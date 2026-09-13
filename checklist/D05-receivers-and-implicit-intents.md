@@ -809,7 +809,7 @@ adb shell am broadcast -n com.target.app/.AuthReceiver -a com.target.VERIFY --el
 - **Proof:** The guarded action executing after you replay a computed token, with no legitimate pairing
   having taken place — and the seed-window arithmetic in the report (candidate count, hit index).
 - **Escalation:** The classic two-component chain: DoS in component A forces the RNG reseed, auth bypass in
-  component B follows. File the crash primitive and the bypass as separate reports (see D05-060).
+  component B follows. File the crash primitive and the bypass as separate reports (see D05-064).
 - **Ruled out when:** The challenge comes from `SecureRandom` with no wall-clock seeding, or the response
   is verified server-side, or the window is bound to a value the attacker cannot observe. Show the
   generator's construction.
@@ -2086,7 +2086,7 @@ grep -rn 'CONNECTIVITY_ACTION\|NETWORK_STATE_CHANGED_ACTION\|EXTRA_WIFI_INFO\|ge
 - **Ruled out when:** The absent-extra branch fails **closed** (trust denied when the SSID cannot be read),
   or the app makes no network-identity trust decision at all. Quote the branch.
 
-### D05-058 · Run the pre-severity gate against the Critical claim, not against the receiver
+### D05-062 · Run the pre-severity gate against the Critical claim, not against the receiver
 
 | | |
 |---|---|
@@ -2116,7 +2116,7 @@ grep -rn 'CONNECTIVITY_ACTION\|NETWORK_STATE_CHANGED_ACTION\|EXTRA_WIFI_INFO\|ge
   not retract a confirmed finding that stopped reproducing because the client shipped a patch mid-engagement.**
   Keep timestamped pre-patch evidence (the APK hash, the logcat, the video) and say so.
 
-### D05-059 · The five-screenshot pattern for a receiver state-change finding
+### D05-063 · The five-screenshot pattern for a receiver state-change finding
 
 | | |
 |---|---|
@@ -2150,7 +2150,7 @@ e.g. 05-step2-broadcast-from-zeropermission-app.png
 - **Escalation:** n/a.
 - **Ruled out when:** n/a — this is a deliverable standard, not a test.
 
-### D05-060 · Chain-filing order for receiver primitives
+### D05-064 · Chain-filing order for receiver primitives
 
 | | |
 |---|---|
@@ -2210,7 +2210,7 @@ These primitives have independent fix surfaces and are filed separately per the 
   unguarded receiver with nothing to steal, and a wide provider root nothing can reach. Joined, the victim
   starts your Intent with `FLAG_GRANT_READ_URI_PERMISSION` aimed at a `content://` URI under its own
   `files/` root and self-grants a zero-permission app read access to its session store. The join is the
-  Critical; file the three parts per D05-060.
+  Critical; file the three parts per D05-064.
 - **D05 implicit broadcast of API responses × D15 shadow API.** The action strings and payloads you sniff
   in D05-031 hand you the mobile client's full endpoint inventory for free — and a mobile app's hardcoded
   backend calls are frequently an **older API version** than the current web app uses, with weaker auth,

@@ -31,7 +31,50 @@ autonomous Claude Opus 5 session. It contains:
 
 ---
 
-## 2. The five rules
+## 2. The six rules
+
+### Rule 0 — Breadth before depth. This is the one you will break.
+
+**The failure mode that costs the most value is not missing a hard bug. It is finding an easy one.**
+
+You will find something juicy in hour two — an arbitrary file read, a leaked token, an open provider.
+It will be genuinely interesting, and you will chase it. Six hours later you will have one good finding
+and you will not have opened the WebView, the deep-link router, the payment flow, or the other forty
+exported components. The client's programme then pays an independent hunter for the account takeover
+you never looked for.
+
+So this is a hard rule, not a preference:
+
+> **During P3, P4, P5 and P6 you are FORBIDDEN from escalating.**
+> Confirm the primitive exists with minimum proof, write a stub to `hypotheses/`, flip the checklist
+> row, and **move to the next component.** All escalation happens in **P7**.
+
+When you find something juicy, the correct behaviour is:
+
+1. Minimum proof only — five minutes, just enough to know it is real.
+2. Park it: one stub in `hypotheses/H-0NN.md` — what you know, why it looks juicy, the next experiment,
+   estimated cost. Thirty seconds to write.
+3. Mark the row `true`, `result=finding`.
+4. **Go to the next item.**
+
+**The three-strike rule.** If any one of these is true, you are in a rabbit hole — park it and move on:
+- more than ~15 tool calls on a single item without confirming or ruling it out
+- you have re-run a variant of the same probe three times (you are guessing)
+- you are writing exploit code during P3–P6 (that is a phase violation)
+
+**Why this is not merely tidiness:** chains are only visible when several primitives sit side by side.
+You cannot find the join between primitive A and primitive C if you spent the engagement on A. P7 exists
+so that every primitive is on the table at once.
+
+**The gate is mechanical, not a request:**
+
+```bash
+python3 ~/sane_android/scripts/coverage.py <engagement>/checklist-status.csv \
+        --components <engagement>/inventory/ --gate p7
+```
+
+It exits non-zero while any breadth item or any component instance is untested. **You may not begin P7
+until it exits zero.** Full doctrine: [`docs/09-coverage-discipline.md`](docs/09-coverage-discipline.md).
 
 ### Rule 1 — The checklist is the floor, not the ceiling
 
@@ -98,6 +141,46 @@ there".
   properties.
 - **Never fabricate** a CVE, a report ID, a bounty figure, a CVSS vector or a PoC. If you did not run it,
   write that you did not run it.
+
+---
+
+### Rule 6 — Coverage is two-dimensional, external, and proves the audit
+
+Coverage is not a feeling. It is two sets of CSV rows in the engagement folder.
+
+| Dimension | File | Proves |
+|---|---|---|
+| **The methodology** | `checklist-status.csv` | Every checklist item across all 27 domains was settled |
+| **This application** | `inventory/components.csv`, `deeplinks.csv`, `webviews.csv`, `endpoints.csv` | Every component that **actually exists in this app** was individually tested |
+
+The second one is what lets the firm say the sentence the client is paying for:
+
+> *"All 47 exported components, 8 provider authorities, 23 deep-link hosts and 5 WebViews in version
+> 18.15.0 were individually tested. Here is the result for each."*
+
+Testing "domain D07" is **not** the same as testing all eight provider authorities. Build the register
+in P3, before any deep review:
+
+```bash
+python3 ~/sane_android/scripts/inventory.py base.apk --out <engagement>/inventory/
+```
+
+Every row starts `tested=false`. That is the point.
+
+### The session ritual — context dies, disk does not
+
+**Start of every session, before anything else:**
+
+```bash
+cat <engagement>/report/assessment-status.md                    # where am I
+python3 ~/sane_android/scripts/coverage.py <engagement>/checklist-status.csv --components <engagement>/inventory/
+cat <engagement>/hypotheses/*.md                                # what did I park
+```
+
+**After every phase:** update `assessment-status.md`, flip the settled rows, commit, push.
+
+A session that ends without this has destroyed its own state, and the next one restarts rather than
+resumes.
 
 ---
 
