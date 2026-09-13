@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Start here — the ordered engagement workflow
+    url: https://github.com/sanehunters/sane_android/blob/main/ISSUES.md
+    about: What to do first, second and third. Read this before opening anything.
+  - name: ⚖️ Severity & reportability doctrine
+    url: https://github.com/sanehunters/sane_android/blob/main/docs/02-severity-and-reportability.md
+    about: What counts as a finding, and the graveyard of classes that never pay.
+  - name: 🎥 PoC & evidence standard
+    url: https://github.com/sanehunters/sane_android/blob/main/docs/04-poc-and-evidence-standard.md
+    about: The mandatory house style for PoC video and the evidence tree.
+  - name: 🗂️ Engagement board
+    url: https://github.com/orgs/sanehunters/projects/1
+    about: The Kanban board where all engagement work is tracked.

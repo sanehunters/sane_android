@@ -1,0 +1,16 @@
+# Engagement artifacts never belong in this repository.
+# This repo is METHODOLOGY. Client data is not.
+evidence/
+engagements/
+*.apk
+*.aab
+*.dex
+*.so
+*.mp4
+*.keystore
+*.jks
+report.md
+assessment-status.md
+.DS_Store
+__pycache__/
+*.pyc

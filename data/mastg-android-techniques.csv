@@ -1,0 +1,79 @@
+id,title
+MASTG-TECH-0001,Accessing the Device Shell
+MASTG-TECH-0002,Host-Device Data Transfer
+MASTG-TECH-0003,Obtaining and Extracting Apps
+MASTG-TECH-0004,Repackaging Apps
+MASTG-TECH-0005,Installing Apps
+MASTG-TECH-0006,Listing Installed Apps
+MASTG-TECH-0007,Exploring the App Package
+MASTG-TECH-0008,Accessing App Data Directories
+MASTG-TECH-0009,Monitoring System Logs
+MASTG-TECH-0010,Basic Network Monitoring/Sniffing
+MASTG-TECH-0011,Setting Up an Interception Proxy
+MASTG-TECH-0012,Bypassing Certificate Pinning
+MASTG-TECH-0013,Reverse Engineering Android Apps
+MASTG-TECH-0014,Static Analysis on Android
+MASTG-TECH-0015,Dynamic Analysis on Android
+MASTG-TECH-0016,Disassembling Code to Smali
+MASTG-TECH-0017,Decompiling Java Code
+MASTG-TECH-0018,Disassembling Native Code
+MASTG-TECH-0019,Retrieving Strings
+MASTG-TECH-0020,Retrieving Cross References
+MASTG-TECH-0021,Information Gathering - API Usage
+MASTG-TECH-0022,Information Gathering - Network Communication
+MASTG-TECH-0023,Reviewing Decompiled Java Code
+MASTG-TECH-0024,Reviewing Disassembled Native Code
+MASTG-TECH-0025,Automated Static Analysis
+MASTG-TECH-0026,Dynamic Analysis on Non-Rooted Devices
+MASTG-TECH-0027,Get Open Files
+MASTG-TECH-0028,Get Open Connections
+MASTG-TECH-0029,Listing Loaded Native Libraries
+MASTG-TECH-0030,Sandbox Inspection
+MASTG-TECH-0031,Debugging
+MASTG-TECH-0032,Execution Tracing
+MASTG-TECH-0033,Method Tracing
+MASTG-TECH-0034,Native Code Tracing
+MASTG-TECH-0035,JNI Tracing
+MASTG-TECH-0036,Emulation-based Analysis
+MASTG-TECH-0037,Symbolic Execution
+MASTG-TECH-0038,Patching
+MASTG-TECH-0039,Repackaging & Re-Signing
+MASTG-TECH-0040,Waiting for the Debugger
+MASTG-TECH-0041,Library Injection
+MASTG-TECH-0042,Getting Loaded Classes and Methods Dynamically
+MASTG-TECH-0043,Method Hooking
+MASTG-TECH-0044,Process Exploration
+MASTG-TECH-0045,Runtime Reverse Engineering
+MASTG-TECH-0100,Logging Sensitive Data from Network Traffic
+MASTG-TECH-0108,Taint Analysis
+MASTG-TECH-0109,Intercepting Flutter HTTPS Traffic
+MASTG-TECH-0115,Obtaining Compiler-Provided Security Features
+MASTG-TECH-0116,Obtaining Information about the APK Signature
+MASTG-TECH-0117,Obtaining Information from the AndroidManifest
+MASTG-TECH-0126,Obtaining App Permissions
+MASTG-TECH-0127,Inspecting an App's Backup Data
+MASTG-TECH-0128,Performing a Backup and Restore of App Data
+MASTG-TECH-0129,Verifying Android Dependencies at Runtime
+MASTG-TECH-0130,Software Composition Analysis (SCA) of Android Dependencies by Creating a SBOM
+MASTG-TECH-0131,Software Composition Analysis (SCA) of Android Dependencies at Build Time
+MASTG-TECH-0140,Obtaining Debugging Information and Symbols
+MASTG-TECH-0141,Inspecting the Merged AndroidManifest
+MASTG-TECH-0142,Inspecting WebView Storage
+MASTG-TECH-0143,Monitor File System Operations in WebViews
+MASTG-TECH-0144,Bypassing Root Detection
+MASTG-TECH-0145,Working with XAPK Files
+MASTG-TECH-0148,Interacting with Android ContentProviders
+MASTG-TECH-0150,Analyzing the AndroidManifest
+MASTG-TECH-0151,Analyzing the Network Security Configuration
+MASTG-TECH-0156,Reverse Engineering Flutter Applications
+MASTG-TECH-0157,Extracting Bundled Native Libraries
+MASTG-TECH-0159,Verify Usage of File-Based Content Providers
+MASTG-TECH-0160,Enumerating Activities
+MASTG-TECH-0161,Enumerating Services
+MASTG-TECH-0162,Enumerating Broadcast Receivers
+MASTG-TECH-0163,Enumerating Content Providers
+MASTG-TECH-0164,Sniffing Implicit Intents and Broadcasts
+MASTG-TECH-0165,"Identifying Compilers, Obfuscators, and Packers in Android Apps"
+MASTG-TECH-0172,Listing Deep Links
+MASTG-TECH-0173,Monitoring Deep Link Handlers at Runtime with Frida
+MASTG-TECH-0174,Verifying App Link Website Association

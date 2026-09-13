@@ -1,0 +1,74 @@
+name: "🎯 Engagement — start a new client assessment"
+description: "Open one of these per client engagement. It becomes the parent tracker for that engagement's work."
+title: "[ENGAGEMENT] <client> — <package> — <start date>"
+labels: ["type: engagement", "phase: 0 scope"]
+projects: ["sanehunters/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is the parent tracker. Do not begin Phase 1 until the authorisation box below is ticked.
+        Full scoping form: [`templates/scoping-questionnaire.md`](../blob/main/templates/scoping-questionnaire.md)
+
+  - type: input
+    id: client
+    attributes: {label: Client, placeholder: "Acme Ltd"}
+    validations: {required: true}
+  - type: input
+    id: packages
+    attributes:
+      label: Package(s) in scope
+      description: Include flavours and white-labels
+      placeholder: com.acme.app, com.acme.app.lite
+    validations: {required: true}
+  - type: input
+    id: hosts
+    attributes: {label: API hosts in scope, placeholder: "api.acme.com, *.acme-cdn.com"}
+    validations: {required: true}
+  - type: input
+    id: window
+    attributes: {label: Testing window, placeholder: "2026-10-01 to 2026-10-14, IST"}
+    validations: {required: true}
+
+  - type: checkboxes
+    id: authorisation
+    attributes:
+      label: Authorisation gate — nothing is touched until every box is ticked
+      options:
+        - {label: "Signed authorisation naming these packages and hosts is on file", required: true}
+        - {label: "Rules of engagement agreed, including which attacker models are in scope", required: true}
+        - {label: "Emergency contact for production impact recorded", required: true}
+
+  - type: checkboxes
+    id: prereqs
+    attributes:
+      label: Prerequisites (chase these on day 1 — each blank is a day lost later)
+      options:
+        - {label: "TWO tester-owned accounts provisioned (required for cross-account IDOR)"}
+        - {label: "Accounts at each privilege level (user / premium / admin / merchant)"}
+        - {label: "KYC / verification state pre-completed, or a route to complete it"}
+        - {label: "Payment sandbox and test instruments available"}
+        - {label: "OTP delivery route the tester can actually receive"}
+        - {label: "Full APK set obtainable (base + config splits)"}
+        - {label: "Build track confirmed as production (a debug build invalidates several checks)"}
+        - {label: "Staging environment available for destructive tests"}
+        - {label: "Rate limits / WAF allow-listing arranged"}
+
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Framework (decides where the logic lives — answer before Phase 3)
+      options: ["Native Java/Kotlin","React Native (Hermes)","React Native (JSC/plain JS)","Flutter","Cordova / Ionic / Capacitor","Unity (il2cpp)","Xamarin / MAUI","Kotlin Multiplatform","Unknown — determine in Phase 2"]
+    validations: {required: true}
+
+  - type: dropdown
+    id: ota
+    attributes:
+      label: OTA code delivery present?
+      description: "If yes, the APK is not the code that runs. Re-base all analysis on the on-device bundle."
+      options: ["Unknown — check in Phase 2","No","Yes — expo-updates","Yes — CodePush","Yes — custom updater"]
+    validations: {required: true}
+
+  - type: textarea
+    id: notes
+    attributes: {label: Scope notes, exclusions and anything unusual}

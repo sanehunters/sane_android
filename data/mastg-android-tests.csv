@@ -1,0 +1,164 @@
+id,masvs_group,status,title,url
+MASTG-TEST-0017,MASVS-AUTH,stable,Testing Confirm Credentials,https://mas.owasp.org/MASTG/tests/android/MASVS-AUTH/MASTG-TEST-0017/
+MASTG-TEST-0018,MASVS-AUTH,stable,Testing Biometric Authentication,https://mas.owasp.org/MASTG/tests/android/MASVS-AUTH/MASTG-TEST-0018/
+MASTG-TEST-0326,MASVS-AUTH,beta,References to APIs Allowing Fallback to Non-Biometric Authentication,https://mas.owasp.org/MASTG/tests/android/MASVS-AUTH/MASTG-TEST-0326/
+MASTG-TEST-0327,MASVS-AUTH,beta,References to APIs for Event-Bound Biometric Authentication,https://mas.owasp.org/MASTG/tests/android/MASVS-AUTH/MASTG-TEST-0327/
+MASTG-TEST-0328,MASVS-AUTH,beta,References to APIs Detecting Biometric Enrollment Changes,https://mas.owasp.org/MASTG/tests/android/MASVS-AUTH/MASTG-TEST-0328/
+MASTG-TEST-0329,MASVS-AUTH,beta,References to APIs Enforcing Authentication without Explicit User Action,https://mas.owasp.org/MASTG/tests/android/MASVS-AUTH/MASTG-TEST-0329/
+MASTG-TEST-0330,MASVS-AUTH,beta,References to APIs for Keys used in Biometric Authentication with Extended Validity Duration,https://mas.owasp.org/MASTG/tests/android/MASVS-AUTH/MASTG-TEST-0330/
+MASTG-TEST-0002,MASVS-CODE,stable,Testing Local Storage for Input Validation,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0002/
+MASTG-TEST-0025,MASVS-CODE,stable,Testing for Injection Flaws,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0025/
+MASTG-TEST-0026,MASVS-CODE,stable,Testing Implicit Intents,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0026/
+MASTG-TEST-0027,MASVS-CODE,stable,Testing for URL Loading in WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0027/
+MASTG-TEST-0034,MASVS-CODE,stable,Testing Object Persistence,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0034/
+MASTG-TEST-0036,MASVS-CODE,stable,Testing Enforced Updating,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0036/
+MASTG-TEST-0042,MASVS-CODE,stable,Checking for Weaknesses in Third Party Libraries,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0042/
+MASTG-TEST-0043,MASVS-CODE,stable,Memory Corruption Bugs,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0043/
+MASTG-TEST-0044,MASVS-CODE,stable,Make Sure That Free Security Features Are Activated,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0044/
+MASTG-TEST-0222,MASVS-CODE,beta,Position Independent Code (PIC) Not Enabled,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0222/
+MASTG-TEST-0223,MASVS-CODE,beta,Stack Canaries Not Enabled,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0223/
+MASTG-TEST-0245,MASVS-CODE,beta,References to Platform Version APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0245/
+MASTG-TEST-0272,MASVS-CODE,beta,Identify Dependencies with Known Vulnerabilities in the Android Project,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0272/
+MASTG-TEST-0274,MASVS-CODE,beta,Dependencies with Known Vulnerabilities in the App's SBOM,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0274/
+MASTG-TEST-0337,MASVS-CODE,beta,References to Object Deserialization of Untrusted Data,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0337/
+MASTG-TEST-0339,MASVS-CODE,beta,SQL Injection in Content Providers,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0339/
+MASTG-TEST-0372,MASVS-CODE,beta,Implicit Intents Used for Internal App Communication,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0372/
+MASTG-TEST-0374,MASVS-CODE,beta,References to Implicit Intents Carrying Sensitive Extras,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0374/
+MASTG-TEST-0375,MASVS-CODE,beta,Missing Validation of Data Returned from Implicit Intents,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0375/
+MASTG-TEST-0382,MASVS-CODE,beta,Runtime Use of Enforced Updating APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0382/
+MASTG-TEST-0392,MASVS-CODE,beta,References to Enforced Updating APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0392/
+MASTG-TEST-0398,MASVS-CODE,beta,References to WebViewClient URL Loading Handlers,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0398/
+MASTG-TEST-0399,MASVS-CODE,beta,SafeBrowsing Disabled,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0399/
+MASTG-TEST-0400,MASVS-CODE,beta,Runtime Use of WebViewClient URL Loading Handlers,https://mas.owasp.org/MASTG/tests/android/MASVS-CODE/MASTG-TEST-0400/
+MASTG-TEST-0013,MASVS-CRYPTO,stable,Testing Symmetric Cryptography,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0013/
+MASTG-TEST-0014,MASVS-CRYPTO,stable,Testing the Configuration of Cryptographic Standard Algorithms,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0014/
+MASTG-TEST-0015,MASVS-CRYPTO,stable,Testing the Purposes of Keys,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0015/
+MASTG-TEST-0016,MASVS-CRYPTO,stable,Testing Random Number Generation,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0016/
+MASTG-TEST-0204,MASVS-CRYPTO,beta,Insecure Random API Usage,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0204/
+MASTG-TEST-0205,MASVS-CRYPTO,beta,Non-random Sources Usage,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0205/
+MASTG-TEST-0208,MASVS-CRYPTO,beta,Insufficient Key Sizes,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0208/
+MASTG-TEST-0212,MASVS-CRYPTO,beta,Use of Hardcoded Cryptographic Keys in Code,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0212/
+MASTG-TEST-0221,MASVS-CRYPTO,beta,Broken Symmetric Encryption Algorithms,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0221/
+MASTG-TEST-0232,MASVS-CRYPTO,beta,Broken Symmetric Encryption Modes,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0232/
+MASTG-TEST-0307,MASVS-CRYPTO,beta,References to Asymmetric Key Pairs Used For Multiple Purposes,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0307/
+MASTG-TEST-0308,MASVS-CRYPTO,beta,Runtime Use of Asymmetric Key Pairs Used For Multiple Purposes,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0308/
+MASTG-TEST-0309,MASVS-CRYPTO,beta,References to Reused Initialization Vectors in Symmetric Encryption,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0309/
+MASTG-TEST-0310,MASVS-CRYPTO,beta,Runtime Use of Reused Initialization Vectors in Symmetric Encryption,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0310/
+MASTG-TEST-0312,MASVS-CRYPTO,beta,References to Explicit Security Provider in Cryptographic APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0312/
+MASTG-TEST-0350,MASVS-CRYPTO,beta,Runtime Use of Broken Symmetric Encryption Modes,https://mas.owasp.org/MASTG/tests/android/MASVS-CRYPTO/MASTG-TEST-0350/
+MASTG-TEST-0019,MASVS-NETWORK,stable,Testing Data Encryption on the Network,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0019/
+MASTG-TEST-0020,MASVS-NETWORK,stable,Testing the TLS Settings,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0020/
+MASTG-TEST-0021,MASVS-NETWORK,stable,Testing Endpoint Identify Verification,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0021/
+MASTG-TEST-0022,MASVS-NETWORK,stable,Testing Custom Certificate Stores and Certificate Pinning,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0022/
+MASTG-TEST-0023,MASVS-NETWORK,stable,Testing the Security Provider,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0023/
+MASTG-TEST-0217,MASVS-NETWORK,beta,Insecure TLS Protocols Explicitly Allowed in Code,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0217/
+MASTG-TEST-0218,MASVS-NETWORK,beta,Insecure TLS Protocols in Network Traffic,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0218/
+MASTG-TEST-0233,MASVS-NETWORK,beta,Hardcoded HTTP URLs,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0233/
+MASTG-TEST-0234,MASVS-NETWORK,beta,Missing Implementation of Server Hostname Verification with SSLSockets,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0234/
+MASTG-TEST-0235,MASVS-NETWORK,beta,Android App Configurations Allowing Cleartext Traffic,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0235/
+MASTG-TEST-0236,MASVS-NETWORK,beta,Cleartext Traffic Observed on the Network,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0236/
+MASTG-TEST-0237,MASVS-NETWORK,beta,Cross-Platform Framework Configurations Allowing Cleartext Traffic,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0237/
+MASTG-TEST-0238,MASVS-NETWORK,beta,Runtime Use of Network APIs Transmitting Cleartext Traffic,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0238/
+MASTG-TEST-0239,MASVS-NETWORK,beta,Using low-level APIs (e.g. Socket) to set up a custom HTTP connection,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0239/
+MASTG-TEST-0242,MASVS-NETWORK,beta,Missing Certificate Pinning in Network Security Configuration,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0242/
+MASTG-TEST-0243,MASVS-NETWORK,beta,Expired Certificate Pins in the Network Security Configuration,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0243/
+MASTG-TEST-0244,MASVS-NETWORK,beta,Missing Certificate Pinning in Network Traffic,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0244/
+MASTG-TEST-0282,MASVS-NETWORK,beta,Unsafe Custom Trust Evaluation,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0282/
+MASTG-TEST-0283,MASVS-NETWORK,beta,Incorrect Implementation of Server Hostname Verification,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0283/
+MASTG-TEST-0284,MASVS-NETWORK,beta,Incorrect SSL Error Handling in WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0284/
+MASTG-TEST-0285,MASVS-NETWORK,beta,Outdated Android Version Allowing Trust in User-Provided CAs,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0285/
+MASTG-TEST-0286,MASVS-NETWORK,beta,Network Security Configuration Allowing Trust in User-Provided CAs,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0286/
+MASTG-TEST-0295,MASVS-NETWORK,beta,GMS Security Provider Not Updated,https://mas.owasp.org/MASTG/tests/android/MASVS-NETWORK/MASTG-TEST-0295/
+MASTG-TEST-0007,MASVS-PLATFORM,stable,Determining Whether Sensitive Stored Data Has Been Exposed via IPC Mechanisms,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0007/
+MASTG-TEST-0008,MASVS-PLATFORM,stable,Checking for Sensitive Data Disclosure Through the User Interface,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0008/
+MASTG-TEST-0010,MASVS-PLATFORM,stable,Finding Sensitive Information in Auto-Generated Screenshots,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0010/
+MASTG-TEST-0024,MASVS-PLATFORM,stable,Testing for App Permissions,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0024/
+MASTG-TEST-0028,MASVS-PLATFORM,stable,Testing Deep Links,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0028/
+MASTG-TEST-0029,MASVS-PLATFORM,stable,Testing for Sensitive Functionality Exposure Through IPC,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0029/
+MASTG-TEST-0030,MASVS-PLATFORM,stable,Testing for Vulnerable Implementation of PendingIntent,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0030/
+MASTG-TEST-0031,MASVS-PLATFORM,stable,Testing JavaScript Execution in WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0031/
+MASTG-TEST-0032,MASVS-PLATFORM,stable,Testing WebView Protocol Handlers,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0032/
+MASTG-TEST-0033,MASVS-PLATFORM,stable,Testing for Java Objects Exposed Through WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0033/
+MASTG-TEST-0035,MASVS-PLATFORM,stable,Testing for Overlay Attacks,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0035/
+MASTG-TEST-0037,MASVS-PLATFORM,stable,Testing WebViews Cleanup,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0037/
+MASTG-TEST-0250,MASVS-PLATFORM,beta,References to Content Provider Access in WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0250/
+MASTG-TEST-0251,MASVS-PLATFORM,beta,Runtime Use of Content Provider Access APIs in WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0251/
+MASTG-TEST-0252,MASVS-PLATFORM,beta,References to Local File Access in WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0252/
+MASTG-TEST-0253,MASVS-PLATFORM,beta,Runtime Use of Local File Access APIs in WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0253/
+MASTG-TEST-0258,MASVS-PLATFORM,beta,References to Keyboard Caching Attributes in UI Elements,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0258/
+MASTG-TEST-0289,MASVS-PLATFORM,beta,Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0289/
+MASTG-TEST-0291,MASVS-PLATFORM,beta,References to Screen Capturing Prevention APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0291/
+MASTG-TEST-0292,MASVS-PLATFORM,beta,`setRecentsScreenshotEnabled` Not Used to Prevent Screenshots When Backgrounded,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0292/
+MASTG-TEST-0293,MASVS-PLATFORM,beta,`setSecure` Not Used to Prevent Screenshots in SurfaceViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0293/
+MASTG-TEST-0294,MASVS-PLATFORM,beta,`SecureOn` Not Used to Prevent Screenshots in Compose Dialogs,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0294/
+MASTG-TEST-0315,MASVS-PLATFORM,beta,Sensitive Data Exposed via Notifications,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0315/
+MASTG-TEST-0316,MASVS-PLATFORM,beta,App Exposing User Authentication Data in Text Input Fields,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0316/
+MASTG-TEST-0320,MASVS-PLATFORM,beta,WebViews Not Cleaning Up Sensitive Data,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0320/
+MASTG-TEST-0334,MASVS-PLATFORM,beta,Native Code Exposed Through WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0334/
+MASTG-TEST-0340,MASVS-PLATFORM,beta,References to Overlay Attack Protections,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0340/
+MASTG-TEST-0355,MASVS-PLATFORM,beta,References to Unauthorized Database Access through Content Providers,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0355/
+MASTG-TEST-0356,MASVS-PLATFORM,beta,Runtime Verification of Unauthorized Database Access through Content Providers,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0356/
+MASTG-TEST-0357,MASVS-PLATFORM,beta,References to Oversharing of File-Based Content Providers,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0357/
+MASTG-TEST-0364,MASVS-PLATFORM,beta,Exported And Unprotected Activities That Expose Sensitive Functionality,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0364/
+MASTG-TEST-0365,MASVS-PLATFORM,beta,Exported And Unprotected Services That Expose Sensitive Functionality,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0365/
+MASTG-TEST-0366,MASVS-PLATFORM,beta,Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0366/
+MASTG-TEST-0381,MASVS-PLATFORM,beta,References to Insecure PendingIntent Creation,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0381/
+MASTG-TEST-0393,MASVS-PLATFORM,beta,Use of Unverified App Links,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0393/
+MASTG-TEST-0394,MASVS-PLATFORM,beta,Missing Input Validation in Custom URL Scheme Handlers,https://mas.owasp.org/MASTG/tests/android/MASVS-PLATFORM/MASTG-TEST-0394/
+MASTG-TEST-0206,MASVS-PRIVACY,beta,Undeclared PII in Network Traffic Capture,https://mas.owasp.org/MASTG/tests/android/MASVS-PRIVACY/MASTG-TEST-0206/
+MASTG-TEST-0254,MASVS-PRIVACY,beta,Dangerous App Permissions,https://mas.owasp.org/MASTG/tests/android/MASVS-PRIVACY/MASTG-TEST-0254/
+MASTG-TEST-0255,MASVS-PRIVACY,beta,Permission Requests Not Minimized,https://mas.owasp.org/MASTG/tests/android/MASVS-PRIVACY/MASTG-TEST-0255/
+MASTG-TEST-0256,MASVS-PRIVACY,beta,Missing Permission Rationale,https://mas.owasp.org/MASTG/tests/android/MASVS-PRIVACY/MASTG-TEST-0256/
+MASTG-TEST-0257,MASVS-PRIVACY,beta,Not Resetting Unused Permissions,https://mas.owasp.org/MASTG/tests/android/MASVS-PRIVACY/MASTG-TEST-0257/
+MASTG-TEST-0318,MASVS-PRIVACY,beta,References to SDK APIs Known to Handle Sensitive User Data,https://mas.owasp.org/MASTG/tests/android/MASVS-PRIVACY/MASTG-TEST-0318/
+MASTG-TEST-0319,MASVS-PRIVACY,beta,Runtime Use of SDK APIs Known to Handle Sensitive User Data,https://mas.owasp.org/MASTG/tests/android/MASVS-PRIVACY/MASTG-TEST-0319/
+MASTG-TEST-0038,MASVS-RESILIENCE,stable,Making Sure that the App is Properly Signed,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0038/
+MASTG-TEST-0039,MASVS-RESILIENCE,stable,Testing whether the App is Debuggable,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0039/
+MASTG-TEST-0040,MASVS-RESILIENCE,stable,Testing for Debugging Symbols,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0040/
+MASTG-TEST-0041,MASVS-RESILIENCE,stable,Testing for Debugging Code and Verbose Error Logging,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0041/
+MASTG-TEST-0045,MASVS-RESILIENCE,stable,Testing Root Detection,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0045/
+MASTG-TEST-0046,MASVS-RESILIENCE,stable,Testing Anti-Debugging Detection,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0046/
+MASTG-TEST-0047,MASVS-RESILIENCE,stable,Testing File Integrity Checks,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0047/
+MASTG-TEST-0048,MASVS-RESILIENCE,stable,Testing Reverse Engineering Tools Detection,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0048/
+MASTG-TEST-0049,MASVS-RESILIENCE,stable,Testing Emulator Detection,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0049/
+MASTG-TEST-0050,MASVS-RESILIENCE,stable,Testing Runtime Integrity Checks,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0050/
+MASTG-TEST-0051,MASVS-RESILIENCE,stable,Testing Obfuscation,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0051/
+MASTG-TEST-0224,MASVS-RESILIENCE,beta,Usage of Insecure APK Signature Version,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0224/
+MASTG-TEST-0225,MASVS-RESILIENCE,beta,Usage of Insecure APK Signature Key Size,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0225/
+MASTG-TEST-0226,MASVS-RESILIENCE,beta,Debuggable Flag Enabled in the AndroidManifest,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0226/
+MASTG-TEST-0227,MASVS-RESILIENCE,beta,Debugging Enabled for WebViews,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0227/
+MASTG-TEST-0247,MASVS-RESILIENCE,beta,References to APIs for Detecting Secure Screen Lock,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0247/
+MASTG-TEST-0249,MASVS-RESILIENCE,beta,Runtime Use of Secure Screen Lock Detection APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0249/
+MASTG-TEST-0263,MASVS-RESILIENCE,beta,Logging of StrictMode Violations,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0263/
+MASTG-TEST-0264,MASVS-RESILIENCE,beta,Runtime Use of StrictMode APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0264/
+MASTG-TEST-0265,MASVS-RESILIENCE,beta,References to StrictMode APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0265/
+MASTG-TEST-0288,MASVS-RESILIENCE,beta,Debugging Symbols in Native Binaries,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0288/
+MASTG-TEST-0324,MASVS-RESILIENCE,beta,References to Root Detection Mechanisms,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0324/
+MASTG-TEST-0325,MASVS-RESILIENCE,beta,Runtime Use of Root Detection Techniques,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0325/
+MASTG-TEST-0338,MASVS-RESILIENCE,beta,References to Storage Integrity Check APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0338/
+MASTG-TEST-0341,MASVS-RESILIENCE,beta,Runtime Use of Hook Detection Techniques,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0341/
+MASTG-TEST-0351,MASVS-RESILIENCE,beta,Runtime Use of Emulator Detection Techniques,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0351/
+MASTG-TEST-0352,MASVS-RESILIENCE,beta,References to Debugging Detection APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0352/
+MASTG-TEST-0353,MASVS-RESILIENCE,beta,Runtime Use of Debugging Detection APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0353/
+MASTG-TEST-0368,MASVS-RESILIENCE,beta,Insufficient Obfuscation of Security-Relevant Java/Kotlin Code,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0368/
+MASTG-TEST-0369,MASVS-RESILIENCE,beta,Insufficient Obfuscation of Security-Relevant Native Code,https://mas.owasp.org/MASTG/tests/android/MASVS-RESILIENCE/MASTG-TEST-0369/
+MASTG-TEST-0001,MASVS-STORAGE,stable,Testing Local Storage for Sensitive Data,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0001/
+MASTG-TEST-0003,MASVS-STORAGE,stable,Testing Logs for Sensitive Data,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0003/
+MASTG-TEST-0004,MASVS-STORAGE,stable,Determining Whether Sensitive Data Is Shared with Third Parties via Embedded Services,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0004/
+MASTG-TEST-0005,MASVS-STORAGE,stable,Determining Whether Sensitive Data Is Shared with Third Parties via Notifications,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0005/
+MASTG-TEST-0006,MASVS-STORAGE,stable,Determining Whether the Keyboard Cache Is Disabled for Text Input Fields,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0006/
+MASTG-TEST-0009,MASVS-STORAGE,stable,Testing Backups for Sensitive Data,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0009/
+MASTG-TEST-0011,MASVS-STORAGE,stable,Testing Memory for Sensitive Data,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0011/
+MASTG-TEST-0012,MASVS-STORAGE,stable,Testing the Device-Access-Security Policy,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0012/
+MASTG-TEST-0200,MASVS-STORAGE,beta,Files Written to External Storage,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0200/
+MASTG-TEST-0201,MASVS-STORAGE,beta,Runtime Use of APIs to Access External Storage,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0201/
+MASTG-TEST-0202,MASVS-STORAGE,beta,References to APIs and Permissions for Accessing External Storage,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0202/
+MASTG-TEST-0203,MASVS-STORAGE,beta,Runtime Use of Logging APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0203/
+MASTG-TEST-0207,MASVS-STORAGE,beta,Runtime Storage of Unencrypted Data in the App Sandbox,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0207/
+MASTG-TEST-0216,MASVS-STORAGE,beta,Sensitive Data Not Excluded From Backup,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0216/
+MASTG-TEST-0231,MASVS-STORAGE,beta,References to Logging APIs,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0231/
+MASTG-TEST-0262,MASVS-STORAGE,beta,References to Backup Configurations Not Excluding Sensitive Data,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0262/
+MASTG-TEST-0287,MASVS-STORAGE,beta,Runtime Storage of Unencrypted Data via the SharedPreferences API,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0287/
+MASTG-TEST-0304,MASVS-STORAGE,beta,References to Sensitive Data Unencrypted via Android Room Database,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0304/
+MASTG-TEST-0305,MASVS-STORAGE,beta,Sensitive Data Stored Unencrypted via DataStore,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0305/
+MASTG-TEST-0306,MASVS-STORAGE,beta,References to Sensitive Data Stored Unencrypted via Android Room DB,https://mas.owasp.org/MASTG/tests/android/MASVS-STORAGE/MASTG-TEST-0306/

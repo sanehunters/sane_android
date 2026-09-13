@@ -1,0 +1,45 @@
+name: "✅ Ruled out — verified negative result"
+description: "Record a surface that was tested and found clean. Negative results are a deliverable, not an omission."
+title: "[RULED OUT] <surface> — <what was tried>"
+labels: ["type: ruled-out"]
+projects: ["sanehunters/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A findings list without a ruled-out register looks like a sample. With one, it looks like an audit.
+
+        **A tool's silence is never a negative result.** "drozer found nothing" and "adb backup was empty"
+        are expected defaults on modern Android, not evidence. Only a manifest read, a code read, or a
+        controlled experiment with a verified precondition establishes a true negative.
+
+  - type: input
+    id: checklist_id
+    attributes: {label: Checklist ID, placeholder: SANE-Dnn-NNN}
+    validations: {required: true}
+  - type: input
+    id: surface
+    attributes: {label: Surface tested, placeholder: "content://com.client.files openFile()"}
+    validations: {required: true}
+  - type: dropdown
+    id: attacker
+    attributes:
+      label: Attacker model tested
+      description: Clean for AM-03 says nothing about AM-05. Record which one.
+      options: ["AM-01","AM-02","AM-03","AM-04","AM-05","AM-06","AM-07","AM-08","AM-09","AM-10","AM-11"]
+    validations: {required: true}
+  - type: textarea
+    id: tried
+    attributes: {label: What was tried, description: "Every payload, path and variant. Be exhaustive — this is the coverage evidence."}
+    validations: {required: true}
+  - type: textarea
+    id: observed
+    attributes: {label: Observed result, render: shell}
+    validations: {required: true}
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this is a TRUE negative
+      description: Name the mechanism that closes it, with file:line. Not the tool that missed it.
+      placeholder: "openFile() calls getCanonicalFile() and asserts startsWith(base) at FileProv.java:61 — traversal is structurally closed, not merely filtered."
+    validations: {required: true}

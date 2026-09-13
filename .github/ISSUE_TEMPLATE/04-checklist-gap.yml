@@ -1,0 +1,40 @@
+name: "📋 Checklist gap — propose a new test item"
+description: "Found a class the checklist misses? Propose it here. This is how the methodology compounds."
+title: "[GAP] D<nn> — <proposed item title>"
+labels: ["type: checklist"]
+projects: ["sanehunters/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The checklist is only worth what the team feeds back into it. If an engagement turned up a class
+        we had no item for, that gap cost us on this client and will cost us on the next one.
+
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Domain
+      options: ["D01 Recon & Surface Mapping","D02 APK/AAB, Signing & Build Integrity","D03 Manifest & Permission Model","D04 Exported Activities, Task & UI Redress","D05 Broadcast Receivers & Implicit Intents","D06 Services, AIDL & Bound IPC","D07 ContentProviders & FileProvider","D08 Intent Redirection, PendingIntent & URI Grants","D09 Deep Links, App Links & URI Schemes","D10 WebView & JavaScript Bridges","D11 Local Data Storage","D12 Cryptography & Key Management","D13 Auth, Session, OTP & Biometrics","D14 Network Security, TLS & Pinning","D15 Backend API, IDOR/BOLA & Business Logic","D16 Native Code, JNI & Memory Safety","D17 Dynamic Code Loading, Deserialization & Supply Chain","D18 Cloud Backend & Third-Party SDK Config","D19 Cross-Platform Frameworks","D20 Privacy, PII & Data Leakage","D21 Anti-Tampering, RASP & Resilience","D22 Platform & OS Version Behaviour","D23 Payments, Entitlements & Fraud","D24 Push, Notifications & Messaging","D25 Device, OEM & Privileged Surfaces","D26 Runtime Instrumentation & Tooling","D27 Reporting, Severity & Evidence"]
+    validations: {required: true}
+  - type: textarea
+    id: test
+    attributes: {label: "Test — what to check"}
+    validations: {required: true}
+  - type: textarea
+    id: how
+    attributes: {label: "How — exact command, grep, or tool step", render: shell}
+    validations: {required: true}
+  - type: textarea
+    id: proof
+    attributes: {label: "Proof — the exact observable that confirms it"}
+    validations: {required: true}
+  - type: input
+    id: severity
+    attributes: {label: "Severity ceiling, and the VRT path it reaches"}
+    validations: {required: true}
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence this is real
+      description: A source, a CVE, a disclosed report, or an engagement where you proved it. Do not propose speculative items without marking them HYPOTHESIS and stating the experiment that would confirm them.
+    validations: {required: true}

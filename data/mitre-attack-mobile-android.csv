@@ -1,0 +1,123 @@
+id,name,tactics,is_subtechnique,url
+T1398,Boot or Logon Initialization Scripts,persistence,false,https://attack.mitre.org/techniques/T1398
+T1404,Exploitation for Privilege Escalation,privilege-escalation,false,https://attack.mitre.org/techniques/T1404
+T1406,Obfuscated Files or Information,defense-evasion,false,https://attack.mitre.org/techniques/T1406
+T1406.001,Steganography,defense-evasion,true,https://attack.mitre.org/techniques/T1406/001
+T1406.002,Software Packing,defense-evasion,true,https://attack.mitre.org/techniques/T1406/002
+T1407,Download New Code at Runtime,defense-evasion,false,https://attack.mitre.org/techniques/T1407
+T1409,Stored Application Data,collection,false,https://attack.mitre.org/techniques/T1409
+T1414,Clipboard Data,collection|credential-access,false,https://attack.mitre.org/techniques/T1414
+T1417,Input Capture,collection|credential-access,false,https://attack.mitre.org/techniques/T1417
+T1417.001,Keylogging,collection|credential-access,true,https://attack.mitre.org/techniques/T1417/001
+T1417.002,GUI Input Capture,collection|credential-access,true,https://attack.mitre.org/techniques/T1417/002
+T1418,Software Discovery,discovery,false,https://attack.mitre.org/techniques/T1418
+T1418.001,Security Software Discovery,discovery,true,https://attack.mitre.org/techniques/T1418/001
+T1420,File and Directory Discovery,discovery,false,https://attack.mitre.org/techniques/T1420
+T1421,System Network Connections Discovery,discovery,false,https://attack.mitre.org/techniques/T1421
+T1422,System Network Configuration Discovery,discovery,false,https://attack.mitre.org/techniques/T1422
+T1422.001,Internet Connection Discovery,discovery,true,https://attack.mitre.org/techniques/T1422/001
+T1422.002,Wi-Fi Discovery,discovery,true,https://attack.mitre.org/techniques/T1422/002
+T1423,Network Service Scanning,discovery,false,https://attack.mitre.org/techniques/T1423
+T1424,Process Discovery,discovery,false,https://attack.mitre.org/techniques/T1424
+T1426,System Information Discovery,discovery,false,https://attack.mitre.org/techniques/T1426
+T1428,Exploitation of Remote Services,lateral-movement,false,https://attack.mitre.org/techniques/T1428
+T1429,Audio Capture,collection,false,https://attack.mitre.org/techniques/T1429
+T1430,Location Tracking,collection|discovery,false,https://attack.mitre.org/techniques/T1430
+T1430.001,Remote Device Management Services,collection|discovery,true,https://attack.mitre.org/techniques/T1430/001
+T1430.002,Impersonate SS7 Nodes,collection|discovery,true,https://attack.mitre.org/techniques/T1430/002
+T1437,Application Layer Protocol,command-and-control,false,https://attack.mitre.org/techniques/T1437
+T1437.001,Web Protocols,command-and-control,true,https://attack.mitre.org/techniques/T1437/001
+T1451,SIM Card Swap,initial-access,false,https://attack.mitre.org/techniques/T1451
+T1453,Abuse Accessibility Features,collection|credential-access,false,https://attack.mitre.org/techniques/T1453
+T1456,Drive-By Compromise,initial-access,false,https://attack.mitre.org/techniques/T1456
+T1458,Replication Through Removable Media,initial-access|lateral-movement,false,https://attack.mitre.org/techniques/T1458
+T1461,Lockscreen Bypass,initial-access,false,https://attack.mitre.org/techniques/T1461
+T1464,Network Denial of Service,impact,false,https://attack.mitre.org/techniques/T1464
+T1471,Data Encrypted for Impact,impact,false,https://attack.mitre.org/techniques/T1471
+T1474,Supply Chain Compromise,initial-access,false,https://attack.mitre.org/techniques/T1474
+T1474.001,Compromise Software Dependencies and Development Tools,initial-access,true,https://attack.mitre.org/techniques/T1474/001
+T1474.002,Compromise Hardware Supply Chain,initial-access,true,https://attack.mitre.org/techniques/T1474/002
+T1474.003,Compromise Software Supply Chain,initial-access,true,https://attack.mitre.org/techniques/T1474/003
+T1481,Web Service,command-and-control,false,https://attack.mitre.org/techniques/T1481
+T1481.001,Dead Drop Resolver,command-and-control,true,https://attack.mitre.org/techniques/T1481/001
+T1481.002,Bidirectional Communication,command-and-control,true,https://attack.mitre.org/techniques/T1481/002
+T1481.003,One-Way Communication,command-and-control,true,https://attack.mitre.org/techniques/T1481/003
+T1509,Non-Standard Port,command-and-control,false,https://attack.mitre.org/techniques/T1509
+T1512,Video Capture,collection,false,https://attack.mitre.org/techniques/T1512
+T1513,Screen Capture,collection,false,https://attack.mitre.org/techniques/T1513
+T1516,Input Injection,defense-evasion|impact,false,https://attack.mitre.org/techniques/T1516
+T1517,Access Notifications,collection|credential-access,false,https://attack.mitre.org/techniques/T1517
+T1521,Encrypted Channel,command-and-control,false,https://attack.mitre.org/techniques/T1521
+T1521.001,Symmetric Cryptography,command-and-control,true,https://attack.mitre.org/techniques/T1521/001
+T1521.002,Asymmetric Cryptography,command-and-control,true,https://attack.mitre.org/techniques/T1521/002
+T1521.003,SSL Pinning,command-and-control,true,https://attack.mitre.org/techniques/T1521/003
+T1532,Archive Collected Data,collection,false,https://attack.mitre.org/techniques/T1532
+T1533,Data from Local System,collection,false,https://attack.mitre.org/techniques/T1533
+T1541,Foreground Persistence,defense-evasion|persistence,false,https://attack.mitre.org/techniques/T1541
+T1544,Ingress Tool Transfer,command-and-control,false,https://attack.mitre.org/techniques/T1544
+T1575,Native API,defense-evasion|execution,false,https://attack.mitre.org/techniques/T1575
+T1577,Compromise Application Executable,persistence,false,https://attack.mitre.org/techniques/T1577
+T1582,SMS Control,impact,false,https://attack.mitre.org/techniques/T1582
+T1603,Scheduled Task/Job,execution|persistence,false,https://attack.mitre.org/techniques/T1603
+T1604,Proxy Through Victim,defense-evasion,false,https://attack.mitre.org/techniques/T1604
+T1616,Call Control,collection|command-and-control|impact,false,https://attack.mitre.org/techniques/T1616
+T1617,Hooking,defense-evasion,false,https://attack.mitre.org/techniques/T1617
+T1623,Command and Scripting Interpreter,execution,false,https://attack.mitre.org/techniques/T1623
+T1623.001,Unix Shell,execution,true,https://attack.mitre.org/techniques/T1623/001
+T1624,Event Triggered Execution,persistence,false,https://attack.mitre.org/techniques/T1624
+T1624.001,Broadcast Receivers,persistence,true,https://attack.mitre.org/techniques/T1624/001
+T1625,Hijack Execution Flow,persistence,false,https://attack.mitre.org/techniques/T1625
+T1625.001,System Runtime API Hijacking,persistence,true,https://attack.mitre.org/techniques/T1625/001
+T1626,Abuse Elevation Control Mechanism,privilege-escalation,false,https://attack.mitre.org/techniques/T1626
+T1626.001,Device Administrator Permissions,privilege-escalation,true,https://attack.mitre.org/techniques/T1626/001
+T1627,Execution Guardrails,defense-evasion,false,https://attack.mitre.org/techniques/T1627
+T1627.001,Geofencing,defense-evasion,true,https://attack.mitre.org/techniques/T1627/001
+T1628,Hide Artifacts,defense-evasion,false,https://attack.mitre.org/techniques/T1628
+T1628.001,Suppress Application Icon,defense-evasion,true,https://attack.mitre.org/techniques/T1628/001
+T1628.002,User Evasion,defense-evasion,true,https://attack.mitre.org/techniques/T1628/002
+T1628.003,Conceal Multimedia Files,defense-evasion,true,https://attack.mitre.org/techniques/T1628/003
+T1629,Impair Defenses,defense-evasion,false,https://attack.mitre.org/techniques/T1629
+T1629.001,Prevent Application Removal,defense-evasion,true,https://attack.mitre.org/techniques/T1629/001
+T1629.002,Device Lockout,defense-evasion,true,https://attack.mitre.org/techniques/T1629/002
+T1629.003,Disable or Modify Tools,defense-evasion,true,https://attack.mitre.org/techniques/T1629/003
+T1630,Indicator Removal on Host,defense-evasion,false,https://attack.mitre.org/techniques/T1630
+T1630.001,Uninstall Malicious Application,defense-evasion,true,https://attack.mitre.org/techniques/T1630/001
+T1630.002,File Deletion,defense-evasion,true,https://attack.mitre.org/techniques/T1630/002
+T1630.003,Disguise Root/Jailbreak Indicators,defense-evasion,true,https://attack.mitre.org/techniques/T1630/003
+T1631,Process Injection,defense-evasion|privilege-escalation,false,https://attack.mitre.org/techniques/T1631
+T1631.001,Ptrace System Calls,defense-evasion|privilege-escalation,true,https://attack.mitre.org/techniques/T1631/001
+T1632,Subvert Trust Controls,defense-evasion,false,https://attack.mitre.org/techniques/T1632
+T1632.001,Code Signing Policy Modification,defense-evasion,true,https://attack.mitre.org/techniques/T1632/001
+T1633,Virtualization/Sandbox Evasion,defense-evasion,false,https://attack.mitre.org/techniques/T1633
+T1633.001,System Checks,defense-evasion,true,https://attack.mitre.org/techniques/T1633/001
+T1635,Steal Application Access Token,credential-access,false,https://attack.mitre.org/techniques/T1635
+T1635.001,URI Hijacking,credential-access,true,https://attack.mitre.org/techniques/T1635/001
+T1636,Protected User Data,collection,false,https://attack.mitre.org/techniques/T1636
+T1636.001,Calendar Entries,collection,true,https://attack.mitre.org/techniques/T1636/001
+T1636.002,Call Log,collection,true,https://attack.mitre.org/techniques/T1636/002
+T1636.003,Contact List,collection,true,https://attack.mitre.org/techniques/T1636/003
+T1636.004,SMS Messages,collection,true,https://attack.mitre.org/techniques/T1636/004
+T1636.005,Accounts,collection,true,https://attack.mitre.org/techniques/T1636/005
+T1637,Dynamic Resolution,command-and-control,false,https://attack.mitre.org/techniques/T1637
+T1637.001,Domain Generation Algorithms,command-and-control,true,https://attack.mitre.org/techniques/T1637/001
+T1638,Adversary-in-the-Middle,collection,false,https://attack.mitre.org/techniques/T1638
+T1639,Exfiltration Over Alternative Protocol,exfiltration,false,https://attack.mitre.org/techniques/T1639
+T1639.001,Exfiltration Over Unencrypted Non-C2 Protocol,exfiltration,true,https://attack.mitre.org/techniques/T1639/001
+T1640,Account Access Removal,impact,false,https://attack.mitre.org/techniques/T1640
+T1641,Data Manipulation,impact,false,https://attack.mitre.org/techniques/T1641
+T1641.001,Transmitted Data Manipulation,impact,true,https://attack.mitre.org/techniques/T1641/001
+T1642,Endpoint Denial of Service,impact,false,https://attack.mitre.org/techniques/T1642
+T1643,Generate Traffic from Victim,impact,false,https://attack.mitre.org/techniques/T1643
+T1644,Out of Band Data,command-and-control,false,https://attack.mitre.org/techniques/T1644
+T1645,Compromise Client Software Binary,persistence,false,https://attack.mitre.org/techniques/T1645
+T1646,Exfiltration Over C2 Channel,exfiltration,false,https://attack.mitre.org/techniques/T1646
+T1655,Masquerading,defense-evasion,false,https://attack.mitre.org/techniques/T1655
+T1655.001,Match Legitimate Name or Location,defense-evasion,true,https://attack.mitre.org/techniques/T1655/001
+T1658,Exploitation for Client Execution,execution,false,https://attack.mitre.org/techniques/T1658
+T1660,Phishing,initial-access,false,https://attack.mitre.org/techniques/T1660
+T1661,Application Versioning,defense-evasion|initial-access,false,https://attack.mitre.org/techniques/T1661
+T1662,Data Destruction,impact,false,https://attack.mitre.org/techniques/T1662
+T1663,Remote Access Software,command-and-control,false,https://attack.mitre.org/techniques/T1663
+T1664,Exploitation for Initial Access,initial-access,false,https://attack.mitre.org/techniques/T1664
+T1670,Virtualization Solution,defense-evasion,false,https://attack.mitre.org/techniques/T1670
+T1676,Linked Devices,collection|persistence,false,https://attack.mitre.org/techniques/T1676

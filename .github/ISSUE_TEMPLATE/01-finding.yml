@@ -1,0 +1,164 @@
+name: "🐞 Finding — confirmed vulnerability"
+description: "File a confirmed vulnerability found during an engagement. Read docs/02-severity-and-reportability.md first."
+title: "[FINDING] <impact-category title, not the Android mechanism>"
+labels: ["type: finding"]
+projects: ["sanehunters/1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Before you file
+
+        Your title must name the **impact**, not the mechanism.
+        Good: `Account takeover via OAuth code interception in the exported callback activity`
+        Bad: `Activity com.target.AuthCallbackActivity is exported`
+
+        If this maps only to a **P5** VRT path, it is not a finding on its own. Either chain it to a
+        non-P5 category, or file it as a Ruled-Out instead.
+
+  - type: input
+    id: checklist_id
+    attributes:
+      label: Checklist ID
+      description: Which checklist item surfaced this, e.g. SANE-D07-014
+      placeholder: SANE-Dnn-NNN
+    validations: {required: true}
+
+  - type: input
+    id: target
+    attributes:
+      label: Target
+      description: package, versionName, versionCode, targetSdk
+      placeholder: com.client.app 8.42.1 (84201), targetSdk 34
+    validations: {required: true}
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options: ["Critical (VRT P1)","High (VRT P2)","Medium (VRT P3)","Low (VRT P4)","Informational (VRT P5) — do not submit standalone"]
+    validations: {required: true}
+
+  - type: input
+    id: vrt
+    attributes:
+      label: VRT path
+      description: The exact Bugcrowd VRT path you are claiming. Must not be a P5 leaf.
+      placeholder: broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers
+    validations: {required: true}
+
+  - type: dropdown
+    id: attacker
+    attributes:
+      label: Attacker model
+      description: Report the WEAKEST attacker that still works. See docs/05-attacker-models.md.
+      options:
+        - "AM-01 remote, no interaction"
+        - "AM-02 remote, one click"
+        - "AM-03 zero-permission local app"
+        - "AM-04 local app with one common permission"
+        - "AM-05 another user of the same app"
+        - "AM-06 network attacker, no trusted CA"
+        - "AM-07 network attacker with a trusted CA"
+        - "AM-08 malicious third-party SDK"
+        - "AM-09 malicious backend or CDN"
+        - "AM-10 physical access, locked"
+        - "AM-11 physical access, unlocked"
+        - "AM-12 attacker's own rooted device — NOT AN ATTACK"
+    validations: {required: true}
+
+  - type: textarea
+    id: precondition
+    attributes:
+      label: Precondition
+      description: One sentence, as weak as you can honestly make it. This drives the rating more than anything else.
+      placeholder: Any application installed on the device, declaring no permissions, can ...
+    validations: {required: true}
+
+  - type: textarea
+    id: mechanism
+    attributes:
+      label: Mechanism
+      description: Name the control that was supposed to stop this, and the exact path that misses it. Cite file:line. Explain WHY it fails.
+      placeholder: |
+        The guard: RouterActivity.java:88 allow-lists three hosts before startActivity().
+        The path that skips it: RouterActivity.java:140 (onNewIntent) reaches the same sink without calling validate().
+        Why it fails: ...
+    validations: {required: true}
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Numbered, copy-pasteable, no placeholders. Someone who has never seen the app must succeed.
+      render: shell
+    validations: {required: true}
+
+  - type: textarea
+    id: delta
+    attributes:
+      label: The delta
+      description: The arithmetic that makes this a vulnerability.
+      placeholder: |
+        Authorised access: 1 contact (the one the user picked)
+        Actual access obtained: all 3 contacts including a canary value never shown to the picker
+    validations: {required: true}
+
+  - type: textarea
+    id: chain
+    attributes:
+      label: Chain
+      description: Each link and its status. Mark anything unproven explicitly. Two verified links plus one unproven link is a Medium, not a Critical.
+      value: |
+        | # | Link | Status |
+        |---|------|--------|
+        | 1 |      | Verified on device |
+        | 2 |      | Verified on device |
+        | 3 |      | **Unproven** — requires ... |
+    validations: {required: true}
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What the attacker gains, in the user's language. Quantify the blast radius.
+    validations: {required: true}
+
+  - type: checkboxes
+    id: evidence
+    attributes:
+      label: Evidence checklist
+      description: Per docs/04-poc-and-evidence-standard.md. All must be true before submission.
+      options:
+        - {label: "Video recorded — one continuous take, portrait, under 60s, under 5 MB", required: true}
+        - {label: "Device/build identity readable in every frame", required: true}
+        - {label: "Ground truth shown from the legitimate app before the attack", required: true}
+        - {label: "Negative control in the SAME take as the exploit", required: true}
+        - {label: "Preconditions on screen (permissions held, targetSdk)", required: true}
+        - {label: "Canary value planted and shown in both ground truth and exploit output", required: true}
+        - {label: "Raw platform API return values printed, not paraphrased", required: true}
+        - {label: "Attacker app source and prebuilt APK in the evidence tree", required: true}
+        - {label: "Nothing on screen belongs to a real third party", required: true}
+
+  - type: checkboxes
+    id: discipline
+    attributes:
+      label: Anti-false-positive checks
+      options:
+        - {label: "I checked for a SECOND IMPLEMENTATION — accurate citations do not make a finding correct", required: true}
+        - {label: "This is not an emulator artefact (see docs/02 §9)", required: true}
+        - {label: "Any extracted secret has had its restriction verified with a recorded probe", required: true}
+        - {label: "If root was used, it was for EVIDENCE only, not as an attack precondition", required: true}
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Remediation
+      description: Specific to their code, not generic advice.
+    validations: {required: true}
+
+  - type: textarea
+    id: limitations
+    attributes:
+      label: Limitations and what was ruled out
+      description: Anything the environment could not prove, and which environment would prove it. This is what makes a triager believe the rest.
