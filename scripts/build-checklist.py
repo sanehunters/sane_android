@@ -109,8 +109,10 @@ def main():
     L = []; A = L.append
     A("# MASTER CHECKLIST\n")
     A(f"> **Every test item, from every source, in one file. {total} items across {len(chapters)} domains.**\n")
-    A("> This is the single file an agent reads to know everything it must test. The per-domain chapters")
-    A("> in [`checklist/`](checklist/) carry the same items; this file is the merged view.\n")
+    A("> **Read this file to know everything you must test.** Each item shows its severity ceiling, the VRT")
+    A("> row it aims at, the attacker model and a one-line statement of the test. The exact command, the")
+    A("> observable that proves it, the escalation and the mandatory *Ruled out when* mechanism live in the")
+    A("> per-domain chapter linked from each section — open that when you actually run the domain.\n")
     A("> **The checklist is the floor, not the ceiling.** You must cover every in-scope item before")
     A("> calling an assessment complete. You are also expected to think past it — park anything novel as")
     A("> a hypothesis and chase it in P7. See [`docs/09-coverage-discipline.md`](docs/09-coverage-discipline.md).\n")
@@ -148,28 +150,38 @@ python3 scripts/coverage.py <eng>/checklist-status.csv --components <eng>/invent
         ph, ms = PHASE.get(c["id"], ("P4", "M4"))
         cnt = collections.Counter(i["sev"] for i in c["items"])
         mix = " · ".join(f"{E[s]} {cnt[s]} {s}" for s in SEV_ORDER if cnt.get(s))
-        A(f"\n---\n\n# {c['id']} {c['name']}\n")
-        A(f"**Phase {ph} · Milestone `{ms}` · {len(c['items'])} items** — {mix}")
-        A(f"· full chapter: [`checklist/{c['file']}`](checklist/{c['file']})\n")
-        if c["crux"]: A(f"> **The crux question.** {c['crux']}\n")
+        anchor = c["file"][:-3]
+        A(f"\n---\n\n## {c['id']} {c['name']}\n")
+        A(f"**Phase {ph} · `{ms}` · {len(c['items'])} items** — {mix}  \n")
+        A(f"📄 Full detail, with every command and proof: [`checklist/{c['file']}`](checklist/{c['file']})\n")
+        if c["crux"]:
+            A(f"> **Crux question.** {c['crux']}\n")
         if c["why"]:
-            first = c["why"].split("\n\n")[0]
-            A(f"{first}\n")
-        if c["triage"]: A(f"**Triage order**\n\n{c['triage']}\n")
-        A("\n## Items\n")
+            A(c["why"].split("\n\n")[0] + "\n")
+        cur = None
         for i in c["items"]:
-            A(f"\n### `{i['id']}` {i['title']}\n")
-            meta = []
-            if i["sev"]:      meta.append(f"{E.get(i['sev'],'')} **{i['sev'].title()}**")
-            if i["vrt"]:      meta.append(f"VRT {i['vrt']}")
-            if i["attacker"]: meta.append(i["attacker"])
-            if i["applies"]:  meta.append(f"applies: {i['applies']}")
-            if meta: A(" · ".join(meta) + "\n")
-            if i["maps"]: A(f"*Maps to:* {i['maps']}\n")
-            A(re.sub(r'^\|.*\|\s*$\n?', '', i["body"], flags=re.M).strip() + "\n")
-        if c["grave"]: A(f"\n## ⚰️ {c['id']} graveyard — do not submit standalone\n\n{c['grave']}\n")
-        if c["joins"]: A(f"\n## 🔗 {c['id']} cross-surface joins\n\n{c['joins']}\n")
-        if c["sources"]: A(f"\n<details><summary>{c['id']} sources</summary>\n\n{c['sources']}\n\n</details>\n")
+            if i["sev"] != cur:
+                cur = i["sev"]
+                A(f"\n**{E.get(cur,'⬜')} {cur.title()} ceiling**\n")
+            bits = []
+            v = i["vrt"].strip()
+            if v and v.lower() not in ("n/a","none","—","-",""):
+                v = re.sub(r'\s*\(P\d\)\s*$', '', v)
+                bits.append(f"`{v[:78]}`")
+            a = i["attacker"].strip()
+            if a and a.lower() not in ("n/a","—","-",""):
+                bits.append(re.sub(r'\s+', ' ', a)[:34])
+            test = one_line(i["body"], "Test")
+            if test:
+                bits.append(test[:110] + ("…" if len(test) > 110 else ""))
+            tail = ("  \n   <sub>" + " · ".join(bits) + "</sub>") if bits else ""
+            A(f"- [ ] **`{i['id']}`** {i['title']}{tail}")
+        if c["grave"]:
+            A(f"\n<details><summary>⚰️ {c['id']} graveyard — do not submit these standalone</summary>\n")
+            A(c["grave"] + "\n\n</details>\n")
+        if c["joins"]:
+            A(f"\n<details><summary>🔗 {c['id']} cross-surface joins — park these, chase them in P7</summary>\n")
+            A(c["joins"] + "\n\n</details>\n")
 
     master = "\n".join(L) + "\n"
     open(os.path.join(ROOT, "MASTER-CHECKLIST.md"), "w", encoding="utf-8").write(master)
