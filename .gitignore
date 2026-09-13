@@ -14,3 +14,17 @@ assessment-status.md
 .DS_Store
 __pycache__/
 *.pyc
+
+# Engagement artefacts that must never be committed
+BugBountyTarget/*/apk/*
+!BugBountyTarget/*/apk/.gitkeep
+BugBountyTarget/*/decompiled/*
+!BugBountyTarget/*/decompiled/.gitkeep
+BugBountyTarget/**/*.apk
+BugBountyTarget/**/*.aab
+BugBountyTarget/**/*.dex
+BugBountyTarget/**/*.so
+BugBountyTarget/**/*.keystore
+BugBountyTarget/**/*.jks
+BugBountyTarget/**/*.har
+.DS_Store
