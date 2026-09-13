@@ -2375,3 +2375,488 @@ that the attacker cannot reach directly?**
   `FLAG_GRANT_*` stripping via `androidx.core.content.IntentSanitizer`) before launching. Generalises to
   any `registerForActivityResult`/`onActivityResult` launcher fed an attacker `Parcelable` Intent from an
   exported receiver — check those too before writing the negative.
+
+### D08-062 · The byte-returning gadget — prove exfiltration, not a proxied read
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (it decides the ceiling of every read finding in this chapter) |
+| **VRT** | n/a (governance) — it is what separates `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) from an unrated `broken_access_control.exposed_sensitive_android_intent` |
+| **Attacker** | n/a |
+| **Applies to** | every confused-deputy read in this chapter — D08-010, -011, -012, -033, -034, -052, -058, -061 |
+| **Maps to** | the corpus rule "two verified links plus one unproven link is a Medium, not a Critical"; `docs/02-severity-and-reportability.md`; Oversecured "Gaining access to arbitrary Content Providers" (the four byte-returning vectors) |
+
+- **Test:** Separate a real exfiltration primitive from one where the victim reads its own file and
+  **nothing crosses the sandbox boundary**. "I made the app open its own database" is not a data-exposure
+  finding; "my zero-permission app holds the bytes" is. Before you rate anything Critical, name the gadget
+  in *this* build that returns bytes to your UID.
+- **How:** There are only five shapes. Enumerate which exist here, by name and `file:line`:
+  ```bash
+  # 1. result echo — the victim hands the Intent (and its grants) back to you
+  grep -rnE 'setResult\(' out/sources/ -A2 | grep -nE 'getIntent\(\)|intent\)'
+  # 2. redirect target you control — component=<attacker> + FLAG_GRANT_* on the nested Intent
+  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' out/sources/
+  # 3. self-grant from an exported receiver launching an attacker Intent (D08-061)
+  grep -rn 'EXTRA_CONSENT_INTENT\|registerForActivityResult\|launcher.launch(' out/sources/
+  # 4. a PendingIntent you can send with your own component filled in (D08-037, D08-040)
+  # 5. the app's own outbound upload/webhook that you can aim at your collector
+  grep -rnE 'okhttp|Retrofit|HttpURLConnection|multipart|EXTRA_STREAM' out/sources/ -B8 | grep -nE 'getIntent\(\)|getData\(\)'
+  ```
+  Then **prove the copy, not the open.** A share sheet rendering only proves `openInputStream()` returned;
+  a triager will say the app may have stat'd the file and nothing more. Aim the same primitive at an
+  artefact the app *just created* on this run, and run the negative control:
+  ```bash
+  adb shell run-as com.target.app ls -l cache/ | tail -5     # note a freshly created 0_<name>
+  # positive: point the primitive at cache/0_<name>  -> the sheet/preview renders it
+  # negative: point it at cache/0_<random-never-created> -> nothing renders
+  ```
+- **Proof:** Attacker-side bytes — the file content in your own app's log or on your collector, captured on
+  a separate device, with no shell, no adb and no root. The fresh-cache-artefact rendering plus the
+  never-created-filename control is what closes the "maybe it only opened it" objection. If no gadget
+  exists, the proof is the **enumeration itself**: five shapes searched, none present, stated in the report.
+- **Escalation:** Finding the gadget is the whole game. D08-061 is the canonical one because the victim
+  itself issues the grant; D08-033 is the cheapest because it needs one grep.
+- **Ruled out when:** All five gadget shapes were searched and none exists in this build — in which case
+  downgrade the read to Medium with the precondition written out ("the victim reads the file; no path
+  returns the bytes to an unprivileged caller in this build"), and say so in the report rather than
+  quietly rating it Critical anyway.
+
+### D08-063 · Marker discipline and the paired-refusal control on every redirection claim
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a (false-positive discipline) |
+| **Attacker** | n/a |
+| **Applies to** | every launch, grant and echo claim in this chapter |
+| **Maps to** | Marker Discipline (8+ character random markers, search the **baseline** for the marker first); the Body-Diff Rule (a byte-identical result is not a bypass); Server-Policy-vs-State; `docs/07-triage-and-false-positives.md` |
+
+- **Test:** Two failure modes kill redirection reports in triage. First, attributing a launch to your
+  payload when the app would have launched that screen anyway. Second, calling a component "non-exported"
+  on the strength of a refusal that had nothing to do with export.
+- **How:** **Marker.** Put a random 8+ character token in every value you inject, and search the baseline
+  before you claim anything:
+  ```bash
+  M=$(head -c 12 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 10); echo "$M"
+  # 1. BASELINE: drive the app normally, with no payload, and prove the marker is absent
+  adb logcat -c; adb shell monkey -p com.target.app 1 >/dev/null; sleep 5
+  adb logcat -d | grep -c "$M"          # must be 0
+  adb shell dumpsys activity activities | grep -c "$M"   # must be 0
+  # 2. TEST: the same marker inside the nested Intent
+  #    inner.putExtra("url", "https://collector.invalid/" + M)  /  --es token "$M"
+  adb logcat -d | grep -n "$M"
+  ```
+  Never use `test`, `evil`, `attacker`, `poc`, `payload`, `1234` or your own domain as the marker, and do
+  not put them in your stub's package name either — a target that logs caller packages will then print
+  something a reviewer discounts on sight. **Paired refusal.** The differential *is* the finding:
+  ```bash
+  adb shell am start -n com.target.app/.internal.NonExportedActivity   # must be REFUSED
+  # java.lang.SecurityException: Permission Denial: starting Intent { ... } not exported from uid ...
+  adb shell am start -n com.attacker.poc/.Go                            # the redirect: must SUCCEED
+  adb shell dumpsys activity activities | grep -m1 -E 'mResumedActivity|ResumedActivity'
+  ```
+  **Classify every refusal before you trust it.** A failure is not proof of a control; several layers sit
+  in front of the export check and each produces a different string:
+  ```bash
+  adb logcat -d -s ActivityTaskManager ActivityManager PackageManager AndroidRuntime | tail -40
+  ```
+
+  | Refusal text | What it actually means |
+  |---|---|
+  | `Permission Denial: ... not exported from uid` | the export check — the control you wanted to test |
+  | `Permission Denial: ... requires <permission>` | a permission gate, not export |
+  | `Abort background activity starts` / `BAL_BLOCK` | background-launch policy (API 34+), says nothing about export |
+  | `Calling startActivity() from outside of an Activity context ... FLAG_ACTIVITY_NEW_TASK` | your own harness bug |
+  | `Intent does not match component's intent filter` / `Access blocked` | Android 16 platform hardening (D08-004), not an app fix |
+  | app-thrown `IllegalArgumentException`/validation exception in the app's own frames | the application-level control — the only true negative |
+
+  Run two controls every session: a **known exported** component (must start) and a **known non-exported**
+  one (must be refused), so you know your harness distinguishes them at all.
+- **Proof:** The marker absent from the baseline and present in the test capture, plus the paired
+  refusal/success with both exact strings quoted. For grant claims the analogue of the body diff is the
+  read itself: `openInputStream()` throwing `SecurityException` before the redirect and returning the same
+  bytes as `run-as cat` afterwards — identical bytes, not "a file opened".
+- **Escalation:** n/a — this is what makes every other item in the chapter defensible.
+- **Ruled out when:** n/a — unconditional. A launch claim with no baseline check, or a "non-exported"
+  claim with no quoted refusal string, is not reportable in this chapter.
+
+### D08-064 · Counted sweeps and the two-stack reproduction bar
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a (method) |
+| **Attacker** | n/a |
+| **Applies to** | the D08-001 census, the D08-005 SDK sweep, and every Critical/High in this chapter |
+| **Maps to** | the Shell-Loop Ban ("always count your results"); the Multi-Tool Reproduction Bar for Critical/High; CLAUDE.md Rule 3 (`adb shell` is uid 2000 and is not AM-03) |
+
+- **Test:** The D08-001 join is a loop over hundreds of grep hits, and a zsh array loop that iterates zero
+  times prints nothing and looks exactly like a clean app. Anything iterating more than five items goes to
+  Python, with a per-item log line and a final count.
+- **How:**
+  ```python
+  #!/usr/bin/env python3
+  # d08_sweep.py — extractor -> sink census with an explicit count. usage: d08_sweep.py out/sources
+  import os, re, sys
+  ROOT = sys.argv[1] if len(sys.argv) > 1 else "out/sources"
+  SKIP = re.compile(r"^(android|androidx|kotlin|kotlinx|com/google/android/material)/")
+  EXTRACT = re.compile(r"getParcelableExtra\(|getParcelableArrayListExtra\(|getParcelable\(|"
+                       r"getSerializableExtra\(|Intent\.parseUri\(|Intent\.getIntent\(|"
+                       r"unmarshall\(|readParcelable\(|android\.intent\.extra\.INTENT")
+  SINK = re.compile(r"startActivity\(|startActivityForResult\(|startActivities\(|startService\(|"
+                    r"startForegroundService\(|bindService\(|sendBroadcast\(|sendOrderedBroadcast\(|"
+                    r"setResult\(|\.send\(")
+  files = hits = pairs = errors = 0
+  for dirpath, _, names in os.walk(ROOT):
+      for n in names:
+          if not n.endswith((".java", ".kt")):
+              continue
+          p = os.path.join(dirpath, n)
+          rel = os.path.relpath(p, ROOT)
+          if SKIP.match(rel):
+              continue
+          files += 1
+          try:
+              lines = open(p, encoding="utf-8", errors="replace").read().splitlines()
+          except Exception as e:                      # never let one bad file end the sweep
+              errors += 1; print("ERR  %s: %s" % (rel, e)); continue
+          for i, line in enumerate(lines):
+              if not EXTRACT.search(line):
+                  continue
+              hits += 1
+              if any(SINK.search(w) for w in lines[i:i + 12]):
+                  pairs += 1
+                  print("PAIR %s:%d: %s" % (rel, i + 1, line.strip()[:120]))
+  print("# files=%d extractor_hits=%d extractor_sink_pairs=%d read_errors=%d"
+        % (files, hits, pairs, errors), file=sys.stderr)
+  ```
+  ```bash
+  python3 d08_sweep.py out/sources > /tmp/d08_pairs.txt 2>/tmp/d08_counts.txt
+  cat /tmp/d08_counts.txt      # files= must be in the thousands; a files=0 line means the path is wrong
+  wc -l /tmp/d08_pairs.txt
+  ```
+  **Two stacks for every Critical/High.** `adb shell` runs as uid 2000 (shell), which holds privileges no
+  installed app has, and drozer's agent runs as its own app — so reproduce each rated finding through two
+  independent paths, at least one of which is a **zero-permission attacker APK**:
+  ```bash
+  # stack 1 — the attacker APK (the one that establishes AM-03; commit its manifest as evidence)
+  adb install -r attacker-poc.apk && adb shell am start -n com.attacker.poc/.Go
+  adb shell dumpsys package com.attacker.poc | sed -n '/requested permissions/,/^$/p'
+  # stack 2 — drozer or a Frida-driven send from a second process
+  ```
+  ```
+  dz> run app.activity.start --component com.target.app com.target.app.ProxyActivity --extra ...
+  ```
+- **Proof:** A count line for every sweep (`files=`, `extractor_hits=`, `extractor_sink_pairs=`) and, for
+  each Critical/High, two reproductions from different stacks with the attacker manifest showing
+  `requested permissions: android.permission.INTERNET` and nothing else.
+- **Escalation:** n/a.
+- **Ruled out when:** n/a — method. A zero-pair sweep is only a negative once the count line proves the
+  sweep actually walked the tree.
+
+### D08-065 · Pre-severity gate against the Critical claim, not against the bug
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a (governance) |
+| **Attacker** | n/a |
+| **Applies to** | every D08 Critical or High claim |
+| **Maps to** | the Pre-Severity Gate (five questions against the Critical **claim**); retraction-appendix discipline and its inverse; `docs/02-severity-and-reportability.md` |
+
+- **Test:** Write the draft Critical title, then substitute the **Critical claim** — not the bug — into each
+  question. This domain produces more confirmed-primitive-without-a-chain than any other, because
+  "I launched a non-exported activity" feels like the finish line and is actually the starting line.
+  1. Have I validated the full chain to attacker-attainable impact, or only the launch? *Launch confirmed*
+     is not *authentication bypass*. The reached component may re-check the session on entry.
+  2. What does the attacker walk away with, in one concrete sentence? "The victim's session token, read by
+     a zero-permission app, POSTed to my server" is concrete. "Could lead to account takeover" is not.
+  3. Have I reproduced the full chain end to end at least twice, and at least once from an app UID rather
+     than `adb shell` (D08-064)?
+  4. Is a gate still standing? A re-auth prompt on the internal screen, a device-bound token, an encrypted
+     file whose Keystore key you cannot use off-device, `BAL_BLOCK` on API 34+, or Android 16's default
+     hardening with no `removeLaunchSecurityProtection()` in the app. If yes, it is "primitive present" at
+     a lower severity, documented honestly.
+  5. Has the programme rejected this class before? Several programmes exclude "URIs leaked because a
+     malicious app has permission to view URIs opened" — so frame the finding around the extras and the
+     grant, not around URI visibility.
+- **How:** Record the five answers in the working notes before drafting. Attach the D08-004 two-API-level
+  table to the answer for question 4 — the vendor will raise it if you do not.
+- **Proof:** The five answers, plus the two reproductions from D08-064, plus the platform-version table.
+- **Escalation:** When a claim fails the gate, downgrade it and write the retraction into the appendix
+  rather than deleting it:
+  ```markdown
+  ### Retracted: <finding name>
+  - **Original signal:** <what looked like a bug>
+  - **Disproving evidence:** <reproduction step + observation>
+  - **Why it looked like a bug:** <marker collision / shell-UID artefact / platform block read as an app fix>
+  - **Retraction date:** <YYYY-MM-DD>
+  ```
+  The inverse rule matters as much: **do not retract a confirmed finding that stopped reproducing because
+  the client patched mid-engagement.** Redirection sinks are a one-line fix and are patched quietly and
+  fast. Keep the timestamped pre-patch capture — the `dumpsys` line, the logcat, the app version from
+  `aapt dump badging` — and say in the report that the behaviour changed on date X.
+- **Ruled out when:** n/a — unconditional for every Critical/High in this chapter.
+
+### D08-066 · Evidence package, chain-filing order and the severity-request paragraph
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a (deliverable and submission mechanics) |
+| **Attacker** | n/a |
+| **Applies to** | every D08 submission |
+| **Maps to** | the five-screenshot state-change pattern; HAR/transcript sanitising and the PII split (mask the secret, leave the correlation data visible); chain-filing order — primitives first so their ids exist, then the consumer, then backfill; "one fix equals one bounty"; Bugcrowd VRT `broken_access_control.exposed_sensitive_android_intent` carries **priority null**, so the priority comes entirely from your narrative; `docs/04-poc-and-evidence-standard.md` |
+
+- **Test:** A redirection finding is a state change (a component ran, a grant was issued, a transaction
+  repeated), so one screenshot of a screen is not an evidence package. Capture five artefacts in one
+  sitting — re-launching the app between captures resets the task stack and revokes the grant, which
+  invalidates the earlier ones.
+- **How:** Name them `{finding-#}-step{n}-{description}.png` and reference them by filename in the body:
+  1. **Pre-state** — the direct attempt refused, with the exact string:
+     `am start -n com.target.app/.internal.X` → `SecurityException: Permission Denial: ... not exported`.
+     For a grant finding, your app's `openInputStream()` on the target URI throwing `SecurityException`.
+  2. **The bug** — the stub app firing the nested payload, and `dumpsys activity activities` naming the
+     internal component as resumed (or `dumpsys activity permissions` showing the grant to your uid). The
+     most important artefact.
+  3. **Post-state negative** — the control: the same payload with the nested extra removed, taking the
+     normal path; or the never-created filename from D08-062 producing nothing.
+  4. **Post-state positive** — your app holding the bytes / the action completed, with the marker from
+     D08-063 visible.
+  5. **Side effect** — your collector on a **separate device** showing the exfiltrated value, plus whether
+     the victim's UI showed the user anything at all (that answers "would the user notice", which is the
+     next question the triager asks).
+
+  Sanitising, ranked by practicality: (A) do not capture the secret — log the byte count and a SHA-256 of
+  the stolen file rather than its content, and keep the full capture locally for the triager through the
+  platform's private attachment system, never email; (B) black-bar in an image editor; (C) find/replace on
+  transcripts and HARs:
+  ```bash
+  sed -E 's/(access_token|refresh_token|id_token|Authorization|password|otp|pin)["=: ]+[^",[:space:]]+/\1=<REDACTED>/g' \
+    d08_exfil.txt > d08_exfil.sanitised.txt
+  grep -iE 'token|bearer|password|otp' d08_exfil.sanitised.txt | head   # verify the redaction worked
+  ```
+  **Leave visible** — the triager needs these to reproduce and to correlate with their logs: your own
+  attacker package name and uid, the component and authority names, the flag values (`0x1000000f` etc.),
+  the exact `SecurityException` text, request/trace ids, the JSON **key** names, and the device's API
+  level. **Mask** — token and cookie values, other users' PII, the victim account's phone number, device
+  serial/IMEI. Rotate the test account after submission so anything visible in a screenshot is dead.
+- **Proof:** Five numbered, cross-referenced artefacts plus a sanitised transcript, with the unredacted
+  originals retained locally, and the attacker APK's manifest committed as evidence of AM-03.
+- **Escalation:** **File in the right order.** D08 is a primitive factory and the pieces have independent
+  fix surfaces: the forwarder (D08-007), the `FileProvider` path scope (D07), the code-load path (D17), the
+  mutable PendingIntent (D08-037). File each primitive first at its standalone severity so its id exists,
+  then file the consumer with the full narrative at the chained severity, then backfill:
+  ```markdown
+  ## Chain partners (filed as separate reports)
+  - **submission [UUID-1]** — `ProxyActivity` forwards an unvalidated nested Intent (D08-007)
+  - **submission [UUID-2]** — `FileProvider` `<root-path path="."/>` exposes the app data directory (D07)
+  These primitives have independent fix surfaces and are filed separately per the programme's
+  "one fix = one bounty" rule.
+  ```
+  Do not paste the chain narrative into every primitive, do not claim each primitive is independently
+  Critical, and do not ask for one combined bounty — a chain is a severity amplifier, not a merge request.
+  Then open the consumer's body with the severity request, because the VRT node you will be given defaults
+  to nothing:
+  ```markdown
+  ## Severity request — please review carefully before applying VRT default
+
+  The closest VRT category is "Broken Access Control > Exposed Sensitive Android Intent", which carries
+  **no default priority** — it is rated on demonstrated impact. **I am requesting evaluation at P[N]
+  [standalone | in chain with submission UUID-1]** because:
+
+  1. **What crosses the boundary** — <the exact bytes/action, and the UID that ended up holding them>.
+  2. **Attacker model** — a zero-permission third-party app (manifest attached), no root, no adb, no user
+     interaction beyond <state it exactly>.
+  3. **Platform coverage** — reproduced on API <n> and API <m>; the app <does / does not> call
+     `removeLaunchSecurityProtection()`.
+  ```
+- **Ruled out when:** n/a — unconditional for every submission in this chapter.
+
+## Graveyard for this domain
+
+| Observation | Why it is not a finding | What would make it one |
+|---|---|---|
+| "Exported activity forwards an Intent" with no reached component that the caller could not reach directly | The VRT node is `broken_access_control.exposed_sensitive_android_intent`, **priority null** — it is rated on what it exposes, and this exposes nothing new | Land it on a component that is `exported="false"`, or on one whose extras drive an action (D08-007), or attach grant flags (D08-010) |
+| A `StrictMode` `UnsafeIntentLaunchViolation` in logcat | A detector firing is a pointer, not an exploit; on its own it is Low and most programmes take it as informational | Weaponise the exact frame it names — the violation then belongs in the report as corroboration, never as the finding (D08-002) |
+| `FLAG_MUTABLE` present in the code | Mutability is mandatory for direct reply and legitimate in several APIs; the flag alone says nothing | The base Intent has no `ComponentName`, **or** the named component consumes `getData()`/`getExtras()` from the delivered intent, **and** you can show an acquisition path (D08-037, -038, -044) |
+| A mutable PendingIntent that never leaves the process, or is only handed to `AlarmManager` | No acquisition path — a token you cannot obtain is not a capability | Show it on a notification, a widget, a slice, an AIDL return or an Intent extra, and demonstrate the acquisition (D08-040, -045, -046, -047) |
+| PendingIntent records read out of `adb shell dumpsys activity intents` | `dumpsys` needs shell or root; AM-12 is not an attack | Obtain the same token from an app UID — a notification listener, a widget host, or an exported component that hands it out |
+| A redirect proved only with `adb shell am start` | `shell` is uid 2000 and holds privileges no installed app has; the finding has not established AM-03 | Re-prove from a zero-permission attacker APK and commit its manifest (D08-064) |
+| A nested-Intent PoC that fails on Android 16 | That is the platform mitigation, not an application fix — and it is the vendor's favourite way to close the report | Run both API levels (D08-004), report it as an application bug with the platform mitigation noted; if the app calls `removeLaunchSecurityProtection()` it is a finding at full severity on every version (D08-019) |
+| The app crashes when you send a malformed nested Intent or an unexpected Parcelable type | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, and it is a self-inflicted local crash | The crash is persistent (crash-on-launch, D04/D19), or the `BadParcelableException` is evidence of a type instantiated before the check, which you then turn into the mismatch finding (D08-028, -029) |
+| `grantUriPermissions="true"` on a `FileProvider` | Mandatory for the class — without it the provider throws | The path scope is over-broad (D07), or a redirector issues a grant to your UID (D08-010 → -012) |
+| `getCreatorPackage()` appearing in the code | Defensive logging and telemetry use it legitimately | The value reaches an `if` that gates a privileged action (D08-041) — read the branch, not the call |
+| `Intent.parseUri` on a string the app itself built (an internal round-trip, `toUri()` then `parseUri()`) | Not attacker-controlled; it is a serialisation convenience | The string reaches `parseUri` from a deep link, a WebView URL, a push payload, a QR code or an extra (D08-022 → -026) |
+| `IntentSanitizer` present, strict allow-list, `sanitizeByThrowing` | The documented mitigation, correctly applied | `allowAnyComponent()`, `allowHistoryStackFlags()`, or the log-and-continue `sanitize(intent, logger)` form (D08-018) |
+| A URI grant your app already had, re-granted | You granted yourself access to your own data | The grant is to a URI under the **victim's** authority, verified by the same read failing before the redirect (D08-063) |
+| "The internal WebView opened" with no control over its URL or its origin | A screen appearing is not impact; this is where most redirection reports stall | Control the loaded URL (D10), reach a bridge method, or read a `file://`/`content://` from that origin |
+| Redirection into a component that immediately re-checks the session and bounces to login | The auth control held; you crossed the export boundary, not the auth boundary | Find the component that does **not** re-check — that is question 4 of the pre-severity gate (D08-065) |
+| A persistable grant you obtained but never used after a reboot | The claim "survives reboot" is exactly the kind of unverified half-link that gets a Critical downgraded | Reboot the device and read the URI again, with `dumpsys activity permissions` before and after (D08-012) |
+| `EXTRA_REFERRER` present in the code | Analytics reads it constantly and harmlessly | It feeds an authorisation decision (D08-060) |
+
+## Cross-surface joins
+
+- **D08 × D07 — the paths XML and the forwarder.** Nobody reads `res/xml/file_paths.xml` and
+  `startActivity(getIntent().getParcelableExtra(...))` in the same sitting. The XML decides what a grant
+  *reaches*; the forwarder decides *who gets one*. Separately they are a configuration note and a
+  "component forwards an intent". Joined, they are
+  `content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/auth.xml` read by a
+  zero-permission app. Do the D08-006 census **before** you build any PoC — it picks your target URI for
+  you, and it is why `exported="false"` on a provider is never a ruled-out basis on its own.
+- **D08 × D10 — the forwarder and the session-bearing WebView.** The WebView reviewer enumerates bridges
+  and origins; the IPC reviewer enumerates exported components. Neither asks which **non-exported**
+  activity hosts a WebView that already carries the user's cookies. That activity is the highest-value
+  redirect target in most apps: the redirect supplies the URL, the WebView supplies the session, and the
+  finding converts from an unrated intent exposure into token theft. Pick the redirect target by sink
+  quality, not by the word "Admin" in its class name.
+- **D08 × D09 — the deep link is what changes the attacker model.** The same `parseUri` sink is AM-03 when
+  it is reached from an extra and AM-02 when it is reached from a link in a browser or a message. The deep
+  link reviewer tests for open redirect and XSS in the `url` parameter and never pastes
+  `intent:#Intent;component=...;end` into it. That one payload moves severity by a whole band because it
+  removes the "attacker must already have an app installed" objection (D08-022, -024, -026).
+- **D08 × D24/D28 — the notification drawer is the PendingIntent acquisition layer.** The PendingIntent
+  reviewer reads the builder; the notification reviewer reads the content. The join is a
+  `NotificationListenerService` that harvests `contentIntent`/`actions[i].actionIntent` and re-sends them:
+  it converts "the app creates a mutable PendingIntent" from a code observation into a confused deputy with
+  a working acquisition path, and it is the documented vector on Google's own page (D08-040, -041).
+- **D08 × D17 — the write flag and the loader.** `FLAG_GRANT_WRITE_URI_PERMISSION` is usually reported as
+  "write access to app data", which most programmes rate Medium. Enumerate `DexClassLoader`,
+  `PathClassLoader`, `System.load`, `createPackageContext` and the plugin directories **first**, choose the
+  write destination to match, and the same primitive is the top-paying category on the programme. This is
+  the Oversecured Google-app chain shape: redirection → provider write → code load.
+- **D08 × D03 — the permission the victim holds is the permission you inherit.** The manifest reviewer
+  lists `READ_CONTACTS`, `READ_SMS`, `READ_CALL_LOG` and moves on; the redirection reviewer aims at the
+  app's own providers. Aim instead at the **system** provider the victim has permission for
+  (`content://com.android.contacts/data`) and the echo or the grant re-delegates a dangerous permission you
+  never requested (D08-034). The manifest's permission list is a menu of what the confused deputy can fetch.
+- **D08 × D05/D13 — the exported receiver on the OTP screen.** D05 tests exported receivers for injection;
+  D13 tests OTP flows for brute force. Neither tests the GMS SMS User Consent receiver as an
+  *arbitrary-Intent-launch gadget* that exists **only while the OTP screen is up** — which is also the
+  moment the app's private storage holds the freshest session material (D08-061). The BAL precondition on
+  API 34+ makes it "captures on the next login", not "unconditional"; say that yourself before the triager
+  does.
+- **D08 × D15 — where the redirect lands is often an older API surface.** An internal route reached through
+  a forwarder or an internal WebView frequently calls a backend version the current web client no longer
+  uses, with weaker authorisation and more field exposure. Diff the two **behaviourally**, not by response
+  shape: a version difference alone is informational; the weakened control is the finding. Take the
+  redirect's destination URL off-device and replay it against the current API version to see which checks
+  are missing.
+- **D08 × D23 — replay and idempotency.** The payments reviewer tests the checkout flow in the UI; the
+  PendingIntent reviewer greps `FLAG_ONE_SHOT`. Joined: a payment-confirmation PendingIntent without
+  `FLAG_ONE_SHOT` whose backend has no idempotency key produces N charges from one user tap, and the
+  `filterEquals()` collision (D08-043) produces the charge against the *wrong* order (D08-042, -050).
+- **D08 × D06 — PendingIntents handed out over AIDL.** A bound service's `Bundle` return value is reviewed
+  for the data it carries and never for the *capabilities* it carries. An `IBinder` or a `PendingIntent`
+  under an unexpected key is a live capability crossing a trust boundary in a container everyone treats as
+  a dictionary (D08-030, -047).
+- **D08 × D11 — reachability is what converts storage into a finding.** An unencrypted token in
+  `shared_prefs` is P5 by VRT and explicitly out of scope at several programmes. The grant or the echo is
+  what makes it a P1 read. File the **access** as the bug and the storage as the payload, never the other
+  way round.
+- **D08 × D02 — the vulnerable component is often not the client's.** The merged manifest contains the
+  activities that dependencies contributed, and the client's own SAST never looked at them. Run the
+  redirection sweep scoped to non-app packages (D08-005): the EngageLab class was an exported SDK activity
+  calling `parseUri(..., URI_ALLOW_UNSAFE)` in 50M+ installs, and the fix was a dependency bump — which
+  also changes who owns the report.
+
+## Sources
+
+- **Android platform documentation** — `privacy-and-security/risks/intent-redirection` (the impact list,
+  the `IntentSanitizer` builder, the four `FLAG_GRANT_*` flags to strip, the Android 16 by-default
+  hardening and `removeLaunchSecurityProtection()`, and the "Common Mistakes to Avoid" list);
+  `risks/pending-intent` (mutability, `fillIn()`, `FLAG_IMMUTABLE`, `FLAG_ONE_SHOT`, the replay section);
+  `risks/sender-of-pending-intents` ("the creator does not always match the sender", and the
+  `Binder.getCallingUid()` / `getSentFromUid()` alternatives); `risks/content-resolver`
+  (`belongsToCurrentApplication()`, `isExported()`, `wasGrantedPermission()`);
+  `guide/components/intents-filters#DetectUnsafeIntentLaunches`; `about/versions/12/behavior-changes-12`
+  (mutability mandate, lint `UnspecifiedImmutableFlag`, notification trampolines,
+  `NOTIFICATION_TRAMPOLINE_BLOCK`); `about/versions/14/behavior-changes-14` (mutable PendingIntent must
+  specify package/component, compat change `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT` id `236704164L`,
+  `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT`, implicit intents reach exported components only);
+  `about/versions/15/behavior-changes-15` and `about/versions/15/features`
+  (`setPendingIntentCreatorBackgroundActivityStartMode`, `ComponentCaller`,
+  `Context.checkContentUriPermissionFull()`, `android:requireContentUriPermissionFromCaller`);
+  `about/versions/16/behavior-changes-all` and `-16` (intent-redirection hardening, the reflection form of
+  the opt-out, `android:intentMatchingFlags` with `enforceIntentFilter`/`none`/`allowNullAction`);
+  `guide/components/activities/background-starts`; `develop/ui/views/appwidgets`
+  (`setPendingIntentTemplate` + fill-in); `develop/ui/views/notifications/build-notification`; AOSP
+  `PendingIntent.java` javadoc (the identity rule — `filterEquals()` plus `requestCode`, extras excluded;
+  `FLAG_UPDATE_CURRENT` still applying under `FLAG_IMMUTABLE`; `FLAG_ONE_SHOT`) and `Intent.java`
+  (`setSelector`, `URI_INTENT_SCHEME`, `URI_ANDROID_APP_SCHEME`, `URI_ALLOW_UNSAFE`).
+- **OWASP MASTG / MASVS / MASWE** — MASTG-TEST-0381 (References to Insecure PendingIntent Creation),
+  MASTG-TEST-0375 (Missing Validation of Data Returned from Implicit Intents), MASTG-TEST-0372,
+  MASTG-TEST-0374, MASTG-TEST-0250, MASTG-TEST-0357, MASTG-TEST-0315, MASTG-TEST-0030 (deprecated, source
+  of the Frida hook); MASTG-KNOW-0024 (Pending Intents), -0117 (`android:grantUriPermissions`), -0138 (URI
+  schemes in Intent results), -0025; MASTG-BEST-0063, -0057; MASTG-TECH-0043; rules
+  `mastg-android-pendingintent-mutable` (the flag-value list `0`, `134217728`, `33554432`, `0x08000000`,
+  `0x02000000`) and `mastg-android-fileprovider-broad-scope`; MASWE-0032 (CWE-927, CWE-940), MASWE-0050
+  (CWE-20, CWE-345), MASWE-0029; MASVS-PLATFORM-1, MASVS-CODE-4. Identifiers cross-checked against
+  `data/mastg-android-tests.csv`, `-techniques.csv`, `-rules.csv`.
+- **Bugcrowd VRT release 2026-07-08** (`data/bugcrowd-vrt-full.csv`, 581 entries) — in particular
+  `broken_access_control.exposed_sensitive_android_intent` carrying `priority: null` with an all-zero CVSS
+  v3 vector, which is why every item in this chapter is written to argue its own priority, and the P5
+  pinning of the whole mobile branch.
+- **Google Mobile VRP and Play policy** — "Intent redirections leading to launching non-exported
+  application components" and "Vulnerabilities caused by unsafe usage of pending intents" in the
+  *Additional vulnerability types in scope*; the Android & Google Devices "valid bypasses of Intent Redirect
+  hardening" line; Google's own auditing tip on `startActivity` and `Intent::getExtras`; the Play App
+  Security Improvement campaigns **Intent Redirection** (`faqs/answer/9267555`, started 2019-05-16),
+  **Implicit PendingIntent** (`faqs/answer/10437428`, started 2022-02-22) and **Implicit Internal Intent**
+  (2021-06-22); the "Cross-app scripting" class from Google's own PDF.
+- **Oversecured** — "Android: Access to app protected components" (§§1–5: nested extras, grant flags,
+  `setSelector`, the `intent://`/WebView vector, and the `Parcel.unmarshall` custom parser), "Gaining
+  access to arbitrary Content Providers" (the four byte-returning vectors and the
+  `setResult(-1, getIntent())` shape, plus the remediation line "developers should never redirect Intents
+  in full"), "Android deep link vulnerabilities", "Why dynamic code loading could be dangerous for your
+  apps: a Google example", "Discovering vendor-specific vulnerabilities in Android"
+  (`SettingsHomepageActivity` at UID 1000), the Samsung "PendingIntent Hijacking" category, and the
+  published base rate of **more than 80% of apps** for the nested-Intent forward.
+- **Disclosed reports** — H1 #200427 (Slack, **Critical**, `extra_deep_link_intent` → `CallActivity`
+  placing a real call), #2289836 (MercadoLibre, **High 8.6**, `SplashActivity` → ATO / arbitrary file read
+  and deletion / partial code execution), #1095633 (VK, Critical), #951691, #272044 (Dropbox, $1000,
+  non-exported provider access), #1161401 (Nextcloud, **Low 1.3**, $250 — the notification-listener
+  PendingIntent, rated low precisely because of the listener precondition).
+- **CVEs and vendor advisories seen in the corpus** — CVE-2020-0389 / A-156959408 (implicit base intent +
+  mutable PendingIntent, cited by MASTG); CVE-2024-26131 (Element Android); CVE-2023-44121 (LG ThinQ
+  exported receiver); CVE-2023-30728 (Samsung PackageInstallerCHN); CVE-2022-36837 (Samsung Email);
+  CVE-2021-4438 (React Native SMS User Consent); CVE-2020-14116 (Xiaomi Mi Browser); CVE-2025-12080
+  (Google Messages for Wear OS `ACTION_SENDTO`); CVE-2025-59489 (Unity runtime `-xrsdk-pre-init-library`);
+  CVE-2021-0928 (ReparcelBug2 `OutputConfiguration` write/read mismatch), CVE-2022-20452 (LeakValue),
+  CVE-2023-45777 (TheLastBundleMismatch — untyped `bundle.getParcelable(KEY_INTENT)`), CVE-2023-20963
+  (WorkSource, exploited in the wild), CVE-2017-0806, CVE-2021-0748 (Bundle Fengshui / launchAnyWhere).
+  The EngageLab EngageSDK `MTCommonActivity` / `n_intent_uri` / `URI_ALLOW_UNSAFE` class (Microsoft
+  Security Blog 2026-04-09; vulnerable ≤ 4.5.4, fixed 5.2.1 on 2025-11-03; 50M+ installs) **had no CVE in
+  the sources read — do not cite one**. EDB 38170 (Facebook for Android 1.8.1, `LoginActivity` →
+  `FacebookWebViewActivity` → `webview.db` cookie theft).
+- **MITRE ATT&CK Mobile** — T1626 Abuse Elevation Control Mechanism (detection DET0642), T1635 / T1635.001
+  Steal Application Access Token / URI Hijacking, T1624.001 Broadcast Receivers, T1409 Stored Application
+  Data, T1533 Data from Local System, T1517 Access Notifications; verified against
+  `data/mitre-attack-mobile-android.csv`.
+- **Tooling, read at source** — drozer (`app.activity.start`, `app.provider.info`'s
+  `Grant Uri Permissions:` field, the verified flag map `GRANT_READ_URI_PERMISSION 0x1` /
+  `GRANT_WRITE_URI_PERMISSION 0x2`, the `parcelable` extra type and the
+  `android.intent.extra.INTENT` / `android.intent.extra.REFERRER` extras lists in `src/drozer/android.py`);
+  Frida hooks on `android.app.Activity.startActivity`, `android.content.Intent.getParcelableExtra` and
+  `android.app.PendingIntent.get*` (MASTG-TECH-0043); `semgrep` with the MASTG rule; QARK
+  `implicit_intent_to_pending_intent.py`; mindedsecurity `MSTG-PLATFORM-4_1` and `MSTG-PLATFORM-4_2` (the
+  bitmask tests `$D & 0x04000000` and `$D & 0x40000000`); `apkanalyzer manifest print` for the merged
+  manifest; `am compat enable DETECT_UNSAFE_INTENT_LAUNCH` / `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT` /
+  `NOTIFICATION_TRAMPOLINE_BLOCK`; `dumpsys activity intents|permissions|providers|activities` and
+  `dumpsys notification --noredact`.
+- **Community checklists and write-ups** — HackTricks (`intent-injection.md`,
+  `android-applications-basics.md`, `android-checklist.md`) for the CWE-926 framing, the selector bypass,
+  the two-API-level rule and `FLAG_DEBUG_LOG_RESOLUTION` (`0x8`); sec-88 "Intent Redirection Vulnerability"
+  and its Ostorlab KB embed (`INTENT_REDIRECTION`, MASVS_CODE_4 / MSTG_PLATFORM_2 / M4 2024, rated High);
+  valsamaras "Pending Intents: A Pentester's view"; tinopreter, Anas Eladly, dnelsaka and the OVAA
+  `LoginActivity` → `WebViewActivity` chain; hackwithsingh sec-14 series; Indusface; Mobile Hacking Lab
+  "Android Intent Security" step 4; the B3nac and saeidshirazi indexes.
+- **The 4,467-star bug-hunting corpus** — marker discipline and the baseline check (D08-063), the
+  body-diff and server-policy-vs-state rules (D08-063), the shell-loop ban and the multi-tool reproduction
+  bar (D08-064), the pre-severity gate and retraction discipline (D08-065), the five-screenshot pattern,
+  the PII mask/leave-visible split and chain-filing order (D08-066), and the shadow-API mobile-to-backend
+  bridge (the D08 × D15 join).
+- **Local senior-researcher corpus** — the confused-deputy framing ("you rarely attack a component
+  directly"), the `setSelector(null)` fix-bypass rule, "prove the copy, not the open", the byte-returning
+  gadget enumeration, the `EXTRA_CONSENT_INTENT` self-grant chain end to end with its BAL precondition, and
+  the "two verified links plus one unproven link is a Medium" severity rule.

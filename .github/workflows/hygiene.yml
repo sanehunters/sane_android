@@ -1,0 +1,46 @@
+name: Evidence hygiene
+
+# Blocks the two mistakes that would genuinely hurt: committing an APK or a decompiled tree,
+# and committing something that looks like a live credential.
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No binaries or decompiled trees
+        run: |
+          bad=$(git ls-files | grep -Ei '\.(apk|aab|dex|so|jks|keystore|har)$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::binary or evidence artefacts committed:"; echo "$bad"; exit 1
+          fi
+          big=$(git ls-files -z | xargs -0 -I{} sh -c 'f="{}"; s=$(wc -c <"$f" 2>/dev/null || echo 0); [ "$s" -gt 5242880 ] && echo "$s $f"' || true)
+          if [ -n "$big" ]; then
+            echo "::error::files over 5 MB committed:"; echo "$big"; exit 1
+          fi
+          echo "clean"
+
+      - name: No live-looking credentials
+        run: |
+          pat='AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk_live_[0-9a-zA-Z]{24}|xox[baprs]-[0-9A-Za-z-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
+          # docs/ and checklist/ legitimately contain these SHAPES as detection patterns.
+          hits=$(git ls-files | grep -v '^docs/' | grep -v '^checklist/' | grep -v '^tools/' \
+                 | grep -v '^data/' | grep -v '^frida/' \
+                 | xargs -r grep -nEl "$pat" 2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "::error::possible live credential committed in:"; echo "$hits"; exit 1
+          fi
+          echo "clean"
+
+      - name: Methodology issues must stay open
+        if: github.event_name == 'push'
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          closed=$(gh issue list --repo "$GITHUB_REPOSITORY" --state closed \
+                     --label "do-not-close" --json number,title --jq '.[] | "#\(.number) \(.title)"' || true)
+          if [ -n "$closed" ]; then
+            echo "::warning::methodology issues were closed — they are standing reference and should be reopened:"
+            echo "$closed"
+          fi

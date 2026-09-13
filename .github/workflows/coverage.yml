@@ -1,0 +1,61 @@
+name: Engagement coverage
+
+# Makes coverage auditable rather than asserted. Runs on every push that touches an
+# engagement folder, and nightly, and writes the result into the job summary.
+on:
+  push:
+    paths: [ 'BugBountyTarget/**', 'checklist.csv', 'scripts/**' ]
+  pull_request:
+    paths: [ 'BugBountyTarget/**' ]
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Report coverage for every engagement
+        run: |
+          shopt -s nullglob
+          found=0
+          {
+            echo "## Engagement coverage"
+            echo
+            echo "| Engagement | Methodology | This application | Open |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for eng in BugBountyTarget/*/; do
+            name=$(basename "$eng")
+            [ "$name" = "_TEMPLATE" ] && continue
+            [ -f "$eng/checklist-status.csv" ] || continue
+            found=1
+            line=$(python3 scripts/coverage.py "$eng/checklist-status.csv" \
+                     --components "$eng/inventory" --brief 2>/dev/null || echo "unreadable")
+            m=$(echo "$line" | sed -n 's/.*checklist \([0-9/]*\).*/\1/p')
+            i=$(echo "$line" | sed -n 's/.*instances \([0-9/]*\).*/\1/p')
+            o=$(echo "$line" | sed -n 's/.*· \([0-9]*\) open.*/\1/p')
+            echo "| \`$name\` | ${m:-–} | ${i:-–} | ${o:-–} |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          if [ "$found" = "0" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_No engagements yet. Start one with \`scripts/new-engagement.sh <Target>\`._" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Full per-engagement detail
+        run: |
+          shopt -s nullglob
+          for eng in BugBountyTarget/*/; do
+            name=$(basename "$eng")
+            [ "$name" = "_TEMPLATE" ] && continue
+            [ -f "$eng/checklist-status.csv" ] || continue
+            echo "::group::$name"
+            python3 scripts/coverage.py "$eng/checklist-status.csv" --components "$eng/inventory" || true
+            echo "::endgroup::"
+          done

