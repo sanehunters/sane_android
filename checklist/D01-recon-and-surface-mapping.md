@@ -1719,3 +1719,785 @@ done
 - **Proof:** A table with one row per feature and four populated columns — Activity/Fragment class, exported components touched, backend paths hit, on-disk artefacts created. Any row with an empty column is an untested surface, **named**.
 - **Escalation:** Each empty cell becomes a work item in D04–D25. Rows that never appear in the proxy are candidates for offline-only or client-authoritative logic → D23. Rows whose files column shows a new credential-bearing file → D11.
 - **Ruled out when:** n/a. The negative is a fully populated table, and a feature you could not reach (no KYC-approved account, no payment sandbox) goes to the blocked register with what was tried and what would unblock it — never silently into the clean column.
+
+### D01-058 · Harvest the complete Retrofit route map from an R8-minified DEX and shortlist by ID shape
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — recon. The routes it produces become `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) in D15 |
+| **Attacker** | n/a (tester method); the resulting BOLA is AM-05 |
+| **Applies to** | Java/Kotlin apps using Retrofit — the dominant Android HTTP stack. **Zero hits is a stack signal, not a clean result**: re-run D01-022 |
+| **Maps to** | MASTG-TECH-0022 (Information Gathering – Network Communication), MASTG-TECH-0019; OWASP API9:2023, API1:2023 |
+
+- **Test:** R8 renames classes and methods but **does not rewrite the string values inside runtime-visible annotations** — Retrofit needs those strings at runtime to build the request line, so `@GET("v2/users/{id}/wallet")` survives minification verbatim even when the interface becomes `a.b.c`. Recover every route, then isolate the ones whose path embeds a client-supplied object identifier.
+- **How:**
+```bash
+jadx -d jadx_out --no-debug-info base.apk       # plus every split_config.*.apk
+S=jadx_out/sources
+grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\("[^"]+"\)' $S | sort -u > endpoints.txt
+grep -rhoE '@HTTP\([^)]*\)' $S | sort -u                       # the @HTTP form hides the verb
+grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' $S | sed 's#^jadx_out/sources/##' | sort -u
+wc -l endpoints.txt
+# decompiler choked? the strings are still in the DEX pool
+unzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api)/' | sort -u
+
+# IDOR shortlist: routes with a path parameter
+grep -rhoE '@(GET|POST|PUT|DELETE|PATCH)\("[^"]*\{[^"]*\}[^"]*"\)' $S | sort -u > idor_candidates.txt
+grep -iE 'bank|card|payment|wallet|refund|order|address|invoice|kyc|document|profile|user|account|ticket|booking' idor_candidates.txt
+```
+For each candidate, read the enclosing interface method to see whether an auth header is attached (`@Header("Authorization")`) or applied globally by an interceptor (D01-061).
+- **Proof:** A deduplicated `endpoints.txt` of concrete route templates (e.g. `1.0/payment-aggregator/users/bank-details/{userId}`), plus a table of `METHOD · PATH · ID-PARAM · OWNER-OF-ID · AUTH-SOURCE`. The map is only *proved* when at least one route from it appears in intercepted traffic returning 200 with the expected JSON.
+- **Escalation:** Path-parameter routes go straight into the two-account BOLA sweep (D15); body models feed the mass-assignment list; every host found feeds D01-063.
+- **Ruled out when:** The app is confirmed non-Retrofit by D01-022 (then use D01-063's framework paths instead), or `endpoints.txt` is populated and every path-parameter route is a GUID-shaped identifier already covered by a tested D15 row. Zero grep hits on a Java/Kotlin app is never a negative — it means you have the wrong stack or the wrong splits.
+
+### D01-059 · Recover hidden request parameters from Retrofit parameter annotations
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | n/a standalone; `broken_access_control.privilege_escalation` (null) when the recovered parameter changes an authorisation outcome |
+| **Attacker** | AM-05 another user of the same app |
+| **Applies to** | All Retrofit apps; the same idea applies to Volley and Ktor builders, where keys appear as plain string literals |
+| **Maps to** | OWASP API3:2023 Broken Object Property Level Authorization; PortSwigger "Finding hidden parameters" |
+
+- **Test:** Enumerate every field name the client is *capable* of sending. `@Query`, `@QueryMap`, `@Field`, `@FieldMap`, `@Part`, `@Header`, `@Path` annotation values also survive R8, and routinely include parameters the UI never exercises: debug flags, `includeDeleted`, `asUser`, `channel`, `role`, `storeId`.
+- **How:**
+```bash
+grep -rhoE '@(Query|Field|Part|Header|Path)\("[^"]+"\)' $S \
+  | sed 's/.*("\(.*\)")/\1/' | sort -u > client_params.txt
+grep -rn '@QueryMap\|@FieldMap\|@PartMap\|@HeaderMap' $S
+wc -l client_params.txt
+# then mine the endpoint with the recovered names plus a generic list
+arjun -u https://api.example.com/v1/user/profile -m GET --headers "Authorization: Bearer $TOK"
+x8   -u https://api.example.com/v1/user/profile -w client_params.txt -H "Authorization: Bearer $TOK"
+```
+Any `@QueryMap Map<String,String>` is an **arbitrary-parameter channel** — the handler accepts whatever the app puts in it, so parameter mining against that endpoint is justified rather than speculative.
+- **Proof:** `client_params.txt` plus, for each interesting name, an intercepted baseline request where the parameter is **absent** — establishing it is reachable but unused by the UI — and then a request with it added producing a different response: a changed status, a changed body length, or a changed field set. Apply the Body-Diff Rule (D01-079): a byte-identical 200 is not a signal.
+- **Escalation:** → D15 mass assignment and BFLA (a `role=` or `scope=` parameter the server honours), → D20 (an `includeAll`-style flag that widens the returned field set).
+- **Ruled out when:** Every recovered parameter name, supplied against its own route with a valid token, produces a byte-identical response body to the baseline, and no `@QueryMap`/`@FieldMap` arbitrary-key channel exists. Record the diff for each.
+
+### D01-060 · Flag `@Url` and runtime base URLs as host-substitution surface
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the token you capture yields a usable session |
+| **Attacker** | AM-09 malicious backend or CDN (the host comes from a server response) / AM-02 remote one click (from a deep link) |
+| **Applies to** | All; particularly apps with white-label or tenant-specific hosts, or an "environment switcher" shipped to production |
+| **Maps to** | OWASP API10:2023 Unsafe Consumption of APIs; MASVS-AUTH-1; CWE-918-adjacent (no ID verified in corpus — cite the behaviour) |
+
+- **Test:** Retrofit's `@Url` lets the *caller* supply the whole URL, and `Retrofit.Builder().baseUrl(...)` can take a runtime value. If any of those originates from a server response, a deep link, remote config or `SharedPreferences`, the app will issue **authenticated** requests to an attacker-chosen host.
+- **How:**
+```bash
+grep -rn '@Url' $S
+grep -rn 'baseUrl(' $S | grep -v 'baseUrl("http'          # non-literal base URLs
+grep -rn 'HttpUrl.parse\|toHttpUrl()\|Uri.parse(' $S | grep -iE 'url|host|endpoint'
+grep -rn 'FirebaseRemoteConfig.getString\|getSharedPreferences' $S | grep -iE 'url|host|env|endpoint'
+```
+Then trace the argument backwards to its source and hook the call site:
+```javascript
+Java.perform(function () {
+  var B = Java.use('okhttp3.Request$Builder');
+  B.url.overload('java.lang.String').implementation = function (u) {
+    console.log('[url] ' + u);
+    return this.url(u);
+  };
+});
+```
+- **Proof:** A request arriving in **your own listener** that still carries the first-party `Authorization` header — the bearer token delivered to a host you control. Capture the full request line and headers.
+- **Escalation:** → D13 (replay the captured token from curl: a first-party bearer at an attacker host is account takeover for the API's scope), → D15, → D14 if the substitution also defeats pinning.
+- **Ruled out when:** Every `@Url` argument and every `baseUrl()` value traces to a compile-time literal or a value the app validates against a hard-coded allow-list before use — and the Frida hook, driven through remote config and every deep link, never prints a host outside that list.
+
+### D01-061 · Read the OkHttp interceptor chain to reconstruct the auth envelope byte-for-byte
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — enabler. Without it, "the token doesn't work from curl" is an unproven claim and every D15 finding stalls |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | All OkHttp-based apps — includes Retrofit, Coil and Firebase transports |
+| **Maps to** | MASVS-AUTH-1; MASTG-TEST-0217 (same OkHttp/Retrofit configuration surface) |
+
+- **Test:** Determine exactly how the app authenticates every request, because you must reproduce it byte-for-byte when you drive the API from outside the app. The logic lives in `okhttp3.Interceptor` implementations and in `okhttp3.Authenticator` (the 401-refresh hook).
+- **How:**
+```bash
+grep -rn 'implements Interceptor\|: Interceptor\|Interceptor {' $S
+grep -rn 'addInterceptor\|addNetworkInterceptor\|authenticator(' $S
+grep -rn 'newBuilder().header(\|addHeader(' $S \
+  | grep -iE 'authorization|bearer|x-|token|sign|hmac|nonce|timestamp|device'
+```
+Read each `intercept(Chain)` body: it shows the full header set (`Authorization`, `X-Device-Id`, `X-App-Version`, `X-Signature`) and whether a request signature is computed (typically HMAC over method+path+body+timestamp).
+- **Proof:** A reconstructed `curl` command that the server accepts with a 200, built entirely from the interceptor logic. If it 401s you have missed a header — the interceptor names which.
+- **Escalation:** If the signature is computed client-side from a hardcoded key (recoverable via D01-028/D01-064), you can sign arbitrary requests and the "device binding" is cosmetic → D13/D15. The header list is also the input to D01-067's version-downgrade test.
+- **Ruled out when:** n/a as a vulnerability. The negative result is a working out-of-app `curl` reproduction; if you cannot build one, say which header you could not reproduce — that is a finding-blocking fact, not a clean result.
+
+### D01-062 · Tap OkHttp in-process and diff against the proxy log
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | n/a for the tap; the **delta** is what gets rated, and an endpoint visible only here is by definition untested by anyone who relied on a proxy |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | All OkHttp apps. The class is `okhttp3.*` when shaded normally; minified builds may relocate it |
+| **Maps to** | MASTG-TEST-0238 (Runtime Use of Network APIs — `[dynamic, hooks]`, a placeholder test in MASTG beta; this is the technique it describes) |
+
+- **Test:** Capture full request/response pairs from inside the process. This is immune to pinning, to proxy-unaware clients and to `Proxy.NO_PROXY` clients. Use it to **complete** the endpoint map, not to replace the proxy — the value is the set difference.
+- **How:**
+```javascript
+// frida -U -p <pid> -l okhttp_tap.js
+Java.perform(function () {
+  var Buffer = Java.use("com.android.okhttp.okio.Buffer");
+  var Interceptor = Java.use("okhttp3.Interceptor");
+  var Tap = Java.registerClass({
+    name: "okhttp3.TapInterceptor", implements: [Interceptor],
+    methods: { intercept: function (chain) {
+        var req = chain.request();
+        console.log("[REQ] " + req.method() + " " + req.url() + "\n" + req.headers());
+        var body = req.body();
+        if (body && body.contentLength() > 0) { var b = Buffer.$new(); body.writeTo(b); console.log(b.readString()); }
+        var res = chain.proceed(req);
+        console.log("[RES] " + res.code() + "\n" + res.headers());
+        return res;
+    }}});
+  var B = Java.use("okhttp3.OkHttpClient$Builder");
+  var tap = Tap.$new();
+  B.build.implementation = function () { this.interceptors().add(tap); return this.build(); };
+});
+```
+If the class is relocated, resolve it first: `Java.enumerateLoadedClasses` filtered on `Interceptor`. Then:
+```bash
+comm -23 <(grep -oE 'https?://[^ ]+' frida_tap.log | sort -u) \
+         <(grep -oE 'https?://[^ ]+' burp_sitemap.txt | sort -u)
+```
+- **Proof:** Request lines and bodies printed for hosts that never appeared in the proxy log. That delta is itself the finding — "traffic bypasses the system proxy" — and the missing half of your endpoint inventory.
+- **Escalation:** Every endpoint only visible here goes into the D15 authz sweep. Combine with D01-074 (packet-level diff) to catch the channels OkHttp never carries.
+- **Ruled out when:** The in-process tap's host set is a subset of the proxy's host set across a full feature walk-through (D01-057). If the tap prints nothing at all, you attached to the wrong process (check `android:process`, D01-041) — that is a harness failure, not a negative.
+
+### D01-063 · Build the host inventory from DEX, resources, assets, native libs and remote WebView bundles
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — recon. It is the evidence base that converts "no pinning" from Informational to a rated finding by proving the unpinned host carries session tokens |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | All |
+| **Maps to** | MASTG-TECH-0019 (Retrieving Strings), MASTG-TECH-0020 (Retrieving Cross References), MASTG-TECH-0022, MASTG-TOOL-0129 (rabin2), MASTG-TEST-0233, MASTG-TEST-0242 (prerequisite `identify-first-party-domains`); OWASP API9:2023; OWASP Mobile M8; H1 #221558 (Grab, Medium 5.3) |
+
+- **Test:** Extract every URL and host embedded in DEX, native libs, resources and assets, then classify first-party (developer-controlled, in scope) versus third-party — MASTG explicitly refuses to fail a pinning test on a third-party domain. Then confirm which of them the app *actually contacts*: MASTG-TEST-0233 warns that "the presence of HTTP URLs alone does not necessarily mean they are actively used".
+- **How:**
+```bash
+apktool d -f -o out base.apk
+jadx --no-src -d jadx_out base.apk
+grep -rIoE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' out/ jadx_out/ | sort -u > urls.txt
+unzip -o base.apk -d raw >/dev/null
+strings -a raw/lib/*/*.so raw/assets/* 2>/dev/null | grep -oE 'https?://[^"'\'' <>]+' >> urls.txt
+rabin2 -zz raw/lib/arm64-v8a/libnative-lib.so | grep -iE 'http|api\.|\.com'
+awk -F/ '{print $3}' urls.txt | sort -u > apk_hosts.txt
+grep -rn 'BASE_URL\|API_URL\|ENDPOINT' jadx_out/sources | head -40
+grep -rn 'http' out/res/values/strings.xml
+
+# framework paths — the endpoint map is NOT in the DEX on these stacks
+strings -n 6 raw/lib/arm64-v8a/libapp.so | grep -E '^/?(api|v[0-9])/|https?://' | sort -u   # Flutter
+unzip -p base.apk assets/index.android.bundle | grep -aoE 'https?://[^"'\'']+' | sort -u     # RN plain JS
+hermes-decomp strings ext/assets/index.android.bundle | grep -aiE 'https?://|/api/'          # RN Hermes
+
+# remote WebView bundles carry mobile-only endpoints that are in no DEX
+cat webview_urls.txt | subjs | tee js.txt
+python3 linkfinder.py -i https://cdn.example.com/app.bundle.js -o cli
+cat js.txt | xargs -n1 -I{} sh -c 'curl -s {} | grep -oE "\"/(api|v[0-9])/[A-Za-z0-9_/-]+\""' | sort -u
+
+# xref each first-party host to a real network call site
+grep -rn 'HttpURLConnection\|OkHttpClient\|Retrofit.Builder().baseUrl' jadx_out/sources
+```
+- **Proof:** A ranked host list where each first-party host has at least one xref reaching a network API — you can name the class and method that dials it — and where at least one FQDN is absent from passive subdomain enumeration yet answers `httprobe`. Hosts appearing in one extractor and not another point at a second HTTP stack (Volley, Ktor, a native library, a WebView) that you have not yet instrumented.
+- **Escalation:** Drives D14 pinning scope, D15 API testing scope and D18 SDK/cloud scope. Each mobile-only host is the least-tested surface in the programme; a mobile-only host serving private data over a GET with the auth token in the query string, indexed by a search engine, is the Grab #221558 shape.
+- **Ruled out when:** Every host in `apk_hosts.txt` is either (a) already in the programme's published web scope with an existing tested status, or (b) a third-party SDK endpoint documented in D01-075, and no host appears in the binary that is absent from the proxy log after a full feature walk-through.
+
+### D01-064 · Run apkleaks across every split and prove every hit with a live request
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the key returns data; `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` (P5) when it is only a client secret with no privilege — do not report the latter standalone |
+| **Attacker** | AM-01 remote no interaction |
+| **Applies to** | All; the split step is required for any app shipped as an AAB |
+| **Maps to** | MASTG-TOOL-0125 (Apkleaks); apkleaks `config/regexes.json` keys `Google_API_Key`, `AWS_API_Key`, `Stripe_API_Key`, `Google_OAuth_Access_Token`, `Slack_Token`, `PayPal_Braintree_Access_Token`, `Firebase`, `RSA_Private_Key`, `PGP_private_key_block`, `Password_in_URL`; CWE-798; H1 #1241116 (Reddit, Critical), #789370 (Smule, Critical), #412772 (8x8, High $500), #753868 (Zenly, Medium $750), #351555 (Reverb, Medium) |
+
+- **Test:** Run the regex corpus across `classes*.dex` strings, `res/`, `assets/`, `lib/*/*.so` and **every split** — split and dynamic-feature APKs and `.so` string tables are the usual hiding place for keys a base-only scan misses. Then prove each hit, because a grep match alone is Informational and must not be reported.
+- **How:**
+```bash
+adb shell pm path "$PKG" | sed 's/package://' | tr -d '\r' | xargs -I{} adb pull {} ./splits/
+for a in splits/*.apk; do apkleaks -f "$a" --json -o "$a.leaks"; done
+ls -la splits/*.leaks | wc -l        # count: one per split, or the loop ate something
+apkleaks -f splits/base.apk -p custom-rules.json   # e.g. {"Internal API host":"https://[a-z0-9.-]+\\.corp\\.example\\.com"}
+apkurlgrep -a splits/base.apk | sort -u > urlgrep.txt
+
+# the raw sweep apkleaks skips (native libs, obfuscated resources)
+unzip -o -d x splits/base.apk >/dev/null
+grep -aoE 'AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24}|ya29\.[0-9A-Za-z\-_]+|ghp_[A-Za-z0-9]{36}|AAAA[a-zA-Z0-9_-]{7}:[a-zA-Z0-9_-]{140}|access_token\$production\$[0-9a-z]{16}\$[0-9a-f]{32}' -r x/ | sort -u
+# resources are missed by anyone who only greps decompiled Java — Reddit's Twitter consumer secret was here
+grep -rniE 'consumer_secret|consumer_key|api[_-]?secret|client_secret|access[_-]?key|firebase_database_url|cloudinary://' out/res/values/ out/assets/
+
+# VALIDATE
+curl --user "$KEY:$SECRET" --data 'grant_type=client_credentials' https://api.twitter.com/oauth2/token
+curl -s -o /dev/null -w '%{http_code}\n' "https://maps.googleapis.com/maps/api/geocode/json?address=x&key=$AIZA"
+```
+Diff `urlgrep.txt` against `endpoints.txt` from D01-058: paths in one and not the other point at a second HTTP stack.
+- **Proof:** An authenticated response from the provider — e.g. `{"token_type":"bearer","access_token":"..."}` — not the grep hit. An unusable analytics write key is noise; a key that returns data is the finding.
+- **Escalation:** → D18 (cloud takeover), → D24 (mass push if it is an FCM server key), → D15 (backend impersonation). Severity follows the key's scope: write/read on production data is Critical; telemetry-only is Medium.
+- **Ruled out when:** Every candidate returns 401/403 or a documented restriction error when replayed from a clean host, **or** the key is demonstrably package-plus-signature restricted — probe once, benignly, and record the restriction response either way. Most client-side keys are public by design; verify the restriction before reporting.
+
+### D01-065 · Recover GraphQL operations and persisted-query hashes from the client
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — recon; enables the GraphQL authz tests in D15. GraphQL introspection alone is on the never-submit list |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | GraphQL backends |
+| **Maps to** | PortSwigger GraphQL API vulnerabilities (finding endpoints and schema discovery without introspection); OWASP API5:2023 |
+
+- **Test:** If the backend is GraphQL, the client ships either the operation documents (Apollo codegen) or only their SHA-256 hashes (Automatic Persisted Queries). Both give you the operation inventory without introspection — including admin and internal mutations the mobile UI never calls but the endpoint still serves.
+- **How:**
+```bash
+unzip -l base.apk | grep -iE '\.graphql|\.gql|graphql'
+grep -rn 'operationName\|__typename\|mutation \|query \|subscription ' $S | head -50
+grep -rnE '"[0-9a-f]{64}"' $S | grep -i 'persist\|hash\|apq\|query' | head    # APQ sha256Hash values
+grep -rn 'com/apollographql' jadx_out/resources 2>/dev/null | head
+grep -rn 'OPERATION_DOCUMENT\|QUERY_DOCUMENT' $S | head
+```
+- **Proof:** The recovered document text, then that exact operation replayed against `/graphql` returning `data` rather than a `PersistedQueryNotFound` error.
+- **Escalation:** → D15 (per-operation authz). Operation names reveal admin and internal mutations the mobile UI never calls. If you only have hashes, you still need the document — obtain it from introspection, field suggestions, or the registered-operations error message.
+- **Ruled out when:** No GraphQL artefacts in any split and no `/graphql` endpoint in the host inventory; or the APQ allow-list rejects every operation you did not recover from the client, with a `PersistedQueryNotFound` on each. Record the rejection.
+
+### D01-066 · Recover gRPC service and method names, drive them with grpcurl, and edit protobuf blind
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.privilege_escalation` (null) for an unauthenticated or over-privileged admin RPC; exposed server reflection alone is Low |
+| **Attacker** | AM-01 remote no interaction |
+| **Applies to** | Apps bundling `io.grpc` / `grpc-okhttp` / Cronet+gRPC |
+| **Maps to** | OWASP API9:2023, API5:2023; protobuf.dev encoding guide (wire-type table); nccgroup blackboxprotobuf |
+
+- **Test:** gRPC traffic is invisible to a naive HTTP proxy and is often the *entire* API for newer apps. Recover the fully qualified service and method names, then call the service directly. Protobuf bodies are self-describing enough to edit blind — each field is `(field_number << 3) | wire_type`, and the wire type says how many bytes to consume, so unknown fields can always be skipped.
+- **How:**
+```bash
+# "/package.Service/Method" survives as a string
+unzip -p base.apk classes*.dex | strings -n 8 \
+  | grep -E '^/[a-zA-Z0-9_.]+/[A-Za-z0-9_]+$' | sort -u
+grep -rn 'MethodDescriptor\|generateFullMethodName\|io.grpc' $S | head -30
+unzip -l base.apk | grep -iE '\.proto|\.protoset|descriptor'
+
+grpcurl <host>:443 list
+grpcurl <host>:443 list package.Service
+grpcurl <host>:443 describe package.Service.Method
+grpcurl -H "authorization: Bearer $TOKEN" -d '{"id":"B"}' <host>:443 package.Service/GetProfile
+# reflection disabled? use the recovered descriptors
+grpcurl -protoset my-protos.bin list
+grpcurl -import-path ./protos -proto api.proto describe package.Service.Method
+```
+For bodies with no schema, install the Blackbox Protobuf Burp extension (or its mitmproxy addon): it renders the message as an editable tree and re-encodes on send. Wire types: `0 VARINT` (int/bool/enum), `1 I64`, `2 LEN` (string/bytes/submessage/packed), `5 I32`; `3`/`4` are deprecated groups.
+- **Proof:** `grpcurl list` returning a service list proves **server reflection is enabled in production** — a Low/Medium finding in its own right and the gRPC analogue of GraphQL introspection. A successful `grpcurl` invocation carrying your bearer token proves the endpoint is reachable outside the app. For the encoding half, a modified field (the varint carrying `quantity`, the LEN field carrying a user id) accepted with a changed response proves the binary encoding is not a security boundary.
+- **Escalation:** Enumerate every method the app never calls and test each for authz — the mobile client is not the only client the server will answer (D15). Add an *unknown* field number to test mass assignment: `proto3` servers ignore unknown fields, but permissive JSON-transcoding gateways may not.
+- **Ruled out when:** No `io.grpc` classes and no `/package.Service/Method`-shaped strings in any split; or reflection is disabled, every recovered method rejects a token from a different account with `PERMISSION_DENIED`, and field edits produce a `INVALID_ARGUMENT` rather than a changed outcome.
+
+### D01-067 · Build the API-version inventory and walk superseded versions with the same token
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the old version answers without the current version's control; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when it leaks objects |
+| **Attacker** | AM-01 remote no interaction |
+| **Applies to** | All; especially apps with a long tail of unforced updates |
+| **Maps to** | OWASP API9:2023 ("Running multiple versions of an API … expands the attack surface"), API1:2023; CWE-862 |
+
+- **Test:** Mobile backends accumulate versions because old installs must keep working, and the old version is the one with the original, weaker authorisation code. An authorisation control that exists only in the current version is not a control.
+- **How:**
+```bash
+grep -oE '"(v[0-9]+(\.[0-9]+)?|[0-9]+\.[0-9]+)/' endpoints.txt | sort -u
+
+python3 - <<'PY'      # NOT a shell loop — see D01-080
+import subprocess, itertools
+vers = ['v1','v2','v3','v4','1.0','2.0','3.0','internal','beta','alpha','legacy','old']
+rows = 0
+for v in vers:
+    url = f"https://api.example.com/{v}/users/{OTHER_ID}/profile"
+    try:
+        code = subprocess.run(['curl','-s','-o','/dev/null','-w','%{http_code}',
+                               '-H', f'Authorization: Bearer {TOKEN}', url],
+                              capture_output=True, text=True, timeout=20).stdout
+        print(f"{v:10s} -> {code}"); rows += 1
+    except Exception as e:
+        print(f"{v:10s} -> ERROR {e}"); rows += 1
+assert rows == len(vers), f"expected {len(vers)} probes, got {rows}"
+PY
+
+# also downgrade the version headers the interceptor sends (from D01-061)
+curl -s -H "Authorization: Bearer $TOKEN" -H 'X-App-Version: 3.1.0' -H 'User-Agent: <old UA>' \
+     "https://api.example.com/v3/users/$OTHER_ID/profile"
+```
+- **Proof:** The **same object id** returning `403` on `v3` and `200` with data on `v1`, with identical credentials and identical input. Capture both responses in full and diff the bodies (D01-079).
+- **Escalation:** → D15 full BOLA enumeration on the legacy version; combine with the User-Agent downgrade to reach versions the current app never calls at all. This is the primitive that D01-068 turns into a rated finding.
+- **Ruled out when:** Every neighbouring version returns `404` or a connection refusal, or returns the identical body to the current version for the identical request — and the version header downgrade changes nothing. A `200` with a static "this version is deprecated" body is **not** a live version; confirm the underlying operation actually executes.
+
+### D01-068 · SHADOW API — diff the mobile-sourced version against the current one BEHAVIOURALLY
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the old path bypasses auth entirely; `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) to `...modify_view_...iterable_object_identifiers` (P1) for field exposure and object access; `server_security_misconfiguration.no_rate_limiting_on_form.login` (P4) for a throttling regression |
+| **Attacker** | AM-01 remote no interaction |
+| **Applies to** | Any versioned API. This is the highest-value mobile-to-backend bridge there is |
+| **Maps to** | OWASP API9:2023 Improper Inventory Management; OWASP Mobile M8; CWE-862 |
+
+- **Test:** A mobile app's hardcoded backend calls are frequently an **older** API version than the current web app uses — with weaker auth, weaker rate limits, weaker input validation and more field exposure. **The bug is the delta, and the delta must be behavioural**, not a difference in response shape. A version difference alone is **Informational**; the *weakened control* is the finding.
+- **How:** Start from the client-recovered route set (D01-058/-063), then probe live versions and diff four security-relevant behaviours for the **same operation**:
+```bash
+# 1. which versions are live at all
+python3 - <<'PY'
+import subprocess
+paths = ['v1','v2','v3','v4','beta','alpha','internal','legacy','old','2022-01-01','2023-01-01','2024-01-01']
+for v in paths:
+    out = subprocess.run(['curl','-s','-o','/dev/null','-w','%{http_code}',
+                          f'https://{TARGET}/api/{v}/'], capture_output=True, text=True).stdout
+    print(out, f'/api/{v}/')
+PY
+curl -s -H "X-API-Version: 1" "https://$TARGET/api/users"
+curl -s -H "Accept: application/vnd.company.v1+json" "https://$TARGET/api/users"
+for sub in api api-v1 api-v2 apiv1 apiv2 legacy-api old-api internal-api staging-api; do
+  curl -s -o /dev/null -w "%{http_code} $sub\n" "https://$sub.$TARGET/"
+done
+```
+Anything but `404` / connection-refused means live. Then, per operation:
+
+| Axis | Old-version probe | What proves the regression |
+|---|---|---|
+| **Auth strength** | same request with no token, an expired token, a lower-privilege token | old returns 200 where current returns 401/403 |
+| **Rate limiting** | burst both paths identically, n ≥ 100 | no 429 on old where current throttles — quantify the reachable keyspace |
+| **Input validation** | identical injection / oversized payload to both | old accepts what current rejects |
+| **Field exposure** | same object, same credential, both versions | old returns internal IDs or PII the current version redacts |
+
+- **Proof:** A side-by-side capture of the identical request against both versions, showing the security regression — same method, same path shape, same object, same credential, different outcome. Diff the **bodies**, not the status codes (D01-079). For the rate-limit axis, produce the distribution across n ≥ 10 interleaved trials per group rather than a single outlier, and distinguish per-IP, per-account, per-session and per-username throttling.
+- **Escalation:** Treat **every** APK-sourced endpoint as a version-diff candidate against the live web API. → D15 for the full BOLA sweep on the weakened path; → D13 when the weakened control is the auth or MFA check. File this as its own submission: it has an independent fix surface from anything it chains into.
+- **Ruled out when:** Every probed version path returns `404` or connection-refused, **or** the live older version is behaviourally identical on all four axes for every operation you tested — same auth outcome, same throttling threshold within 2σ, same validation rejections, byte-identical field set. Say which axes you tested on which operations; an untested axis is not a negative. Before claiming the auth axis, apply D01-078: a `400 "field X is required"` from an unauthenticated request does **not** prove you passed auth.
+
+### D01-069 · Diff the mobile route set against the web route set
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) up to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for a bulk-sync endpoint returning a tenant's records |
+| **Attacker** | AM-05 another user of the same app |
+| **Applies to** | Any target with both a web and a mobile client |
+| **Maps to** | OWASP API3:2023 (excessive data exposure), API9:2023 |
+
+- **Test:** Mobile clients frequently get endpoints the web app does not expose — bulk sync, device registration, offline reconciliation, "get everything since timestamp". Those endpoints have had far fewer eyes and routinely return more data per call.
+- **How:**
+```bash
+# mobile set: D01-058 + D01-062 + D01-063
+sort -u endpoints.txt frida_tap_routes.txt apk_paths.txt > mobile_routes.txt
+# web set: browse the web app through Burp, harvest /api/ paths from its JS
+cat web_js_urls.txt | xargs -n1 -I{} sh -c 'curl -s {} | grep -oE "\"/(api|v[0-9])/[A-Za-z0-9_/-]+\""' \
+  | tr -d '"' | sort -u > web_routes.txt
+comm -23 mobile_routes.txt web_routes.txt > mobile_only.txt
+wc -l mobile_routes.txt web_routes.txt mobile_only.txt      # count all three
+```
+For every mobile-only route ask: does it take a filter or scope parameter, does it paginate, and does it enforce the same authz as its web sibling?
+- **Proof:** A mobile-only route returning fields or record counts that the web equivalent redacts or paginates, captured side by side with the same credential.
+- **Escalation:** Bulk endpoints are also the best rate-limit and enumeration targets — one call per thousand records. → D15 for the authz test, → D20 for the PII exposure.
+- **Ruled out when:** `comm -23` produces an empty mobile-only set, or every mobile-only route enforces the same scope and pagination as its nearest web sibling for an identical credential. Record the three counts; an empty diff produced by an empty web set is a broken sweep, not a negative (D01-080).
+
+### D01-070 · Diff the same privileged operation across every channel host
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `broken_access_control.privilege_escalation` (null) when a low-privilege identity reaches an admin operation |
+| **Attacker** | AM-05 another user of the same app |
+| **Applies to** | All; especially backends retrofitted onto an existing web app |
+| **Maps to** | OWASP API5:2023 Broken Function Level Authorization; CWE-862 |
+
+- **Test:** The same business object is usually exposed by three or more front doors — `www.` with a web session cookie, `m.`/mobile-web, `api.`/`mapi.`/`gw.` with the app's bearer, plus GraphQL — and only one of them enforces the check. Authorisation middleware is frequently per-service.
+- **How:**
+```bash
+python3 - <<'PY'
+import subprocess
+hosts = ['www.example.com','m.example.com','api.example.com','mapi.example.com','gw.example.com']
+path  = '/v1/admin/users'
+for h in hosts:
+    r = subprocess.run(['curl','-s','-o','/tmp/body','-w','%{http_code} %{size_download}',
+                        '-H', f'Authorization: Bearer {LOWPRIV}', f'https://{h}{path}'],
+                       capture_output=True, text=True)
+    print(f"{h:24s} {r.stdout}")
+    subprocess.run(['cp','/tmp/body', f'/tmp/body.{h}'])
+PY
+# then diff the BODIES, not the statuses
+diff /tmp/body.www.example.com /tmp/body.api.example.com
+```
+Also re-run every recovered route (D01-063) against every newly discovered host — the same object, the same credential.
+- **Proof:** A 200 with a JSON body on one host where the others return 401/403, same credential and same object, with the body diff attached.
+- **Escalation:** Feed the winning host into the full D15 IDOR/BOLA and mass-assignment sweep. → D13 if the bypassed control is the auth or MFA gate.
+- **Ruled out when:** Every channel host returns the identical status **and** a byte-identical body for the identical privileged request with a low-privilege identity. A byte-identical 200 across all hosts is not a bypass — it usually means the path was never protected anywhere, which is a different (and possibly larger) finding; check whether an unauthenticated request also gets it.
+
+### D01-071 · Find the staging and QA hosts shipped in the release build, then test them with a production token
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) for the exposure alone; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) or `broken_authentication_and_session_management.authentication_bypass` (P1) when the staging host serves production data or accepts production credentials |
+| **Attacker** | AM-01 remote no interaction |
+| **Applies to** | All. Check the **release** APK, never a debug build |
+| **Maps to** | OWASP API9:2023 (the documented scenario: a beta environment lacking rate limiting → password-reset brute force); OWASP Mobile M8 |
+
+- **Test:** Release builds routinely carry the full host inventory including staging, UAT and regional shards. Staging backends are the classic API9 finding: same data, weaker controls. Find them even when the release build no longer names them.
+- **How:**
+```bash
+grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' out/res out/assets jadx_out/sources \
+  | sed 's#\(https\?://[^/]*\).*#\1#' | sort | uniq -c | sort -rn | head -60
+grep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'
+grep -riE 'staging|uat|dev-|preprod|\.local|internal|qa\.' urls.txt
+cat out/res/values/strings.xml | grep -i http
+# certificate-transparency and internet-wide pivots for hosts the build no longer names
+# Censys:  443.https.tls.certificate.parsed.extensions.subject_alt_name.dns_name:example.com
+# plus:    "Example Inc" + internal        (internal-CA certs)
+for h in $(cat candidate_hosts.txt); do
+  printf '%s ' "$h"
+  curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $PROD_TOKEN" "https://$h/v1/me"
+done
+```
+- **Proof:** A non-production hostname present in the release APK that answers a request signed with a **production** token — 200 with real data rather than 401 — or that accepts registration with no verification. The finding is the control gap, evidenced by a live response.
+- **Escalation:** Test the staging host with the production account token; if it accepts it, every control gap there becomes a production account risk → D15. Staging usually shares a cloud project or bucket with production → D18. A staging host reachable only by an internal CNAME is also a subdomain-takeover candidate: `server_security_misconfiguration.misconfigured_dns.subdomain_takeover` (P3).
+- **Ruled out when:** Every non-production host in the release build fails to resolve, or resolves to an isolated environment that rejects the production token with 401 **and** contains only synthetic data (confirmed by a marker account you created there, not by assumption). An empty parked page is a Low at most.
+
+### D01-072 · Recover the debug parameters and debug flags the client ships
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for an internal-topology or stack-trace leak; High via `broken_access_control.privilege_escalation` (null) when the switch disables an authorisation check |
+| **Attacker** | AM-05 another user of the same app |
+| **Applies to** | All |
+| **Maps to** | OWASP API8:2023 Security Misconfiguration; CWE-200 |
+
+- **Test:** Mobile backends carry `?debug=1`, `?test=true`, `X-Debug: 1` switches that dump stack traces, SQL or internal IDs — and the client is where the switch names are written down. Also search the decompiled tree for `develop`, `debug`, `fake`, `test` as *method and class* name substrings, not just as strings.
+- **How:**
+```bash
+grep -rInoE '"(debug|test|mock|sandbox|verbose|trace|staging|internal)[A-Za-z_]*"' out/smali* out/res/ | sort -u
+grep -rniE 'class .*(Debug|Test|Mock|Fake|Develop)|void (debug|test|mock)[A-Z]' $S | head -40
+grep -rn 'BuildConfig.DEBUG\|isDebugBuild\|FLAVOR' $S | head -30
+
+curl -s -H "Authorization: Bearer $TOK" 'https://api.example.com/v1/orders?debug=true' | head -c 2000
+curl -s -H "Authorization: Bearer $TOK" -H 'X-Debug: 1' 'https://api.example.com/v1/orders' | head -c 2000
+```
+- **Proof:** A response containing a stack trace, a SQL statement, an internal hostname, or a field set absent from the normal response — captured with its baseline for comparison.
+- **Escalation:** → D15 (SQL surfaced by the trace is an injection lead), → D20 (PII in the debug payload), → D22 (a client-side debug flag that flips the app to a staging backend or disables pinning is a MitM primitive).
+- **Ruled out when:** Every recovered switch name, applied as a query parameter and as a header against each route, produces a byte-identical response to the baseline. Apply the Body-Diff Rule — a 200 either way with identical bytes is not a debug surface.
+
+### D01-073 · Sweep archived specs and the Wayback index for routes the client no longer calls
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | follows the regression found, up to `broken_authentication_and_session_management.authentication_bypass` (P1). An exposed spec alone is `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) at best |
+| **Attacker** | AM-01 remote no interaction |
+| **Applies to** | Spec-publishing APIs; any versioned mobile API with history |
+| **Maps to** | OWASP API9:2023; CVE-2018-25031 (Swagger UI ≤ 4.1.2 spec injection); CVE-2023-38337 (`rswag` directory traversal); H1 #3124103 (U.S. DoD Swagger UI Injection, May 2025), #1656650 (reflected XSS via `url=`) |
+
+- **Test:** A deprecated version's OpenAPI spec often stays indexed after the live link is removed, and old app builds pinned `/v1/` that the backend never decommissioned — predating the authorisation middleware added in `/v3/`.
+- **How:**
+```bash
+python3 - <<'PY'
+import subprocess
+paths = ['openapi.json','swagger.json','v1/swagger.json','v2/swagger.json','v3/api-docs',
+         'api-docs.json','swagger/v1/swagger.json','.well-known/openapi.json','swagger-ui.html',
+         'swagger-resources','docs','redoc','q/openapi','graphql','graphiql','playground']
+for p in paths:
+    out = subprocess.run(['curl','-s','-o','/dev/null','-w','%{http_code}',
+                          f'https://{TARGET}/{p}'], capture_output=True, text=True).stdout
+    print(out, '/'+p)
+PY
+curl -s "http://web.archive.org/cdx/search/cdx?url=$TARGET/*swagger*&output=json&collapse=urlkey"
+jq -r '.paths | keys[]' v1-swagger.json | sort > /tmp/v1_paths.txt
+jq -r '.paths | keys[]' v2-swagger.json | sort > /tmp/v2_paths.txt
+comm -23 /tmp/v1_paths.txt /tmp/v2_paths.txt        # v1-only -> forgotten-but-live candidates
+
+gau --subs example.com | grep -E '/(v[0-9]+|api)/' | sort -u > hist.txt
+cat hist.txt | httpx -status-code -content-length -H "Authorization: Bearer $TOK"
+```
+Also check Swagger UI's `?configUrl=` / `?url=` parameters if a UI is exposed: an unsanitised one lets an attacker host a spec whose routes point back at the legitimate origin, so the victim's "Try It Out" clicks fire same-origin authenticated requests.
+- **Proof:** A route documented only in the old spec (or only in the archive) that still returns something other than 404 **and whose underlying operation actually executes** — a static "this version is deprecated" 200 is not a finding. Then the consequence: `/v1/orders/1337` returning the object that `/v3/orders/1337` refuses with 403.
+- **Escalation:** → D01-068 (the behavioural version diff), → D15 (full BOLA on the legacy version). A spec alone is Low/Info; a spec documenting `/api/admin/users/{id}/reset-password` whose controller is missing its authorisation attribute is the Critical.
+- **Ruled out when:** Every spec path returns 404, the Wayback CDX index returns no spec captures, and every `gau`-recovered historical route returns 404 or 410. Confirm the operation executes before calling any 200 a finding.
+
+### D01-074 · Enumerate the non-HTTP channels the proxy will never show you
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | the delta is a testability observation (Low); a WebSocket that accepts commands for another user's device is `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) or higher |
+| **Attacker** | AM-05 another user of the same app |
+| **Applies to** | All; mandatory for messaging, dispatch and IoT companion apps |
+| **Maps to** | MASTG-TEST-0236 (notes the same limitation, points at Burp-Non-HTTP-Extension / MASTG-TOOL-0078) |
+
+- **Test:** WebSockets, MQTT, XMPP and raw TLS sockets carry authenticated commands in many apps — chat, ride-hailing dispatch, IoT control — and are completely absent from an HTTP-proxy-only test. Frames are rarely re-authorised per message.
+- **How:**
+```bash
+grep -rn 'WebSocket\|okhttp3.WebSocket\|wss://\|MqttAndroidClient\|Paho\|SSLSocketFactory\|SocketChannel\|XMPP' $S | head -40
+grep -rhoE '(wss?|mqtt|mqtts|tcp)://[^"]+' $S | sort -u
+
+emulator -avd pt -writable-system -tcpdump cap.pcap -http-proxy 127.0.0.1:8080
+tshark -r cap.pcap -Y 'tcp.flags.syn==1 && tcp.flags.ack==0' \
+       -T fields -e ip.dst -e tcp.dstport | sort -u > pcap_dsts.txt
+# compare against the proxy's destination set
+comm -23 pcap_dsts.txt proxy_dsts.txt
+```
+- **Proof:** A destination `ip:port` present in the pcap and absent from the proxy log — proof of unproxied traffic, and it tells you exactly which stack to instrument next. The rated finding is inside the channel: subscribe to another user's topic or channel id and show the server pushing their events.
+- **Escalation:** → D14 (the channel's own TLS validation), → D15 (per-message authorisation), → D06 if a local socket fronts it.
+- **Ruled out when:** The pcap destination set is a subset of the proxy destination set across a full feature walk-through, and no `wss://`/`mqtt://` literal or `SSLSocketFactory` direct-socket call site appears in the decompiled tree. Both halves.
+
+### D01-075 · Treat every third-party SDK endpoint as a separate target
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | rating follows the data class exposed — `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); `server_security_misconfiguration.misconfigured_dns.subdomain_takeover` (P3) for a dangling record |
+| **Attacker** | AM-08 malicious third-party SDK / AM-01 for a takeover |
+| **Applies to** | All |
+| **Maps to** | OWASP API10:2023 Unsafe Consumption of APIs; CWE-200 |
+
+- **Test:** Analytics, crash, CDN, attribution and feature-flag endpoints are often in scope by virtue of holding the client's data. For each, determine what the app *sends* it — token? user id? PII? — and whether the endpoint is world-readable. The smallest vendor on the list is usually the one without pinning, without auth, or with a dangling DNS record.
+- **How:**
+```bash
+# SDK fingerprint from package namespaces
+grep -rhoE '^\.class.*L(com|io|net|org)/[a-z0-9]+/[a-z0-9]+/' out/smali*/ \
+  | sed -E 's|.*L([a-z]+/[a-z0-9]+/[a-z0-9]+)/.*|\1|' | sort | uniq -c | sort -rn | head -60
+grep -rhoE '[a-z0-9.-]+\.(amazonaws|cloudfront|appsflyer|branch|adjust|onesignal|clevertap|braze|segment|mixpanel|amplitude|sentry)\.[a-z]+' out/ | sort -u
+# dangling-record check
+for h in $(cat sdk_hosts.txt); do printf '%s -> ' "$h"; dig +short CNAME "$h"; done
+# what leaves, and to whom — from the Burp host table after a full walk-through
+```
+- **Proof:** A third-party endpoint returning the client's user data without app-specific authentication; or a CNAME pointing at an unclaimed vendor subdomain (NXDOMAIN on the CNAME target); or an SDK endpoint accepting the app's write traffic with only a client-side-extractable key.
+- **Escalation:** → D18 (SDK key abuse and cloud pivot), → D20 (PII sent to a processor the privacy policy does not name), → D17 (the SDK's own version against its advisory history — the SDK component is a first-class exported surface, not a dependency footnote).
+- **Ruled out when:** Every third-party host in the Burp table receives only an opaque installation id and no account identifier or PII, resolves without a dangling CNAME, and rejects reads with the client-extractable key. Name the hosts checked.
+
+### D01-076 · Inventory bundled native libraries and the resolved dependency graph, then prove reachability
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | n/a standalone; the memory-corruption finding is rated in D16. Presence alone is `lack_of_binary_hardening.lack_of_exploit_mitigations`-adjacent (P5) — do not report it that way |
+| **Attacker** | AM-02 remote one click (attacker-supplied font, image, archive or avatar) |
+| **Applies to** | All apps shipping `lib/`; especially image, PDF, document and media viewers, Unity and Flutter |
+| **Maps to** | CVE-2025-27363 (FreeType OOB write parsing TrueType GX / variable font subglyphs, actively exploited, Android May 2025 bulletin), CVE-2023-4863 (libwebp OOB write), CVE-2025-64505 (libpng), CVE-2019-7317 (libpng 1.6.36), CVE-2025-5915 (libarchive < 3.8.0), CVE-2022-3970 (libtiff `TIFFReadRGBATileExt`) |
+
+- **Test:** A bundled vulnerable parser is only a finding if app-supplied data reaches it. Bundled libraries are patched on the app vendor's schedule, not the OS's — an app can ship a library the platform fixed a year ago. **Reachability is the finding; presence is not.**
+- **How:**
+```bash
+unzip -o base.apk split_config.*.apk 'lib/*' -d libs/
+for so in libs/lib/*/*.so; do
+  echo "== $so"
+  strings -a "$so" | grep -Eio '(freetype|libwebp|libpng|libjpeg|openssl|libavc|libhevc|sqlite|ffmpeg|libvpx|libarchive|tiff)[ -/_]?[0-9]+\.[0-9]+(\.[0-9]+)?' | sort -u
+done
+# SDK/dex-level inventory with version markers that survive R8
+python3 android_lib_detector.py base.apk --verbose --csv libs.csv
+unzip -p base.apk 'META-INF/*.version' 2>/dev/null | head -50
+
+# ABIs can differ — the vulnerable build may ship only to armeabi-v7a
+apkeep -a "$PKG" -o 'arch=arm64-v8a' ./a64
+apkeep -a "$PKG" -o 'arch=armeabi-v7a' ./a32
+for f in ./a64/*.apk ./a32/*.apk; do echo "== $f"; unzip -l "$f" | grep '\.so$'; done
+
+# with source access: what the build INTENDED, including silent BoM substitutions
+./gradlew :app:dependencies --configuration releaseRuntimeClasspath > deps.txt
+./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency okhttp
+grep -nE '\-> [0-9]' deps.txt | head -50          # arrows mark version substitutions
+
+# then PROVE reachability
+nm -D --defined-only libs/lib/arm64-v8a/libfoo.so | grep -i 'Java_'
+frida -U -f "$PKG" -l - <<'JS'
+Process.enumerateModules().forEach(m => {
+  if (/freetype|webp|png|jpeg|avc|hevc|archive|tiff/i.test(m.name))
+    console.log(m.name, m.base, m.size);
+});
+JS
+```
+- **Proof:** A version string strictly below the fixed release **and** a demonstrated path where attacker-supplied bytes — a file handed over a share intent, a deep link, a downloaded avatar — reach that module, confirmed by an `Interceptor.attach` on the JNI entry printing your marker bytes. From source, a `deps.txt` line such as `com.squareup.okhttp3:okhttp:4.12.0 -> 4.9.3 (*)` proves the declared safe version was not the shipped one, which defeats a "we already pinned it" rebuttal.
+- **Escalation:** → D16 (build an ASan harness against the app's own `.so`), → D17 (supply-chain finding with a concrete exploit), → D02 (dependency verification as a build-process finding).
+- **Ruled out when:** Every recovered library version is at or above its advisory-fixed release across **every** ABI split, or the library exposes no `Java_` JNI entry point and the Frida module sweep shows it is never loaded during a full feature walk-through. Note the drozer `app.package.native` caveat verbatim — it "only checks for libraries that are bundled inside the package APK", so a zero there is not a negative; confirm with `/proc/<pid>/maps`.
+
+### D01-077 · Region- and locale-gated features hidden from your test device
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `broken_access_control.privilege_escalation` (null) when the gate is regulatory and bypassing it completes a transaction; Medium otherwise |
+| **Attacker** | AM-05 another user of the same app |
+| **Applies to** | All; especially fintech, mobility, marketplace and gaming apps |
+| **Maps to** | ATT&CK T1627.001 Geofencing, T1422.001 Internet Connection Discovery; no VRT-specific node |
+
+- **Test:** Commercial apps ship features to some markets only — UPI/PIX/wallet top-up, regional KYC tiers, age gates, price tiers, cash on delivery, regulated lending. If your device reports `en-US` you never render them, so you never test them — yet the endpoints are live for everyone. The question is whether the gate is client-side.
+- **How:**
+```bash
+grep -rnE 'Locale\.getDefault|getSimCountryIso|getNetworkCountryIso|getNetworkOperator|isNetworkRoaming|getConfiguration\(\)\.locale|BuildConfig\.FLAVOR|isFeatureEnabled|RemoteConfig\.(getBoolean|getString)' $S \
+  | grep -iE 'country|region|market|locale|tier'
+
+adb shell "setprop persist.sys.locale hi-IN; setprop gsm.sim.operator.iso-country in; \
+           setprop gsm.operator.iso-country in"
+adb shell am force-stop "$PKG"
+# re-walk the feature matrix (D01-057), capture a second Burp sitemap, diff host/path sets
+comm -13 sitemap_enUS.txt sitemap_hiIN.txt
+# then call the region-gated endpoint from the ORIGINAL locale with the same account token
+curl -s -H "Authorization: Bearer $TOK" https://api.example.com/v1/lending/preapproval
+```
+- **Proof:** A 200 with a real resource body from a region-restricted endpoint while the client is pinned to a region that hides the feature — a lending pre-approval, a regional coupon, a payment method the UI refuses to show. Capture both sitemaps.
+- **Escalation:** → D23 (price tier per market: buy at the cheapest market's price), → D15 (business-logic bypass). High when the gate is regulatory — age verification, lending eligibility, gambling — because bypassing it is a compliance breach with a demonstrable transaction.
+- **Ruled out when:** The locale and MCC/MNC flip produces an identical host and path set across the whole feature matrix, or the region-gated endpoint returns a server-enforced `403 region_not_supported` when called from the original locale with the same token. The server-side half is what matters; a client that simply hides the button is not the negative.
+
+### D01-078 · The layer-ordering trap: a 400 from an APK-derived endpoint is not an auth bypass
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — kill gate. It prevents a false `broken_authentication_and_session_management.authentication_bypass` (P1) against production infrastructure |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | Every auth-bypass claim derived from an APK-recovered endpoint |
+| **Maps to** | no external identifier — discipline rule; applies equally to WAF/CDN layers (an edge block is not an origin response) |
+
+- **Test:** The highest-confidence false positive in the entire auth-bypass class. Many stacks put a global input sanitiser, body parser or schema filter **in front of** the auth middleware, so a malformed body is rejected before auth is ever consulted — and the response is indistinguishable from "auth passed, validation failed". You will hit this constantly, because an APK-derived route list gives you endpoints whose body shape you do not yet know.
+- **How:** Re-send with a minimal **well-formed** body and compare.
+```bash
+# looks like an auth bypass
+curl -s -X POST https://target/api/v1/resource -d '{'
+# 400 {"code":"ERR-INPUT-0001","message":"Invalid text. Only permitted characters are allowed"}
+
+# tells you where the auth layer actually sits
+curl -s -X POST https://target/api/v1/resource \
+     -H 'Content-Type: application/json' -d '{}'
+# 401 {"code":"ERR-AUTH-0001","message":"Not authenticated. Please log in."}
+```
+Response taxonomy for an unauthenticated probe of an APK-derived route:
+  - `401` / `"Missing authorization"` → gated. Move on.
+  - `200` with data → **unauthenticated data exposure. Finding.**
+  - `400 "field X is mandatory"` **from a well-formed `{}`** → reached business-logic validation without an auth check → auth bypass; supply the field minimally to confirm.
+  - `200` plus a verbose DB or stack error (`PROCEDURE db_x.sp_y does not exist`) → reached the data layer unauthenticated; also an injection-surface signal.
+  - Mandatory fields named `is_admin` / `is_internal` / `requested_by` / `role_id` / `account_type` → **authorisation derived from client-supplied parameters**. Set the flag and self-elevate. Critical class.
+- **Proof:** Only the well-formed-body response tells you where auth sits. If the error text is about **input shape or character class**, you are talking to a parser, not business logic. If it names a **domain field** and a well-formed body still returns it, that is real signal.
+- **Escalation:** → D13 and D15 own the resulting auth-bypass write-up. Stop at minimum-necessary proof; do not enumerate the table.
+- **Ruled out when:** n/a — this is a gate, not a test. The negative you record is the well-formed-`{}` response for each endpoint you probed, which is also the evidence a triager needs.
+
+### D01-079 · The soft-404 and body-diff controls before you call an APK-derived endpoint "live"
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — false-positive gate. Status-code-only claims are the most common rejected-as-N/A category on bounty platforms |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | Every "this host/route/version is live" and every bypass claim in this chapter |
+| **Maps to** | no external identifier — discipline rule |
+
+- **Test:** Two controls, both mandatory before an APK-derived host or route enters a finding. **Soft-404:** SPA catch-alls return 200 (or 403) for *every* path, so `.env`, `.git`, actuator and admin-panel "hits" from a sweep are overwhelmingly noise. **Body-diff:** a bypass claim requires a response **body** differential, not a status code — a 200 with a byte-identical body is not a bypass.
+- **How:**
+```bash
+# soft-404 control: always probe a junk path alongside the real one
+curl -s -o /tmp/a -w "%{http_code} %{size_download}\n" "https://host.target.com/.env"
+curl -s -o /tmp/b -w "%{http_code} %{size_download}\n" "https://host.target.com/zzz-nonsense-$RANDOM"
+cmp -s /tmp/a /tmp/b && echo "SOFT-404 false positive" || echo "differs — investigate"
+
+# body-diff on any bypass / version / channel claim
+diff <(curl -s "$BASELINE_URL" -H "$BASELINE_HDR") \
+     <(curl -s "$BYPASS_URL"   -H "$BYPASS_HDR")
+
+# marker discipline, when you claim a value you injected came back
+MARK=$(head -c 9 /dev/urandom | base64 | tr -dc 'a-z0-9')     # 8+ chars, no English words
+curl -s "$URL" | grep -c "$MARK"            # BASELINE first — must be 0
+curl -s "$URL?p=$MARK" | grep -c "$MARK"
+```
+- **Proof:** For a soft-404: byte length and body of the claimed finding differ from the junk control, **and** the body carries a format signature (`.git/config` starts `[core]`; `.env` has `KEY=value`). For a bypass: a byte-level diff in the report, with the changed bytes identified — a correlation id or timestamp is not content. For a reflection: the marker present in the test response and **absent from the baseline** — searching the baseline first kills most false reflection reports. Never use `test`, `marker`, `evil`, `payload`, `script`, `AAAA` or your own domain as a marker.
+- **Escalation:** These gates feed every claim in D01-067 through D01-073 and hand the cleaned set to D15. Related: a server-side policy that always denies is not a state oracle — establish whether the differentiator tracks *your input* or a *fixed deny-list* before calling it an oracle. And for any timing or rate-limit claim, n ≥ 10 interleaved trials per group with the suspect mean ≥ 2σ above the control; a single 2× outlier is network jitter (D26/D15 own those claims).
+- **Ruled out when:** n/a — gate. Record the junk-control response and the body diff for every host and route you promoted, so the promotions are auditable.
+
+### D01-080 · The shell-loop ban: count your results or the sweep silently lied
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — method-integrity gate |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | Every automated sweep in this chapter — endpoint probing, version walking, split iteration, debuggable sweeps, package permutation |
+| **Maps to** | no external identifier — discipline rule |
+
+- **Test:** Shell array expansion fails **silently**. A loop like `for x in "${arr[@]}"` can produce zero iterations with no error when the array was not populated by the previous command, and the output still looks complete. This chapter is almost entirely loops, so this is the gate that makes its negatives trustworthy.
+- **How:** Loops of ≤5 hard-coded items in shell are fine. Anything iterating a list, a file or a computed range goes to Python with `try/except` per iteration and explicit per-iteration logging — and **always count**:
+```python
+import subprocess
+targets = [l.strip() for l in open('hosts.txt') if l.strip()]
+expected, got = len(targets), 0
+for t in targets:
+    try:
+        r = subprocess.run(['curl','-s','-o','/dev/null','-w','%{http_code}',f'https://{t}/'],
+                           capture_output=True, text=True, timeout=20)
+        print(f'{r.stdout} {t}'); got += 1
+    except Exception as e:
+        print(f'ERR {t} {e}'); got += 1
+assert got == expected, f'expected {expected} probes, got {got} — the loop ate {expected-got}'
+```
+In shell, when a loop is unavoidable, count anyway:
+```bash
+wc -l < hosts.txt; grep -c . results.txt        # these two numbers MUST match
+```
+- **Proof:** The result count matches the input count, printed in the same output block. If you expected 100 probes and got fewer than 100 lines, the loop ate something and the sweep's negative is worthless.
+- **Escalation:** Applies to D01-010 (version history), D01-015 (permutations), D01-055 (debuggable sweep), D01-063 (host probing), D01-067/-068/-073 (version and spec walking) and every `for` loop in this file. A miscounted sweep produces a **false negative**, which is the one error class this chapter exists to prevent. Related discipline: before labelling anything Critical or High, reproduce via two independent tools with different HTTP stacks (curl plus Burp, or Python `requests` plus a raw socket) — cross-tool consistency rules out tool artefacts.
+- **Ruled out when:** n/a — gate. The negative is the matching pair of counts, recorded next to each sweep's output.
+
+## Graveyard for this domain
+
+| Observation | Why it is not a finding | What would make it one |
+|---|---|---|
+| "The app is not obfuscated / R8 is not enabled" | `lack_of_binary_hardening.lack_of_obfuscation` is **P5**. Obfuscation is not a security control and its absence harms nobody | Nothing on its own. Report the secret, route or logic you recovered — the readability is context in that finding, never the finding |
+| "The app exports N components" (a count, with no reachability verdict) | An inventory is the map, not the territory. Triage reads a bare count as Informational | One named component, reached from a zero-permission PoC app, performing a privileged action — then it is `broken_access_control.exposed_sensitive_android_intent` (null), rated on what it exposes |
+| "The APK contains hardcoded URLs including staging hosts" | A string is not a host. MASTG-TEST-0233 is explicit that HTTP URLs in a binary do not mean they are used | The host resolving, answering with the app's API, and accepting a production token or serving production data (D01-071) |
+| "The APK contains an API key" | Most client-side keys are public by design and package-plus-signature restricted. `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` is **P5** | A live authenticated response from the provider using that key, from a clean host (D01-064). An OAuth `client_secret` in a mobile app specifically is on the never-submit list |
+| "An expired JWT is hardcoded in the binary" | An expired token authenticates nothing | The claim names, the `alg`, and the `/v1/*` paths around it are reconnaissance-grade — file it as the internal-API-surface map at Medium, or fold it into the endpoint inventory. If the HS256 secret is also recoverable, that is a different, Critical finding |
+| "The app allows backup / `android:allowBackup="true"`" | `mobile_security_misconfiguration.auto_backup_allowed_by_default` is **P5** | Only as a chain: backup extraction yielding a session token that authenticates → D11 then `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| "No certificate pinning" discovered during host inventory | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` is **P5**, and AM-07 (network attacker with a trusted CA) is a tester convenience, not an attacker | Only where the programme prices MitM (D01-019) and only against a **first-party** host that demonstrably carries session tokens (D01-063). Otherwise it is harness setup, not a finding |
+| "drozer reports 0 exported components" | drozer is `[DEGRADED]` on API 29+ and its own agent needs `<queries>` on `targetSdk >= 30`; a zero is frequently a package-visibility artefact | Reconcile with the merged manifest and `dumpsys` resolver tables (D01-035, D01-037). Agreement between three sources is the negative; a lone drozer zero is not |
+| "The app runs on an emulator / root detection is absent" | `lack_of_binary_hardening.lack_of_jailbreak_detection` is **P5** and AM-12 (your own rooted device) is not an attack | Nothing. Use the rooted device for discovery, then re-prove every finding on a stock device with a zero-permission APK, `adb shell am`/`content`, or a `network_security_config` that already trusts user CAs |
+| "Version N of the API exists alongside version N+1" | A version difference alone is **Informational** — that is the explicit rule | A behavioural regression on the old path: weaker auth, absent throttling, accepted payloads, or extra fields (D01-068) |
+| "GraphQL introspection is enabled" / "gRPC server reflection is enabled" | Introspection alone is on the never-submit list; reflection alone is Low | An operation or RPC discovered through it that is unauthenticated or over-privileged for your identity (D15) |
+| "The app requests `QUERY_ALL_PACKAGES`" | A manifest declaration is a policy question, not an exploit | The enumerated list captured leaving the device in a request body, correlated with an account identifier and a named recipient (D01-043) |
+| "The app opens a loopback socket" | Binding is not a vulnerability | An unauthenticated request from a second process or host returning app-private bytes or accepting a file write (D01-053) |
+| "The signing certificate is self-signed / valid for 30 years" | Every Android release certificate is self-signed; long validity is required by Play | A mismatch between the artefact you tested and the store artefact, or a `knownSigner` allow-list containing a key the target no longer controls (D01-004, D01-005) |
+
+## Cross-surface joins
+
+These are pairs of surfaces that separate people review separately, whose JOIN is the bug.
+
+- **Config splits × the secret sweep (D01-001 × D01-064 → D18).** Almost every secret sweep in the wild runs against `base.apk`. Native libraries and whole feature modules live in `split_config.*` and `split_feature_*`, and `apkleaks` on base alone never sees them. The join is: a signing key or cloud credential that exists **only** in the arm64 split, in an app whose vendor SAST scans the bundle's base module. Also check both ABIs — a vulnerable `.so` may ship only to `armeabi-v7a`, i.e. to the oldest and most-at-risk device population.
+- **Superseded builds × the live backend (D01-010 × D01-067 → D15).** Nobody joins "APKMirror has builds N-1 through N-12" with "the backend still routes `/v1/`". The vendor's mental model is that removing a key from the client retired it, and that deprecating an API version removed it. Each half is separately boring; the join is a credential from build N-3 authenticating against a version the current client never calls, which is P1 twice over.
+- **`<queries>` × the caller-verification code path (D01-042 × D03/D06).** Manifest reviewers read `<queries>` as a compatibility declaration. Code reviewers read `checkSignatures` call sites without knowing which peers matter. The join — a `<queries><package>` entry whose peer is resolved by **name only**, with no `GET_SIGNING_CERTIFICATES` comparison anywhere on the call path — is a squattable trust anchor, and it is only visible if the same person holds both halves.
+- **Merged-manifest SDK delta × the URI-grant primitive (D01-036 × D08/D07).** The app vendor does not know the component exists; the SDK vendor does not know it is exported in this host app. An exported SDK proxy activity plus `FLAG_GRANT_READ_URI_PERMISSION` handling is the EngageLab shape — persistent read/write grants over the host app's private storage, at 50M+ installs. Neither party reviews the join.
+- **Process topology × the WebView renderer (D01-041 × D10/D11).** A "`:webview` process" is presented internally as isolation. It shares the UID and the data directory unless `isolatedProcess` was also set. The join makes any renderer compromise reach the token store — and it is the specific claim ("our payment WebView runs isolated") that makes it reportable.
+- **Foreground-service types × an exported starter (D01-046 × D06).** The FGS type table is read as a compliance chore; the exported-service list is read as an IPC chore. `android:foregroundServiceType="microphone"` on a service an unprivileged app can `startForegroundService()` is remote-triggered background mic capture, and neither list alone says that.
+- **Package enumeration × the RASP blocklist (D01-043 × D21).** The installed-app enumeration is written up as a privacy issue; the root/Frida detection is written up as a hardening note. They are usually the **same code**: the enumeration exists to feed a competitor/security-app blocklist, and reading that blocklist tells you exactly which branch to flip to disable the RASP.
+- **Deep-link `<data>` cross-product × the App Links verdict (D01-048 × D09/D13).** Testers enumerate schemes; separately, someone checks `assetlinks.json`. The join — a synthetic `scheme × host` combination that reaches a handler which skips the validation applied to the canonical `https` form, on a host whose App Links verification failed — is how a password-reset token reaches an arbitrary installed app.
+- **Dialer secret codes × the environment switch (D01-049 × D22/D14).** Secret codes are treated as an OEM curiosity. Environment switchers are treated as a debug-build artefact. A `*#*#code#*#*` receiver in a production build that flips the backend to staging or disables pinning joins them into a physical-access MitM primitive with no permission and no UI trail.
+- **OTA channel × the network position (D01-032/-033 × D14/D17).** The OTA channel is a release-engineering concern; pinning is a network concern. The join is that an unsigned or unenforced update payload fetched over an unpinned channel is `server_side_injection.remote_code_execution_rce` (P1) — and it is invisible to anyone who only analysed the APK, because the APK is not what runs.
+- **App instances × entitlement counting (D01-052 × D23/D13).** Nobody tests the work profile, the Private Space copy and the OEM clone as *separate installs of the same account*. A trial or device-binding scheme that counts installs is defeated by a feature the platform ships, and the vendor's own compat documentation warns that work-profile logic breaks on Private Space.
+- **In-process OkHttp tap × the packet capture (D01-062 × D01-074 × D15).** Proxy-only testers miss non-proxied HTTP; packet-capture-only testers see destinations but not bodies. Running both and taking the three-way set difference — proxy log, Frida tap, pcap destinations — names exactly which stack is unproxied and which endpoints nobody has ever tested.
+- **Feature matrix × the coverage register (D01-057 × D01-038).** Component coverage and feature coverage are different axes, and an engagement can be complete on one and empty on the other. A component with a TESTED-CLEAN status that appears in no feature row was tested in isolation and never driven with real state; a feature with no component row was never bound to code at all.
+
+## Sources
+
+- **OWASP MASTG / MASVS** — MASTG-TECH-0003, -0019, -0020, -0022, -0029, -0117, -0126, -0141, -0145, -0150, -0156, -0157, -0160, -0161, -0162, -0163, -0165, -0172; MASTG-TOOL-0004 (adb), -0009 (APKiD), -0011 (apktool), -0018 (jadx), -0078, -0104 (hermes-dec), -0116 (blutter), -0125 (apkleaks), -0129 (rabin2), -0146 (RootBeer); MASTG-TEST-0217, -0233, -0236, -0237, -0238, -0242, -0355, -0364, -0365, -0366, -0393; MASTG-KNOW-0017, -0020; MASWE-0018; MASVS-PLATFORM-1, MASVS-AUTH-1.
+- **Bugcrowd VRT release 2026-07-08** (581 entries) — every severity claim in this chapter is pinned to a path from that tree; the mobile branch's P5 ceiling is why the Graveyard is long.
+- **AOSP / developer.android.com** — five-layer architecture and application sandbox; Binder IPC and `service_contexts`; APEX/Mainline module model; APK signing schemes v1–v4 and v3 key rotation; `knownSigner` protection level; package visibility and `<queries>`; App Startup; foreground-service type table; Play Feature Delivery; SDK Extensions; Private Space; processes and threads; `android-exported` risk page; sender-of-pending-intents signature guidance; behaviour-change pages for Android 12–16.
+- **MITRE ATT&CK Mobile** — T1418 / T1418.001 Software and Security Software Discovery (mitigation M1006, analytic AN1646), T1420 File and Directory Discovery, T1421 System Network Connections Discovery, T1422 / T1422.001 / T1422.002 System Network Configuration Discovery, T1423 Network Service Scanning, T1424 Process Discovery, T1426 System Information Discovery, T1430 Location Tracking, T1627.001 Geofencing.
+- **OWASP API Security Top 10 (2023) and Mobile Top 10** — API1, API3, API5, API8, API9, API10; M3 and M8.
+- **A 4,467-star bug-hunting corpus** — the shadow/zombie-API behavioural diff and its severity table, the layer-ordering trap, marker discipline, the body-diff rule, the statistical-sample rule, server-policy-vs-state, the shell-loop ban, the multi-tool reproduction bar, ownership/namespace-collision triage, the soft-404 control, the APK/iOS red-team pipeline stages, the never-submit list, the pre-severity gate, retraction discipline and chain-filing order.
+- **Disclosed reports** — HackerOne #1241116 (Reddit, Critical), #789370 (Smule, Critical), #1667998 (KAYAK, Critical 9.3), #766346, #694053 (Lark), #532836 / #1455987 (Exness), #583987 (Periscope), #412772 (8x8), #753868 (Zenly), #351555 (Reverb), #328486 (Zomato), #331302 (Nextcloud), #221558 (Grab), #3124103 (U.S. DoD Swagger UI), #1656650.
+- **CVEs and advisories** — CVE-2020-8913 (Play Core), CVE-2025-27363 (FreeType), CVE-2023-4863 (libwebp), CVE-2025-64505 (libpng), CVE-2019-7317 (libpng), CVE-2025-5915 (libarchive), CVE-2022-3970 (libtiff), CVE-2019-6447 (ES File Explorer / EDB 50070), CVE-2018-25031 and CVE-2023-38337 (Swagger tooling), CVE-2026-28576 / -0047 / -0049 (patch-level verification); EDB 37504, 44242, 44852, 46464; the EngageLab SDK ≤ v4.5.4 `MTCommonActivity` disclosure (fixed v5.2.1, 2025-11-03).
+- **Vendor programme rules** — Google Mobile VRP application tiers, reward table, developer-account scope and routing; Android & Google Devices; Chrome VRP; Samsung, Xiaomi, PayPal, Uber, Grab, Reddit and Meta scope clauses on MitM, physical access, rooted devices and version currency.
+- **Tooling documentation read directly** — APKEditor, bundletool, uber-apk-signer, apkeep, apkanalyzer, apksigner, apkid, apkleaks, apkurlgrep, apk2url, MARA, android_lib_detector, drozer (`app.package.attacksurface`, `app.package.info`, `app.package.list`, `app.package.shareduid`, `app.package.manifest`, `app.package.debuggable`, `app.package.backup`, `app.package.native`, `scanner.misc.secretcodes`, `scanner.misc.urls`, `information.permissions`), apk-components-inspector, IRIS intent monitor, hbctool, hermes-dec, hermes_rs, hermes-decomp, react-native-decompiler, Blutter, Il2CppDumper, Zygisk-Il2CppDumper, frida-il2cpp-bridge, pyxamstore, blackboxprotobuf, grpcurl, arjun, x8, apkX, subjs, LinkFinder, gau, httpx, subfinder, amass, dnsgen, massdns, httprobe, aquatone, GitDorker, gitGraber, MobSF manifest analysis rules (`well_known_assetlinks`, `dialer_code_found`, `sms_receiver_port_found`), and the facebook/hermes `BytecodeFileFormat.h` header layout.
+- **NIST SP 800-115** Appendix B (scope, assumptions, personnel, schedule, incident handling, target list, data handling, reporting, signature page), Appendix C (white/grey/black box), §6.6 and §8.2 — for the scoping sheet, the RoE and the prior-report intake.

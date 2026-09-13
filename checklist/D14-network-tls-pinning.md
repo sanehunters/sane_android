@@ -12,7 +12,7 @@
 |---|---|
 | **Phases** | P3 network inventory (hosts, stacks, NSC, targetSdk gates), P4 static (trust code, cleartext constants, pin sets, TLS config), P6 dynamic (clean-trust-store MitM, pcap/proxy diff, response tampering) |
 | **Milestones** | M3, M4, M6 |
-| **VRT ceiling** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (**VARIES** — argue High on HackerOne's own AITM standard `CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N`); `broken_authentication_and_session_management|cleartext_transmission_of_session_token` (**P4**); `broken_authentication_and_session_management|weak_login_function|over_http` (**P4**); `insecure_data_transport|executable_download|no_secure_integrity_check` (**P4**, override upward with the execution proof) → `server_side_injection|remote_code_execution_rce` (**P1**) when the MitM'd artefact executes. The pinning nodes `mobile_security_misconfiguration|ssl_certificate_pinning|absent` and `|defeatable` are **P5** and are never the headline |
+| **VRT ceiling** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (**VARIES** — argue High on HackerOne's own AITM standard `CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N`); `broken_authentication_and_session_management\|cleartext_transmission_of_session_token` (**P4**); `broken_authentication_and_session_management\|weak_login_function\|over_http` (**P4**); `insecure_data_transport\|executable_download\|no_secure_integrity_check` (**P4**, override upward with the execution proof) → `server_side_injection\|remote_code_execution_rce` (**P1**) when the MitM'd artefact executes. The pinning nodes `mobile_security_misconfiguration\|ssl_certificate_pinning\|absent` and `\|defeatable` are **P5** and are never the headline |
 | **Primary attacker model** | **AM-06** network attacker with no trusted CA. AM-07 (network attacker *with* a trusted CA) is tester convenience and is NOT an attacker model — a finding proved only by installing your own CA is a pinning report and pays nothing. Secondary: AM-09 malicious backend/CDN (response tampering), AM-08 malicious third-party SDK (process-global trust neutering), AM-03 zero-permission local app (loopback / LAN listeners) |
 | **Maps to** | MASVS-NETWORK-1, MASVS-NETWORK-2, MASVS-CODE-4; MASTG-TEST-0217, -0218, -0233, -0234, -0235, -0236, -0238, -0242, -0243, -0244, -0282, -0283, -0285, -0286, -0295, MASTG-TECH-0010, -0011, -0012, -0019, -0022, -0028, -0039, -0150, -0151, MASTG-KNOW-0010, -0011, -0014, -0015, MASTG-BEST-0020, -0021, MASTG-TOOL-0008/-0020/-0025/-0029/-0032/-0038/-0075/-0077/-0078/-0081/-0097/-0100/-0101/-0103/-0110/-0120/-0140, MASWE-0026, -0027, -0028, -0029, -0049; CWE-295, CWE-297, CWE-319, CWE-347, CWE-353, CWE-354, CWE-494; ATT&CK T1638, T1521.003 (analytic AN1725), T1639.001, T1632 / T1632.001, T1509, T1637, T1437.001, mitigations M1006, M1009, M1011, M1012; CVE-2021-0341, CVE-2023-3635, CVE-2018-9468, CVE-2018-9493, CVE-2018-9546 |
 
@@ -178,7 +178,7 @@ adb shell su 0 nsenter --mount=/proc/$PID/ns/mnt -- ls /apex/com.android.conscry
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | n/a (false-positive gate for `mobile_security_misconfiguration|ssl_certificate_pinning|absent`) |
+| **VRT** | n/a (false-positive gate for `mobile_security_misconfiguration\|ssl_certificate_pinning\|absent`) |
 | **Attacker** | n/a |
 | **Applies to** | all; the APEX trap is specific to API 34+ |
 | **Maps to** | MASTG-TEST-0244 (implementation-agnostic), MASTG-TEST-0022 (documents the `X509Util` log line), MASTG-KNOW-0015 |
@@ -306,7 +306,7 @@ ngrok tcp 8080                       # note e.g. 0.tcp.ngrok.io:12345
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES — argue High/Critical on demonstrated content) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES — argue High/Critical on demonstrated content) |
 | **Attacker** | AM-06 |
 | **Applies to** | all API levels; prevalence highest in legacy code paths and third-party SDKs |
 | **Maps to** | MASTG-TEST-0282, MASWE-0027, MASTG-KNOW-0010, MASTG-BEST-0021, semgrep rule `mastg-android-network-checkservertrusted`, CWE-295, ATT&CK T1638 |
@@ -356,7 +356,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0282's enumerated failure modes, MASWE-0027, MASTG-KNOW-0010, CWE-295 |
@@ -391,7 +391,7 @@ grep -rn -A6 'getAcceptedIssuers' jadx_out/sources/ | grep -nE 'return null|new 
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 (and any attacker who can buy a certificate for a domain they own) |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0283, MASWE-0027, CWE-297 "Improper Validation of Certificate with Host Mismatch", semgrep rule `mastg-android-network-hostname-verification`, Google ASI campaign "Insecure Hostname Verification" (2016-11-29), ATT&CK T1638 |
@@ -426,7 +426,7 @@ sf.setHostnameVerifier(SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 |
 | **Applies to** | all; any raw `SSLSocket`/`SSLSocketFactory.createSocket()` path, common in chat, MQTT, XMPP, custom binary protocols |
 | **Maps to** | MASTG-TEST-0234, MASWE-0027, semgrep rule `mastg-android-ssl-socket-hostnameverifier`, CWE-297 |
@@ -459,7 +459,7 @@ grep -rn 'getDefaultHostnameVerifier\|HttpsURLConnection.getDefaultHostnameVerif
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 |
 | **Applies to** | all multi-stack apps (an OkHttp API client plus a WebView plus a download/media/socket path) |
 | **Maps to** | MASTG-TEST-0283 ("incomplete verification coverage" named as a distinct failure mode), MASWE-0027, CWE-297 |
@@ -490,7 +490,7 @@ mitmproxy --mode transparent --showhost --set upstream_cert=false
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 |
 | **Applies to** | all apps with a WebView |
 | **Maps to** | MASWE-0027, CWE-295, Google ASI campaign "Webview SSLErrorHandler" (2015-07-17), H1 #795272 (Razer, $750), ATT&CK T1638 |
@@ -519,7 +519,7 @@ grep -rn -A8 'onReceivedClientCertRequest' jadx_out/sources/   # the mTLS siblin
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-08 (malicious/negligent SDK) delivering the defect; AM-06 exploiting it |
 | **Applies to** | all; the defect is now more common in SDKs than in app code |
 | **Maps to** | MASWE-0027, CWE-295, Google ASI campaigns "TrustManager" (2016-02-17) and "Insecure Hostname Verification" (2016-11-29), Google risk pages `unsafe-trustmanager` / `unsafe-hostname` |
@@ -559,7 +559,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES); the version string alone is `using_components_with_known_vulnerabilities|outdated_software_version` (P5) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES); the version string alone is `using_components_with_known_vulnerabilities\|outdated_software_version` (P5) |
 | **Attacker** | AM-06 |
 | **Applies to** | apps bundling OkHttp < 4.9.2 **and** making manual `HostnameVerifier` calls; check okio separately |
 | **Maps to** | CVE-2021-0341 (OkHttp prior to 4.9.2; the fix strictly verifies hostnames because "programs making manual calls could be defeated if hostnames weren't strictly ASCII"), CVE-2023-3635 (`com.squareup.okio:okio`, shipped inside OkHttp 4.11.0), CWE-297 |
@@ -622,8 +622,8 @@ grep -rn 'setEnabledProtocols\|TLSv1.2\|Tls12SocketFactory\|ProviderInstaller' j
 
 | | |
 |---|---|
-| **Severity ceiling** | Medium (configuration alone) |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) — only once paired with observed sensitive traffic (D14-018) |
+| **Severity ceiling** | Medium |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) — only once paired with observed sensitive traffic (D14-018) |
 | **Attacker** | AM-06 |
 | **Applies to** | all. **LEGACY:** cleartext is permitted by default at `targetSdk < 28`; denied by default at 28+ |
 | **Maps to** | MASTG-TEST-0235, MASWE-0026, MASTG-KNOW-0014, MASTG-TECH-0150, MASTG-TECH-0151, CWE-319, MobSF `clear_text_traffic` |
@@ -657,7 +657,7 @@ yq -p=xml -o=json '.' apktool_out/res/xml/network_security_config.xml | \
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 |
 | **Applies to** | `targetSdk ≥ 28` apps with an NSC (API 24+) |
 | **Maps to** | MASTG-TEST-0235, MASWE-0026, MASTG-TECH-0151, MobSF `network_security.py` finding "Domain config is insecurely configured to permit clear text traffic" |
@@ -700,7 +700,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES → High); `broken_authentication_and_session_management|cleartext_transmission_of_session_token` (P4); `|weak_login_function|over_http` (P4); `|weak_registration_implementation|over_http` (P4) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES → High); `broken_authentication_and_session_management\|cleartext_transmission_of_session_token` (P4); `\|weak_login_function\|over_http` (P4); `\|weak_registration_implementation\|over_http` (P4) |
 | **Attacker** | AM-06 |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0236, MASWE-0026, MASTG-TECH-0010, MASTG-TECH-0011, MASTG-TECH-0028, MASTG-TOOL-0075, MASTG-TOOL-0081, MASTG-TOOL-0078 (MITM Relay, for non-HTTP protocols such as XMPP), CWE-319, ATT&CK T1639.001, mitigation M1009; H1 #12977, #166712 (Boozt, login without SSL), #2101 (Yahoo, signup over HTTP) |
@@ -732,8 +732,8 @@ adb shell cat /proc/$PID/net/tcp        # rem_address in hex, uid field
 
 | | |
 |---|---|
-| **Severity ceiling** | Critical (when the host is unregistered or serves code) |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) → `server_side_injection|remote_code_execution_rce` (P1) for the code-delivery case |
+| **Severity ceiling** | Critical |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) → `server_side_injection\|remote_code_execution_rce` (P1) for the code-delivery case |
 | **Attacker** | AM-06; **AM-01** when the hardcoded host is unregistered |
 | **Applies to** | all; native `.so` strings included |
 | **Maps to** | MASTG-TEST-0233, MASTG-TEST-0238 (the Frida-plus-`.backtrace()` approach), MASWE-0026, MASTG-TECH-0019, CWE-319; EDB 42288 / 42287 / 42349 / 42350 (MitM → `addJavascriptInterface` RCE chains); Android Lint check `InsecureBaseConfiguration` |
@@ -779,7 +779,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) for `ws://`; `broken_access_control|idor|view_sensitive_information_iterable_object_identifiers` (P3) upward for the per-message authz case |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) for `ws://`; `broken_access_control\|idor\|view_sensitive_information_iterable_object_identifiers` (P3) upward for the per-message authz case |
 | **Attacker** | AM-06 for `ws://`; AM-05 for the authz case |
 | **Applies to** | apps with real-time features — chat, live orders, trading, presence, notifications |
 | **Maps to** | MASWE-0026, CWE-319; corpus community sources on WebSocket transport and Pusher/PubNub/Ably SDK channels |
@@ -807,7 +807,7 @@ tshark -r cap.pcap -Y 'websocket' -T fields -e ip.dst -e tcp.dstport -e websocke
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 (needs only to answer the first, pre-TLS request or to be the redirect source) |
 | **Applies to** | all; OkHttp's `followSslRedirects` defaults to **true** |
 | **Maps to** | MASWE-0026, CWE-319, ATT&CK T1638 |
@@ -843,7 +843,7 @@ def response(flow):
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 |
 | **Applies to** | Flutter (Dart `HttpClient` on its own BoringSSL and its own CA list), Unity (`UnityWebRequest`), Cronet, gRPC, Go and any bundled native stack; Capacitor's `server.cleartext` |
 | **Maps to** | MASTG-TECH-0151, MASWE-0026, CWE-319; corpus: Dart's compiled-in CA list (`session_verify_cert_chain` in `x509.cc`), Capacitor `WebViewLocalServer` |
@@ -872,8 +872,8 @@ tcpdump -i any -n 'tcp port 80'    # on the lab AP/gateway while driving the app
 
 | | |
 |---|---|
-| **Severity ceiling** | Critical (loopback OAuth callback race) |
-| **VRT** | `broken_authentication_and_session_management|authentication_bypass` (P1) when an authorization code is captured; `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) for an unauthenticated LAN service |
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (P1) when an authorization code is captured; `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) for an unauthenticated LAN service |
 | **Attacker** | **AM-03** zero-permission local app (loopback); AM-06 / same-LAN peer (LAN listener) |
 | **Applies to** | all for loopback; the LAN gate is Android 16 / targetSdk 36+ |
 | **Maps to** | MASWE-0029; Android 16 Local Network Protection (`adb shell am compat enable RESTRICT_LOCAL_NETWORK <pkg>`, address ranges 169.254.0.0/16, 100.64.0.0/10, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, IPv4 broadcast, IPv6 link-local; DNS port 53 excepted; error strings `sendto failed: EPERM` / `sendto failed: ECONNABORTED`) |
@@ -910,7 +910,7 @@ adb shell am compat disable RESTRICT_LOCAL_NETWORK <pkg>
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | rated on the channel's contents; `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) as the transport node |
+| **VRT** | rated on the channel's contents; `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) as the transport node |
 | **Attacker** | AM-06 |
 | **Applies to** | all; especially messaging, IoT-companion, gaming and finance apps |
 | **Maps to** | ATT&CK T1509 Non-Standard Port (precedents named by ATT&CK: Cerberus "HTTP requests over port 8888", Chameleon "port 7242", FlexiSpy "ports 12512 and 12514"), T1437.001, T1521, MASTG-TOOL-0078 (MITM Relay for XMPP-class protocols) |
@@ -939,7 +939,7 @@ grep -rn -i 'mqtt\|xmpp\|Socket(\|SSLSocketFactory\|grpc\|QuicChannel\|cronet\|n
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure|token_leakage_via_referer|over_http` (P4) where applicable; otherwise argue under `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES). Note Xiaomi explicitly excludes "sensitive data in URLs/request bodies **when protected by TLS**" |
+| **VRT** | `sensitive_data_exposure\|token_leakage_via_referer\|over_http` (P4) where applicable; otherwise argue under `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES). Note Xiaomi explicitly excludes "sensitive data in URLs/request bodies **when protected by TLS**" |
 | **Attacker** | AM-09 (log-holder), AM-06 over cleartext |
 | **Applies to** | all |
 | **Maps to** | CWE-319; corpus community sources sec-14-4 #9, sec-14-18 #23 |
@@ -965,7 +965,7 @@ grep -rn 'HttpUrl.Builder\|addQueryParameter\|Uri.Builder\|appendQueryParameter\
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) — Medium standalone, High once you capture credentials through the user-CA intercept |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) — Medium standalone, High once you capture credentials through the user-CA intercept |
 | **Attacker** | AM-06 for the consequence; the enabling step is a user-installed CA (phishing, a malicious profile, an MDM, or malware with a settings-injection primitive) |
 | **Applies to** | `targetSdk ≥ 24`, where this is an explicit opt-in. **LEGACY:** at `targetSdk < 24` user CAs are trusted with no config at all and this is the platform default, not a misconfiguration |
 | **Maps to** | MASTG-TEST-0286, MASWE-0027, MASTG-KNOW-0014, semgrep rule `mastg-android-network-insecure-trust-anchors` (literally `match: any: - <certificates src="user"`), MASTG-TOOL-0110, MobSF `network_security.py` "Base config is configured to trust user installed certificates" (HIGH), ATT&CK T1632 Subvert Trust Controls |
@@ -1002,7 +1002,7 @@ grep -n 'debug-overrides' apktool_out/res/xml/network_security_config.xml   # di
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES), scoped to the affected device population |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES), scoped to the affected device population |
 | **Attacker** | AM-06 after a user-CA install |
 | **Applies to** | **LEGACY** — only when `minSdkVersion < 24`; state the affected device share in the report |
 | **Maps to** | MASTG-TEST-0285 (note its frontmatter carries `deprecated_since: 24`), MASWE-0027, MASTG-KNOW-0014, MASTG-TECH-0150, ATT&CK T1632 ("apps that target compatibility with Android 7 and higher (API Level 24) default to only trusting CA certificates that are bundled with the operating system") |
@@ -1026,7 +1026,7 @@ aapt2 d badging base.apk | grep "^sdkVersion"
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES → High/Critical with the captured session); the debuggable half also files under D02/D26 |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES → High/Critical with the captured session); the debuggable half also files under D02/D26 |
 | **Attacker** | AM-06 plus anyone with adb/USB access; and AM-03 via `run-as`/JDWP |
 | **Applies to** | all. `<debug-overrides>` applies **only** when `android:debuggable="true"`; `overridePins` defaults to `true` inside that block |
 | **Maps to** | MASWE-0063, MASTG-TECH-0011, Google risk `android-debuggable`, MobSF `app_is_debuggable` (high) and the `network_security.analysis(..., debuggable, ...)` gate — MobSF raises the debug-override findings **only** when `is_debuggable` is true |
@@ -1057,7 +1057,7 @@ adb shell dumpsys package <pkg> | grep -i DEBUGGABLE     # confirm on the INSTAL
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 after a user-CA install (no root required) |
 | **Applies to** | NSC apps, API 24+. `overridePins` defaults to `false` everywhere **except** inside `<debug-overrides>`, where it defaults to `true` |
 | **Maps to** | Android NSC reference (`<debug-overrides>`, `overridePins`, `<certificates src>`), MASWE-0028, MobSF "Base config is configured to bypass certificate pinning" (HIGH) |
@@ -1090,7 +1090,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) |
 | **Attacker** | AM-06 with a certificate from the bundled anchor's issuer; AM-09 |
 | **Applies to** | NSC apps, API 24+. The CT caveat applies at every API level; CT itself is API 36+ |
 | **Maps to** | Android NSC reference — "Certificate transparency verification is NOT performed on connections using custom trust anchors"; MASWE-0028, MASWE-0027 |
@@ -1119,7 +1119,7 @@ for c in apktool_out/res/raw/*.{pem,crt,cer}; do [ -f "$c" ] && \
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES); pairs with `mobile_security_misconfiguration|ssl_certificate_pinning|absent` (P5) to argue an aggregate |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES); pairs with `mobile_security_misconfiguration\|ssl_certificate_pinning\|absent` (P5) to argue an aggregate |
 | **Attacker** | AM-06 holding a mis-issued certificate from any trusted CA |
 | **Applies to** | `<certificateTransparency enabled>` is **not available ≤ API 35**, available and **disabled by default on API 36**, **enabled by default with opt-out at API 37+** |
 | **Maps to** | Android NSC reference (`<certificateTransparency enabled>` and its per-API defaults; the custom-trust-anchor exclusion) |
@@ -1147,7 +1147,7 @@ aapt2 dump badging base.apk | grep targetSdkVersion
 | | |
 |---|---|
 | **Severity ceiling** | Low |
-| **VRT** | no direct node; argue under `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) only where the hostname itself is the sensitive datum |
+| **VRT** | no direct node; argue under `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) only where the hostname itself is the sensitive datum |
 | **Attacker** | AM-06 performing traffic analysis |
 | **Applies to** | `<domainEncryption mode>` defaults to **enabled at API 37+**, disabled at 36 and below |
 | **Maps to** | Android NSC reference (`<domainEncryption mode>` and its per-API defaults) |
@@ -1171,7 +1171,7 @@ tshark -r cap.pcap -Y 'tls.handshake.type==1' -T fields -e tls.handshake.extensi
 | | |
 |---|---|
 | **Severity ceiling** | Low |
-| **VRT** | `lack_of_binary_hardening|runtime_instrumentation_based` (P5) — resilience only |
+| **VRT** | `lack_of_binary_hardening\|runtime_instrumentation_based` (P5) — resilience only |
 | **Attacker** | AM-12 own rooted device (**not an attack**) |
 | **Applies to** | API 34+, apps that enumerate or hash the system trust store to detect interception |
 | **Maps to** | AOSP Conscrypt module (`source.android.com/docs/core/ota/modular-system/conscrypt` — "Android 14 introduced updatable root certificates… stored in the Conscrypt module APEX and the system partition"; paths `/apex/com.android.conscrypt/cacerts` and `/system/etc/security/cacerts`; APEX package `com.android.conscrypt`) |
@@ -1199,8 +1199,8 @@ frida-trace -U -f <pkg> -j '*!*cacert*' -j '*!*TrustedCertificate*'
 
 | | |
 |---|---|
-| **Severity ceiling** | Support (**ceiling is P5 as a finding**) |
-| **VRT** | `mobile_security_misconfiguration|ssl_certificate_pinning|absent` (**P5**) / `|defeatable` (**P5**) — never file standalone |
+| **Severity ceiling** | Support |
+| **VRT** | `mobile_security_misconfiguration\|ssl_certificate_pinning\|absent` (**P5**) / `\|defeatable` (**P5**) — never file standalone |
 | **Attacker** | AM-07 (tester convenience, not an attacker) |
 | **Applies to** | NSC pinning from API 24; NSC pins cover framework traffic (`HttpsURLConnection`, WebView) but **not** native-code connections |
 | **Maps to** | MASTG-TEST-0242, MASTG-TEST-0244, MASWE-0028, MASTG-KNOW-0015, MASVS-NETWORK-2 (an L2 control), prerequisite `identify-first-party-domains`; HackerOne Platform Standards demotion rule; Bugcrowd VRT both nodes P5 |
@@ -1236,7 +1236,7 @@ python sslpindetect.py -a apktool_2.11.0.jar -f base.apk -v
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `mobile_security_misconfiguration|ssl_certificate_pinning|absent` (P5) at base — argue up only with an interception impact; the reporting angle is the lapsed control |
+| **VRT** | `mobile_security_misconfiguration\|ssl_certificate_pinning\|absent` (P5) at base — argue up only with an interception impact; the reporting angle is the lapsed control |
 | **Attacker** | AM-06 with a certificate from any trusted CA (the fallback is the configured trust anchors) |
 | **Applies to** | all NSC-pinning apps, API 24+ |
 | **Maps to** | MASTG-TEST-0243, MASWE-0028, MASTG-KNOW-0014, MASTG-KNOW-0015; MobSF `network_security.py` "Certificate pinning expires on {exp}. After this date pinning will be disabled." |
@@ -1266,7 +1266,7 @@ date -u +%Y-%m-%d
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) when the unpinned channel carries identifiers; `sensitive_data_exposure|disclosure_of_secrets|pii_leakage_exposure` (VARIES) |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) when the unpinned channel carries identifiers; `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-06 |
 | **Applies to** | all apps that pin selectively — which is nearly all of them |
 | **Maps to** | MASTG-TEST-0242's first-party scoping rule, MASWE-0028; corpus worked calibration: a payment SDK pinning **its own** traffic while the app's main API was interceptable with a system-trusted CA |
@@ -1298,7 +1298,7 @@ comm -13 pinned.txt contacted.txt        # contacted but never pinned
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) — rate on the channel contents |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) — rate on the channel contents |
 | **Attacker** | AM-06 |
 | **Applies to** | apps bundling a native HTTP client (`libcurl`, BoringSSL, mbedTLS, nghttp2), Cronet, gRPC, or a cross-platform stack |
 | **Maps to** | MASWE-0028; the NSC's documented scope (framework traffic only — not native-code connections) |
@@ -1328,7 +1328,7 @@ frida -U -f <pkg> --codeshare akabe1/frida-multiple-unpinning
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `mobile_security_misconfiguration|ssl_certificate_pinning|defeatable` (**P5**) — record, do not file |
+| **VRT** | `mobile_security_misconfiguration\|ssl_certificate_pinning\|defeatable` (**P5**) — record, do not file |
 | **Attacker** | AM-07/AM-12 (tester) |
 | **Applies to** | all pinned apps |
 | **Maps to** | MASTG-TECH-0012, MASTG-TOOL-0140 (frida-multiple-unpinning), MASTG-TOOL-0038/-0029 (objection), MASTG-TOOL-0025 (SSLUnpinning), MASTG-TOOL-0020 (JustTrustMe), MASTG-TOOL-0008 (Android-SSL-TrustKiller), MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0101 (disable-flutter-tls-verification), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TECH-0039 |
@@ -1400,8 +1400,8 @@ grep -ri 'java/lang/String;\[Ljava/lang/String;)L' ./             # obfuscated C
 
 | | |
 |---|---|
-| **Severity ceiling** | Medium (asset discovery; severity follows what the host exposes) |
-| **VRT** | rated on the discovered host — up to `sensitive_data_exposure|disclosure_of_secrets|for_internal_asset` (P3) or beyond |
+| **Severity ceiling** | Medium |
+| **VRT** | rated on the discovered host — up to `sensitive_data_exposure\|disclosure_of_secrets\|for_internal_asset` (P3) or beyond |
 | **Attacker** | AM-01 once the host is reachable |
 | **Applies to** | apps that pin with bundled certificates |
 | **Maps to** | corpus `apk-redteam-pipeline` Stage 4 + decision-tree row "Pinned cert for internal host → new asset discovery" |
@@ -1434,7 +1434,7 @@ keytool -list -v -keystore apktool_out/res/raw/truststore.bks -storetype BKS -st
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_authentication_and_session_management|authentication_bypass` (**P1**) if the spoofed verdict yields a privileged action; High as filed when only privileged *data* is shown |
+| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) if the spoofed verdict yields a privileged action; High as filed when only privileged *data* is shown |
 | **Attacker** | AM-01 (the header spoof needs no network position at all) |
 | **Applies to** | mTLS-fronted mobile backends terminating at nginx/HAProxy/Envoy |
 | **Maps to** | corpus `hunt-tls-network` Phase 8 + chain table ("High, not Critical" without a demonstrated privileged action); CWE-290-class trust-of-header |
@@ -1475,7 +1475,7 @@ for p in /health /ping /status /metrics /api/health; do
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `server_security_misconfiguration|insecure_ssl|insecure_cipher_suite` (**P5**) / `|lack_of_forward_secrecy` (**P5**) — the client-side node is a graveyard entry unless paired with an observed session (D14-042) |
+| **VRT** | `server_security_misconfiguration\|insecure_ssl\|insecure_cipher_suite` (**P5**) / `\|lack_of_forward_secrecy` (**P5**) — the client-side node is a graveyard entry unless paired with an observed session (D14-042) |
 | **Attacker** | AM-06 with a downgrade-capable position and a cooperating server |
 | **Applies to** | all. The NSC gives **no** control over TLS versions on Android (unlike iOS ATS) — it is all code-level. TLS 1.3 is on by default from Android 10 |
 | **Maps to** | MASTG-TEST-0217, MASWE-0026, CWE-319; mobsfscan `insecure_tls_version`, `weak_tls_cipher_suite`, `insecure_sslv3`, `default_http_client_tls` ("`DefaultHTTPClient()` with default constructor is not compatible with TLS 1.2") |
@@ -1505,7 +1505,7 @@ grep -rn 'DefaultHttpClient' jadx_out/sources/
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `server_security_misconfiguration|insecure_ssl|insecure_cipher_suite` (P5) — a server-side report, not a mobile one |
+| **VRT** | `server_security_misconfiguration\|insecure_ssl\|insecure_cipher_suite` (P5) — a server-side report, not a mobile one |
 | **Attacker** | AM-06 |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0218, MASWE-0026, MASTG-TECH-0010, MASTG-TOOL-0081 |
@@ -1535,7 +1535,7 @@ nmap --script ssl-enum-ciphers -p 443 api.target.tld
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) when the weak session carries data |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) when the weak session carries data |
 | **Attacker** | AM-06 |
 | **Applies to** | apps shipping their own OpenSSL/BoringSSL/Conscrypt-standalone/mbedTLS in a `.so`, or a cross-platform framework's stack. The platform floor binds at `targetSdk 35`; bundled stacks are unaffected on **every** version |
 | **Maps to** | AOSP Conscrypt module ("Android 15 now disallows TLS 1.0 and 1.1 for apps targeting that version"), developer.android.com Android 15 behaviour changes "Restricted TLS Versions"; MASWE-0026 |
@@ -1603,7 +1603,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES); `server_security_misconfiguration|misconfigured_dns|subdomain_takeover` (P3) if the hijack is achieved by a dangling record rather than by network position |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES); `server_security_misconfiguration\|misconfigured_dns\|subdomain_takeover` (P3) if the hijack is achieved by a dangling record rather than by network position |
 | **Attacker** | AM-06 controlling DHCP/DNS on the same network |
 | **Applies to** | all. Android supports DNS-over-TLS from SDK 28 and DoH3 from SDK 30; DNS resolution is the `com.android.resolv` Mainline module |
 | **Maps to** | Google risk `bad-dns` (names `DnsResolver`, DoT at SDK 28+, DoH3 at SDK 30+, and the anti-patterns "Implement custom DNS resolution logic", "Configure hardcoded DNS servers", "Use unencrypted DNS (plain UDP port 53)"); ATT&CK T1638; MASWE-0026 |
@@ -1637,7 +1637,7 @@ adb logcat | grep -iE 'SSLHandshake|CertPathValidator|UnknownHost|retry|fallback
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management|authentication_bypass` (P1) / `sensitive_data_exposure|disclosure_of_secrets|for_publicly_accessible_asset` (P1) when the redirected client hands over credentials at scale |
+| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (P1) / `sensitive_data_exposure\|disclosure_of_secrets\|for_publicly_accessible_asset` (P1) when the redirected client hands over credentials at scale |
 | **Attacker** | AM-09 / AM-06 when the source is network-controlled; AM-03/AM-11 when only locally writable |
 | **Applies to** | all |
 | **Maps to** | ATT&CK T1637 Dynamic Resolution, T1481.002, T1638; MASWE-0026 |
@@ -1668,7 +1668,7 @@ adb shell am start -a android.intent.action.VIEW -d 'target://config?api=https:/
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_data_transport|executable_download|no_secure_integrity_check` (**P4** baseline, CWE-353/354/494, baseline vector `AV:N/AC:H/PR:N/UI:N/S:C/C:N/I:L/A:N`) → override upward to `server_side_injection|remote_code_execution_rce` (**P1**) with the execution proof. The sibling `|secure_integrity_check` is **P5** |
+| **VRT** | `insecure_data_transport\|executable_download\|no_secure_integrity_check` (**P4** baseline, CWE-353/354/494, baseline vector `AV:N/AC:H/PR:N/UI:N/S:C/C:N/I:L/A:N`) → override upward to `server_side_injection\|remote_code_execution_rce` (**P1**) with the execution proof. The sibling `\|secure_integrity_check` is **P5** |
 | **Attacker** | AM-06 (MitM) or AM-09 (malicious CDN); AM-01 if the fetch host is takeover-able |
 | **Applies to** | all; see D17 for the OTA/dynamic-loading variants |
 | **Maps to** | MASWE-0049, CWE-494, MASVS-CODE-4, Mobile Top 10 2024 M2; Google Mobile VRP ACE definition — "Attacker gaining full control of the application, meaning code can be downloaded from the network and executed" |
@@ -1705,7 +1705,7 @@ def response(flow):
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|executable_download|no_secure_integrity_check` (P4) for the artefact; `sensitive_data_exposure|disclosure_of_secrets|pii_leakage_exposure` (VARIES) for the header disclosure |
+| **VRT** | `insecure_data_transport\|executable_download\|no_secure_integrity_check` (P4) for the artefact; `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (VARIES) for the header disclosure |
 | **Attacker** | AM-03 (querying the downloads provider) and AM-06 (tampering the fetch) |
 | **Applies to** | all; pre-API-29 also requires `WRITE_EXTERNAL_STORAGE`, widening the exposure |
 | **Maps to** | Google risk `unsafe-download-manager` (CVE-2018-9468 permission bypass, CVE-2018-9493 SQL injection, CVE-2018-9546 request-header disclosure of "session cookies, authentication headers"); MobSF `android_download_manager` |
@@ -1735,7 +1735,7 @@ adb shell content query --uri content://downloads/all_downloads
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection|remote_code_execution_rce` (**P1**) — arbitrary JS with the app's full native-module surface |
+| **VRT** | `server_side_injection\|remote_code_execution_rce` (**P1**) — arbitrary JS with the app's full native-module surface |
 | **Attacker** | AM-06 (serves the bundle), AM-03/AM-11 (sets `debug_http_host`) |
 | **Applies to** | React Native release builds that still ship `DevSupportManager` wiring |
 | **Maps to** | React Native `devsupport/DevServerHelper.kt` — bundle URL `"%s://%s/%s.%s?platform=android&dev=%s&lazy=%s&minify=%s&app=%s&modulesOnly=%s&runModule=%s"`, inspector `"%s://%s/inspector/device?name=%s&app=%s&device=%s&profiling=%b"`, `"%s://%s/open-debugger?device=%s"`; MASWE-0049 |
@@ -1765,7 +1765,7 @@ adb shell am start -a android.intent.action.VIEW -d "<scheme>://" <pkg>   # then
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure|disclosure_of_secrets|for_publicly_accessible_asset` (P1) when the exfiltrated token is the main session token; High otherwise |
+| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|for_publicly_accessible_asset` (P1) when the exfiltrated token is the main session token; High otherwise |
 | **Attacker** | AM-09 (playback API / manifest) or AM-02 (deep link that sets the licence URI) |
 | **Applies to** | apps with DRM playback (Media3/ExoPlayer + Widevine) |
 | **Maps to** | `developer.android.com/media/media3/exoplayer/drm` — `setLicenseUri()`, `setLicenseRequestHeaders(Map<String,String>)`, `setMultiSession()`, `DefaultDrmSessionManager`, `DrmSessionManagerProvider`; MASWE-0026 |
@@ -1795,7 +1795,7 @@ grep -n 'domain-config\|base-config' apktool_out/res/xml/network_security_config
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport|cleartext_transmission_of_sensitive_data` (VARIES) for the credentialed fetch; rate the native-parser path on its own crash/impact |
+| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (VARIES) for the credentialed fetch; rate the native-parser path on its own crash/impact |
 | **Attacker** | AM-02 (deep link, push payload, chat message, QR) |
 | **Applies to** | any app with media playback where the source URL is not a fixed allow-list |
 | **Maps to** | ExoPlayer/Media3 data-source plumbing (`MediaItem.fromUri`, `DefaultHttpDataSource.setDefaultRequestProperties`, `setSubtitleConfigurations`); MASWE-0026 |
@@ -1824,7 +1824,7 @@ adb shell am start -a android.intent.action.VIEW \
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | rated on the consequence; `broken_authentication_and_session_management|authentication_bypass` (P1) in the rare case where a 200 is read as auth success |
+| **VRT** | rated on the consequence; `broken_authentication_and_session_management\|authentication_bypass` (P1) in the rare case where a 200 is read as auth success |
 | **Attacker** | AM-06 running the AP |
 | **Applies to** | all |
 | **Maps to** | not covered by MASTG or the mainstream checklists; Android `NetworkMonitor`/captive-portal validation is the platform side |
@@ -1852,7 +1852,7 @@ adb logcat | grep -iE 'captive|NetworkMonitor|portal'
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_authentication_and_session_management|authentication_bypass` (P1) if a revocation or entitlement gate fails open into privileged state |
+| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (P1) if a revocation or entitlement gate fails open into privileged state |
 | **Attacker** | AM-11 / AM-05, exploiting a condition the platform now creates routinely |
 | **Applies to** | Android 15+ (all apps) |
 | **Maps to** | developer.android.com Android 15 behaviour changes — background network access restrictions; requests started outside a valid process lifecycle throw `UnknownHostException` or a socket `IOException` |
@@ -1881,7 +1881,7 @@ adb shell cmd deviceidle force-idle
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management|authentication_bypass` (**P1**) when the old path skips auth; `broken_access_control|idor|view_sensitive_information_iterable_object_identifiers` (P3) upward for field exposure; a version difference alone is **Informational** |
+| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) when the old path skips auth; `broken_access_control\|idor\|view_sensitive_information_iterable_object_identifiers` (P3) upward for field exposure; a version difference alone is **Informational** |
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API — which is every mobile backend |
 | **Maps to** | corpus `hunt-shadow-api` Stages 1–3 and its severity table; the explicit chain from `apk-redteam-pipeline`. Described there as the highest-value mobile→backend bridge in the repository |
@@ -2071,10 +2071,10 @@ grep -i 'authorization\|"cookie"' out.sanitized.har | head -20   # verify
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
-| "The app does not implement certificate pinning" | `mobile_security_misconfiguration|ssl_certificate_pinning|absent` = **P5**. HackerOne Core Ineligible lists "Lack of SSL Pinning" under missing best practices; Xiaomi, Grab, Spotify, Starbucks and Snapchat exclude it by name. Shopify #55644 was rated **none, $0** | An interceptable secret **plus** a realistic AM-06 path — i.e. broken validation (D14-007/-009/-010), an expired pin set (D14-035), or an unpinned channel carrying identifiers (D14-036) |
-| "I bypassed the app's pinning with objection/Frida" | `|ssl_certificate_pinning|defeatable` = **P5**. HackerOne Platform Standards: "If a report requires an attacker to disable Certificate Pinning in an application, then that is not a valid vulnerability" | Nothing about the bypass. Report what the decrypted traffic then reveals, filed under D15 with its own VRT |
-| "Weak TLS ciphers / TLS 1.0 supported" | HackerOne Core Ineligible "SSL/TLS Configurations"; Grab, Reddit, Basecamp and HackenProof all exclude it without a PoC. `server_security_misconfiguration|insecure_ssl|*` children are P5 | A captured session actually negotiating the weak parameters **and** a demonstrated decryption or downgrade consequence |
-| "Missing HSTS on the auth subdomain" | Exploitation needs an active MitM position you cannot demonstrate remotely; `server_security_misconfiguration|lack_of_security_headers|strict_transport_security` = P5 | A demonstrated downgrade of a real session on a network you controlled, with the token captured |
+| "The app does not implement certificate pinning" | `mobile_security_misconfiguration\|ssl_certificate_pinning\|absent` = **P5**. HackerOne Core Ineligible lists "Lack of SSL Pinning" under missing best practices; Xiaomi, Grab, Spotify, Starbucks and Snapchat exclude it by name. Shopify #55644 was rated **none, $0** | An interceptable secret **plus** a realistic AM-06 path — i.e. broken validation (D14-007/-009/-010), an expired pin set (D14-035), or an unpinned channel carrying identifiers (D14-036) |
+| "I bypassed the app's pinning with objection/Frida" | `\|ssl_certificate_pinning\|defeatable` = **P5**. HackerOne Platform Standards: "If a report requires an attacker to disable Certificate Pinning in an application, then that is not a valid vulnerability" | Nothing about the bypass. Report what the decrypted traffic then reveals, filed under D15 with its own VRT |
+| "Weak TLS ciphers / TLS 1.0 supported" | HackerOne Core Ineligible "SSL/TLS Configurations"; Grab, Reddit, Basecamp and HackenProof all exclude it without a PoC. `server_security_misconfiguration\|insecure_ssl\|*` children are P5 | A captured session actually negotiating the weak parameters **and** a demonstrated decryption or downgrade consequence |
+| "Missing HSTS on the auth subdomain" | Exploitation needs an active MitM position you cannot demonstrate remotely; `server_security_misconfiguration\|lack_of_security_headers\|strict_transport_security` = P5 | A demonstrated downgrade of a real session on a network you controlled, with the token captured |
 | "Missing CAA / DNSSEC / SPF-DKIM-DMARC" | P5 nodes, and reading `p=none` from `dig` is not a finding | A spoofed mail **delivered to the Inbox** of a real receiver you control, with headers — and even then it belongs to the email domain, not here |
 | "`<debug-overrides>` present in the release APK" | The block is inert unless `android:debuggable="true"` — MobSF itself gates the finding on that flag | The store build is also debuggable (→ D14-028) |
 | "The app trusts user CAs" on a `targetSdk < 24` build | That is the documented platform default for that target, not a deviation | `targetSdk ≥ 24` with an explicit `<certificates src="user"/>` (→ D14-026), or `overridePins="true"` (→ D14-029) |
@@ -2082,8 +2082,8 @@ grep -i 'authorization\|"cookie"' out.sanitized.har | head -20   # verify
 | "An analytics ping goes over HTTP" | Informational unless it carries something | The ping carries a session token, a stable user id, an advertising id tied to an account, or PII |
 | "ARP poisoning lets me intercept the app" | True of every OS, needs same-L2 presence, defeated by Wi-Fi client isolation and MAC randomisation. Use the lab-gateway form purely as a capture mechanism | Nothing — it is not an Android finding. Report the app-side defect the capture revealed |
 | "Play Integrity / SafetyNet can be bypassed with Frida" | Verdicts are checked server-side and cannot be forged by a local hook. If the gate is a server-verified attestation, stop and re-scope | The **server** accepting requests carrying no integrity verdict at all — a separate, server-side finding |
-| "The interception-detection routine can be defeated" | `lack_of_binary_hardening|runtime_instrumentation_based` = P5; AM-12 (own rooted device) is not an attacker | Only if a client SoW explicitly buys MAS-R resilience controls — then it is a contractual gap, not a vulnerability |
-| "OkHttp version X has CVE-YYYY-NNNN" | `using_components_with_known_vulnerabilities|outdated_software_version` = P5; a version string is not reachability | The vulnerable code path demonstrably reached — e.g. a manual `HostnameVerifier` call plus an accepted confusable-hostname certificate (→ D14-014) |
+| "The interception-detection routine can be defeated" | `lack_of_binary_hardening\|runtime_instrumentation_based` = P5; AM-12 (own rooted device) is not an attacker | Only if a client SoW explicitly buys MAS-R resilience controls — then it is a contractual gap, not a vulnerability |
+| "OkHttp version X has CVE-YYYY-NNNN" | `using_components_with_known_vulnerabilities\|outdated_software_version` = P5; a version string is not reachability | The vulnerable code path demonstrably reached — e.g. a manual `HostnameVerifier` call plus an accepted confusable-hostname certificate (→ D14-014) |
 | "Traffic fails to intercept, therefore the app pins" | Uniform failure across unrelated hosts including CDNs is your trust store, not the app. On API 34+ the `/system/etc/security/cacerts` push succeeds and changes nothing | A `<pin-set>`/`CertificatePinner` call site **plus** `I/X509Util: … Pin verification failed` in logcat (→ D14-003) |
 | "The app ignores the system proxy" | A testability observation, not a vulnerability | The proxy-bypassing client also skipping validation (→ D14-007), or a channel carrying secrets that no review ever covered (→ D14-004) |
 | "`<domainEncryption>` is not enabled" | Below API 37 it is disabled by default; the hostname is visible on every other platform too | The hostname itself is the sensitive datum (health, dating, whistleblowing) **and** the app explicitly sets `mode="disabled"` |

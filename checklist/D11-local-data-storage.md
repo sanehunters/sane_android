@@ -2373,3 +2373,237 @@ adb shell run-as $PKG find . -iname '*installation*' -o -iname '*fcm*' -o -iname
   registration token).
 - **Ruled out when:** `WorkSpec.input` carries only non-sensitive job parameters and the Firebase
   installation token is short-lived and device-bound (replay returns 401). Show the replay failing.
+
+### D11-070 · Chain-filing order — file the storage payload as a primitive, the reach as the consumer
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (governs how every D11 payload is filed) |
+| **VRT** | n/a (reporting mechanics) |
+| **Attacker** | n/a |
+| **Applies to** | every D11 finding that is a payload for a reach primitive |
+| **Maps to** | claude-bughunter chain-filing discipline ("one fix = one bounty; a chain is a severity amplifier, not a merge request") |
+
+- **Test:** A D11 payload (a plaintext token) and its reach primitive (a FileProvider traversal, a
+  debuggable build) are two bugs with two fix surfaces, and a chain consumer report must reference the
+  primitives' ids — which only exist once the primitives are filed. Get the order right or you leave money
+  on the table and confuse the triager.
+- **How:** (1) Identify the highest-severity chained outcome (ATO via the stolen token). (2) File each
+  primitive separately at its standalone severity — the storage finding at P5/Low, the reach primitive
+  (D07/D08/D10/D02) at its own rating — with a placeholder cross-reference line. (3) File the chain consumer
+  with the full ATO narrative at the chained severity, filling in the real primitive ids. (4) Backfill each
+  primitive with the consumer's id. Do **not** paste the whole chain into every primitive, claim each is
+  independently Critical, or ask for one combined bounty. Never file everything in one batch within minutes —
+  triagers read that as spam; primitives -> consumer -> clean standalone findings -> OOS-risky findings last.
+- **Proof:** Cross-referenced ids in both directions, and a "Chain partners (filed as separate reports)"
+  block in the consumer body.
+- **Escalation:** This is what turns "cleartext token" (P5, closed) into a filed ATO with the reach primitive
+  paid separately.
+- **Ruled out when:** The finding is genuinely standalone (a shared-storage P4 read by a zero-permission app
+  with no further chain) — then file it once, at P4, and stop.
+
+### D11-071 · Evidence hygiene for a storage-exfil PoC — the five-shot pattern and the PII split
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (governs the PoC quality of every D11 finding) |
+| **VRT** | n/a (reporting mechanics) |
+| **Attacker** | n/a |
+| **Applies to** | every D11 finding delivered as a PoC |
+| **Maps to** | claude-bughunter evidence-hygiene (five-screenshot state-change pattern; HAR sanitising; the PII mask-vs-leave-visible split) |
+
+- **Test:** A storage-theft PoC needs the same rigour as a web state-change: pre-state, the extraction, the
+  replay, and the side effect. And the exfil PoC must mask what would harm the victim while leaving what the
+  triager needs to verify.
+- **How:** For a token-theft chain, capture in one sitting (do not reload between shots): (1) the token in
+  place on disk (`cat shared_prefs/auth.xml`); (2) **the extraction itself** — the `run-as`/backup/provider
+  command that lifts it without root, the most important shot; (3) a negative — the same read denied to a
+  zero-permission context (`adb shell cat` -> `Permission denied`); (4) the positive — the token replayed
+  from a clean host returning the victim's data; (5) the side effect — the account action the token enables.
+  Sanitise: **mask** the victim's session cookie/token value in the body and the victim's PII; **leave
+  visible** trace ids, your own attacker uid, JSON key names and the endpoint, because the triager needs
+  them. Prefer capturing DevTools/Console over the raw Network headers panel; for a HAR, redact `cookie` /
+  `authorization` / `set-cookie` with `jq` and grep the output to confirm.
+- **Proof:** Five numbered, cross-referenced artefacts (`{finding}-step{n}-{desc}.png`) plus a sanitised HAR
+  whose redaction you verified.
+- **Escalation:** This is what stops a real token-theft finding being downgraded as "theoretical".
+- **Ruled out when:** n/a — always applied to the PoC.
+
+### D11-072 · The mobile store points at an OLDER, weaker backend — the shadow API
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical when the older version has weaker auth/authorisation on the same data |
+| **VRT** | outcome-rated: `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) / `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **Attacker** | AM-01 remote (the endpoint is reachable once you have the token/host) |
+| **Applies to** | any app whose local store or bundle holds a hardcoded backend host/version |
+| **Maps to** | claude-bughunter "Shadow API — the mobile-to-backend bridge" (D15/D01) |
+
+- **Test:** A mobile app's hardcoded backend calls — recovered from `shared_prefs`, a bundled config, a
+  restored control-plane value (D11-056), or the string dump — are frequently an **older API version** than
+  the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field
+  exposure. The version difference alone is Informational; the *weakened control* is the finding. Diff
+  **behaviourally** across versions, not by response shape. This is one of the highest-value structural ideas
+  for a mobile engagement, and D11 is where the host/version string is often stored.
+- **How:**
+```bash
+adb shell run-as $PKG cat shared_prefs/*.xml | grep -oE 'https?://[^"<]+'
+grep -rnoE 'https?://[a-zA-Z0-9./_-]*(v[0-9]|api)[a-zA-Z0-9./_-]*' out/sources/ | sort -u
+# recover the token (D11-011) and hit the mobile host's version directly
+curl -i -H "Authorization: Bearer <token>" https://api-v1.target.tld/v1/users/123
+curl -i -H "Authorization: Bearer <token>" https://api.target.tld/v3/users/123   # compare the web version
+```
+- **Proof:** A behavioural difference on the same object: the older mobile-facing version returns a field the
+  current version masks, accepts an IDOR the current version blocks, or omits a rate limit the current
+  version enforces — shown with two `curl` transcripts against the two versions for the same resource.
+- **Escalation:** -> D15 (IDOR/BOLA/mass-assignment on the weaker version), -> D13 (weaker auth path). The
+  token that unlocks it came from this chapter.
+- **Ruled out when:** The mobile host and version are identical to the web app's and enforce the same
+  controls (byte-for-byte behavioural parity on a probe object, per the Body-Diff Rule — a byte-identical
+  200 across versions is not a difference), or the older host is decommissioned (connection refused). A
+  version string difference with identical behaviour is Informational only.
+
+### D11-073 · Layer-ordering: a "field required" 400 from a storage-derived request is not an auth pass
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (false-positive discipline for D11-072 / D11-036 backend probes) |
+| **VRT** | n/a (methodology) |
+| **Attacker** | n/a |
+| **Applies to** | any D11 item that replays a stored/queued/tampered request against the backend |
+| **Maps to** | claude-bughunter "layer-ordering trap" (D13/D15) |
+
+- **Test:** When you replay a recovered token (D11-011), a tampered offline-queue mutation (D11-036) or a
+  shadow-API probe (D11-072) and the server answers `400 "field X is required"`, that does **not** prove you
+  passed authentication. Many stacks run a body parser or input sanitiser **in front of** the auth
+  middleware, so a validation error fires before auth is ever checked. Re-test with a minimal well-formed
+  `{}` (or the minimal valid body) before claiming the stored credential authenticated, or before claiming
+  the replayed mutation was accepted.
+- **How:**
+```bash
+# after a 400 "field required", send the minimal well-formed body and read the status taxonomy
+curl -i -H "Authorization: Bearer <stored-token>" -H 'Content-Type: application/json' \
+  -d '{}' https://api.target.tld/v1/transfer
+# 401/403 => the token did NOT authenticate; the 400 was a pre-auth parser. 200/422 => auth passed.
+```
+- **Proof:** The status taxonomy across `{}`, a well-formed-but-unauthorised body, and a fully valid body —
+  showing the auth layer actually accepted the stored credential rather than a parser rejecting the shape.
+- **Escalation:** Correctly attributing the 400 is what keeps D11-072 and D11-036 findings from being
+  retracted at triage.
+- **Ruled out when:** n/a — this is the verification step run before filing any storage-to-backend replay.
+
+## Graveyard for this domain
+
+| Observation | Why it is not a finding | What would make it one |
+|---|---|---|
+| Sensitive data found in `/data/data/<pkg>` via `run-as` or `su` on your own rooted/emulator device | AM-12 (own rooted device) is not an attack; the VRT prices internal storage at P5 (`insecure_data_storage...on_internal_storage`), and Xiaomi, Grab and Spotify list app-private storage explicitly out of scope | Pair it with a non-root reach primitive a third party has — a debuggable build (D02), an exported/grantable provider (D07), a `file://` WebView (D10), a backup extraction (D11-051), or a world-readable mode bit — and refile as the **access** bug with the data as payload (D11-001) |
+| `android:allowBackup="true"` (or unset) | `mobile_security_misconfiguration.auto_backup_allowed_by_default` = **P5**, vector `AV:P`; Google states backups enabled is intended; H1 #1225158 (Zivver) paid **$0** for exactly this | A credential extracted via `bmgr`/backup on a non-rooted device and replayed against the production API (D11-051), or a control-plane value restored to repoint the app (D11-056) |
+| A failed or header-only `adb backup` archive | `adb backup` is gutted on Android 12+ and dead on many OEM builds — its silence is a platform property, not an app property | Re-run via the `bmgr` local transport / D2D transport (D11-058); the negative is an empty `bmgr` archive, not an empty `adb backup` |
+| `MODE_WORLD_READABLE` / `MODE_WORLD_WRITEABLE` constant in the source | These throw `SecurityException` from targetSdk 24, and SELinux confines `/data/data` cross-app regardless of DAC bits; Android 11+ blocks reading another app's internal dir even for world-readable files | The `stat` output on-device shows the loose mode bits **and** a second unprivileged app reads the file (D11-019) — on a build with targetSdk < 24 or via native `chmod` |
+| `insecure_data_storage.screen_caching_enabled` — no `FLAG_SECURE`, recents thumbnail | P5; Grab and Spotify exclude "Snapshot/Pasteboard leakage"; remediation is phrased as a best practice | The cached screen shows an unmasked credential/PAN **and** a chain reaches the snapshot store (D02 backup, D04/D21); or, on a platform program, a `FLAG_SECURE` bypass of a control the app *did* set |
+| `mobile_security_misconfiguration.clipboard_enabled` — the app copies to the clipboard | P5, vector `AV:L/AC:H/PR:N/UI:R/S:C/C:L/I:N/A:N` designed to score low; the VRT flattened the sensitive/non-sensitive children into one P5 parent; background reads blocked since Android 10 | The copied value is an OTP/PAN/seed phrase, read by a **foreground** PoC app on the in-scope OS, and then used to complete an authentication (file the ATO, D13) |
+| Keyboard cache on a generic (non-sensitive) field | CWE-524 but no real credential leaks; most programs rate it Low | The cached value is a PIN/OTP/card number/seed phrase suggested in a *second* app (D11-061), demonstrated with a canary |
+| Reading the personal dictionary / `READ_USER_DICTIONARY` | The permission was removed at API 23; the store is not third-party readable on modern Android | n/a on modern Android — do not report |
+| `/data/system/users/0/accounts.db` read | System-owned; not reachable by a third-party app | An auth token recovered via `AccountManager` API from an app of the same account type or shared signature (D11-064) |
+| A field named `_cvv` / `card_token` in a decompiled model class | R8 keeps Gson-annotated dead fields; a field is not a write | A `putString`/`insert`/file-write that actually carries the field to disk (D11-006), confirmed with a runtime hook |
+| A four-digit string matching a card's last four across cache files | A four-digit run occurs by chance across hundreds of binary cache files (D11-008) | A Luhn-valid PAN-shaped 16-digit run, or a field-name hit, in a post-transaction dump |
+| `EncryptedSharedPreferences` / `flutter_secure_storage` / `react-native-keychain` present | Presence is not protection, but presence alone is also not a finding | The key has no `setUserAuthenticationRequired` and a Frida `Cipher` hook decrypts it on a merely-unlocked device (D11-013), or the app also stores the same class in cleartext elsewhere (D11-012) |
+| `getExternalFilesDir()` write on a targetSdk 30+ device | On Android 11+ `Android/data/<pkg>` is not readable by other ordinary apps; `WRITE_EXTERNAL_STORAGE` grants no extra access | The read succeeds from a second package (prove it, don't assert it), or the data lands in `Download`/`DCIM`/a public MediaStore collection which stay broadly readable (D11-041) |
+| A cleartext token at rest with no replay attempted | Storage without impact is informational; GitHub Security Lab's $4,500 was a CodeQL query, not a report of plaintext prefs — do not cite it as precedent | The token replayed from a clean host returns the victim's data (D11-011); the replay is the finding |
+| Process memory holds a decrypted secret on a rooted device | AM-12 is not an attack; MASTG deprecated the standalone memory test; immutable `String`s cannot be reliably cleared, so this is expected | It falsifies a "never stored / hardware-backed" design claim, or the recovered key decrypts the local store and turns a Medium into a Critical (D11-066) — filed as a contributing factor to a root/debuggable finding |
+| A restorable preference that the app re-derives from the server on launch | The restore changes nothing; the server overwrites it before first use | The app trusts the restored value before contacting the server (D11-056) — proven by the first outbound request going to the attacker host |
+
+## Cross-surface joins
+
+- **D11 × D14 — the backup set and the network interceptor (J01).** Nobody reads `data_extraction_rules.xml`
+  and the OkHttp `CertificatePinner` construction in the same sitting. If the client reads its base URL or
+  its pin set from a preference or cached JSON that is inside the backup set, a restored attacker copy
+  repoints the whole app *before first launch* — and pinning cannot save it, because the pin set was restored
+  too. Individually: a config note and a pinning implementation. Joined: pre-authentication MitM of a pinned
+  app with no runtime instrumentation (D11-056 -> D14).
+- **D11 × D18 — the App Startup initializer and the restored preference (J12).** Initializers run before any
+  gate. An initializer that reads a restored control-plane value acts on it before the app can validate
+  anything — before a remote kill switch or server-side config could correct it. The storage reviewer sees a
+  restorable preference; the startup reviewer sees an initializer; the join is pre-auth config injection
+  (Critical if the value is the API host).
+- **D11 × D13 — the biometric-lock boolean in the backup set (J13).** When "app lock enabled" is persisted
+  as a plain boolean rather than bound to a `CryptoObject`, and that boolean is in the backup set, restoring
+  it as `false` disables the gate with neither root nor Frida. The auth reviewer checks the biometric flow;
+  the storage reviewer checks the backup rules; neither checks the flag's *restorability*.
+- **D11 × D23 — the entitlement cache and backup restore (J18).** If entitlement state is cached in a
+  backed-up preference and trusted on cold start (to work offline), the entitlement is portable and
+  forgeable — restore it `true` on a device that never purchased. The same primitive (D11-056) unlocks any
+  other cached trust decision.
+- **D11 × D16 — the planted MediaStore file and the app's own importer (J20).** D11-045's attacker-chosen
+  `RELATIVE_PATH`/`DISPLAY_NAME` meets any "import from device" feature: plant a file where the importer
+  scans, with the name and MIME it keys on, and the app ingests attacker bytes with no user selection —
+  reaching the parser in D16 zero-click.
+- **D11 × D07 — reachability is the whole finding.** An unencrypted token in `shared_prefs` is P5 and out of
+  scope at several programmes; a FileProvider traversal or a grantable provider is the thing that makes it a
+  P1 read. File the access as the bug and the storage as the payload — never the other way round (D11-070).
+- **D11 × D10 — the WebView cookie jar reached from inside the WebView.** `setAllowFileAccess` /
+  `setAllowContentAccess` let untrusted web content `XMLHttpRequest` a `content://` or read
+  `app_webview/Default/Cookies`. The WebView reviewer tests XSS and origins; the storage reviewer dumps the
+  cookie DB with `run-as`; neither tests the store *from inside the WebView*, which is where the cross-surface
+  ATO (D11-031) lives.
+- **D11 × D17 — the write primitive and the loader.** A traversal, zip-slip, `.db-journal` or `.xml.bak`
+  write is Medium on its own; enumerate `System.load`/`DexClassLoader`/plugin directories *first*, choose
+  the destination to match, and the same primitive becomes local code execution (D11-020, D11-024, D11-046,
+  D11-047).
+- **D11 × D15 — the stored host is an older, weaker backend (shadow API).** The mobile client's hardcoded or
+  restored API host is frequently an older version than the web app's, with weaker auth and more field
+  exposure. The stored token from this chapter unlocks it; the behavioural version diff is the finding
+  (D11-072).
+- **D11 × D20 — the shared-device residue and cross-account bleed.** Logout, account switch and
+  delete-for-everyone all leave data on disk (D11-033, D11-037, D11-040). On a family tablet, kiosk or ward
+  device [T.P4], the next authorised-but-different user reads the previous user's conversations, queries and
+  live sessions — a supported scenario nobody tests.
+
+## Sources
+
+- **Bugcrowd VRT (release 2026-07-08, 581 entries)** — the storage branch pinning (`insecure_data_storage.*`
+  P5/P4, `screen_caching_enabled` P5, `clipboard_enabled` P5, `auto_backup_allowed_by_default` P5), the
+  escape nodes (`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` P1,
+  `broken_authentication_and_session_management.authentication_bypass` P1,
+  `insecure_os_firmware.hardcoded_password.non_privileged_user` P2, `cryptographic_weakness.key_reuse.inter_environment`
+  P2, `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` VARIES), baseline CVSS vectors,
+  and the CHANGELOG note flattening the clipboard children. Verified against `vrt_full_tree.txt`.
+- **OWASP MASTG / MASWE / MASVS** — MASTG-TEST-0009/0200/0201/0202/0203/0207/0216/0231/0258/0262/0287/0304/0305/0306/0316
+  (0011 and 0006 deprecated; 0304/0305/0306 placeholders), MASTG-TECH-0002/0008/0043/0044/0127/0128/0142,
+  the MASTG-KNOW storage series, MASTG-TOOL entries, and MASWE-0001/0002/0005/0006/0024/0030/0036/0038/0040/0050/0061.
+- **AOSP & Android developer documentation** — the app-sandbox model (home dir 0700 at targetSdk >= 24), FBE
+  CE vs DE storage and Direct Boot, the backup deviation and E2E cloud-backup entangling with the LSKF, the
+  `dataExtractionRules` `<cloud-backup>`/`<device-transfer>` schema and the "missing section = fully enabled"
+  rule, `testingbackup` commands, scoped-storage timeline (Android 10/11), the Android 12 D2D and clipboard
+  toast changes, Android 13 `EXTRA_IS_SENSITIVE` and clipboard auto-clear, Android 14 `setReadOnly()` DCL
+  enforcement and `ZipPathValidator.clearCallback()`, MediaStore `DATA`/`RELATIVE_PATH`/`DISPLAY_NAME`
+  guidance, the ContentResolver fstat/lstat validation algorithm, and Private Space.
+- **MITRE ATT&CK Mobile** — T1409 Stored Application Data, T1533 Data from Local System (names keyboard
+  cache, Wi-Fi passwords, auth tokens), T1635 Steal Application Access Token, T1638 Adversary-in-the-Middle
+  (Man-in-the-Disk), T1628.003 Conceal Multimedia Files, T1513, T1417.001, T1420, T1532, M1006, AN1840.
+- **Disclosed reports** — H1 #44727 (Vine, cleartext creds in `databases/webview.db`, $140), #1122661
+  (GitHub Security Lab CodeQL CWE-312, $4,500 — a query, not a plaintext-prefs report), #1142918 (Nextcloud),
+  #288955 (IRCCloud, symlink + percent-decode -> `session_key`), #859469 (LINE zip-slip, $475), #1378889
+  (Slack zip-slip, $3,500), #1377748 / #1362313 (Evernote `Content-Disposition` / `_display_name` traversal
+  -> 2-click RCE), #351555 (Cloudinary hardcoded api secret), #753868, #57918, #226191, #2553411 (Basecamp),
+  #462441 / #377582 (VK/Nextcloud external cache); EDB 44852 (FTP server prefs), EDB 44690 / CVE-2018-11242
+  (MakeMyTrip), EDB 43189 (Gmail) / EDB 43353 (Outlook) Project Zero SQLite hot-journal; CVE-2024-21668
+  (`react-native-mmkv` logged encryption key); Microsoft Dirty Stream (Xiaomi File Manager / WPS Office).
+- **Cross-platform & framework research** — AsyncStorage `RKStorage`/`catalystLocalStorage`, `react-native-mmkv`
+  `files/mmkv/`, Capacitor `CapacitorStorage.xml`, Flutter `FlutterSharedPreferences.xml` /
+  `FlutterSecureStorage.xml` and the IQCrafter unwrap chain, Unity `PlayerPrefs`, CodePush `CodePushConstants`.
+- **Community & tooling corpus** — Oversecured ("theft of arbitrary files", SDK-security post, "never store
+  sensitive data in `/storage/emulated/0`"), ivrodriguez mobile-bounty tips, HackTricks Android storage
+  pages, the sec-88 / Het Mehta / hackwithsingh / sehno / riya78 / Indusface checklist set (ghost-files
+  `.bak`, Realm, WAL/journal residue, logout residue), MobSF / mobsfscan rule keys
+  (`android_world_writable`, `android_sensitive_input_keyboard_cache`, `android_hiddenui`,
+  `android_prevent_screenshot`), MASTG semgrep rules, objection / drozer / Frida / Fridump / r2frida verified
+  command sets, `abe.jar` and the `pax`/`star`/LibreSSL backup-extraction traps.
+- **claude-bughunter (4,467-star corpus)** — the shadow-API mobile-to-backend bridge (D11-072), the
+  layer-ordering trap (D11-073), Marker Discipline and the baseline-search rule (D11-005), the Body-Diff and
+  Statistical-Sample rules, the five-screenshot state-change pattern and the PII mask-vs-leave-visible split
+  (D11-071), and chain-filing order — primitives first, consumer second, backfill the links (D11-070).
+- **Local senior-researcher corpus** — the extension-not-directory sweep and `astore.sh`, the SQLCipher
+  literal-passphrase grep, the modify-and-restore pipeline and the F-011 control-plane-restore shape, the
+  plaintext-token honest-rating rule, the R8 attribute/annotation grep traps, the Luhn/BIN payment-data
+  discipline, and the second-implementation retraction rule.
