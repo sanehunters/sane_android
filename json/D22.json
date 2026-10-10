@@ -460,10 +460,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.package.attacksurface",
-     "app.package.list"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D22-075"
@@ -1637,7 +1634,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "com.android.conscrypt",
      "mobile_security_misconfiguration.ssl_certificate_pinning.defeatable"
     ]
    },
@@ -2804,9 +2800,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "com.android.art"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D22-080"

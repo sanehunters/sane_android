@@ -395,7 +395,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "libapp.so",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
@@ -489,7 +488,6 @@
     "attack": [],
     "vrt": [
      "cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive",
-     "dump.cs",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
@@ -932,7 +930,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`cryptographic_weakness.insufficient_entropy.predictable_initialization_vector` (P4, CWE-340)",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -982,7 +980,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`cryptographic_weakness.insufficient_entropy.initialization_vector_reuse` (**P5** on its own); rate the recovered plaintext or the forgery instead",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1100,8 +1098,7 @@
     "attack": [],
     "vrt": [
      "cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive",
-     "cryptographic_weakness.side_channel_attack.padding_oracle_attack",
-     "rsa_cipher_usage.py"
+     "cryptographic_weakness.side_channel_attack.padding_oracle_attack"
     ]
    },
    "xrefs": [
@@ -1221,7 +1218,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`cryptographic_weakness.insecure_key_generation.insufficient_key_space` (P3, CWE-326/331/522)",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1420,7 +1417,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`cryptographic_weakness.key_reuse.intra_environment` (**P5** on its own — you must demonstrate the cross-protocol use to exceed it)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-03 / AM-08",
    "attacker_ids": [
     "AM-03",
@@ -1472,7 +1469,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`cryptographic_weakness.key_reuse.inter_environment` (**P2**, CWE-323) — this is the chapter's crypto-native ceiling",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1492,8 +1489,7 @@
     ],
     "attack": [],
     "vrt": [
-     "cryptographic_weakness.key_reuse.inter_environment",
-     "key_reuse.intra_environment"
+     "cryptographic_weakness.key_reuse.inter_environment"
     ]
    },
    "xrefs": [],
@@ -2274,7 +2270,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.sensitive_information_disclosed_jwt` (**P5** for the token itself) — file the *surface map* it yields, not the token",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12 (recon) → AM-01",
    "attacker_ids": [
     "AM-01",
@@ -2897,7 +2893,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) as filed naively — rate the consequence instead",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-08/AM-03 with an in-process or read primitive",
    "attacker_ids": [
     "AM-03",
@@ -3425,7 +3421,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "com.android.conscrypt",
      "cryptographic_weakness.broken_cryptography.use_of_vulnerable_cryptographic_library"
     ]
    },

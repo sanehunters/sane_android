@@ -189,7 +189,7 @@
    "severity_floor": "high",
    "severity_note": "High (Medium in the common case; High when this is the only route to the flip and the server honours the result)",
    "vrt": "`mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) for the enabler; rate on the consequence via `broken_access_control.privilege_escalation` (**VARIES**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 physical unlocked; AM-12 for convenience",
    "attacker_ids": [
     "AM-11",
@@ -241,7 +241,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (when the gated content is other users' data or a balance), otherwise High",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) when premium gates other users' data; `broken_access_control.privilege_escalation` (**VARIES**) for the revenue case",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -343,7 +343,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) — the token is an object identifier being redeemed outside its owner",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-05 another user of the same app",
    "attacker_ids": [
     "AM-05"
@@ -1015,7 +1015,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (**P2**) for the modification class; argue **P1** where the modified order settles and goods ship",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1112,7 +1112,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (**P2**), argued up on the settled delta",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1497,7 +1497,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-05 another user of the same app",
    "attacker_ids": [
     "AM-05"
@@ -1540,7 +1540,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1644,7 +1644,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) for the completed unauthorised transaction; the overlay component alone is `mobile_security_misconfiguration.tapjacking` (**P5**) and must never be the headline",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-04 local app with one common permission (the accessibility grant is user-facing and social-engineered; say so)",
    "attacker_ids": [
     "AM-04"
@@ -1702,7 +1702,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1796,7 +1796,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`cryptographic_weakness.key_reuse.inter_environment` (**P2**) where a sandbox key is live against production; otherwise `broken_access_control.privilege_escalation` (**VARIES**)",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1843,7 +1843,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 (anyone who downloads the APK)",
    "attacker_ids": [
     "AM-01"
@@ -1886,7 +1886,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical if the credential alone suffices, High if it reaches an internal payment asset, hygiene (CWE-798) if the server also requires a session — **state the fork explicitly**",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) if it authenticates alone; `...\\|for_internal_asset` (**P3**) if it reaches only an internal asset",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -2025,7 +2025,7 @@
    "severity_floor": "high",
    "severity_note": "High (Medium where the discount is trivial)",
    "vrt": "`server_security_misconfiguration.no_rate_limiting_on_form.registration` is **not** the right node; file as `broken_access_control.privilege_escalation` (**VARIES**) and carry the rating with the face value × discovery rate",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -2433,7 +2433,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where a step reaches another user's object",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-05",
    "attacker_ids": [
     "AM-05"
@@ -2526,7 +2526,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-02 (a poisoned QR code in the physical world, or a link)",
    "attacker_ids": [
     "AM-02"
@@ -2668,7 +2668,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (old version bypasses auth entirely) / High (accepts payloads the current version validates) / Medium–High (rate-limit or field-exposure regression). **A version difference alone is Informational**",
    "vrt": "rate on the regression found: `broken_authentication_and_session_management.authentication_bypass` (**P1**), `broken_access_control.idor\\|*`, or `server_security_misconfiguration.race_condition` (**VARIES**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -2712,7 +2712,7 @@
    "severity_floor": "support",
    "severity_note": "Support (it prevents a false Critical against production financial infrastructure)",
    "vrt": "n/a (a kill gate for `broken_authentication_and_session_management.authentication_bypass`)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "every auth-bypass claim made against a payment, billing or wallet route",

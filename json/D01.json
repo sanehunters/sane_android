@@ -1297,8 +1297,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "capacitor.config.json",
-     "capacitor.plugins.json",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
@@ -1728,9 +1726,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.package.attacksurface"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D01-035",
@@ -1832,7 +1828,6 @@
     ],
     "attack": [],
     "vrt": [
-     "app.package.shareduid",
      "broken_authentication_and_session_management.authentication_bypass",
      "insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage"
     ]
@@ -2270,8 +2265,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "broken_access_control.exposed_sensitive_android_intent",
-     "scanner.misc.secretcodes"
+     "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
    "xrefs": [],
@@ -2552,7 +2546,6 @@
     ],
     "attack": [],
     "vrt": [
-     "app.package.debuggable",
      "broken_authentication_and_session_management.authentication_bypass",
      "sensitive_data_exposure.disclosure_of_secrets.for_internal_asset"
     ]

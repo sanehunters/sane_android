@@ -88,11 +88,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "tools.file.download",
-     "tools.file.md5sum",
-     "tools.file.size"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [],
@@ -1424,9 +1420,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.package.debuggable",
-     "broken_authentication_and_session_management.authentication_bypass",
-     "exploit.jdwp.check"
+     "broken_authentication_and_session_management.authentication_bypass"
     ]
    },
    "xrefs": [],
@@ -1694,7 +1688,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium (High if the route exposes data or state rather than only crashing)",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) for a crash-only route; `broken_access_control.exposed_sensitive_android_intent` (varies) when it exposes data",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-03 zero-permission local app (any installed app can fire the intent); AM-02 if the scheme is web-reachable",
    "attacker_ids": [
     "AM-02",
@@ -2212,7 +2206,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) vs `...for_internal_asset` (**P3**) vs `...pay_per_use_abuse` (**P4**, the correct path for a billable-but-not-sensitive Maps/Places key) vs `...intentionally_public_sample_or_invalid` (**P5**, what you get if you skip the liveness proof). Also `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**) / `...non_privileged_user` (**P2**) for a static credential.",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 remote, no interaction",
    "attacker_ids": [
     "AM-01"
@@ -2820,7 +2814,7 @@
    "severity_floor": "low",
    "severity_note": "Inherits the CVE's severity **only with reachability**; Low at most without it",
    "vrt": "`using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) for a version string alone — this is the closed-informative trap",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (inventory step) — rate each CVE by its real reachability: AM-01/AM-02 for a network- or link-reachable parser, AM-03 for an IPC-reachable one",
    "attacker_ids": [
     "AM-01",
@@ -2925,7 +2919,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (a leaked keystore is app impersonation)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) for signing material; `server_security_misconfiguration.directory_listing_enabled.sensitive_data_exposure` (varies) for an exposed release directory",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 remote, no interaction",
    "attacker_ids": [
     "AM-01"
@@ -2943,7 +2937,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "approach.md",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset",
      "server_security_misconfiguration.directory_listing_enabled.sensitive_data_exposure"
     ]
@@ -3064,7 +3057,7 @@
    "severity_floor": "high",
    "severity_note": "High when the gated code is a security check",
    "vrt": "Routes to the gated weakness (for the cited case, `server_side_injection.sql_injection` P1 via a provider)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 zero-permission local app (any app may declare an old `targetSdk` — the attacker chooses it freely)",
    "attacker_ids": [
     "AM-03"

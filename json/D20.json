@@ -1565,7 +1565,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.two_fa_bypass` (**P3**)",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "attacker": "AM-04",
    "attacker_ids": [
     "AM-04"
@@ -1952,7 +1952,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`insecure_data_storage.screen_caching_enabled` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 / AM-05",
    "attacker_ids": [
     "AM-05",
@@ -2191,9 +2191,7 @@
     ],
     "vrt": [
      "external_behavior.system_clipboard_leak.shared_links",
-     "mobile_security_misconfiguration.clipboard_enabled",
-     "post.capture.clipboard",
-     "post.perform.setclipboard"
+     "mobile_security_misconfiguration.clipboard_enabled"
     ]
    },
    "xrefs": [],
@@ -2419,7 +2417,7 @@
    "severity_floor": "low",
    "severity_note": "Low (Medium in combination with the capture items)",
    "vrt": "`external_behavior.browser_feature.plaintext_password_field` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 (shoulder surfing), and it multiplies every capture item above",
    "attacker_ids": [
     "AM-11"
@@ -2823,7 +2821,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) where the identifier alone yields a session",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 (any local app that can read or spoof the identifier) / AM-01 if it is accepted remotely",
    "attacker_ids": [
     "AM-01",
@@ -2869,7 +2867,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.exif_geolocation_data_not_stripped_from_uploaded_images.automatic_user_enumeration` (**P3**) / `…manual_user_enumeration` (**P4**) — note the qualifier. **Without user enumeration there is no rated node**, and several programmes exclude EXIF by name",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "attacker": "**AM-05** — another signed-in user of the same app, fetching a photo the victim uploaded",
    "attacker_ids": [
     "AM-05"
@@ -3071,7 +3069,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (**P4**); where the surviving token still reaches user data, `broken_authentication_and_session_management.authentication_bypass` (**P1**)",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-05 / whoever holds a previously issued token",
    "attacker_ids": [
     "AM-05"
@@ -3115,7 +3113,7 @@
    "severity_floor": "high",
    "severity_note": "High (when a session token survives uninstall — device resale or handover becomes ATO)",
    "vrt": "`mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**); the escalation is `broken_authentication_and_session_management.authentication_bypass` (**P1**) via the restored token",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 / AM-05",
    "attacker_ids": [
     "AM-05",

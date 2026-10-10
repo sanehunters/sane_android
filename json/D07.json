@@ -181,10 +181,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.provider.finduri",
-     "scanner.provider.finduris"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D07-015",
@@ -675,7 +672,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.provider.call",
      "broken_access_control.exposed_sensitive_android_intent",
      "broken_authentication_and_session_management.authentication_bypass"
     ]
@@ -769,9 +765,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.provider.call"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D07-015",
@@ -1382,10 +1376,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.provider.read",
-     "scanner.provider.traversal"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D07-028"
@@ -1426,9 +1417,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.provider.read"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D07-028",
@@ -1803,7 +1792,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "scanner.provider.injection",
      "server_side_injection.sql_injection"
     ]
    },
@@ -2204,9 +2192,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "auxiliary.webcontentresolver"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D07-007",
@@ -2857,7 +2843,6 @@
     ],
     "attack": [],
     "vrt": [
-     "cn.wps.moffice_eng",
      "server_security_misconfiguration.path_traversal",
      "server_side_injection.remote_code_execution_rce"
     ]

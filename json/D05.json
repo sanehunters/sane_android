@@ -544,8 +544,6 @@
     ],
     "attack": [],
     "vrt": [
-     "app.broadcast.info",
-     "app.broadcast.send",
      "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
@@ -1388,7 +1386,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) for the token once you replay it; `broken_access_control.exposed_sensitive_android_intent` (null) for the mechanism; `broken_authentication_and_session_management.two_fa_bypass` (**P3**) for an intercepted OTP, `authentication_bypass` (**P1**) with full takeover",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1748,7 +1746,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app_crash.malformed_android_intents",
      "application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty",
      "broken_access_control.exposed_sensitive_android_intent"
     ]
@@ -2589,7 +2586,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app_crash.malformed_android_intents",
      "application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty"
     ]
    },

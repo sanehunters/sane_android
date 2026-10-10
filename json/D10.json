@@ -247,7 +247,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "exploit.remote.webview.addjavascriptinterface",
      "server_side_injection.remote_code_execution_rce"
     ]
    },

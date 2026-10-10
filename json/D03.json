@@ -192,9 +192,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.package.attacksurface"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D03-003"
@@ -1898,8 +1896,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "broken_access_control.exposed_sensitive_android_intent",
-     "scanner.misc.secretcodes"
+     "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
    "xrefs": [],
@@ -2154,7 +2151,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (when the op gates a *defensive* feature that then fails open); Medium otherwise",
    "vrt": "`mobile_security_misconfiguration.tapjacking` (**P5**) when the failed-open control is an overlay guard — escalate through what the disabled defence permits",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 (to set the op) / AM-08",
    "attacker_ids": [
     "AM-08",
@@ -2818,7 +2815,7 @@
    "severity_floor": "high",
    "severity_note": "**High** on the defensive half (Critical only where the redressed control authorises a payment or a permission grant); the *holding* half alone is Support",
    "vrt": "`mobile_security_misconfiguration.tapjacking` (**P5** — a pinned node). This item exists to feed D04's PoC and to remove a triager's \"the attacker cannot draw over us\" objection, never to be filed alone",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-04 — the overlay app needs `SYSTEM_ALERT_WINDOW`, which ATT&CK records as *\"at least under certain conditions, automatically granted to applications installed from the Google Play Store\"*",
    "attacker_ids": [
     "AM-04"
@@ -3014,7 +3011,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (when the shared-storage file holds credentials or PII)",
    "vrt": "`insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (**P4**)",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-04 (a second app with storage/media access)",
    "attacker_ids": [
     "AM-04"
@@ -3190,7 +3187,6 @@
     ],
     "attack": [],
     "vrt": [
-     "app.package.backup",
      "broken_authentication_and_session_management.authentication_bypass",
      "insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage",
      "mobile_security_misconfiguration.auto_backup_allowed_by_default"
@@ -3349,7 +3345,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.package.debuggable",
      "broken_authentication_and_session_management.authentication_bypass",
      "insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage"
     ]

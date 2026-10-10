@@ -190,8 +190,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.activity.info",
-     "app.activity.start",
      "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
@@ -2147,7 +2145,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`mobile_security_misconfiguration.tapjacking` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-04 (`SYSTEM_ALERT_WINDOW` is a user-granted special permission from Android 6.x)",
    "attacker_ids": [
     "AM-04"
@@ -2326,8 +2324,7 @@
     ],
     "vrt": [
      "broken_access_control.exposed_sensitive_android_intent",
-     "broken_authentication_and_session_management.authentication_bypass",
-     "tapjacking.md"
+     "broken_authentication_and_session_management.authentication_bypass"
     ]
    },
    "xrefs": [],
@@ -2770,7 +2767,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2817,7 +2814,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; to be paid you must move it to `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) or `.critical_impact_and_or_easy_difficulty` (**P2**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3244,8 +3241,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "broken_access_control.exposed_sensitive_android_intent",
-     "dump.cs"
+     "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
    "xrefs": [

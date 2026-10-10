@@ -10,11 +10,11 @@ are in [`data/`](../data/):
 
 | Dataset | Rows | Source |
 |---|---|---|
-| [`mastg-android-tests.csv`](../data/mastg-android-tests.csv) | 163 | OWASP MASTG (51 stable + 112 beta) |
-| [`mastg-android-techniques.csv`](../data/mastg-android-techniques.csv) | 78 | MASTG Android techniques |
-| [`mastg-android-tools.csv`](../data/mastg-android-tools.csv) | 48 | MASTG Android tools |
-| [`mastg-android-rules.csv`](../data/mastg-android-rules.csv) | 51 | MASTG static-analysis rules |
-| [`mitre-attack-mobile-android.csv`](../data/mitre-attack-mobile-android.csv) | 122 | ATT&CK Mobile, Android-applicable |
+| [`mastg-tests.csv`](../data/mastg-tests.csv) | 163 | MASTG Android tests with status (98 current v2, 51 deprecated v1, 14 placeholders) |
+| [`mastg-techniques.csv`](../data/mastg-techniques.csv) · [`mastg-tools.csv`](../data/mastg-tools.csv) · [`mastg-knowledge.csv`](../data/mastg-knowledge.csv) · [`mastg-rules.csv`](../data/mastg-rules.csv) | 91 · 81 · 75 · 71 | the other MASTG object types, Android + generic + network |
+| [`maswe.csv`](../data/maswe.csv) · [`masvs-controls.csv`](../data/masvs-controls.csv) | 77 · 24 | MASWE weaknesses and MASVS v2 controls |
+| [`attack-mobile-android.csv`](../data/attack-mobile-android.csv) | 122 | MITRE ATT&CK Mobile 19.2, Android-applicable techniques |
+| [`crosswalk.csv`](../data/crosswalk.csv) | ~1,400 | **generated** standard id → checklist items (the proof behind every row below) |
 | [`vrt.csv`](../data/vrt.csv) | 581 | Bugcrowd VRT, release 2026-07-08 |
 
 ---

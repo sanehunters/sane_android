@@ -1418,9 +1418,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "dump.cs"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [
@@ -1820,7 +1818,7 @@
    "severity_floor": "low",
    "severity_note": "Low (P5) standalone; Medium only with an unmasked credential and a device-access chain",
    "vrt": "`insecure_data_storage.screen_caching_enabled` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 physical unlocked; AM-04 screen-recording/casting app",
    "attacker_ids": [
     "AM-04",
@@ -1915,7 +1913,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium–High; the VRT rates it P4, a full band above internal storage",
    "vrt": "`insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (**P4**, CWE-312, baseline `AV:P/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N`)",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-03 zero-permission (legacy/scoped edges); AM-04 with `READ_MEDIA_*`",
    "attacker_ids": [
     "AM-03",
@@ -2383,7 +2381,7 @@
    "severity_floor": "high",
    "severity_note": "High when a session token or PII file is restorable; the flag alone is P5",
    "vrt": "`mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) for the flag; file the extracted-and-replayed credential instead",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 physical unlocked with ADB; AM-11 with the user's backup account",
    "attacker_ids": [
     "AM-11"
@@ -3279,9 +3277,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "androidx.work.workdb"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D11-036"

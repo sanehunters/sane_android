@@ -99,11 +99,13 @@ def load_vrt():
     with open(p, newline="", encoding="utf-8") as f:
         for r in csv.DictReader(f):
             pr = (r.get("priority") or "").strip()
-            out[r["vrt_path"].strip()] = ("P" + pr) if pr.isdigit() else pr.lower()
+            pr = ("P" + pr) if pr.isdigit() else (pr.upper() if re.fullmatch(r"[pP][1-5]", pr) else pr.lower())
+            out[r["vrt_path"].strip()] = pr
     return out
 
 
 VRT = load_vrt()
+VRT_CATEGORIES = {k.split(".")[0] for k in VRT}
 
 
 def meta_field(blk, name):
@@ -149,7 +151,7 @@ def ids_in(text):
         "masvs": sorted(set(re.findall(r'MASVS-[A-Z]+-\d', text))),
         "cwe": sorted(set(re.findall(r'CWE-\d+', text))),
         "attack": sorted(set(re.findall(r'\bT1\d{3}(?:\.\d{3})?\b', text))),
-        "vrt": sorted(set(re.findall(r'`([a-z_]+(?:\.[a-z0-9_]+)+)`', text))),
+        "vrt": sorted(p for p in set(re.findall(r'`([a-z_]+(?:\.[a-z0-9_]+)+)`', text)) if p.split(".")[0] in VRT_CATEGORIES),
     }
 
 

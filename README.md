@@ -22,7 +22,7 @@ at the same time.
 ### 1. The reports are full of findings that are worth nothing
 
 Run MobSF, paste the red rows. Now check them against the Bugcrowd VRT (release 2026-07-08, mirrored in
-[`data/bugcrowd-vrt-full.csv`](data/bugcrowd-vrt-full.csv)):
+[`data/vrt.csv`](data/vrt.csv)):
 
 | Finding | VRT |
 |---|---|

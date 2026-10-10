@@ -525,7 +525,6 @@
      "broken_authentication_and_session_management.authentication_bypass",
      "cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials",
      "cryptographic_weakness.key_reuse.inter_environment",
-     "metadata.release_date",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset",
      "server_security_misconfiguration.oauth_misconfiguration.account_takeover",
      "server_side_injection.remote_code_execution_rce"
@@ -877,9 +876,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "metadata.default"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D27-027",
@@ -1911,7 +1908,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; the tombstone is what moves a crash toward memory safety instead",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-02 / AM-03 depending on the delivery path",
    "attacker_ids": [
     "AM-02",
@@ -2090,11 +2087,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "scanner.misc.native",
-     "scanner.provider.injection",
-     "scanner.provider.traversal"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [],
@@ -2343,9 +2336,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "download.aspx"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [],

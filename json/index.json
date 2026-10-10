@@ -1305,7 +1305,7 @@
    "severity": "high",
    "severity_floor": "medium",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P2"
   },
   "D02-037": {
@@ -1404,7 +1404,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P2"
   },
   "D02-048": {
@@ -1521,7 +1521,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-01/AM-02/AM-03",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P2"
   },
   "D02-061": {
@@ -1539,7 +1539,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P2"
   },
   "D02-063": {
@@ -1566,7 +1566,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P2"
   },
   "D02-066": {
@@ -2052,7 +2052,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-08/AM-11",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P3"
   },
   "D03-048": {
@@ -2178,7 +2178,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "attacker": "AM-04",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P3"
   },
   "D03-062": {
@@ -2214,7 +2214,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-04",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P3"
   },
   "D03-066": {
@@ -2736,7 +2736,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-04",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P5"
   },
   "D04-048": {
@@ -2853,7 +2853,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-03",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P5"
   },
   "D04-061": {
@@ -2862,7 +2862,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-03",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P5"
   },
   "D04-062": {
@@ -3231,7 +3231,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D05-031": {
@@ -6201,7 +6201,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-02",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P5"
   },
   "D09-074": {
@@ -7263,7 +7263,7 @@
    "severity": "medium",
    "severity_floor": "low",
    "attacker": "AM-04/AM-11",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D11-040": {
@@ -7281,7 +7281,7 @@
    "severity": "high",
    "severity_floor": "medium",
    "attacker": "AM-03/AM-04",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P4"
   },
   "D11-042": {
@@ -7371,7 +7371,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-11",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D11-052": {
@@ -7740,7 +7740,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-01",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P4"
   },
   "D12-020": {
@@ -7749,7 +7749,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D12-021": {
@@ -7794,7 +7794,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-01",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "phase": "P4"
   },
   "D12-026": {
@@ -7830,7 +7830,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-03/AM-08",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D12-030": {
@@ -7839,7 +7839,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "phase": "P4"
   },
   "D12-031": {
@@ -7992,7 +7992,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-01/AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D12-048": {
@@ -8109,7 +8109,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-03/AM-08",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D12-061": {
@@ -8775,7 +8775,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "phase": "P6"
   },
   "D13-055": {
@@ -9063,7 +9063,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "attacker": "AM-01/AM-02/AM-03",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P6"
   },
   "D13-087": {
@@ -9126,7 +9126,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P6"
   },
   "D14-004": {
@@ -9405,7 +9405,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-07",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P6"
   },
   "D14-035": {
@@ -9441,7 +9441,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-07/AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P6"
   },
   "D14-039": {
@@ -9459,7 +9459,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D14-041": {
@@ -9468,7 +9468,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-06",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P6"
   },
   "D14-042": {
@@ -9522,7 +9522,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-06/AM-09",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P6"
   },
   "D14-048": {
@@ -9540,7 +9540,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03/AM-06/AM-11",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D14-050": {
@@ -9972,7 +9972,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-05",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P6"
   },
   "D15-040": {
@@ -10251,7 +10251,7 @@
    "severity": "critical",
    "severity_floor": "low",
    "attacker": "AM-01",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P6"
   },
   "D15-071": {
@@ -10485,7 +10485,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-02/AM-09",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-007": {
@@ -10494,7 +10494,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-03/AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-008": {
@@ -10503,7 +10503,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-009": {
@@ -10521,7 +10521,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-011": {
@@ -10530,7 +10530,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-012": {
@@ -10539,7 +10539,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-013": {
@@ -10548,7 +10548,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-014": {
@@ -10566,7 +10566,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-016": {
@@ -10593,7 +10593,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-019": {
@@ -10611,7 +10611,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-021": {
@@ -10620,7 +10620,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-022": {
@@ -10638,7 +10638,7 @@
    "severity": "medium",
    "severity_floor": "low",
    "attacker": "AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D16-024": {
@@ -10647,7 +10647,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-025": {
@@ -10656,7 +10656,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-02",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-026": {
@@ -10665,7 +10665,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-02",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-027": {
@@ -10674,7 +10674,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-02",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-028": {
@@ -10683,7 +10683,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-02",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-029": {
@@ -10692,7 +10692,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "attacker": "AM-01/AM-02/AM-09",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-030": {
@@ -10701,7 +10701,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-031": {
@@ -10710,7 +10710,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "attacker": "AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-032": {
@@ -10719,7 +10719,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-033": {
@@ -10728,7 +10728,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-034": {
@@ -10737,7 +10737,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-035": {
@@ -10746,7 +10746,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-036": {
@@ -10764,7 +10764,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "attacker": "AM-02/AM-09",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-038": {
@@ -10782,7 +10782,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03/AM-09",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-040": {
@@ -10800,7 +10800,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-042": {
@@ -10809,7 +10809,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-03/AM-04/AM-12",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-043": {
@@ -10836,7 +10836,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-02",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-046": {
@@ -10845,7 +10845,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "n/a",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-047": {
@@ -10917,7 +10917,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "n/a",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-055": {
@@ -10944,7 +10944,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D16-058": {
@@ -11511,7 +11511,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D17-061": {
@@ -12546,7 +12546,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-06/AM-07",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D19-024": {
@@ -12690,7 +12690,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-07",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D19-040": {
@@ -12726,7 +12726,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D19-044": {
@@ -12888,7 +12888,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "n/a",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D19-062": {
@@ -12951,7 +12951,7 @@
    "severity": "high",
    "severity_floor": "medium",
    "attacker": "AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D19-069": {
@@ -13338,7 +13338,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-04",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "phase": "P4"
   },
   "D20-033": {
@@ -13410,7 +13410,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-05/AM-11",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D20-041": {
@@ -13491,7 +13491,7 @@
    "severity": "medium",
    "severity_floor": "low",
    "attacker": "AM-11",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D20-050": {
@@ -13563,7 +13563,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01/AM-03",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D20-058": {
@@ -13572,7 +13572,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-05",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "phase": "P4"
   },
   "D20-059": {
@@ -13608,7 +13608,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-05",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P4"
   },
   "D20-063": {
@@ -13617,7 +13617,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-05/AM-11",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D20-064": {
@@ -13932,7 +13932,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D21-029": {
@@ -13977,7 +13977,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "attacker": "AM-01/AM-05/AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-034": {
@@ -14013,7 +14013,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-038": {
@@ -14031,7 +14031,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-03",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "phase": "P4"
   },
   "D21-040": {
@@ -14067,7 +14067,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-08/AM-09",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-044": {
@@ -14085,7 +14085,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01/AM-05/AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-046": {
@@ -14094,7 +14094,7 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-11/AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-047": {
@@ -14103,7 +14103,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03/AM-06/AM-11",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D21-048": {
@@ -14112,7 +14112,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-03/AM-11",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D21-049": {
@@ -14121,7 +14121,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03/AM-11",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D21-050": {
@@ -14130,7 +14130,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-11",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-051": {
@@ -14139,7 +14139,7 @@
    "severity": "high",
    "severity_floor": "support",
    "attacker": "AM-01",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-052": {
@@ -14148,7 +14148,7 @@
    "severity": "medium",
    "severity_floor": "low",
    "attacker": "AM-01",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-053": {
@@ -14166,7 +14166,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P4"
   },
   "D21-055": {
@@ -14175,7 +14175,7 @@
    "severity": "low",
    "severity_floor": "low",
    "attacker": "AM-01",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P4"
   },
   "D21-056": {
@@ -14967,7 +14967,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-11/AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P6"
   },
   "D23-005": {
@@ -14976,7 +14976,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-006": {
@@ -14994,7 +14994,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-05",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-008": {
@@ -15120,7 +15120,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "phase": "P6"
   },
   "D23-022": {
@@ -15138,7 +15138,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "phase": "P6"
   },
   "D23-024": {
@@ -15210,7 +15210,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-05",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-032": {
@@ -15219,7 +15219,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-033": {
@@ -15237,7 +15237,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-04",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-035": {
@@ -15246,7 +15246,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-036": {
@@ -15264,7 +15264,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "phase": "P6"
   },
   "D23-038": {
@@ -15273,7 +15273,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-039": {
@@ -15282,7 +15282,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-040": {
@@ -15309,7 +15309,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P6"
   },
   "D23-043": {
@@ -15390,7 +15390,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-05",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-052": {
@@ -15408,7 +15408,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-02",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-054": {
@@ -15435,7 +15435,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-057": {
@@ -15444,7 +15444,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "n/a",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P6"
   },
   "D23-058": {
@@ -15849,7 +15849,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D25-037": {
@@ -15885,7 +15885,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-06/AM-11",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "phase": "P5"
   },
   "D25-041": {
@@ -15894,7 +15894,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-01",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D25-042": {
@@ -15912,7 +15912,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-06/AM-11",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "phase": "P5"
   },
   "D25-044": {
@@ -15939,7 +15939,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03/AM-06",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D25-047": {
@@ -16038,7 +16038,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-04/AM-10",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "phase": "P5"
   },
   "D25-058": {
@@ -16083,7 +16083,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03/AM-10",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D25-063": {
@@ -16092,7 +16092,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-05",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D25-064": {
@@ -16101,7 +16101,7 @@
    "severity": "high",
    "severity_floor": "medium",
    "attacker": "AM-01/AM-02",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "phase": "P5"
   },
   "D25-065": {
@@ -16119,7 +16119,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-05",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D25-067": {
@@ -16128,7 +16128,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-05/AM-11",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "phase": "P5"
   },
   "D25-068": {
@@ -16200,7 +16200,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "attacker": "AM-03/AM-11",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "phase": "P5"
   },
   "D25-076": {
@@ -16272,7 +16272,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-07",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P1"
   },
   "D26-005": {
@@ -16686,7 +16686,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P1"
   },
   "D26-051": {
@@ -16695,7 +16695,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-12",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P1"
   },
   "D26-052": {
@@ -16785,7 +16785,7 @@
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-03/AM-09",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P1"
   },
   "D26-062": {
@@ -17352,7 +17352,7 @@
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-02/AM-03",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "phase": "P9"
   },
   "D27-046": {

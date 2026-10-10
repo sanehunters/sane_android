@@ -279,9 +279,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "app.provider.info"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D08-010",
@@ -1277,7 +1275,6 @@
     "attack": [],
     "vrt": [
      "broken_access_control.exposed_sensitive_android_intent",
-     "parcel.unmarshall",
      "server_side_injection.remote_code_execution_rce"
     ]
    },
@@ -1784,8 +1781,7 @@
     "vrt": [
      "broken_access_control.exposed_sensitive_android_intent",
      "broken_access_control.privilege_escalation",
-     "broken_authentication_and_session_management.authentication_bypass",
-     "implicit_intent_to_pending_intent.py"
+     "broken_authentication_and_session_management.authentication_bypass"
     ]
    },
    "xrefs": [
@@ -1932,8 +1928,7 @@
      "T1517"
     ],
     "vrt": [
-     "broken_access_control.privilege_escalation",
-     "com.nextcloud.client"
+     "broken_access_control.privilege_escalation"
     ]
    },
    "xrefs": [

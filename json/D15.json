@@ -1658,7 +1658,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical once the leak path is chained; Low for the bare UUID swap",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_guid` (**P4**) for the bare swap; the iterable nodes once the ids are obtainable",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-05",
    "attacker_ids": [
     "AM-05"
@@ -3035,7 +3035,7 @@
    "severity_floor": "low",
    "severity_note": "Low alone — **P5**; High/Critical via the consequence it unlocks",
    "vrt": "`sensitive_data_exposure.graphql_introspection_enabled` (**P5**) for the exposure itself",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"

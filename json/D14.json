@@ -119,7 +119,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "n/a (false-positive gate for `mobile_security_misconfiguration.ssl_certificate_pinning.absent`)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all; the APEX trap is specific to API 34+",
@@ -828,8 +828,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "insecure_data_transport.cleartext_transmission_of_sensitive_data",
-     "network_security.py"
+     "insecure_data_transport.cleartext_transmission_of_sensitive_data"
     ]
    },
    "xrefs": [],
@@ -1284,8 +1283,7 @@
      "T1632"
     ],
     "vrt": [
-     "insecure_data_transport.cleartext_transmission_of_sensitive_data",
-     "network_security.py"
+     "insecure_data_transport.cleartext_transmission_of_sensitive_data"
     ]
    },
    "xrefs": [],
@@ -1613,7 +1611,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "com.android.conscrypt",
      "lack_of_binary_hardening.runtime_instrumentation_based"
     ]
    },
@@ -1639,7 +1636,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`mobile_security_misconfiguration.ssl_certificate_pinning.absent` (**P5**) / `\\|defeatable` (**P5**) — never file standalone",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-07 (tester convenience, not an attacker)",
    "attacker_ids": [
     "AM-07"
@@ -1719,8 +1716,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "mobile_security_misconfiguration.ssl_certificate_pinning.absent",
-     "network_security.py"
+     "mobile_security_misconfiguration.ssl_certificate_pinning.absent"
     ]
    },
    "xrefs": [],
@@ -1842,7 +1838,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) — record, do not file",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-07/AM-12 (tester)",
    "attacker_ids": [
     "AM-07",
@@ -1942,7 +1938,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) if the spoofed verdict yields a privileged action; High as filed when only privileged *data* is shown",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 (the header spoof needs no network position at all)",
    "attacker_ids": [
     "AM-01"
@@ -1989,7 +1985,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`server_security_misconfiguration.insecure_ssl.insecure_cipher_suite` (**P5**) / `\\|lack_of_forward_secrecy` (**P5**) — the client-side node is a graveyard entry unless paired with an observed session (D14-042)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-06 with a downgrade-capable position and a cooperating server",
    "attacker_ids": [
     "AM-06"
@@ -2287,7 +2283,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`insecure_data_transport.executable_download.no_secure_integrity_check` (**P4** baseline, CWE-353/354/494, baseline vector `AV:N/AC:H/PR:N/UI:N/S:C/C:N/I:L/A:N`) → override upward to `server_side_injection.remote_code_execution_rce` (**P1**) with the execution proof. The sibling `\\|secure_integrity_check` is **P5**",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-06 (MitM) or AM-09 (malicious CDN); AM-01 if the fetch host is takeover-able",
    "attacker_ids": [
     "AM-01",
@@ -2385,7 +2381,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) — arbitrary JS with the app's full native-module surface",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-06 (serves the bundle), AM-03/AM-11 (sets `debug_http_host`)",
    "attacker_ids": [
     "AM-03",

@@ -48,8 +48,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "broken_access_control.exposed_sensitive_android_intent",
-     "scanner.activity.browsable"
+     "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
    "xrefs": [
@@ -521,10 +520,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset",
-     "server.cleartext",
-     "server.hostname",
-     "server.url"
+     "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
    "xrefs": [],
@@ -1088,9 +1084,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "assetlinks.json"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [],
@@ -1130,7 +1124,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.link",
      "broken_authentication_and_session_management.authentication_bypass"
     ]
    },
@@ -1281,7 +1274,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "assetlinks.json",
      "broken_authentication_and_session_management.authentication_bypass",
      "sensitive_data_exposure.weak_password_reset_implementation"
     ]
@@ -1691,8 +1683,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "broken_access_control.exposed_sensitive_android_intent",
-     "com.android.installreferrer"
+     "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
    "xrefs": [
@@ -2342,9 +2333,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "developer.google.com",
-     "server_security_misconfiguration.misconfigured_dns.subdomain_takeover",
-     "www.google.com"
+     "server_security_misconfiguration.misconfigured_dns.subdomain_takeover"
     ]
    },
    "xrefs": [
@@ -3399,7 +3388,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) — informational on its own, so **do not file it alone**; it becomes reportable only via the session-loss delta below",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"

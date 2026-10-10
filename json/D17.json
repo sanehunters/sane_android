@@ -278,9 +278,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "dev.expo.updates.prefs",
-     "insecure_data_transport.executable_download.no_secure_integrity_check",
-     "updates.db"
+     "insecure_data_transport.executable_download.no_secure_integrity_check"
     ]
    },
    "xrefs": [
@@ -1135,8 +1133,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "insecure_data_transport.executable_download.secure_integrity_check",
-     "strings.xml"
+     "insecure_data_transport.executable_download.secure_integrity_check"
     ]
    },
    "xrefs": [
@@ -2723,7 +2720,7 @@
    "severity_floor": "support",
    "severity_note": "This is not a finding — it is the multiplier that turns a P5 informative into the sink's real severity",
    "vrt": "without it, `using_components_with_known_vulnerabilities.outdated_software_version` (**P5**), every time",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (tester step)",
    "attacker_ids": [],
    "applies_to": "all",
@@ -2877,13 +2874,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "co.fs2",
-     "com.google.code.gson",
-     "com.opencsv",
-     "gson.code.google.com",
-     "net.jpountz.lz4",
-     "org.mvel",
-     "org.tpolecat",
      "server_side_injection.remote_code_execution_rce"
     ]
    },
@@ -2971,8 +2961,7 @@
     ],
     "attack": [],
     "vrt": [
-     "server_side_injection.remote_code_execution_rce",
-     "settings.gradle"
+     "server_side_injection.remote_code_execution_rce"
     ]
    },
    "xrefs": [
@@ -3189,12 +3178,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "com.canhub",
-     "com.github.arthurhub",
-     "com.theartofdev.edmodo",
-     "com.vanniktech"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D17-060",
@@ -3278,8 +3262,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "child.js",
-     "install.js",
      "server_side_injection.remote_code_execution_rce"
     ]
    },

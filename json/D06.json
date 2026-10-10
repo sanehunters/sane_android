@@ -91,7 +91,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.service.info",
      "broken_access_control.exposed_sensitive_android_intent"
     ]
    },
@@ -1262,8 +1261,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.service.start",
-     "app.service.stop",
      "broken_access_control.exposed_sensitive_android_intent",
      "insecure_os_firmware.command_injection"
     ]
@@ -1461,7 +1458,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.service.stop",
      "application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty"
     ]
    },

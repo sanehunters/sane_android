@@ -1062,7 +1062,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) — never file this as a finding",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-06/AM-07",
    "attacker_ids": [
     "AM-06",
@@ -1186,9 +1186,7 @@
     "attack": [
      "T1407"
     ],
-    "vrt": [
-     "strings.xml"
-    ]
+    "vrt": []
    },
    "xrefs": [
     "D19-003",
@@ -1822,7 +1820,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "blutter_frida.js",
      "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers",
      "cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature"
     ]
@@ -1851,7 +1848,7 @@
    "severity_floor": "support",
    "severity_note": "Support (the resulting traffic findings carry the severity)",
    "vrt": "`mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) if filed as a pinning issue — do not file it there",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-07 network attacker with a trusted CA is a **tester convenience, not an attacker**; the real finding is what the decrypted traffic shows",
    "attacker_ids": [
     "AM-07"
@@ -2061,7 +2058,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) — do not file; report what the substitution unlocks",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12 own device — **not an attack**",
    "attacker_ids": [
     "AM-12"
@@ -2219,8 +2216,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "capacitor.config.json",
-     "capacitor.plugins.json",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
@@ -2322,10 +2317,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "server.cleartext",
-     "server.hostname",
-     "server.html5mode",
-     "server.url",
      "server_side_injection.remote_code_execution_rce"
     ]
    },
@@ -2656,7 +2647,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "capacitor.plugins.json",
      "server_side_injection.file_inclusion.local",
      "server_side_injection.sql_injection"
     ]
@@ -2921,7 +2911,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "n/a as recon; `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) if filed as a finding — do not",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Unity IL2CPP Android builds. Il2CppDumper supports Unity **5.3–2022.2**; frida-il2cpp-bridge covers **5.3.0–6000.3.x**. Mono-backend builds instead ship managed `.dll` assemblies under `assets/bin/Data/Managed/` and are directly ILSpy-able",
@@ -2939,14 +2929,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "dump.cs",
-     "ghidra.py",
-     "ghidra_wasm.py",
-     "ida.py",
-     "ida_with_struct.py",
-     "lack_of_binary_hardening.lack_of_obfuscation",
-     "script.json",
-     "stringliteral.json"
+     "lack_of_binary_hardening.lack_of_obfuscation"
     ]
    },
    "xrefs": [
@@ -3033,8 +3016,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "broken_access_control.privilege_escalation",
-     "dump.cs"
+     "broken_access_control.privilege_escalation"
     ]
    },
    "xrefs": [],
@@ -3078,7 +3060,6 @@
     "attack": [],
     "vrt": [
      "broken_access_control.privilege_escalation",
-     "dump.cs",
      "insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage"
     ]
    },
@@ -3251,7 +3232,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium standalone; High by what the bypass unlocks",
    "vrt": "`lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) if filed as a resilience issue — file the unlocked control instead",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12 own device",
    "attacker_ids": [
     "AM-12"
@@ -3271,7 +3252,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "assemblies.json",
      "lack_of_binary_hardening.lack_of_jailbreak_detection"
     ]
    },
@@ -3353,7 +3333,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "local.properties",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
@@ -3401,7 +3380,6 @@
     "attack": [],
     "vrt": [
      "broken_access_control.privilege_escalation",
-     "ghidra_wasm.py",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },

@@ -270,7 +270,7 @@
    "severity_floor": "low",
    "severity_note": "Low standalone (Support in practice); rated by the advisory **only** with a reachability argument",
    "vrt": "`using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) alone — escalates into the memory-safety items only with a demonstrated path",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-02 / AM-09 for the decoder classes once reachability is shown",
    "attacker_ids": [
     "AM-02",
@@ -321,7 +321,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium (as undocumented native anti-analysis in a production build); Support otherwise",
    "vrt": "`lack_of_binary_hardening.runtime_instrumentation_based` (**P5**) if you file the RASP observation alone — file it under D21 instead, or as context",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12 (your own instrumentation is being blocked); AM-03 when the constructor itself parses attacker data",
    "attacker_ids": [
     "AM-03",
@@ -375,7 +375,7 @@
    "severity_floor": "low",
    "severity_note": "Low (Support in practice)",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) standalone",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (rating input)",
    "attacker_ids": [],
    "applies_to": "all apps shipping `.so`; the check is per-binary and per-NDK, never per-OS-version",
@@ -478,7 +478,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (rating input)",
    "attacker_ids": [],
    "applies_to": "**LEGACY** as a mitigation finding: Android has required PIE for dynamically linked executables since **Android 5.0 (API 21)**, and Clang builds PIE by default",
@@ -528,7 +528,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (rating input)",
    "attacker_ids": [],
    "applies_to": "all apps shipping native code; NDK builds get canaries by default, hand-rolled build systems often do not",
@@ -579,7 +579,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (rating input)",
    "attacker_ids": [],
    "applies_to": "all native code; the platform has shipped `FORTIFY_SOURCE=1` since Android 4.2 and `=2` since 4.4, but that governs *platform* binaries, not the app's",
@@ -626,7 +626,7 @@
    "severity_floor": "low",
    "severity_note": "Low standalone; a direct exploitability multiplier",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (rating input)",
    "attacker_ids": [],
    "applies_to": "all; XN/NX has been enforced since Android 2.3, so a marked-executable stack is a build defect",
@@ -713,7 +713,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`lack_of_binary_hardening.lack_of_obfuscation` (**P5**) standalone",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "n/a (reconnaissance)",
    "attacker_ids": [],
    "applies_to": "all apps shipping native code",
@@ -874,7 +874,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with demonstrated execution; `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) for a reliable crash only",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 / AM-02 / AM-01 per the D16-005 row",
    "attacker_ids": [
     "AM-01",
@@ -982,7 +982,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with execution; **P3** for a reliable crash; nothing at all for an unreached sink",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 / AM-02 per the D16-005 row",
    "attacker_ids": [
     "AM-02",
@@ -1040,7 +1040,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`insecure_os_firmware.command_injection` (**P1**, CWE-77) or `server_side_injection.remote_code_execution_rce` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 / AM-02",
    "attacker_ids": [
     "AM-02",
@@ -1143,7 +1143,7 @@
    "severity_floor": "low",
    "severity_note": "Low (Medium only when it materially protects payments, DRM or anti-fraud)",
    "vrt": "`lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) / `.runtime_instrumentation_based` (**P5**) — this is the P5 ceiling stated plainly",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12 (the bypass is on your own device)",
    "attacker_ids": [
     "AM-12"
@@ -1193,7 +1193,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with execution; **P3** for a reliable crash",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 / AM-02 for a decoder fed by a delivered file; AM-03 when the Java API that sets the sizes is reachable cross-app",
    "attacker_ids": [
     "AM-01",
@@ -1247,7 +1247,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with execution; **P3** crash-only",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 (0-click font/image/document paths) / AM-02",
    "attacker_ids": [
     "AM-01",
@@ -1297,7 +1297,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**); **P3** crash-only",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 / AM-02",
    "attacker_ids": [
     "AM-01",
@@ -1348,7 +1348,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 (a file delivered by MMS/RCS, thumbnail, media scan) / AM-02",
    "attacker_ids": [
     "AM-01",
@@ -1399,7 +1399,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) when the write is demonstrated; otherwise rate the read",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 / AM-02",
    "attacker_ids": [
     "AM-01",
@@ -1450,7 +1450,7 @@
    "severity_floor": "high",
    "severity_note": "High (Critical when the leaked bytes carry credentials)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) if the leak yields a token/key; otherwise rate the disclosure",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 / AM-02 / AM-09",
    "attacker_ids": [
     "AM-01",
@@ -1501,7 +1501,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (with demonstrated reuse control); **High** for a reproducible UAF with no control",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with control; **P3** otherwise",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-02 / AM-03",
    "attacker_ids": [
     "AM-02",
@@ -1550,7 +1550,7 @@
    "severity_floor": "high",
    "severity_note": "High–Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with control; **P3** for the arbitrary-free crash alone",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "**AM-03** — a zero-permission installed app; this is the cheapest attacker model in the whole chapter",
    "attacker_ids": [
     "AM-03"
@@ -1605,7 +1605,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-02 / AM-03, whichever supplies the corruption",
    "attacker_ids": [
     "AM-02",
@@ -1659,7 +1659,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-02 / AM-03",
    "attacker_ids": [
     "AM-02",
@@ -1714,7 +1714,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-02 / AM-03",
    "attacker_ids": [
     "AM-02",
@@ -1765,7 +1765,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with execution; `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) for a reliable controlled crash. Compare the band you are escaping: a pure **Java**-layer crash from the same vector is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, worth nothing",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "**AM-03** zero-permission local app (prove it from a real attacker APK, not from `adb`, which runs as the far-more-privileged shell UID)",
    "attacker_ids": [
     "AM-03"
@@ -1873,7 +1873,7 @@
    "severity_floor": "high",
    "severity_note": "High–Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with execution; otherwise rate the crash",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "**AM-09** malicious backend/CDN; **AM-02** when the URL comes from a deep link or a scanned code",
    "attacker_ids": [
     "AM-02",
@@ -1973,7 +1973,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "**AM-03** (a co-located app writing the file) or AM-09 (the app downloads it)",
    "attacker_ids": [
     "AM-03",
@@ -2042,10 +2042,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "permitted.paths",
-     "search.paths"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [
@@ -2070,7 +2067,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) with execution; otherwise rate the crash",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-02 / AM-03 depending on which bridge reaches the plugin",
    "attacker_ids": [
     "AM-02",
@@ -2126,7 +2123,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) if a live token is scraped from memory and used; otherwise rate the disclosure",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03/AM-04 **only if** the app is debuggable; otherwise AM-12 (not an attack)",
    "attacker_ids": [
     "AM-03",
@@ -2271,7 +2268,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (the ASan verdict is what rates the finding)",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) via the bug it finds",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01/AM-02 per the delivery path",
    "attacker_ids": [
     "AM-01",
@@ -2322,7 +2319,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (this item is what makes the Critical payable)",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "n/a (rating discipline) — the attacker model is whichever one reaches the *real* call path, never your harness",
    "attacker_ids": [],
    "applies_to": "every memory-safety submission, at every programme in this corpus",
@@ -2582,9 +2579,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "libdng_sdk.so"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [],
@@ -2658,7 +2653,7 @@
    "severity_floor": "support",
    "severity_note": "Support (a downgrade discipline that protects every Critical you file)",
    "vrt": "it bounds what you may claim after `server_side_injection.remote_code_execution_rce`",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item",
    "attacker_ids": [],
    "applies_to": "all; SELinux has been enforcing since Android 4.4",
@@ -2775,7 +2770,7 @@
    "severity_floor": "high",
    "severity_note": "High (and it is the honest ceiling — this is **not** a sandbox escape)",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) only when you demonstrate execution; otherwise rate the primitive",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 — a **zero-permission** app, which is what makes this valuable",
    "attacker_ids": [
     "AM-03"

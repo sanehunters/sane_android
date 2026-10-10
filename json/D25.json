@@ -443,8 +443,7 @@
     ],
     "attack": [],
     "vrt": [
-     "insecure_os_firmware.poorly_configured_operating_system_security",
-     "ro.control_privapp_permissions"
+     "insecure_os_firmware.poorly_configured_operating_system_security"
     ]
    },
    "xrefs": [
@@ -625,9 +624,7 @@
     ],
     "attack": [],
     "vrt": [
-     "app.package.debuggable",
      "broken_access_control.privilege_escalation",
-     "exploit.jdwp.check",
      "insecure_os_firmware.poorly_configured_operating_system_security"
     ]
    },
@@ -968,7 +965,6 @@
     "attack": [],
     "vrt": [
      "broken_access_control.privilege_escalation",
-     "com.sec.factory.camera",
      "insecure_os_firmware.poorly_configured_operating_system_security"
     ]
    },
@@ -1338,8 +1334,7 @@
     ],
     "attack": [],
     "vrt": [
-     "broken_access_control.privilege_escalation",
-     "mac_permissions.xml"
+     "broken_access_control.privilege_escalation"
     ]
    },
    "xrefs": [
@@ -1619,7 +1614,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical when the parser is reachable 0-click",
    "vrt": "`server_side_injection.remote_code_execution_rce` (**P1**) framing when the chain completes; otherwise rated by the reached impact",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 remote no interaction, where the parser is on an auto-render path",
    "attacker_ids": [
     "AM-01"
@@ -1637,7 +1632,6 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "libhwui.so",
      "server_side_injection.remote_code_execution_rce"
     ]
    },
@@ -1781,7 +1775,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`insecure_os_firmware.weakness_in_firmware_updates.firmware_does_not_validate_update_integrity` (**P3** baseline, CWE-434, baseline vector `AV:N/AC:H/PR:H/UI:R/S:C/C:H/I:H/A:H` — if your PoC needs neither `PR:H` nor `UI:R`, say so and argue the score up); `insecure_os_firmware.weakness_in_firmware_updates.firmware_is_not_encrypted` (**P5**); `insecure_os_firmware.weakness_in_firmware_updates.firmware_cannot_be_updated` (**VARIES**)",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "attacker": "AM-06 network attacker, or AM-11 physical for a local update path",
    "attacker_ids": [
     "AM-06",
@@ -1832,7 +1826,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`insecure_os_firmware.hardcoded_password.privileged_user` (**P1**, CWE-259, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`); `\\|non_privileged_user` (**P2**, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N`); `insecure_os_firmware.shared_credentials_on_storage` (**P3**, CWE-798); `insecure_os_firmware.over_permissioned_credentials_on_storage` (**P2**, CWE-250)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01 remote where the credential authenticates to a network service",
    "attacker_ids": [
     "AM-01"
@@ -1904,7 +1898,6 @@
      "T1645"
     ],
     "vrt": [
-     "framework.jar",
      "insecure_os_firmware.poorly_configured_operating_system_security"
     ]
    },
@@ -1928,7 +1921,7 @@
    "severity_floor": "high",
    "severity_note": "High for the app-level consequence on a debuggable build; the bare open port is an environment observation",
    "vrt": "`insecure_os_firmware.local_administrator_on_default_environment` (**P2**, CWE-276) on a fleet build where it is the default; otherwise `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**)",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "attacker": "AM-06 network attacker on the same Wi-Fi; AM-11 physical unlocked for the enablement",
    "attacker_ids": [
     "AM-06",
@@ -2050,7 +2043,6 @@
     "attack": [],
     "vrt": [
      "broken_access_control.exposed_sensitive_android_intent",
-     "scanner.misc.secretcodes",
      "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
     ]
    },
@@ -2078,7 +2070,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical when it binds `0.0.0.0` and serves files; High on loopback",
    "vrt": "`server_side_injection.file_inclusion.local` (**P1**) where a path handler traverses; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) when the served file is a credential",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-06 network attacker on the same Wi-Fi for the `0.0.0.0` case; AM-03 zero-permission local app for loopback",
    "attacker_ids": [
     "AM-03",
@@ -2589,7 +2581,7 @@
    "severity_floor": "high",
    "severity_note": "High when the payload is a credential or an actuation command; Medium for telemetry",
    "vrt": "`broken_authentication_and_session_management.cleartext_transmission_of_session_token` (**P4**) where a token crosses; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) otherwise",
-   "vrt_priority": "p4",
+   "vrt_priority": "P4",
    "attacker": "AM-04 local app with one common permission; AM-10 proximity for the replay",
    "attacker_ids": [
     "AM-04",
@@ -2827,7 +2819,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical if a path puts the phone app into an authenticated state; High to Medium otherwise",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) for the auth-shaped path; `broken_access_control.privilege_escalation` (**VARIES**) otherwise",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 (an app that can reach the Data Layer) / AM-10 (a paired attacker node)",
    "attacker_ids": [
     "AM-03",
@@ -2875,7 +2867,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (BOLA on a companion-only endpoint)",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**); `\\|view_sensitive_information_iterable_object_identifiers` (**P3**) for read-only",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-05 another user of the same app",
    "attacker_ids": [
     "AM-05"
@@ -2918,7 +2910,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium to High, depending on what the endpoint returns",
    "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (**P3**) or higher depending on the data; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**)",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "attacker": "AM-01 remote no interaction (for the live endpoints); AM-02 for the browser-triggered client path",
    "attacker_ids": [
     "AM-01",
@@ -3010,7 +3002,7 @@
    "severity_floor": "high",
    "severity_note": "High (cross-user data access is an explicitly bought impact class)",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where it returns another user's records; `broken_access_control.privilege_escalation` (**VARIES**) otherwise",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-05 another user of the same device",
    "attacker_ids": [
     "AM-05"
@@ -3056,7 +3048,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where data crosses; `broken_authentication_and_session_management.authentication_bypass` (**P1**) for unlocking without the designated factor",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-05 / AM-11",
    "attacker_ids": [
     "AM-05",
@@ -3424,7 +3416,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) for the recovered credential; the demonstrated corporate access sets the real rating",
-   "vrt_priority": "p3",
+   "vrt_priority": "P3",
    "attacker": "AM-03 / AM-11",
    "attacker_ids": [
     "AM-03",
@@ -3599,13 +3591,7 @@
     "masvs": [],
     "cwe": [],
     "attack": [],
-    "vrt": [
-     "shell.exec",
-     "shell.send",
-     "shell.start",
-     "tools.setup.minimalsu",
-     "tools.setup.toybox"
-    ]
+    "vrt": []
    },
    "xrefs": [],
    "domain_refs": [],

@@ -1271,7 +1271,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical where attestation gates enrolment or payment provisioning; High otherwise",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) for the enrolment case; otherwise `broken_access_control.privilege_escalation` (**VARIES**)",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -1498,7 +1498,7 @@
    "severity_floor": "high",
    "severity_note": "High — rated on the unlocked capability, **never on the bypass itself**; Critical only where it gates money movement",
    "vrt": "`lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) for the bypass; file the *consequence* under `broken_access_control.privilege_escalation` (**VARIES**) or the relevant D11/D12/D13/D15 node",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12 for the bypass — which is why the bypass is never the finding; AM-01/AM-05 for whatever it reaches",
    "attacker_ids": [
     "AM-01",
@@ -1733,7 +1733,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium as a broken-control finding; do not inflate",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) for the absence; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) where the check is the integrity control the vendor claims",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12",
    "attacker_ids": [
     "AM-12"
@@ -1831,7 +1831,7 @@
    "severity_floor": "critical",
    "severity_note": "**Critical** where the trigger is plantable by another app",
    "vrt": "`application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (**P2**), or `\\|high_impact_and_or_medium_difficulty` (**P3**)",
-   "vrt_priority": "p2",
+   "vrt_priority": "P2",
    "attacker": "AM-03 zero-permission local app where the trigger is a file on shared storage; AM-01 where the trigger is a server-influenced signal",
    "attacker_ids": [
     "AM-01",
@@ -2025,7 +2025,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical — per the embedded library's advisory, and only with a reachability proof",
    "vrt": "`using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) for the version string alone — you must reach the code path to rate it higher",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-08 malicious third-party SDK / AM-09 where the vulnerable parser consumes remote data",
    "attacker_ids": [
     "AM-08",
@@ -2113,7 +2113,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical — the extracted material's severity, where the token grants off-device account access; Low where the extraction is local-only",
    "vrt": "`lack_of_binary_hardening.runtime_instrumentation_based` (**P5**) for the missing detection — never the headline; file the extracted secret under its own node",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-12 for the extraction; the finding only exists once D21-002 condition 2 or 6 converts it to AM-01/AM-05",
    "attacker_ids": [
     "AM-01",
@@ -2174,7 +2174,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium — rated on what the attached debugger reaches; the missing detection alone is Informational",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) for the absence",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11 physical unlocked with USB debugging, or AM-12",
    "attacker_ids": [
     "AM-11",
@@ -2236,7 +2236,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) where JDWP yields the session; otherwise rate on the data reached",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-11 physical unlocked with USB access; AM-03/AM-06 where adb-over-TCP is enabled",
    "attacker_ids": [
     "AM-03",
@@ -2258,9 +2258,7 @@
     "cwe": [],
     "attack": [],
     "vrt": [
-     "app.package.debuggable",
-     "broken_authentication_and_session_management.authentication_bypass",
-     "exploit.jdwp.check"
+     "broken_authentication_and_session_management.authentication_bypass"
     ]
    },
    "xrefs": [],
@@ -2288,7 +2286,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) where the DevTools session yields the authenticated web session; otherwise rate on the content reached",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-11 physical unlocked with USB/adb; AM-03 where another app can reach the abstract socket on an affected build",
    "attacker_ids": [
     "AM-03",
@@ -2337,7 +2335,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical for a hardcoded credential or an auth bypass; High otherwise",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**); `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**) for a shipped test credential; `broken_access_control.exposed_sensitive_android_intent` (**VARIES**) for the reachable debug Activity",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-03 zero-permission local app where the debug component is exported; AM-11 otherwise",
    "attacker_ids": [
     "AM-03",
@@ -2389,7 +2387,7 @@
    "severity_floor": "low",
    "severity_note": "Low — bundle it, do not file it alone",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-11",
    "attacker_ids": [
     "AM-11"
@@ -2450,7 +2448,7 @@
    "severity_floor": "support",
    "severity_note": "High where the recovered rule lets you evade a fraud or abuse control; Informational for the obfuscation gap alone",
    "vrt": "`lack_of_binary_hardening.lack_of_obfuscation` (**P5**) for the gap; file the recovered rule under `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) or the control it defeats",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-01 (anyone can download the APK)",
    "attacker_ids": [
     "AM-01"
@@ -2512,7 +2510,7 @@
    "severity_floor": "low",
    "severity_note": "Medium — report bundled with the concrete bypass it enabled; Low alone",
    "vrt": "`lack_of_binary_hardening.lack_of_obfuscation` (**P5**)",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -2609,7 +2607,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical where the old version bypasses auth entirely; High for a weakened control; **a version difference alone is Informational**",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) at the ceiling; `broken_access_control.privilege_escalation` (**VARIES**) for the weakened control",
-   "vrt_priority": "p1",
+   "vrt_priority": "P1",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -2656,7 +2654,7 @@
    "severity_floor": "low",
    "severity_note": "Low — Informational standalone; rated on the abuse it enables",
    "vrt": "`lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) for the absence",
-   "vrt_priority": "p5",
+   "vrt_priority": "P5",
    "attacker": "AM-01 (an emulator farm is a remote client)",
    "attacker_ids": [
     "AM-01"
