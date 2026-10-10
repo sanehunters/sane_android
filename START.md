@@ -182,7 +182,10 @@ party's data. `.gitignore` and the pre-commit hook block most of it; the rule is
 `json/Dnn.json` (jq/python only), `docs/01` (search). Your context is for the target, not for the manual.
 
 **Token economy — the second design goal of this repository.** A model that reads less finds more,
-because the tokens go to the target instead of the manual. The rules:
+because the tokens go to the target instead of the manual. **It never trades away coverage or evidence:**
+no item is skipped or settled early to save tokens; raw logs keep everything (digests are for reading, not
+for deciding — when a digest shows a candidate, open the full log); every negative still needs its
+mechanism; every finding still needs its full evidence tree. The rules:
 
 | Rule | How |
 |---|---|
