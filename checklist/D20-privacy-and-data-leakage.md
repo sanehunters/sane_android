@@ -1301,7 +1301,7 @@ adb logcat -s POC:E -d
 - **Proof:** Your PoC's own log line containing the OTP / message body / balance, with the target's package
   name in the same line, plus a screenshot of the ordinary settings toggle the user flipped. State the
   attacker app's permission set — ideally empty besides the listener binding.
-- **Escalation:** -> D09/D28 join: the listener also reads the notification's deep link and its extras, then
+- **Escalation:** -> D09/D24 join: the listener also reads the notification's deep link and its extras, then
   replays that deep link itself (see Cross-surface joins); -> D08 if the `contentIntent` is a mutable
   `PendingIntent`; -> D13 for the OTP.
 - **Ruled out when:** The target's notifications carry no sensitive value in any `extras` key — the OTP is
@@ -2457,7 +2457,7 @@ adb shell dumpsys window | grep -iE 'TYPE_APPLICATION_OVERLAY|alpha='
 |---|---|
 | **Severity ceiling** | High |
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
-| **Attacker** | the app / an SDK inside it |
+| **Attacker** | AM-08 (the app itself, or an SDK inside it) |
 | **Applies to** | targetSdk 34+ apps must declare an FGS type; `mediaProjection`, `microphone`, `camera` and `health` are the relevant ones |
 | **Maps to** | T1541 Foreground Persistence; developer.android.com `develop/background-work/services/fgs/service-types` (`HIGH_SAMPLING_RATE_SENSORS` as a manifest prerequisite for the `health` FGS type) |
 

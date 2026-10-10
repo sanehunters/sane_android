@@ -1673,7 +1673,7 @@ that the attacker cannot reach directly?**
   from the victim's handler captured alongside `adb shell ps | grep com.attacker.poc` showing your PID as
   the caller. The clean framing: creator says `com.trusted`, sender is `com.attacker.poc`, branch executed.
 - **Escalation:** → D13 auth bypass; → D06 if the gated path is a bound service. This is the
-  notification-listener × PendingIntent join in D28.
+  notification-listener × PendingIntent join in D24.
 - **Ruled out when:** Every authorisation decision on a received PendingIntent uses `Binder.getCallingUid()`
   inside a Service or ContentProvider dispatch (plus `getPackagesForUid()` **and** a signature check), or
   `BroadcastReceiver.getSentFromUid()`/`getSentFromPackage()` on API 34+. A `getCreatorPackage()` used only
@@ -2715,7 +2715,7 @@ that the attacker cannot reach directly?**
   link reviewer tests for open redirect and XSS in the `url` parameter and never pastes
   `intent:#Intent;component=...;end` into it. That one payload moves severity by a whole band because it
   removes the "attacker must already have an app installed" objection (D08-022, -024, -026).
-- **D08 × D24/D28 — the notification drawer is the PendingIntent acquisition layer.** The PendingIntent
+- **D08 × D24 — the notification drawer is the PendingIntent acquisition layer.** The PendingIntent
   reviewer reads the builder; the notification reviewer reads the content. The join is a
   `NotificationListenerService` that harvests `contentIntent`/`actions[i].actionIntent` and re-sends them:
   it converts "the app creates a mutable PendingIntent" from a code observation into a confused deputy with

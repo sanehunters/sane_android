@@ -1397,7 +1397,7 @@ positive control?**
 |---|---|
 | **Severity ceiling** | **High** |
 | **VRT** | routed to D07: `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) up to `server_side_injection.sql_injection` (P1) |
-| **Attacker** | shell UID 2000 for the command; **the finding must be re-proved from a real app UID** (D26-065) |
+| **Attacker** | AM-12 harness (shell UID 2000 for the command); **the finding must be re-proved from a real app UID — AM-03** (D26-065) |
 | **Applies to** | all; `cmd content` needs ADB from Android 8.0+ |
 | **Maps to** | MASTG-TECH-0148 (Interacting with Android ContentProviders), MASTG-TOOL-0004 (adb); H1 #242727 (Nextcloud, $75), #518669, #534541 |
 

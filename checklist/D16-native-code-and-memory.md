@@ -1076,7 +1076,7 @@ without checking it?**
 - **Proof:** The UBSan line naming the exact expression and the two operands, **or** an ASan
   `heap-buffer-overflow` whose offset matches the wrapped arithmetic. Write the overflow arithmetic out
   longhand in the report — it is the single most convincing paragraph you can produce for a triager.
-- **Escalation:** → D16-053 (what stops it), → D16-062 (a Java-reachable native overflow as a managed→native
+- **Escalation:** → D16-053 (what stops it), → the D16 managed→native item (a Java-reachable native overflow as a managed→native
   escape), → D24 for the delivery path if the parser is a decoder.
 - **Ruled out when:** every size computation from attacker-controlled operands is done in a 64-bit type with
   an explicit upper-bound clamp before the multiply, *or* the code is compiled with trapping IntSan and you
@@ -1916,7 +1916,7 @@ without checking it?**
 |---|---|
 | **Severity ceiling** | Critical (this item is what makes the Critical payable) |
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
-| **Attacker** | per the real path, not per your harness |
+| **Attacker** | n/a (rating discipline) — the attacker model is whichever one reaches the *real* call path, never your harness |
 | **Applies to** | every memory-safety submission, at every programme in this corpus |
 | **Maps to** | Google "Invalid Reports → Unreachable bugs"; Samsung ineligible list and downgrade factors; TikTok exploit requirement |
 
@@ -2151,7 +2151,7 @@ without checking it?**
 |---|---|
 | **Severity ceiling** | Support (it is a *downgrade* discipline) |
 | **VRT** | moves the finding to `application_level_denial_of_service_dos.*` instead of RCE |
-| **Attacker** | unchanged |
+| **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | AOSP components built with UBSan/IntSan trapping; increasingly, app libraries too |
 | **Maps to** | CVE-2026-0049 (the `libdng_sdk.so` case); AOSP IntSan/BoundSan |
 
@@ -2181,7 +2181,7 @@ without checking it?**
 |---|---|
 | **Severity ceiling** | Support (this is the item that prevents the most common over-claim in this domain) |
 | **VRT** | it is what decides between `server_side_injection.remote_code_execution_rce` (P1) and a P3 crash |
-| **Attacker** | unchanged |
+| **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | every memory-corruption finding, without exception |
 | **Maps to** | MASTG-KNOW-0006; AOSP security-model Tables 4–5; `source.android.com/docs/security/test/*` (the AOSP sanitizer/CFI/Scudo/SCS suite) |
 
@@ -2223,7 +2223,7 @@ without checking it?**
 |---|---|
 | **Severity ceiling** | Support (a downgrade discipline that protects every Critical you file) |
 | **VRT** | it bounds what you may claim after `server_side_injection.remote_code_execution_rce` |
-| **Attacker** | unchanged |
+| **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | all; SELinux has been enforcing since Android 4.4 |
 | **Maps to** | AOSP SELinux concepts (`isolated_app`, `untrusted_app`, versioned `untrusted_app_NN` domains); AOSP device-policy guidance |
 
@@ -2257,7 +2257,7 @@ without checking it?**
 |---|---|
 | **Severity ceiling** | Medium as a hardening finding on its own; it is the **amplifier** on any memory-safety finding in this chapter |
 | **VRT** | n/a standalone; it moves the parser finding up or down one band |
-| **Attacker** | unchanged |
+| **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | Android 4.1+; the correct container for parsing untrusted input (media, archives, HTML, PDF, native decoders) |
 | **Maps to** | AOSP security-model Table 2 ("Isolated process: Apps may run services in a process with no Android permissions and access to only two binder services"); `guide/topics/manifest/service-element` (isolatedProcess); SELinux `isolated_app` domain |
 

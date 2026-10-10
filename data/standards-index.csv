@@ -1,0 +1,1074 @@
+id,kind,platform,title,masvs,status,source_path
+MASTG-APP-0001,APP,android,AndroGoat,,,owasp-mastg/apps/android/MASTG-APP-0001.md
+MASTG-APP-0002,APP,android,Android License Validator,,,owasp-mastg/apps/android/MASTG-APP-0002.md
+MASTG-APP-0003,APP,android,Android UnCrackable L1,,,owasp-mastg/apps/android/MASTG-APP-0003.md
+MASTG-APP-0004,APP,android,Android UnCrackable L2,,,owasp-mastg/apps/android/MASTG-APP-0004.md
+MASTG-APP-0005,APP,android,Android UnCrackable L3,,,owasp-mastg/apps/android/MASTG-APP-0005.md
+MASTG-APP-0006,APP,android,Digitalbank,,,owasp-mastg/apps/android/MASTG-APP-0006.md
+MASTG-APP-0007,APP,android,DIVA Android,,,owasp-mastg/apps/android/MASTG-APP-0007.md
+MASTG-APP-0008,APP,android,DodoVulnerableBank,,,owasp-mastg/apps/android/MASTG-APP-0008.md
+MASTG-APP-0009,APP,android,DVHMA,,,owasp-mastg/apps/android/MASTG-APP-0009.md
+MASTG-APP-0010,APP,android,InsecureBankv2,,,owasp-mastg/apps/android/MASTG-APP-0010.md
+MASTG-APP-0011,APP,android,MASTG Hacking Playground (Java),,,owasp-mastg/apps/android/MASTG-APP-0011.md
+MASTG-APP-0012,APP,android,MASTG Hacking Playground (Kotlin),,,owasp-mastg/apps/android/MASTG-APP-0012.md
+MASTG-APP-0013,APP,android,OVAA,,,owasp-mastg/apps/android/MASTG-APP-0013.md
+MASTG-APP-0014,APP,android,InsecureShop,,deprecated,owasp-mastg/apps/android/MASTG-APP-0014.md
+MASTG-APP-0015,APP,android,Android UnCrackable L4,,,owasp-mastg/apps/android/MASTG-APP-0015.md
+MASTG-APP-0016,APP,android,Finstergram,,,owasp-mastg/apps/android/MASTG-APP-0016.md
+MASTG-APP-0017,APP,android,Disable-flutter-tls-verification,,,owasp-mastg/apps/android/MASTG-APP-0017.md
+MASTG-APP-0018,APP,android,MASTestApp-Android-NETWORK,,,owasp-mastg/apps/android/MASTG-APP-0018.md
+MASTG-APP-0023,APP,ios,DVIA,,,owasp-mastg/apps/ios/MASTG-APP-0023.md
+MASTG-APP-0024,APP,ios,DVIA-v2,,,owasp-mastg/apps/ios/MASTG-APP-0024.md
+MASTG-APP-0025,APP,ios,iOS UnCrackable L1,,,owasp-mastg/apps/ios/MASTG-APP-0025.md
+MASTG-APP-0026,APP,ios,iOS UnCrackable L2,,,owasp-mastg/apps/ios/MASTG-APP-0026.md
+MASTG-APP-0027,APP,ios,Disable-flutter-tls-verification,,,owasp-mastg/apps/ios/MASTG-APP-0027.md
+MASTG-APP-0028,APP,ios,iGoat-Swift,,,owasp-mastg/apps/ios/MASTG-APP-0028.md
+MASTG-APP-0029,APP,android,BugBazaar,,,owasp-mastg/apps/android/MASTG-APP-0029.md
+MASTG-APP-0030,APP,ios,iBugBazaar,,,owasp-mastg/apps/ios/MASTG-APP-0030.md
+MASTG-APP-0031,APP,android,VulnForum,,,owasp-mastg/apps/android/MASTG-APP-0031.md
+MASTG-APP-0032,APP,android,RootBeer Sample,,,owasp-mastg/apps/android/MASTG-APP-0032.md
+MASTG-APP-0033,APP,android,Android RASP Sample,,,owasp-mastg/apps/android/MASTG-APP-0033.md
+MASTG-BEST-0001,BEST,generic,Use Secure Random Number Generator APIs,,,owasp-mastg/best-practices/MASTG-BEST-0001.md
+MASTG-BEST-0002,BEST,generic,Remove Logging Code,,,owasp-mastg/best-practices/MASTG-BEST-0002.md
+MASTG-BEST-0003,BEST,generic,Comply with Privacy Regulations and Best Practices,,,owasp-mastg/best-practices/MASTG-BEST-0003.md
+MASTG-BEST-0004,BEST,generic,Exclude Sensitive Data from Backups,,,owasp-mastg/best-practices/MASTG-BEST-0004.md
+MASTG-BEST-0005,BEST,generic,Use Secure Encryption Modes,,,owasp-mastg/best-practices/MASTG-BEST-0005.md
+MASTG-BEST-0006,BEST,generic,Use Up-to-Date APK Signing Schemes,,,owasp-mastg/best-practices/MASTG-BEST-0006.md
+MASTG-BEST-0007,BEST,generic,Debuggable Flag Disabled in the AndroidManifest,,,owasp-mastg/best-practices/MASTG-BEST-0007.md
+MASTG-BEST-0008,BEST,generic,Debugging Disabled for WebViews,,,owasp-mastg/best-practices/MASTG-BEST-0008.md
+MASTG-BEST-0009,BEST,generic,Use Secure Encryption Algorithms,,,owasp-mastg/best-practices/MASTG-BEST-0009.md
+MASTG-BEST-0010,BEST,generic,Use Up-to-Date minSdkVersion,,,owasp-mastg/best-practices/MASTG-BEST-0010.md
+MASTG-BEST-0011,BEST,generic,Securely Load File Content in a WebView,,,owasp-mastg/best-practices/MASTG-BEST-0011.md
+MASTG-BEST-0012,BEST,generic,Disable JavaScript in WebViews,,,owasp-mastg/best-practices/MASTG-BEST-0012.md
+MASTG-BEST-0013,BEST,generic,Disable Content Provider Access in WebViews,,,owasp-mastg/best-practices/MASTG-BEST-0013.md
+MASTG-BEST-0014,BEST,generic,Preventing Screenshots and Screen Recording,,,owasp-mastg/best-practices/MASTG-BEST-0014.md
+MASTG-BEST-0015,BEST,generic,Use `setRecentsScreenshotEnabled` to Prevent Screenshots When Backgrounded,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0015.md
+MASTG-BEST-0016,BEST,generic,Use `SECURE_FLAG` to Prevent Screenshots and Screen Recording,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0016.md
+MASTG-BEST-0017,BEST,generic,Use `setSecure` to Prevent Screenshots in SurfaceViews,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0017.md
+MASTG-BEST-0018,BEST,generic,Use `SecureFlagPolicy.SecureOn` to Prevent Screenshots in Compose Components,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0018.md
+MASTG-BEST-0019,BEST,generic,Use Non-Caching Input Types for Sensitive Fields,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0019.md
+MASTG-BEST-0020,BEST,generic,Update the GMS Security Provider,,,owasp-mastg/best-practices/MASTG-BEST-0020.md
+MASTG-BEST-0021,BEST,generic,Ensure Proper Error and Exception Handling,,,owasp-mastg/best-practices/MASTG-BEST-0021.md
+MASTG-BEST-0022,BEST,generic,Disable Verbose and Debug Logging in Production Builds,,,owasp-mastg/best-practices/MASTG-BEST-0022.md
+MASTG-BEST-0023,BEST,generic,Exclude Sensitive Information from Backups,,,owasp-mastg/best-practices/MASTG-BEST-0023.md
+MASTG-BEST-0024,BEST,generic,Store Data Encrypted in App Sandbox Directory,,,owasp-mastg/best-practices/MASTG-BEST-0024.md
+MASTG-BEST-0025,BEST,generic,Use Secure Random Number Generator APIs,,,owasp-mastg/best-practices/MASTG-BEST-0025.md
+MASTG-BEST-0026,BEST,generic,Preventing Keyboard Caching for Sensitive Text Inputs,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0026.md
+MASTG-BEST-0027,BEST,generic,Preventing Sensitive Data Exposure in Notifications,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0027.md
+MASTG-BEST-0028,BEST,generic,WebViews Cache Cleanup,,,owasp-mastg/best-practices/MASTG-BEST-0028.md
+MASTG-BEST-0029,BEST,generic,Implementing Resilience and RASP Signals,,placeholder,owasp-mastg/best-practices/MASTG-BEST-0029.md
+MASTG-BEST-0030,BEST,generic,Implementing Root Detection,,,owasp-mastg/best-practices/MASTG-BEST-0030.md
+MASTG-BEST-0031,BEST,generic,Enforce Strong Biometrics for Sensitive Operations,,,owasp-mastg/best-practices/MASTG-BEST-0031.md
+MASTG-BEST-0032,BEST,generic,Migrate from UIWebView to WKWebView,,,owasp-mastg/best-practices/MASTG-BEST-0032.md
+MASTG-BEST-0033,BEST,generic,Securely Load File Content in a WebView,,,owasp-mastg/best-practices/MASTG-BEST-0033.md
+MASTG-BEST-0034,BEST,generic,Validate WebView Input,,,owasp-mastg/best-practices/MASTG-BEST-0034.md
+MASTG-BEST-0035,BEST,generic,Prefer Origin Scoped Messaging Over Legacy JavaScript Bridges,,,owasp-mastg/best-practices/MASTG-BEST-0035.md
+MASTG-BEST-0036,BEST,generic,Use Cryptographic Binding for Biometric Authentication,,,owasp-mastg/best-practices/MASTG-BEST-0036.md
+MASTG-BEST-0037,BEST,generic,Invalidate Biometric Keys on Enrollment Changes,,,owasp-mastg/best-practices/MASTG-BEST-0037.md
+MASTG-BEST-0038,BEST,generic,Require Explicit User Confirmation for Biometric Authentication,,,owasp-mastg/best-practices/MASTG-BEST-0038.md
+MASTG-BEST-0039,BEST,generic,Prevent SQL Injection in ContentProviders,,,owasp-mastg/best-practices/MASTG-BEST-0039.md
+MASTG-BEST-0040,BEST,generic,Preventing Overlay Attacks,,,owasp-mastg/best-practices/MASTG-BEST-0040.md
+MASTG-BEST-0041,BEST,generic,Hardening Against Runtime Hooking,,,owasp-mastg/best-practices/MASTG-BEST-0041.md
+MASTG-BEST-0042,BEST,generic,Use Strong TLS Settings in ATS Configuration,,,owasp-mastg/best-practices/MASTG-BEST-0042.md
+MASTG-BEST-0043,BEST,generic,Enforce Strong TLS Settings When ATS Doesn't Apply,,,owasp-mastg/best-practices/MASTG-BEST-0043.md
+MASTG-BEST-0044,BEST,generic,Mask Sensitive Data in Text Input Fields,,,owasp-mastg/best-practices/MASTG-BEST-0044.md
+MASTG-BEST-0045,BEST,generic,Limit Sensitive Data Exposure Through iOS IPC Channels,,,owasp-mastg/best-practices/MASTG-BEST-0045.md
+MASTG-BEST-0046,BEST,generic,Hardening Against Emulation,,,owasp-mastg/best-practices/MASTG-BEST-0046.md
+MASTG-BEST-0047,BEST,generic,Continuous Anti-Debugging Checks,,,owasp-mastg/best-practices/MASTG-BEST-0047.md
+MASTG-BEST-0048,BEST,generic,Hardening Against Reverse Engineering Tools,,,owasp-mastg/best-practices/MASTG-BEST-0048.md
+MASTG-BEST-0049,BEST,generic,Restrict and Validate Access to Exported Content Providers,,,owasp-mastg/best-practices/MASTG-BEST-0049.md
+MASTG-BEST-0050,BEST,generic,Store Data Encrypted in App Sandbox Directory,,,owasp-mastg/best-practices/MASTG-BEST-0050.md
+MASTG-BEST-0051,BEST,generic,Minimize iOS Permissions and Entitlements,,,owasp-mastg/best-practices/MASTG-BEST-0051.md
+MASTG-BEST-0052,BEST,generic,Restrict Access to Android App Components,,,owasp-mastg/best-practices/MASTG-BEST-0052.md
+MASTG-BEST-0053,BEST,generic,Hardening Against Virtual Devices,,,owasp-mastg/best-practices/MASTG-BEST-0053.md
+MASTG-BEST-0054,BEST,generic,Validate Input Parameters in Custom URL Scheme Handlers,,,owasp-mastg/best-practices/MASTG-BEST-0054.md
+MASTG-BEST-0055,BEST,generic,Validate Source Application in Custom URL Scheme Handlers,,,owasp-mastg/best-practices/MASTG-BEST-0055.md
+MASTG-BEST-0056,BEST,generic,Use Explicit Intents for Internal IPC,,,owasp-mastg/best-practices/MASTG-BEST-0056.md
+MASTG-BEST-0057,BEST,generic,Sanitize Data Coming from External Components,,,owasp-mastg/best-practices/MASTG-BEST-0057.md
+MASTG-BEST-0058,BEST,generic,Restrict Native Functionality Exposed Through WebView Bridges,,,owasp-mastg/best-practices/MASTG-BEST-0058.md
+MASTG-BEST-0059,BEST,generic,Render Sensitive UI as Native Views Over the WebView,,,owasp-mastg/best-practices/MASTG-BEST-0059.md
+MASTG-BEST-0060,BEST,generic,Use Native Views for Sensitive Text Entry Over a WebView,,,owasp-mastg/best-practices/MASTG-BEST-0060.md
+MASTG-BEST-0061,BEST,generic,Use WKContentWorld Isolation for DOM Inspection Scripts,,,owasp-mastg/best-practices/MASTG-BEST-0061.md
+MASTG-BEST-0062,BEST,generic,Use WKScriptMessageHandlerWithReply to Return Data to JavaScript,,,owasp-mastg/best-practices/MASTG-BEST-0062.md
+MASTG-BEST-0063,BEST,generic,Use Immutable PendingIntents with Explicit Intents,,,owasp-mastg/best-practices/MASTG-BEST-0063.md
+MASTG-BEST-0064,BEST,generic,Use Safe APIs for Object Deserialization,,,owasp-mastg/best-practices/MASTG-BEST-0064.md
+MASTG-BEST-0065,BEST,generic,Implementing Storage Integrity Checks on iOS,,,owasp-mastg/best-practices/MASTG-BEST-0065.md
+MASTG-BEST-0066,BEST,generic,Implementing Storage Integrity Checks on Android,,,owasp-mastg/best-practices/MASTG-BEST-0066.md
+MASTG-BEST-0067,BEST,generic,Implementing Source Code Integrity Checks on iOS,,,owasp-mastg/best-practices/MASTG-BEST-0067.md
+MASTG-BEST-0068,BEST,generic,Secure Data Sharing Between App Extensions and Containing Apps,,,owasp-mastg/best-practices/MASTG-BEST-0068.md
+MASTG-BEST-0069,BEST,generic,Keep Sensitive Input on the System Keyboard,,,owasp-mastg/best-practices/MASTG-BEST-0069.md
+MASTG-BEST-0070,BEST,generic,Verify Android App Links with autoVerify and Digital Asset Links,,,owasp-mastg/best-practices/MASTG-BEST-0070.md
+MASTG-BEST-0071,BEST,generic,Validate Input Parameters in Deep Link and Custom URL Scheme Handlers,,,owasp-mastg/best-practices/MASTG-BEST-0071.md
+MASTG-BEST-0072,BEST,generic,Validate Input Parameters in Universal Link Handlers,,,owasp-mastg/best-practices/MASTG-BEST-0072.md
+MASTG-BEST-0073,BEST,generic,Properly Validate Server Trust in URLSessionDelegate and WKNavigationDelegate,,,owasp-mastg/best-practices/MASTG-BEST-0073.md
+MASTG-BEST-0074,BEST,generic,Implementing Anti-Debugging Checks on iOS,,,owasp-mastg/best-practices/MASTG-BEST-0074.md
+MASTG-DEMO-0001,DEMO,android,File System Snapshots from External Storage,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0001/MASTG-DEMO-0001.md
+MASTG-DEMO-0002,DEMO,android,External Storage APIs Tracing with Frida,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0002/MASTG-DEMO-0002.md
+MASTG-DEMO-0003,DEMO,android,App Writing to External Storage without Scoped Storage Restrictions,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0003/MASTG-DEMO-0003.md
+MASTG-DEMO-0004,DEMO,android,App Writing to External Storage with Scoped Storage Restrictions,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0004/MASTG-DEMO-0004.md
+MASTG-DEMO-0005,DEMO,android,App Writing to External Storage via the MediaStore API,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0005/MASTG-DEMO-0005.md
+MASTG-DEMO-0006,DEMO,android,Tracing Common Logging APIs Looking for Secrets,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0006/MASTG-DEMO-0006.md
+MASTG-DEMO-0007,DEMO,android,Common Uses of Insecure Random APIs,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0007/MASTG-DEMO-0007.md
+MASTG-DEMO-0008,DEMO,android,Uses of Non-random Sources,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0008/MASTG-DEMO-0008.md
+MASTG-DEMO-0009,DEMO,android,Detecting Undeclared PII in Network Traffic,,,owasp-mastg/demos/android/MASVS-PRIVACY/MASTG-DEMO-0009/MASTG-DEMO-0009.md
+MASTG-DEMO-0010,DEMO,android,File System Snapshots from Internal Storage,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0010/MASTG-DEMO-0010.md
+MASTG-DEMO-0011,DEMO,ios,Uses of Insufficient Key Size in SecKeyCreateRandomKey with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0011/MASTG-DEMO-0011.md
+MASTG-DEMO-0012,DEMO,android,Cryptographic Key Generation With Insufficient Key Length,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0012/MASTG-DEMO-0012.md
+MASTG-DEMO-0013,DEMO,ios,Use of Hardcoded RSA Private Key in SecKeyCreateWithData with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0013/MASTG-DEMO-0013.md
+MASTG-DEMO-0014,DEMO,ios,Use of Hardcoded ECDSA Private Key in CryptoKit with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0014/MASTG-DEMO-0014.md
+MASTG-DEMO-0015,DEMO,ios,Uses of Broken Hashing Algorithms in CommonCrypto with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0015/MASTG-DEMO-0015.md
+MASTG-DEMO-0016,DEMO,ios,Uses of Broken Hashing Algorithms in CryptoKit with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0016/MASTG-DEMO-0016.md
+MASTG-DEMO-0017,DEMO,android,Use of Hardcoded AES Key in SecretKeySpec with semgrep,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0017/MASTG-DEMO-0017.md
+MASTG-DEMO-0018,DEMO,ios,Uses of Broken Encryption Algorithms in CommonCrypto with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0018/MASTG-DEMO-0018.md
+MASTG-DEMO-0019,DEMO,ios,Uses of isExcludedFromBackupKey with r2,,,owasp-mastg/demos/ios/MASVS-STORAGE/MASTG-DEMO-0019/MASTG-DEMO-0019.md
+MASTG-DEMO-0020,DEMO,android,Data Exclusion using backup_rules.xml with Backup Manager,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0020/MASTG-DEMO-0020.md
+MASTG-DEMO-0021,DEMO,ios,Uses of Jailbreak Detection Techniques with r2,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0021/MASTG-DEMO-0021.md
+MASTG-DEMO-0022,DEMO,android,Uses of Broken Symmetric Encryption Algorithms in Cipher with semgrep,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0022/MASTG-DEMO-0022.md
+MASTG-DEMO-0023,DEMO,android,Uses of Broken Encryption Modes in Cipher with semgrep,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0023/MASTG-DEMO-0023.md
+MASTG-DEMO-0024,DEMO,ios,Uses of LAContext.canEvaluatePolicy with r2,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0024/MASTG-DEMO-0024.md
+MASTG-DEMO-0025,DEMO,android,Uses of Build.VERSION.SDK_INT with semgrep,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0025/MASTG-DEMO-0025.md
+MASTG-DEMO-0026,DEMO,ios,Runtime Use of LAContext.canEvaluatePolicy with Frida,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0026/MASTG-DEMO-0026.md
+MASTG-DEMO-0027,DEMO,android,Runtime Use of KeyguardManager.isDeviceSecure and BiometricManager.canAuthenticate APIs with Frida,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0027/MASTG-DEMO-0027.md
+MASTG-DEMO-0028,DEMO,android,Uses of KeyguardManager.isDeviceSecure and BiometricManager.canAuthenticate with semgrep,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0028/MASTG-DEMO-0028.md
+MASTG-DEMO-0029,DEMO,android,Uses of WebViews Allowing Content Access with semgrep,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0029/MASTG-DEMO-0029.md
+MASTG-DEMO-0030,DEMO,android,Uses of WebViews Allowing Content Access with Frida,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0030/MASTG-DEMO-0030.md
+MASTG-DEMO-0031,DEMO,android,Uses of WebViews Allowing Local File Access with Frida,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0031/MASTG-DEMO-0031.md
+MASTG-DEMO-0032,DEMO,android,Uses of WebViews Allowing Local File Access with semgrep,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0032/MASTG-DEMO-0032.md
+MASTG-DEMO-0033,DEMO,android,Dangerous Permissions in the AndroidManifest with semgrep,,,owasp-mastg/demos/android/MASVS-PRIVACY/MASTG-DEMO-0033/MASTG-DEMO-0033.md
+MASTG-DEMO-0034,DEMO,android,Backup and Restore App Data with semgrep,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0034/MASTG-DEMO-0034.md
+MASTG-DEMO-0035,DEMO,android,Data Exclusion using backup_rules.xml with adb backup,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0035/MASTG-DEMO-0035.md
+MASTG-DEMO-0036,DEMO,ios,Debuggable Entitlement Enabled in the entitlements.plist with rabin2,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0036/MASTG-DEMO-0036.md
+MASTG-DEMO-0037,DEMO,android,App Leaking Information about Unclosed SQL Cursor via StrictMode,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0037/MASTG-DEMO-0037.md
+MASTG-DEMO-0038,DEMO,android,Detecting StrictMode Uses with Frida,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0038/MASTG-DEMO-0038.md
+MASTG-DEMO-0039,DEMO,android,Detecting StrictMode PenaltyLog Usage with Semgrep,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0039/MASTG-DEMO-0039.md
+MASTG-DEMO-0040,DEMO,android,Debuggable Flag Enabled in the AndroidManifest with semgrep,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0040/MASTG-DEMO-0040.md
+MASTG-DEMO-0041,DEMO,ios,Uses of LAContext.evaluatePolicy with r2,,,owasp-mastg/demos/ios/MASVS-AUTH/MASTG-DEMO-0041/MASTG-DEMO-0041.md
+MASTG-DEMO-0042,DEMO,ios,Runtime Use of LAContext.evaluatePolicy with Frida,,,owasp-mastg/demos/ios/MASVS-AUTH/MASTG-DEMO-0042/MASTG-DEMO-0042.md
+MASTG-DEMO-0043,DEMO,ios,Uses of kSecAccessControlUserPresence with r2,,,owasp-mastg/demos/ios/MASVS-AUTH/MASTG-DEMO-0043/MASTG-DEMO-0043.md
+MASTG-DEMO-0044,DEMO,ios,Runtime Use of kSecAccessControlUserPresence with Frida,,,owasp-mastg/demos/ios/MASVS-AUTH/MASTG-DEMO-0044/MASTG-DEMO-0044.md
+MASTG-DEMO-0045,DEMO,ios,Uses of kSecAccessControlBiometryCurrentSet with r2,,,owasp-mastg/demos/ios/MASVS-AUTH/MASTG-DEMO-0045/MASTG-DEMO-0045.md
+MASTG-DEMO-0046,DEMO,ios,Runtime Use of kSecAccessControlBiometryCurrentSet with Frida,,,owasp-mastg/demos/ios/MASVS-AUTH/MASTG-DEMO-0046/MASTG-DEMO-0046.md
+MASTG-DEMO-0047,DEMO,ios,Runtime Use of the Keychain Not Requiring User Presence with Frida,,placeholder,owasp-mastg/demos/ios/MASVS-AUTH/MASTG-DEMO-0047/MASTG-DEMO-0047.md
+MASTG-DEMO-0048,DEMO,android,SSLSocket Connection to Wrong Host Server Allowed by Lack of HostnameVerifier,,,owasp-mastg/demos/android/MASVS-NETWORK/MASTG-DEMO-0048/MASTG-DEMO-0048.md
+MASTG-DEMO-0049,DEMO,android,SSLSocket Connection to Wrong Host Server Blocked by HostnameVerifier,,,owasp-mastg/demos/android/MASVS-NETWORK/MASTG-DEMO-0049/MASTG-DEMO-0049.md
+MASTG-DEMO-0050,DEMO,android,Identifying Insecure Dependencies in Android Studio,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0050/MASTG-DEMO-0050.md
+MASTG-DEMO-0051,DEMO,android,Identifying Insecure Dependencies through SBOM Creation,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0051/MASTG-DEMO-0051.md
+MASTG-DEMO-0052,DEMO,ios,Scanning Package Manager Artifacts for Insecure iOS Dependencies,,,owasp-mastg/demos/ios/MASVS-CODE/MASTG-DEMO-0052/MASTG-DEMO-0052.md
+MASTG-DEMO-0053,DEMO,ios,Identifying Insecure Dependencies in SwiftPM through SBOM creation,,,owasp-mastg/demos/ios/MASVS-CODE/MASTG-DEMO-0053/MASTG-DEMO-0053.md
+MASTG-DEMO-0054,DEMO,android,Use of a TrustManager that Does Not Validate Certificate Chains,,,owasp-mastg/demos/android/MASVS-NETWORK/MASTG-DEMO-0054/MASTG-DEMO-0054.md
+MASTG-DEMO-0055,DEMO,android,Use of the HostnameVerifier that Allows Any Hostname,,,owasp-mastg/demos/android/MASVS-NETWORK/MASTG-DEMO-0055/MASTG-DEMO-0055.md
+MASTG-DEMO-0056,DEMO,android,WebView Ignoring TLS Errors in onReceivedSslError,,,owasp-mastg/demos/android/MASVS-NETWORK/MASTG-DEMO-0056/MASTG-DEMO-0056.md
+MASTG-DEMO-0057,DEMO,android,Network Security Configuration Allows User-Added Certificates,,,owasp-mastg/demos/android/MASVS-NETWORK/MASTG-DEMO-0057/MASTG-DEMO-0057.md
+MASTG-DEMO-0058,DEMO,android,Using KeyGenParameterSpec with a Broken ECB Block Mode,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0058/MASTG-DEMO-0058.md
+MASTG-DEMO-0059,DEMO,android,Using SharedPreferences to Write Sensitive Data Unencrypted to the App Sandbox,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0059/MASTG-DEMO-0059.md
+MASTG-DEMO-0060,DEMO,android,App Writing Sensitive Data to Sandbox using EncryptedSharedPreferences,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0060/MASTG-DEMO-0060.md
+MASTG-DEMO-0061,DEMO,android,Uses of FLAG_SECURE with semgrep,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0061/MASTG-DEMO-0061.md
+MASTG-DEMO-0062,DEMO,android,Enabling Screenshots in Recents via setRecentsScreenshotEnabled with semgrep,,placeholder,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0062/MASTG-DEMO-0062.md
+MASTG-DEMO-0063,DEMO,android,Incorrectly Preventing Screenshots with SecureFlagPolicy in Compose Dialogs with semgrep,,placeholder,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0063/MASTG-DEMO-0063.md
+MASTG-DEMO-0064,DEMO,android,Uses of Caching UI Elements with semgrep,,,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0064/MASTG-DEMO-0064.md
+MASTG-DEMO-0065,DEMO,ios,Uses of Logging APIs with r2,,,owasp-mastg/demos/ios/MASVS-STORAGE/MASTG-DEMO-0065/MASTG-DEMO-0065.md
+MASTG-DEMO-0066,DEMO,ios,Sensitive Data Logging with idevicesyslog,,,owasp-mastg/demos/ios/MASVS-STORAGE/MASTG-DEMO-0066/MASTG-DEMO-0066.md
+MASTG-DEMO-0067,DEMO,ios,Runtime Tracking of Files Eligible for Backup with Frida,,,owasp-mastg/demos/ios/MASVS-STORAGE/MASTG-DEMO-0067/MASTG-DEMO-0067.md
+MASTG-DEMO-0068,DEMO,android,Sensitive Data in Unencrypted SQLite,,placeholder,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0068/MASTG-DEMO-0068.md
+MASTG-DEMO-0069,DEMO,android,Sensitive Data Stored Unencrypted via DataStore,,placeholder,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0069/MASTG-DEMO-0069.md
+MASTG-DEMO-0070,DEMO,android,Sensitive Data Stored Unencrypted via Room Database,,placeholder,owasp-mastg/demos/android/MASVS-STORAGE/MASTG-DEMO-0070/MASTG-DEMO-0070.md
+MASTG-DEMO-0071,DEMO,android,References to Asymmetric Key Pairs Used For Multiple Purposes with Semgrep,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0071/MASTG-DEMO-0071.md
+MASTG-DEMO-0072,DEMO,android,Runtime Use of Asymmetric Key Pairs Used For Multiple Purposes With Frida,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0072/MASTG-DEMO-0072.md
+MASTG-DEMO-0073,DEMO,ios,Uses of Insecure Random Number Generation with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0073/MASTG-DEMO-0073.md
+MASTG-DEMO-0074,DEMO,ios,Uses of Insecure Random Number Generation with frida-trace,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0074/MASTG-DEMO-0074.md
+MASTG-DEMO-0075,DEMO,android,Uses of Explicit Security Providers in Cryptographic APIs with semgrep,,,owasp-mastg/demos/android/MASVS-CRYPTO/MASTG-DEMO-0075/MASTG-DEMO-0075.md
+MASTG-DEMO-0076,DEMO,ios,Keyboard Caching Not Prevented for Sensitive Data with r2,,,owasp-mastg/demos/ios/MASVS-STORAGE/MASTG-DEMO-0076/MASTG-DEMO-0076.md
+MASTG-DEMO-0077,DEMO,ios,Runtime Monitoring of Text Fields Eligible for Keyboard Caching with Frida,,,owasp-mastg/demos/ios/MASVS-STORAGE/MASTG-DEMO-0077/MASTG-DEMO-0077.md
+MASTG-DEMO-0078,DEMO,android,App Leaking Sensitive Data via Notifications,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0078/MASTG-DEMO-0078.md
+MASTG-DEMO-0079,DEMO,android,App Exposing Access and Verification Codes in Text Input Fields,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0079/MASTG-DEMO-0079.md
+MASTG-DEMO-0080,DEMO,ios,Uses of Broken Encryption Modes in CommonCrypto with r2,,,owasp-mastg/demos/ios/MASVS-CRYPTO/MASTG-DEMO-0080/MASTG-DEMO-0080.md
+MASTG-DEMO-0081,DEMO,android,Sensitive User Data Sent to Firebase Analytics with Frida,,,owasp-mastg/demos/android/MASVS-PRIVACY/MASTG-DEMO-0081/MASTG-DEMO-0081.md
+MASTG-DEMO-0082,DEMO,android,WebView WebStorage Cleanup,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0082/MASTG-DEMO-0082.md
+MASTG-DEMO-0083,DEMO,ios,Insecure ATS Configuration Allowing Cleartext Traffic,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0083/MASTG-DEMO-0083.md
+MASTG-DEMO-0084,DEMO,ios,Hardcoded HTTP URLs in iOS Binary,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0084/MASTG-DEMO-0084.md
+MASTG-DEMO-0085,DEMO,ios,Uses of Network Framework Bypassing ATS,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0085/MASTG-DEMO-0085.md
+MASTG-DEMO-0086,DEMO,ios,Uses of BSD Sockets Bypassing ATS,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0086/MASTG-DEMO-0086.md
+MASTG-DEMO-0087,DEMO,android,Uses of Root Detection Techniques with Semgrep,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0087/MASTG-DEMO-0087.md
+MASTG-DEMO-0088,DEMO,android,Runtime Detection of Root Detection Mechanisms,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0088/MASTG-DEMO-0088.md
+MASTG-DEMO-0089,DEMO,android,Uses of BiometricPrompt with Device Credential Fallback with semgrep,,,owasp-mastg/demos/android/MASVS-AUTH/MASTG-DEMO-0089/MASTG-DEMO-0089.md
+MASTG-DEMO-0090,DEMO,android,Uses of BiometricPrompt with Event-Bound Authentication with semgrep,,,owasp-mastg/demos/android/MASVS-AUTH/MASTG-DEMO-0090/MASTG-DEMO-0090.md
+MASTG-DEMO-0091,DEMO,android,Uses of setInvalidatedByBiometricEnrollment with semgrep,,,owasp-mastg/demos/android/MASVS-AUTH/MASTG-DEMO-0091/MASTG-DEMO-0091.md
+MASTG-DEMO-0092,DEMO,android,Uses of BiometricPrompt without Explicit User Confirmation with semgrep,,,owasp-mastg/demos/android/MASVS-AUTH/MASTG-DEMO-0092/MASTG-DEMO-0092.md
+MASTG-DEMO-0093,DEMO,android,Uses of Extended Validity Duration in setUserAuthenticationParameters with semgrep,,,owasp-mastg/demos/android/MASVS-AUTH/MASTG-DEMO-0093/MASTG-DEMO-0093.md
+MASTG-DEMO-0094,DEMO,ios,Use of the Deprecated UIWebView,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0094/MASTG-DEMO-0094.md
+MASTG-DEMO-0095,DEMO,ios,Attacker-Controlled Input in a WebView Leading to Unintended Navigation,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0095/MASTG-DEMO-0095.md
+MASTG-DEMO-0096,DEMO,ios,HTML Injection in a Local WebView Leading to Local File Access,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0096/MASTG-DEMO-0096.md
+MASTG-DEMO-0097,DEMO,android,Sensitive Data and Functionality Exposed Through WebView JavaScript Bridges,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0097/MASTG-DEMO-0097.md
+MASTG-DEMO-0098,DEMO,ios,References to File Access in WebViews with radare2,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0098/MASTG-DEMO-0098.md
+MASTG-DEMO-0099,DEMO,ios,Runtime Monitoring of WebView File Access with Frida,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0099/MASTG-DEMO-0099.md
+MASTG-DEMO-0100,DEMO,android,Object Deserialization Using Serializable with semgrep,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0100/MASTG-DEMO-0100.md
+MASTG-DEMO-0101,DEMO,android,References to Storage Integrity Check APIs with semgrep,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0101/MASTG-DEMO-0101.md
+MASTG-DEMO-0102,DEMO,android,SQL Injection via URI Path and Selection in Android Content Providers,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0102/MASTG-DEMO-0102.md
+MASTG-DEMO-0103,DEMO,android,Missing Overlay Protection on a Sensitive View,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0103/MASTG-DEMO-0103.md
+MASTG-DEMO-0104,DEMO,android,App Requesting SYSTEM_ALERT_WINDOW Permission,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0104/MASTG-DEMO-0104.md
+MASTG-DEMO-0105,DEMO,android,Activity-Level Overlay Protection Using setHideOverlayWindows,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0105/MASTG-DEMO-0105.md
+MASTG-DEMO-0106,DEMO,android,Extracting Sensitive Data from Cipher.doFinal via Frida Hooking,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0106/MASTG-DEMO-0106.md
+MASTG-DEMO-0107,DEMO,android,Detecting Frida hooks and terminating the application on response,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0107/MASTG-DEMO-0107.md
+MASTG-DEMO-0108,DEMO,android,Bypassing Frida Detection in /proc/self/maps to Extract Sensitive Data,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0108/MASTG-DEMO-0108.md
+MASTG-DEMO-0109,DEMO,ios,ATS TLS Policy Exceptions in Info.plist,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0109/MASTG-DEMO-0109.md
+MASTG-DEMO-0110,DEMO,ios,URLSession Minimum TLS Version Lowered in Code,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0110/MASTG-DEMO-0110.md
+MASTG-DEMO-0111,DEMO,ios,Network.framework TLS Minimum Version Lowered via sec_protocol_options,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0111/MASTG-DEMO-0111.md
+MASTG-DEMO-0112,DEMO,ios,Text Input Fields Not Hiding Sensitive Data,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0112/MASTG-DEMO-0112.md
+MASTG-DEMO-0113,DEMO,ios,Runtime Monitoring of Text Input Fields Not Hiding Sensitive Data,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0113/MASTG-DEMO-0113.md
+MASTG-DEMO-0114,DEMO,android,Detecting Emulator Detection Checks with Frida,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0114/MASTG-DEMO-0114.md
+MASTG-DEMO-0115,DEMO,android,JDWP Debugging Checks in App Code,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0115/MASTG-DEMO-0115.md
+MASTG-DEMO-0116,DEMO,android,Native Anti-Debugging Checks with TracerPid and ptrace,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0116/MASTG-DEMO-0116.md
+MASTG-DEMO-0117,DEMO,ios,Extracting Sensitive Data from CCCrypt via Frida Hooking,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0117/MASTG-DEMO-0117.md
+MASTG-DEMO-0118,DEMO,ios,Detecting Frida Hooks Before Sensitive Cryptographic Operations,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0118/MASTG-DEMO-0118.md
+MASTG-DEMO-0119,DEMO,ios,Bypassing Frida D-Bus Port Detection to Extract Sensitive Data,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0119/MASTG-DEMO-0119.md
+MASTG-DEMO-0120,DEMO,android,Uses of Unauthorized Access to Exported Content Providers,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0120/MASTG-DEMO-0120.md
+MASTG-DEMO-0121,DEMO,android,Unauthorized Access to Database Records through Exported Content Provider,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0121/MASTG-DEMO-0121.md
+MASTG-DEMO-0122,DEMO,android,Oversharing via FileProvider with Unrestricted Path Configuration,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0122/MASTG-DEMO-0122.md
+MASTG-DEMO-0123,DEMO,android,Exfiltration of Private Files via FileProvider URI Grant Oversharing,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0123/MASTG-DEMO-0123.md
+MASTG-DEMO-0124,DEMO,ios,Logging APIs Exposing Implementation Details with r2,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0124/MASTG-DEMO-0124.md
+MASTG-DEMO-0125,DEMO,ios,Implementation Details Exposed in App Logs,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0125/MASTG-DEMO-0125.md
+MASTG-DEMO-0126,DEMO,ios,Runtime Location Capture with a Deceptive Purpose String,,,owasp-mastg/demos/ios/MASVS-PRIVACY/MASTG-DEMO-0126/MASTG-DEMO-0126.md
+MASTG-DEMO-0127,DEMO,ios,Unjustified Capability Exposure due to Excessive Entitlements,,,owasp-mastg/demos/ios/MASVS-PRIVACY/MASTG-DEMO-0127/MASTG-DEMO-0127.md
+MASTG-DEMO-0128,DEMO,android,Sensitive Data Exposed Through an Unprotected Activity,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0128/MASTG-DEMO-0128.md
+MASTG-DEMO-0129,DEMO,android,Sensitive Action Exposed Through an Unprotected Service,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0129/MASTG-DEMO-0129.md
+MASTG-DEMO-0130,DEMO,android,Sensitive Action Exposed Through an Unprotected Manifest-Declared Broadcast Receiver,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0130/MASTG-DEMO-0130.md
+MASTG-DEMO-0131,DEMO,ios,Detecting Virtual Device Detection Checks with Frida,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0131/MASTG-DEMO-0131.md
+MASTG-DEMO-0132,DEMO,android,Root Detection Logic in Java/Kotlin Layer Only Protected by Identifier Renaming,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0132/MASTG-DEMO-0132.md
+MASTG-DEMO-0133,DEMO,android,Root Detection Logic in Native Layer with Insufficient Obfuscation,,,owasp-mastg/demos/android/MASVS-RESILIENCE/MASTG-DEMO-0133/MASTG-DEMO-0133.md
+MASTG-DEMO-0134,DEMO,ios,Custom URL Scheme Handler Without Input Validation,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0134/MASTG-DEMO-0134.md
+MASTG-DEMO-0135,DEMO,ios,Custom URL Scheme Handler with Source Validation,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0135/MASTG-DEMO-0135.md
+MASTG-DEMO-0136,DEMO,android,Internal Activity Communication via Implicit Intent,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0136/MASTG-DEMO-0136.md
+MASTG-DEMO-0138,DEMO,android,Leaking Sensitive Information via Implicit Intents,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0138/MASTG-DEMO-0138.md
+MASTG-DEMO-0139,DEMO,android,Path Traversal via Malicious ContentProvider Filename,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0139/MASTG-DEMO-0139.md
+MASTG-DEMO-0140,DEMO,android,Attacker App Registering for Internal Implicit Intent,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0140/MASTG-DEMO-0140.md
+MASTG-DEMO-0141,DEMO,android,Attacker App Returning Malicious ContentProvider Filename,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0141/MASTG-DEMO-0141.md
+MASTG-DEMO-0142,DEMO,ios,Sensitive Data and Functionality Exposed Through a WKWebView Native Bridge,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0142/MASTG-DEMO-0142.md
+MASTG-DEMO-0143,DEMO,ios,Sensitive Data Returned to Page JavaScript via evaluateJavaScript in a WKScriptMessageHandler,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0143/MASTG-DEMO-0143.md
+MASTG-DEMO-0144,DEMO,ios,Password Field Rendered in WebView DOM Without Native Overlay,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0144/MASTG-DEMO-0144.md
+MASTG-DEMO-0145,DEMO,ios,DOM Inspection Using evaluateJavaScript Without Content World Isolation,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0145/MASTG-DEMO-0145.md
+MASTG-DEMO-0146,DEMO,ios,Sensitive Data Written into WebView DOM via evaluateJavaScript,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0146/MASTG-DEMO-0146.md
+MASTG-DEMO-0147,DEMO,android,Uses of Insecure PendingIntent,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0147/MASTG-DEMO-0147.md
+MASTG-DEMO-0148,DEMO,ios,Missing Certificate Pinning in ATS,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0148/MASTG-DEMO-0148.md
+MASTG-DEMO-0149,DEMO,ios,References to Object Deserialization of a URL Scheme Payload with r2,,draft,owasp-mastg/demos/ios/MASVS-CODE/MASTG-DEMO-0149/MASTG-DEMO-0149.md
+MASTG-DEMO-0150,DEMO,ios,References to Storage Integrity Check APIs with radare2,,,owasp-mastg/demos/ios/MASVS-RESILIENCE/MASTG-DEMO-0150/MASTG-DEMO-0150.md
+MASTG-DEMO-0151,DEMO,android,Deep Link Intent Filter Missing android:autoVerify with semgrep,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0151/MASTG-DEMO-0151.md
+MASTG-DEMO-0152,DEMO,android,Custom URL Scheme Handler Without Input Validation with semgrep,,,owasp-mastg/demos/android/MASVS-PLATFORM/MASTG-DEMO-0152/MASTG-DEMO-0152.md
+MASTG-DEMO-0153,DEMO,ios,Universal Link Handler Without Input Validation,,,owasp-mastg/demos/ios/MASVS-PLATFORM/MASTG-DEMO-0153/MASTG-DEMO-0153.md
+MASTG-DEMO-0154,DEMO,ios,URLSessionDelegate Accepting Any Server Certificate,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0154/MASTG-DEMO-0154.md
+MASTG-DEMO-0155,DEMO,ios,WKNavigationDelegate Accepting Any Server Certificate,,,owasp-mastg/demos/ios/MASVS-NETWORK/MASTG-DEMO-0155/MASTG-DEMO-0155.md
+MASTG-DEMO-0156,DEMO,android,SafeBrowsing Disabled Detection with semgrep,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0156/MASTG-DEMO-0156.md
+MASTG-DEMO-0157,DEMO,android,Uses of WebViewClient URL Loading Handlers with semgrep,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0157/MASTG-DEMO-0157.md
+MASTG-DEMO-0158,DEMO,android,Runtime Use of WebViewClient URL Loading Handlers with Frida,,,owasp-mastg/demos/android/MASVS-CODE/MASTG-DEMO-0158/MASTG-DEMO-0158.md
+MASTG-KNOW-0001,KNOW,android,Biometric Authentication,MASVS-AUTH,,owasp-mastg/knowledge/android/MASVS-AUTH/MASTG-KNOW-0001.md
+MASTG-KNOW-0002,KNOW,android,FingerprintManager,MASVS-AUTH,deprecated,owasp-mastg/knowledge/android/MASVS-AUTH/MASTG-KNOW-0002.md
+MASTG-KNOW-0003,KNOW,android,App Signing,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0003.md
+MASTG-KNOW-0004,KNOW,android,Third-Party Libraries,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0004.md
+MASTG-KNOW-0005,KNOW,android,Memory Corruption Bugs,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0005.md
+MASTG-KNOW-0006,KNOW,android,Binary Protection Mechanisms,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0006.md
+MASTG-KNOW-0007,KNOW,android,Debuggable Apps,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0007.md
+MASTG-KNOW-0008,KNOW,android,Debugging Information and Debug Symbols,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0008.md
+MASTG-KNOW-0009,KNOW,android,StrictMode,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0009.md
+MASTG-KNOW-0010,KNOW,android,Exception Handling,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0010.md
+MASTG-KNOW-0011,KNOW,android,Security Provider,MASVS-CRYPTO,,owasp-mastg/knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0011.md
+MASTG-KNOW-0012,KNOW,android,Key Generation,MASVS-CRYPTO,,owasp-mastg/knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0012.md
+MASTG-KNOW-0013,KNOW,android,Random Number Generation,MASVS-CRYPTO,,owasp-mastg/knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0013.md
+MASTG-KNOW-0014,KNOW,android,Android Network Security Configuration,MASVS-NETWORK,,owasp-mastg/knowledge/android/MASVS-NETWORK/MASTG-KNOW-0014.md
+MASTG-KNOW-0015,KNOW,android,Certificate Pinning,MASVS-NETWORK,,owasp-mastg/knowledge/android/MASVS-NETWORK/MASTG-KNOW-0015.md
+MASTG-KNOW-0016,KNOW,android,TBD,MASVS-NETWORK,placeholder,owasp-mastg/knowledge/android/MASVS-NETWORK/MASTG-KNOW-0016.md
+MASTG-KNOW-0017,KNOW,android,App Permissions,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0017.md
+MASTG-KNOW-0018,KNOW,android,WebViews,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0018.md
+MASTG-KNOW-0019,KNOW,android,Deep Links,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0019.md
+MASTG-KNOW-0020,KNOW,android,Inter-Process Communication (IPC) Mechanisms,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0020.md
+MASTG-KNOW-0021,KNOW,android,Object Serialization,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0021.md
+MASTG-KNOW-0022,KNOW,android,Overlay Attacks,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0022.md
+MASTG-KNOW-0023,KNOW,android,Enforced Updating,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0023.md
+MASTG-KNOW-0024,KNOW,android,Pending Intents,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0024.md
+MASTG-KNOW-0025,KNOW,android,Explicit vs Implicit Intents,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0025.md
+MASTG-KNOW-0026,KNOW,android,Third-party Services Embedded in the App,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-PRIVACY/MASTG-KNOW-0026.md
+MASTG-KNOW-0027,KNOW,android,Root Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0027.md
+MASTG-KNOW-0028,KNOW,android,Anti-Debugging,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0028.md
+MASTG-KNOW-0029,KNOW,android,File Integrity Checks,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0029.md
+MASTG-KNOW-0030,KNOW,android,Reverse Engineering Tool Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0030.md
+MASTG-KNOW-0031,KNOW,android,Emulator Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0031.md
+MASTG-KNOW-0032,KNOW,android,Runtime Integrity Verification,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0032.md
+MASTG-KNOW-0033,KNOW,android,Obfuscation,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0033.md
+MASTG-KNOW-0034,KNOW,android,Device Binding,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0034.md
+MASTG-KNOW-0035,KNOW,android,Google Play Integrity API,MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0035.md
+MASTG-KNOW-0036,KNOW,android,Shared Preferences,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0036.md
+MASTG-KNOW-0037,KNOW,android,SQLite Database,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0037.md
+MASTG-KNOW-0038,KNOW,android,SQLCipher Database,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0038.md
+MASTG-KNOW-0039,KNOW,android,Firebase Real-time Databases,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0039.md
+MASTG-KNOW-0040,KNOW,android,Realm Databases,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0040.md
+MASTG-KNOW-0041,KNOW,android,Internal Storage,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0041.md
+MASTG-KNOW-0042,KNOW,android,External Storage,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0042.md
+MASTG-KNOW-0043,KNOW,android,Android KeyStore,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0043.md
+MASTG-KNOW-0044,KNOW,android,Key Attestation,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0044.md
+MASTG-KNOW-0045,KNOW,android,Secure Key Import into Keystore,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0045.md
+MASTG-KNOW-0046,KNOW,android,BouncyCastle KeyStore,MASVS-STORAGE,deprecated,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0046.md
+MASTG-KNOW-0047,KNOW,android,Cryptographic Key Storage,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0047.md
+MASTG-KNOW-0048,KNOW,android,KeyChain,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0048.md
+MASTG-KNOW-0049,KNOW,android,Logs,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0049.md
+MASTG-KNOW-0050,KNOW,android,Backups,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0050.md
+MASTG-KNOW-0051,KNOW,android,Process Memory,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0051.md
+MASTG-KNOW-0052,KNOW,android,User Interface Components,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0052.md
+MASTG-KNOW-0053,KNOW,android,Screenshots,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0053.md
+MASTG-KNOW-0054,KNOW,android,App Notifications,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0054.md
+MASTG-KNOW-0055,KNOW,android,Keyboard Cache,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0055.md
+MASTG-KNOW-0056,KNOW,ios,Local Authentication Framework,MASVS-AUTH,,owasp-mastg/knowledge/ios/MASVS-AUTH/MASTG-KNOW-0056.md
+MASTG-KNOW-0057,KNOW,ios,Keychain Services,MASVS-AUTH,,owasp-mastg/knowledge/ios/MASVS-AUTH/MASTG-KNOW-0057.md
+MASTG-KNOW-0058,KNOW,ios,App Signing,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0058.md
+MASTG-KNOW-0059,KNOW,ios,Third-Party Libraries,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0059.md
+MASTG-KNOW-0060,KNOW,ios,Memory Corruption Bugs,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0060.md
+MASTG-KNOW-0061,KNOW,ios,Binary Protection Mechanisms,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0061.md
+MASTG-KNOW-0062,KNOW,ios,Debuggable Apps,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0062.md
+MASTG-KNOW-0063,KNOW,ios,Debugging Information and Debug Symbols,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0063.md
+MASTG-KNOW-0064,KNOW,ios,Non-Production Resources,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0064.md
+MASTG-KNOW-0065,KNOW,ios,Exception Handling,MASVS-CODE,,owasp-mastg/knowledge/ios/MASVS-CODE/MASTG-KNOW-0065.md
+MASTG-KNOW-0066,KNOW,ios,CryptoKit,MASVS-CRYPTO,,owasp-mastg/knowledge/ios/MASVS-CRYPTO/MASTG-KNOW-0066.md
+MASTG-KNOW-0067,KNOW,ios,"CommonCrypto, SecKey and Wrapper libraries",MASVS-CRYPTO,,owasp-mastg/knowledge/ios/MASVS-CRYPTO/MASTG-KNOW-0067.md
+MASTG-KNOW-0068,KNOW,ios,Cryptographic Third-Party libraries,MASVS-CRYPTO,,owasp-mastg/knowledge/ios/MASVS-CRYPTO/MASTG-KNOW-0068.md
+MASTG-KNOW-0069,KNOW,ios,Key Management,MASVS-CRYPTO,,owasp-mastg/knowledge/ios/MASVS-CRYPTO/MASTG-KNOW-0069.md
+MASTG-KNOW-0070,KNOW,ios,Random Number Generator,MASVS-CRYPTO,,owasp-mastg/knowledge/ios/MASVS-CRYPTO/MASTG-KNOW-0070.md
+MASTG-KNOW-0071,KNOW,ios,iOS App Transport Security,MASVS-NETWORK,,owasp-mastg/knowledge/ios/MASVS-NETWORK/MASTG-KNOW-0071.md
+MASTG-KNOW-0072,KNOW,ios,Server Trust Evaluation,MASVS-NETWORK,,owasp-mastg/knowledge/ios/MASVS-NETWORK/MASTG-KNOW-0072.md
+MASTG-KNOW-0073,KNOW,ios,iOS Network APIs,MASVS-NETWORK,,owasp-mastg/knowledge/ios/MASVS-NETWORK/MASTG-KNOW-0073.md
+MASTG-KNOW-0074,KNOW,ios,Enforced Updating,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0074.md
+MASTG-KNOW-0075,KNOW,ios,Object Serialization,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0075.md
+MASTG-KNOW-0076,KNOW,ios,WebViews,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0076.md
+MASTG-KNOW-0077,KNOW,ios,App Permissions,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0077.md
+MASTG-KNOW-0078,KNOW,ios,Inter-Process Communication (IPC),MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0078.md
+MASTG-KNOW-0079,KNOW,ios,Custom URL Schemes,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0079.md
+MASTG-KNOW-0080,KNOW,ios,Universal Links,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0080.md
+MASTG-KNOW-0081,KNOW,ios,UIActivity Sharing,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0081.md
+MASTG-KNOW-0082,KNOW,ios,App Extensions,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0082.md
+MASTG-KNOW-0083,KNOW,ios,Pasteboard,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0083.md
+MASTG-KNOW-0084,KNOW,ios,Jailbreak Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0084.md
+MASTG-KNOW-0085,KNOW,ios,Anti-Debugging Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0085.md
+MASTG-KNOW-0086,KNOW,ios,Storage Integrity Checks,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0086.md
+MASTG-KNOW-0087,KNOW,ios,Reverse Engineering Tools Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0087.md
+MASTG-KNOW-0088,KNOW,ios,iOS Simulator Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0088.md
+MASTG-KNOW-0089,KNOW,ios,Obfuscation,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0089.md
+MASTG-KNOW-0090,KNOW,ios,Device Binding,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0090.md
+MASTG-KNOW-0091,KNOW,ios,File System APIs,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0091.md
+MASTG-KNOW-0092,KNOW,ios,Binary Data Storage,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0092.md
+MASTG-KNOW-0093,KNOW,ios,UserDefaults,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0093.md
+MASTG-KNOW-0094,KNOW,ios,CoreData,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0094.md
+MASTG-KNOW-0095,KNOW,ios,Firebase Real-time Databases,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0095.md
+MASTG-KNOW-0096,KNOW,ios,Realm Databases,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0096.md
+MASTG-KNOW-0097,KNOW,ios,Other Third-Party Databases,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0097.md
+MASTG-KNOW-0098,KNOW,ios,User Interface Components,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0098.md
+MASTG-KNOW-0099,KNOW,ios,Screenshots,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0099.md
+MASTG-KNOW-0100,KNOW,ios,Keyboard Cache,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0100.md
+MASTG-KNOW-0101,KNOW,ios,Logs,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0101.md
+MASTG-KNOW-0102,KNOW,ios,Backups,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0102.md
+MASTG-KNOW-0103,KNOW,ios,Process Memory,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0103.md
+MASTG-KNOW-0104,KNOW,ios,Low-Level System IPC Mechanisms,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0104.md
+MASTG-KNOW-0105,KNOW,android,User-Initiated Screenshots and Screen Recording,MASVS-PLATFORM,placeholder,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0105.md
+MASTG-KNOW-0106,KNOW,android,App-Initiated Screenshots and Screen Recording,MASVS-PLATFORM,placeholder,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0106.md
+MASTG-KNOW-0107,KNOW,android,Screenshots and Screen Recording Detection,MASVS-PLATFORM,placeholder,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0107.md
+MASTG-KNOW-0108,KNOW,ios,App Sandbox Directories,MASVS-STORAGE,,owasp-mastg/knowledge/ios/MASVS-STORAGE/MASTG-KNOW-0108.md
+MASTG-KNOW-0109,KNOW,generic,Binary Patching,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0109.md
+MASTG-KNOW-0110,KNOW,generic,Code Injection,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0110.md
+MASTG-KNOW-0111,KNOW,generic,Obfuscation,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0111.md
+MASTG-KNOW-0112,KNOW,generic,Emulation-based Dynamic Analysis,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0112.md
+MASTG-KNOW-0113,KNOW,generic,Using Disassemblers and Decompilers,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0113.md
+MASTG-KNOW-0114,KNOW,generic,Debugging and Tracing,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0114.md
+MASTG-KNOW-0115,KNOW,generic,Dynamic Binary Instrumentation,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0115.md
+MASTG-KNOW-0116,KNOW,generic,Symbolic Execution,MASVS-RESILIENCE,,owasp-mastg/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0116.md
+MASTG-KNOW-0117,KNOW,android,Android ContentProvider,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0117.md
+MASTG-KNOW-0118,KNOW,android,Runtime Application Self-Protection (RASP),MASVS-RESILIENCE,,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0118.md
+MASTG-KNOW-0119,KNOW,android,Key Attestation,MASVS-RESILIENCE,placeholder,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0119.md
+MASTG-KNOW-0120,KNOW,android,Device Attestation,MASVS-RESILIENCE,placeholder,owasp-mastg/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0120.md
+MASTG-KNOW-0121,KNOW,ios,Text Input Field Masking in iOS,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0121.md
+MASTG-KNOW-0122,KNOW,ios,"Document Picker, Document Interaction, and Open in Place",MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0122.md
+MASTG-KNOW-0123,KNOW,ios,Handoff,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0123.md
+MASTG-KNOW-0124,KNOW,ios,SiriKit and Siri Shortcuts,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0124.md
+MASTG-KNOW-0125,KNOW,ios,App Groups,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0125.md
+MASTG-KNOW-0126,KNOW,ios,Keychain Access Groups,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0126.md
+MASTG-KNOW-0127,KNOW,ios,File Coordination APIs,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0127.md
+MASTG-KNOW-0128,KNOW,ios,Bonjour,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0128.md
+MASTG-KNOW-0129,KNOW,ios,App Intents and AI Agent Exposure,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0129.md
+MASTG-KNOW-0130,KNOW,ios,Core Bluetooth,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0130.md
+MASTG-KNOW-0131,KNOW,ios,Core NFC,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0131.md
+MASTG-KNOW-0132,KNOW,android,Android Activities,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0132.md
+MASTG-KNOW-0133,KNOW,android,Android Services,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0133.md
+MASTG-KNOW-0134,KNOW,android,Android Broadcast Receivers,MASVS-PLATFORM,,owasp-mastg/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0134.md
+MASTG-KNOW-0135,KNOW,ios,Virtual Devices Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0135.md
+MASTG-KNOW-0136,KNOW,ios,iOS Apps Running on macOS Detection,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0136.md
+MASTG-KNOW-0138,KNOW,android,URI Schemes in Android Intent Results,MASVS-CODE,,owasp-mastg/knowledge/android/MASVS-CODE/MASTG-KNOW-0138.md
+MASTG-KNOW-0139,KNOW,ios,WKContentWorld,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0139.md
+MASTG-KNOW-0140,KNOW,ios,Source Code Integrity Checks,MASVS-RESILIENCE,,owasp-mastg/knowledge/ios/MASVS-RESILIENCE/MASTG-KNOW-0140.md
+MASTG-KNOW-0141,KNOW,ios,Custom Keyboards,MASVS-PLATFORM,,owasp-mastg/knowledge/ios/MASVS-PLATFORM/MASTG-KNOW-0141.md
+MASTG-KNOW-0142,KNOW,android,Android DataStore,MASVS-STORAGE,,owasp-mastg/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0142.md
+MASTG-TECH-0001,TECH,android,Accessing the Device Shell,,,owasp-mastg/techniques/android/MASTG-TECH-0001.md
+MASTG-TECH-0002,TECH,android,Host-Device Data Transfer,,,owasp-mastg/techniques/android/MASTG-TECH-0002.md
+MASTG-TECH-0003,TECH,android,Obtaining and Extracting Apps,,,owasp-mastg/techniques/android/MASTG-TECH-0003.md
+MASTG-TECH-0004,TECH,android,Repackaging Apps,,,owasp-mastg/techniques/android/MASTG-TECH-0004.md
+MASTG-TECH-0005,TECH,android,Installing Apps,,,owasp-mastg/techniques/android/MASTG-TECH-0005.md
+MASTG-TECH-0006,TECH,android,Listing Installed Apps,,,owasp-mastg/techniques/android/MASTG-TECH-0006.md
+MASTG-TECH-0007,TECH,android,Exploring the App Package,,,owasp-mastg/techniques/android/MASTG-TECH-0007.md
+MASTG-TECH-0008,TECH,android,Accessing App Data Directories,,,owasp-mastg/techniques/android/MASTG-TECH-0008.md
+MASTG-TECH-0009,TECH,android,Monitoring System Logs,,,owasp-mastg/techniques/android/MASTG-TECH-0009.md
+MASTG-TECH-0010,TECH,android,Basic Network Monitoring/Sniffing,,,owasp-mastg/techniques/android/MASTG-TECH-0010.md
+MASTG-TECH-0011,TECH,android,Setting Up an Interception Proxy,,,owasp-mastg/techniques/android/MASTG-TECH-0011.md
+MASTG-TECH-0012,TECH,android,Bypassing Certificate Pinning,,,owasp-mastg/techniques/android/MASTG-TECH-0012.md
+MASTG-TECH-0013,TECH,android,Reverse Engineering Android Apps,,,owasp-mastg/techniques/android/MASTG-TECH-0013.md
+MASTG-TECH-0014,TECH,android,Static Analysis on Android,,,owasp-mastg/techniques/android/MASTG-TECH-0014.md
+MASTG-TECH-0015,TECH,android,Dynamic Analysis on Android,,,owasp-mastg/techniques/android/MASTG-TECH-0015.md
+MASTG-TECH-0016,TECH,android,Disassembling Code to Smali,,,owasp-mastg/techniques/android/MASTG-TECH-0016.md
+MASTG-TECH-0017,TECH,android,Decompiling Java Code,,,owasp-mastg/techniques/android/MASTG-TECH-0017.md
+MASTG-TECH-0018,TECH,android,Disassembling Native Code,,,owasp-mastg/techniques/android/MASTG-TECH-0018.md
+MASTG-TECH-0019,TECH,android,Retrieving Strings,,,owasp-mastg/techniques/android/MASTG-TECH-0019.md
+MASTG-TECH-0020,TECH,android,Retrieving Cross References,,,owasp-mastg/techniques/android/MASTG-TECH-0020.md
+MASTG-TECH-0021,TECH,android,Information Gathering - API Usage,,,owasp-mastg/techniques/android/MASTG-TECH-0021.md
+MASTG-TECH-0022,TECH,android,Information Gathering - Network Communication,,,owasp-mastg/techniques/android/MASTG-TECH-0022.md
+MASTG-TECH-0023,TECH,android,Reviewing Decompiled Java Code,,,owasp-mastg/techniques/android/MASTG-TECH-0023.md
+MASTG-TECH-0024,TECH,android,Reviewing Disassembled Native Code,,,owasp-mastg/techniques/android/MASTG-TECH-0024.md
+MASTG-TECH-0025,TECH,android,Automated Static Analysis,,,owasp-mastg/techniques/android/MASTG-TECH-0025.md
+MASTG-TECH-0026,TECH,android,Dynamic Analysis on Non-Rooted Devices,,,owasp-mastg/techniques/android/MASTG-TECH-0026.md
+MASTG-TECH-0027,TECH,android,Get Open Files,,,owasp-mastg/techniques/android/MASTG-TECH-0027.md
+MASTG-TECH-0028,TECH,android,Get Open Connections,,,owasp-mastg/techniques/android/MASTG-TECH-0028.md
+MASTG-TECH-0029,TECH,android,Listing Loaded Native Libraries,,,owasp-mastg/techniques/android/MASTG-TECH-0029.md
+MASTG-TECH-0030,TECH,android,Sandbox Inspection,,,owasp-mastg/techniques/android/MASTG-TECH-0030.md
+MASTG-TECH-0031,TECH,android,Debugging,,,owasp-mastg/techniques/android/MASTG-TECH-0031.md
+MASTG-TECH-0032,TECH,android,Execution Tracing,,,owasp-mastg/techniques/android/MASTG-TECH-0032.md
+MASTG-TECH-0033,TECH,android,Method Tracing,,,owasp-mastg/techniques/android/MASTG-TECH-0033.md
+MASTG-TECH-0034,TECH,android,Native Code Tracing,,,owasp-mastg/techniques/android/MASTG-TECH-0034.md
+MASTG-TECH-0035,TECH,android,JNI Tracing,,,owasp-mastg/techniques/android/MASTG-TECH-0035.md
+MASTG-TECH-0036,TECH,android,Emulation-based Analysis,,,owasp-mastg/techniques/android/MASTG-TECH-0036.md
+MASTG-TECH-0037,TECH,android,Symbolic Execution,,,owasp-mastg/techniques/android/MASTG-TECH-0037.md
+MASTG-TECH-0038,TECH,android,Patching,,,owasp-mastg/techniques/android/MASTG-TECH-0038.md
+MASTG-TECH-0039,TECH,android,Repackaging & Re-Signing,,,owasp-mastg/techniques/android/MASTG-TECH-0039.md
+MASTG-TECH-0040,TECH,android,Waiting for the Debugger,,,owasp-mastg/techniques/android/MASTG-TECH-0040.md
+MASTG-TECH-0041,TECH,android,Library Injection,,,owasp-mastg/techniques/android/MASTG-TECH-0041.md
+MASTG-TECH-0042,TECH,android,Getting Loaded Classes and Methods Dynamically,,,owasp-mastg/techniques/android/MASTG-TECH-0042.md
+MASTG-TECH-0043,TECH,android,Method Hooking,,,owasp-mastg/techniques/android/MASTG-TECH-0043.md
+MASTG-TECH-0044,TECH,android,Process Exploration,,,owasp-mastg/techniques/android/MASTG-TECH-0044.md
+MASTG-TECH-0045,TECH,android,Runtime Reverse Engineering,,,owasp-mastg/techniques/android/MASTG-TECH-0045.md
+MASTG-TECH-0047,TECH,generic,Reverse Engineering,,,owasp-mastg/techniques/generic/MASTG-TECH-0047.md
+MASTG-TECH-0048,TECH,generic,Static Analysis,,,owasp-mastg/techniques/generic/MASTG-TECH-0048.md
+MASTG-TECH-0049,TECH,generic,Dynamic Analysis,,,owasp-mastg/techniques/generic/MASTG-TECH-0049.md
+MASTG-TECH-0050,TECH,generic,Binary Analysis,,,owasp-mastg/techniques/generic/MASTG-TECH-0050.md
+MASTG-TECH-0051,TECH,generic,Tampering and Runtime Instrumentation,,,owasp-mastg/techniques/generic/MASTG-TECH-0051.md
+MASTG-TECH-0052,TECH,ios,Accessing the Device Shell,,,owasp-mastg/techniques/ios/MASTG-TECH-0052.md
+MASTG-TECH-0053,TECH,ios,Host-Device Data Transfer,,,owasp-mastg/techniques/ios/MASTG-TECH-0053.md
+MASTG-TECH-0054,TECH,ios,Obtaining and Extracting Apps,,,owasp-mastg/techniques/ios/MASTG-TECH-0054.md
+MASTG-TECH-0055,TECH,ios,Launching a Repackaged App in Debug Mode,,,owasp-mastg/techniques/ios/MASTG-TECH-0055.md
+MASTG-TECH-0056,TECH,ios,Installing Apps,,,owasp-mastg/techniques/ios/MASTG-TECH-0056.md
+MASTG-TECH-0057,TECH,ios,Listing Installed Apps,,,owasp-mastg/techniques/ios/MASTG-TECH-0057.md
+MASTG-TECH-0058,TECH,ios,Exploring the App Package,,,owasp-mastg/techniques/ios/MASTG-TECH-0058.md
+MASTG-TECH-0059,TECH,ios,Accessing App Data Directories,,,owasp-mastg/techniques/ios/MASTG-TECH-0059.md
+MASTG-TECH-0060,TECH,ios,Monitoring System Logs,,,owasp-mastg/techniques/ios/MASTG-TECH-0060.md
+MASTG-TECH-0061,TECH,ios,Dumping KeyChain Data,,,owasp-mastg/techniques/ios/MASTG-TECH-0061.md
+MASTG-TECH-0062,TECH,ios,Basic Network Monitoring/Sniffing,,,owasp-mastg/techniques/ios/MASTG-TECH-0062.md
+MASTG-TECH-0063,TECH,ios,Setting up an Interception Proxy,,,owasp-mastg/techniques/ios/MASTG-TECH-0063.md
+MASTG-TECH-0064,TECH,ios,Bypassing Certificate Pinning,,,owasp-mastg/techniques/ios/MASTG-TECH-0064.md
+MASTG-TECH-0065,TECH,ios,Reverse Engineering iOS Apps,,,owasp-mastg/techniques/ios/MASTG-TECH-0065.md
+MASTG-TECH-0066,TECH,ios,Static Analysis on iOS,,,owasp-mastg/techniques/ios/MASTG-TECH-0066.md
+MASTG-TECH-0067,TECH,ios,Dynamic Analysis on iOS,,,owasp-mastg/techniques/ios/MASTG-TECH-0067.md
+MASTG-TECH-0068,TECH,ios,Disassembling Native Code,,,owasp-mastg/techniques/ios/MASTG-TECH-0068.md
+MASTG-TECH-0069,TECH,ios,Decompiling Native Code,,,owasp-mastg/techniques/ios/MASTG-TECH-0069.md
+MASTG-TECH-0070,TECH,ios,Extracting Information from the Application Binary,,,owasp-mastg/techniques/ios/MASTG-TECH-0070.md
+MASTG-TECH-0071,TECH,generic,Retrieving Strings,,,owasp-mastg/techniques/generic/MASTG-TECH-0071.md
+MASTG-TECH-0072,TECH,ios,Retrieving Cross References,,,owasp-mastg/techniques/ios/MASTG-TECH-0072.md
+MASTG-TECH-0073,TECH,ios,Information Gathering - API Usage,,,owasp-mastg/techniques/ios/MASTG-TECH-0073.md
+MASTG-TECH-0074,TECH,ios,Information Gathering - Network Communication,,,owasp-mastg/techniques/ios/MASTG-TECH-0074.md
+MASTG-TECH-0075,TECH,ios,Reviewing Decompiled Objective-C and Swift Code,,,owasp-mastg/techniques/ios/MASTG-TECH-0075.md
+MASTG-TECH-0076,TECH,ios,Reviewing Disassembled Objective-C and Swift Code,,,owasp-mastg/techniques/ios/MASTG-TECH-0076.md
+MASTG-TECH-0077,TECH,ios,Reviewing Disassembled Native Code,,,owasp-mastg/techniques/ios/MASTG-TECH-0077.md
+MASTG-TECH-0078,TECH,ios,Automated Static Analysis,,,owasp-mastg/techniques/ios/MASTG-TECH-0078.md
+MASTG-TECH-0079,TECH,ios,Obtaining a Developer Provisioning Profile,,,owasp-mastg/techniques/ios/MASTG-TECH-0079.md
+MASTG-TECH-0080,TECH,ios,Get Open Files,,,owasp-mastg/techniques/ios/MASTG-TECH-0080.md
+MASTG-TECH-0081,TECH,ios,Get Open Connections,,,owasp-mastg/techniques/ios/MASTG-TECH-0081.md
+MASTG-TECH-0082,TECH,ios,Extracting Bundled Libraries,,,owasp-mastg/techniques/ios/MASTG-TECH-0082.md
+MASTG-TECH-0083,TECH,ios,TBD,,placeholder,owasp-mastg/techniques/ios/MASTG-TECH-0083.md
+MASTG-TECH-0084,TECH,ios,Debugging,,,owasp-mastg/techniques/ios/MASTG-TECH-0084.md
+MASTG-TECH-0085,TECH,ios,Execution Tracing,,,owasp-mastg/techniques/ios/MASTG-TECH-0085.md
+MASTG-TECH-0086,TECH,ios,Method Tracing,,,owasp-mastg/techniques/ios/MASTG-TECH-0086.md
+MASTG-TECH-0087,TECH,ios,Native Code Tracing,,,owasp-mastg/techniques/ios/MASTG-TECH-0087.md
+MASTG-TECH-0088,TECH,ios,Emulation-based Analysis,,,owasp-mastg/techniques/ios/MASTG-TECH-0088.md
+MASTG-TECH-0089,TECH,ios,Symbolic Execution,,,owasp-mastg/techniques/ios/MASTG-TECH-0089.md
+MASTG-TECH-0090,TECH,ios,Injecting Frida Gadget into an IPA Automatically,,,owasp-mastg/techniques/ios/MASTG-TECH-0090.md
+MASTG-TECH-0091,TECH,ios,Injecting Libraries into an IPA Manually,,,owasp-mastg/techniques/ios/MASTG-TECH-0091.md
+MASTG-TECH-0092,TECH,ios,Signing IPA files,,,owasp-mastg/techniques/ios/MASTG-TECH-0092.md
+MASTG-TECH-0093,TECH,ios,Waiting for the debugger,,,owasp-mastg/techniques/ios/MASTG-TECH-0093.md
+MASTG-TECH-0094,TECH,ios,Getting Loaded Classes and Methods dynamically,,,owasp-mastg/techniques/ios/MASTG-TECH-0094.md
+MASTG-TECH-0095,TECH,ios,Method Hooking,,,owasp-mastg/techniques/ios/MASTG-TECH-0095.md
+MASTG-TECH-0096,TECH,ios,Process Exploration,,,owasp-mastg/techniques/ios/MASTG-TECH-0096.md
+MASTG-TECH-0097,TECH,ios,Runtime Reverse Engineering,,,owasp-mastg/techniques/ios/MASTG-TECH-0097.md
+MASTG-TECH-0098,TECH,ios,Patching React Native Apps,,,owasp-mastg/techniques/ios/MASTG-TECH-0098.md
+MASTG-TECH-0100,TECH,android,Logging Sensitive Data from Network Traffic,,,owasp-mastg/techniques/android/MASTG-TECH-0100.md
+MASTG-TECH-0108,TECH,android,Taint Analysis,,,owasp-mastg/techniques/android/MASTG-TECH-0108.md
+MASTG-TECH-0109,TECH,android,Intercepting Flutter HTTPS Traffic,,,owasp-mastg/techniques/android/MASTG-TECH-0109.md
+MASTG-TECH-0110,TECH,ios,Intercepting Flutter HTTPS Traffic,,,owasp-mastg/techniques/ios/MASTG-TECH-0110.md
+MASTG-TECH-0111,TECH,ios,Extracting Entitlements from MachO Binaries,,,owasp-mastg/techniques/ios/MASTG-TECH-0111.md
+MASTG-TECH-0112,TECH,ios,Obtaining the Code Signature Format Version,,,owasp-mastg/techniques/ios/MASTG-TECH-0112.md
+MASTG-TECH-0113,TECH,ios,Obtaining Debugging Symbols,,,owasp-mastg/techniques/ios/MASTG-TECH-0113.md
+MASTG-TECH-0114,TECH,ios,Demangling Symbols,,,owasp-mastg/techniques/ios/MASTG-TECH-0114.md
+MASTG-TECH-0115,TECH,android,Obtaining Compiler-Provided Security Features,,,owasp-mastg/techniques/android/MASTG-TECH-0115.md
+MASTG-TECH-0116,TECH,android,Obtaining Information about the APK Signature,,,owasp-mastg/techniques/android/MASTG-TECH-0116.md
+MASTG-TECH-0117,TECH,android,Obtaining Information from the AndroidManifest,,,owasp-mastg/techniques/android/MASTG-TECH-0117.md
+MASTG-TECH-0118,TECH,ios,Obtaining Compiler-Provided Security Features,,,owasp-mastg/techniques/ios/MASTG-TECH-0118.md
+MASTG-TECH-0119,TECH,generic,Intercepting HTTP Traffic by Hooking Network APIs at the Application Layer,,,owasp-mastg/techniques/generic/MASTG-TECH-0119.md
+MASTG-TECH-0120,TECH,generic,Intercepting HTTP Traffic Using an Interception Proxy,,,owasp-mastg/techniques/generic/MASTG-TECH-0120.md
+MASTG-TECH-0121,TECH,generic,Intercepting Non-HTTP Traffic Using an Interception Proxy,,,owasp-mastg/techniques/generic/MASTG-TECH-0121.md
+MASTG-TECH-0122,TECH,generic,Passive Eavesdropping,,,owasp-mastg/techniques/generic/MASTG-TECH-0122.md
+MASTG-TECH-0123,TECH,generic,Achieving a MITM Position via ARP Spoofing,,,owasp-mastg/techniques/generic/MASTG-TECH-0123.md
+MASTG-TECH-0124,TECH,generic,Achieving a MITM Position Using a Rogue Access Point,,,owasp-mastg/techniques/generic/MASTG-TECH-0124.md
+MASTG-TECH-0125,TECH,generic,Intercepting Xamarin Traffic,,deprecated,owasp-mastg/techniques/generic/MASTG-TECH-0125.md
+MASTG-TECH-0126,TECH,android,Obtaining App Permissions,,,owasp-mastg/techniques/android/MASTG-TECH-0126.md
+MASTG-TECH-0127,TECH,android,Inspecting an App's Backup Data,,,owasp-mastg/techniques/android/MASTG-TECH-0127.md
+MASTG-TECH-0128,TECH,android,Performing a Backup and Restore of App Data,,,owasp-mastg/techniques/android/MASTG-TECH-0128.md
+MASTG-TECH-0129,TECH,android,Verifying Android Dependencies at Runtime,,,owasp-mastg/techniques/android/MASTG-TECH-0129.md
+MASTG-TECH-0130,TECH,android,Software Composition Analysis (SCA) of Android Dependencies by Creating a SBOM,,,owasp-mastg/techniques/android/MASTG-TECH-0130.md
+MASTG-TECH-0131,TECH,android,Software Composition Analysis (SCA) of Android Dependencies at Build Time,,,owasp-mastg/techniques/android/MASTG-TECH-0131.md
+MASTG-TECH-0132,TECH,ios,Software Composition Analysis (SCA) of iOS Dependencies by Creating a SBOM,,,owasp-mastg/techniques/ios/MASTG-TECH-0132.md
+MASTG-TECH-0133,TECH,ios,Software Composition Analysis (SCA) of iOS Dependencies by Scanning Package Manager Artifacts,,,owasp-mastg/techniques/ios/MASTG-TECH-0133.md
+MASTG-TECH-0134,TECH,ios,Monitoring the Pasteboard,,,owasp-mastg/techniques/ios/MASTG-TECH-0134.md
+MASTG-TECH-0135,TECH,ios,Bypassing Biometric Authentication,,,owasp-mastg/techniques/ios/MASTG-TECH-0135.md
+MASTG-TECH-0136,TECH,ios,Retrieving PrivacyInfo.xcprivacy Files,,,owasp-mastg/techniques/ios/MASTG-TECH-0136.md
+MASTG-TECH-0137,TECH,ios,Analyzing PrivacyInfo.xcprivacy Files,,,owasp-mastg/techniques/ios/MASTG-TECH-0137.md
+MASTG-TECH-0138,TECH,ios,Convert Plist Files to JSON,,,owasp-mastg/techniques/ios/MASTG-TECH-0138.md
+MASTG-TECH-0139,TECH,ios,Attach to WKWebView,,,owasp-mastg/techniques/ios/MASTG-TECH-0139.md
+MASTG-TECH-0140,TECH,android,Obtaining Debugging Information and Symbols,,,owasp-mastg/techniques/android/MASTG-TECH-0140.md
+MASTG-TECH-0141,TECH,android,Inspecting the Merged AndroidManifest,,,owasp-mastg/techniques/android/MASTG-TECH-0141.md
+MASTG-TECH-0142,TECH,android,Inspecting WebView Storage,,,owasp-mastg/techniques/android/MASTG-TECH-0142.md
+MASTG-TECH-0143,TECH,android,Monitor File System Operations in WebViews,,,owasp-mastg/techniques/android/MASTG-TECH-0143.md
+MASTG-TECH-0144,TECH,android,Bypassing Root Detection,,,owasp-mastg/techniques/android/MASTG-TECH-0144.md
+MASTG-TECH-0145,TECH,android,Working with XAPK Files,,,owasp-mastg/techniques/android/MASTG-TECH-0145.md
+MASTG-TECH-0146,TECH,ios,Dynamic Analysis on Non-Jailbroken Devices,,,owasp-mastg/techniques/ios/MASTG-TECH-0146.md
+MASTG-TECH-0147,TECH,ios,Patching,,,owasp-mastg/techniques/ios/MASTG-TECH-0147.md
+MASTG-TECH-0148,TECH,android,Interacting with Android ContentProviders,,,owasp-mastg/techniques/android/MASTG-TECH-0148.md
+MASTG-TECH-0149,TECH,ios,Validating ATS TLS Settings at Runtime Using nscurl,,,owasp-mastg/techniques/ios/MASTG-TECH-0149.md
+MASTG-TECH-0150,TECH,android,Analyzing the AndroidManifest,,,owasp-mastg/techniques/android/MASTG-TECH-0150.md
+MASTG-TECH-0151,TECH,android,Analyzing the Network Security Configuration,,,owasp-mastg/techniques/android/MASTG-TECH-0151.md
+MASTG-TECH-0152,TECH,ios,Bypassing Jailbreak Detection,,,owasp-mastg/techniques/ios/MASTG-TECH-0152.md
+MASTG-TECH-0153,TECH,ios,Retrieving Info.plist Files,,,owasp-mastg/techniques/ios/MASTG-TECH-0153.md
+MASTG-TECH-0154,TECH,ios,Analyzing Info.plist Files,,,owasp-mastg/techniques/ios/MASTG-TECH-0154.md
+MASTG-TECH-0155,TECH,ios,Analyzing the ATS Configuration,,,owasp-mastg/techniques/ios/MASTG-TECH-0155.md
+MASTG-TECH-0156,TECH,android,Reverse Engineering Flutter Applications,,,owasp-mastg/techniques/android/MASTG-TECH-0156.md
+MASTG-TECH-0157,TECH,android,Extracting Bundled Native Libraries,,,owasp-mastg/techniques/android/MASTG-TECH-0157.md
+MASTG-TECH-0158,TECH,ios,Extracting Loaded Libraries,,,owasp-mastg/techniques/ios/MASTG-TECH-0158.md
+MASTG-TECH-0159,TECH,android,Verify Usage of File-Based Content Providers,,,owasp-mastg/techniques/android/MASTG-TECH-0159.md
+MASTG-TECH-0160,TECH,android,Enumerating Activities,,,owasp-mastg/techniques/android/MASTG-TECH-0160.md
+MASTG-TECH-0161,TECH,android,Enumerating Services,,,owasp-mastg/techniques/android/MASTG-TECH-0161.md
+MASTG-TECH-0162,TECH,android,Enumerating Broadcast Receivers,,,owasp-mastg/techniques/android/MASTG-TECH-0162.md
+MASTG-TECH-0163,TECH,android,Enumerating Content Providers,,,owasp-mastg/techniques/android/MASTG-TECH-0163.md
+MASTG-TECH-0164,TECH,android,Sniffing Implicit Intents and Broadcasts,,,owasp-mastg/techniques/android/MASTG-TECH-0164.md
+MASTG-TECH-0165,TECH,android,"Identifying Compilers, Obfuscators, and Packers in Android Apps",,,owasp-mastg/techniques/android/MASTG-TECH-0165.md
+MASTG-TECH-0166,TECH,ios,Identifying Custom URL Scheme Registrations in iOS Apps,,,owasp-mastg/techniques/ios/MASTG-TECH-0166.md
+MASTG-TECH-0167,TECH,ios,Monitoring UIActivity Data Sharing,,,owasp-mastg/techniques/ios/MASTG-TECH-0167.md
+MASTG-TECH-0168,TECH,ios,Monitoring UIActivity Data Receiving,,,owasp-mastg/techniques/ios/MASTG-TECH-0168.md
+MASTG-TECH-0169,TECH,ios,Opening Deep Links,,,owasp-mastg/techniques/ios/MASTG-TECH-0169.md
+MASTG-TECH-0170,TECH,ios,Enumerating App Extensions,,,owasp-mastg/techniques/ios/MASTG-TECH-0170.md
+MASTG-TECH-0171,TECH,ios,Monitoring Data Sharing Between App Extensions and Containing Apps,,,owasp-mastg/techniques/ios/MASTG-TECH-0171.md
+MASTG-TECH-0172,TECH,android,Listing Deep Links,,,owasp-mastg/techniques/android/MASTG-TECH-0172.md
+MASTG-TECH-0173,TECH,android,Monitoring Deep Link Handlers at Runtime with Frida,,,owasp-mastg/techniques/android/MASTG-TECH-0173.md
+MASTG-TECH-0174,TECH,android,Verifying App Link Website Association,,,owasp-mastg/techniques/android/MASTG-TECH-0174.md
+MASTG-TECH-0175,TECH,ios,Verifying Universal Link Domain Association,,,owasp-mastg/techniques/ios/MASTG-TECH-0175.md
+MASTG-TECH-0176,TECH,ios,Monitoring Universal Link Handlers at Runtime with Frida,,,owasp-mastg/techniques/ios/MASTG-TECH-0176.md
+MASTG-TEST-0001,TEST,android,Testing Local Storage for Sensitive Data,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0001.md
+MASTG-TEST-0002,TEST,android,Testing Local Storage for Input Validation,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0002.md
+MASTG-TEST-0003,TEST,android,Testing Logs for Sensitive Data,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0003.md
+MASTG-TEST-0004,TEST,android,Determining Whether Sensitive Data Is Shared with Third Parties via Embedded Services,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0004.md
+MASTG-TEST-0005,TEST,android,Determining Whether Sensitive Data Is Shared with Third Parties via Notifications,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0005.md
+MASTG-TEST-0006,TEST,android,Determining Whether the Keyboard Cache Is Disabled for Text Input Fields,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0006.md
+MASTG-TEST-0007,TEST,android,Determining Whether Sensitive Stored Data Has Been Exposed via IPC Mechanisms,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0007.md
+MASTG-TEST-0008,TEST,android,Checking for Sensitive Data Disclosure Through the User Interface,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0008.md
+MASTG-TEST-0009,TEST,android,Testing Backups for Sensitive Data,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0009.md
+MASTG-TEST-0010,TEST,android,Finding Sensitive Information in Auto-Generated Screenshots,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0010.md
+MASTG-TEST-0011,TEST,android,Testing Memory for Sensitive Data,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0011.md
+MASTG-TEST-0012,TEST,android,Testing the Device-Access-Security Policy,,deprecated,owasp-mastg/tests/android/MASVS-STORAGE/MASTG-TEST-0012.md
+MASTG-TEST-0013,TEST,android,Testing Symmetric Cryptography,,deprecated,owasp-mastg/tests/android/MASVS-CRYPTO/MASTG-TEST-0013.md
+MASTG-TEST-0014,TEST,android,Testing the Configuration of Cryptographic Standard Algorithms,,deprecated,owasp-mastg/tests/android/MASVS-CRYPTO/MASTG-TEST-0014.md
+MASTG-TEST-0015,TEST,android,Testing the Purposes of Keys,,deprecated,owasp-mastg/tests/android/MASVS-CRYPTO/MASTG-TEST-0015.md
+MASTG-TEST-0016,TEST,android,Testing Random Number Generation,,deprecated,owasp-mastg/tests/android/MASVS-CRYPTO/MASTG-TEST-0016.md
+MASTG-TEST-0017,TEST,android,Testing Confirm Credentials,,deprecated,owasp-mastg/tests/android/MASVS-AUTH/MASTG-TEST-0017.md
+MASTG-TEST-0018,TEST,android,Testing Biometric Authentication,,deprecated,owasp-mastg/tests/android/MASVS-AUTH/MASTG-TEST-0018.md
+MASTG-TEST-0019,TEST,android,Testing Data Encryption on the Network,,deprecated,owasp-mastg/tests/android/MASVS-NETWORK/MASTG-TEST-0019.md
+MASTG-TEST-0020,TEST,android,Testing the TLS Settings,,deprecated,owasp-mastg/tests/android/MASVS-NETWORK/MASTG-TEST-0020.md
+MASTG-TEST-0021,TEST,android,Testing Endpoint Identify Verification,,deprecated,owasp-mastg/tests/android/MASVS-NETWORK/MASTG-TEST-0021.md
+MASTG-TEST-0022,TEST,android,Testing Custom Certificate Stores and Certificate Pinning,,deprecated,owasp-mastg/tests/android/MASVS-NETWORK/MASTG-TEST-0022.md
+MASTG-TEST-0023,TEST,android,Testing the Security Provider,,deprecated,owasp-mastg/tests/android/MASVS-NETWORK/MASTG-TEST-0023.md
+MASTG-TEST-0024,TEST,android,Testing for App Permissions,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0024.md
+MASTG-TEST-0025,TEST,android,Testing for Injection Flaws,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0025.md
+MASTG-TEST-0026,TEST,android,Testing Implicit Intents,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0026.md
+MASTG-TEST-0027,TEST,android,Testing for URL Loading in WebViews,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0027.md
+MASTG-TEST-0028,TEST,android,Testing Deep Links,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0028.md
+MASTG-TEST-0029,TEST,android,Testing for Sensitive Functionality Exposure Through IPC,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0029.md
+MASTG-TEST-0030,TEST,android,Testing for Vulnerable Implementation of PendingIntent,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0030.md
+MASTG-TEST-0031,TEST,android,Testing JavaScript Execution in WebViews,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0031.md
+MASTG-TEST-0032,TEST,android,Testing WebView Protocol Handlers,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0032.md
+MASTG-TEST-0033,TEST,android,Testing for Java Objects Exposed Through WebViews,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0033.md
+MASTG-TEST-0034,TEST,android,Testing Object Persistence,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0034.md
+MASTG-TEST-0035,TEST,android,Testing for Overlay Attacks,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0035.md
+MASTG-TEST-0036,TEST,android,Testing Enforced Updating,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0036.md
+MASTG-TEST-0037,TEST,android,Testing WebViews Cleanup,,deprecated,owasp-mastg/tests/android/MASVS-PLATFORM/MASTG-TEST-0037.md
+MASTG-TEST-0038,TEST,android,Making Sure that the App is Properly Signed,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0038.md
+MASTG-TEST-0039,TEST,android,Testing whether the App is Debuggable,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0039.md
+MASTG-TEST-0040,TEST,android,Testing for Debugging Symbols,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0040.md
+MASTG-TEST-0041,TEST,android,Testing for Debugging Code and Verbose Error Logging,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0041.md
+MASTG-TEST-0042,TEST,android,Checking for Weaknesses in Third Party Libraries,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0042.md
+MASTG-TEST-0043,TEST,android,Memory Corruption Bugs,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0043.md
+MASTG-TEST-0044,TEST,android,Make Sure That Free Security Features Are Activated,,deprecated,owasp-mastg/tests/android/MASVS-CODE/MASTG-TEST-0044.md
+MASTG-TEST-0045,TEST,android,Testing Root Detection,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0045.md
+MASTG-TEST-0046,TEST,android,Testing Anti-Debugging Detection,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0046.md
+MASTG-TEST-0047,TEST,android,Testing File Integrity Checks,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0047.md
+MASTG-TEST-0048,TEST,android,Testing Reverse Engineering Tools Detection,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0048.md
+MASTG-TEST-0049,TEST,android,Testing Emulator Detection,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0049.md
+MASTG-TEST-0050,TEST,android,Testing Runtime Integrity Checks,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0050.md
+MASTG-TEST-0051,TEST,android,Testing Obfuscation,,deprecated,owasp-mastg/tests/android/MASVS-RESILIENCE/MASTG-TEST-0051.md
+MASTG-TEST-0052,TEST,ios,Testing Local Data Storage,,deprecated,owasp-mastg/tests/ios/MASVS-STORAGE/MASTG-TEST-0052.md
+MASTG-TEST-0053,TEST,ios,Checking Logs for Sensitive Data,,deprecated,owasp-mastg/tests/ios/MASVS-STORAGE/MASTG-TEST-0053.md
+MASTG-TEST-0054,TEST,ios,Determining Whether Sensitive Data Is Shared with Third Parties,,deprecated,owasp-mastg/tests/ios/MASVS-STORAGE/MASTG-TEST-0054.md
+MASTG-TEST-0055,TEST,ios,Finding Sensitive Data in the Keyboard Cache,,deprecated,owasp-mastg/tests/ios/MASVS-STORAGE/MASTG-TEST-0055.md
+MASTG-TEST-0056,TEST,ios,Determining Whether Sensitive Data Is Exposed via IPC Mechanisms,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0056.md
+MASTG-TEST-0057,TEST,ios,Checking for Sensitive Data Disclosed Through the User Interface,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0057.md
+MASTG-TEST-0058,TEST,ios,Testing Backups for Sensitive Data,,deprecated,owasp-mastg/tests/ios/MASVS-STORAGE/MASTG-TEST-0058.md
+MASTG-TEST-0059,TEST,ios,Testing Auto-Generated Screenshots for Sensitive Information,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0059.md
+MASTG-TEST-0060,TEST,ios,Testing Memory for Sensitive Data,,deprecated,owasp-mastg/tests/ios/MASVS-STORAGE/MASTG-TEST-0060.md
+MASTG-TEST-0061,TEST,ios,Verifying the Configuration of Cryptographic Standard Algorithms,,deprecated,owasp-mastg/tests/ios/MASVS-CRYPTO/MASTG-TEST-0061.md
+MASTG-TEST-0062,TEST,ios,Testing Key Management,,deprecated,owasp-mastg/tests/ios/MASVS-CRYPTO/MASTG-TEST-0062.md
+MASTG-TEST-0063,TEST,ios,Testing Random Number Generation,,deprecated,owasp-mastg/tests/ios/MASVS-CRYPTO/MASTG-TEST-0063.md
+MASTG-TEST-0064,TEST,ios,Testing Biometric Authentication,,deprecated,owasp-mastg/tests/ios/MASVS-AUTH/MASTG-TEST-0064.md
+MASTG-TEST-0065,TEST,ios,Testing Data Encryption on the Network,,deprecated,owasp-mastg/tests/ios/MASVS-NETWORK/MASTG-TEST-0065.md
+MASTG-TEST-0066,TEST,ios,Testing the TLS Settings,,deprecated,owasp-mastg/tests/ios/MASVS-NETWORK/MASTG-TEST-0066.md
+MASTG-TEST-0067,TEST,ios,Testing Endpoint Identity Verification,,deprecated,owasp-mastg/tests/ios/MASVS-NETWORK/MASTG-TEST-0067.md
+MASTG-TEST-0068,TEST,ios,Testing Custom Certificate Stores and Certificate Pinning,,deprecated,owasp-mastg/tests/ios/MASVS-NETWORK/MASTG-TEST-0068.md
+MASTG-TEST-0069,TEST,ios,Testing App Permissions,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0069.md
+MASTG-TEST-0070,TEST,ios,Testing Universal Links,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0070.md
+MASTG-TEST-0071,TEST,ios,Testing UIActivity Sharing,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0071.md
+MASTG-TEST-0072,TEST,ios,Testing App Extensions,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0072.md
+MASTG-TEST-0073,TEST,ios,Testing UIPasteboard,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0073.md
+MASTG-TEST-0075,TEST,ios,Testing Custom URL Schemes,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0075.md
+MASTG-TEST-0076,TEST,ios,Testing iOS WebViews,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0076.md
+MASTG-TEST-0077,TEST,ios,Testing WebView Protocol Handlers,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0077.md
+MASTG-TEST-0078,TEST,ios,Determining Whether Native Methods Are Exposed Through WebViews,,deprecated,owasp-mastg/tests/ios/MASVS-PLATFORM/MASTG-TEST-0078.md
+MASTG-TEST-0079,TEST,ios,Testing Object Persistence,,deprecated,owasp-mastg/tests/ios/MASVS-CODE/MASTG-TEST-0079.md
+MASTG-TEST-0080,TEST,ios,Testing Enforced Updating,,deprecated,owasp-mastg/tests/ios/MASVS-CODE/MASTG-TEST-0080.md
+MASTG-TEST-0081,TEST,ios,Making Sure that the App Is Properly Signed,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0081.md
+MASTG-TEST-0082,TEST,ios,Testing whether the App is Debuggable,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0082.md
+MASTG-TEST-0083,TEST,ios,Testing for Debugging Symbols,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0083.md
+MASTG-TEST-0084,TEST,ios,Testing for Debugging Code and Verbose Error Logging,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0084.md
+MASTG-TEST-0085,TEST,ios,Checking for Weaknesses in Third Party Libraries,,deprecated,owasp-mastg/tests/ios/MASVS-CODE/MASTG-TEST-0085.md
+MASTG-TEST-0086,TEST,ios,Memory Corruption Bugs,,deprecated,owasp-mastg/tests/ios/MASVS-CODE/MASTG-TEST-0086.md
+MASTG-TEST-0087,TEST,ios,Make Sure That Free Security Features Are Activated,,deprecated,owasp-mastg/tests/ios/MASVS-CODE/MASTG-TEST-0087.md
+MASTG-TEST-0088,TEST,ios,Testing Jailbreak Detection,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0088.md
+MASTG-TEST-0089,TEST,ios,Testing Anti-Debugging Detection,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0089.md
+MASTG-TEST-0090,TEST,ios,Testing File Integrity Checks,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0090.md
+MASTG-TEST-0091,TEST,ios,Testing Reverse Engineering Tools Detection,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0091.md
+MASTG-TEST-0092,TEST,ios,Testing Emulator Detection,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0092.md
+MASTG-TEST-0093,TEST,ios,Testing Obfuscation,,deprecated,owasp-mastg/tests/ios/MASVS-RESILIENCE/MASTG-TEST-0093.md
+MASTG-TEST-0200,TEST,android,Files Written to External Storage,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0200.md
+MASTG-TEST-0201,TEST,android,Runtime Use of APIs to Access External Storage,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0201.md
+MASTG-TEST-0202,TEST,android,References to APIs and Permissions for Accessing External Storage,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0202.md
+MASTG-TEST-0203,TEST,android,Runtime Use of Logging APIs,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0203.md
+MASTG-TEST-0204,TEST,android,Insecure Random API Usage,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0204.md
+MASTG-TEST-0205,TEST,android,Non-random Sources Usage,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0205.md
+MASTG-TEST-0206,TEST,android,Undeclared PII in Network Traffic Capture,,,owasp-mastg/tests-beta/android/MASVS-PRIVACY/MASTG-TEST-0206.md
+MASTG-TEST-0207,TEST,android,Runtime Storage of Unencrypted Data in the App Sandbox,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0207.md
+MASTG-TEST-0208,TEST,android,Insufficient Key Sizes,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0208.md
+MASTG-TEST-0209,TEST,ios,Insufficient Key Sizes,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0209.md
+MASTG-TEST-0210,TEST,ios,Broken Symmetric Encryption Algorithms,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0210.md
+MASTG-TEST-0211,TEST,ios,Broken Hashing Algorithms,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0211.md
+MASTG-TEST-0212,TEST,android,Use of Hardcoded Cryptographic Keys in Code,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0212.md
+MASTG-TEST-0213,TEST,ios,Use of Hardcoded Cryptographic Keys in Code,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0213.md
+MASTG-TEST-0214,TEST,ios,Hardcoded Cryptographic Keys in Files,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0214.md
+MASTG-TEST-0215,TEST,ios,Sensitive Data Not Marked For Backup Exclusion,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0215.md
+MASTG-TEST-0216,TEST,android,Sensitive Data Not Excluded From Backup,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0216.md
+MASTG-TEST-0217,TEST,android,Insecure TLS Protocols Explicitly Allowed in Code,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0217.md
+MASTG-TEST-0218,TEST,android,Insecure TLS Protocols in Network Traffic,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0218.md
+MASTG-TEST-0219,TEST,ios,Testing for Debugging Symbols,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0219.md
+MASTG-TEST-0220,TEST,ios,Usage of Outdated Code Signature Format,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0220.md
+MASTG-TEST-0221,TEST,android,Broken Symmetric Encryption Algorithms,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0221.md
+MASTG-TEST-0222,TEST,android,Position Independent Code (PIC) Not Enabled,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0222.md
+MASTG-TEST-0223,TEST,android,Stack Canaries Not Enabled,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0223.md
+MASTG-TEST-0224,TEST,android,Usage of Insecure APK Signature Version,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0224.md
+MASTG-TEST-0225,TEST,android,Usage of Insecure APK Signature Key Size,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0225.md
+MASTG-TEST-0226,TEST,android,Debuggable Flag Enabled in the AndroidManifest,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0226.md
+MASTG-TEST-0227,TEST,android,Debugging Enabled for WebViews,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0227.md
+MASTG-TEST-0228,TEST,ios,Position Independent Code (PIC) not Enabled,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0228.md
+MASTG-TEST-0229,TEST,ios,Stack Canaries Not enabled,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0229.md
+MASTG-TEST-0230,TEST,ios,Automatic Reference Counting (ARC) not enabled,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0230.md
+MASTG-TEST-0231,TEST,android,References to Logging APIs,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0231.md
+MASTG-TEST-0232,TEST,android,Broken Symmetric Encryption Modes,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0232.md
+MASTG-TEST-0233,TEST,android,Hardcoded HTTP URLs,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0233.md
+MASTG-TEST-0234,TEST,android,Missing Implementation of Server Hostname Verification with SSLSockets,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0234.md
+MASTG-TEST-0235,TEST,android,Android App Configurations Allowing Cleartext Traffic,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0235.md
+MASTG-TEST-0236,TEST,android,Cleartext Traffic Observed on the Network,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0236.md
+MASTG-TEST-0237,TEST,android,Cross-Platform Framework Configurations Allowing Cleartext Traffic,,placeholder,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0237.md
+MASTG-TEST-0238,TEST,android,Runtime Use of Network APIs Transmitting Cleartext Traffic,,placeholder,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0238.md
+MASTG-TEST-0239,TEST,android,Using low-level APIs (e.g. Socket) to set up a custom HTTP connection,,placeholder,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0239.md
+MASTG-TEST-0240,TEST,ios,Jailbreak Detection in Code,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0240.md
+MASTG-TEST-0241,TEST,ios,Runtime Use of Jailbreak Detection Techniques,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0241.md
+MASTG-TEST-0242,TEST,android,Missing Certificate Pinning in Network Security Configuration,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0242.md
+MASTG-TEST-0243,TEST,android,Expired Certificate Pins in the Network Security Configuration,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0243.md
+MASTG-TEST-0244,TEST,android,Missing Certificate Pinning in Network Traffic,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0244.md
+MASTG-TEST-0245,TEST,android,References to Platform Version APIs,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0245.md
+MASTG-TEST-0246,TEST,ios,Runtime Use of Secure Screen Lock Detection APIs,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0246.md
+MASTG-TEST-0247,TEST,android,References to APIs for Detecting Secure Screen Lock,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0247.md
+MASTG-TEST-0248,TEST,ios,References to APIs for Detecting Secure Screen Lock,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0248.md
+MASTG-TEST-0249,TEST,android,Runtime Use of Secure Screen Lock Detection APIs,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0249.md
+MASTG-TEST-0250,TEST,android,References to Content Provider Access in WebViews,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0250.md
+MASTG-TEST-0251,TEST,android,Runtime Use of Content Provider Access APIs in WebViews,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0251.md
+MASTG-TEST-0252,TEST,android,References to Local File Access in WebViews,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0252.md
+MASTG-TEST-0253,TEST,android,Runtime Use of Local File Access APIs in WebViews,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0253.md
+MASTG-TEST-0254,TEST,android,Dangerous App Permissions,,,owasp-mastg/tests-beta/android/MASVS-PRIVACY/MASTG-TEST-0254.md
+MASTG-TEST-0255,TEST,android,Permission Requests Not Minimized,,placeholder,owasp-mastg/tests-beta/android/MASVS-PRIVACY/MASTG-TEST-0255.md
+MASTG-TEST-0256,TEST,android,Missing Permission Rationale,,placeholder,owasp-mastg/tests-beta/android/MASVS-PRIVACY/MASTG-TEST-0256.md
+MASTG-TEST-0257,TEST,android,Not Resetting Unused Permissions,,placeholder,owasp-mastg/tests-beta/android/MASVS-PRIVACY/MASTG-TEST-0257.md
+MASTG-TEST-0258,TEST,android,References to Keyboard Caching Attributes in UI Elements,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0258.md
+MASTG-TEST-0261,TEST,ios,Debuggable Entitlement Enabled in the entitlements.plist,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0261.md
+MASTG-TEST-0262,TEST,android,References to Backup Configurations Not Excluding Sensitive Data,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0262.md
+MASTG-TEST-0263,TEST,android,Logging of StrictMode Violations,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0263.md
+MASTG-TEST-0264,TEST,android,Runtime Use of StrictMode APIs,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0264.md
+MASTG-TEST-0265,TEST,android,References to StrictMode APIs,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0265.md
+MASTG-TEST-0266,TEST,ios,References to APIs for Event-Bound Biometric Authentication,,,owasp-mastg/tests-beta/ios/MASVS-AUTH/MASTG-TEST-0266.md
+MASTG-TEST-0267,TEST,ios,Runtime Use Of Event-Bound Biometric Authentication,,,owasp-mastg/tests-beta/ios/MASVS-AUTH/MASTG-TEST-0267.md
+MASTG-TEST-0268,TEST,ios,References to APIs Allowing Fallback to Non-Biometric Authentication,,,owasp-mastg/tests-beta/ios/MASVS-AUTH/MASTG-TEST-0268.md
+MASTG-TEST-0269,TEST,ios,Runtime Use Of APIs Allowing Fallback to Non-Biometric Authentication,,,owasp-mastg/tests-beta/ios/MASVS-AUTH/MASTG-TEST-0269.md
+MASTG-TEST-0270,TEST,ios,References to APIs Detecting Biometric Enrollment Changes,,,owasp-mastg/tests-beta/ios/MASVS-AUTH/MASTG-TEST-0270.md
+MASTG-TEST-0271,TEST,ios,Runtime Use Of APIs Detecting Biometric Enrollment Changes,,,owasp-mastg/tests-beta/ios/MASVS-AUTH/MASTG-TEST-0271.md
+MASTG-TEST-0272,TEST,android,Identify Dependencies with Known Vulnerabilities in the Android Project,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0272.md
+MASTG-TEST-0273,TEST,ios,Identify Dependencies with Known Vulnerabilities by Scanning Dependency Managers Artifacts,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0273.md
+MASTG-TEST-0274,TEST,android,Dependencies with Known Vulnerabilities in the App's SBOM,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0274.md
+MASTG-TEST-0275,TEST,ios,Dependencies with Known Vulnerabilities in the App's SBOM,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0275.md
+MASTG-TEST-0276,TEST,ios,Use of the iOS General Pasteboard,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0276.md
+MASTG-TEST-0277,TEST,ios,Sensitive Data in the iOS General Pasteboard at Runtime,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0277.md
+MASTG-TEST-0278,TEST,ios,Pasteboard Contents Not Cleared After Use,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0278.md
+MASTG-TEST-0279,TEST,ios,Pasteboard Contents Not Expiring,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0279.md
+MASTG-TEST-0280,TEST,ios,Pasteboard Contents Not Restricted to Local Device,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0280.md
+MASTG-TEST-0281,TEST,ios,Undeclared Known Tracking Domains,,,owasp-mastg/tests-beta/ios/MASVS-PRIVACY/MASTG-TEST-0281.md
+MASTG-TEST-0282,TEST,android,Unsafe Custom Trust Evaluation,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0282.md
+MASTG-TEST-0283,TEST,android,Incorrect Implementation of Server Hostname Verification,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0283.md
+MASTG-TEST-0284,TEST,android,Incorrect SSL Error Handling in WebViews,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0284.md
+MASTG-TEST-0285,TEST,android,Outdated Android Version Allowing Trust in User-Provided CAs,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0285.md
+MASTG-TEST-0286,TEST,android,Network Security Configuration Allowing Trust in User-Provided CAs,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0286.md
+MASTG-TEST-0287,TEST,android,Runtime Storage of Unencrypted Data via the SharedPreferences API,,,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0287.md
+MASTG-TEST-0288,TEST,android,Debugging Symbols in Native Binaries,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0288.md
+MASTG-TEST-0289,TEST,android,Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0289.md
+MASTG-TEST-0290,TEST,ios,Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0290.md
+MASTG-TEST-0291,TEST,android,References to Screen Capturing Prevention APIs,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0291.md
+MASTG-TEST-0292,TEST,android,`setRecentsScreenshotEnabled` Not Used to Prevent Screenshots When Backgrounded,,placeholder,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0292.md
+MASTG-TEST-0293,TEST,android,`setSecure` Not Used to Prevent Screenshots in SurfaceViews,,placeholder,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0293.md
+MASTG-TEST-0294,TEST,android,`SecureOn` Not Used to Prevent Screenshots in Compose Dialogs,,placeholder,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0294.md
+MASTG-TEST-0295,TEST,android,GMS Security Provider Not Updated,,,owasp-mastg/tests-beta/android/MASVS-NETWORK/MASTG-TEST-0295.md
+MASTG-TEST-0296,TEST,ios,Sensitive Data Exposure in Logs,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0296.md
+MASTG-TEST-0297,TEST,ios,Sensitive Data Exposure Through Logging APIs,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0297.md
+MASTG-TEST-0298,TEST,ios,Runtime Monitoring of Files Eligible for Backup,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0298.md
+MASTG-TEST-0299,TEST,ios,Data Protection Classes for Files in Private Storage,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0299.md
+MASTG-TEST-0300,TEST,ios,References to APIs for Storing Unencrypted Data in Private Storage,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0300.md
+MASTG-TEST-0301,TEST,ios,Runtime Use of APIs for Storing Unencrypted Data in Private Storage,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0301.md
+MASTG-TEST-0302,TEST,ios,Sensitive Data Unencrypted in Private Storage Files,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0302.md
+MASTG-TEST-0303,TEST,ios,References to APIs for Storing Unencrypted Data in Shared Storage,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0303.md
+MASTG-TEST-0304,TEST,android,References to Sensitive Data Unencrypted via Android Room Database,,placeholder,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0304.md
+MASTG-TEST-0305,TEST,android,Sensitive Data Stored Unencrypted via DataStore,,placeholder,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0305.md
+MASTG-TEST-0306,TEST,android,References to Sensitive Data Stored Unencrypted via Android Room DB,,placeholder,owasp-mastg/tests-beta/android/MASVS-STORAGE/MASTG-TEST-0306.md
+MASTG-TEST-0307,TEST,android,References to Asymmetric Key Pairs Used For Multiple Purposes,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0307.md
+MASTG-TEST-0308,TEST,android,Runtime Use of Asymmetric Key Pairs Used For Multiple Purposes,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0308.md
+MASTG-TEST-0309,TEST,android,References to Reused Initialization Vectors in Symmetric Encryption,,placeholder,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0309.md
+MASTG-TEST-0310,TEST,android,Runtime Use of Reused Initialization Vectors in Symmetric Encryption,,placeholder,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0310.md
+MASTG-TEST-0311,TEST,ios,Insecure Random API Usage,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0311.md
+MASTG-TEST-0312,TEST,android,References to Explicit Security Provider in Cryptographic APIs,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0312.md
+MASTG-TEST-0313,TEST,ios,References to APIs for Preventing Keyboard Caching of Text Fields,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0313.md
+MASTG-TEST-0314,TEST,ios,Runtime Monitoring of Text Fields Eligible for Keyboard Caching,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0314.md
+MASTG-TEST-0315,TEST,android,Sensitive Data Exposed via Notifications,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0315.md
+MASTG-TEST-0316,TEST,android,App Exposing User Authentication Data in Text Input Fields,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0316.md
+MASTG-TEST-0317,TEST,ios,Broken Symmetric Encryption Modes,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0317.md
+MASTG-TEST-0318,TEST,android,References to SDK APIs Known to Handle Sensitive User Data,,,owasp-mastg/tests-beta/android/MASVS-PRIVACY/MASTG-TEST-0318.md
+MASTG-TEST-0319,TEST,android,Runtime Use of SDK APIs Known to Handle Sensitive User Data,,,owasp-mastg/tests-beta/android/MASVS-PRIVACY/MASTG-TEST-0319.md
+MASTG-TEST-0320,TEST,android,WebViews Not Cleaning Up Sensitive Data,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0320.md
+MASTG-TEST-0321,TEST,ios,Hardcoded HTTP URLs,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0321.md
+MASTG-TEST-0322,TEST,ios,App Transport Security Configurations Allowing Cleartext Traffic,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0322.md
+MASTG-TEST-0323,TEST,ios,Uses of Low-Level Networking APIs for Cleartext Traffic,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0323.md
+MASTG-TEST-0324,TEST,android,References to Root Detection Mechanisms,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0324.md
+MASTG-TEST-0325,TEST,android,Runtime Use of Root Detection Techniques,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0325.md
+MASTG-TEST-0326,TEST,android,References to APIs Allowing Fallback to Non-Biometric Authentication,,,owasp-mastg/tests-beta/android/MASVS-AUTH/MASTG-TEST-0326.md
+MASTG-TEST-0327,TEST,android,References to APIs for Event-Bound Biometric Authentication,,,owasp-mastg/tests-beta/android/MASVS-AUTH/MASTG-TEST-0327.md
+MASTG-TEST-0328,TEST,android,References to APIs Detecting Biometric Enrollment Changes,,,owasp-mastg/tests-beta/android/MASVS-AUTH/MASTG-TEST-0328.md
+MASTG-TEST-0329,TEST,android,References to APIs Enforcing Authentication without Explicit User Action,,,owasp-mastg/tests-beta/android/MASVS-AUTH/MASTG-TEST-0329.md
+MASTG-TEST-0330,TEST,android,References to APIs for Keys used in Biometric Authentication with Extended Validity Duration,,,owasp-mastg/tests-beta/android/MASVS-AUTH/MASTG-TEST-0330.md
+MASTG-TEST-0331,TEST,ios,Use of Deprecated WebView APIs,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0331.md
+MASTG-TEST-0332,TEST,ios,Attacker-Controlled URI in WebViews,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0332.md
+MASTG-TEST-0333,TEST,ios,Overly Broad File Read Access in WebViews,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0333.md
+MASTG-TEST-0334,TEST,android,Native Code Exposed Through WebViews,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0334.md
+MASTG-TEST-0335,TEST,ios,WebView File Origin Access Relaxed by Configuration,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0335.md
+MASTG-TEST-0336,TEST,ios,Runtime Setting of Relaxed WebView File Origin Policies,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0336.md
+MASTG-TEST-0337,TEST,android,References to Object Deserialization of Untrusted Data,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0337.md
+MASTG-TEST-0338,TEST,android,References to Storage Integrity Check APIs,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0338.md
+MASTG-TEST-0339,TEST,android,SQL Injection in Content Providers,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0339.md
+MASTG-TEST-0340,TEST,android,References to Overlay Attack Protections,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0340.md
+MASTG-TEST-0341,TEST,android,Runtime Use of Hook Detection Techniques,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0341.md
+MASTG-TEST-0342,TEST,ios,References to Weak ATS TLS Policy Exceptions in Info.plist,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0342.md
+MASTG-TEST-0343,TEST,ios,URLSession TLS Protocol Configuration,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0343.md
+MASTG-TEST-0344,TEST,ios,Network.framework TLS Protocol Configuration,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0344.md
+MASTG-TEST-0345,TEST,ios,Embedded or Third-party TLS Stack Configuration,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0345.md
+MASTG-TEST-0346,TEST,ios,References to APIs Hiding Sensitive Data in Text Input Fields,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0346.md
+MASTG-TEST-0347,TEST,ios,Runtime Use of APIs Hiding Sensitive Data in Text Input Fields,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0347.md
+MASTG-TEST-0348,TEST,ios,Insecure TLS Protocols in Network Traffic,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0348.md
+MASTG-TEST-0349,TEST,ios,Runtime Use of Insecure Random APIs,,,owasp-mastg/tests-beta/ios/MASVS-CRYPTO/MASTG-TEST-0349.md
+MASTG-TEST-0350,TEST,android,Runtime Use of Broken Symmetric Encryption Modes,,,owasp-mastg/tests-beta/android/MASVS-CRYPTO/MASTG-TEST-0350.md
+MASTG-TEST-0351,TEST,android,Runtime Use of Emulator Detection Techniques,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0351.md
+MASTG-TEST-0352,TEST,android,References to Debugging Detection APIs,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0352.md
+MASTG-TEST-0353,TEST,android,Runtime Use of Debugging Detection APIs,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0353.md
+MASTG-TEST-0354,TEST,ios,Runtime Use of Hook Detection Techniques,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0354.md
+MASTG-TEST-0355,TEST,android,References to Unauthorized Database Access through Content Providers,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0355.md
+MASTG-TEST-0356,TEST,android,Runtime Verification of Unauthorized Database Access through Content Providers,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0356.md
+MASTG-TEST-0357,TEST,android,References to Oversharing of File-Based Content Providers,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0357.md
+MASTG-TEST-0358,TEST,ios,Implementation Details Exposure Through Logging APIs,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0358.md
+MASTG-TEST-0359,TEST,ios,Implementation Details Exposure in Logs,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0359.md
+MASTG-TEST-0360,TEST,ios,Purpose String Accuracy for Reachable Protected Resource Access,,,owasp-mastg/tests-beta/ios/MASVS-PRIVACY/MASTG-TEST-0360.md
+MASTG-TEST-0361,TEST,ios,Runtime Use of Protected Resource APIs Without Accurate Purpose Strings,,,owasp-mastg/tests-beta/ios/MASVS-PRIVACY/MASTG-TEST-0361.md
+MASTG-TEST-0362,TEST,ios,Entitlements for Unjustified Capability Exposure,,,owasp-mastg/tests-beta/ios/MASVS-PRIVACY/MASTG-TEST-0362.md
+MASTG-TEST-0363,TEST,ios,Runtime Use of Entitlement-Backed APIs for Unjustified Capability Exposure,,,owasp-mastg/tests-beta/ios/MASVS-PRIVACY/MASTG-TEST-0363.md
+MASTG-TEST-0364,TEST,android,Exported And Unprotected Activities That Expose Sensitive Functionality,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0364.md
+MASTG-TEST-0365,TEST,android,Exported And Unprotected Services That Expose Sensitive Functionality,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0365.md
+MASTG-TEST-0366,TEST,android,Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0366.md
+MASTG-TEST-0367,TEST,ios,Runtime Use of Virtual Device Detection Techniques,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0367.md
+MASTG-TEST-0368,TEST,android,Insufficient Obfuscation of Security-Relevant Java/Kotlin Code,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0368.md
+MASTG-TEST-0369,TEST,android,Insufficient Obfuscation of Security-Relevant Native Code,,,owasp-mastg/tests-beta/android/MASVS-RESILIENCE/MASTG-TEST-0369.md
+MASTG-TEST-0370,TEST,ios,Missing Input Validation in Custom URL Scheme Handlers,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0370.md
+MASTG-TEST-0371,TEST,ios,Missing Source Validation in Custom URL Scheme Handlers,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0371.md
+MASTG-TEST-0372,TEST,android,Implicit Intents Used for Internal App Communication,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0372.md
+MASTG-TEST-0374,TEST,android,References to Implicit Intents Carrying Sensitive Extras,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0374.md
+MASTG-TEST-0375,TEST,android,Missing Validation of Data Returned from Implicit Intents,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0375.md
+MASTG-TEST-0376,TEST,ios,References to Native Bridge APIs in WebViews,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0376.md
+MASTG-TEST-0377,TEST,ios,References to `evaluateJavaScript` Used as Bridge Reply in `WKScriptMessageHandler`,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0377.md
+MASTG-TEST-0378,TEST,ios,References to Password Fields in WebView-Loaded HTML,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0378.md
+MASTG-TEST-0379,TEST,ios,References to `evaluateJavaScript` Without Content World Isolation,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0379.md
+MASTG-TEST-0380,TEST,ios,References to `evaluateJavaScript` Writing Sensitive Data into WebView DOM,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0380.md
+MASTG-TEST-0381,TEST,android,References to Insecure PendingIntent Creation,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0381.md
+MASTG-TEST-0382,TEST,android,Runtime Use of Enforced Updating APIs,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0382.md
+MASTG-TEST-0383,TEST,ios,References to Enforced Updating APIs,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0383.md
+MASTG-TEST-0384,TEST,ios,Runtime Use of Enforced Updating APIs,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0384.md
+MASTG-TEST-0385,TEST,ios,Missing Certificate Pinning in ATS,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0385.md
+MASTG-TEST-0386,TEST,ios,References to Object Deserialization of Untrusted Data,,,owasp-mastg/tests-beta/ios/MASVS-CODE/MASTG-TEST-0386.md
+MASTG-TEST-0387,TEST,ios,References to Storage Integrity Check APIs,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0387.md
+MASTG-TEST-0388,TEST,ios,References to Sensitive Data Stored Unprotected in Shared App Group Containers,,,owasp-mastg/tests-beta/ios/MASVS-STORAGE/MASTG-TEST-0388.md
+MASTG-TEST-0389,TEST,ios,References to the App-Wide Restriction of Custom Keyboards,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0389.md
+MASTG-TEST-0390,TEST,ios,Full Access Requested by a Custom Keyboard Extension,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0390.md
+MASTG-TEST-0391,TEST,ios,Insufficient Obfuscation of Security-Relevant Native Code,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0391.md
+MASTG-TEST-0392,TEST,android,References to Enforced Updating APIs,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0392.md
+MASTG-TEST-0393,TEST,android,Use of Unverified App Links,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0393.md
+MASTG-TEST-0394,TEST,android,Missing Input Validation in Custom URL Scheme Handlers,,,owasp-mastg/tests-beta/android/MASVS-PLATFORM/MASTG-TEST-0394.md
+MASTG-TEST-0395,TEST,ios,Missing Input Validation in Universal Link Handlers,,,owasp-mastg/tests-beta/ios/MASVS-PLATFORM/MASTG-TEST-0395.md
+MASTG-TEST-0396,TEST,ios,References to URLSessionDelegate Bypassing Certificate Validation,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0396.md
+MASTG-TEST-0397,TEST,ios,References to WKNavigationDelegate Bypassing Certificate Validation,,,owasp-mastg/tests-beta/ios/MASVS-NETWORK/MASTG-TEST-0397.md
+MASTG-TEST-0398,TEST,android,References to WebViewClient URL Loading Handlers,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0398.md
+MASTG-TEST-0399,TEST,android,SafeBrowsing Disabled,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0399.md
+MASTG-TEST-0400,TEST,android,Runtime Use of WebViewClient URL Loading Handlers,,,owasp-mastg/tests-beta/android/MASVS-CODE/MASTG-TEST-0400.md
+MASTG-TEST-0401,TEST,ios,References to Debugging Detection APIs,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0401.md
+MASTG-TEST-0402,TEST,ios,Runtime Use of Debugging Detection APIs,,,owasp-mastg/tests-beta/ios/MASVS-RESILIENCE/MASTG-TEST-0402.md
+MASTG-TOOL-0001,TOOL,android,Frida (Android),,,owasp-mastg/tools/android/MASTG-TOOL-0001.md
+MASTG-TOOL-0002,TOOL,android,MobSF (Android),,,owasp-mastg/tools/android/MASTG-TOOL-0002.md
+MASTG-TOOL-0003,TOOL,android,nm (Android),,,owasp-mastg/tools/android/MASTG-TOOL-0003.md
+MASTG-TOOL-0004,TOOL,android,adb,,,owasp-mastg/tools/android/MASTG-TOOL-0004.md
+MASTG-TOOL-0005,TOOL,android,Android NDK,,,owasp-mastg/tools/android/MASTG-TOOL-0005.md
+MASTG-TOOL-0006,TOOL,android,Android SDK,,,owasp-mastg/tools/android/MASTG-TOOL-0006.md
+MASTG-TOOL-0007,TOOL,android,Android Studio,,,owasp-mastg/tools/android/MASTG-TOOL-0007.md
+MASTG-TOOL-0008,TOOL,android,Android-SSL-TrustKiller,,deprecated,owasp-mastg/tools/android/MASTG-TOOL-0008.md
+MASTG-TOOL-0009,TOOL,android,APKiD,,,owasp-mastg/tools/android/MASTG-TOOL-0009.md
+MASTG-TOOL-0010,TOOL,android,APKLab,,,owasp-mastg/tools/android/MASTG-TOOL-0010.md
+MASTG-TOOL-0011,TOOL,android,Apktool,,,owasp-mastg/tools/android/MASTG-TOOL-0011.md
+MASTG-TOOL-0012,TOOL,android,apkx,,,owasp-mastg/tools/android/MASTG-TOOL-0012.md
+MASTG-TOOL-0013,TOOL,android,Busybox,,,owasp-mastg/tools/android/MASTG-TOOL-0013.md
+MASTG-TOOL-0014,TOOL,android,Bytecode Viewer,,,owasp-mastg/tools/android/MASTG-TOOL-0014.md
+MASTG-TOOL-0015,TOOL,android,drozer,,,owasp-mastg/tools/android/MASTG-TOOL-0015.md
+MASTG-TOOL-0016,TOOL,android,gplaycli,,,owasp-mastg/tools/android/MASTG-TOOL-0016.md
+MASTG-TOOL-0017,TOOL,android,House,,,owasp-mastg/tools/android/MASTG-TOOL-0017.md
+MASTG-TOOL-0018,TOOL,android,jadx,,,owasp-mastg/tools/android/MASTG-TOOL-0018.md
+MASTG-TOOL-0019,TOOL,android,jdb,,,owasp-mastg/tools/android/MASTG-TOOL-0019.md
+MASTG-TOOL-0020,TOOL,android,JustTrustMe,,,owasp-mastg/tools/android/MASTG-TOOL-0020.md
+MASTG-TOOL-0021,TOOL,android,Magisk,,,owasp-mastg/tools/android/MASTG-TOOL-0021.md
+MASTG-TOOL-0022,TOOL,android,ProGuard,,,owasp-mastg/tools/android/MASTG-TOOL-0022.md
+MASTG-TOOL-0023,TOOL,android,RootCloak Plus,,deprecated,owasp-mastg/tools/android/MASTG-TOOL-0023.md
+MASTG-TOOL-0024,TOOL,android,Scrcpy,,,owasp-mastg/tools/android/MASTG-TOOL-0024.md
+MASTG-TOOL-0025,TOOL,android,SSLUnpinning,,,owasp-mastg/tools/android/MASTG-TOOL-0025.md
+MASTG-TOOL-0026,TOOL,android,Termux,,,owasp-mastg/tools/android/MASTG-TOOL-0026.md
+MASTG-TOOL-0027,TOOL,android,Xposed,,deprecated,owasp-mastg/tools/android/MASTG-TOOL-0027.md
+MASTG-TOOL-0028,TOOL,android,radare2 for Android,,,owasp-mastg/tools/android/MASTG-TOOL-0028.md
+MASTG-TOOL-0029,TOOL,android,objection (Android),,,owasp-mastg/tools/android/MASTG-TOOL-0029.md
+MASTG-TOOL-0030,TOOL,android,Angr,,,owasp-mastg/tools/android/MASTG-TOOL-0030.md
+MASTG-TOOL-0031,TOOL,generic,Frida,,,owasp-mastg/tools/generic/MASTG-TOOL-0031.md
+MASTG-TOOL-0032,TOOL,generic,Frida CodeShare,,,owasp-mastg/tools/generic/MASTG-TOOL-0032.md
+MASTG-TOOL-0033,TOOL,generic,Ghidra,,,owasp-mastg/tools/generic/MASTG-TOOL-0033.md
+MASTG-TOOL-0034,TOOL,generic,LIEF,,,owasp-mastg/tools/generic/MASTG-TOOL-0034.md
+MASTG-TOOL-0035,TOOL,generic,MobSF,,,owasp-mastg/tools/generic/MASTG-TOOL-0035.md
+MASTG-TOOL-0036,TOOL,generic,r2frida,,,owasp-mastg/tools/generic/MASTG-TOOL-0036.md
+MASTG-TOOL-0037,TOOL,generic,RMS Runtime Mobile Security,,,owasp-mastg/tools/generic/MASTG-TOOL-0037.md
+MASTG-TOOL-0038,TOOL,generic,objection,,,owasp-mastg/tools/generic/MASTG-TOOL-0038.md
+MASTG-TOOL-0039,TOOL,ios,Frida (iOS),,,owasp-mastg/tools/ios/MASTG-TOOL-0039.md
+MASTG-TOOL-0040,TOOL,ios,MobSF (iOS),,,owasp-mastg/tools/ios/MASTG-TOOL-0040.md
+MASTG-TOOL-0041,TOOL,ios,nm (iOS),,,owasp-mastg/tools/ios/MASTG-TOOL-0041.md
+MASTG-TOOL-0042,TOOL,ios,BinaryCookieReader,,,owasp-mastg/tools/ios/MASTG-TOOL-0042.md
+MASTG-TOOL-0043,TOOL,ios,class-dump,,,owasp-mastg/tools/ios/MASTG-TOOL-0043.md
+MASTG-TOOL-0044,TOOL,ios,class-dump-z,,,owasp-mastg/tools/ios/MASTG-TOOL-0044.md
+MASTG-TOOL-0045,TOOL,ios,class-dump-dyld,,,owasp-mastg/tools/ios/MASTG-TOOL-0045.md
+MASTG-TOOL-0046,TOOL,ios,Cycript,,deprecated,owasp-mastg/tools/ios/MASTG-TOOL-0046.md
+MASTG-TOOL-0047,TOOL,ios,Cydia,,deprecated,owasp-mastg/tools/ios/MASTG-TOOL-0047.md
+MASTG-TOOL-0048,TOOL,ios,dsdump,,,owasp-mastg/tools/ios/MASTG-TOOL-0048.md
+MASTG-TOOL-0049,TOOL,ios,Frida-cycript,,,owasp-mastg/tools/ios/MASTG-TOOL-0049.md
+MASTG-TOOL-0050,TOOL,ios,Frida-ios-dump,,,owasp-mastg/tools/ios/MASTG-TOOL-0050.md
+MASTG-TOOL-0051,TOOL,ios,gdb,,deprecated,owasp-mastg/tools/ios/MASTG-TOOL-0051.md
+MASTG-TOOL-0053,TOOL,ios,iOSbackup,,,owasp-mastg/tools/ios/MASTG-TOOL-0053.md
+MASTG-TOOL-0054,TOOL,ios,ios-deploy,,,owasp-mastg/tools/ios/MASTG-TOOL-0054.md
+MASTG-TOOL-0055,TOOL,ios,iproxy,,,owasp-mastg/tools/ios/MASTG-TOOL-0055.md
+MASTG-TOOL-0056,TOOL,ios,Keychain-Dumper,,,owasp-mastg/tools/ios/MASTG-TOOL-0056.md
+MASTG-TOOL-0057,TOOL,ios,lldb (iOS),,,owasp-mastg/tools/ios/MASTG-TOOL-0057.md
+MASTG-TOOL-0058,TOOL,ios,MachoOView,,,owasp-mastg/tools/ios/MASTG-TOOL-0058.md
+MASTG-TOOL-0059,TOOL,ios,optool,,,owasp-mastg/tools/ios/MASTG-TOOL-0059.md
+MASTG-TOOL-0060,TOOL,ios,otool,,,owasp-mastg/tools/ios/MASTG-TOOL-0060.md
+MASTG-TOOL-0061,TOOL,ios,Grapefruit,,,owasp-mastg/tools/ios/MASTG-TOOL-0061.md
+MASTG-TOOL-0062,TOOL,ios,Plutil,,,owasp-mastg/tools/ios/MASTG-TOOL-0062.md
+MASTG-TOOL-0063,TOOL,ios,security,,,owasp-mastg/tools/ios/MASTG-TOOL-0063.md
+MASTG-TOOL-0064,TOOL,ios,Sileo,,,owasp-mastg/tools/ios/MASTG-TOOL-0064.md
+MASTG-TOOL-0065,TOOL,ios,simctl,,,owasp-mastg/tools/ios/MASTG-TOOL-0065.md
+MASTG-TOOL-0066,TOOL,ios,SSL Kill Switch 3,,,owasp-mastg/tools/ios/MASTG-TOOL-0066.md
+MASTG-TOOL-0067,TOOL,ios,swift-demangle,,,owasp-mastg/tools/ios/MASTG-TOOL-0067.md
+MASTG-TOOL-0068,TOOL,ios,SwiftShield,,,owasp-mastg/tools/ios/MASTG-TOOL-0068.md
+MASTG-TOOL-0069,TOOL,ios,Usbmuxd,,,owasp-mastg/tools/ios/MASTG-TOOL-0069.md
+MASTG-TOOL-0070,TOOL,ios,Xcode,,,owasp-mastg/tools/ios/MASTG-TOOL-0070.md
+MASTG-TOOL-0071,TOOL,ios,Xcode Command Line Tools,,,owasp-mastg/tools/ios/MASTG-TOOL-0071.md
+MASTG-TOOL-0072,TOOL,ios,xcrun,,,owasp-mastg/tools/ios/MASTG-TOOL-0072.md
+MASTG-TOOL-0073,TOOL,ios,radare2 (iOS),,,owasp-mastg/tools/ios/MASTG-TOOL-0073.md
+MASTG-TOOL-0074,TOOL,ios,objection (iOS),,,owasp-mastg/tools/ios/MASTG-TOOL-0074.md
+MASTG-TOOL-0075,TOOL,generic,tcpdump (Android),,,owasp-mastg/tools/network/MASTG-TOOL-0075.md
+MASTG-TOOL-0076,TOOL,generic,bettercap,,,owasp-mastg/tools/network/MASTG-TOOL-0076.md
+MASTG-TOOL-0077,TOOL,generic,Burp Suite,,,owasp-mastg/tools/network/MASTG-TOOL-0077.md
+MASTG-TOOL-0078,TOOL,generic,MITM Relay,,,owasp-mastg/tools/network/MASTG-TOOL-0078.md
+MASTG-TOOL-0079,TOOL,generic,ZAP (Zed Attack Proxy),,,owasp-mastg/tools/network/MASTG-TOOL-0079.md
+MASTG-TOOL-0080,TOOL,generic,tcpdump,,,owasp-mastg/tools/network/MASTG-TOOL-0080.md
+MASTG-TOOL-0081,TOOL,generic,Wireshark,,,owasp-mastg/tools/network/MASTG-TOOL-0081.md
+MASTG-TOOL-0097,TOOL,generic,mitmproxy,,,owasp-mastg/tools/network/MASTG-TOOL-0097.md
+MASTG-TOOL-0098,TOOL,generic,iaito,,,owasp-mastg/tools/generic/MASTG-TOOL-0098.md
+MASTG-TOOL-0099,TOOL,android,FlowDroid,,,owasp-mastg/tools/android/MASTG-TOOL-0099.md
+MASTG-TOOL-0100,TOOL,generic,reFlutter,,,owasp-mastg/tools/generic/MASTG-TOOL-0100.md
+MASTG-TOOL-0101,TOOL,generic,disable-flutter-tls-verification,,,owasp-mastg/tools/generic/MASTG-TOOL-0101.md
+MASTG-TOOL-0102,TOOL,ios,ios-app-signer,,,owasp-mastg/tools/ios/MASTG-TOOL-0102.md
+MASTG-TOOL-0103,TOOL,android,uber-apk-signer,,,owasp-mastg/tools/android/MASTG-TOOL-0103.md
+MASTG-TOOL-0104,TOOL,generic,hermes-dec,,,owasp-mastg/tools/generic/MASTG-TOOL-0104.md
+MASTG-TOOL-0105,TOOL,ios,ipsw,,,owasp-mastg/tools/ios/MASTG-TOOL-0105.md
+MASTG-TOOL-0106,TOOL,generic,Fridump,,,owasp-mastg/tools/generic/MASTG-TOOL-0106.md
+MASTG-TOOL-0107,TOOL,android,jnitrace,,,owasp-mastg/tools/android/MASTG-TOOL-0107.md
+MASTG-TOOL-0108,TOOL,generic,Corellium,,,owasp-mastg/tools/generic/MASTG-TOOL-0108.md
+MASTG-TOOL-0109,TOOL,generic,Nope-Proxy,,,owasp-mastg/tools/network/MASTG-TOOL-0109.md
+MASTG-TOOL-0110,TOOL,generic,semgrep,,,owasp-mastg/tools/generic/MASTG-TOOL-0110.md
+MASTG-TOOL-0111,TOOL,ios,ldid,,,owasp-mastg/tools/ios/MASTG-TOOL-0111.md
+MASTG-TOOL-0112,TOOL,android,pidcat,,,owasp-mastg/tools/android/MASTG-TOOL-0112.md
+MASTG-TOOL-0114,TOOL,ios,codesign,,,owasp-mastg/tools/ios/MASTG-TOOL-0114.md
+MASTG-TOOL-0115,TOOL,generic,HTTP Toolkit,,,owasp-mastg/tools/network/MASTG-TOOL-0115.md
+MASTG-TOOL-0116,TOOL,android,blutter,,,owasp-mastg/tools/android/MASTG-TOOL-0116.md
+MASTG-TOOL-0117,TOOL,ios,fastlane,,,owasp-mastg/tools/ios/MASTG-TOOL-0117.md
+MASTG-TOOL-0118,TOOL,ios,Sideloadly,,,owasp-mastg/tools/ios/MASTG-TOOL-0118.md
+MASTG-TOOL-0120,TOOL,android,ProxyDroid,,,owasp-mastg/tools/android/MASTG-TOOL-0120.md
+MASTG-TOOL-0121,TOOL,ios,objdump (iOS),,,owasp-mastg/tools/ios/MASTG-TOOL-0121.md
+MASTG-TOOL-0122,TOOL,ios,c++filt,,,owasp-mastg/tools/ios/MASTG-TOOL-0122.md
+MASTG-TOOL-0123,TOOL,android,apksigner,,,owasp-mastg/tools/android/MASTG-TOOL-0123.md
+MASTG-TOOL-0124,TOOL,android,aapt2,,,owasp-mastg/tools/android/MASTG-TOOL-0124.md
+MASTG-TOOL-0125,TOOL,android,Apkleaks,,,owasp-mastg/tools/android/MASTG-TOOL-0125.md
+MASTG-TOOL-0126,TOOL,ios,libimobiledevice suite,,,owasp-mastg/tools/ios/MASTG-TOOL-0126.md
+MASTG-TOOL-0127,TOOL,ios,AppSync Unified,,,owasp-mastg/tools/ios/MASTG-TOOL-0127.md
+MASTG-TOOL-0128,TOOL,ios,Filza,,,owasp-mastg/tools/ios/MASTG-TOOL-0128.md
+MASTG-TOOL-0129,TOOL,generic,rabin2,,,owasp-mastg/tools/generic/MASTG-TOOL-0129.md
+MASTG-TOOL-0130,TOOL,android,blint,,,owasp-mastg/tools/android/MASTG-TOOL-0130.md
+MASTG-TOOL-0131,TOOL,generic,dependency-check,,,owasp-mastg/tools/generic/MASTG-TOOL-0131.md
+MASTG-TOOL-0132,TOOL,generic,dependency-track,,,owasp-mastg/tools/generic/MASTG-TOOL-0132.md
+MASTG-TOOL-0133,TOOL,generic,Visual Studio Code (vscode),,,owasp-mastg/tools/generic/MASTG-TOOL-0133.md
+MASTG-TOOL-0134,TOOL,generic,cdxgen,,,owasp-mastg/tools/generic/MASTG-TOOL-0134.md
+MASTG-TOOL-0135,TOOL,ios,PlistBuddy,,,owasp-mastg/tools/ios/MASTG-TOOL-0135.md
+MASTG-TOOL-0136,TOOL,ios,plistlib,,,owasp-mastg/tools/ios/MASTG-TOOL-0136.md
+MASTG-TOOL-0137,TOOL,ios,GlobalWebInspect,,,owasp-mastg/tools/ios/MASTG-TOOL-0137.md
+MASTG-TOOL-0138,TOOL,ios,ipainstaller,,,owasp-mastg/tools/ios/MASTG-TOOL-0138.md
+MASTG-TOOL-0139,TOOL,ios,ElleKit,,,owasp-mastg/tools/ios/MASTG-TOOL-0139.md
+MASTG-TOOL-0140,TOOL,android,frida-multiple-unpinning,,,owasp-mastg/tools/android/MASTG-TOOL-0140.md
+MASTG-TOOL-0141,TOOL,ios,IOSSecuritySuite,,,owasp-mastg/tools/ios/MASTG-TOOL-0141.md
+MASTG-TOOL-0142,TOOL,ios,Choicy,,,owasp-mastg/tools/ios/MASTG-TOOL-0142.md
+MASTG-TOOL-0143,TOOL,generic,badssl,,,owasp-mastg/tools/network/MASTG-TOOL-0143.md
+MASTG-TOOL-0144,TOOL,generic,gitleaks,,,owasp-mastg/tools/generic/MASTG-TOOL-0144.md
+MASTG-TOOL-0145,TOOL,generic,Frooky,,,owasp-mastg/tools/generic/MASTG-TOOL-0145.md
+MASTG-TOOL-0146,TOOL,android,RootBeer,,,owasp-mastg/tools/android/MASTG-TOOL-0146.md
+MASTG-TOOL-0147,TOOL,android,Android RASP,,,owasp-mastg/tools/android/MASTG-TOOL-0147.md
+MASTG-TOOL-0148,TOOL,android,apkeep,,,owasp-mastg/tools/android/MASTG-TOOL-0148.md
+MASTG-TOOL-0149,TOOL,android,LSPosed,,,owasp-mastg/tools/android/MASTG-TOOL-0149.md
+MASTG-TOOL-0150,TOOL,ios,xpcspy,,,owasp-mastg/tools/ios/MASTG-TOOL-0150.md
+MASTG-TOOL-0151,TOOL,android,debugmepLS,,,owasp-mastg/tools/android/MASTG-TOOL-0151.md
+MASTG-TOOL-0152,TOOL,android,lldb (Android),,,owasp-mastg/tools/android/MASTG-TOOL-0152.md
+MASTG-TOOL-0153,TOOL,android,dProtect,,,owasp-mastg/tools/android/MASTG-TOOL-0153.md
+MASWE-0001,MASWE,generic,Sensitive Data Stored Unencrypted in Private Storage,,,maswe/weaknesses/MASVS-STORAGE/MASWE-0001.md
+MASWE-0002,MASWE,generic,Sensitive Data Stored Unencrypted Outside of Private Storage,,,maswe/weaknesses/MASVS-STORAGE/MASWE-0002.md
+MASWE-0003,MASWE,generic,Cryptographic Keys Stored Outside of Platform Keystore,,,maswe/weaknesses/MASVS-STORAGE/MASWE-0003.md
+MASWE-0004,MASWE,generic,Sensitive Data Hardcoded in the App Package,,,maswe/weaknesses/MASVS-STORAGE/MASWE-0004.md
+MASWE-0005,MASWE,generic,Insertion of Sensitive Data into Logs,,,maswe/weaknesses/MASVS-STORAGE/MASWE-0005.md
+MASWE-0006,MASWE,generic,Sensitive Data Not Excluded From Backup,,,maswe/weaknesses/MASVS-STORAGE/MASWE-0006.md
+MASWE-0007,MASWE,generic,Improper Encryption,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0007.md
+MASWE-0008,MASWE,generic,Improper Hashing,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0008.md
+MASWE-0009,MASWE,generic,Improper Use of Message Authentication Code (MAC),,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0009.md
+MASWE-0010,MASWE,generic,Improper Generation of Cryptographic Signatures,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0010.md
+MASWE-0011,MASWE,generic,Improper Verification of Cryptographic Signature,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0011.md
+MASWE-0012,MASWE,generic,Improper Random Number Generation,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0012.md
+MASWE-0013,MASWE,generic,Improper Cryptographic Key Generation,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0013.md
+MASWE-0014,MASWE,generic,Improper Cryptographic Key Derivation,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0014.md
+MASWE-0015,MASWE,generic,Cryptographic Key Rotation Not Implemented,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0015.md
+MASWE-0016,MASWE,generic,Cryptographic Key Access Not Restricted,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0016.md
+MASWE-0017,MASWE,generic,Device Secure Lock Not Enforced,,,maswe/weaknesses/MASVS-CRYPTO/MASWE-0017.md
+MASWE-0018,MASWE,generic,Lack of Authentication or Authorization on App Components,,,maswe/weaknesses/MASVS-AUTH/MASWE-0018.md
+MASWE-0019,MASWE,generic,Lack of Auto-fill Support for Credential Providers,,,maswe/weaknesses/MASVS-AUTH/MASWE-0019.md
+MASWE-0020,MASWE,generic,Local Authentication Can Be Bypassed,,,maswe/weaknesses/MASVS-AUTH/MASWE-0020.md
+MASWE-0021,MASWE,generic,Fallback to Non-biometric Credentials Allowed for Sensitive Transactions,,,maswe/weaknesses/MASVS-AUTH/MASWE-0021.md
+MASWE-0022,MASWE,generic,Crypto Keys Not Invalidated on New Biometric Enrollment,,,maswe/weaknesses/MASVS-AUTH/MASWE-0022.md
+MASWE-0023,MASWE,generic,Step-Up Authentication Not Implemented for Sensitive Actions,,,maswe/weaknesses/MASVS-AUTH/MASWE-0023.md
+MASWE-0024,MASWE,generic,Sensitive Data Accessible After Session Termination,,,maswe/weaknesses/MASVS-AUTH/MASWE-0024.md
+MASWE-0025,MASWE,generic,Lack of Non-Repudiation for Critical Actions,,,maswe/weaknesses/MASVS-AUTH/MASWE-0025.md
+MASWE-0026,MASWE,generic,Network Traffic Not Encrypted,,,maswe/weaknesses/MASVS-NETWORK/MASWE-0026.md
+MASWE-0027,MASWE,generic,Insecure Certificate Validation,,,maswe/weaknesses/MASVS-NETWORK/MASWE-0027.md
+MASWE-0028,MASWE,generic,Insecure Identity Pinning,,,maswe/weaknesses/MASVS-NETWORK/MASWE-0028.md
+MASWE-0029,MASWE,generic,Insecure Deep Links,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0029.md
+MASWE-0030,MASWE,generic,Improper Use of the Clipboard,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0030.md
+MASWE-0031,MASWE,generic,Allowing Untrusted App Extensions,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0031.md
+MASWE-0032,MASWE,generic,Insecure Intents,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0032.md
+MASWE-0033,MASWE,generic,Sensitive Native Functionality Exposed in WebViews,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0033.md
+MASWE-0034,MASWE,generic,WebViews Allow Access to Local Resources with Untrusted Content,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0034.md
+MASWE-0035,MASWE,generic,WebViews Loading Untrusted Content,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0035.md
+MASWE-0036,MASWE,generic,Unnecessary Exposure of Sensitive Data via the User Interface,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0036.md
+MASWE-0037,MASWE,generic,Unnecessary Exposure of Sensitive Data via Notifications,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0037.md
+MASWE-0038,MASWE,generic,Insufficient Protection of Sensitive Data from Screenshots or Screen Recordings,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0038.md
+MASWE-0039,MASWE,generic,App Vulnerable to Overlay Attacks,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0039.md
+MASWE-0040,MASWE,generic,Sensitive Data Leaked via Accessibility Services,,,maswe/weaknesses/MASVS-PLATFORM/MASWE-0040.md
+MASWE-0041,MASWE,generic,Running on a Recent Platform Version Not Ensured,,,maswe/weaknesses/MASVS-CODE/MASWE-0041.md
+MASWE-0042,MASWE,generic,Latest Platform Version Not Targeted,,,maswe/weaknesses/MASVS-CODE/MASWE-0042.md
+MASWE-0043,MASWE,generic,Enforced Updating Not Implemented,,,maswe/weaknesses/MASVS-CODE/MASWE-0043.md
+MASWE-0044,MASWE,generic,Dependencies with Known Vulnerabilities,,,maswe/weaknesses/MASVS-CODE/MASWE-0044.md
+MASWE-0045,MASWE,generic,Compiler-Provided Security Features Not Used,,,maswe/weaknesses/MASVS-CODE/MASWE-0045.md
+MASWE-0046,MASWE,generic,Use of Deprecated APIs or Functionality,,,maswe/weaknesses/MASVS-CODE/MASWE-0046.md
+MASWE-0047,MASWE,generic,Using Non-Standard APIs for Security-Critical Functionality,,,maswe/weaknesses/MASVS-CODE/MASWE-0047.md
+MASWE-0048,MASWE,generic,Malicious Code Included in the App,,,maswe/weaknesses/MASVS-CODE/MASWE-0048.md
+MASWE-0049,MASWE,generic,Unsafe Dynamic Code Loading,,,maswe/weaknesses/MASVS-CODE/MASWE-0049.md
+MASWE-0050,MASWE,generic,Unsafe Handling of Untrusted Data,,,maswe/weaknesses/MASVS-CODE/MASWE-0050.md
+MASWE-0051,MASWE,generic,Root/Jailbreak Detection Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0051.md
+MASWE-0052,MASWE,generic,App Virtualization Environment Detection Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0052.md
+MASWE-0053,MASWE,generic,Emulated or Virtual Device Detection Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0053.md
+MASWE-0054,MASWE,generic,Device Attestation Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0054.md
+MASWE-0055,MASWE,generic,Malware Detection Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0055.md
+MASWE-0056,MASWE,generic,App Attestation Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0056.md
+MASWE-0057,MASWE,generic,App Resources Integrity Not Verified,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0057.md
+MASWE-0058,MASWE,generic,Runtime Code Integrity Not Verified,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0058.md
+MASWE-0059,MASWE,generic,Code Obfuscation Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0059.md
+MASWE-0060,MASWE,generic,Resource Obfuscation Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0060.md
+MASWE-0061,MASWE,generic,Debug Artifacts Not Removed,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0061.md
+MASWE-0062,MASWE,generic,No Application-Level Payload Encryption,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0062.md
+MASWE-0063,MASWE,generic,Debug Mechanisms Not Disabled,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0063.md
+MASWE-0064,MASWE,generic,Debugger Detection Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0064.md
+MASWE-0065,MASWE,generic,Dynamic Analysis Tools Detection Not Implemented,,,maswe/weaknesses/MASVS-RESILIENCE/MASWE-0065.md
+MASWE-0066,MASWE,generic,Inadequate Permission Management,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0066.md
+MASWE-0067,MASWE,generic,Lack of Anonymization or Pseudonymisation Measures,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0067.md
+MASWE-0068,MASWE,generic,Incorrect Use of Identifiers for User Tracking,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0068.md
+MASWE-0069,MASWE,generic,Usage of Non-Privacy-Preserving Functionality,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0069.md
+MASWE-0070,MASWE,generic,Inadequate Awareness for Privacy Relevant Actions,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0070.md
+MASWE-0071,MASWE,generic,Inadequate Defaults for Privacy Relevant Actions,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0071.md
+MASWE-0072,MASWE,generic,Inadequate Privacy Policy,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0072.md
+MASWE-0073,MASWE,generic,Inadequate Data Collection Declarations,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0073.md
+MASWE-0074,MASWE,generic,Inadequate Tracking Domains Declarations,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0074.md
+MASWE-0075,MASWE,generic,Non-Reproducible Builds,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0075.md
+MASWE-0076,MASWE,generic,Lack of Proper Data Management Controls,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0076.md
+MASWE-0077,MASWE,generic,Inadequate Data Visibility Controls,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0077.md
+MASWE-0078,MASWE,generic,Inadequate or Ambiguous User Consent Mechanisms,,,maswe/weaknesses/MASVS-PRIVACY/MASWE-0078.md

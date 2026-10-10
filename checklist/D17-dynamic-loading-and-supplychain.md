@@ -2702,7 +2702,7 @@ call that runs them?**
 |---|---|
 | **Severity ceiling** | By the behaviour introduced — the point is that it **cannot** be dismissed as "the library does that" |
 | **VRT** | whichever node the introduced behaviour lands in |
-| **Attacker** | per the behaviour |
+| **Attacker** | AM-08 malicious or compromised third-party code (vendored copy) — rated per the behaviour it introduces |
 | **Applies to** | all, especially apps whose manifest surface is otherwise well-built |
 | **Maps to** | the corpus's vendored-patch technique (see also the D10 vendored-WebView-client item); MASWE-0048 |
 

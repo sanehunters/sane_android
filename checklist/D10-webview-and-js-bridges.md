@@ -687,7 +687,7 @@ read or do?**
   `https://example.com@attacker.tld`, `https://EXAMPLE.COM.attacker.tld`, and any open redirect on the real host.
 - **Proof:** The crafted URL rendering inside the in-app WebView (identifiable by the app's toolbar and the JS bridge
   object) rather than in a Custom Tab.
-- **Escalation:** Deep link × WebView allow-list × OAuth redirect → D10-004/D28.
+- **Escalation:** Deep link × WebView allow-list × OAuth redirect → D10-004 / D13 (OAuth).
 - **Ruled out when:** the classifier does exact-host matching against a fixed first-party list, treats redirects as
   external, and no open redirect exists on the trusted host to smuggle back in.
 
@@ -1307,7 +1307,7 @@ read or do?**
   control set and read a cookie for the IdP origin.
 - **Proof:** Frida prints `true` for the login/checkout WebView, then the iframe sets/reads an IdP-origin cookie.
 - **Escalation:** OAuth in an embedded WebView (not a Custom Tab) + third-party cookies = session-fixation/code
-  interception → D13/D28.
+  interception → D13.
 - **Ruled out when:** third-party cookies are off (default) for the auth WebView, or the OAuth flow runs in a Custom Tab.
 
 ### D10-045 · Modern SameSite default (targetSdk 31) pushing the session token into a URL or bridge
@@ -2081,7 +2081,7 @@ read or do?**
 - **D18 (secrets/infra) × D10:** a bridged WebView loading remote HTML from a CDN/bucket (D10-064) makes a subdomain
   takeover or stale bucket a direct bridge-access primitive — file the takeover against infra, then the bridge as the
   consumer.
-- **D28 (OAuth) × D10:** OAuth run in an embedded WebView instead of a Custom Tab, plus third-party cookies
+- **D13 (OAuth) × D10:** OAuth run in an embedded WebView instead of a Custom Tab, plus third-party cookies
   (D10-044) or the targetSdk-31 SameSite regression (D10-045), converts into session fixation / code interception —
   the WebView-vs-Custom-Tab classifier (D10-021) is the same bug from the routing side.
 

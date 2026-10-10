@@ -1822,7 +1822,7 @@ adb shell monkey -p com.target.app 1 ; adb logcat -d | head -100
 ```
   Watch the proxy for requests that fire before the first screen paints.
 - **Proof:** A network request carrying device identifiers, or fetching a config the app then trusts, observed in the proxy **before** the app's lock screen is drawn. Timestamp it against the first frame.
-- **Escalation:** Pre-auth, pre-consent egress is -> D20; a pre-auth *config fetch* that the app then trusts is a control-plane injection point -> D18-025 and, combined with backup/restore, -> D11/D28.
+- **Escalation:** Pre-auth, pre-consent egress is -> D20; a pre-auth *config fetch* that the app then trusts is a control-plane injection point -> D18-025 and, combined with backup/restore, -> D11.
 - **Ruled out when:** Every declared initialiser only wires local dependencies — no HTTP client construction, no token read, no telemetry call — and the proxy shows nothing before the first screen. Quote the initialiser list.
 
 ### D18-066 · Permissions, foreground-service types and components the SDKs merged into the manifest
@@ -2048,7 +2048,7 @@ grep -i 'authorization\|"cookie"\|apikey' out.sanitized.har | head -20   # verif
 - **Push send credential (D18-031/-032) × the message handler (D18-034) × deep links (D09).** A server key is High as mass phishing. Joined with a handler that routes on message content and a deep link that reaches a sensitive route, the same credential is remote, zero-interaction navigation control over every install — the D09 chain without needing the victim to click anything.
 - **Crash reporter configuration (D18-060) × logcat findings (D20) × the OkHttp interceptor (D14).** Each is capped: logcat needs a local reader, `HttpLoggingInterceptor` is a code smell, the crash SDK is inventory. Joined, the interceptor writes the bearer token to logcat, the reporter attaches logcat to crash reports, and the token leaves the device to a third party — which removes the on-device reachability cap that limited the logcat finding.
 - **Cognito/identity-pool role scope (D18-036/-037) × object-key structure (D18-043) × the app's own IDOR surface (D15).** The role decides *whether* you can call S3; the key structure decides *whose* object you get. Testers usually stop at the role. Enumerate the per-identity prefix convention from the listing and then test the same substitution against the app's own download endpoint — the two surfaces frequently disagree about who owns an object.
-- **App Startup initialisers (D18-065) × backup and restore (D11/D28).** An initialiser that reads a config or token from `SharedPreferences` before any gate, combined with permissive backup rules, means an attacker-supplied restore seeds the app's control plane before the lock screen is drawn. Neither surface is interesting alone.
+- **App Startup initialisers (D18-065) × backup and restore (D11).** An initialiser that reads a config or token from `SharedPreferences` before any gate, combined with permissive backup rules, means an attacker-supplied restore seeds the app's control plane before the lock screen is drawn. Neither surface is interesting alone.
 - **SDK-injected permissions (D18-066) × confused-deputy components (D05).** The permission an SDK merged in is exactly what an exported first-party receiver inherits. Cross the merged-manifest permission list against the exported-component list: an SDK-contributed `READ_PHONE_STATE` or location permission raises the ceiling of every confused-deputy primitive the app already had.
 
 ## Sources

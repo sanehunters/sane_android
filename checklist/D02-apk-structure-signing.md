@@ -971,7 +971,7 @@ grep -rn 'dist:module\|dist:onDemand\|dist:instant' out/AndroidManifest.xml out/
 |---|---|
 | **Severity ceiling** | High (the severity of whatever the split-only code leaks or exposes) |
 | **VRT** | Follows the content — commonly `sensitive_data_exposure.disclosure_of_secrets.*` or `broken_access_control.exposed_sensitive_android_intent` (varies) |
-| **Attacker** | Follows the content |
+| **Attacker** | n/a (inventory step) — the finding it uncovers inherits its own attacker model |
 | **Applies to** | All AAB/XAPK/split-delivery apps; universally true for Flutter (`libapp.so`), React Native and Unity (`libil2cpp.so`) builds |
 | **Maps to** | MASTG-TECH-0145 (Working with XAPK Files), MASTG-TECH-0003 |
 
@@ -1481,7 +1481,7 @@ cdxgen -t android -o apk-sbom.json .
 |---|---|
 | **Severity ceiling** | Inherits the CVE's severity **only with reachability**; Low at most without it |
 | **VRT** | `using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) for a version string alone — this is the closed-informative trap |
-| **Attacker** | Follows the CVE |
+| **Attacker** | n/a (inventory step) — rate each CVE by its real reachability: AM-01/AM-02 for a network- or link-reachable parser, AM-03 for an IPC-reachable one |
 | **Applies to** | All |
 | **Maps to** | MASTG-TEST-0272 (Gradle route), MASTG-TEST-0274, MASTG-TECH-0131, MASTG-TOOL-0131 (dependency-check), MASTG-TOOL-0132 (dependency-track); MASWE-0044 (CWE-1395, CWE-1357), MASVS-CODE-3; CVE-2021-0341, CVE-2020-8913; susatest; Project Zero CVE-2022-2294 RCA ("the bug is only reachable in applications that use SDP munging") |
 
@@ -1617,7 +1617,7 @@ adb install -r -d old-release.apk || (adb uninstall com.target.app && adb instal
 |---|---|
 | **Severity ceiling** | High when the gated code is a security check |
 | **VRT** | Routes to the gated weakness (for the cited case, `server_side_injection.sql_injection` P1 via a provider) |
-| **Attacker** | Any app that declares an old `targetSdk` — the attacker chooses it freely |
+| **Attacker** | AM-03 zero-permission local app (any app may declare an old `targetSdk` — the attacker chooses it freely) |
 | **Applies to** | Android 10+ (the `CompatChanges` framework); exploitable by any app declaring `targetSdk` at or below the gate |
 | **Maps to** | CVE-2026-28576 / GHSA-ph86-9mcx-3p6r; MHL: "Auditing `@ChangeId` annotations in system apps is a reliable way to find this bug class"; `github.com/mobilehackinglab/jadx-mcp-plugin` |
 

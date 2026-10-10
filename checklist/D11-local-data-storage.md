@@ -2067,7 +2067,7 @@ Log.e("PoC", cm.getPrimaryClip().getItemAt(0).getText().toString());
 |---|---|
 | **Severity ceiling** | High when transmitted clipboard contents are a password-manager paste or a 2FA code |
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the transmission; the read itself is P5 |
-| **Attacker** | the target app is the reader here — this is the app misbehaving, tested from the defender's side |
+| **Attacker** | AM-08 (the target app, or an SDK inside it, is the reader — the app is misbehaving; tested from the defender's side) |
 | **Applies to** | Android 12+ (the toast makes a silent-launch read detectable) |
 | **Maps to** | `developer.android.com/about/versions/12/behavior-changes-all` (toast `"APP pasted from your clipboard."`; `getPrimaryClipDescription()` does not trigger it) |
 

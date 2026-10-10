@@ -724,7 +724,7 @@ done
 adb shell run-as com.target.app ls -la shared_prefs/ databases/ files/
 ```
 - **Proof:** A 200 with account A's data at a point in the lifecycle where the app's UI says A is no longer the active account, or where the app was reinstalled and never re-authenticated.
-- **Escalation:** The reinstall/restore variant chains to D02/D11 (backup extraction) and to D13-091 (Restore Credentials); the account-switch variant chains to D15 BOLA with the wrong tenant's token.
+- **Escalation:** The reinstall/restore variant chains to D02/D11 (backup extraction) and to the D13 Restore Credentials item (Android 15 Credential Manager restore keys — see the D13 card); the account-switch variant chains to D15 BOLA with the wrong tenant's token.
 - **Ruled out when:** Each transition either issues a new token and refuses the old one, or the old token's scope demonstrably no longer covers the switched-to account. Account switching is the highest-yield row: an app that keeps both tokens live in memory and picks by index is one off-by-one away from cross-account reads.
 
 ### D13-027 · JWT algorithm, key and claim battery against the server

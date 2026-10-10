@@ -977,7 +977,7 @@ say exactly that, with the unproven link named rather than hidden?**
 |---|---|
 | **Severity ceiling** | Support |
 | **VRT** | n/a |
-| **Attacker** | varies |
+| **Attacker** | n/a (reporting procedure) — the finding's own attacker model carries through |
 | **Applies to** | Samsung, Xiaomi, Google-owned apps, AOSP; the technique generalises |
 | **Maps to** | Samsung Mobile Security Risk Classification ("Last updated: September 8, 2026") and its explicit appeal clause; Xiaomi's Remote/Local and privileged/ordinary/restricted process definitions; AOSP severity table and modifiers at `source.android.com/docs/security/overview/updates-resources` |
 

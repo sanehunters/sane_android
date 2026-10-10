@@ -1409,7 +1409,7 @@ adb shell dumpsys shortcut | sed -n "/$PKG/,/^  [A-Za-z]/p"
 adb shell am start -n "$PKG/<targetClass>" --es <extra> <value>
 ```
 - **Proof:** An `<intent android:targetClass="...">` naming an activity that the manifest marks `android:exported="false"`, or one carrying a hard-coded extra such as `"skipOnboarding"` / `"isDebug"` / `"internal"`. The confirming observable is the app reaching that screen or state.
-- **Escalation:** → D08 (intent redirection makes the non-exported target reachable from an unprivileged app), → D09 (pinned-shortcut staleness), → D28/D07 (share-receiver plus FileProvider join).
+- **Escalation:** → D08 (intent redirection makes the non-exported target reachable from an unprivileged app), → D09 (pinned-shortcut staleness), → D07 (share-receiver plus FileProvider join).
 - **Ruled out when:** `res/xml/shortcuts.xml` is absent, or every `<intent>` in it names an activity that is already exported and already in your D01-035 register with a tested status, carrying no state-skipping extra.
 
 ### D01-048 · Inventory the deep-link surface including the `<data>` cross-product and the App Links verdict

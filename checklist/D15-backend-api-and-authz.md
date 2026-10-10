@@ -2954,7 +2954,7 @@ header or the client's arithmetic?**
 | | |
 |---|---|
 | **Severity ceiling** | Critical (SQLi/command injection/SSRF to cloud metadata) |
-| **VRT** | `server_side_injection.sql_injection` (P1), `server_side_injection.remote_code_execution_rce` (P1), `server_side_injection.server_side_request_forgery_ssrf` |
+| **VRT** | `server_side_injection.sql_injection` (P1), `server_side_injection.remote_code_execution_rce` (P1), `server_security_misconfiguration.server_side_request_forgery_ssrf.internal_secrets_exposure` |
 | **Attacker** | AM-05 |
 | **Applies to** | all apps with a remote backend |
 | **Maps to** | API7:2023 Server Side Request Forgery; API8:2023; Mobile Top 10 2024 M4; MASWE-0050 (CWE-20, CWE-89, CWE-116); MASVS-CODE-4; ATT&CK T1428, T1426 |
