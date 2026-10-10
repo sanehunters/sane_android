@@ -51,7 +51,7 @@ Does any security decision anywhere — this app's own self-check, a sibling app
 - **How:**
 ```bash
 for f in apk/*.apk; do
-  printf '%s\t%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(stat -f%z "$f")" "$f"
+  printf '%s\t%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(wc -c < "$f" | tr -d " ")" "$f"
 done | tee evidence/ARTEFACT-MANIFEST.txt
 apksigner verify --print-certs --verbose apk/base.apk | \
   grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme|key (algorithm|size)'

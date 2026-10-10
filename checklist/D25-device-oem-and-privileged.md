@@ -11,7 +11,7 @@
 |---|---|
 | **Phases** | P4 static and image analysis, P5 IPC and privileged-surface probing |
 | **Milestones** | M4, M5 |
-| **VRT ceiling** | `insecure_os_firmware\|hardcoded_password\|privileged_user` (**P1**, CWE-259) and `insecure_os_firmware\|command_injection` (**P1**) for device/firmware scope; `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) for a preinstalled-app confused deputy; `insecure_os_firmware\|local_administrator_on_default_environment` (**P2**, CWE-276) and `insecure_os_firmware\|over_permissioned_credentials_on_storage` (**P2**, CWE-250). When the device is out of scope the same observations are environment notes with no rating at all — say so rather than filing them |
+| **VRT ceiling** | `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**, CWE-259) and `insecure_os_firmware.command_injection` (**P1**) for device/firmware scope; `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) for a preinstalled-app confused deputy; `insecure_os_firmware.local_administrator_on_default_environment` (**P2**, CWE-276) and `insecure_os_firmware.over_permissioned_credentials_on_storage` (**P2**, CWE-250). When the device is out of scope the same observations are environment notes with no rating at all — say so rather than filing them |
 | **Primary attacker model** | AM-03 zero-permission local app (the OEM confused-deputy class); AM-10/AM-11 physical for the accessory, USB and AFU items; AM-12 own rooted device for the policy and firmware machinery, which is **not an attack** |
 | **Maps to** | MASVS-PLATFORM, MASVS-STORAGE-1, MASVS-STORAGE-2, MASVS-CRYPTO-2; MASTG-KNOW-0017, MASTG-KNOW-0020, MASTG-KNOW-0049, MASTG-TEST-0203, MASTG-TEST-0247, MASTG-TEST-0249, MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366, MASTG-TOOL-0004; MASWE-0005, MASWE-0017, MASWE-0018, MASWE-0026, MASWE-0029, MASWE-0032, MASWE-0050, MASWE-0070, MASWE-0078; CWE-16, CWE-250, CWE-259, CWE-269, CWE-276, CWE-434, CWE-532, CWE-798, CWE-926, CWE-927; ATT&CK T1398, T1458, T1474.002, T1474.003, T1625.001, T1645, mitigations M1001, M1002, M1004, M1012 |
 
@@ -344,7 +344,7 @@ adb shell ls -laZ /data/data/$PKG          # u:object_r:app_data_file:s0:c123,c2
 | | |
 |---|---|
 | **Severity ceiling** | Support for the determination; it escalates every other chapter's findings by a band |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) once a component is driven |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) once a component is driven |
 | **Attacker** | AM-03 |
 | **Applies to** | any app that also ships on an OEM, carrier or enterprise image |
 | **Maps to** | AOSP Application Sandbox (privileged vs non-privileged app domains); AOSP System API "available only to partners and OEMs for inclusion in bundled applications"; MASTG-KNOW-0017 |
@@ -375,7 +375,7 @@ adb shell dumpsys package com.target.app | grep -iE 'sharedUser|signatures|userI
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 |
 | **Applies to** | preloaded, OEM, carrier and enterprise-imaged apps |
 | **Maps to** | MASTG-KNOW-0017 (the Uraniborg-derived risk-scored permission table), MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366, MASWE-0018 |
@@ -422,7 +422,7 @@ adb shell pm list permissions -d -g
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 (the consequence); AM-12 for the observation |
 | **Applies to** | OEM images, Android 8.0+ for the mechanism, Android 9+ for boot-blocking enforcement |
 | **Maps to** | AOSP privileged-permission allowlist documentation (`ro.control_privapp_permissions`, per-partition allowlists, boot-blocking from Android 9) |
@@ -454,7 +454,7 @@ adb shell dumpsys package com.oem.target | sed -n '/install permissions/,/runtim
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-12 for the observation |
 | **Applies to** | Android 15+, platform-signed **non-system** apps only (platform-signed system apps are explicitly unaffected); not enforced on debuggable builds |
 | **Maps to** | AOSP signature-permission allowlist documentation (`<signature-permissions package="…">` under `/etc/permissions/`, named `signature-permissions-OEM_NAME.xml` / `signature-permissions-DEVICE_NAME.xml`) |
@@ -482,7 +482,7 @@ adb shell getprop ro.build.type                    # not enforced on userdebug/e
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 via the weakest sibling |
 | **Applies to** | all; deprecated from API 29 but still shipping in OEM and enterprise apps |
 | **Maps to** | Oversecured "Android security checklist: theft of arbitrary files" §9 Shared User ID Exploitation; "Two weeks of securing Samsung devices: Part 1" (CVE-2021-25393 / SVE-2021-20731) |
@@ -544,7 +544,7 @@ adb shell cat /system/etc/selinux/plat_seapp_contexts | grep -n minTargetSdkVers
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16); `broken_access_control\|privilege_escalation` (**VARIES**) when the debuggable package is privileged |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16); `broken_access_control.privilege_escalation` (**VARIES**) when the debuggable package is privileged |
 | **Attacker** | AM-11 physical unlocked, or AM-06/AM-04 where `adb` is reachable |
 | **Applies to** | all API levels; highest yield on OEM and carrier handsets |
 | **Maps to** | drozer `app.package.debuggable`, `exploit.jdwp.check`; ATT&CK M1012 (do not enable USB debugging unless needed) |
@@ -582,7 +582,7 @@ adb jdwp                                      # confirm the JDWP port is live
 | | |
 |---|---|
 | **Severity ceiling** | Medium (it is the argument that lifts a D20 logcat leak off the floor, not a finding on its own) |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) for the image observation; the rated finding stays in D20 |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) for the image observation; the rated finding stays in D20 |
 | **Attacker** | AM-03 (the preinstalled reader is already on the device) |
 | **Applies to** | all; strength depends on the target's device demographics |
 | **Maps to** | MASTG-TEST-0203 (verbatim: "the vast ecosystem of Android devices includes pre-loaded apps with the `READ_LOGS` privilege, increasing the risk of sensitive data exposure"), MASTG-KNOW-0017 (`READ_LOGS` rated HIGH, `signature`), MASTG-KNOW-0049, MASWE-0005 (CWE-532) |
@@ -652,7 +652,7 @@ adb shell service list | sort > svc.$DEV ; comm -23 svc.oem svc.aosp > oem-only-
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | OEM/VRP engagements and managed-device assessments |
 | **Maps to** | CVE-2026-20983 (Samsung Dialer, improper export → arbitrary activity launch at Dialer privilege); CVE-2026-21059 (Samsung Contacts, arbitrary file delete at Contacts' system privilege, fixed SMR Aug-2026 Release 1); CVE-2026-20990 (Secure Folder, fixed SMR Mar-2026 Release 1); CVE-2015-7889, CVE-2015-7893; Oversecured "176 vulnerabilities in Samsung preinstalled apps"; CWE-926 |
@@ -689,7 +689,7 @@ drozer> run app.package.attacksurface <oem.pkg>
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM-scope engagements |
 | **Maps to** | Oversecured "Discovering vendor-specific vulnerabilities in Android" — the `semIsBackupEnabled()`-beside-`isBackupEnabled()` pattern ("returns the value with no checks at all") and the `IPowerManager.reboot()` `enforceCallingOrSelfPermission()` contrast |
@@ -724,7 +724,7 @@ grep -rLn 'enforceCallingPermission\|enforceCallingOrSelfPermission\|checkPermis
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `application_level_denial_of_service_dos\|critical_impact_and_or_easy_difficulty` (**P2**) for a locally triggerable reboot |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (**P2**) for a locally triggerable reboot |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM-scope engagements |
 | **Maps to** | Oversecured — the Samsung `StorageManagerService.java` case where the broadcast action `com.samsung.intent.action.RESTART_OF_SDCARDBADREMOVED_HASAPK` triggers a device reboot, "effectively sidestepping permission restrictions" |
@@ -755,7 +755,7 @@ adb shell am broadcast -a com.oem.intent.action.SOME_PRIVILEGED_ACTION
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) for what comes back |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) for what comes back |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM builds — enumerate per ROM, not per app |
 | **Maps to** | CVE-2025-10184 (OnePlus OxygenOS Telephony provider permission bypass, Rapid7); HackTricks android-checklist "Check OEM ROM add-ons … for extra exported ContentProviders that bypass permissions" |
@@ -785,7 +785,7 @@ adb shell content update --uri content://<authority>/<path> --bind x:s:y   # wri
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) escalating to `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) escalating to `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM builds |
 | **Maps to** | Oversecured Samsung `com.sec.factory.camera` — a debug app on production with system privileges and an unprotected receiver accepting test commands, producing silent video recording with no camera indicator |
@@ -817,7 +817,7 @@ adb shell dumpsys media.camera | grep -i 'active\|clients'    # confirm the effe
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM builds; out of scope for most app engagements — confirm scope first |
 | **Maps to** | AOSP Binder IPC (`/dev/binder` context for framework and app AIDL); AOSP `service_contexts` / `hal_attribute_service` access model; MASTG-KNOW-0020, MASTG-TOOL-0004; AOSP AIDL fuzzing as the systematic follow-up |
@@ -851,7 +851,7 @@ sesearch -A -s untrusted_app -c service_manager policy.bin
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM-scope engagements |
 | **Maps to** | `protectionLevel` semantics; AOSP permissions documentation on OEMs being able to define custom permissions as `normal` or `dangerous`; AOSP privileged-permission allowlist |
@@ -888,7 +888,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 on a non-vendor device; AM-08 where the sibling is the SDK's |
 | **Applies to** | OEM-bundled or OEM-integrated apps |
 | **Maps to** | Oversecured "Discovering vendor-specific vulnerabilities in Android", "20 Security Issues Found in Xiaomi Devices", "176 vulnerabilities in Samsung preinstalled apps"; `developer.android.com/privacy-and-security/risks/create-package-context` |
@@ -918,7 +918,7 @@ adb shell pm list packages -s | head -50
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16); `insecure_os_firmware\|hardcoded_password\|privileged_user` (**P1**, CWE-259) where credentials are embedded |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16); `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**, CWE-259) where credentials are embedded |
 | **Attacker** | AM-01 remote (the implant's operator) |
 | **Applies to** | cheap and whitelabel devices, TV boxes, carrier and reseller firmware |
 | **Maps to** | HackTricks README "Pre-installed privileged Android TV-box implants (OEM / reseller firmware abuse)", citing Bitsight's Fuyao Enterprise research; ATT&CK T1474.002 Compromise Hardware Supply Chain, T1474.003, mitigation M1001 |
@@ -993,7 +993,7 @@ sesearch -A -t app_data_file policy.bin
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM/VRP engagements, Android 8.0+ (Treble) |
 | **Maps to** | AOSP SELinux device-policy documentation (the "5–10% device-specific policy" model; Treble assembling policy at boot from `system` and `vendor`); AOSP security-model paper §4.8 |
@@ -1029,7 +1029,7 @@ seinfo -adomain -x oem_policy.bin
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 for the exercised impact |
 | **Maps to** | AOSP `system/sepolicy` `neverallow` assertions, enforced at build time and re-tested by CTS; AOSP SELinux concepts (permissive vs enforcing; `permissive=0` in an AVC means enforcing) |
 | **Applies to** | OEM builds |
@@ -1062,7 +1062,7 @@ grep -rn 'neverallow untrusted_app' system/sepolicy/
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM engagements |
 | **Maps to** | AOSP `seapp_contexts` selectors (`user=`, `seinfo=`, `name=`, `isPrivApp=`, `minTargetSdkVersion=`, `levelFrom=`) and `mac_permissions.xml` mapping signing certificates to `seinfo`; zygote assigning the domain at fork from signing cert, priv status and targetSdk |
@@ -1160,7 +1160,7 @@ seinfo --stats policy.bin
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM builds mostly; always verify from an app UID, never from `adb shell` |
 | **Maps to** | AOSP system-property documentation (`ro.` set once by init and immutable; `persist.` survives reboot; `property_contexts` with `system_internal_prop` / `system_restricted_prop` / `system_vendor_config_prop` / `system_public_prop`; vendor prefixes `vendor.`, `persist.vendor.`, `ro.vendor.`, `odm.`, `ro.odm.`) |
@@ -1194,7 +1194,7 @@ adb reboot && adb wait-for-device && adb shell getprop persist.vendor.foo.debug
 | | |
 |---|---|
 | **Severity ceiling** | Critical on a device brief when the client's own deployment requires it off; otherwise Support |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-11 physical unlocked |
 | **Applies to** | all for the recording; device/firmware engagements for the finding |
 | **Maps to** | AOSP Verified Boot (chain of trust from hardware root → bootloader → boot and other verified partitions; dm-verity from Android 4.4, FEC in 7.0; AVB standardised footers and rollback protection in Android 8.0); ATT&CK mitigation M1004 System Partition Integrity, M1002 Attestation |
@@ -1282,7 +1282,7 @@ adb shell cat /proc/$(adb shell pidof -s com.target.app)/maps | awk '{print $6}'
 | | |
 |---|---|
 | **Severity ceiling** | Critical when the parser is reachable 0-click |
-| **VRT** | `server_side_injection\|remote_code_execution_rce` (**P1**) framing when the chain completes; otherwise rated by the reached impact |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) framing when the chain completes; otherwise rated by the reached impact |
 | **Attacker** | AM-01 remote no interaction, where the parser is on an auto-render path |
 | **Applies to** | OEM/firmware research; not applicable to a pure app-scoped engagement |
 | **Maps to** | CVE-2020-8899 (Samsung Qmage in `libhwui.so`, 0-click MMS); Mobile Hacking Lab's rediscovery write-up; AOSP AIDL/native fuzzing guidance |
@@ -1400,7 +1400,7 @@ adb logcat -b all | grep -iE 'defex|rkp|kdp'
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_os_firmware\|weakness_in_firmware_updates\|firmware_does_not_validate_update_integrity` (**P3** baseline, CWE-434, baseline vector `AV:N/AC:H/PR:H/UI:R/S:C/C:H/I:H/A:H` — if your PoC needs neither `PR:H` nor `UI:R`, say so and argue the score up); `insecure_os_firmware\|weakness_in_firmware_updates\|firmware_is_not_encrypted` (**P5**); `insecure_os_firmware\|weakness_in_firmware_updates\|firmware_cannot_be_updated` (**VARIES**) |
+| **VRT** | `insecure_os_firmware.weakness_in_firmware_updates.firmware_does_not_validate_update_integrity` (**P3** baseline, CWE-434, baseline vector `AV:N/AC:H/PR:H/UI:R/S:C/C:H/I:H/A:H` — if your PoC needs neither `PR:H` nor `UI:R`, say so and argue the score up); `insecure_os_firmware.weakness_in_firmware_updates.firmware_is_not_encrypted` (**P5**); `insecure_os_firmware.weakness_in_firmware_updates.firmware_cannot_be_updated` (**VARIES**) |
 | **Attacker** | AM-06 network attacker, or AM-11 physical for a local update path |
 | **Applies to** | device/IoT/companion-hardware programmes |
 | **Maps to** | ATT&CK T1474.002 Compromise Hardware Supply Chain, mitigation M1001 |
@@ -1429,7 +1429,7 @@ adb logcat -b all | grep -iE 'update|ota|dfu|verify|signature'
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_os_firmware\|hardcoded_password\|privileged_user` (**P1**, CWE-259, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`); `\|non_privileged_user` (**P2**, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N`); `insecure_os_firmware\|shared_credentials_on_storage` (**P3**, CWE-798); `insecure_os_firmware\|over_permissioned_credentials_on_storage` (**P2**, CWE-250) |
+| **VRT** | `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**, CWE-259, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`); `\|non_privileged_user` (**P2**, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N`); `insecure_os_firmware.shared_credentials_on_storage` (**P3**, CWE-798); `insecure_os_firmware.over_permissioned_credentials_on_storage` (**P2**, CWE-250) |
 | **Attacker** | AM-01 remote where the credential authenticates to a network service |
 | **Applies to** | device and firmware programmes |
 | **Maps to** | the VRT `insecure_os_firmware` credential branch — the one place in the mobile-adjacent taxonomy that reaches P1 without a chain |
@@ -1458,7 +1458,7 @@ rg -n -i --no-ignore 'password|secret|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY' ./oem/
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-11 physical unlocked, or AM-03 once persistence exists |
 | **Applies to** | rooted / OEM / firmware engagements only — out of scope for a store-app-only assessment; say so explicitly so the tester does not burn time |
 | **Maps to** | ATT&CK T1398 Boot or Logon Initialization Scripts (these "are part of the operating system and require device rooting or jailbreaking to access"; OldBoot "leverages elevated privileges to alter init scripts on the boot partition"; FlexiSpy "installs boot hooks into `/system/su.d`"); T1645 Compromise Client Software Binary; T1625.001 System Runtime API Hijacking (Zen S0494 "can replace `framework.jar`"); mitigations M1004, M1002 |
@@ -1484,7 +1484,7 @@ rg -n -i 'init\.rc|remount|/system/priv-app|magisk module|adb root' out/sources 
 | | |
 |---|---|
 | **Severity ceiling** | High for the app-level consequence on a debuggable build; the bare open port is an environment observation |
-| **VRT** | `insecure_os_firmware\|local_administrator_on_default_environment` (**P2**, CWE-276) on a fleet build where it is the default; otherwise `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**) |
+| **VRT** | `insecure_os_firmware.local_administrator_on_default_environment` (**P2**, CWE-276) on a fleet build where it is the default; otherwise `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**) |
 | **Attacker** | AM-06 network attacker on the same Wi-Fi; AM-11 physical unlocked for the enablement |
 | **Applies to** | all — but be explicit that adb-over-TCP requires the user or the fleet image to have enabled it. Do not present it as a default |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/android-debuggable` and the test/debug-features risk page; ATT&CK T1458 Replication Through Removable Media, mitigation M1012 ("prevent enabling USB debugging on Android devices unless specifically needed") |
@@ -1518,7 +1518,7 @@ adb -s <victim-ip>:5555 shell run-as com.target.app cat shared_prefs/auth.xml
 | | |
 |---|---|
 | **Severity ceiling** | High on a kiosk, fleet, POS or enterprise deployment; Low elsewhere |
-| **VRT** | `insecure_os_firmware\|poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-11 physical unlocked |
 | **Applies to** | kiosk, fleet, POS and enterprise deployments especially; consumer apps where the client ships a companion desktop tool |
 | **Maps to** | ATT&CK T1458 (adversaries "may utilize the physical connection of a device to a compromised or malicious charging station or PC to bypass application store requirements and install malicious applications directly"; DualToy side-loads "to both Android and iOS devices via a USB connection"), mitigation M1012 |
@@ -1548,7 +1548,7 @@ rg -n 'android.hardware.usb.action' -A6 out/AndroidManifest.xml
 | | |
 |---|---|
 | **Severity ceiling** | High when the reached screen exposes logs, identifiers or a security toggle; Medium otherwise |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927); `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) for what the screen shows |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) for what the screen shows |
 | **Attacker** | AM-11 physical unlocked (dialler), or AM-03 via the broadcast |
 | **Applies to** | all devices with a telephony stack; yield highest on OEM, carrier and telematics builds |
 | **Maps to** | drozer `scanner.misc.secretcodes`; MobSF `dialer_code_found` (level `warning`, `[android:scheme="android_secret_code"]`) |
@@ -1583,7 +1583,7 @@ adb shell dumpsys activity activities | head -30
 | | |
 |---|---|
 | **Severity ceiling** | Critical when it binds `0.0.0.0` and serves files; High on loopback |
-| **VRT** | `server_side_injection\|file_inclusion\|local` (**P1**) where a path handler traverses; `sensitive_data_exposure\|disclosure_of_secrets\|for_publicly_accessible_asset` (**P1**) when the served file is a credential |
+| **VRT** | `server_side_injection.file_inclusion.local` (**P1**) where a path handler traverses; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) when the served file is a credential |
 | **Attacker** | AM-06 network attacker on the same Wi-Fi for the `0.0.0.0` case; AM-03 zero-permission local app for loopback |
 | **Applies to** | all. Android 16's Local Network Protection gates LAN sockets behind `NEARBY_WIFI_DEVICES` — **loopback is not covered**, so LNP does not mitigate the local-app variant |
 | **Maps to** | H1 #292761 (VK, "Stealing Private Information in VK Android App through PlayerProxy Port **Remotely**", $700); Oversecured "Android security checklist: theft of arbitrary files", local-web-servers section — "these servers become available from the local network while the app is running, which makes a possible vulnerability even more dangerous" |
@@ -1623,7 +1623,7 @@ if (requestUri.startsWith(CACHE_PREFIX)) {
 | | |
 |---|---|
 | **Severity ceiling** | Critical when a writable privileged endpoint is reachable from an app UID |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `insecure_os_firmware\|local_administrator_on_default_environment` (**P2**, CWE-276) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `insecure_os_firmware.local_administrator_on_default_environment` (**P2**, CWE-276) |
 | **Attacker** | AM-03 |
 | **Applies to** | device/OEM engagements |
 | **Maps to** | the senior-researcher corpus's local-surface enumeration (`canhazaxs`, `/proc/net/unix`, netlink forging as the GingerBreak/Exploid shape) |
@@ -1656,7 +1656,7 @@ ls -l /proc/[0-9]*/fd/* | grep /dev/ashmem       # shared memory (+ vendor pmem/
 | | |
 |---|---|
 | **Severity ceiling** | High for a physical-access vector; state the vector requirements explicitly |
-| **VRT** | `physical_security_issues\|bypass_of_physical_access_control` (**VARIES**) where it defeats a lock; otherwise rated by the reached parser |
+| **VRT** | `physical_security_issues.bypass_of_physical_access_control` (**VARIES**) where it defeats a lock; otherwise rated by the reached parser |
 | **Attacker** | AM-10 physical locked / AM-11 physical unlocked |
 | **Applies to** | device engagements. Pre-4.2.2 unauthenticated ADB over USB is **LEGACY**; 4.2.2 added RSA host allow-listing |
 | **Maps to** | the senior-researcher corpus's USB-surface enumeration; ATT&CK T1458 |
@@ -1686,7 +1686,7 @@ git grep USB_FUNCTION_ frameworks/base            # modes the framework knows ab
 | | |
 |---|---|
 | **Severity ceiling** | High when the parser is native and crashes controllably, or when device data drives an authenticated action; Medium when it only DoSes |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the entry point; the reached impact sets the rating |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the entry point; the reached impact sets the rating |
 | **Attacker** | AM-10/AM-11 physical (malicious accessory) |
 | **Applies to** | apps shipping a `device_filter`. Requires physical USB contact — a charging kiosk, a rental car, a borrowed cable — state that precondition |
 | **Maps to** | `developer.android.com/develop/connectivity/usb/host`, verbatim: "When users connect a device that matches your device filter, the system presents them with a dialog that asks if they want to start your application… **If users accept, your application automatically has permission to access the device until the device is disconnected**"; and "If your application uses an intent filter to discover USB devices as they're connected, it automatically receives permission if the user allows your application to handle the intent" |
@@ -1721,7 +1721,7 @@ adb logcat | grep -E "START u0 .*USB_DEVICE_ATTACHED"
 | | |
 |---|---|
 | **Severity ceiling** | High when the accessory channel drives an action or feeds a native parser; Medium when it only supplies display data |
-| **VRT** | `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**) where the app derives trust from the identity; otherwise rated by the reached sink |
+| **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) where the app derives trust from the identity; otherwise rated by the reached sink |
 | **Attacker** | AM-10/AM-11 physical |
 | **Applies to** | apps shipping an `accessory_filter` |
 | **Maps to** | `developer.android.com/develop/connectivity/usb/accessory` — the filter attributes `manufacturer`, `model`, `version`, the `openAccessory()` → `FileInputStream(fd)` pattern, and the documentation's own statement that "The accessory sends these attributes [to] the Android-powered device" |
@@ -1752,7 +1752,7 @@ adb shell dumpsys usb | grep -A5 accessory
 | | |
 |---|---|
 | **Severity ceiling** | High for apps whose entire protection is "Android encrypts storage" |
-| **VRT** | `insecure_os_firmware\|data_not_encrypted_at_rest\|sensitive` (**VARIES**); `insecure_os_firmware\|poorly_configured_disk_encryption` (**VARIES**); `insecure_os_firmware\|recovery_of_disk_contains_sensitive_material` (**VARIES**) |
+| **VRT** | `insecure_os_firmware.data_not_encrypted_at_rest.sensitive` (**VARIES**); `insecure_os_firmware.poorly_configured_disk_encryption` (**VARIES**); `insecure_os_firmware.recovery_of_disk_contains_sensitive_material` (**VARIES**) |
 | **Attacker** | AM-10 physical locked (BFU) / AM-11 physical unlocked or AFU |
 | **Applies to** | all apps handling regulated or high-value data |
 | **Maps to** | HackTricks android-physical-attacks, citing AOSP authentication / Gatekeeper / Weaver / KeyMint documentation |
@@ -1788,7 +1788,7 @@ adb shell su -c 'ls /data/user/0/com.target.app' ; echo "BFU rc=$?"
 | | |
 |---|---|
 | **Severity ceiling** | Critical (device compromise), reported as a threat-model caveat for app findings |
-| **VRT** | `physical_security_issues\|bypass_of_physical_access_control` (**VARIES**) |
+| **VRT** | `physical_security_issues.bypass_of_physical_access_control` (**VARIES**) |
 | **Attacker** | AM-10 physical locked |
 | **Applies to** | any engagement with a physical-access threat model; scope-gated — most programmes exclude it |
 | **Maps to** | HackTricks android-physical-attacks; the iOS parallel worth citing in a cross-platform report is checkm8 for Boot ROM devices and CVE-2025-24200 as a USB Restricted Mode policy-enforcement bypass re-enabling USB data on a locked device |
@@ -1815,7 +1815,7 @@ adb shell cat /proc/net/ptype /proc/net/protocols | head -40
 | | |
 |---|---|
 | **Severity ceiling** | Critical (device-level) |
-| **VRT** | `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**); `broken_authentication_and_session_management\|authentication_bypass` (**P1**) where it reaches the account |
+| **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**); `broken_authentication_and_session_management.authentication_bypass` (**P1**) where it reaches the account |
 | **Attacker** | AM-11 physical unlocked plus root; scope-gated |
 | **Applies to** | devices without a real Secure Element or Weaver path |
 | **Maps to** | HackTricks android-physical-attacks "Biometric TA AuthToken forgery", citing the DarkNavy research |
@@ -1848,7 +1848,7 @@ adb shell cat /proc/net/ptype /proc/net/protocols | head -40
 | | |
 |---|---|
 | **Severity ceiling** | High; Critical where it reaches the account |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927); `broken_authentication_and_session_management\|authentication_bypass` (**P1**) if it reaches the account |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `broken_authentication_and_session_management.authentication_bypass` (**P1**) if it reaches the account |
 | **Attacker** | AM-10 physical locked |
 | **Applies to** | all |
 | **Maps to** | AOSP severity guidance rating "Lockscreen bypass" as High; the Android & Google Devices top-tier table entry "Software-Based Lockscreen Bypass"; Google Mobile VRP's non-qualifying "Secondary lockscreen bypasses" — check which lock you are bypassing before filing |
@@ -1876,7 +1876,7 @@ adb shell dumpsys window | grep -iE 'mShowWhenLocked|KeyguardOccluded'
 | | |
 |---|---|
 | **Severity ceiling** | High when the dispatched data reaches a router, WebView or file sink |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927); rated by the reached sink |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); rated by the reached sink |
 | **Attacker** | AM-10/AM-11 physical proximity (<8 cm) |
 | **Applies to** | apps registering `ACTION_NDEF_DISCOVERED` / `TECH_DISCOVERED` / `TAG_DISCOVERED` |
 | **Maps to** | `developer.android.com/develop/connectivity/nfc/nfc` — the three dispatch actions and their priority order (`NDEF_DISCOVERED` > `TECH_DISCOVERED` > `TAG_DISCOVERED`), AAR precedence, and the tech-list XML |
@@ -1908,7 +1908,7 @@ adb logcat -d | grep -iE 'NfcDispatch|NDEF_DISCOVERED|START u0 .*com.target'
 | | |
 |---|---|
 | **Severity ceiling** | Critical for a relay of live EMV transactions; High for pre-auth logic running before consent |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) for the role; the financial impact is rated in D23 |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) for the role; the financial impact is rated in D23 |
 | **Attacker** | AM-02 remote one click (the user installs the relay app) for the relay; AM-10 proximity for the reader side |
 | **Applies to** | apps registering `HostApduService`; Android 15+ for observe mode and polling-frame handling |
 | **Maps to** | `HostApduService.processPollingFrames()`, `CardEmulation.registerPollingLoopPatternFilterForService()` and the Android 15 observe-mode APIs; `res/xml/apduservice.xml` AID registration |
@@ -1937,7 +1937,7 @@ adb shell dumpsys nfc | grep -iE 'aid|default|payment|observe'
 | | |
 |---|---|
 | **Severity ceiling** | High when the payload is a credential or an actuation command; Medium for telemetry |
-| **VRT** | `broken_authentication_and_session_management\|cleartext_transmission_of_session_token` (**P4**) where a token crosses; `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) otherwise |
+| **VRT** | `broken_authentication_and_session_management.cleartext_transmission_of_session_token` (**P4**) where a token crosses; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) otherwise |
 | **Attacker** | AM-04 local app with one common permission; AM-10 proximity for the replay |
 | **Applies to** | any app using BLE. Android 12+ splits `BLUETOOTH_CONNECT`/`SCAN`/`ADVERTISE` — note which the eavesdropping app needs |
 | **Maps to** | `developer.android.com/develop/connectivity/bluetooth/ble/ble-overview`, verbatim caution: "When a user pairs their device with another device using BLE, the data that's communicated between the two devices is accessible to **all** apps on the user's device. For this reason, if your app captures sensitive data, you should implement app-layer security to protect the privacy of that data"; MASWE-0026 |
@@ -1967,7 +1967,7 @@ adb pull /sdcard/Android/data/btsnoop_hci.log        # path varies by OEM; check
 | | |
 |---|---|
 | **Severity ceiling** | Critical when the write can push firmware or a credential; High when it triggers an action, changes configuration, or feeds a parser |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `broken_authentication_and_session_management\|authentication_bypass` (**P1**) where it grants access |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `broken_authentication_and_session_management.authentication_bypass` (**P1**) where it grants access |
 | **Attacker** | AM-10 proximity, no app installed on the victim's phone |
 | **Applies to** | apps that expose a `BluetoothGattServer`. Android 16's improved bond-loss handling changes bond-removal UX but not this |
 | **Maps to** | the BLE overview's app-layer-security requirement; MASWE-0018 |
@@ -1999,7 +1999,7 @@ gatttool -b <MAC> -I           # connect / char-write-req <handle> <hex>
 | | |
 |---|---|
 | **Severity ceiling** | High when the association grants a persistent background channel into a privileged code path, or when `removeBond()` is reachable from an exported component; Medium for the association alone (it needs a tap in the picker) |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the exported `removeBond()` path; rated by the reached impact |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the exported `removeBond()` path; rated by the reached impact |
 | **Attacker** | AM-10 proximity; AM-03 for the exported-component variant |
 | **Applies to** | apps using CDM; `CompanionDeviceManager#removeBond(int)` is Android 16+ |
 | **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` (`CompanionDeviceManager#removeBond(int)`; monitor `BluetoothDevice#ACTION_BOND_STATE_CHANGED`); `developer.android.com/about/versions/16/behavior-changes-all` — "Companion apps no longer notified of discovery timeouts": companion apps now receive `RESULT_USER_REJECTED` instead of `RESULT_DISCOVERY_TIMEOUT`, which changes the error handling your PoC will see on API 36+ |
@@ -2034,7 +2034,7 @@ adb shell dumpsys companiondevice | grep -A5 com.target.app
 | | |
 |---|---|
 | **Severity ceiling** | High when the app has any unpinned host; Medium otherwise |
-| **VRT** | `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (priority **null** — argue it) via the network position; the rated finding is whatever the MitM then reaches |
+| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (priority **null** — argue it) via the network position; the rated finding is whatever the MitM then reaches |
 | **Attacker** | AM-02 remote one click (the user scans a sticker); then AM-06 network attacker |
 | **Applies to** | apps whose scanner enables the Wi-Fi barcode format |
 | **Maps to** | `developers.google.com/ml-kit/vision/barcode-scanning/android` — `Barcode.getWifi()`, `getValueType()`; the page gives no validation guidance |
@@ -2063,7 +2063,7 @@ adb shell dumpsys wifi | grep -iE 'SSID|Suggestion'
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) for the rendered account data |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) for the rendered account data |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | any app shipping an Android for Cars integration (categories `androidx.car.app.category.NAVIGATION` / `.POI` / `.IOT` / `.WEATHER`) |
 | **Maps to** | `developer.android.com/training/cars/apps` — the docs name `createHostValidator()` and `HostValidator.ALLOW_ALL_HOSTS_VALIDATOR` and explicitly warn to validate the binding host; MASWE-0018 |
@@ -2096,7 +2096,7 @@ bindService(i, conn, BIND_AUTO_CREATE);
 | | |
 |---|---|
 | **Severity ceiling** | Critical if a path puts the phone app into an authenticated state; High to Medium otherwise |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) for the auth-shaped path; `broken_access_control\|privilege_escalation` (**VARIES**) otherwise |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) for the auth-shaped path; `broken_access_control.privilege_escalation` (**VARIES**) otherwise |
 | **Attacker** | AM-03 (an app that can reach the Data Layer) / AM-10 (a paired attacker node) |
 | **Applies to** | any app with a Wear OS companion. The Data Layer is Android-phone-only, so the path set is often *less* tested than the main API |
 | **Maps to** | `developer.android.com/training/wearables/data/data-layer` and `.../data/messages` (`DataClient`, `MessageClient`, `WearableListenerService`, `sendMessage(nodeId, path, data)`); MASWE-0018, MASWE-0032; CVE-2025-12080 (intent abuse in Google Messages for Wear OS, patched May 2025) as evidence the form factor is a live surface |
@@ -2127,7 +2127,7 @@ grep -rnE 'onMessageReceived|getPath\(\)' sources/ -A20 | grep -iE 'auth|unlock|
 | | |
 |---|---|
 | **Severity ceiling** | Critical (BOLA on a companion-only endpoint) |
-| **VRT** | `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (**P1**); `\|view_sensitive_information_iterable_object_identifiers` (**P3**) for read-only |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**); `\|view_sensitive_information_iterable_object_identifiers` (**P3**) for read-only |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | apps with Wear, Auto, TV, widget or Tile companions |
 | **Maps to** | the shadow-API method from the bug-hunting corpus: a mobile client's hardcoded backend calls are frequently an *older* API version than the current web app uses, with weaker auth, weaker rate limits, weaker validation and more field exposure. **Diff behaviourally, not by response shape. A version difference alone is Informational; the weakened control is the finding** |
@@ -2163,7 +2163,7 @@ comm -23 <(sort -u companion-hosts.txt) <(sort -u phone-hosts.txt)
 | | |
 |---|---|
 | **Severity ceiling** | Medium to High, depending on what the endpoint returns |
-| **VRT** | `broken_access_control\|idor\|view_sensitive_information_iterable_object_identifiers` (**P3**) or higher depending on the data; `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) |
+| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (**P3**) or higher depending on the data; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) |
 | **Attacker** | AM-01 remote no interaction (for the live endpoints); AM-02 for the browser-triggered client path |
 | **Applies to** | **LEGACY client, live server.** Google Play Instant is discontinued — as of December 2025 instant apps cannot be published and the Play services Instant APIs stop working. Any app that ever shipped an instant experience |
 | **Maps to** | `developer.android.com/topic/google-play-instant/overview` (discontinuation timeline; `InstantApps.isInstantApp()`; the restricted API and permission subset); H1 #258460 (Quora) — the researcher's own published correction is the caution to heed: "services can be accessed by Instant Apps only in case when `android:visibleToInstantApps` flag is enabled" |
@@ -2228,7 +2228,7 @@ adb shell pm list users | grep -iE 'dual|clone|999'     # Samsung Dual Messenger
 | | |
 |---|---|
 | **Severity ceiling** | High (cross-user data access is an explicitly bought impact class) |
-| **VRT** | `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where it returns another user's records; `broken_access_control\|privilege_escalation` (**VARIES**) otherwise |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where it returns another user's records; `broken_access_control.privilege_escalation` (**VARIES**) otherwise |
 | **Attacker** | AM-05 another user of the same device |
 | **Applies to** | Android 5+ multi-user; Private Space Android 15+ |
 | **Maps to** | Android & Google Devices in-scope impact, verbatim: "**Multi-User & Private Space:** Cross-user sensitive data access, or unlocking Private Space without the designated lock factor"; Samsung High: "Bypass Operating System protections including access memory or file contents across application, user, or profile boundaries" |
@@ -2266,7 +2266,7 @@ grep -rnE 'getCallingUid|getCallingPackage|checkSignatures|getPackagesForUid' so
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where data crosses; `broken_authentication_and_session_management\|authentication_bypass` (**P1**) for unlocking without the designated factor |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where data crosses; `broken_authentication_and_session_management.authentication_bypass` (**P1**) for unlocking without the designated factor |
 | **Attacker** | AM-05 / AM-11 |
 | **Applies to** | Android 15+ |
 | **Maps to** | `developer.android.com/about/versions/15/behavior-changes-all` (private space as a separate user profile; launcher requirements `ROLE_HOME`, `ACCESS_HIDDEN_PROFILES`, `getLauncherUserInfo()`, `requestQuietModeEnabled()`, `ACTION_PROFILE_AVAILABLE`/`ACTION_PROFILE_UNAVAILABLE`; app stores must declare `android.intent.category.APP_MARKET`); `developer.android.com/about/versions/15/features` |
@@ -2297,7 +2297,7 @@ adb shell am get-current-user
 | | |
 |---|---|
 | **Severity ceiling** | High in an enterprise-scoped engagement (DLP bypass); out of scope for a consumer app without a managed configuration in scope |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure\|disclosure_of_secrets\|for_internal_asset` (**P3**) for the leaked corporate data |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) for the leaked corporate data |
 | **Attacker** | AM-05 / AM-11 |
 | **Applies to** | managed devices only — work profile API 21+, fully managed API 21+. Confirm the engagement includes an enrolled device |
 | **Maps to** | community work-profile checklists on cross-profile clipboard, sharing, notifications and file mediation; `DISALLOW_CROSS_PROFILE_COPY_PASTE` |
@@ -2329,7 +2329,7 @@ adb shell dumpsys package | grep -A10 'Cross-profile'
 | | |
 |---|---|
 | **Severity ceiling** | Medium to High in an enterprise engagement |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-11 physical unlocked (the enrolled user) |
 | **Applies to** | managed devices only |
 | **Maps to** | community MDM checklists on screen-capture, camera, backup and managed-configuration enforcement |
@@ -2356,7 +2356,7 @@ adb shell screencap /sdcard/t.png && adb pull /sdcard/t.png
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `broken_authentication_and_session_management\|authentication_bypass` (**P1**) where the replaced app holds the enterprise session |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the replaced app holds the enterprise session |
 | **Attacker** | AM-11 physical unlocked (temporary access to enable Developer Options and USB debugging) |
 | **Applies to** | Android Enterprise BYOD work profiles with required-app policies |
 | **Maps to** | CVE-2023-21257 (the patch being bypassed — ADB sideloads blocked under `DISALLOW_INSTALL_APPS` / `DISALLOW_DEBUGGING_FEATURES`); HackTricks android-enterprise-work-profile-bypass |
@@ -2395,7 +2395,7 @@ android { namespace = "com.workday.workdroidapp"
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-11 physical unlocked; AM-03 where an app surface reaches the removal |
 | **Applies to** | managed and enterprise deployments |
 | **Maps to** | Android & Google Devices in-scope impact, verbatim: "**Enterprise Bypasses:** Unauthorized removal of the Device Policy Controller (DPC)" — explicitly named in-scope and rarely covered in public checklists |
@@ -2422,7 +2422,7 @@ adb shell dpm remove-active-admin com.dpc/.Receiver
 | | |
 |---|---|
 | **Severity ceiling** | High in a kiosk engagement (the device *is* the security boundary); N/A otherwise |
-| **VRT** | `insecure_os_firmware\|kiosk_escape_or_breakout` (**VARIES**) |
+| **VRT** | `insecure_os_firmware.kiosk_escape_or_breakout` (**VARIES**) |
 | **Attacker** | AM-11 physical unlocked (a member of the public at the kiosk) |
 | **Applies to** | dedicated/COSU/kiosk deployments only; scope it explicitly |
 | **Maps to** | VRT `insecure_os_firmware > kiosk_escape_or_breakout`; community COSU/lock-task checklists |
@@ -2451,7 +2451,7 @@ adb shell am start -a android.intent.action.GET_CONTENT -t '*/*'
 | | |
 |---|---|
 | **Severity ceiling** | Medium to High in an enterprise engagement; a bug in the OEM layer itself belongs to the **OEM's** VRP, not the app vendor's |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 / AM-11 |
 | **Applies to** | OEM-managed fleets; out of scope for a standard app engagement unless the app itself ships the integration |
 | **Maps to** | community enterprise checklists on Knox Guard, Knox Platform for Enterprise, E-FOTA, enterprise firmware update abuse, and generic Android Enterprise / EMM / UEM bypasses |
@@ -2479,7 +2479,7 @@ grep -rn 'com.samsung.android.knox\|EnterpriseDeviceManager\|KnoxContainerManage
 | | |
 |---|---|
 | **Severity ceiling** | Critical when obtained without informed consent |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-02 remote one click |
 | **Applies to** | all |
 | **Maps to** | TapTrap (USENIX Security 2025), which explicitly lists Device Administrator status — "enables remote device wipe" — among the reachable outcomes; MASWE-0070 / MASWE-0078 (inadequate awareness/consent for privacy-relevant actions) |
@@ -2513,7 +2513,7 @@ adb shell dumpsys accessibility
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|for_internal_asset` (**P3**) for the recovered credential; the demonstrated corporate access sets the real rating |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) for the recovered credential; the demonstrated corporate access sets the real rating |
 | **Attacker** | AM-03 / AM-11 |
 | **Applies to** | enterprise and BYOD apps |
 | **Maps to** | the "From APK to Golden Ticket" write-up (Pierini & Trotta, 2017) as the canonical shape of a mobile foothold leading to domain compromise |
@@ -2702,7 +2702,7 @@ dz> clean
 | "I found a root exploit / I rooted the device" | Rooting your own device is not an attack on the app, and most programmes exclude root-required findings outright | The root was obtained **from an app UID** with no user interaction on a stock, locked, enforcing retail device |
 | "The app's data is readable once I have root" | Root defeats the sandbox by definition. Xiaomi, Grab and Spotify all exclude "sensitive data stored in the app private directory" | A non-root reader — a debuggable build (D25-014), a cross-user path (D25-066), or a backup/extraction path |
 | "`allowBackup="true"` on an OEM build" | P5 everywhere and excluded by name at Google and Xiaomi; VRT `mobile_security_misconfiguration.auto_backup_allowed_by_default` = **P5** with a physical-vector, high-privilege CVSS baseline | The credential you actually extracted from the backup and replayed (D11/D13) |
-| "Firmware is not encrypted" | VRT `insecure_os_firmware\|weakness_in_firmware_updates\|firmware_is_not_encrypted` = **P5**. Obscurity was never the control | The update is not *integrity*-validated (D25-040), which is a different node at P3 and argues upward |
+| "Firmware is not encrypted" | VRT `insecure_os_firmware.weakness_in_firmware_updates.firmware_is_not_encrypted` = **P5**. Obscurity was never the control | The update is not *integrity*-validated (D25-040), which is a different node at P3 and argues upward |
 | "The OEM image contains 40 preinstalled apps with dangerous permissions" | An inventory is not a finding, and the permission set is the OEM's product decision | One of them exporting a component that re-delegates the permission to a zero-permission caller (D25-009, D25-017) |
 | "This OEM bug is Critical" — filed against the app client | Wrong programme. It is the OEM's bug and the app client cannot fix it | Two artefacts: an environmental-risk note to the app client, and a separate report to the OEM's VRP (D25-001) |
 | "Malformed USB/NFC/BLE input crashes the app" | VRT `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**; Xiaomi, Grab and Spotify all exclude crash-only reports; "a valid exploit must achieve arbitrary code execution, not just trigger an application crash" | A controlled write with an attacker-controlled fault address, quoted from the tombstone (D25-049, D16) — or a persistent DoS requiring a factory reset |

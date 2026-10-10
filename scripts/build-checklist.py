@@ -91,15 +91,15 @@ def parse_severity(cell):
 
 
 def load_vrt():
-    """vrt_path -> priority (int or None)."""
+    """vrt_path -> priority: 'P1'..'P5', 'varies', or '' for a parent category."""
     out = {}
-    p = os.path.join(DATA, "bugcrowd-vrt-full.csv")
+    p = os.path.join(DATA, "vrt.csv")
     if not os.path.exists(p):
         return out
     with open(p, newline="", encoding="utf-8") as f:
         for r in csv.DictReader(f):
             pr = (r.get("priority") or "").strip()
-            out[r["vrt_path"].strip()] = int(pr) if pr.isdigit() else None
+            out[r["vrt_path"].strip()] = ("P" + pr) if pr.isdigit() else pr.lower()
     return out
 
 
@@ -133,8 +133,8 @@ def vrt_priority(vrt_text):
         return "P" + m.group(1)
     paths = re.findall(r'`([a-z_]+(?:\.[a-z0-9_]+)+)`', vrt_text)
     for p in paths:
-        if p in VRT and VRT[p]:
-            return "P%d" % VRT[p]
+        if VRT.get(p):
+            return VRT[p]
     if re.search(r'\bvaries\b', vrt_text, re.I):
         return "varies"
     if re.match(r'^\s*(n/a|none|—|-)', vrt_text, re.I) or not vrt_text.strip():

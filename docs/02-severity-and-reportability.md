@@ -4,7 +4,7 @@
 > single biggest difference between a report that pays and a report that is closed as informative.
 >
 > Ground truth used here: Bugcrowd VRT release **2026-07-08** (581 entries, mirrored in
-> [`data/bugcrowd-vrt-full.csv`](../data/bugcrowd-vrt-full.csv)).
+> [`data/vrt.csv`](../data/vrt.csv)).
 
 ---
 
@@ -210,4 +210,4 @@ These present as findings and are environment properties. Reporting one discredi
 - [Attacker models](05-attacker-models.md) — pick the weakest attacker that still works.
 - [PoC & evidence standard](04-poc-and-evidence-standard.md) — what proves a chain.
 - [Triage response playbook](06-triage-playbook.md) — what to send when they push back.
-- [`data/bugcrowd-vrt-full.csv`](../data/bugcrowd-vrt-full.csv) — the full taxonomy with priorities.
+- [`data/vrt.csv`](../data/vrt.csv) — the full taxonomy with priorities.

@@ -147,9 +147,9 @@
     "D09"
    ],
    "has_code": true,
-   "body_md": "| | |\n|---|---|\n| **Severity ceiling** | Support |\n| **VRT** | n/a — evidence integrity control |\n| **Attacker** | n/a (tester method) |\n| **Applies to** | All |\n| **Maps to** | `apksigner verify --print-certs --verbose`; MASTG-TOOL-0004 |\n\n- **Test:** A client-supplied APK, a Play-downloaded APK and an APKMirror copy of \"the same version\" can differ in signer, split set and bytes. Fix the identity of what you tested before you test it, or every disputed finding becomes arguable.\n- **How:**\n```bash\nmkdir -p evidence\nfor f in apk/*.apk; do\n  printf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(stat -f%z \"$f\")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\n\napksigner verify --print-certs --verbose apk/base.apk \\\n  | grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme'\n\nadb shell dumpsys package com.target.app \\\n  | grep -E 'versionName|versionCode|firstInstallTime|lastUpdateTime|targetSdk|minSdk'\n```\nRecord in the report: source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), the SHA-256 of each split, the signer SHA-256, and which schemes verified.\n- **Proof:** An appendix table a client build engineer can re-derive hash-for-hash, plus the `versionName`/`versionCode` pair quoted as text (Google explicitly asks for text, not a screenshot).\n- **Escalation:** The signer SHA-256 is reused by D09 (Digital Asset Links) and D03/D06 (`checkSignatures` analysis) — capture it once. The per-split hashes are what defeat a \"we already fixed that\" dismissal.\n- **Ruled out when:** Never. This field has no true negative; its absence is a delivery defect, not a clean result.",
+   "body_md": "| | |\n|---|---|\n| **Severity ceiling** | Support |\n| **VRT** | n/a — evidence integrity control |\n| **Attacker** | n/a (tester method) |\n| **Applies to** | All |\n| **Maps to** | `apksigner verify --print-certs --verbose`; MASTG-TOOL-0004 |\n\n- **Test:** A client-supplied APK, a Play-downloaded APK and an APKMirror copy of \"the same version\" can differ in signer, split set and bytes. Fix the identity of what you tested before you test it, or every disputed finding becomes arguable.\n- **How:**\n```bash\nmkdir -p evidence\nfor f in apk/*.apk; do\n  printf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(wc -c < \"$f\" | tr -d \" \")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\n\napksigner verify --print-certs --verbose apk/base.apk \\\n  | grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme'\n\nadb shell dumpsys package com.target.app \\\n  | grep -E 'versionName|versionCode|firstInstallTime|lastUpdateTime|targetSdk|minSdk'\n```\nRecord in the report: source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), the SHA-256 of each split, the signer SHA-256, and which schemes verified.\n- **Proof:** An appendix table a client build engineer can re-derive hash-for-hash, plus the `versionName`/`versionCode` pair quoted as text (Google explicitly asks for text, not a screenshot).\n- **Escalation:** The signer SHA-256 is reused by D09 (Digital Asset Links) and D03/D06 (`checkSignatures` analysis) — capture it once. The per-split hashes are what defeat a \"we already fixed that\" dismissal.\n- **Ruled out when:** Never. This field has no true negative; its absence is a delivery defect, not a clean result.",
    "test": "A client-supplied APK, a Play-downloaded APK and an APKMirror copy of \"the same version\" can differ in signer, split set and bytes. Fix the identity of what you tested before you test it, or every disputed finding becomes arguable.",
-   "how": "```bash\nmkdir -p evidence\nfor f in apk/*.apk; do\nprintf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(stat -f%z \"$f\")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\n\napksigner verify --print-certs --verbose apk/base.apk \\\n| grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme'\n\nadb shell dumpsys package com.target.app \\\n| grep -E 'versionName|versionCode|firstInstallTime|lastUpdateTime|targetSdk|minSdk'\n```\nRecord in the report: source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), the SHA-256 of each split, the signer SHA-256, and which schemes verified.",
+   "how": "```bash\nmkdir -p evidence\nfor f in apk/*.apk; do\nprintf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(wc -c < \"$f\" | tr -d \" \")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\n\napksigner verify --print-certs --verbose apk/base.apk \\\n| grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme'\n\nadb shell dumpsys package com.target.app \\\n| grep -E 'versionName|versionCode|firstInstallTime|lastUpdateTime|targetSdk|minSdk'\n```\nRecord in the report: source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), the SHA-256 of each split, the signer SHA-256, and which schemes verified.",
    "proof": "An appendix table a client build engineer can re-derive hash-for-hash, plus the `versionName`/`versionCode` pair quoted as text (Google explicitly asks for text, not a screenshot).",
    "escalation": "The signer SHA-256 is reused by D09 (Digital Asset Links) and D03/D06 (`checkSignatures` analysis) — capture it once. The per-split hashes are what defeat a \"we already fixed that\" dismissal.",
    "ruled_out_when": "Never. This field has no true negative; its absence is a delivery defect, not a clean result.",
@@ -212,7 +212,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what the hijacked link exposes) when the mismatch breaks App Links",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 remote one click (victim taps a link that falls back to a chooser)",
    "attacker_ids": [
     "AM-02"
@@ -903,7 +903,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "rated on what the regressed or flag-gated capability exposes; a staff-only capability reachable in production is commonly `broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05 another user of the same app",
    "attacker_ids": [
     "AM-05"
@@ -1555,7 +1555,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "n/a — this is the map. Each `perm=NONE` row is a candidate for `broken_access_control.exposed_sensitive_android_intent` (null) in D04–D08",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app (that is what each row is scored against)",
    "attacker_ids": [
     "AM-03"
@@ -1618,7 +1618,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "n/a standalone; `broken_access_control.exposed_sensitive_android_intent` (null) once one proves reachable",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-08 malicious third-party SDK / AM-03 zero-permission local app",
    "attacker_ids": [
     "AM-03",
@@ -1758,7 +1758,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "n/a standalone; the guarded component's finding inherits it — commonly `broken_access_control.exposed_sensitive_android_intent` (null) or `broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app (a `normal` permission is granted silently at install)",
    "attacker_ids": [
     "AM-03"
@@ -1907,7 +1907,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "n/a standalone; `broken_access_control.privilege_escalation` (null) once a squatted package defeats a name-only check",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app registering the queried package name",
    "attacker_ids": [
     "AM-03"
@@ -1957,7 +1957,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — rated on the data) when the inventory reaches a third party",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 malicious third-party SDK (the SDK is usually the caller)",
    "attacker_ids": [
     "AM-08"
@@ -2007,7 +2007,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "n/a standalone; High once paired with a grant primitive — rate through `broken_access_control.exposed_sensitive_android_intent` (null) in D08",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app",
    "attacker_ids": [
     "AM-03"
@@ -2055,7 +2055,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what the callback accepts and returns)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app",
    "attacker_ids": [
     "AM-03"
@@ -2104,7 +2104,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "n/a standalone; High once chained to an exported or implicit start — rate via `broken_access_control.exposed_sensitive_android_intent` (null) in D06",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app (starting the FGS)",
    "attacker_ids": [
     "AM-03"
@@ -2150,7 +2150,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "n/a standalone; `broken_access_control.exposed_sensitive_android_intent` (null) once the named internal activity is reached",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app (via D08 redirection) / AM-11 physical unlocked (pinned shortcut)",
    "attacker_ids": [
     "AM-03",
@@ -2251,7 +2251,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what the code unlocks); High on an OEM image, route to D25",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-11 physical unlocked (dialer) / AM-03 zero-permission local app (the broadcast needs no permission)",
    "attacker_ids": [
     "AM-03",
@@ -2298,7 +2298,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); escalates through whatever the parser does",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01 remote no interaction (any sender who knows the number)",
    "attacker_ids": [
     "AM-01"
@@ -2481,7 +2481,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) when an app-reachable vendor service exposes an ungated privileged transaction",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app",
    "attacker_ids": [
     "AM-03"
@@ -2712,7 +2712,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "n/a standalone; `broken_access_control.privilege_escalation` (null) when the recovered parameter changes an authorisation outcome",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-05 another user of the same app",
    "attacker_ids": [
     "AM-05"
@@ -3042,7 +3042,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) for an unauthenticated or over-privileged admin RPC; exposed server reflection alone is Low",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01 remote no interaction",
    "attacker_ids": [
     "AM-01"
@@ -3569,7 +3569,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.privilege_escalation` (null) when the gate is regulatory and bypassing it completes a transaction; Medium otherwise",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05 another user of the same app",
    "attacker_ids": [
     "AM-05"

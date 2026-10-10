@@ -15,7 +15,7 @@ are in [`data/`](../data/):
 | [`mastg-android-tools.csv`](../data/mastg-android-tools.csv) | 48 | MASTG Android tools |
 | [`mastg-android-rules.csv`](../data/mastg-android-rules.csv) | 51 | MASTG static-analysis rules |
 | [`mitre-attack-mobile-android.csv`](../data/mitre-attack-mobile-android.csv) | 122 | ATT&CK Mobile, Android-applicable |
-| [`bugcrowd-vrt-full.csv`](../data/bugcrowd-vrt-full.csv) | 581 | Bugcrowd VRT, release 2026-07-08 |
+| [`vrt.csv`](../data/vrt.csv) | 581 | Bugcrowd VRT, release 2026-07-08 |
 
 ---
 
@@ -39,7 +39,7 @@ submissions. See [severity doctrine](02-severity-and-reportability.md).
 | **D10** WebView & JS bridges | PLATFORM, CODE | TEST-0027, TEST-0031, TEST-0032, TEST-0033, TEST-0037, TEST-0250–0253, TEST-0320, TEST-0334, TEST-0398–0400 | T1635, T1658 | M4 | **P1** `remote_code_execution_rce` |
 | **D11** Local data storage | STORAGE | TEST-0001, TEST-0003, TEST-0009, TEST-0200–0203, TEST-0207, TEST-0216, TEST-0262, TEST-0287, TEST-0304–0306 | T1409, T1420, T1533 | M9 Insecure Data Storage | P5 alone — **P1** once a zero-permission app can reach it |
 | **D12** Cryptography & key management | CRYPTO | TEST-0013–0016, TEST-0204, TEST-0205, TEST-0208, TEST-0212, TEST-0221, TEST-0232, TEST-0307–0312, TEST-0350 | T1521 | M10 Insufficient Cryptography | **P2** `key_reuse.inter_environment` |
-| **D13** Auth, session, OTP, biometrics | AUTH | TEST-0017, TEST-0018, TEST-0326–0330 | T1634, T1635 | M1 Improper Credential Usage | **P1** `authentication_bypass` |
+| **D13** Auth, session, OTP, biometrics | AUTH | TEST-0017, TEST-0018, TEST-0326–0330 | T1635, T1417 | M1 Improper Credential Usage | **P1** `authentication_bypass` |
 | **D14** Network security, TLS, pinning | NETWORK | TEST-0019–0023, TEST-0217, TEST-0218, TEST-0233–0244, TEST-0282–0286, TEST-0295 | T1638 AiTM, T1521.003 | M5 Insecure Communication | P5 for pinning; **P4** for cleartext of sensitive data |
 | **D15** Backend API, IDOR/BOLA, business logic | AUTH, NETWORK | (MASTG is thin here — this is API testing) | T1639, T1646 | M6 Inadequate Privacy Controls | **P1** `broken_access_control.idor.*` |
 | **D16** Native code, JNI, memory safety | CODE | TEST-0043, TEST-0222, TEST-0223, TEST-0288; TECH-0018, TECH-0024, TECH-0034, TECH-0035 | T1575 Native API | M7 Insufficient Binary Protections | **P1** if a primitive is demonstrated |

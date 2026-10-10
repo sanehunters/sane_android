@@ -16,7 +16,7 @@
 |---|---|
 | **Phases** | **P6 dynamic/business-logic** (entitlement grant path, receipt verification on the wire, checkout and ledger tampering, races, incentive reuse, payment hand-off and callback), with a **P4 static** preparation pass (billing call sites, entitlement storage keys, PSP keys, limits and thresholds read out of the decompile) and **P7 write-up** (ledger arithmetic, chain filing, RoE-safe evidence) |
 | **Milestones** | **M6** primary (server-side trust of client-asserted money and entitlement state); **M7** for the chain/report items; M3 harness dependency (an authenticated, decrypted proxy and a KYC/funded account are preconditions for most of the chapter) |
-| **VRT ceiling** | **P1** — `sensitive_data_exposure\|disclosure_of_secrets\|for_publicly_accessible_asset` (a live PSP secret key extracted from the package), `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (a receipt/instrument token redeemable across accounts), `broken_authentication_and_session_management\|authentication_bypass` (a money-moving action completed with no valid authorisation). The working majority of this chapter files as `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) or `server_security_misconfiguration\|race_condition` (**VARIES**) and is rated on the demonstrated ledger delta — **the VRT has no billing node, so the number you get is the number you argue for** |
+| **VRT ceiling** | **P1** — `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (a live PSP secret key extracted from the package), `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (a receipt/instrument token redeemable across accounts), `broken_authentication_and_session_management.authentication_bypass` (a money-moving action completed with no valid authorisation). The working majority of this chapter files as `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) or `server_security_misconfiguration.race_condition` (**VARIES**) and is rated on the demonstrated ledger delta — **the VRT has no billing node, so the number you get is the number you argue for** |
 | **Primary attacker model** | **AM-01 remote no interaction** for everything that is an authenticated API call the attacker makes against their own account (price, coupon, receipt replay, races) and **AM-05 another user of the same app** for cross-account token redemption; **AM-02 remote one click** for forged payment callbacks and payment deep links; **AM-03/AM-04** for exported entitlement surfaces and billing-proxy apps; **AM-08** for a payment SDK's own defects. **AM-12 (your own rooted device) is not an attacker model** — a premium feature unlocked only in your own UI is a P5 and belongs in the graveyard |
 | **Maps to** | MASVS-AUTH-1, MASVS-RESILIENCE-2, MASVS-RESILIENCE-3, MASVS-PLATFORM; MASTG-TEST-0338, MASTG-TEST-0368, MASTG-TEST-0327, MASTG-TEST-0340; MASTG-TECH-0008, -0009, -0010, -0011, -0043; MASTG-KNOW-0036; MASTG-BEST-0066; MASWE-0004, -0009, -0011, -0018, -0023, -0025, -0039, -0040, -0050, -0057, -0059; CWE-471, CWE-862, CWE-798, CWE-693, CWE-269, CWE-347, CWE-927; ATT&CK **T1641** Data Manipulation, **T1641.001** Transmitted Data Manipulation, **T1643** Generate Traffic from Victim, **T1516** Input Injection (detection DET0612/AN1666), T1417.002, T1453, T1582, T1616, T1660; OWASP API Top 10 **API3:2023**, **API5:2023**, **API6:2023**; OWASP WSTG **WSTG-BUSL-02**, **-03**, **-05**, **-06**; Mobile Top 10 2024 **M3/M7**; CVE-2025-12080 (intent injection reaching a billable action) |
 
@@ -137,7 +137,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); the embedded key itself is `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**, CWE-347) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the embedded key itself is `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**, CWE-347) |
 | **Attacker** | AM-12 to discover, AM-01 to exploit once the forged receipt is accepted by the backend |
 | **Applies to** | any app with Google Play Billing or a custom receipt flow |
 | **Maps to** | MASWE-0011 (Improper Verification of Cryptographic Signature), MASWE-0004 (hardcoded key), MASWE-0050, MASWE-0057 (CWE-471); MASTG-TECH-0043; MASVS-AUTH-1; Google Play Billing security guidance — **"Do not verify signatures on the device"**; Google ASI campaign *Google Play Billing interception* (started 2016-07-28, `faqs/answer/7054270`) |
@@ -182,7 +182,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-12 locally; the reportable form is AM-01 once the server accepts it |
 | **Applies to** | all apps with paid tiers, trials, quotas or role flags |
 | **Maps to** | **MASTG-TEST-0338** (References to Storage Integrity Check APIs — its own attack scenario is "resets a trial counter or flips a 'premium' flag"), MASWE-0057 (CWE-471), MASTG-KNOW-0036, MASTG-BEST-0066, MASTG-TECH-0008; MASVS-RESILIENCE-2; Mobile Top 10 2024 M7/M3 |
@@ -219,10 +219,10 @@ android heap print fields <hashcode>
 | | |
 |---|---|
 | **Severity ceiling** | High (Medium in the common case; High when this is the only route to the flip and the server honours the result) |
-| **VRT** | `mobile_security_misconfiguration\|auto_backup_allowed_by_default` (**P5**) for the enabler; rate on the consequence via `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) for the enabler; rate on the consequence via `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-11 physical unlocked; AM-12 for convenience |
 | **Applies to** | `android:allowBackup="true"` (the default) and `≤ Android 11`; **`[DEGRADED]` on Android 12+**, where `adb backup` no longer covers app data for non-debuggable apps — say so rather than claiming a universal route |
-| **Maps to** | MASTG-TECH-0008; MASWE-0057; `insecure_data_storage\|sensitive_application_data_stored_unencrypted\|on_internal_storage` (P5) for the store itself |
+| **Maps to** | MASTG-TECH-0008; MASWE-0057; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the store itself |
 
 - **Test:** The value of this item is not the flip — it is removing root from the PoC. A triager who sees
   `adb root` discounts the finding; a triager who sees a stock, unrooted device does not.
@@ -251,7 +251,7 @@ adb restore new.ab && adb shell am force-stop com.target.app
 | | |
 |---|---|
 | **Severity ceiling** | Critical (when the gated content is other users' data or a balance), otherwise High |
-| **VRT** | `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (**P1**) when premium gates other users' data; `broken_access_control\|privilege_escalation` (**VARIES**) for the revenue case |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) when premium gates other users' data; `broken_access_control.privilege_escalation` (**VARIES**) for the revenue case |
 | **Attacker** | AM-01 |
 | **Applies to** | all freemium/subscription apps |
 | **Maps to** | API5:2023 Broken Function Level Authorization, API3:2023; MASWE-0018 (CWE-862); MASVS-AUTH-1; H1 #175490 (Shopify — the *server* accepted the state the client claimed) is the nearest disclosed calibration point |
@@ -284,7 +284,7 @@ curl -s https://api.target/v1/entitlements -H "Authorization: Bearer $FREE_TOKEN
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); the concurrent variant is `server_security_misconfiguration\|race_condition` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the concurrent variant is `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | any app whose backend accepts a client-supplied receipt |
 | **Maps to** | Google Play Billing security guidance — the documented flow requires the backend to "maintain a record of all `purchaseToken` values" and reject a repeat; MASWE-0009 (missing replay protection); WSTG-BUSL-02 Test Ability to Forge Requests |
@@ -320,7 +320,7 @@ curl -s https://api.target/v1/entitlements -H "Authorization: Bearer $T" | jq '.
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (**P1**) — the token is an object identifier being redeemed outside its owner |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) — the token is an object identifier being redeemed outside its owner |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | any app with Play Billing or a receipt-based entitlement |
 | **Maps to** | Google Play Billing security guidance (send token to backend → verify uniqueness → call the Developer API → check `obfuscatedAccountId` → grant only if `PURCHASED`); `Purchases.products:get`, `Purchases.subscriptionsv2:get`; API3:2023 |
@@ -352,7 +352,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | | |
 |---|---|
 | **Severity ceiling** | High (Medium standalone; High filed as the mechanism behind D23-007) |
-| **VRT** | `cryptographic_weakness\|insecure_implementation\|missing_cryptographic_step` (**VARIES**, CWE-325) as the closest honest node; file with D23-007 as the consumer |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (**VARIES**, CWE-325) as the closest honest node; file with D23-007 as the consumer |
 | **Attacker** | AM-05 |
 | **Applies to** | Play Billing integrations |
 | **Maps to** | Google Play Billing security guidance — `setObfuscatedAccountId()`, `setObfuscatedProfileId()` and the eligibility-check step |
@@ -386,7 +386,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | any backend that takes both a receipt and a `productId`/`sku` from the client |
 | **Maps to** | API3:2023 (property-level trust of a client-supplied `productId`); WSTG-BUSL-03 Test Integrity Checks |
@@ -419,7 +419,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**, CWE-347) |
+| **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**, CWE-347) |
 | **Attacker** | AM-01 |
 | **Applies to** | backends that accept a client-assembled receipt envelope (`signedData` + `signature`) rather than a bare `purchaseToken` |
 | **Maps to** | MASWE-0011; Google Play Billing security guidance (server-to-server verification with the Developer API is the only verification that counts) |
@@ -449,7 +449,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 (the attacker is the purchaser) |
 | **Applies to** | Play Billing apps that call `acknowledgePurchase` from the client |
 | **Maps to** | Google Play Billing security guidance — purchases not acknowledged within three days are auto-refunded, and acknowledgement is to be performed server-side; `Purchases.products:acknowledge`, `Purchases.subscriptions:acknowledge` |
@@ -478,7 +478,7 @@ grep -rnE 'acknowledgePurchase|AcknowledgePurchaseParams|isAcknowledged\(\)|cons
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | subscription and IAP apps |
 | **Maps to** | Google Play `Orders:refund` with `revoke=true` and the **Voided Purchases API**; WSTG-BUSL-06 Circumvention of Work Flows; API6:2023 |
@@ -507,7 +507,7 @@ curl -s https://api.target/v1/entitlements -H "Authorization: Bearer $T" | jq '.
 | | |
 |---|---|
 | **Severity ceiling** | High (Medium for a nominal trial; High where the trial has real per-cycle value or converts to credit) |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure\|disclosure_of_secrets\|pay_per_use_abuse` (**P4**) where the trial burns a metered third-party resource |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (**P4**) where the trial burns a metered third-party resource |
 | **Attacker** | AM-01 |
 | **Applies to** | any app with a free trial, a free-credit grant or a usage quota |
 | **Maps to** | API6:2023 Unrestricted Access to Sensitive Business Flows; MASWE-0018; Mobile Top 10 2024 M3; MASTG-TEST-0338 (the trial-counter attack scenario) |
@@ -541,7 +541,7 @@ grep -rnE 'ANDROID_ID|Secure\.getString|randomUUID|installationId|FirebaseInstal
 | | |
 |---|---|
 | **Severity ceiling** | High (Medium for a free trial; High when it is monetary referral/credit and scales, or when "one device per licence" is the product) |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-11 physical unlocked, scaling to AM-01 once the identifier generation is understood |
 | **Applies to** | Android 5+ for multi-user; **Private Space is Android 15+**; OEM dual-app/clone features are vendor-specific — name the OEM and the feature in the report |
 | **Maps to** | MASWE-0057; MASTG-TECH-0008; the multi-user/Private Space impact surface |
@@ -573,7 +573,7 @@ done
 | | |
 |---|---|
 | **Severity ceiling** | High (when server-accepted); Low otherwise |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-12 to set up, AM-01 to prove |
 | **Applies to** | all frameworks; the cross-platform stores are the common case (AsyncStorage, `shared_preferences`, PlayerPrefs, MMKV) |
 | **Maps to** | MASWE-0057 (CWE-471); MASTG-TECH-0008; Mobile Top 10 2024 M7 |
@@ -603,7 +603,7 @@ adb shell "run-as com.target.app cat shared_prefs/com.target.app.v2.playerprefs.
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | all subscription apps |
 | **Maps to** | WSTG-BUSL-06 Circumvention of Work Flows; API6:2023; MASWE-0018 |
@@ -633,7 +633,7 @@ curl -i -X PUT  https://api.target/v1/subscription        -H "Authorization: Bea
 | | |
 |---|---|
 | **Severity ceiling** | High if the server honours it; Medium when it only unlocks locally-present paid assets |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927) — the one Android-native node rated on what it exposes |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) — the one Android-native node rated on what it exposes |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | **targetSdk < 31**: components with intent-filters are exported by default. **Android 14 (targetSdk 34+)** mandates `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` on runtime registration — check registration sites as well as the manifest |
 | **Maps to** | MASVS-PLATFORM; `risks/insecure-broadcast-receiver`; `risks/access-control-to-exported-components`; CWE-927 |
@@ -664,7 +664,7 @@ adb shell am start -a android.intent.action.VIEW -d "targetapp://unlock?tier=pre
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | **targetSdk < 17**: providers are exported by default — state this explicitly if it applies. Otherwise any provider with `android:exported="true"` or a `grantUriPermissions` path |
 | **Maps to** | CWE-927; `risks/content-resolver`; MASWE-0057 |
@@ -695,7 +695,7 @@ adb shell content insert --uri content://com.target.app.provider/entitlements \
 | | |
 |---|---|
 | **Severity ceiling** | Critical (High for revenue loss; Critical if the forged entitlement unlocks other users' content) |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927); `broken_access_control\|privilege_escalation` (**VARIES**) for the consequence |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `broken_access_control.privilege_escalation` (**VARIES**) for the consequence |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | apps still shipping the legacy `IabHelper`/direct-bind path — **LEGACY**; the modern Play Billing Library binds explicitly, so verify which one is in the APK before writing anything. **targetSdk < 30** also grants free package visibility, which makes the malicious service easier to place |
 | **Maps to** | Google ASI campaign *Google Play Billing interception* (started 2016-07-28, `faqs/answer/7054270`) — the stated remediation is literally `Intent.setPackage("com.android.vending")`; CWE-927 |
@@ -730,7 +730,7 @@ grep -rn 'setPackage("com.android.vending")\|setComponent(' jadx_out/sources    
 | | |
 |---|---|
 | **Severity ceiling** | Medium (Support when the app has no licensing claim to make) |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps that claim Play-install enforcement or paid-app licensing |
 | **Maps to** | Play Integrity verdicts — `accountDetails.appLicensingVerdict` ∈ {`LICENSED`, `UNLICENSED`, `UNEVALUATED`}, where `LICENSED` means "User installed/updated app from Google Play"; the Integrity overview's rule that all decisions are made server-side; MASVS-RESILIENCE-3 |
@@ -758,7 +758,7 @@ LICENSED|UNLICENSED|UNEVALUATED|decodeIntegrityToken|PiracyChecker|LicenseChecke
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|idor\|modify_sensitive_information_iterable_object_identifiers` (**P2**) for the modification class; argue **P1** where the modified order settles and goods ship |
+| **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (**P2**) for the modification class; argue **P1** where the modified order settles and goods ship |
 | **Attacker** | AM-01 |
 | **Applies to** | all commerce apps; cross-platform builds are over-represented because the shared business logic runs on-device |
 | **Maps to** | **T1641.001** Transmitted Data Manipulation; API3:2023; WSTG-BUSL-03 Test Integrity Checks; Mobile Top 10 2024 M7 |
@@ -791,7 +791,7 @@ curl -s https://api.target/v1/orders/$ORDER -H "Authorization: Bearer $T" | jq '
 | | |
 |---|---|
 | **Severity ceiling** | Critical when the credit settles into a withdrawable balance; Informational if checkout errors at payment |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); **P1** argued when the credit becomes withdrawable money |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); **P1** argued when the credit becomes withdrawable money |
 | **Attacker** | AM-01 |
 | **Applies to** | commerce and wallet backends |
 | **Maps to** | T1641 Data Manipulation; API3:2023; WSTG-BUSL-03 |
@@ -826,7 +826,7 @@ curl -s https://api.target/v1/wallet/balance -H "Authorization: Bearer $T"
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|idor\|modify_sensitive_information_iterable_object_identifiers` (**P2**), argued up on the settled delta |
+| **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (**P2**), argued up on the settled delta |
 | **Attacker** | AM-01 |
 | **Applies to** | multi-currency checkouts and multi-currency wallets |
 | **Maps to** | T1641.001; API3:2023; WSTG-BUSL-03 |
@@ -859,7 +859,7 @@ curl -s -X POST https://api.target/v1/checkout -H "Authorization: Bearer $T" \
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | multi-step checkouts — the norm in mobile, where the payment sheet is a separate screen from the cart |
 | **Maps to** | WSTG-BUSL-03; API6:2023 |
@@ -889,7 +889,7 @@ curl -s https://api.target/v1/orders/$O | jq '.total,.items'
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | any app with tipping, donations, round-up, wallet top-up or a custom-amount payment |
 | **Maps to** | T1641; API3:2023; WSTG-BUSL-03 |
@@ -916,7 +916,7 @@ curl -s https://api.target/v1/wallet/balance -H "Authorization: Bearer $T"
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | fintech, gaming, marketplace and ticketing apps |
 | **Maps to** | **MASTG-TEST-0368**; MASWE-0059 (CWE-693); MASVS-RESILIENCE-3; API6:2023 Unrestricted Access to Sensitive Business Flows; Mobile Top 10 2024 M7 |
@@ -955,7 +955,7 @@ curl -i -X POST https://api.target/v1/wallet/withdraw -H "Authorization: Bearer 
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); **P1** argued where goods ship with no payment captured |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); **P1** argued where goods ship with no payment captured |
 | **Attacker** | AM-01 |
 | **Applies to** | payments and commerce backends with a multi-endpoint order flow |
 | **Maps to** | WSTG-BUSL-06 Circumvention of Work Flows; API6:2023; disclosed precedents: double payout via mishandled payment-provider transaction states — withdrawing money without the funds being deducted (H1 #307239, $10,000); modifying in-flight data to a payment provider to generate wallet balance (H1 #1295844, $7,500) |
@@ -991,7 +991,7 @@ adb shell am start -a android.intent.action.VIEW \
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the local trigger; `broken_authentication_and_session_management\|authentication_bypass` (**P1**) where the forged return completes a payment that never happened |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the local trigger; `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the forged return completes a payment that never happened |
 | **Attacker** | AM-02 remote one click (a web page can fire the scheme); AM-03 locally |
 | **Applies to** | every app that hands off to a PSP app, a bank app or a browser and returns via a deep link or `onActivityResult` |
 | **Maps to** | CWE-927; `risks/unsafe-use-of-deeplinks`; CVE-2025-12080 (intent injection reaching a billable action); WSTG-BUSL-02 |
@@ -1023,7 +1023,7 @@ printf '<script>location="targetapp://payment/callback?status=success&orderId=%s
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | Stripe, Braintree, Adyen, Razorpay, PayU, Checkout.com, Cashfree, Juspay and similar drop-in SDKs |
 | **Maps to** | API3:2023; WSTG-BUSL-02; MASWE-0018 |
@@ -1058,7 +1058,7 @@ Il2Cpp.perform(() => {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `server_security_misconfiguration\|race_condition` (**VARIES**) for the concurrent form; `broken_access_control\|privilege_escalation` (**VARIES**) for the sequential form |
+| **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**) for the concurrent form; `broken_access_control.privilege_escalation` (**VARIES**) for the sequential form |
 | **Attacker** | AM-01 if the webhook endpoint is reachable and the body replayable; AM-09 malicious backend/CDN in the hostile-PSP framing |
 | **Applies to** | any webhook consumer — the norm in mobile payment backends |
 | **Maps to** | MASWE-0009 (missing replay protection); WSTG-BUSL-02; API6:2023 |
@@ -1091,7 +1091,7 @@ curl -i -X POST https://api.target/v1/transfers -H "Authorization: Bearer $T" \
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (**P1**) |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | all apps that store payment instruments |
 | **Maps to** | API1:2023-class object-level authorization (filed as BAC/IDOR); WSTG-BUSL-02; cross-user billing/subscription parameter tampering precedent H1 #394329 ($8,000) |
@@ -1122,7 +1122,7 @@ curl -s https://api.target/v1/payment-methods/$((ID-1)) -H "Authorization: Beare
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-01 |
 | **Applies to** | banking, wallet, brokerage and any app with a per-transaction biometric/PIN/OTP confirmation |
 | **Maps to** | **MASWE-0023** ("Step-Up Not Bound to the Action: implementing a re-authentication challenge that is not tied to the specific transaction being approved, so a single approval can be reused for a different or modified action"; mitigation "Bind the Challenge to the Action … (e.g. transaction signing)"), MASWE-0025 (Lack of Non-Repudiation for Critical Actions), MASWE-0009; **MASTG-TEST-0327** (event-bound vs crypto-bound biometrics — the client-side half); MASVS-AUTH-1 |
@@ -1167,7 +1167,7 @@ Java.perform(function(){
 | | |
 |---|---|
 | **Severity ceiling** | Critical (for money movement); Medium as a design gap where the amounts are small |
-| **VRT** | `cryptographic_weakness\|insecure_implementation\|missing_cryptographic_step` (**VARIES**, CWE-325); the consequence files as `broken_authentication_and_session_management\|authentication_bypass` (**P1**) |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (**VARIES**, CWE-325); the consequence files as `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-03 local app with a driving primitive; AM-12 to demonstrate |
 | **Applies to** | **Android 9+ for Protected Confirmation, and it is hardware-dependent** — say so; the underlying finding (an on-device attacker can drive the authorisation path) applies everywhere |
 | **Maps to** | AOSP security-model §4.3.8 — apps "can tie usage of a key stored in Keymint or Strongbox to the user confirming that they have seen a message displayed on the screen by pushing a physical button … even a full kernel compromise (without user cooperation) cannot lead to creating these signed confirmations"; Keystore tags `TAG_TRUSTED_CONFIRMATION_REQUIRED`, `TAG_TRUSTED_USER_PRESENCE_REQUIRED`; MASWE-0025 |
@@ -1196,7 +1196,7 @@ adb shell pm list features | grep -i confirmation
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) for the completed unauthorised transaction; the overlay component alone is `mobile_security_misconfiguration\|tapjacking` (**P5**) and must never be the headline |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) for the completed unauthorised transaction; the overlay component alone is `mobile_security_misconfiguration.tapjacking` (**P5**) and must never be the headline |
 | **Attacker** | AM-04 local app with one common permission (the accessibility grant is user-facing and social-engineered; say so) |
 | **Applies to** | banking, wallet and brokerage apps |
 | **Maps to** | **MASWE-0040** ("High-Risk Flows Fully Automatable: designing sensitive flows (e.g. payments) so that they can be completed entirely through programmatic UI interaction without any additional verification"; mitigation "Add Friction to High-Risk Flows: require verification that UI automation cannot satisfy (e.g. biometric-bound confirmation)"), MASWE-0039; **MASTG-TEST-0340**; ATT&CK **T1516** Input Injection (ATT&CK's own example: "Mimicking user clicks to commit fraud (e.g., stealing from PayPal accounts)"; detection DET0612/AN1666 — "programmatic clicks, global actions, or text insertion into another app's active UI, especially when those actions occur without matching user touch interaction", strengthened when "followed by target-app navigation, form submission, transaction progression, or network activity"), T1417.002, T1453 |
@@ -1229,7 +1229,7 @@ adb shell screenrecord --time-limit 90 /sdcard/poc.mp4 && adb pull /sdcard/poc.m
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps taking card payments under EU/UK/IN SCA regimes, and any app with a step-up WebView |
 | **Maps to** | MASWE-0023 (step-up not bound to the action); WSTG-BUSL-02; API3:2023 |
@@ -1262,7 +1262,7 @@ curl -s -X POST https://api.target/v1/payments/$P/3ds-result -H "Authorization: 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); the `PAN_ONLY` half is `insecure_data_transport\|cleartext_transmission_of_sensitive_data` (**VARIES**, CWE-319) only if it also leaves unprotected — otherwise rate on the integration defect |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the `PAN_ONLY` half is `insecure_data_transport.cleartext_transmission_of_sensitive_data` (**VARIES**, CWE-319) only if it also leaves unprotected — otherwise rate on the integration defect |
 | **Attacker** | AM-01 |
 | **Applies to** | apps taking Google Pay |
 | **Maps to** | Google Pay `WalletConstants.ENVIRONMENT_TEST` / `ENVIRONMENT_PRODUCTION`, `PaymentDataRequest`, `IsReadyToPayRequest`, `tokenizationSpecification`, `allowedAuthMethods` ∈ {`PAN_ONLY`, `CRYPTOGRAM_3DS`}; API3:2023 |
@@ -1292,7 +1292,7 @@ gatewayMerchantId|tokenizationSpecification|TransactionInfo|setTotalPrice' jadx_
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `cryptographic_weakness\|key_reuse\|inter_environment` (**P2**) where a sandbox key is live against production; otherwise `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `cryptographic_weakness.key_reuse.inter_environment` (**P2**) where a sandbox key is live against production; otherwise `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps with a PSP integration |
 | **Maps to** | API3:2023; WSTG-BUSL-03 |
@@ -1323,7 +1323,7 @@ grep -rnE 'remoteConfig|getBoolean\("(test|sandbox|debug)' jadx_out/sources -A4
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|for_publicly_accessible_asset` (**P1**) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) |
 | **Attacker** | AM-01 (anyone who downloads the APK) |
 | **Applies to** | any app embedding a payment provider's credential |
 | **Maps to** | CWE-798; public research summarised in the corpus — of ~13,000 apps analysed, ~250 used the Razorpay API and around 5% exposed both `key_id` and `key_secret`, sufficient to access transaction information and payment ids **and to carry out refunds**, framed as developer misuse rather than a provider flaw; Ostorlab's classification that Stripe and payment-related credentials must be server-delegated, never embedded |
@@ -1355,7 +1355,7 @@ curl -s -u "$KEY_ID:$KEY_SECRET" 'https://api.razorpay.com/v1/payments?count=1' 
 | | |
 |---|---|
 | **Severity ceiling** | Critical if the credential alone suffices, High if it reaches an internal payment asset, hygiene (CWE-798) if the server also requires a session — **state the fork explicitly** |
-| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|for_publicly_accessible_asset` (**P1**) if it authenticates alone; `...\|for_internal_asset` (**P3**) if it reaches only an internal asset |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) if it authenticates alone; `...\|for_internal_asset` (**P3**) if it reaches only an internal asset |
 | **Attacker** | AM-01 |
 | **Applies to** | all payment-integrated apps, especially card-vault/tokenisation integrations |
 | **Maps to** | CWE-798; HackerOne Platform Standards on leaked credentials — hackers "should NOT test their validity beyond authenticating and then immediately deauthenticating" |
@@ -1390,7 +1390,7 @@ grep -rn 'OkHttpClient.Builder()\|addInterceptor(\|addNetworkInterceptor(' jadx_
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); **P1** argued where the bridge moves money on the victim's session |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); **P1** argued where the bridge moves money on the victim's session |
 | **Attacker** | AM-02 remote one click |
 | **Applies to** | apps with in-app payment WebViews; **minSdk < 17** additionally exposes the `addJavascriptInterface` reflection path |
 | **Maps to** | CWE-927; MASVS-PLATFORM; disclosed calibration: a bridge proxying authenticated API calls in an exchange app — note that the platform initially rated it low and the researcher had to contest it, settling at CVSS 4.3, so **lead with the money, not the mechanism** |
@@ -1423,7 +1423,7 @@ grep -rniE 'initiateTxn|getTxnParams|startPayment|requestPayment|signTransaction
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | **targetSdk < 31**: `PendingIntent` mutability is unenforced, so a mutable implicit `PendingIntent` is the default hazard — state the level |
 | **Maps to** | `risks/pending-intent`; AOSP `PendingIntent.java`; CWE-927 |
@@ -1451,7 +1451,7 @@ grep -rn 'FLAG_ONE_SHOT\|FLAG_IMMUTABLE\|FLAG_MUTABLE\|FLAG_UPDATE_CURRENT' jadx
 | | |
 |---|---|
 | **Severity ceiling** | High (Medium where the discount is trivial) |
-| **VRT** | `server_security_misconfiguration\|no_rate_limiting_on_form\|registration` is **not** the right node; file as `broken_access_control\|privilege_escalation` (**VARIES**) and carry the rating with the face value × discovery rate |
+| **VRT** | `server_security_misconfiguration.no_rate_limiting_on_form.registration` is **not** the right node; file as `broken_access_control.privilege_escalation` (**VARIES**) and carry the rating with the face value × discovery rate |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps with promo, voucher, referral or gift codes |
 | **Maps to** | H1 **#125707** (Uber — promotion-code enumeration and brute force in a mobile app, Medium, **$3,000**); API6:2023; WSTG-BUSL-05 |
@@ -1490,7 +1490,7 @@ wc -l /tmp/promo.out          # never trust a loop you did not count
 | | |
 |---|---|
 | **Severity ceiling** | Critical when a refund settles to your instrument; High when the impact is free goods only |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) for the sequential form; `server_security_misconfiguration\|race_condition` (**VARIES**) for the parallel form |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) for the sequential form; `server_security_misconfiguration.race_condition` (**VARIES**) for the parallel form |
 | **Attacker** | AM-01 |
 | **Applies to** | commerce and fintech |
 | **Maps to** | disclosed: a fee discount redeemable many times (H1 **#1849626**, **$5,000**); redeeming gift cards multiple times (H1 **#759247**); WSTG-BUSL-05; API6:2023 |
@@ -1526,7 +1526,7 @@ seq 1 20 | xargs -P20 -I{} curl -s -o /dev/null -w '%{http_code} ' -X POST \
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | any app with a referral, invite or "refer a friend" credit |
 | **Maps to** | WSTG-BUSL-05; API6:2023; the referral self-redemption pattern in the business-logic corpus |
@@ -1560,7 +1560,7 @@ InstallReferrerClient|getInstallReferrer' jadx_out/sources -A4
 | | |
 |---|---|
 | **Severity ceiling** | Critical by the ledger delta; High where the overrun is bounded and small |
-| **VRT** | `server_security_misconfiguration\|race_condition` (**VARIES**) |
+| **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all stateful money and incentive endpoints — coupon redemption, gift-card burn, wallet withdrawal, refund, top-up confirmation, one-time top-ups, binder-exposed local redemption paths |
 | **Maps to** | PortSwigger *Smashing the state machine* (single-packet attack; predict collisions, probe with synchronised batches against a sequential baseline, isolate to two requests, automate retries); disclosed: gift cards redeemed multiple times (H1 **#759247**), limit-bypass races (H1 **#2110030** $3,000; **#1438052** $5,000; **#1520931** $4,000; **#2078571** $2,480; **#119657** $2,000); WSTG-BUSL-05 |
@@ -1607,7 +1607,7 @@ curl -s "https://api.target/v1/transactions?limit=50" -H "Authorization: Bearer 
 | | |
 |---|---|
 | **Severity ceiling** | Critical when points convert to cash or wallet balance; High for spend-only points |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps with points, credits, wallet balance or in-app currency |
 | **Maps to** | T1641 Data Manipulation; API3:2023; WSTG-BUSL-03 |
@@ -1645,7 +1645,7 @@ Java.perform(function() {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); the concurrent burn is `server_security_misconfiguration\|race_condition` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the concurrent burn is `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01, frequently unauthenticated |
 | **Applies to** | apps selling or accepting gift cards, vouchers or stored-value codes |
 | **Maps to** | H1 **#759247** (redeeming gift cards multiple times); WSTG-BUSL-05; API6:2023 |
@@ -1678,7 +1678,7 @@ wc -l /tmp/gc.out
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_security_misconfiguration\|race_condition` (**VARIES**); argued **P1** on the settled delta |
+| **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**); argued **P1** on the settled delta |
 | **Attacker** | AM-01 |
 | **Applies to** | all wallet, payout and fintech apps. Keep amounts trivial, fund the balance yourself, and restore state |
 | **Maps to** | PortSwigger *Smashing the state machine* — limit overrun; WSTG-BUSL-05; disclosed: double payout via mishandled payment-provider transaction states — withdrawing money without the funds being deducted (H1 **#307239**, $10,000); modifying in-flight data to generate wallet balance (H1 **#1295844**, $7,500) |
@@ -1716,7 +1716,7 @@ for a in -100 0 0.001 99999999 1e9; do curl -s -o /dev/null -w "$a:%{http_code} 
 | | |
 |---|---|
 | **Severity ceiling** | Critical when value is extracted twice; High for a single duplicated refund |
-| **VRT** | `server_security_misconfiguration\|race_condition` (**VARIES**) |
+| **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all commerce apps with a self-service refund or cancellation |
 | **Maps to** | WSTG-BUSL-06; API6:2023; the `paid -> refunded while goods remain delivered` transition |
@@ -1743,7 +1743,7 @@ curl -i -X POST https://api.target/v1/orders/$O/refund  -H "Authorization: Beare
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | n/a (a kill gate for a claim that would otherwise be filed as `server_security_misconfiguration\|race_condition`) |
+| **VRT** | n/a (a kill gate for a claim that would otherwise be filed as `server_security_misconfiguration.race_condition`) |
 | **Attacker** | n/a |
 | **Applies to** | any payments backend fronted by GraphQL |
 | **Maps to** | the FP gate in the business-logic corpus: most reference implementations (Apollo, GraphQL-Ruby, Graphene) resolve aliases **sequentially** within one request |
@@ -1771,7 +1771,7 @@ curl -s https://api.target/graphql -H "Authorization: Bearer $T" \
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|idor\|modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where a step reaches another user's object |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where a step reaches another user's object |
 | **Attacker** | AM-05 |
 | **Applies to** | in-app wallets, gift/red-packet features, P2P transfers, split bills, escrow |
 | **Maps to** | H1 **#753280** (Razer — "Multiple vulnerabilities chained to allow 'RedPacket' money to be stolen by a 3rd party", **$1,000**), **#757095** (**$1,000**), **#754044** (IDOR on the same feature's logs, **$500**); API5:2023 |
@@ -1803,7 +1803,7 @@ curl -i -X POST https://api.target/v1/redpacket/000000/claim -H "Authorization: 
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927); the completed transfer is `broken_authentication_and_session_management\|authentication_bypass` (**P1**) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); the completed transfer is `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-02 remote one click; AM-03 locally |
 | **Applies to** | apps that construct or consume payment URIs (`upi://pay?...`, wallet schemes, bank-app schemes) and apps that register an intent-filter for them. **targetSdk < 30** gives free package visibility, which makes discovering the installed handler trivial |
 | **Maps to** | CWE-927; `risks/unsafe-use-of-deeplinks`; disclosed calibration: a "send all" transaction reachable from a `tx_amount=(all)` URI (H1 **#3648638**, Medium 6.5) |
@@ -1840,7 +1840,7 @@ adb shell am start -a android.intent.action.VIEW \
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-02 (a poisoned QR code in the physical world, or a link) |
 | **Applies to** | payment apps with QR, NFC tag or deep-link initiated payments |
 | **Maps to** | H1 **#126784** ("Sending payments via QR code does not require confirmation"); MASWE-0040; MASWE-0025 |
@@ -1870,7 +1870,7 @@ adb pull /sdcard/qr.mp4
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-02 |
 | **Applies to** | wallets, payment apps, and any app whose consent prompt names a counterparty |
 | **Maps to** | H1 **#1751333** (MetaMask — confirmation attributing a request to a trusted origin, **High 7.1**), **#1941767** (Medium 4.7); MASWE-0025 (Lack of Non-Repudiation for Critical Actions) |
@@ -1899,7 +1899,7 @@ jq '{payee:.payee, amount:.amount, origin:.origin, memo:.memo}' confirm.json
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) where a transaction exists server-side with no confirmation; otherwise a UI defect |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) where a transaction exists server-side with no confirmation; otherwise a UI defect |
 | **Attacker** | AM-01 (the victim is the user; the defect is the app's) |
 | **Applies to** | **targetSdk 35+** (edge-to-edge is enforced by default) and **targetSdk 36+** (predictive back default) — state the level |
 | **Maps to** | Android 15 behaviour changes (edge-to-edge enforced); Android 16 behaviour changes (predictive back default); MASWE-0025 |
@@ -1929,7 +1929,7 @@ curl -s "https://api.target/v1/transactions?limit=5" -H "Authorization: Bearer $
 | | |
 |---|---|
 | **Severity ceiling** | Critical (old version bypasses auth entirely) / High (accepts payloads the current version validates) / Medium–High (rate-limit or field-exposure regression). **A version difference alone is Informational** |
-| **VRT** | rate on the regression found: `broken_authentication_and_session_management\|authentication_bypass` (**P1**), `broken_access_control\|idor\|*`, or `server_security_misconfiguration\|race_condition` (**VARIES**) |
+| **VRT** | rate on the regression found: `broken_authentication_and_session_management.authentication_bypass` (**P1**), `broken_access_control.idor\|*`, or `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API — and a mobile build is the number-one source of old-version endpoints |
 | **Maps to** | the shadow/zombie-API method (behavioural diff, not response-shape diff); API9:2023-class improper inventory management, filed on the regression |
@@ -1972,7 +1972,7 @@ done
 | | |
 |---|---|
 | **Severity ceiling** | Support (it prevents a false Critical against production financial infrastructure) |
-| **VRT** | n/a (a kill gate for `broken_authentication_and_session_management\|authentication_bypass`) |
+| **VRT** | n/a (a kill gate for `broken_authentication_and_session_management.authentication_bypass`) |
 | **Attacker** | n/a |
 | **Applies to** | every auth-bypass claim made against a payment, billing or wallet route |
 | **Maps to** | the layer-ordering trap in the triage-validation corpus — the highest-confidence false positive in the whole auth-bypass class |
@@ -2005,8 +2005,8 @@ curl -s -X POST https://api.target/v1/billing/verify -H 'Content-Type: applicati
 
 | | |
 |---|---|
-| **Severity ceiling** | High (PCI-relevant and a direct fraud enabler). The bare-storage node is `insecure_data_storage\|sensitive_application_data_stored_unencrypted\|on_internal_storage` (**P5**) — do not file it there |
-| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**, CWE-200) for the exposure; `insecure_data_storage\|sensitive_application_data_stored_unencrypted\|on_external_storage` (**P4**) if it lands on shared storage |
+| **Severity ceiling** | High (PCI-relevant and a direct fraud enabler). The bare-storage node is `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) — do not file it there |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**, CWE-200) for the exposure; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (**P4**) if it lands on shared storage |
 | **Attacker** | AM-11 physical unlocked, AM-04 for the logcat/shared-storage routes on older API levels |
 | **Applies to** | all payment apps |
 | **Maps to** | CWE-312; MASTG-TECH-0009 (system log inspection); MASTG-TECH-0008 |
@@ -2041,7 +2041,7 @@ adb shell "su 0 find /data/data/$P -type f -newermt '-10 minutes'" | while read 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**, CWE-200) for the emitted identifier; `broken_access_control\|privilege_escalation` (**VARIES**) where the app acts on the frame |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**, CWE-200) for the emitted identifier; `broken_access_control.privilege_escalation` (**VARIES**) where the app acts on the frame |
 | **Attacker** | AM-10 physical locked (a reader presented to a locked device) |
 | **Applies to** | **Android 15+ HCE apps** — `NfcAdapter.setObserveModeEnabled()`, `HostApduService.processPollingFrames()`, `CardEmulation.registerPollingLoopPatternFilterForService()` |
 | **Maps to** | Android 15 features documentation (Observe Mode, polling-frame pre-authentication, polling-loop pattern filters) |
@@ -2068,7 +2068,7 @@ adb shell dumpsys nfc | grep -iE 'observe|polling|routing|AID'
 | | |
 |---|---|
 | **Severity ceiling** | High (Medium where the app merely mis-states which handler will transact; High where it acts on the assumption) |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 local app that holds or acquires the role |
 | **Applies to** | **Android 15+** — the Wallet role replaces the old NFC default contactless payment setting and routes payment AIDs to the role holder |
 | **Maps to** | Android 15 features documentation ("New system role replacing NFC default contactless payment setting. Routes NFC payment AIDs to the Wallet role holder. Users manage via Settings > Apps > Default Apps") |
@@ -2095,7 +2095,7 @@ grep -rn 'ROLE_WALLET\|isDefaultServiceForCategory\|CardEmulation\|setPreferredS
 | | |
 |---|---|
 | **Severity ceiling** | Critical for payment or access-control credentials |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) for harvested card data |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) for harvested card data |
 | **Attacker** | AM-10 physical locked for the relay/skim case; AM-03 for a competing registration |
 | **Applies to** | wallet, transit, access-control and loyalty apps with an HCE service |
 | **Maps to** | `risks/insecure-machine-to-machine` (NFC cloned intent-filters; mitigation `NdefRecord.createApplicationRecord()` / Android Application Records; and "Lack of NDEF Message Validation" — validate TNF, record structure and magic bytes before dispatch); the EMV relay research summarised in the corpus (PPSE `325041592E5359532E4444463031` = `2PAY.SYS.DDF01`; EMV AIDs `A0000000031010`, `A0000000041010`, `A00000002501`) |
@@ -2126,7 +2126,7 @@ adb shell dumpsys nfc | sed -n '/AID/,/^$/p'
 | | |
 |---|---|
 | **Severity ceiling** | Critical when silent and repeatable; High otherwise |
-| **VRT** | `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**, CWE-927); `sensitive_data_exposure\|disclosure_of_secrets\|pay_per_use_abuse` (**P4**) where the abused resource is a metered third-party service rather than the user's own bill |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (**P4**) where the abused resource is a metered third-party service rather than the user's own bill |
 | **Attacker** | AM-03 zero-permission local app (the confused deputy holds the permission, not the attacker) |
 | **Applies to** | apps holding `SEND_SMS`, `CALL_PHONE`, or any entitlement/credit-consuming action reachable by IPC |
 | **Maps to** | ATT&CK **T1643** Generate Traffic from Victim (on Android `SEND_SMS` "is required, and user consent is necessary for premium-rate SMS recipients"; MazarBOT "can send messages to premium-rate numbers"; Judy "uses infected devices to generate fraudulent clicks on advertisements"), **T1582** SMS Control, **T1616** Call Control, T1660; CVE-2025-12080 (intent injection) |
@@ -2314,7 +2314,7 @@ These primitives have independent fix surfaces and are filed separately per the 
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
-| Premium unlocked on your own rooted device and it reverts on the next sync | AM-12 is not an attacker model; the server is the control and it held. Files as `lack_of_binary_hardening\|runtime_instrumentation_based` (**P5**) | A premium-only **server** response under a free account's token, from `curl`, outside the app (D23-005) |
+| Premium unlocked on your own rooted device and it reverts on the next sync | AM-12 is not an attacker model; the server is the control and it held. Files as `lack_of_binary_hardening.runtime_instrumentation_based` (**P5**) | A premium-only **server** response under a free account's token, from `curl`, outside the app (D23-005) |
 | `BASE64_PUBLIC_KEY` / `base64EncodedPublicKey` found in the decompile | A Play licensing public key is meant to be in the APK; its presence alone proves nothing about where verification happens | The same key used by an in-app `Signature.verify` **and** no `purchaseToken` leaving the device (D23-002) |
 | `verifyPurchase()` hooked with Frida and it returned `true` | A hook on your own process is the expected outcome of an untrusted execution environment | The entitlement persisting after a clean install and login on a second device (D23-005, D23-012) |
 | Negative price or quantity accepted by the cart endpoint | The explicit FP trap: cart APIs accept arbitrary client state while capture rejects negative totals. The cart display is fiction | The credit **settling** — wallet balance, store credit, or a refund to your instrument (D23-022) |
@@ -2325,9 +2325,9 @@ These primitives have independent fix surfaces and are filed separately per the 
 | An older `/api/v1/` billing path is still live | A version difference alone is Informational | A behavioural regression on the old path — weaker auth, no 429, laxer validation, more fields (D23-056) |
 | `rzp_test_…`, `pk_test_…` or a Stripe publishable key in the APK | Publishable and test identifiers are public by design; filing them lands on `...\|intentionally_public_sample_or_invalid` (**P5**) | A **secret** authenticating with one read-only call (D23-038), or a sandbox key live against production (D23-037) |
 | `ENVIRONMENT_TEST` in a debug flavour | Debug flavours are not distributed | The same constant in the store-distributed release artefact (D23-036) |
-| The payment confirmation screen can be tapjacked | `mobile_security_misconfiguration\|tapjacking` is **P5** and the overlay alone moves no money | A transaction completed end to end by overlay plus accessibility, recorded, with the server record (D23-034) |
-| No certificate pinning on the payment host | `mobile_security_misconfiguration\|ssl_certificate_pinning\|absent` and `\|defeatable` are both **P5**, and AM-07 is tester convenience, not an attacker | Cleartext transmission of a token or PAN to a network attacker with no trusted CA (that is D14, not D23) |
-| Card fields are screenshot-able / appear in the recents thumbnail | `insecure_data_storage\|screen_caching_enabled` is **P5** — Bugcrowd's own remediation text calls `FLAG_SECURE` a best practice | The PAN recoverable from a third party's session-replay dashboard, or from disk after dismissal (D23-058) |
+| The payment confirmation screen can be tapjacked | `mobile_security_misconfiguration.tapjacking` is **P5** and the overlay alone moves no money | A transaction completed end to end by overlay plus accessibility, recorded, with the server record (D23-034) |
+| No certificate pinning on the payment host | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` and `\|defeatable` are both **P5**, and AM-07 is tester convenience, not an attacker | Cleartext transmission of a token or PAN to a network attacker with no trusted CA (that is D14, not D23) |
+| Card fields are screenshot-able / appear in the recents thumbnail | `insecure_data_storage.screen_caching_enabled` is **P5** — Bugcrowd's own remediation text calls `FLAG_SECURE` a best practice | The PAN recoverable from a third party's session-replay dashboard, or from disk after dismissal (D23-058) |
 | A promo code works more than once | Many marketing codes are multi-use by design | The code documented or labelled single-use, or a per-account limit that the parallel run overruns (D23-043) |
 | `purchaseToken` visible in the proxy on your own device | It is your own purchase on your own device over your own proxy | The same token accepted under a second account (D23-007) |
 | The Play Billing Library version is out of date | Version currency is not a vulnerability without a reachable defect | A reachable defect — e.g. the legacy implicit `InAppBillingService.BIND` path (D23-019) |

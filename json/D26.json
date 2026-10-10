@@ -169,7 +169,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "none; note `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` is **P5** — the bypass is never the finding",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-07 network attacker with a trusted CA — **tester convenience, not an attacker model**",
    "attacker_ids": [
     "AM-07"
@@ -2377,7 +2377,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "none. A pinning bypass is a *technique*; `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` is **P5**",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-12",
    "attacker_ids": [
     "AM-12"
@@ -2429,7 +2429,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "none. `mobile_security_misconfiguration.*` and `insecure_data_storage.screen_caching_enabled` are **P5** — the presence of `FLAG_SECURE` is the app behaving correctly",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-12 (evidence capture only)",
    "attacker_ids": [
     "AM-12"
@@ -2931,7 +2931,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "routed to D16/D25 and rated on the reachable crash: `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**, while memory corruption in a privileged process is an OEM/Google VRP matter",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-03 or AM-09 depending on where the malformed input enters",
    "attacker_ids": [
     "AM-03",

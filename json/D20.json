@@ -26,7 +26,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null = rated on demonstrated impact) — this item exists to get you **into** that node instead of the P5 mechanism nodes",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 / AM-08 / AM-10 / AM-05; explicitly **not** AM-12",
    "attacker_ids": [
     "AM-04",
@@ -281,7 +281,7 @@
    "severity_floor": "low",
    "severity_note": "Low standalone (High only via the value, see D20-008)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — the mechanism alone has no node above P5",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 (a `READ_LOGS` holder), AM-08 (a log-forwarding SDK), AM-11 (ADB on an unlocked device)",
    "attacker_ids": [
     "AM-04",
@@ -390,7 +390,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "n/a — instrumentation",
    "attacker_ids": [],
    "applies_to": "all; essential where R8 has renamed the logging wrapper",
@@ -489,7 +489,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium (High when the logged argument is a token or PAN)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 / AM-11",
    "attacker_ids": [
     "AM-04",
@@ -535,7 +535,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 / AM-11",
    "attacker_ids": [
     "AM-04",
@@ -632,7 +632,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-11 (physical unlocked with ADB), AM-04 (an OEM diagnostics package)",
    "attacker_ids": [
     "AM-04",
@@ -793,7 +793,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — **not** `insecure_data_storage.screen_caching_enabled`, because the capture is in-process and `FLAG_SECURE` is irrelevant to it",
-   "vrt_priority": "P5",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -842,7 +842,7 @@
    "severity_floor": "high",
    "severity_note": "High (Critical where the vendor console exposes multiple users' sessions)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — HackerOne's multi-user PII standard applies once the console holds many users' recordings)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -893,7 +893,7 @@
    "severity_floor": "high",
    "severity_note": "High (the attribution is what makes the payload finding actionable)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -945,7 +945,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`privacy_concerns.unnecessary_data_collection` (null; the only concrete child, `…wifi_ssid_password`, is P4) — escalate via `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -997,7 +997,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`privacy_concerns.unnecessary_data_collection` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -1183,7 +1183,7 @@
    "severity_floor": "high",
    "severity_note": "High (Critical where it is multi-user sensitive PII per the HackerOne standard)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 (a third-party recipient) — for a first-party-only flow this is a compliance finding, which most bounty programmes route to a privacy track rather than pay",
    "attacker_ids": [
     "AM-08"
@@ -1397,7 +1397,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — this is third-party PII (the contacts themselves never consented)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08; the data subjects are people who are not users of the app at all",
    "attacker_ids": [
     "AM-08"
@@ -1452,7 +1452,7 @@
    "severity_floor": "high",
    "severity_note": "High (an OTP on a locked screen is a second-factor bypass for anyone holding the device)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**)",
-   "vrt_priority": "P3",
+   "vrt_priority": "varies",
    "attacker": "**AM-10** physical locked — the rare item where AM-10 is the primary model",
    "attacker_ids": [
     "AM-10"
@@ -1511,7 +1511,7 @@
    "severity_floor": "high",
    "severity_note": "High (Critical when the value is an OTP that completes an account takeover)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**)",
-   "vrt_priority": "P3",
+   "vrt_priority": "varies",
    "attacker": "**AM-04** — notification access is a single user toggle, no dangerous permission",
    "attacker_ids": [
     "AM-04"
@@ -1565,7 +1565,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.two_fa_bypass` (**P3**)",
-   "vrt_priority": "P3",
+   "vrt_priority": "p3",
    "attacker": "AM-04",
    "attacker_ids": [
     "AM-04"
@@ -1612,7 +1612,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-11 physical unlocked, AM-05 shared device",
    "attacker_ids": [
     "AM-05",
@@ -1708,7 +1708,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null = rated on what it exposes)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 (notification access)",
    "attacker_ids": [
     "AM-04"
@@ -1812,7 +1812,7 @@
    "severity_floor": "high",
    "severity_note": "High (persistent screen capture beyond the consent the user gave)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 for a third-party capturer; for the target app itself this is a covert-collection finding",
    "attacker_ids": [
     "AM-04"
@@ -1859,7 +1859,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (the remote viewer in a support-call or casting scam)",
    "attacker_ids": [
     "AM-02"
@@ -1952,7 +1952,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`insecure_data_storage.screen_caching_enabled` (**P5**)",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-11 / AM-05",
    "attacker_ids": [
     "AM-05",
@@ -2062,7 +2062,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 (an enabled accessibility service; `uiautomator` itself is AM-11/AM-12 and is only the evidence tool)",
    "attacker_ids": [
     "AM-04",
@@ -2218,7 +2218,7 @@
    "severity_floor": "high",
    "severity_note": "High (for an app that reads and exfiltrates the clipboard); Medium for the paste direction",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the read; the paste direction is a business-logic finding rated on the transaction",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "For the read: the app itself as AM-08-shaped behaviour. For the paste: AM-04 (a clipboard-swapping app)",
    "attacker_ids": [
     "AM-04",
@@ -2370,7 +2370,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 — the user enabling a third-party autofill service is a single action",
    "attacker_ids": [
     "AM-04"
@@ -2419,7 +2419,7 @@
    "severity_floor": "low",
    "severity_note": "Low (Medium in combination with the capture items)",
    "vrt": "`external_behavior.browser_feature.plaintext_password_field` (**P5**)",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-11 (shoulder surfing), and it multiplies every capture item above",
    "attacker_ids": [
     "AM-11"
@@ -2523,7 +2523,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium (a missing control)",
    "vrt": "no VRT node for the missing control; file the demonstrated capture under `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) and name the missing control as remediation",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04",
    "attacker_ids": [
     "AM-04"
@@ -2823,7 +2823,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.authentication_bypass` (**P1**) where the identifier alone yields a session",
-   "vrt_priority": "P1",
+   "vrt_priority": "p1",
    "attacker": "AM-03 (any local app that can read or spoof the identifier) / AM-01 if it is accepted remotely",
    "attacker_ids": [
     "AM-01",
@@ -2869,7 +2869,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.exif_geolocation_data_not_stripped_from_uploaded_images.automatic_user_enumeration` (**P3**) / `…manual_user_enumeration` (**P4**) — note the qualifier. **Without user enumeration there is no rated node**, and several programmes exclude EXIF by name",
-   "vrt_priority": "P3",
+   "vrt_priority": "p3",
    "attacker": "**AM-05** — another signed-in user of the same app, fetching a photo the victim uploaded",
    "attacker_ids": [
     "AM-05"
@@ -2916,7 +2916,7 @@
    "severity_floor": "high",
    "severity_note": "High (Critical if EXIF GPS for unselected images is shipped)",
    "vrt": "`privacy_concerns.unnecessary_data_collection` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -2970,7 +2970,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium (High when the surviving artefact is an authenticator)",
    "vrt": "`insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null, CWE-459); `cryptographic_weakness.incomplete_cleanup_of_keying_material` (**P5**, CWE-459); `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (**P4**)",
-   "vrt_priority": "P5",
+   "vrt_priority": "varies",
    "attacker": "**AM-05** — another user of the same device, which the vendor supports for kiosks, POS terminals, ward tablets and family devices ([T.P4])",
    "attacker_ids": [
     "AM-05"
@@ -3020,7 +3020,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium as a privacy finding (High when deletion leaves a working authenticator)",
    "vrt": "`insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05 / AM-11 for the device side; the server side is a data-subject-rights failure",
    "attacker_ids": [
     "AM-05",
@@ -3071,7 +3071,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (**P4**); where the surviving token still reaches user data, `broken_authentication_and_session_management.authentication_bypass` (**P1**)",
-   "vrt_priority": "P4",
+   "vrt_priority": "p4",
    "attacker": "AM-05 / whoever holds a previously issued token",
    "attacker_ids": [
     "AM-05"
@@ -3115,7 +3115,7 @@
    "severity_floor": "high",
    "severity_note": "High (when a session token survives uninstall — device resale or handover becomes ATO)",
    "vrt": "`mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**); the escalation is `broken_authentication_and_session_management.authentication_bypass` (**P1**) via the restored token",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-11 / AM-05",
    "attacker_ids": [
     "AM-05",
@@ -3162,7 +3162,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (covert recording); High for access that is disclosed but broader than necessary",
    "vrt": "`privacy_concerns.unnecessary_data_collection` (null); the recorded artefact files as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 / the app itself",
    "attacker_ids": [
     "AM-08"

@@ -23,7 +23,7 @@ compare our report against what independent hunters submit. Success is therefore
 
 ## 2. The economics that set your priorities
 
-The Bugcrowd VRT (release 2026-07-08, mirrored in `data/bugcrowd-vrt-full.csv`) rates the **entire mobile
+The Bugcrowd VRT (release 2026-07-08, mirrored in `data/vrt.csv`) rates the **entire mobile
 branch at P5 — Informational**: absent or defeatable pinning, `allowBackup`, tapjacking, root-detection
 bypass, clipboard, and even *sensitive data stored unencrypted on internal storage*. The one Android-native
 node that is not pinned to P5, `broken_access_control.exposed_sensitive_android_intent`, is rated on *what it
@@ -202,5 +202,5 @@ did.
 | Knowing what was wrong with the previous build | `docs/08-senior-audit-2026-10.md` |
 | Running a domain | `cards/Dnn.md` → `python3 scripts/item.py Dnn-NNN` |
 | Writing up | `templates/` |
-| A real identifier | `data/standards-index.csv`, `data/bugcrowd-vrt-full.csv` — never invent one |
+| A real identifier | `data/standards-index.csv`, `data/vrt.csv` — never invent one |
 | Storing engagement output | `BugBountyTarget/README.md` |

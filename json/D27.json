@@ -554,7 +554,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (realistically; the node has no ceiling of its own)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (priority **null**, CWE-927, placeholder CVSS `AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N`)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1788,7 +1788,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "the difference between `broken_access_control.exposed_sensitive_android_intent` rated at P4 and rated on impact",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1911,7 +1911,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; the tombstone is what moves a crash toward memory safety instead",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-02 / AM-03 depending on the delivery path",
    "attacker_ids": [
     "AM-02",

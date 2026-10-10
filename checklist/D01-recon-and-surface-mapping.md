@@ -115,7 +115,7 @@ apkanalyzer manifest print merged.apk | grep -cE '<(activity|service|receiver|pr
 ```bash
 mkdir -p evidence
 for f in apk/*.apk; do
-  printf '%s\t%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(stat -f%z "$f")" "$f"
+  printf '%s\t%s\t%s\n' "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$(wc -c < "$f" | tr -d " ")" "$f"
 done | tee evidence/ARTEFACT-MANIFEST.txt
 
 apksigner verify --print-certs --verbose apk/base.apk \

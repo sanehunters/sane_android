@@ -1,0 +1,92 @@
+id,status,platform,title,url,source_path
+MASTG-TECH-0001,current,android,Accessing the Device Shell,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0001/,techniques/android/MASTG-TECH-0001.md
+MASTG-TECH-0002,current,android,Host-Device Data Transfer,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0002/,techniques/android/MASTG-TECH-0002.md
+MASTG-TECH-0003,current,android,Obtaining and Extracting Apps,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0003/,techniques/android/MASTG-TECH-0003.md
+MASTG-TECH-0004,current,android,Repackaging Apps,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0004/,techniques/android/MASTG-TECH-0004.md
+MASTG-TECH-0005,current,android,Installing Apps,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0005/,techniques/android/MASTG-TECH-0005.md
+MASTG-TECH-0006,current,android,Listing Installed Apps,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0006/,techniques/android/MASTG-TECH-0006.md
+MASTG-TECH-0007,current,android,Exploring the App Package,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0007/,techniques/android/MASTG-TECH-0007.md
+MASTG-TECH-0008,current,android,Accessing App Data Directories,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0008/,techniques/android/MASTG-TECH-0008.md
+MASTG-TECH-0009,current,android,Monitoring System Logs,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0009/,techniques/android/MASTG-TECH-0009.md
+MASTG-TECH-0010,current,android,Basic Network Monitoring/Sniffing,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0010/,techniques/android/MASTG-TECH-0010.md
+MASTG-TECH-0011,current,android,Setting Up an Interception Proxy,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0011/,techniques/android/MASTG-TECH-0011.md
+MASTG-TECH-0012,current,android,Bypassing Certificate Pinning,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0012/,techniques/android/MASTG-TECH-0012.md
+MASTG-TECH-0013,current,android,Reverse Engineering Android Apps,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0013/,techniques/android/MASTG-TECH-0013.md
+MASTG-TECH-0014,current,android,Static Analysis on Android,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0014/,techniques/android/MASTG-TECH-0014.md
+MASTG-TECH-0015,current,android,Dynamic Analysis on Android,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0015/,techniques/android/MASTG-TECH-0015.md
+MASTG-TECH-0016,current,android,Disassembling Code to Smali,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0016/,techniques/android/MASTG-TECH-0016.md
+MASTG-TECH-0017,current,android,Decompiling Java Code,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0017/,techniques/android/MASTG-TECH-0017.md
+MASTG-TECH-0018,current,android,Disassembling Native Code,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0018/,techniques/android/MASTG-TECH-0018.md
+MASTG-TECH-0019,current,android,Retrieving Strings,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0019/,techniques/android/MASTG-TECH-0019.md
+MASTG-TECH-0020,current,android,Retrieving Cross References,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0020/,techniques/android/MASTG-TECH-0020.md
+MASTG-TECH-0021,current,android,Information Gathering - API Usage,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0021/,techniques/android/MASTG-TECH-0021.md
+MASTG-TECH-0022,current,android,Information Gathering - Network Communication,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0022/,techniques/android/MASTG-TECH-0022.md
+MASTG-TECH-0023,current,android,Reviewing Decompiled Java Code,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0023/,techniques/android/MASTG-TECH-0023.md
+MASTG-TECH-0024,current,android,Reviewing Disassembled Native Code,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0024/,techniques/android/MASTG-TECH-0024.md
+MASTG-TECH-0025,current,android,Automated Static Analysis,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0025/,techniques/android/MASTG-TECH-0025.md
+MASTG-TECH-0026,current,android,Dynamic Analysis on Non-Rooted Devices,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0026/,techniques/android/MASTG-TECH-0026.md
+MASTG-TECH-0027,current,android,Get Open Files,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0027/,techniques/android/MASTG-TECH-0027.md
+MASTG-TECH-0028,current,android,Get Open Connections,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0028/,techniques/android/MASTG-TECH-0028.md
+MASTG-TECH-0029,current,android,Listing Loaded Native Libraries,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0029/,techniques/android/MASTG-TECH-0029.md
+MASTG-TECH-0030,current,android,Sandbox Inspection,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0030/,techniques/android/MASTG-TECH-0030.md
+MASTG-TECH-0031,current,android,Debugging,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0031/,techniques/android/MASTG-TECH-0031.md
+MASTG-TECH-0032,current,android,Execution Tracing,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0032/,techniques/android/MASTG-TECH-0032.md
+MASTG-TECH-0033,current,android,Method Tracing,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0033/,techniques/android/MASTG-TECH-0033.md
+MASTG-TECH-0034,current,android,Native Code Tracing,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0034/,techniques/android/MASTG-TECH-0034.md
+MASTG-TECH-0035,current,android,JNI Tracing,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0035/,techniques/android/MASTG-TECH-0035.md
+MASTG-TECH-0036,current,android,Emulation-based Analysis,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0036/,techniques/android/MASTG-TECH-0036.md
+MASTG-TECH-0037,current,android,Symbolic Execution,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0037/,techniques/android/MASTG-TECH-0037.md
+MASTG-TECH-0038,current,android,Patching,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0038/,techniques/android/MASTG-TECH-0038.md
+MASTG-TECH-0039,current,android,Repackaging & Re-Signing,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0039/,techniques/android/MASTG-TECH-0039.md
+MASTG-TECH-0040,current,android,Waiting for the Debugger,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0040/,techniques/android/MASTG-TECH-0040.md
+MASTG-TECH-0041,current,android,Library Injection,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0041/,techniques/android/MASTG-TECH-0041.md
+MASTG-TECH-0042,current,android,Getting Loaded Classes and Methods Dynamically,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0042/,techniques/android/MASTG-TECH-0042.md
+MASTG-TECH-0043,current,android,Method Hooking,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0043/,techniques/android/MASTG-TECH-0043.md
+MASTG-TECH-0044,current,android,Process Exploration,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0044/,techniques/android/MASTG-TECH-0044.md
+MASTG-TECH-0045,current,android,Runtime Reverse Engineering,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0045/,techniques/android/MASTG-TECH-0045.md
+MASTG-TECH-0100,current,android,Logging Sensitive Data from Network Traffic,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0100/,techniques/android/MASTG-TECH-0100.md
+MASTG-TECH-0108,current,android,Taint Analysis,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0108/,techniques/android/MASTG-TECH-0108.md
+MASTG-TECH-0109,current,android,Intercepting Flutter HTTPS Traffic,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0109/,techniques/android/MASTG-TECH-0109.md
+MASTG-TECH-0115,current,android,Obtaining Compiler-Provided Security Features,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0115/,techniques/android/MASTG-TECH-0115.md
+MASTG-TECH-0116,current,android,Obtaining Information about the APK Signature,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0116/,techniques/android/MASTG-TECH-0116.md
+MASTG-TECH-0117,current,android,Obtaining Information from the AndroidManifest,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0117/,techniques/android/MASTG-TECH-0117.md
+MASTG-TECH-0126,current,android,Obtaining App Permissions,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0126/,techniques/android/MASTG-TECH-0126.md
+MASTG-TECH-0127,current,android,Inspecting an App's Backup Data,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0127/,techniques/android/MASTG-TECH-0127.md
+MASTG-TECH-0128,current,android,Performing a Backup and Restore of App Data,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0128/,techniques/android/MASTG-TECH-0128.md
+MASTG-TECH-0129,current,android,Verifying Android Dependencies at Runtime,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0129/,techniques/android/MASTG-TECH-0129.md
+MASTG-TECH-0130,current,android,Software Composition Analysis (SCA) of Android Dependencies by Creating a SBOM,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0130/,techniques/android/MASTG-TECH-0130.md
+MASTG-TECH-0131,current,android,Software Composition Analysis (SCA) of Android Dependencies at Build Time,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0131/,techniques/android/MASTG-TECH-0131.md
+MASTG-TECH-0140,current,android,Obtaining Debugging Information and Symbols,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0140/,techniques/android/MASTG-TECH-0140.md
+MASTG-TECH-0141,current,android,Inspecting the Merged AndroidManifest,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0141/,techniques/android/MASTG-TECH-0141.md
+MASTG-TECH-0142,current,android,Inspecting WebView Storage,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0142/,techniques/android/MASTG-TECH-0142.md
+MASTG-TECH-0143,current,android,Monitor File System Operations in WebViews,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0143/,techniques/android/MASTG-TECH-0143.md
+MASTG-TECH-0144,current,android,Bypassing Root Detection,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0144/,techniques/android/MASTG-TECH-0144.md
+MASTG-TECH-0145,current,android,Working with XAPK Files,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0145/,techniques/android/MASTG-TECH-0145.md
+MASTG-TECH-0148,current,android,Interacting with Android ContentProviders,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0148/,techniques/android/MASTG-TECH-0148.md
+MASTG-TECH-0150,current,android,Analyzing the AndroidManifest,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0150/,techniques/android/MASTG-TECH-0150.md
+MASTG-TECH-0151,current,android,Analyzing the Network Security Configuration,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0151/,techniques/android/MASTG-TECH-0151.md
+MASTG-TECH-0156,current,android,Reverse Engineering Flutter Applications,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0156/,techniques/android/MASTG-TECH-0156.md
+MASTG-TECH-0157,current,android,Extracting Bundled Native Libraries,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0157/,techniques/android/MASTG-TECH-0157.md
+MASTG-TECH-0159,current,android,Verify Usage of File-Based Content Providers,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0159/,techniques/android/MASTG-TECH-0159.md
+MASTG-TECH-0160,current,android,Enumerating Activities,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0160/,techniques/android/MASTG-TECH-0160.md
+MASTG-TECH-0161,current,android,Enumerating Services,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0161/,techniques/android/MASTG-TECH-0161.md
+MASTG-TECH-0162,current,android,Enumerating Broadcast Receivers,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0162/,techniques/android/MASTG-TECH-0162.md
+MASTG-TECH-0163,current,android,Enumerating Content Providers,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0163/,techniques/android/MASTG-TECH-0163.md
+MASTG-TECH-0164,current,android,Sniffing Implicit Intents and Broadcasts,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0164/,techniques/android/MASTG-TECH-0164.md
+MASTG-TECH-0165,current,android,"Identifying Compilers, Obfuscators, and Packers in Android Apps",https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0165/,techniques/android/MASTG-TECH-0165.md
+MASTG-TECH-0172,current,android,Listing Deep Links,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0172/,techniques/android/MASTG-TECH-0172.md
+MASTG-TECH-0173,current,android,Monitoring Deep Link Handlers at Runtime with Frida,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0173/,techniques/android/MASTG-TECH-0173.md
+MASTG-TECH-0174,current,android,Verifying App Link Website Association,https://mas.owasp.org/MASTG/techniques/android/MASTG-TECH-0174/,techniques/android/MASTG-TECH-0174.md
+MASTG-TECH-0047,current,generic,Reverse Engineering,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0047/,techniques/generic/MASTG-TECH-0047.md
+MASTG-TECH-0048,current,generic,Static Analysis,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0048/,techniques/generic/MASTG-TECH-0048.md
+MASTG-TECH-0049,current,generic,Dynamic Analysis,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0049/,techniques/generic/MASTG-TECH-0049.md
+MASTG-TECH-0050,current,generic,Binary Analysis,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0050/,techniques/generic/MASTG-TECH-0050.md
+MASTG-TECH-0051,current,generic,Tampering and Runtime Instrumentation,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0051/,techniques/generic/MASTG-TECH-0051.md
+MASTG-TECH-0071,current,generic,Retrieving Strings,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0071/,techniques/generic/MASTG-TECH-0071.md
+MASTG-TECH-0119,current,generic,Intercepting HTTP Traffic by Hooking Network APIs at the Application Layer,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0119/,techniques/generic/MASTG-TECH-0119.md
+MASTG-TECH-0120,current,generic,Intercepting HTTP Traffic Using an Interception Proxy,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0120/,techniques/generic/MASTG-TECH-0120.md
+MASTG-TECH-0121,current,generic,Intercepting Non-HTTP Traffic Using an Interception Proxy,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0121/,techniques/generic/MASTG-TECH-0121.md
+MASTG-TECH-0122,current,generic,Passive Eavesdropping,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0122/,techniques/generic/MASTG-TECH-0122.md
+MASTG-TECH-0123,current,generic,Achieving a MITM Position via ARP Spoofing,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0123/,techniques/generic/MASTG-TECH-0123.md
+MASTG-TECH-0124,current,generic,Achieving a MITM Position Using a Rogue Access Point,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0124/,techniques/generic/MASTG-TECH-0124.md
+MASTG-TECH-0125,deprecated,generic,Intercepting Xamarin Traffic,https://mas.owasp.org/MASTG/techniques/generic/MASTG-TECH-0125/,techniques/generic/MASTG-TECH-0125.md

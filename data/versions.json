@@ -1,0 +1,32 @@
+{
+ "versions": {
+  "owasp-mastg": "02ffd85fb74383ec2a30b42866d38f89d72c0ead 2026-09-30T10:25:55+02:00",
+  "maswe": "4859052afadbb3df1ffae71daed8decd6095565c 2026-09-30T12:36:37+02:00",
+  "owasp-masvs": "bbe226fd17e6dab51927f392936deef31c816423 2026-09-21T10:50:56+02:00",
+  "vulnerability-rating-taxonomy": "75f888a997a1cc307c62235d6b3325e53a215c60 2026-08-25T21:22:44-07:00 release 2026-07-08T00:00:00+00:00",
+  "www-project-mobile-top-10": "f2dc2d6607f3da069e8b91c7a44825fd85c74555 2025-10-09T00:35:26+05:30",
+  "attack-mobile": "19.2 2026-08-05T21:34:50.442Z"
+ },
+ "row_counts": {
+  "mastg-tests.csv": 163,
+  "mastg-techniques.csv": 91,
+  "mastg-tools.csv": 81,
+  "mastg-knowledge.csv": 75,
+  "mastg-best-practices.csv": 44,
+  "mastg-apps.csv": 22,
+  "mastg-demos.csv": 94,
+  "mastg-rules.csv": 71,
+  "maswe.csv": 77,
+  "masvs-controls.csv": 24,
+  "vrt.csv": 581,
+  "vrt-deprecated-nodes.csv": 113,
+  "mobile-top10-2024.csv": 10,
+  "attack-mobile-android.csv": 122,
+  "cwe-top25.csv": 25
+ },
+ "platforms_kept": [
+  "android",
+  "generic",
+  "network"
+ ]
+}

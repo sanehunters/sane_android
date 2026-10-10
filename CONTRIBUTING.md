@@ -41,5 +41,6 @@ An item is not accepted until it has all seven fields:
 
 ## Never commit
 
-Client data, APKs, evidence, videos, credentials or a live `report.md`. See `.gitignore`. This repository
-is methodology; engagement artifacts live in the engagement's own private store.
+APKs, decompiled trees, keystores, raw HAR/PCAP captures, videos over 5 MB, credentials, or any third
+party's data. Engagement folders under `BugBountyTarget/` are committed — hashes, logs, sanitised captures,
+notes, small videos — because the archive is the point. See `.gitignore` and `BugBountyTarget/README.md`.

@@ -21,7 +21,7 @@
 - [ ] `D01-002` ⬜ n/a n/a — Rebuild one analysable artefact from the split set, an AAB or an XAPK
 - [ ] `D01-003` ⬜ n/a n/a — Record artefact provenance: acquisition path, per-split SHA-256, signer digest
 - [ ] `D01-004` 🟩 varies AM-08/AM-11 — Establish which APK signature schemes verify and pin the signer SHA-256
-- [ ] `D01-005` 🟧 ? AM-02 — Play App Signing: the artefact you were handed is signed with a different key than users run
+- [ ] `D01-005` 🟧 varies AM-02 — Play App Signing: the artefact you were handed is signed with a different key than users run
 - [ ] `D01-006` ⬜ n/a n/a — Establish minSdkVersion and targetSdkVersion from two authoritative sources
 - [ ] `D01-007` 🟩 n/a AM-03 — Enumerate SDK Extension versions before declaring a modern API unreachable
 - [ ] `D01-008` ⬜ n/a n/a — Prove version currency against the programme's staleness clause
@@ -37,7 +37,7 @@
 - [ ] `D01-018` 🟥 P1 AM-01 — Code-search dorking anchored on the exact applicationId
 - [ ] `D01-019` ⬜ n/a n/a — Read the programme rules that set the payout ceiling and the admissible attacker model
 - [ ] `D01-020` ⬜ n/a n/a — Bind a commercial engagement with a scoping sheet and an RoE that authorises mobile-test acts
-- [ ] `D01-021` 🟧 ? AM-05 — Day-0 intake: prior reports, regression checks and the feature-flag list
+- [ ] `D01-021` 🟧 varies AM-05 — Day-0 intake: prior reports, regression checks and the feature-flag list
 - [ ] `D01-022` ⬜ n/a n/a — Fingerprint the framework from the archive listing before writing a single test case
 - [ ] `D01-023` ⬜ P5 n/a — Run APKiD for compiler, obfuscator, packer and anti-analysis signatures
 - [ ] `D01-024` 🟨 n/a AM-08/AM-09 — A decompiler that "sees nothing" is anti-analysis, not a clean app
@@ -51,38 +51,38 @@
 - [ ] `D01-032` ⬜ n/a n/a — Determine which binary is ACTUALLY executing (expo-updates, CodePush, DexClassLoader)
 - [ ] `D01-033` 🟥 P1 AM-06/AM-09 — Check whether the OTA code channel is signed and the signature enforced
 - [ ] `D01-034` ⬜ n/a n/a — Never conclude "obfuscated, therefore unanalysable" — grep the anchors R8 cannot rename
-- [ ] `D01-035` ⬜ n/a AM-03 — Build the component inventory from the MERGED manifest and compute implicit export per targetSdk
-- [ ] `D01-036` 🟨 n/a AM-03/AM-08 — Isolate the SDK-injected components by class-prefix delta
+- [ ] `D01-035` ⬜ varies AM-03 — Build the component inventory from the MERGED manifest and compute implicit export per targetSdk
+- [ ] `D01-036` 🟨 varies AM-03/AM-08 — Isolate the SDK-injected components by class-prefix delta
 - [ ] `D01-037` 🟨 n/a AM-03 — Reconcile the static manifest against the runtime resolver tables
 - [ ] `D01-038` ⬜ n/a n/a — Close the component-coverage register: zero TODO rows at delivery
-- [ ] `D01-039` 🟧 n/a AM-03 — Enumerate every custom permission the app defines and its resolved protectionLevel
+- [ ] `D01-039` 🟧 varies AM-03 — Enumerate every custom permission the app defines and its resolved protectionLevel
 - [ ] `D01-040` 🟧 P1 AM-03/AM-08 — sharedUserId redefines the target boundary — triage the weakest sibling
 - [ ] `D01-041` 🟨 n/a AM-08/AM-09 — Map the process topology before believing a "sandboxed process" claim
-- [ ] `D01-042` 🟨 n/a AM-03 — Read `<queries>` as the declared trust graph, then check how each peer is verified
-- [ ] `D01-043` 🟨 ? AM-08 — QUERY_ALL_PACKAGES plus egress is a privacy exfiltration, not a lint warning
-- [ ] `D01-044` 🟨 n/a AM-03 — Enumerate the auto-generated providers and read the FileProvider roots
-- [ ] `D01-045` 🟧 ? AM-03 — Find privileged listener services declared without their BIND_* permission
-- [ ] `D01-046` 🟩 n/a AM-03 — Inventory foreground-service types as a background-capability map
-- [ ] `D01-047` 🟨 n/a AM-03/AM-11 — Harvest shortcuts.xml, share-targets and widget metadata as an undeclared entry-point list
+- [ ] `D01-042` 🟨 varies AM-03 — Read `<queries>` as the declared trust graph, then check how each peer is verified
+- [ ] `D01-043` 🟨 varies AM-08 — QUERY_ALL_PACKAGES plus egress is a privacy exfiltration, not a lint warning
+- [ ] `D01-044` 🟨 varies AM-03 — Enumerate the auto-generated providers and read the FileProvider roots
+- [ ] `D01-045` 🟧 varies AM-03 — Find privileged listener services declared without their BIND_* permission
+- [ ] `D01-046` 🟩 varies AM-03 — Inventory foreground-service types as a background-capability map
+- [ ] `D01-047` 🟨 varies AM-03/AM-11 — Harvest shortcuts.xml, share-targets and widget metadata as an undeclared entry-point list
 - [ ] `D01-048` 🟧 P1 AM-02 — Inventory the deep-link surface including the `<data>` cross-product and the App Links verdict
-- [ ] `D01-049` 🟨 ? AM-03/AM-11 — Enumerate `android_secret_code` dialer receivers
-- [ ] `D01-050` 🟨 ? AM-01 — Find binary-SMS receivers bound to a port
+- [ ] `D01-049` 🟨 varies AM-03/AM-11 — Enumerate `android_secret_code` dialer receivers
+- [ ] `D01-050` 🟨 varies AM-01 — Find binary-SMS receivers bound to a port
 - [ ] `D01-051` ⬜ n/a AM-02/AM-10/AM-11 — Enumerate the physical-accessory entry points: USB, NFC, BLE and CompanionDeviceManager
 - [ ] `D01-052` ⬜ n/a AM-05/AM-11 — Enumerate every instance of the app on the device: users, work profile, Private Space, OEM clones
 - [ ] `D01-053` 🟧 P1 AM-03/AM-06 — Enumerate the device's inbound network surface created by the app
-- [ ] `D01-054` 🟧 ? AM-03 — Enumerate the binder services the app's own UID can reach
+- [ ] `D01-054` 🟧 varies AM-03 — Enumerate the binder services the app's own UID can reach
 - [ ] `D01-055` 🟧 P3 AM-03/AM-11 — Device-wide sweep for debuggable packages
 - [ ] `D01-056` ⬜ n/a AM-01/AM-12 — Build the per-attacker-model reachability matrix by attempting reach, not by reading the manifest
 - [ ] `D01-057` ⬜ n/a n/a — Bind every user-visible feature to its components, endpoints and on-disk artefacts
 - [ ] `D01-058` ⬜ P1 AM-05 — Harvest the complete Retrofit route map from an R8-minified DEX and shortlist by ID shape
-- [ ] `D01-059` 🟨 n/a AM-05 — Recover hidden request parameters from Retrofit parameter annotations
+- [ ] `D01-059` 🟨 varies AM-05 — Recover hidden request parameters from Retrofit parameter annotations
 - [ ] `D01-060` 🟧 P1 AM-02/AM-09 — Flag `@Url` and runtime base URLs as host-substitution surface
 - [ ] `D01-061` ⬜ n/a n/a — Read the OkHttp interceptor chain to reconstruct the auth envelope byte-for-byte
 - [ ] `D01-062` 🟧 n/a n/a — Tap OkHttp in-process and diff against the proxy log
 - [ ] `D01-063` ⬜ n/a n/a — Build the host inventory from DEX, resources, assets, native libs and remote WebView bundles
 - [ ] `D01-064` 🟥 P1 AM-01 — Run apkleaks across every split and prove every hit with a live request
 - [ ] `D01-065` ⬜ n/a n/a — Recover GraphQL operations and persisted-query hashes from the client
-- [ ] `D01-066` 🟧 ? AM-01 — Recover gRPC service and method names, drive them with grpcurl, and edit protobuf blind
+- [ ] `D01-066` 🟧 varies AM-01 — Recover gRPC service and method names, drive them with grpcurl, and edit protobuf blind
 - [ ] `D01-067` 🟥 P1 AM-01 — Build the API-version inventory and walk superseded versions with the same token
 - [ ] `D01-068` 🟥 P1 AM-01 — SHADOW API — diff the mobile-sourced version against the current one BEHAVIOURALLY
 - [ ] `D01-069` 🟧 P3 AM-05 — Diff the mobile route set against the web route set
@@ -93,7 +93,7 @@
 - [ ] `D01-074` 🟧 P2 AM-05 — Enumerate the non-HTTP channels the proxy will never show you
 - [ ] `D01-075` 🟨 P3 AM-01/AM-08 — Treat every third-party SDK endpoint as a separate target
 - [ ] `D01-076` 🟧 P5 AM-02 — Inventory bundled native libraries and the resolved dependency graph, then prove reachability
-- [ ] `D01-077` 🟨 ? AM-05 — Region- and locale-gated features hidden from your test device
+- [ ] `D01-077` 🟨 varies AM-05 — Region- and locale-gated features hidden from your test device
 - [ ] `D01-078` ⬜ P1 n/a — The layer-ordering trap: a 400 from an APK-derived endpoint is not an auth bypass
 - [ ] `D01-079` ⬜ n/a n/a — The soft-404 and body-diff controls before you call an APK-derived endpoint "live"
 - [ ] `D01-080` ⬜ n/a n/a — The shell-loop ban: count your results or the sweep silently lied
@@ -137,7 +137,7 @@
 - [ ] `D02-033` 🟩 n/a n/a — `android:testOnly="true"` — you were handed the wrong binary
 - [ ] `D02-034` 🟧 P3 AM-03/AM-06 — `BuildConfig.DEBUG == true` inside a bundled AAR/JAR
 - [ ] `D02-035` 🟧 P1 AM-03 — Debug/QA components and hidden menus surviving into the release variant
-- [ ] `D02-036` 🟧 P5 AM-02/AM-03 — Debug-only deep links and debug navigation routes in the release manifest
+- [ ] `D02-036` 🟧 p5 AM-02/AM-03 — Debug-only deep links and debug navigation routes in the release manifest
 - [ ] `D02-037` 🟧 P5 AM-01 — Build residue shipped inside the package: mapping files, unstripped symbols, source maps
 - [ ] `D02-038` 🟧 P1 AM-03/AM-11 — Base-only install: does the app fail closed without its required splits
 - [ ] `D02-039` ⬜ n/a AM-03 — `SplitInstallManager.getInstalledModules()` not checked before using module code
@@ -148,7 +148,7 @@
 - [ ] `D02-044` 🟧 ? AM-06/AM-08 — Manifest-merger creep: an SDK re-opened cleartext or replaced the network security config
 - [ ] `D02-045` 🟧 P1 AM-03/AM-05 — Resource-level feature gating flipped and rebuilt
 - [ ] `D02-046` 🟥 P1 AM-01 — Signing and keystore material shipped inside the package
-- [ ] `D02-047` 🟥 P1 AM-01 — Live credentials recoverable from the artefact — routing and the liveness proof
+- [ ] `D02-047` 🟥 p1 AM-01 — Live credentials recoverable from the artefact — routing and the liveness proof
 - [ ] `D02-048` 🟥 P1 AM-01 — Non-release artefacts shipped in the package
 - [ ] `D02-049` 🟨 P5 n/a — Packed / superpacked builds — recover the DEX that actually runs
 - [ ] `D02-050` 🟥 varies AM-03 — `android:appComponentFactory` plus `createPackageContext` as a code-execution sink
@@ -161,12 +161,12 @@
 - [ ] `D02-057` 🟧 P4 AM-06/AM-08 — Gradle wrapper jar and distribution URL integrity
 - [ ] `D02-058` 🟧 P4 AM-06 — Dependencies fetched over plaintext HTTP
 - [ ] `D02-059` 🟨 varies AM-08 — SBOM of the shipped binary, reconciled against the declared graph
-- [ ] `D02-060` 🟩 P5 AM-01/AM-02/AM-03 — osv-scanner over the reconciled list, then the reachability gate
+- [ ] `D02-060` 🟩 p5 AM-01/AM-02/AM-03 — osv-scanner over the reconciled list, then the reachability gate
 - [ ] `D02-061` ⬜ n/a n/a — Library version fingerprinting when R8 stripped the version markers
-- [ ] `D02-062` 🟥 P1 AM-01 — Build artefacts left on the API or CDN host
+- [ ] `D02-062` 🟥 p1 AM-01 — Build artefacts left on the API or CDN host
 - [ ] `D02-063` 🟧 P1 AM-03/AM-11 — Version rollback: does the backend still serve an older signed build
 - [ ] `D02-064` 🟩 n/a AM-03 — Minimum installable `targetSdkVersion` and the documented bypass
-- [ ] `D02-065` 🟧 P1 AM-03 — `@ChangeId` / `enableAfterTargetSdk` audit: security checks gated on the app's chosen targetSdk
+- [ ] `D02-065` 🟧 p1 AM-03 — `@ChangeId` / `enableAfterTargetSdk` audit: security checks gated on the app's chosen targetSdk
 - [ ] `D02-066` 🟧 varies n/a — Platform-signed non-system APK without a signature-permission allowlist entry
 - [ ] `D02-067` 🟧 varies AM-03 — Privileged-app permission allowlisting on OEM images
 - [ ] `D02-068` ⬜ n/a n/a — Establish the partition before claiming persistence
@@ -181,53 +181,53 @@
 
 - [ ] `D03-001` ⬜ n/a n/a — Analyse the MERGED manifest, and attribute every entry to the module that injected it
 - [ ] `D03-002` ⬜ n/a n/a — Fix the API-level matrix from the app's own declaration and bind every finding to it
-- [ ] `D03-003` ⬜ n/a AM-03 — Build the effective-export table, resolving the default per component type and targetSdk
+- [ ] `D03-003` ⬜ varies AM-03 — Build the effective-export table, resolving the default per component type and targetSdk
 - [ ] `D03-004` ⬜ n/a AM-03 — Reconcile the manifest against the live PackageManager resolver tables
-- [ ] `D03-005` 🟧 ? AM-03 — Read the permission model from PackageManager, not from the manifest, and decode the numeric protectionLevel
+- [ ] `D03-005` 🟧 varies AM-03 — Read the permission model from PackageManager, not from the manifest, and decode the numeric protectionLevel
 - [ ] `D03-006` ⬜ n/a AM-03 — Prove every reachability claim from a separate, zero-permission attacker APK — never from `adb shell am` alone
 - [ ] `D03-007` ⬜ n/a n/a — Count your sweep results — the shell-loop ban applied to manifest and permission enumeration
 - [ ] `D03-008` 🟥 P1 AM-03 — Orphan permission — a component guarded by a permission string nobody defines
-- [ ] `D03-009` 🟥 ? AM-03 — Custom `<permission>` with no `protectionLevel` — it silently becomes `normal`
-- [ ] `D03-010` 🟥 ? AM-03/AM-04 — `normal` or `dangerous` protectionLevel guarding a privileged action
-- [ ] `D03-011` 🟧 ? AM-03 — Permission-name typo, case mismatch, or a non-permission literal
-- [ ] `D03-012` 🟧 ? AM-03 — `android:uses-permission` on a component tag, or `<uses-permission>` nested inside one
-- [ ] `D03-013` 🟥 ? AM-03 — Permission squatting — the attacker defines the target's custom permission first
-- [ ] `D03-014` 🟧 ? AM-03 — Protection-level downgrade after the defining app is uninstalled
-- [ ] `D03-015` 🟧 ? AM-03 — Ecosystem missing-redeclaration — defined in App A, only *used* by App B
-- [ ] `D03-016` 🟧 ? AM-03/AM-09 — `<permission-tree>` and runtime `PackageManager.addPermission()`
-- [ ] `D03-017` 🟧 ? AM-04 — Custom permission mapped into a platform `permissionGroup`
-- [ ] `D03-018` 🟧 ? AM-08 — `knownSigner` / `android:knownCerts` — enumerate the certificate allow-list
-- [ ] `D03-019` 🟧 ? AM-08 — `signatureOrSystem` — deprecated at API 23, and a weaker claim than the developer thinks
-- [ ] `D03-020` 🟧 ? AM-03 — `PROTECTION_INTERNAL` with no gating flag
+- [ ] `D03-009` 🟥 varies AM-03 — Custom `<permission>` with no `protectionLevel` — it silently becomes `normal`
+- [ ] `D03-010` 🟥 varies AM-03/AM-04 — `normal` or `dangerous` protectionLevel guarding a privileged action
+- [ ] `D03-011` 🟧 varies AM-03 — Permission-name typo, case mismatch, or a non-permission literal
+- [ ] `D03-012` 🟧 varies AM-03 — `android:uses-permission` on a component tag, or `<uses-permission>` nested inside one
+- [ ] `D03-013` 🟥 varies AM-03 — Permission squatting — the attacker defines the target's custom permission first
+- [ ] `D03-014` 🟧 varies AM-03 — Protection-level downgrade after the defining app is uninstalled
+- [ ] `D03-015` 🟧 varies AM-03 — Ecosystem missing-redeclaration — defined in App A, only *used* by App B
+- [ ] `D03-016` 🟧 varies AM-03/AM-09 — `<permission-tree>` and runtime `PackageManager.addPermission()`
+- [ ] `D03-017` 🟧 varies AM-04 — Custom permission mapped into a platform `permissionGroup`
+- [ ] `D03-018` 🟧 varies AM-08 — `knownSigner` / `android:knownCerts` — enumerate the certificate allow-list
+- [ ] `D03-019` 🟧 varies AM-08 — `signatureOrSystem` — deprecated at API 23, and a weaker claim than the developer thinks
+- [ ] `D03-020` 🟧 varies AM-03 — `PROTECTION_INTERNAL` with no gating flag
 - [ ] `D03-021` 🟨 P3 AM-08/AM-11 — `development`-flagged permission grantable straight from the shell
-- [ ] `D03-022` 🟧 ? AM-02 — Role-protected permission (`PROTECTION_FLAG_ROLE`) — taking the role takes the permission
-- [ ] `D03-023` 🟧 ? AM-03 — A "platform" signature permission whose definer is not `android`
+- [ ] `D03-022` 🟧 varies AM-02 — Role-protected permission (`PROTECTION_FLAG_ROLE`) — taking the role takes the permission
+- [ ] `D03-023` 🟧 varies AM-03 — A "platform" signature permission whose definer is not `android`
 - [ ] `D03-024` 🟥 P1 AM-03 — `checkSelfPermission()` in an exported entry point — the confused-deputy core
-- [ ] `D03-025` 🟥 ? AM-03 — `checkCallingOrSelfPermission()` / `enforceCallingOrSelfPermission()` — passes because *you* pass
-- [ ] `D03-026` 🟧 ? AM-03 — `checkCallingPermission()` result discarded — it returns an `int`, it does not throw
-- [ ] `D03-027` 🟥 ? AM-03 — `Binder.clearCallingIdentity()` launders the caller before the check runs
-- [ ] `D03-028` 🟧 ? AM-03 — `Binder.getCallingUid()` on a same-process call returns your own UID
-- [ ] `D03-029` 🟧 ? AM-03 — `getCallingPackage()` / `getCallingActivity()` null-handling used as authorisation
-- [ ] `D03-030` 🟧 ? AM-03 — Package-name substring / prefix matching used as a trust boundary
-- [ ] `D03-031` 🟥 P1 AM-03 — Permission re-delegation — the app holds the permission, the caller does not, and the app will use it for them
-- [ ] `D03-032` 🟧 ? AM-03/AM-04 — `android:permission` on `<application>` silently **overridden**, not supplemented, by a per-component value
-- [ ] `D03-033` 🟧 ? AM-03 — `<activity-alias>` inherits nothing from its target
-- [ ] `D03-034` 🟥 ? AM-03 — `android:exported="true"` written to satisfy the targetSdk 31 build
-- [ ] `D03-035` 🟧 ? AM-03 — `android:path` used where `pathPrefix` was meant — the subtree is unguarded
-- [ ] `D03-036` 🟧 ? AM-03 — `<path-permission>` coverage gap and `<grant-uri-permission>` scoped to the whole provider
-- [ ] `D03-037` 🟧 ? AM-03 — Provider declares `readPermission` but omits `writePermission`
-- [ ] `D03-038` 🟧 ? AM-08 — `android:process` with a global name, and missing `isolatedProcess` on untrusted-input services
+- [ ] `D03-025` 🟥 varies AM-03 — `checkCallingOrSelfPermission()` / `enforceCallingOrSelfPermission()` — passes because *you* pass
+- [ ] `D03-026` 🟧 varies AM-03 — `checkCallingPermission()` result discarded — it returns an `int`, it does not throw
+- [ ] `D03-027` 🟥 varies AM-03 — `Binder.clearCallingIdentity()` launders the caller before the check runs
+- [ ] `D03-028` 🟧 varies AM-03 — `Binder.getCallingUid()` on a same-process call returns your own UID
+- [ ] `D03-029` 🟧 varies AM-03 — `getCallingPackage()` / `getCallingActivity()` null-handling used as authorisation
+- [ ] `D03-030` 🟧 varies AM-03 — Package-name substring / prefix matching used as a trust boundary
+- [ ] `D03-031` 🟥 varies AM-03 — Permission re-delegation — the app holds the permission, the caller does not, and the app will use it for them
+- [ ] `D03-032` 🟧 varies AM-03/AM-04 — `android:permission` on `<application>` silently **overridden**, not supplemented, by a per-component value
+- [ ] `D03-033` 🟧 varies AM-03 — `<activity-alias>` inherits nothing from its target
+- [ ] `D03-034` 🟥 varies AM-03 — `android:exported="true"` written to satisfy the targetSdk 31 build
+- [ ] `D03-035` 🟧 varies AM-03 — `android:path` used where `pathPrefix` was meant — the subtree is unguarded
+- [ ] `D03-036` 🟧 varies AM-03 — `<path-permission>` coverage gap and `<grant-uri-permission>` scoped to the whole provider
+- [ ] `D03-037` 🟧 varies AM-03 — Provider declares `readPermission` but omits `writePermission`
+- [ ] `D03-038` 🟧 varies AM-08 — `android:process` with a global name, and missing `isolatedProcess` on untrusted-input services
 - [ ] `D03-039` 🟧 P5 AM-10 — `android:directBootAware="true"` — components that run before the user unlocks
-- [ ] `D03-040` 🟧 ? AM-03 — Context-registered receivers are invisible to manifest analysis — and `RECEIVER_NOT_EXPORTED` is mandatory from API 33
-- [ ] `D03-041` 🟧 ? AM-02/AM-03 — Dialler secret-code receivers (`android.provider.Telephony.SECRET_CODE`)
-- [ ] `D03-042` 🟧 P5 AM-03/AM-10/AM-11 — Accessory intent filters (USB / NFC) — exported by necessity, therefore audit them as exported components
+- [ ] `D03-040` 🟧 varies AM-03 — Context-registered receivers are invisible to manifest analysis — and `RECEIVER_NOT_EXPORTED` is mandatory from API 33
+- [ ] `D03-041` 🟧 varies AM-02/AM-03 — Dialler secret-code receivers (`android.provider.Telephony.SECRET_CODE`)
+- [ ] `D03-042` 🟧 varies AM-03/AM-10/AM-11 — Accessory intent filters (USB / NFC) — exported by necessity, therefore audit them as exported components
 - [ ] `D03-043` 🟧 P1 AM-03 — Account-type squatting against `AbstractAccountAuthenticator`
-- [ ] `D03-044` 🟧 ? AM-03 — `android:intentMatchingFlags` — `"none"` is an explicit opt-*out* of Android 16 intent hardening
-- [ ] `D03-045` 🟧 ? AM-03 — `resolveActivity() == null` used as a security gate — the package-visibility trap
+- [ ] `D03-044` 🟧 varies AM-03 — `android:intentMatchingFlags` — `"none"` is an explicit opt-*out* of Android 16 intent hardening
+- [ ] `D03-045` 🟧 varies AM-03 — `resolveActivity() == null` used as a security gate — the package-visibility trap
 - [ ] `D03-046` 🟨 varies AM-03/AM-08 — `QUERY_ALL_PACKAGES` and over-broad `<queries>` — and using `<queries><package>` to remove your own PoC's precondition
-- [ ] `D03-047` 🟧 P5 AM-08/AM-11 — App-op-gated special permissions fail open at `MODE_IGNORED`
+- [ ] `D03-047` 🟧 p5 AM-08/AM-11 — App-op-gated special permissions fail open at `MODE_IGNORED`
 - [ ] `D03-048` 🟨 varies n/a — Foreground-only permissions: probe the background path where the op flips to `MODE_IGNORED`
-- [ ] `D03-049` 🟧 ? AM-08/AM-09 — Restricted permissions and installer-granted allow-list exemptions
+- [ ] `D03-049` 🟧 varies AM-08/AM-09 — Restricted permissions and installer-granted allow-list exemptions
 - [ ] `D03-050` 🟧 varies n/a — `GRANTED_BY_DEFAULT` / `SYSTEM_FIXED` flags — read the flags, not just `granted=true`
 - [ ] `D03-051` 🟨 P4 n/a — `NEARBY_WIFI_DEVICES` without `usesPermissionFlags="neverForLocation"`
 - [ ] `D03-052` 🟧 varies AM-08 — Attribution tags and `AppOpsManager.OnOpNotedCallback` — attribute every protected-data read to the SDK that made it
@@ -238,14 +238,14 @@
 - [ ] `D03-057` 🟥 varies AM-02/AM-08 — AccessibilityService scope — `typeAllMask` with no `packageNames` allow-list
 - [ ] `D03-058` 🟧 P3 AM-02 — Default-SMS-handler role and `SMS_DELIVER` — read, send, and erase
 - [ ] `D03-059` 🟥 P3 AM-02/AM-03 — Telephony call control — `CALL_PHONE`, `ANSWER_PHONE_CALLS`, `CallScreeningService` and MMI forwarding
-- [ ] `D03-060` 🟧 ? AM-01/AM-09 — `USE_EXACT_ALARM` and `USE_FULL_SCREEN_INTENT` — auto-granted permissions that dodge the prompt
-- [ ] `D03-061` 🟥 P5 AM-04 — `SYSTEM_ALERT_WINDOW` held — and the inverse, the app's own screens undefended against other apps' overlays
+- [ ] `D03-060` 🟧 varies AM-01/AM-09 — `USE_EXACT_ALARM` and `USE_FULL_SCREEN_INTENT` — auto-granted permissions that dodge the prompt
+- [ ] `D03-061` 🟥 p5 AM-04 — `SYSTEM_ALERT_WINDOW` held — and the inverse, the app's own screens undefended against other apps' overlays
 - [ ] `D03-062` 🟧 varies AM-08 — `foregroundServiceType` and the sensor held while the app is not visible
 - [ ] `D03-063` 🟥 P3 AM-05 — `ACCESS_BACKGROUND_LOCATION` and the always-on location posture
 - [ ] `D03-064` 🟥 varies AM-08/AM-09 — Health Connect `android.permission.health.*` — the most sensitive permission family most checklists ignore
-- [ ] `D03-065` 🟧 P4 AM-04 — `MANAGE_EXTERNAL_STORAGE` / `requestLegacyExternalStorage` — the scoped-storage escape
-- [ ] `D03-066` 🟥 ? AM-03 — Privileged-permission tiers on preloaded and OEM apps
-- [ ] `D03-067` 🟥 ? AM-08/AM-11 — `sharedUserId` — one compromised sibling is all of them
+- [ ] `D03-065` 🟧 p4 AM-04 — `MANAGE_EXTERNAL_STORAGE` / `requestLegacyExternalStorage` — the scoped-storage escape
+- [ ] `D03-066` 🟥 varies AM-03 — Privileged-permission tiers on preloaded and OEM apps
+- [ ] `D03-067` 🟥 varies AM-08/AM-11 — `sharedUserId` — one compromised sibling is all of them
 - [ ] `D03-068` 🟧 P5 AM-05/AM-09/AM-11 — `allowBackup` — the flag is P5; the finding is the credential you extract and replay
 - [ ] `D03-069` 🟧 P5 AM-05/AM-11 — `dataExtractionRules` — cloud backup and device transfer are configured **separately**
 - [ ] `D03-070` 🟧 P1 AM-11 — Backup **restore** as a write primitive — `restoreAnyVersion`, a custom `backupAgent`, and a tampered archive
@@ -260,43 +260,43 @@
 
 > **Is there any screen in this app whose security depends on the user having arrived from the previous screen — and can I start it directly, from a package that holds no permissions, with the arguments of my choice?**
 
-- [ ] `D04-001` ⬜ ? AM-03 — Build the exported-activity register from the installed package, not the source manifest
-- [ ] `D04-002` ⬜ ? AM-03 — Resolve the real export default per component type and targetSdk before calling anything "not exported"
+- [ ] `D04-001` ⬜ varies AM-03 — Build the exported-activity register from the installed package, not the source manifest
+- [ ] `D04-002` ⬜ varies AM-03 — Resolve the real export default per component type and targetSdk before calling anything "not exported"
 - [ ] `D04-003` 🟧 P1 AM-03 — `<activity-alias>` re-exporting an activity that is itself `exported="false"`
-- [ ] `D04-004` ⬜ ? AM-03 — Fire every exported activity from an unprivileged UID and read `topResumedActivity`, not the exit code
-- [ ] `D04-005` ⬜ ? AM-03 — Re-prove every candidate from a zero-permission attacker APK — an adb-only proof does not establish AM-03
-- [ ] `D04-006` 🟨 ? AM-03 — `android:intentMatchingFlags` absent, or a per-component `none` hole punched in the app's own hardening
+- [ ] `D04-004` ⬜ varies AM-03 — Fire every exported activity from an unprivileged UID and read `topResumedActivity`, not the exit code
+- [ ] `D04-005` ⬜ varies AM-03 — Re-prove every candidate from a zero-permission attacker APK — an adb-only proof does not establish AM-03
+- [ ] `D04-006` 🟨 varies AM-03 — `android:intentMatchingFlags` absent, or a per-component `none` hole punched in the app's own hardening
 - [ ] `D04-007` 🟥 P1 AM-03 — Post-authentication activity renders account data with no session check
 - [ ] `D04-008` 🟨 P1 AM-03/AM-11 — In-app lock / PIN / biometric gate bypassed by starting an inner activity
 - [ ] `D04-009` ⬜ P1 n/a — Do not claim an auth bypass from a rendered screen — prove the layer you actually passed
 - [ ] `D04-010` 🟥 P1 AM-03 — Attacker-chosen extras name an identity, a role or an amount that the backend honours
 - [ ] `D04-011` 🟧 P3 AM-02/AM-03 — Exported activity writes attacker data straight into persistent identity state
-- [ ] `D04-012` 🟨 ? AM-03 — Exported activity commits a server-side state change for the logged-in user
+- [ ] `D04-012` 🟨 varies AM-03 — Exported activity commits a server-side state change for the logged-in user
 - [ ] `D04-013` 🟧 P3 AM-03 — Debug, developer or internal tooling activity left exported in a release build
-- [ ] `D04-014` 🟧 ? AM-03 — Fragment injection — an exported activity instantiates a class named in an extra
+- [ ] `D04-014` 🟧 varies AM-03 — Fragment injection — an exported activity instantiates a class named in an extra
 - [ ] `D04-015` 🟥 P1 AM-02/AM-03 — Exported activity loads an attacker-supplied URL into a WebView
-- [ ] `D04-016` 🟧 ? AM-03 — Exported activity loads an attacker-supplied HTML **body** into a WebView
+- [ ] `D04-016` 🟧 varies AM-03 — Exported activity loads an attacker-supplied HTML **body** into a WebView
 - [ ] `D04-017` 🟨 P4 AM-03 — Extra re-launched as an external `ACTION_VIEW` — phishing navigation under the app's identity
 - [ ] `D04-018` 🟧 P1 AM-03 — Flutter `route` / `dart_entrypoint` / `cached_engine_id` extras on an exported `FlutterActivity`
 - [ ] `D04-019` 🟨 P3 AM-03 — Exported start activity destroys the authenticated session
 - [ ] `D04-020` 🟧 P3 AM-03 — Exported share/receive activity consumes a caller-supplied `EXTRA_STREAM` — and the `/data/user/0/` path-check bypass
-- [ ] `D04-021` 🟧 ? AM-03 — `android:requireContentUriPermissionFromCaller` absent on an activity that opens a caller-supplied `content://` URI
+- [ ] `D04-021` 🟧 varies AM-03 — `android:requireContentUriPermissionFromCaller` absent on an activity that opens a caller-supplied `content://` URI
 - [ ] `D04-022` 🟧 P1 AM-03 — Exported activity returns sensitive data to its caller through `setResult`
-- [ ] `D04-023` 🟥 ? AM-03 — Full-intent echo — `setResult(RESULT_OK, getIntent())` launders URI grants
-- [ ] `D04-024` 🟧 ? AM-03 — Activity result spoofing — the app trusts whatever an implicit responder returns
-- [ ] `D04-025` 🟨 ? AM-03 — `FLAG_ACTIVITY_FORWARD_RESULT` — the result is delivered to a recipient you chose
+- [ ] `D04-023` 🟥 varies AM-03 — Full-intent echo — `setResult(RESULT_OK, getIntent())` launders URI grants
+- [ ] `D04-024` 🟧 varies AM-03 — Activity result spoofing — the app trusts whatever an implicit responder returns
+- [ ] `D04-025` 🟨 varies AM-03 — `FLAG_ACTIVITY_FORWARD_RESULT` — the result is delivered to a recipient you chose
 - [ ] `D04-026` 🟧 P1 AM-03 — `getCallingActivity()` / `getCallingPackage()` used as an authentication signal
 - [ ] `D04-027` 🟧 P1 AM-03 — `checkCallingPermission()` called as if it threw — the return value is discarded
 - [ ] `D04-028` 🟧 P3 AM-03 — `singleTask` / `singleTop` re-delivery — `onNewIntent` re-drives an already-authenticated screen
-- [ ] `D04-029` 🟧 ? AM-03 — Caller validated in `onCreate` but not in `onNewIntent` (`ComponentCaller`, API 35)
-- [ ] `D04-030` 🟨 ? AM-03 — `FLAG_ACTIVITY_NEW_TASK` plus matching affinity resurfaces a mid-flow authenticated task
-- [ ] `D04-031` ⬜ ? AM-03 — Task-manipulation flag sweep — the full `FLAG_ACTIVITY_*` grammar against every exported activity
+- [ ] `D04-029` 🟧 varies AM-03 — Caller validated in `onCreate` but not in `onNewIntent` (`ComponentCaller`, API 35)
+- [ ] `D04-030` 🟨 varies AM-03 — `FLAG_ACTIVITY_NEW_TASK` plus matching affinity resurfaces a mid-flow authenticated task
+- [ ] `D04-031` ⬜ varies AM-03 — Task-manipulation flag sweep — the full `FLAG_ACTIVITY_*` grammar against every exported activity
 - [ ] `D04-032` 🟨 P4 AM-03 — Task hijacking via inherited `taskAffinity` + `allowTaskReparenting` (StrandHogg v1)
 - [ ] `D04-033` 🟨 ? AM-03 — `launchMode="singleTask"` on the launcher activity with `targetSdk < 28` (the MobSF `task_hijacking` rule)
 - [ ] `D04-034` 🟨 ? AM-03 — StrandHogg 2.0 — reflective task hijack that ignores `taskAffinity` (CVE-2020-0096)
-- [ ] `D04-035` 🟨 ? AM-03 — `android:allowCrossUidActivitySwitchFromBelow` not set to `false` — the modern task-hijack opt-in was not taken
-- [ ] `D04-036` 🟨 ? AM-03 — `setAllowCrossUidActivitySwitchFromBelow(true)` called at runtime — a self-inflicted hardening opt-out
-- [ ] `D04-037` 🟨 ? AM-03 — `android:allowEmbedded` without `knownActivityEmbeddingCerts`
+- [ ] `D04-035` 🟨 varies AM-03 — `android:allowCrossUidActivitySwitchFromBelow` not set to `false` — the modern task-hijack opt-in was not taken
+- [ ] `D04-036` 🟨 varies AM-03 — `setAllowCrossUidActivitySwitchFromBelow(true)` called at runtime — a self-inflicted hardening opt-out
+- [ ] `D04-037` 🟨 varies AM-03 — `android:allowEmbedded` without `knownActivityEmbeddingCerts`
 - [ ] `D04-038` ⬜ ? AM-03 — Background-Activity-Launch is the make-or-break precondition — state it or the PoC is not reproducible
 - [ ] `D04-039` 🟧 P1 AM-03 — Non-exported activity started through a system deputy (LaunchAnyWhere)
 - [ ] `D04-040` 🟧 P3 AM-03 — Bubble activity — `allowEmbedded` + `documentLaunchMode="always"` is a permission-free float-over-other-apps surface
@@ -304,23 +304,23 @@
 - [ ] `D04-042` 🟩 P5 AM-04/AM-11 — `FLAG_SECURE` set on login and forgotten on the card, OTP and transaction screens
 - [ ] `D04-043` 🟩 P5 AM-04/AM-11/AM-12 — Recover the on-disk task snapshot rather than relying on the Recents thumbnail
 - [ ] `D04-044` 🟩 P5 AM-04/AM-11 — `clearFlags(FLAG_SECURE)` and the three surfaces `FLAG_SECURE` does not cover
-- [ ] `D04-045` 🟨 ? AM-11 — Orientation and aspect-ratio locks ignored on large screens (targetSdk 36) unmask a field the portrait layout hid
-- [ ] `D04-046` 🟨 ? AM-01/AM-04 — Edge-to-edge enforcement (targetSdk 35/36) hides the material terms of a confirmation
-- [ ] `D04-047` 🟩 P5 AM-04 — Classic full-occlusion tapjacking — and verifying whether the platform already stops it
+- [ ] `D04-045` 🟨 varies AM-11 — Orientation and aspect-ratio locks ignored on large screens (targetSdk 36) unmask a field the portrait layout hid
+- [ ] `D04-046` 🟨 varies AM-01/AM-04 — Edge-to-edge enforcement (targetSdk 35/36) hides the material terms of a confirmation
+- [ ] `D04-047` 🟩 p5 AM-04 — Classic full-occlusion tapjacking — and verifying whether the platform already stops it
 - [ ] `D04-048` 🟨 P5 AM-04 — Partial occlusion — the variant Android 12 does not block
 - [ ] `D04-049` ⬜ ? AM-04 — Prove the *trigger*, not just the overlay
 - [ ] `D04-050` 🟧 P1 AM-04 — `TYPE_ACCESSIBILITY_OVERLAY` — a full-screen overlay with no "draw over other apps" prompt
 - [ ] `D04-051` 🟧 P5 AM-03 — TapTrap — animation-driven tapjacking that needs no overlay permission
 - [ ] `D04-052` 🟨 P5 AM-03 — The activity sandwich — launch the victim's exported activity, then overlay your own in the same task
 - [ ] `D04-053` 🟩 P5 AM-04 — `Window.setHideOverlayWindows(true)` absent on the screens that authorise something
-- [ ] `D04-054` 🟨 ? AM-01/AM-11 — Predictive back (targetSdk 36) silently disables a security control implemented in `onBackPressed()`
-- [ ] `D04-055` 🟨 ? AM-01 — `PRIORITY_SYSTEM_NAVIGATION_OBSERVER` used as if it blocked navigation
+- [ ] `D04-054` 🟨 varies AM-01/AM-11 — Predictive back (targetSdk 36) silently disables a security control implemented in `onBackPressed()`
+- [ ] `D04-055` 🟨 varies AM-01 — `PRIORITY_SYSTEM_NAVIGATION_OBSERVER` used as if it blocked navigation
 - [ ] `D04-056` 🟧 P1 AM-03/AM-10 — `showWhenLocked` / `turnScreenOn` activity reachable before unlock
-- [ ] `D04-057` 🟧 ? AM-05/AM-10 — `android:showForAllUsers` / `android:directBootAware` on an activity that renders user data
-- [ ] `D04-058` ⬜ ? AM-02/AM-03 — Map the deep-link trampoline / router activity's route table before testing anything downstream
-- [ ] `D04-059` 🟨 ? AM-03/AM-08 — Notification trampoline restriction as a locator for the arbitrary-activity-start gadget
-- [ ] `D04-060` ⬜ P5 AM-03 — Null-intent and type-confusion fuzzing as a triage-ordering signal, not a finding
-- [ ] `D04-061` 🟨 P5 AM-03 — Persistent crash loop — the only DoS shape in this domain that is payable
+- [ ] `D04-057` 🟧 varies AM-05/AM-10 — `android:showForAllUsers` / `android:directBootAware` on an activity that renders user data
+- [ ] `D04-058` ⬜ varies AM-02/AM-03 — Map the deep-link trampoline / router activity's route table before testing anything downstream
+- [ ] `D04-059` 🟨 varies AM-03/AM-08 — Notification trampoline restriction as a locator for the arbitrary-activity-start gadget
+- [ ] `D04-060` ⬜ p5 AM-03 — Null-intent and type-confusion fuzzing as a triage-ordering signal, not a finding
+- [ ] `D04-061` 🟨 p5 AM-03 — Persistent crash loop — the only DoS shape in this domain that is payable
 - [ ] `D04-062` ⬜ P5 AM-03 — Exported-component crash as a process-restart primitive
 - [ ] `D04-063` 🟨 P3 AM-03 — The app's own launcher entry can be disabled by an attacker-reachable path
 - [ ] `D04-064` 🟧 P1 AM-01/AM-06 — The activity's backend call is an older API version than the web app uses
@@ -329,7 +329,7 @@
 - [ ] `D04-067` ⬜ ? n/a — The pre-severity gate — run it against the Critical *claim*, not against the bug
 - [ ] `D04-068` 🟧 P1 AM-10 — Quick Settings `TileService` performs its action, or launches its activity, over the keyguard
 - [ ] `D04-069` 🟧 P1 AM-03/AM-08 — A bundled library's exported activity writes to a caller-supplied `Uri` inside the host app's private storage
-- [ ] `D04-070` 🟧 ? AM-03 — Exported engine/player activity whose extras are consumed by game or framework code
+- [ ] `D04-070` 🟧 varies AM-03 — Exported engine/player activity whose extras are consumed by game or framework code
 - [ ] `D04-071` 🟨 P5 AM-10 — The widget or lock-screen surface renders the account data the in-app screen protects
 - [ ] `D04-072` ⬜ ? n/a — False-positive discipline for the four claims this chapter makes
 
@@ -337,55 +337,55 @@
 
 > Does any broadcast this app sends or receives carry, or act on, a value that decides authentication, entitlement, or where the app sends its data — and can an app that declares no permissions supply or read that value?
 
-- [ ] `D05-001` ⬜ n/a AM-03 — Build the manifest receiver inventory with exported, permission and filter columns
+- [ ] `D05-001` ⬜ varies AM-03 — Build the manifest receiver inventory with exported, permission and filter columns
 - [ ] `D05-002` ⬜ n/a AM-03 — Enumerate runtime-registered receivers — the surface the manifest never shows
-- [ ] `D05-003` 🟧 ? AM-03 — `RECEIVER_EXPORTED` audit — the Android 13/14 compile fix that widened the surface
-- [ ] `D05-004` 🟧 ? AM-03 — LEGACY — context-registered receivers below targetSdk 33 are exported by omission
+- [ ] `D05-003` 🟧 varies AM-03 — `RECEIVER_EXPORTED` audit — the Android 13/14 compile fix that widened the surface
+- [ ] `D05-004` 🟧 varies AM-03 — LEGACY — context-registered receivers below targetSdk 33 are exported by omission
 - [ ] `D05-005` ⬜ n/a AM-03 — Classify each receiver action against the protected-broadcast list
-- [ ] `D05-006` 🟧 ? AM-03 — Explicit-component reachability of "protected broadcast" receivers
+- [ ] `D05-006` 🟧 varies AM-03 — Explicit-component reachability of "protected broadcast" receivers
 - [ ] `D05-007` ⬜ n/a AM-03 — `setPackage(victim)` defeats the Android 8 manifest implicit-broadcast restriction
 - [ ] `D05-008` ⬜ n/a AM-03 — The stopped-package false negative — your broadcast never reached a freshly installed app
 - [ ] `D05-009` ⬜ n/a AM-03 — The `result=0` trap — a completed broadcast is not a handled broadcast
 - [ ] `D05-010` ⬜ n/a AM-03 — Marker discipline for broadcast-driven side effects
 - [ ] `D05-011` ⬜ n/a AM-03 — `adb shell` is not AM-03 — re-prove every receiver finding from a zero-permission APK
-- [ ] `D05-012` 🟧 ? AM-03 — Enumerate and replay every extra key `onReceive` actually reads
-- [ ] `D05-013` 🟥 ? AM-03 — Receiver extras piped into a permission-holding API — permission re-delegation
+- [ ] `D05-012` 🟧 varies AM-03 — Enumerate and replay every extra key `onReceive` actually reads
+- [ ] `D05-013` 🟥 varies AM-03 — Receiver extras piped into a permission-holding API — permission re-delegation
 - [ ] `D05-014` 🟥 P1 AM-03 — Receiver that repoints the backend base URL, environment or a security feature flag
-- [ ] `D05-015` 🟧 ? AM-03 — Receiver that flips entitlement, subscription or premium state
+- [ ] `D05-015` 🟧 varies AM-03 — Receiver that flips entitlement, subscription or premium state
 - [ ] `D05-016` 🟧 P1 AM-03 — Receiver that terminates, rotates or fixates the session
 - [ ] `D05-017` 🟧 P4 AM-03 — Receiver that renders an attacker-supplied notification or in-app message
-- [ ] `D05-018` 🟧 ? AM-03 — Receiver guarded by a squattable or non-signature custom permission
-- [ ] `D05-019` 🟧 ? AM-03 — Broadcast sent with a `receiverPermission` that is not signature level
-- [ ] `D05-020` 🟧 ? AM-03 — Receiver makes a trust decision with no caller identity at all
+- [ ] `D05-018` 🟧 varies AM-03 — Receiver guarded by a squattable or non-signature custom permission
+- [ ] `D05-019` 🟧 varies AM-03 — Broadcast sent with a `receiverPermission` that is not signature level
+- [ ] `D05-020` 🟧 varies AM-03 — Receiver makes a trust decision with no caller identity at all
 - [ ] `D05-021` 🟧 P1 AM-03 — Weak receiver challenge-response seeded from wall-clock time
-- [ ] `D05-022` 🟧 ? AM-03 — AppWidgetProvider receiver custom actions — exported by construction
+- [ ] `D05-022` 🟧 varies AM-03 — AppWidgetProvider receiver custom actions — exported by construction
 - [ ] `D05-023` 🟧 P1 AM-03 — `DownloadManager` completion receivers that trust `EXTRA_DOWNLOAD_ID`
 - [ ] `D05-024` 🟧 P1 AM-03/AM-04 — Boot / package-replaced receiver that reads configuration from a writable location
-- [ ] `D05-025` 🟧 ? AM-03 — FCM / c2dm push receiver reachable locally
-- [ ] `D05-026` 🟧 ? AM-03 — Receiver that hands attacker input to a deferred `WorkManager` / `JobScheduler` / `AlarmManager` job
+- [ ] `D05-025` 🟧 varies AM-03 — FCM / c2dm push receiver reachable locally
+- [ ] `D05-026` 🟧 varies AM-03 — Receiver that hands attacker input to a deferred `WorkManager` / `JobScheduler` / `AlarmManager` job
 - [ ] `D05-027` 🟧 P1 AM-03 — Reading any single extra deserialises the whole Bundle
-- [ ] `D05-028` 🟧 ? AM-03 — Receiver that forwards a nested Intent — the redirection sink discovered in D05
+- [ ] `D05-028` 🟧 varies AM-03 — Receiver that forwards a nested Intent — the redirection sink discovered in D05
 - [ ] `D05-029` 🟥 P1 AM-03 — Receiver that copies files from caller-supplied URIs (the Play Core / SmartSwitch shape)
-- [ ] `D05-030` 🟥 P1 AM-03 — Implicit broadcast carrying a session token, OTP or credential
+- [ ] `D05-030` 🟥 p1 AM-03 — Implicit broadcast carrying a session token, OTP or credential
 - [ ] `D05-031` 🟥 P1 AM-03 — The whole-API-response broadcast
-- [ ] `D05-032` 🟩 ? AM-03 — Location, file-event and upload broadcasts — the permission-bypass framing
+- [ ] `D05-032` 🟩 varies AM-03 — Location, file-event and upload broadcasts — the permission-bypass framing
 - [ ] `D05-033` ⬜ n/a AM-03 — `LocalBroadcastManager` removal regression
-- [ ] `D05-034` 🟨 ? AM-03 — Sticky broadcast read — `registerReceiver(null, filter)` (LEGACY)
-- [ ] `D05-035` 🟨 ? AM-03 — Sticky broadcast overwrite, and `setPackage()` being ignored on re-broadcast (LEGACY)
+- [ ] `D05-034` 🟨 varies AM-03 — Sticky broadcast read — `registerReceiver(null, filter)` (LEGACY)
+- [ ] `D05-035` 🟨 varies AM-03 — Sticky broadcast overwrite, and `setPackage()` being ignored on re-broadcast (LEGACY)
 - [ ] `D05-036` 🟧 P3 AM-03 — Ordered-broadcast priority interception — and the Android 16 per-process narrowing
 - [ ] `D05-037` 🟨 P3 AM-03 — `abortBroadcast()` suppression of a security-relevant flow
 - [ ] `D05-038` 🟧 P1 AM-03 — `setResultData` / `setResultExtras` tampering
-- [ ] `D05-039` 🟧 ? AM-03 — The app trusts `getResultData()` — sender-side ordered-result trust, broken on Android 16
+- [ ] `D05-039` 🟧 varies AM-03 — The app trusts `getResultData()` — sender-side ordered-result trust, broken on Android 16
 - [ ] `D05-040` ⬜ n/a AM-03 — Implicit-intent sender inventory
 - [ ] `D05-041` 🟥 P1 AM-03 — Implicit intent carrying sensitive extras to an unconstrained recipient
-- [ ] `D05-042` 🟧 ? AM-03 — Implicit intent used for internal app communication — hijack by matching filter
-- [ ] `D05-043` 🟧 ? AM-03 — `android:priority="999"` chooser win plus silent forward-on
-- [ ] `D05-044` 🟨 ? AM-03 — `queryIntentActivities` / `resolveActivity` ordering trusted as a gate
-- [ ] `D05-045` 🟨 P1 AM-03 — Implicit `startService` / `bindService`
+- [ ] `D05-042` 🟧 varies AM-03 — Implicit intent used for internal app communication — hijack by matching filter
+- [ ] `D05-043` 🟧 varies AM-03 — `android:priority="999"` chooser win plus silent forward-on
+- [ ] `D05-044` 🟨 varies AM-03 — `queryIntentActivities` / `resolveActivity` ordering trusted as a gate
+- [ ] `D05-045` 🟨 varies AM-03 — Implicit `startService` / `bindService`
 - [ ] `D05-046` 🟨 P1 AM-03 — Poisoned result from a hijacked `ACTION_GET_CONTENT` / `ACTION_PICK`
 - [ ] `D05-047` 🟧 P1 AM-03 — Responder-controlled `DISPLAY_NAME` and `ClipData` — path traversal in the consumer
-- [ ] `D05-048` 🟧 ? AM-03 — targetSdk 34 implicit-intent restriction — and the `exported="true"` fix that replaced it
-- [ ] `D05-049` 🟧 ? AM-03 — Android 14 did not fix implicit *sending* — the half the checklists get wrong
+- [ ] `D05-048` 🟧 varies AM-03 — targetSdk 34 implicit-intent restriction — and the `exported="true"` fix that replaced it
+- [ ] `D05-049` 🟧 varies AM-03 — Android 14 did not fix implicit *sending* — the half the checklists get wrong
 - [ ] `D05-050` 🟥 P3 AM-03 — SMS User Consent receiver registered without `SmsRetriever.SEND_PERMISSION`
 - [ ] `D05-051` 🟥 P1 AM-03/AM-04 — `EXTRA_CONSENT_INTENT` arbitrary-Intent-launch gadget and the self-grant exfiltration chain
 - [ ] `D05-052` 🟥 P3 AM-03 — The OTP-injection variant — trace the handshake before claiming it
@@ -393,8 +393,8 @@
 - [ ] `D05-054` 🟨 P3 AM-03/AM-11 — Restricted App Standby Bucket suppresses `BOOT_COMPLETED` — disarming a security control
 - [ ] `D05-055` 🟨 P3 AM-11 — Android 15 force-stop cancels every `PendingIntent` — time-based controls silently die
 - [ ] `D05-056` 🟧 P1 AM-06 — Bluetooth `ACTION_KEY_MISSING` / `ACTION_ENCRYPTION_CHANGE` unhandled
-- [ ] `D05-057` 🟧 ? AM-06 — `CONNECTIVITY_ACTION` and Wi-Fi broadcast stale assumptions that fail open
-- [ ] `D05-058` 🟥 ? AM-02/AM-03 — `intent://` in a WebView — the vector that upgrades every receiver primitive to one click
+- [ ] `D05-057` 🟧 varies AM-06 — `CONNECTIVITY_ACTION` and Wi-Fi broadcast stale assumptions that fail open
+- [ ] `D05-058` 🟥 varies AM-02/AM-03 — `intent://` in a WebView — the vector that upgrades every receiver primitive to one click
 - [ ] `D05-059` 🟧 P1 AM-03/AM-10 — `directBootAware="true"` receiver that runs before the device is ever unlocked
 - [ ] `D05-060` 🟥 P1 AM-01 — Turn the broadcast-harvested route inventory into a shadow-API version diff
 - [ ] `D05-061` ⬜ n/a AM-03 — Prove delivery-order and spray wins statistically, never from one lucky run
@@ -407,31 +407,31 @@
 > **For every method behind this app's exported binder: does it check *who* is calling — on the thread the transaction actually arrives on — or does it only validate *what* is being asked?**
 
 - [ ] `D06-001` ⬜ n/a n/a — Build the service register from the MERGED manifest, not from `base.apk`
-- [ ] `D06-002` ⬜ n/a AM-03 — Classify every exported service by reachability and by the protection level of its guard
+- [ ] `D06-002` ⬜ varies AM-03 — Classify every exported service by reachability and by the protection level of its guard
 - [ ] `D06-003` 🟧 P1 AM-04/AM-05 — `android:permission` on `<service>` is checked at bind/start time only, never per transaction
 - [ ] `D06-004` ⬜ n/a n/a — `android:process=":remote"` — instrument the right PID or you will report a false negative
 - [ ] `D06-005` ⬜ n/a AM-02 — Do not claim Instant-App or browser reach for a service without `android:visibleToInstantApps`
-- [ ] `D06-006` 🟧 ? AM-03 — Enumerate the service classes that *cannot* be un-exported, and test what they added
+- [ ] `D06-006` 🟧 varies AM-03 — Enumerate the service classes that *cannot* be un-exported, and test what they added
 - [ ] `D06-007` ⬜ n/a n/a — Recover the complete AIDL method table before touching the device
 - [ ] `D06-008` 🟥 P1 AM-03 — Build the per-method check matrix — interfaces check one method and forget the rest
 - [ ] `D06-009` ⬜ n/a n/a — Trace the Dagger/Hilt generated wrapper to the real delegate before concluding anything
-- [ ] `D06-010` 🟥 ? AM-03 — Hook `onTransact` at runtime to recover codes, arguments and the real calling UID
-- [ ] `D06-011` 🟧 ? AM-03 — Sweep the raw transaction space with the NPE-versus-`SecurityException` oracle
+- [ ] `D06-010` 🟥 varies AM-03 — Hook `onTransact` at runtime to recover codes, arguments and the real calling UID
+- [ ] `D06-011` 🟧 varies AM-03 — Sweep the raw transaction space with the NPE-versus-`SecurityException` oracle
 - [ ] `D06-012` 🟥 P3 AM-03 — Raw `IBinder.transact()` bypasses hidden-API restrictions entirely
 - [ ] `D06-013` 🟥 P1 AM-03 — Audit the `dump*` / `*Proto` method family for a missing `DUMP` enforcement
 - [ ] `D06-014` ⬜ n/a n/a — Start the pipe reader thread *before* the transaction on any FD-returning API
 - [ ] `D06-015` 🟥 P1 AM-03 — No caller check anywhere in the `$Stub` body — the base bug of the domain
 - [ ] `D06-016` 🟥 P1 AM-03 — `Binder.getCallingUid()` evaluated off the transaction thread returns *your own* UID
-- [ ] `D06-017` 🟧 ? AM-03 — The three ways a permission check inside a Binder method is a no-op
-- [ ] `D06-018` 🟧 ? AM-03 — `clearCallingIdentity()` scope creep — the confused deputy in one line
-- [ ] `D06-019` 🟧 ? AM-03 — `getCallingPackage()` / `getCallingActivity()` used inside a Service
+- [ ] `D06-017` 🟧 varies AM-03 — The three ways a permission check inside a Binder method is a no-op
+- [ ] `D06-018` 🟧 varies AM-03 — `clearCallingIdentity()` scope creep — the confused deputy in one line
+- [ ] `D06-019` 🟧 varies AM-03 — `getCallingPackage()` / `getCallingActivity()` used inside a Service
 - [ ] `D06-020` 🟧 P1 AM-03 — Caller allow-list keyed on package name with no signature check
-- [ ] `D06-021` 🟧 ? AM-03/AM-08 — UID→package resolution that assumes one package per UID
-- [ ] `D06-022` 🟧 ? AM-03 — Caller identity taken from `getCallingPid()` — the PID-reuse race
+- [ ] `D06-021` 🟧 varies AM-03/AM-08 — UID→package resolution that assumes one package per UID
+- [ ] `D06-022` 🟧 varies AM-03 — Caller identity taken from `getCallingPid()` — the PID-reuse race
 - [ ] `D06-023` 🟧 P1 AM-03/AM-05 — The caller check never compares the Android **user id**
-- [ ] `D06-024` 🟧 ? AM-03 — Permission enforced only in `onBind()`, then the binder handle is relayed
+- [ ] `D06-024` 🟧 varies AM-03 — Permission enforced only in `onBind()`, then the binder handle is relayed
 - [ ] `D06-025` 🟧 P1 AM-03 — Session state cleaned up only in `binderDied()`
-- [ ] `D06-026` 🟧 ? AM-03/AM-04 — The guarding permission's `protectionLevel` is not `signature`
+- [ ] `D06-026` 🟧 varies AM-03/AM-04 — The guarding permission's `protectionLevel` is not `signature`
 - [ ] `D06-027` 🟥 P1 AM-03 — Exported service reached through `onStartCommand` — the path reviewers skip
 - [ ] `D06-028` 🟥 P1 AM-03 — Service as a network-egress confused deputy — attacker URL, victim's credentials
 - [ ] `D06-029` 🟥 P1 AM-03 — Upload-helper service with caller-chosen file **and** destination
@@ -440,44 +440,44 @@
 - [ ] `D06-032` 🟥 P1 AM-03 — `Messenger` service — enumerate every `what` code and every `Bundle` key
 - [ ] `D06-033` 🟥 P1 AM-03 — `Messenger` IPC is structurally unauthenticatable with the public SDK — say so, then test it
 - [ ] `D06-034` 🟧 P1 AM-03 — `msg.replyTo` trusted as the result channel — and as a binder the target now holds
-- [ ] `D06-035` 🟥 ? AM-03 — Exported entry point that starts a `camera` / `microphone` / `location` foreground service
-- [ ] `D06-036` 🟨 ? AM-12 — `specialUse` foreground service — compare the declared subtype with what the service does
-- [ ] `D06-037` 🟨 ? n/a — `systemExempted` FGS type claimed by an app with no qualifying role
+- [ ] `D06-035` 🟥 varies AM-03 — Exported entry point that starts a `camera` / `microphone` / `location` foreground service
+- [ ] `D06-036` 🟨 varies AM-12 — `specialUse` foreground service — compare the declared subtype with what the service does
+- [ ] `D06-037` 🟨 varies n/a — `systemExempted` FGS type claimed by an app with no qualifying role
 - [ ] `D06-038` 🟨 P3 AM-06/AM-09 — FGS timeout budgets as a starvation attack on a security-relevant background task
 - [ ] `D06-039` 🟨 P3 n/a — Android 15 FGS start restrictions — the fallback path is the finding
-- [ ] `D06-040` 🟧 ? AM-03 — Background FGS launch used to acquire while-in-use permissions
-- [ ] `D06-041` 🟨 ? AM-03/AM-08 — Attribute every declared `foregroundServiceType` — and every service — to its owning package namespace
-- [ ] `D06-042` 🟧 ? AM-03 — Implicit `Intent` used to start or bind a service — the attacker answers
-- [ ] `D06-043` 🟧 ? AM-03 — The app binds a peer resolved by package name, with no signature check on the connection
-- [ ] `D06-044` 🟧 ? AM-03/AM-08 — `BIND_ALLOW_ACTIVITY_STARTS` handed to a third-party service
+- [ ] `D06-040` 🟧 varies AM-03 — Background FGS launch used to acquire while-in-use permissions
+- [ ] `D06-041` 🟨 varies AM-03/AM-08 — Attribute every declared `foregroundServiceType` — and every service — to its owning package namespace
+- [ ] `D06-042` 🟧 varies AM-03 — Implicit `Intent` used to start or bind a service — the attacker answers
+- [ ] `D06-043` 🟧 varies AM-03 — The app binds a peer resolved by package name, with no signature check on the connection
+- [ ] `D06-044` 🟧 varies AM-03/AM-08 — `BIND_ALLOW_ACTIVITY_STARTS` handed to a third-party service
 - [ ] `D06-045` 🟥 P1 AM-03 — gRPC-over-binder — the `SecurityPolicy` is the caller check, not the manifest
-- [ ] `D06-046` 🟧 ? AM-03 — Privileged listener service declared **without** its `BIND_*` permission
+- [ ] `D06-046` 🟧 varies AM-03 — Privileged listener service declared **without** its `BIND_*` permission
 - [ ] `D06-047` 🟥 P1 AM-04 — The app's own `AccessibilityService`, and the app's exposure to someone else's
 - [ ] `D06-048` 🟥 P3 AM-04 — `NotificationListenerService` as an OTP and `PendingIntent` siphon
-- [ ] `D06-049` 🟨 ? AM-04 — Sensitive fields not excluded from the Autofill `AssistStructure`
+- [ ] `D06-049` 🟨 varies AM-04 — Sensitive fields not excluded from the Autofill `AssistStructure`
 - [ ] `D06-050` 🟧 P4 AM-10 — `TileService` action performed while the device is locked
-- [ ] `D06-051` 🟨 ? AM-03 — Exported `SliceProvider` whose `onBindSlice` acts on the URI
+- [ ] `D06-051` 🟨 varies AM-03 — Exported `SliceProvider` whose `onBindSlice` acts on the URI
 - [ ] `D06-052` 🟧 P1 AM-03 — `AppWidgetProvider` accepts a forged `APPWIDGET_UPDATE` or custom action
 - [ ] `D06-053` 🟧 P3 AM-03 — `MediaBrowserService` with no `onGetRoot` package validation
-- [ ] `D06-054` 🟧 ? AM-03 — `CarAppService` shipped with `ALLOW_ALL_HOSTS_VALIDATOR`
+- [ ] `D06-054` 🟧 varies AM-03 — `CarAppService` shipped with `ALLOW_ALL_HOSTS_VALIDATOR`
 - [ ] `D06-055` 🟧 P1 AM-03 — `WearableListenerService` path routing with no node or capability verification
-- [ ] `D06-056` 🟨 ? AM-03 — `ChooserTargetService` — LEGACY, but still shipping in old code
-- [ ] `D06-057` 🟨 ? AM-03/AM-08 — `androidx.startup.InitializationProvider` — the pre-authentication code path nobody wrote
-- [ ] `D06-058` 🟧 ? AM-03 — `JobService` missing `BIND_JOB_SERVICE`
+- [ ] `D06-056` 🟨 varies AM-03 — `ChooserTargetService` — LEGACY, but still shipping in old code
+- [ ] `D06-057` 🟨 varies AM-03/AM-08 — `androidx.startup.InitializationProvider` — the pre-authentication code path nobody wrote
+- [ ] `D06-058` 🟧 varies AM-03 — `JobService` missing `BIND_JOB_SERVICE`
 - [ ] `D06-059` 🟧 P1 AM-03/AM-11/AM-12 — WorkManager's persisted `WorkSpec` input and its injected components
 - [ ] `D06-060` 🟧 P1 AM-03 — `WorkManager` / `AlarmManager` job input hijack from an exported entry point
-- [ ] `D06-061` 🟧 ? AM-03 — `androidx.work.multiprocess` — `RemoteWorkerService` is a bound service with a parcel boundary
-- [ ] `D06-062` 🟧 ? AM-03 — `JobIntentService` entry points — LEGACY, and still the enqueue path in old builds
+- [ ] `D06-061` 🟧 varies AM-03 — `androidx.work.multiprocess` — `RemoteWorkerService` is a bound service with a parcel boundary
+- [ ] `D06-062` 🟧 varies AM-03 — `JobIntentService` entry points — LEGACY, and still the enqueue path in old builds
 - [ ] `D06-063` 🟧 P4 AM-03/AM-08 — A security decision implemented as a `oneway` transaction
 - [ ] `D06-064` 🟧 P3 AM-03 — Transaction-buffer exhaustion and a fail-open `TransactionTooLargeException` catch
 - [ ] `D06-065` 🟥 P1 AM-03 — A `ParcelFileDescriptor` returned over binder is a live FD in your process
-- [ ] `D06-066` 🟥 ? AM-03 — The app's own `Parcelable` has a `writeToParcel`/`createFromParcel` mismatch
+- [ ] `D06-066` 🟥 varies AM-03 — The app's own `Parcelable` has a `writeToParcel`/`createFromParcel` mismatch
 - [ ] `D06-067` 🟨 n/a n/a — `isolatedProcess` — a real containment boundary, in both directions
 - [ ] `D06-068` ⬜ n/a n/a — Binder domains and vendor interfaces are not app-reachable — the false-positive gate
 - [ ] `D06-069` 🟧 P2 AM-03 — Binder threadpool re-entrancy — check-then-act races, proved statistically
 - [ ] `D06-070` 🟥 P1 AM-03/AM-06 — Local socket or localhost HTTP server bound by the app without authentication
-- [ ] `D06-071` 🟧 ? AM-04 — Shell-backed binder brokers (Shizuku-class) as an assumed-privilege path
-- [ ] `D06-072` 🟥 ? AM-06/AM-09 — Service acting as a network proxy or registering a `VpnService`
+- [ ] `D06-071` 🟧 varies AM-04 — Shell-backed binder brokers (Shizuku-class) as an assumed-privilege path
+- [ ] `D06-072` 🟥 varies AM-06/AM-09 — Service acting as a network proxy or registering a `VpnService`
 - [ ] `D06-073` 🟥 P1 AM-01/AM-02 — Remote-support / screen-share module embedded as a service
 - [ ] `D06-074` 🟧 P1 AM-06 — Cast / remote-playback session as an unauthenticated control and content channel
 - [ ] `D06-075` ⬜ n/a n/a — THE LAYER-ORDERING TRAP, binder edition — an argument error does not prove you passed the caller check
@@ -573,53 +573,53 @@
 
 > **Does any attacker-reachable entry point in this app hand a `Intent`, `Uri`, `Bundle` or `PendingIntent` that the attacker fully or partially controls to a framework call that executes with the app's own UID — and if so, which non-exported component, private provider URI or held runtime permission does that reach that the attacker cannot reach directly?**
 
-- [ ] `D08-001` ⬜ n/a AM-03 — Census every unparcel-to-launch sink in the app
+- [ ] `D08-001` ⬜ varies AM-03 — Census every unparcel-to-launch sink in the app
 - [ ] `D08-002` ⬜ n/a AM-12 — Enable `StrictMode.detectUnsafeIntentLaunch()` and drive the app
 - [ ] `D08-003` ⬜ n/a AM-12 — Frida census of the redirection and PendingIntent surface at runtime
 - [ ] `D08-004` ⬜ n/a AM-12 — Two-API-level control run before any redirection claim
-- [ ] `D08-005` 🟧 ? AM-03/AM-08 — Sweep the merged manifest for SDK-added exported proxies
+- [ ] `D08-005` 🟧 varies AM-03/AM-08 — Sweep the merged manifest for SDK-added exported proxies
 - [ ] `D08-006` ⬜ n/a AM-03 — Census the URI-grant preconditions before testing any grant item
 - [ ] `D08-007` 🟥 P1 AM-03 — Classic nested-Intent forward to a non-exported activity
-- [ ] `D08-008` 🟧 ? AM-03 — The same forward through service, foreground-service and broadcast sinks
-- [ ] `D08-009` 🟧 ? AM-03 — Literal `startActivity(getIntent())` self-forward
+- [ ] `D08-008` 🟧 varies AM-03 — The same forward through service, foreground-service and broadcast sinks
+- [ ] `D08-009` 🟧 varies AM-03 — Literal `startActivity(getIntent())` self-forward
 - [ ] `D08-010` 🟥 P1 AM-03 — Forwarded `FLAG_GRANT_READ/WRITE_URI_PERMISSION` — the grant is the payload
 - [ ] `D08-011` 🟥 P1 AM-03 — `FLAG_GRANT_PREFIX_URI_PERMISSION` — one file becomes the whole authority
 - [ ] `D08-012` 🟥 P1 AM-03 — `FLAG_GRANT_PERSISTABLE_URI_PERMISSION` — a grant that survives reboot
-- [ ] `D08-013` 🟧 ? AM-03 — Component allow-list present, but extras, data and flags still attacker-controlled
-- [ ] `D08-014` 🟧 ? AM-03 — `resolveActivity()`-based validation bypass
-- [ ] `D08-015` 🟧 ? AM-02/AM-03 — `setSelector()` smuggling past `setComponent(null)`
-- [ ] `D08-016` 🟧 ? AM-03 — Implicit inner Intent matched against a non-exported component's filter
+- [ ] `D08-013` 🟧 varies AM-03 — Component allow-list present, but extras, data and flags still attacker-controlled
+- [ ] `D08-014` 🟧 varies AM-03 — `resolveActivity()`-based validation bypass
+- [ ] `D08-015` 🟧 varies AM-02/AM-03 — `setSelector()` smuggling past `setComponent(null)`
+- [ ] `D08-016` 🟧 varies AM-03 — Implicit inner Intent matched against a non-exported component's filter
 - [ ] `D08-017` ⬜ ? AM-03 — No `IntentSanitizer` and no component allow-list on a forwarding path
-- [ ] `D08-018` 🟧 ? AM-03 — `IntentSanitizer` present but configured permissively
-- [ ] `D08-019` 🟧 ? AM-03 — `Intent.removeLaunchSecurityProtection()` present in app code
-- [ ] `D08-020` 🟨 ? AM-03 — `android:intentMatchingFlags="none"` on an exported component
-- [ ] `D08-021` 🟨 ? AM-03 — Task and launch flags preserved through the forward
+- [ ] `D08-018` 🟧 varies AM-03 — `IntentSanitizer` present but configured permissively
+- [ ] `D08-019` 🟧 varies AM-03 — `Intent.removeLaunchSecurityProtection()` present in app code
+- [ ] `D08-020` 🟨 varies AM-03 — `android:intentMatchingFlags="none"` on an exported component
+- [ ] `D08-021` 🟨 varies AM-03 — Task and launch flags preserved through the forward
 - [ ] `D08-022` 🟥 P1 AM-02 — `Intent.parseUri()` on attacker-controlled text
 - [ ] `D08-023` 🟥 P1 AM-02/AM-03 — `Intent.URI_ALLOW_UNSAFE` (flag value 4) on externally sourced data
 - [ ] `D08-024` 🟥 P1 AM-02/AM-09 — WebView `shouldOverrideUrlLoading` turned into an arbitrary-component launcher
-- [ ] `D08-025` 🟧 ? AM-02 — Legacy `Intent.getIntent()` / `getIntentOld()` parsers
+- [ ] `D08-025` 🟧 varies AM-02 — Legacy `Intent.getIntent()` / `getIntentOld()` parsers
 - [ ] `D08-026` 🟥 P1 AM-03/AM-08/AM-09 — Push / messaging payload field parsed into an Intent
 - [ ] `D08-027` 🟥 P1 AM-02 — `Parcel.unmarshall()` + `readParcelable()` on a deep-link parameter
-- [ ] `D08-028` 🟨 ? AM-03 — Untyped `getParcelableExtra` / `getParcelable` / `getSerializableExtra`
+- [ ] `D08-028` 🟨 varies AM-03 — Untyped `getParcelableExtra` / `getParcelable` / `getSerializableExtra`
 - [ ] `D08-029` 🟧 P1 AM-03 — App-defined `Parcelable` whose write and read byte counts disagree
-- [ ] `D08-030` 🟧 ? AM-03 — Whole-`Bundle` forward carrying smuggled `IBinder` / `PendingIntent` keys
-- [ ] `D08-031` 🟧 ? AM-03 — Parcel mismatch across the app's own `android:process` boundary
+- [ ] `D08-030` 🟧 varies AM-03 — Whole-`Bundle` forward carrying smuggled `IBinder` / `PendingIntent` keys
+- [ ] `D08-031` 🟧 varies AM-03 — Parcel mismatch across the app's own `android:process` boundary
 - [ ] `D08-032` 🟨 P1 AM-03 — Untyped `getSerializableExtra` on an exported forwarder
 - [ ] `D08-033` 🟥 P1 AM-03 — `setResult(RESULT_OK, getIntent())` — the full-Intent echo
-- [ ] `D08-034` 🟥 ? AM-03 — Echo or redirect aimed at a system provider the victim holds permission for
-- [ ] `D08-035` 🟧 ? AM-03 — `onActivityResult` trusting a third-party result Intent — the reverse direction
+- [ ] `D08-034` 🟥 varies AM-03 — Echo or redirect aimed at a system provider the victim holds permission for
+- [ ] `D08-035` 🟧 varies AM-03 — `onActivityResult` trusting a third-party result Intent — the reverse direction
 - [ ] `D08-036` 🟥 P1 AM-03 — Path traversal via `OpenableColumns.DISPLAY_NAME` from a hostile provider
 - [ ] `D08-037` 🟥 P1 AM-03/AM-04 — Mutable `PendingIntent` with a blank or implicit base Intent
-- [ ] `D08-038` 🟧 ? AM-03/AM-04 — Mutable `PendingIntent` with `setPackage()` only — the targetSdk-34-compliant variant
-- [ ] `D08-039` 🟧 ? AM-03 — `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT` present
-- [ ] `D08-040` 🟧 ? AM-04 — PendingIntent harvested from a notification by a `NotificationListenerService`
+- [ ] `D08-038` 🟧 varies AM-03/AM-04 — Mutable `PendingIntent` with `setPackage()` only — the targetSdk-34-compliant variant
+- [ ] `D08-039` 🟧 varies AM-03 — `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT` present
+- [ ] `D08-040` 🟧 varies AM-04 — PendingIntent harvested from a notification by a `NotificationListenerService`
 - [ ] `D08-041` 🟥 P1 AM-03/AM-04 — `getCreatorPackage()` / `getCreatorUid()` used to authenticate the *sender*
-- [ ] `D08-042` 🟧 ? AM-03/AM-04 — Missing `FLAG_ONE_SHOT` on a non-idempotent PendingIntent → replay
+- [ ] `D08-042` 🟧 varies AM-03/AM-04 — Missing `FLAG_ONE_SHOT` on a non-idempotent PendingIntent → replay
 - [ ] `D08-043` 🟧 P3 AM-03/AM-05 — `filterEquals()` + constant `requestCode` collision, with or without `FLAG_UPDATE_CURRENT`
 - [ ] `D08-044` 🟧 P3 AM-04 — Direct-reply `RemoteInput` PendingIntent — legitimately mutable, so audit what that exposes
-- [ ] `D08-045` 🟧 ? AM-03/AM-09 — Widget `setPendingIntentTemplate()` with an attacker-influenced `fillInIntent`
-- [ ] `D08-046` 🟨 ? AM-03 — Slice `primaryAction` PendingIntent fired by a host on your behalf
-- [ ] `D08-047` 🟧 ? AM-03 — PendingIntent handed out over AIDL, `IntentSender` or a `Bundle` extra
+- [ ] `D08-045` 🟧 varies AM-03/AM-09 — Widget `setPendingIntentTemplate()` with an attacker-influenced `fillInIntent`
+- [ ] `D08-046` 🟨 varies AM-03 — Slice `primaryAction` PendingIntent fired by a host on your behalf
+- [ ] `D08-047` 🟧 varies AM-03 — PendingIntent handed out over AIDL, `IntentSender` or a `Bundle` extra
 - [ ] `D08-048` 🟧 P4 AM-03/AM-08 — Background-activity-launch opt-ins on a PendingIntent handed to third parties
 - [ ] `D08-049` 🟨 ? AM-04 — Notification trampoline removal that traded a UX bug for this one
 - [ ] `D08-050` 🟥 P2 AM-03/AM-04 — Payment PendingIntent replay and misrouting, composed
@@ -627,10 +627,10 @@
 - [ ] `D08-052` 🟥 P1 AM-03/AM-04 — PendingIntent whose base Intent carries `FLAG_GRANT_*` — `send()` issues the grant
 - [ ] `D08-053` 🟧 P1 AM-03 — `grantUriPermission()` called with a caller-supplied package name
 - [ ] `D08-054` 🟧 P1 AM-03 — Outbound implicit intent carrying grant flags → resolver hijack
-- [ ] `D08-055` 🟧 ? AM-03 — Persistable grant retention after the share is "over"
-- [ ] `D08-056` 🟨 ? AM-03 — `android:requireContentUriPermissionFromCaller` absent on a URI-consuming activity
+- [ ] `D08-055` 🟧 varies AM-03 — Persistable grant retention after the share is "over"
+- [ ] `D08-056` 🟨 varies AM-03 — `android:requireContentUriPermissionFromCaller` absent on a URI-consuming activity
 - [ ] `D08-057` 🟧 P1 AM-03 — `ComponentCaller` checked in `onCreate` but not in `onNewIntent`
-- [ ] `D08-058` 🟥 ? AM-03 — Inbound `content://` URI consumed without `checkUriPermission` / authority validation
+- [ ] `D08-058` 🟥 varies AM-03 — Inbound `content://` URI consumed without `checkUriPermission` / authority validation
 - [ ] `D08-059` 🟧 P1 AM-03 — `getCallingActivity()` non-null used as an authentication signal
 - [ ] `D08-060` 🟧 P1 AM-03 — `android.intent.extra.REFERRER` or a caller-supplied "source app" string trusted
 - [ ] `D08-061` 🟥 P1 AM-03 — GMS SMS User Consent receiver as an arbitrary-Intent-launch gadget
@@ -644,24 +644,24 @@
 
 > **Does any URI an attacker can put in front of the victim — a web link, a QR code, a push payload, another app's intent — reach a parser inside this app that hands attacker-controlled bytes to a sink that runs with the user's session, and is the entry point ownership-verified on the device or merely claimed in the manifest?**
 
-- [ ] `D09-001` ⬜ n/a AM-02/AM-03 — Census every BROWSABLE filter in the merged manifest, resolving string references
-- [ ] `D09-002` 🟨 ? AM-02/AM-03 — Expand the `<data>` cross-product — attributes merge, they do not pair
-- [ ] `D09-003` ⬜ n/a AM-03/AM-08 — Attribute every scheme to the AAR that contributed it
+- [ ] `D09-001` ⬜ varies AM-02/AM-03 — Census every BROWSABLE filter in the merged manifest, resolving string references
+- [ ] `D09-002` 🟨 varies AM-02/AM-03 — Expand the `<data>` cross-product — attributes merge, they do not pair
+- [ ] `D09-003` ⬜ varies AM-03/AM-08 — Attribute every scheme to the AAR that contributed it
 - [ ] `D09-004` ⬜ n/a AM-02/AM-03 — Enumerate the routes declared in code, not in the manifest
 - [ ] `D09-005` 🟥 P1 AM-03 — Schemes the app emits but never registers
 - [ ] `D09-006` ⬜ n/a AM-02/AM-03 — Classify every entry point by its ownership proof before rating anything
 - [ ] `D09-007` ⬜ n/a AM-02 — Prove browser reachability, not adb reachability
 - [ ] `D09-008` ⬜ n/a AM-02 — Per-browser `intent://` capability matrix
-- [ ] `D09-009` 🟧 ? AM-02/AM-03 — Flutter: `flutter_deeplinking_enabled` defaults to ON, so jadx shows you nothing
-- [ ] `D09-010` 🟧 ? AM-02/AM-03 — React Native: the Java→JS `Linking` handoff
+- [ ] `D09-009` 🟧 varies AM-02/AM-03 — Flutter: `flutter_deeplinking_enabled` defaults to ON, so jadx shows you nothing
+- [ ] `D09-010` 🟧 varies AM-02/AM-03 — React Native: the Java→JS `Linking` handoff
 - [ ] `D09-011` 🟥 P1 AM-02 — Cordova / Capacitor: `appUrlOpen`, `allow-navigation` and `server.url`
 - [ ] `D09-012` ⬜ n/a AM-12 — Runtime handler discovery — hook `Intent.getData()` with a stack trace
 - [ ] `D09-013` ⬜ n/a AM-03 — Fire the whole URI corpus and record where each one lands
 - [ ] `D09-014` 🟧 P1 AM-02/AM-03 — `pm get-app-links` — the on-device verification state is the only truth
-- [ ] `D09-015` 🟧 ? AM-03 — Fetch `assetlinks.json` for every declared host and diff the fingerprint
+- [ ] `D09-015` 🟧 varies AM-03 — Fetch `assetlinks.json` for every declared host and diff the fingerprint
 - [ ] `D09-016` 🟧 ? AM-03 — Play App Signing: the fingerprint you checked may be the wrong certificate
 - [ ] `D09-017` 🟧 ? AM-03 — The Digital Asset Links failure taxonomy — redirects, transport, JSON, per-host files
-- [ ] `D09-018` 🟧 ? AM-03/AM-08 — Wildcard or extra `package_name` in the statement file
+- [ ] `D09-018` 🟧 varies AM-03/AM-08 — Wildcard or extra `package_name` in the statement file
 - [ ] `D09-019` 🟧 ? AM-03/AM-08 — Stale `sha256_cert_fingerprints` after a signing-key rotation
 - [ ] `D09-020` 🟧 P3 AM-01/AM-02 — A statement host the vendor no longer owns, or a dangling subdomain
 - [ ] `D09-021` 🟧 ? AM-03 — Pre-Android-12 verification poisoning: one bad filter de-verifies every host
@@ -678,37 +678,37 @@
 - [ ] `D09-032` ⬜ n/a n/a — `android:priority` is capped — do not claim a priority win
 - [ ] `D09-033` 🟧 ? AM-02/AM-03 — Android 12+ web-intent resolution, and the custom scheme added to work around it
 - [ ] `D09-034` 🟧 P2 AM-03/AM-08 — Scheme collision across every app that embeds the same SDK
-- [ ] `D09-035` 🟧 ? AM-02/AM-09 — Deferred deep links from an attribution SDK — a router input the OS never validated
-- [ ] `D09-036` 🟧 ? AM-01 — `INSTALL_REFERRER` payload trusted for routing or entitlement
-- [ ] `D09-037` 🟧 ? AM-02 — QR / barcode scan treated as a trusted deep-link source
+- [ ] `D09-035` 🟧 varies AM-02/AM-09 — Deferred deep links from an attribution SDK — a router input the OS never validated
+- [ ] `D09-036` 🟧 varies AM-01 — `INSTALL_REFERRER` payload trusted for routing or entitlement
+- [ ] `D09-037` 🟧 varies AM-02 — QR / barcode scan treated as a trusted deep-link source
 - [ ] `D09-038` 🟧 ? AM-02 — NFC tag as the delivery vehicle
-- [ ] `D09-039` 🟧 ? AM-02 — Notification-origin trust signature on privileged deep-link routes
-- [ ] `D09-040` 🟧 ? AM-02/AM-04 — Retired routes that still resolve: pinned shortcuts and instant-app-era paths
+- [ ] `D09-039` 🟧 varies AM-02 — Notification-origin trust signature on privileged deep-link routes
+- [ ] `D09-040` 🟧 varies AM-02/AM-04 — Retired routes that still resolve: pinned shortcuts and instant-app-era paths
 - [ ] `D09-041` ⬜ n/a AM-02/AM-03 — Trace the router: URI → parser → route → sink, and produce the route table
 - [ ] `D09-042` 🟥 P1 AM-02 — Host validation by `startsWith` / `endsWith` / `contains` — run the whole matrix
 - [ ] `D09-043` 🟥 P1 AM-02 — The host is checked and the scheme is not
 - [ ] `D09-044` 🟧 P1 AM-02 — Backslash and userinfo divergence between `Uri.parse().getHost()` and the loader
-- [ ] `D09-045` 🟧 ? AM-03 — `Uri` object smuggling via reflection (`HierarchicalUri`)
+- [ ] `D09-045` 🟧 varies AM-03 — `Uri` object smuggling via reflection (`HierarchicalUri`)
 - [ ] `D09-046` 🟥 P1 AM-02 — Parser-differential sweep: where the validator's parse and the sink's parse disagree
-- [ ] `D09-047` 🟧 ? AM-02/AM-03 — Java validator versus JS/Dart router — the cross-boundary differential
-- [ ] `D09-048` 🟧 ? AM-02 — `pathPattern` glob semantics — no backtracking, lazy `.*`, greedy `*`
-- [ ] `D09-049` 🟨 ? AM-02 — `pathPrefix` escape via `../` in the path
+- [ ] `D09-047` 🟧 varies AM-02/AM-03 — Java validator versus JS/Dart router — the cross-boundary differential
+- [ ] `D09-048` 🟧 varies AM-02 — `pathPattern` glob semantics — no backtracking, lazy `.*`, greedy `*`
+- [ ] `D09-049` 🟨 varies AM-02 — `pathPrefix` escape via `../` in the path
 - [ ] `D09-050` 🟧 P3 AM-02 — Host wildcards, case sensitivity, trailing dots and Unicode
-- [ ] `D09-051` 🟨 ? AM-02 — `UriRelativeFilterGroup` exclusion rules bypassed by encoding
-- [ ] `D09-052` 🟨 ? AM-03 — `allowNullAction` — an action-less intent takes a different branch
-- [ ] `D09-053` 🟧 ? AM-03 — `enforceIntentFilter` absent: an explicit `VIEW` with an arbitrary URI
-- [ ] `D09-054` 🟧 ? AM-03 — `intentMatchingFlags="none"` — a hole punched in the app's own hardening
-- [ ] `D09-055` 🟨 ? AM-02 — Over-broad path scope on a correctly verified App Link
+- [ ] `D09-051` 🟨 varies AM-02 — `UriRelativeFilterGroup` exclusion rules bypassed by encoding
+- [ ] `D09-052` 🟨 varies AM-03 — `allowNullAction` — an action-less intent takes a different branch
+- [ ] `D09-053` 🟧 varies AM-03 — `enforceIntentFilter` absent: an explicit `VIEW` with an arbitrary URI
+- [ ] `D09-054` 🟧 varies AM-03 — `intentMatchingFlags="none"` — a hole punched in the app's own hardening
+- [ ] `D09-055` 🟨 varies AM-02 — Over-broad path scope on a correctly verified App Link
 - [ ] `D09-056` 🟥 P1 AM-01/AM-02 — An expired or registrable domain inside the code-side allow-list
 - [ ] `D09-057` 🟥 P1 AM-02 — Shared-tenant wildcard hosts in the allow-list
-- [ ] `D09-058` 🟧 ? AM-02 — Router traversal inside the route or path segment
+- [ ] `D09-058` 🟧 varies AM-02 — Router traversal inside the route or path segment
 - [ ] `D09-059` 🟥 P1 AM-02 — A deep-link parameter becomes the URL of a session-bearing WebView
 - [ ] `D09-060` 🟥 P1 AM-02 — `loadUrl(url, headers)` — the app attaches its auth headers to your origin
 - [ ] `D09-061` 🟥 P1 AM-02 — A redirect parameter followed *after* the internal-URL check
 - [ ] `D09-062` 🟥 P1 AM-02 — The app appends the session to *your* URL
 - [ ] `D09-063` 🟥 P1 AM-02 — `file://` or `content://` pushed through the router into a reading sink
 - [ ] `D09-064` 🟨 P4 AM-02 — Path traversal in a deep-link parameter used as a save path
-- [ ] `D09-065` 🟥 ? AM-02 — `intent://` smuggling and `Intent.parseUri` inside the deep-link handler
+- [ ] `D09-065` 🟥 varies AM-02 — `intent://` smuggling and `Intent.parseUri` inside the deep-link handler
 - [ ] `D09-066` 🟥 P1 AM-02 — A deep link performs a state-changing action with no confirmation
 - [ ] `D09-067` 🟧 P1 AM-02/AM-03 — A deep link reaches an authenticated screen when fired cold
 - [ ] `D09-068` 🟥 P1 AM-02/AM-05 — A deep-link parameter is an object identifier the server does not authorise
@@ -716,7 +716,7 @@
 - [ ] `D09-070` 🟥 P1 AM-02 — A deep-link parameter switches the backend host or environment
 - [ ] `D09-071` 🟨 P3 AM-02 — A deep-link parameter drives a device-side request to an attacker or internal host
 - [ ] `D09-072` 🟨 P3 AM-04/AM-08/AM-11 — Deep-link parameters persisted to logcat, Recents or analytics
-- [ ] `D09-073` 🟩 P5 AM-02 — A deep link that crashes the handler — and whether the session dies with it
+- [ ] `D09-073` 🟩 p5 AM-02 — A deep link that crashes the handler — and whether the session dies with it
 - [ ] `D09-074` 🟥 P1 AM-01/AM-05 — Shadow API: the route's backend call is an older API version than the web app uses
 - [ ] `D09-075` ⬜ n/a n/a — Bound the finding by what the NEXT layer does, before you rate it
 - [ ] `D09-076` ⬜ n/a AM-02/AM-03 — Prove AM-03 from the attacker app and AM-02 from a page — `adb` proves neither
@@ -793,7 +793,7 @@
 - [ ] `D10-062` 🟧 ? AM-02/AM-06 — Cordova-Android < 4.1.1 whitelist redirect bypass / config injection (LEGACY)
 - [ ] `D10-063` 🟨 ? AM-02 — CSP not enforced in the in-app browser (response header vs `<meta>`)
 - [ ] `D10-064` 🟧 P1 AM-09 — CDN- or remote-served asset loaded into a bridged WebView (supply chain)
-- [ ] `D10-065` 🟧 ? AM-02 — `intent://` handling in `shouldOverrideUrlLoading` → arbitrary activity launch / redirection
+- [ ] `D10-065` 🟧 varies AM-02 — `intent://` handling in `shouldOverrideUrlLoading` → arbitrary activity launch / redirection
 - [ ] `D10-066` 🟥 P1 AM-06/AM-08 — Ad / analytics SDK WebView with a JS interface reachable over cleartext
 - [ ] `D10-067` 🟧 P2 AM-05/AM-09 — Support-chat SDK WebView rendering agent-/bot-supplied HTML
 - [ ] `D10-068` 🟨 ? AM-02 — In-app browser URL / origin spoofing (calibration)
@@ -844,9 +844,9 @@
 - [ ] `D11-036` 🟧 P2 AM-03/AM-11 — The offline write-queue — tamper the pending mutations before they sync
 - [ ] `D11-037` 🟧 P5 AM-03/AM-05 — Chat and media caches that survive "delete for everyone"
 - [ ] `D11-038` 🟧 P5 AM-04/AM-11 — Sensitive data left in a view that is merely hidden
-- [ ] `D11-039` 🟨 P5 AM-04/AM-11 — No `FLAG_SECURE` — recents snapshot on disk and screen capture
+- [ ] `D11-039` 🟨 p5 AM-04/AM-11 — No `FLAG_SECURE` — recents snapshot on disk and screen capture
 - [ ] `D11-040` 🟧 varies AM-05/AM-11 — Deleted-record and unallocated-space residue in structured stores
-- [ ] `D11-041` 🟧 P4 AM-03/AM-04 — Sensitive data written to external / shared storage (the one class rated above P5)
+- [ ] `D11-041` 🟧 p4 AM-03/AM-04 — Sensitive data written to external / shared storage (the one class rated above P5)
 - [ ] `D11-042` 🟧 P4 AM-03/AM-04 — Scoped-storage bypass and `MANAGE_EXTERNAL_STORAGE` over-request
 - [ ] `D11-043` 🟧 P4 AM-03 — Cross-app access to `Android/data` and `Android/obb` (version-gated)
 - [ ] `D11-044` 🟨 varies AM-03 — MediaStore `_data` column disclosure and path re-use
@@ -856,7 +856,7 @@
 - [ ] `D11-048` 🟥 P1 AM-02 — `Content-Disposition` / provider `_display_name` filename traversal on download
 - [ ] `D11-049` 🟥 P1 AM-02/AM-03 — TOCTOU / symlink race on a file handed over as `file://` or a descriptor
 - [ ] `D11-050` 🟨 P4 AM-03/AM-11 — Data written to a hidden `.nomedia` directory the user cannot see or manage
-- [ ] `D11-051` 🟧 P5 AM-11 — Backup rules — read the RULES, then extract, never report the flag
+- [ ] `D11-051` 🟧 p5 AM-11 — Backup rules — read the RULES, then extract, never report the flag
 - [ ] `D11-052` 🟧 P5 AM-11 — Asymmetric `dataExtractionRules` — excluded from cloud, wide open to device transfer
 - [ ] `D11-053` 🟧 P1 AM-11 — Modify-and-restore — prove a client-side entitlement/PIN is authoritative
 - [ ] `D11-054` 🟥 P1 AM-11 — Inverted or absent restore guard on a device-bound value
@@ -902,18 +902,18 @@
 - [ ] `D12-016` 🟧 P3 AM-01 — Weak hash making a security decision (MD5 / SHA-1 / MD4)
 - [ ] `D12-017` 🟧 P2 AM-01 — CBC without integrity — ciphertext malleability on a field the app or server trusts
 - [ ] `D12-018` 🟧 P1 AM-01 — Padding oracle: CBC + PKCS#5/7 with a distinguishable decrypt failure
-- [ ] `D12-019` 🟨 P4 AM-01 — Static or predictable IV
-- [ ] `D12-020` 🟧 P5 AM-01 — IV / nonce reuse under a fixed key (CTR keystream reuse, GCM forgery)
+- [ ] `D12-019` 🟨 p4 AM-01 — Static or predictable IV
+- [ ] `D12-020` 🟧 p5 AM-01 — IV / nonce reuse under a fixed key (CTR keystream reuse, GCM forgery)
 - [ ] `D12-021` 🟧 P4 AM-01 — Non-standard GCM IV length, or a bundled provider re-enabling what the platform refuses
 - [ ] `D12-022` 🟧 P3 AM-01 — RSA without OAEP (PKCS#1 v1.5 or `NoPadding`)
 - [ ] `D12-023` 🟧 varies AM-01 — Home-grown "encryption" that is a XOR loop
 - [ ] `D12-024` 🟧 P5 AM-01/AM-03 — Encoding presented as encryption, and reversible custom transforms on identity parameters
-- [ ] `D12-025` 🟨 P3 AM-01 — Insufficient key size
+- [ ] `D12-025` 🟨 p3 AM-01 — Insufficient key size
 - [ ] `D12-026` 🟧 varies AM-01/AM-03 — Insufficient key stretching — plain hash, PBKDF1, or low-iteration PBKDF2
-- [ ] `D12-027` 🟨 P5 AM-01 — Missing, hardcoded or predictable salt
+- [ ] `D12-027` 🟨 varies AM-01 — Missing, hardcoded or predictable salt
 - [ ] `D12-028` 🟧 P1 AM-01/AM-03 — Low-entropy input (a 4–6 digit PIN) not combined with Keystore-held material
-- [ ] `D12-029` 🟨 P5 AM-03/AM-08 — One key, many purposes — decode the `KeyGenParameterSpec` purpose bitmask
-- [ ] `D12-030` 🟧 P2 AM-01 — Same key across environments — production and staging share key material
+- [ ] `D12-029` 🟨 p5 AM-03/AM-08 — One key, many purposes — decode the `KeyGenParameterSpec` purpose bitmask
+- [ ] `D12-030` 🟧 p2 AM-01 — Same key across environments — production and staging share key material
 - [ ] `D12-031` 🟧 P1 AM-01 — Same key across every install — no per-device key derivation
 - [ ] `D12-032` 🟨 P5 AM-01/AM-08 — One key reused across subsystems (storage, signing, transport, integrity)
 - [ ] `D12-033` 🟥 P4 AM-01 — `java.util.Random` / `Math.random()` at a security sink
@@ -925,12 +925,12 @@
 - [ ] `D12-039` 🟧 P4 AM-01 — MAC construction misuse — `hash(key‖msg)`, truncated tags, CRC as integrity
 - [ ] `D12-040` 🟨 P4 AM-01/AM-03 — Non-constant-time tag or signature comparison
 - [ ] `D12-041` 🟥 P2 AM-01 — Request-signing scheme the server never enforces
-- [ ] `D12-042` 🟧 P4 AM-01/AM-06/AM-09 — Signature verified and the result discarded, or the verifier trusts the data it verifies
+- [ ] `D12-042` 🟧 varies AM-01/AM-06/AM-09 — Signature verified and the result discarded, or the verifier trusts the data it verifies
 - [ ] `D12-043` 🟥 P1 AM-01 — The shadow-API bridge: an older API version that does not enforce the signature at all
 - [ ] `D12-044` 🟥 P1 AM-01 — Hardcoded HS256 signing secret in the binary → forge arbitrary identities
 - [ ] `D12-045` 🟥 P1 AM-01 — RS256 → HS256 algorithm confusion using the public key as the HMAC secret
 - [ ] `D12-046` 🟥 P1 AM-01 — `alg:none`, `kid`, `jku`/`x5u` and `jwk` header attacks on the app's own token
-- [ ] `D12-047` 🟨 P5 AM-01/AM-12 — An expired JWT in the binary is reconnaissance, not a dead end
+- [ ] `D12-047` 🟨 p5 AM-01/AM-12 — An expired JWT in the binary is reconnaissance, not a dead end
 - [ ] `D12-048` 🟧 P1 AM-03/AM-08/AM-11 — `setUserAuthenticationRequired` absent on a key that gates a sensitive action
 - [ ] `D12-049` 🟧 varies AM-08/AM-11 — Time-window auth presented as per-operation auth — the keyguard-asserted differential
 - [ ] `D12-050` 🟧 P1 AM-11 — `setInvalidatedByBiometricEnrollment(false)` — enrol your own finger
@@ -943,7 +943,7 @@
 - [ ] `D12-057` 🟨 P4 AM-03/AM-08 — `setRandomizedEncryptionRequired(false)` — the caller supplies the IV on a Keystore key
 - [ ] `D12-058` 🟥 P1 AM-03 — Keystore used as a decryption or signing oracle by an exported surface
 - [ ] `D12-059` 🟥 P1 AM-03/AM-08 — `KeyStoreManager.grantKeyAccess()` (Android 16) — a Keystore key shared to another UID
-- [ ] `D12-060` 🟨 P5 AM-03/AM-08 — `EncryptedSharedPreferences` / `MasterKey` present but the master key is not auth-bound
+- [ ] `D12-060` 🟨 p5 AM-03/AM-08 — `EncryptedSharedPreferences` / `MasterKey` present but the master key is not auth-bound
 - [ ] `D12-061` 🟩 P4 AM-03/AM-11 — Keying material not cleared on logout or account removal
 - [ ] `D12-062` 🟩 varies AM-12 — No StrongBox request and no attestation verification — the fair comment on any device
 - [ ] `D12-063` 🟧 P1 AM-01/AM-12 — Key attestation verified on the client instead of on a server
@@ -1022,7 +1022,7 @@
 - [ ] `D13-051` 🟥 P1 AM-01/AM-12 — SIM-binding and MSISDN checks that trust local telephony APIs
 - [ ] `D13-052` 🟥 P1 AM-01 — SMS/voice recovery survives SIM swap; recycled numbers inherit accounts
 - [ ] `D13-053` 🟥 P4 AM-01 — Password-reset token: leak, non-expiry, reuse and unbinding
-- [ ] `D13-054` 🟧 P2 AM-01 — Reset-link poisoning via `Host` / `X-Forwarded-Host`
+- [ ] `D13-054` 🟧 p2 AM-01 — Reset-link poisoning via `Host` / `X-Forwarded-Host`
 - [ ] `D13-055` 🟥 P1 AM-01 — Weak reset-token keyspace
 - [ ] `D13-056` 🟥 P1 AM-03 — Reset or magic-link token delivered through an unverified deep link, or consumed by a prefetch
 - [ ] `D13-057` 🟥 P4 AM-01/AM-03/AM-11 — Recovery / backup codes: server-returned, client-generated, or not single-use
@@ -1054,7 +1054,7 @@
 - [ ] `D13-083` 🟥 P1 AM-01/AM-05 — Device registration / enrolment endpoint: forge, re-point or cross-enrol
 - [ ] `D13-084` 🟥 P1 AM-01/AM-02 — Multi-device linking and "scan to log in" QR pairing
 - [ ] `D13-085` 🟧 P1 AM-10 — Lock-screen notification action performs an authenticated action
-- [ ] `D13-086` 🟥 P4 AM-01/AM-02/AM-03 — Account deletion without re-authentication, or reachable from an exported surface
+- [ ] `D13-086` 🟥 p4 AM-01/AM-02/AM-03 — Account deletion without re-authentication, or reachable from an exported surface
 - [ ] `D13-087` 🟧 P5 AM-01 — Deletion that does not revoke tokens, grants, push registrations or identities
 - [ ] `D13-088` 🟥 P3 AM-01/AM-05 — Support-chat identity verification disabled or computed on-device
 - [ ] `D13-089` 🟥 P1 AM-03/AM-08 — Autofill and Credential Manager leaking credentials into a WebView or an unverified package
@@ -1066,7 +1066,7 @@
 
 - [ ] `D14-001` ⬜ n/a n/a — Fix the TLS baseline from `targetSdkVersion` before reading any config
 - [ ] `D14-002` ⬜ n/a AM-07 — Pass the harness acceptance gate before asserting anything about pinning
-- [ ] `D14-003` ⬜ n/a n/a — Never infer pinning from a failed MitM — use the failure *shape* and the platform log
+- [ ] `D14-003` ⬜ p5 n/a — Never infer pinning from a failed MitM — use the failure *shape* and the platform log
 - [ ] `D14-004` ⬜ n/a n/a — Run a pcap beside the proxy and chase every destination the proxy never saw
 - [ ] `D14-005` 🟩 n/a AM-06 — Transparent/gateway interception, and forcing QUIC down to TCP
 - [ ] `D14-006` ⬜ n/a AM-06 — Test the cellular path, not just the lab Wi-Fi
@@ -1097,22 +1097,22 @@
 - [ ] `D14-031` 🟨 P5 AM-06 — Certificate Transparency turned off per domain (API 36 opt-in, API 37 default-on)
 - [ ] `D14-032` 🟩 varies AM-06 — `<domainEncryption mode="disabled"/>` — opting out of Encrypted Client Hello
 - [ ] `D14-033` 🟩 P5 AM-12 — Interception-detection (RASP) reading the wrong trust-store path on API 34+
-- [ ] `D14-034` ⬜ ? AM-07 — Pinning inventory, per host, per stack — the P5 item that steers everything else
+- [ ] `D14-034` ⬜ p5 AM-07 — Pinning inventory, per host, per stack — the P5 item that steers everything else
 - [ ] `D14-035` 🟨 P5 AM-06 — Expired `<pin-set expiration="…">` — pinning that silently stopped being enforced
 - [ ] `D14-036` 🟨 varies AM-06 — Pin scope error: first-party pinned, an SDK/analytics host unpinned and carrying identifiers
 - [ ] `D14-037` 🟨 varies AM-06 — The pin set an SDK's own HTTP stack never consults
-- [ ] `D14-038` ⬜ ? AM-07/AM-12 — The pinning-bypass ladder — technique, not a finding
+- [ ] `D14-038` ⬜ p5 AM-07/AM-12 — The pinning-bypass ladder — technique, not a finding
 - [ ] `D14-039` 🟨 P3 AM-01 — Pinned certificates in `assets/` disclose unadvertised internal hosts
-- [ ] `D14-040` 🟧 ? AM-01 — mTLS: client-certificate handling, and the edge-terminated verdict header
-- [ ] `D14-041` 🟨 ? AM-06 — Insecure TLS versions explicitly enabled in code
+- [ ] `D14-040` 🟧 p1 AM-01 — mTLS: client-certificate handling, and the edge-terminated verdict header
+- [ ] `D14-041` 🟨 p5 AM-06 — Insecure TLS versions explicitly enabled in code
 - [ ] `D14-042` 🟨 P5 AM-06 — Negotiated TLS version and cipher observed in live traffic
 - [ ] `D14-043` 🟨 varies AM-06 — A bundled TLS stack that the Android 15 protocol floor does not reach
 - [ ] `D14-044` 🟩 ? AM-06 — GMS Security Provider not updated, updated too late, or with the failure swallowed
 - [ ] `D14-045` 🟧 P3 AM-06 — Custom DNS resolution bypassing Private DNS, and behaviour under a hijacked name
 - [ ] `D14-046` 🟥 P1 AM-03/AM-06/AM-09/AM-11 — Backend host derived from a mutable source
-- [ ] `D14-047` 🟥 ? AM-01/AM-06/AM-09 — Executable, module, bundle or security-relevant config fetched without an integrity check
+- [ ] `D14-047` 🟥 p4 AM-01/AM-06/AM-09 — Executable, module, bundle or security-relevant config fetched without an integrity check
 - [ ] `D14-048` 🟧 P4 AM-03/AM-06 — `DownloadManager` used for security-relevant downloads
-- [ ] `D14-049` 🟥 ? AM-03/AM-06/AM-11 — React Native dev bundle server or inspector reachable in a release build
+- [ ] `D14-049` 🟥 p1 AM-03/AM-06/AM-11 — React Native dev bundle server or inspector reachable in a release build
 - [ ] `D14-050` 🟥 P1 AM-02/AM-09 — DRM licence request carrying the app's bearer token to a server-chosen licence URI
 - [ ] `D14-051` 🟧 varies AM-02 — Media manifest, segment or subtitle URL taken from an untrusted source
 - [ ] `D14-052` 🟨 P1 AM-06 — Hostile captive portal: a 200 with portal HTML treated as data or as success
@@ -1165,7 +1165,7 @@
 - [ ] `D15-036` 🟧 P2 AM-05 — HTTP method swap and `X-HTTP-Method-Override`
 - [ ] `D15-037` 🟥 ? AM-01/AM-05 — Systematic authorisation sweep with Autorize, then verify every row by hand
 - [ ] `D15-038` 🟥 P4 AM-05 — Single-account check: object-id predictability
-- [ ] `D15-039` 🟥 P4 AM-05 — Decode the UUID version nibble, then find the in-app leak that defeats AC:H
+- [ ] `D15-039` 🟥 p4 AM-05 — Decode the UUID version nibble, then find the in-app leak that defeats AC:H
 - [ ] `D15-040` 🟥 P1 AM-01 — 401/403 bypass with client-trusted authorisation headers and path-shape tricks
 - [ ] `D15-041` 🟧 P1 AM-05 — Array-wrap and parameter pollution against an equality ownership check
 - [ ] `D15-042` 🟥 P1 AM-05 — Smuggle a hidden ownership field into the JSON body
@@ -1196,7 +1196,7 @@
 - [ ] `D15-067` 🟧 P2 AM-05 — Sync conflict resolution driven by a client-supplied timestamp or version
 - [ ] `D15-068` 🟥 P1 AM-05 — Server-side prototype pollution — pollute, then prove the sink
 - [ ] `D15-069` 🟥 P3 AM-05 — Server-side parameter pollution in backend URL construction
-- [ ] `D15-070` 🟥 P5 AM-01 — GraphQL schema recovery: introspection, its bypasses, and suggestion mining
+- [ ] `D15-070` 🟥 p5 AM-01 — GraphQL schema recovery: introspection, its bypasses, and suggestion mining
 - [ ] `D15-071` 🟥 P1 AM-05 — Relay `node(id:)` global-object-handle IDOR, including cross-type confusion
 - [ ] `D15-072` 🟥 P3 AM-05 — GraphQL field-level and nested-path authorisation
 - [ ] `D15-073` 🟥 P4 AM-01/AM-05 — GraphQL aliasing and batching to defeat per-request rate limits
@@ -1214,7 +1214,7 @@
 - [ ] `D15-085` 🟥 varies AM-05 — Race conditions: limit overrun, multi-endpoint collision, and the sequential baseline that must precede both
 - [ ] `D15-086` 🟧 P4 AM-01 — Measure the rate limit on every mobile-only endpoint, then work out what it keys on
 - [ ] `D15-087` 🟧 P4 AM-01 — Account and data enumeration through response differentials, including the search oracle
-- [ ] `D15-088` 🟧 ? AM-02 — CORS policy on the mobile API host
+- [ ] `D15-088` 🟧 varies AM-02 — CORS policy on the mobile API host
 - [ ] `D15-089` 🟧 varies AM-02/AM-05 — Content-type manipulation against the mobile API
 - [ ] `D15-090` 🟥 P1 AM-05 — Hand the client-only parameter set to the injection and SSRF batteries
 
@@ -1227,47 +1227,47 @@
 - [ ] `D16-003` ⬜ n/a n/a — Enumerate every `Java_*` export and bind each one to its Java declaration
 - [ ] `D16-004` ⬜ n/a n/a — Catch the `RegisterNatives` methods that have no `Java_*` export
 - [ ] `D16-005` ⬜ n/a n/a — Build the reachability table: `.so` → JNI entry → data source → attacker model
-- [ ] `D16-006` 🟩 P5 AM-02/AM-09 — Version-fingerprint every bundled third-party library from `.rodata`
-- [ ] `D16-007` 🟨 P5 AM-03/AM-12 — `JNI_OnLoad` and `.init_array` constructors: code that runs before any Java
-- [ ] `D16-008` 🟩 P5 n/a — Per-`.so` mitigation sweep — run it on THIS binary, and count your results
+- [ ] `D16-006` 🟩 p5 AM-02/AM-09 — Version-fingerprint every bundled third-party library from `.rodata`
+- [ ] `D16-007` 🟨 p5 AM-03/AM-12 — `JNI_OnLoad` and `.init_array` constructors: code that runs before any Java
+- [ ] `D16-008` 🟩 p5 n/a — Per-`.so` mitigation sweep — run it on THIS binary, and count your results
 - [ ] `D16-009` 🟩 P1 AM-02/AM-03 — Partial RELRO — the writable GOT is the one mitigation gap that is a primitive
-- [ ] `D16-010` 🟩 P5 n/a — Non-PIE library (`Type: EXEC`) — LEGACY, and what it actually tells you in 2026
-- [ ] `D16-011` 🟩 P5 n/a — Stack canaries absent — and the four documented false positives you must exclude first
-- [ ] `D16-012` 🟩 P5 n/a — FORTIFY verification — check for `_chk` symbols, not for a compiler flag
-- [ ] `D16-013` 🟩 P5 n/a — Executable stack, executable heap and RWX mappings at runtime
+- [ ] `D16-010` 🟩 p5 n/a — Non-PIE library (`Type: EXEC`) — LEGACY, and what it actually tells you in 2026
+- [ ] `D16-011` 🟩 p5 n/a — Stack canaries absent — and the four documented false positives you must exclude first
+- [ ] `D16-012` 🟩 p5 n/a — FORTIFY verification — check for `_chk` symbols, not for a compiler flag
+- [ ] `D16-013` 🟩 p5 n/a — Executable stack, executable heap and RWX mappings at runtime
 - [ ] `D16-014` ⬜ n/a n/a — Establish which platform mitigations are actually live on the test build
-- [ ] `D16-015` 🟩 P5 n/a — Debugging symbols, source paths and build machine paths left in the shipped binary
+- [ ] `D16-015` 🟩 p5 n/a — Debugging symbols, source paths and build machine paths left in the shipped binary
 - [ ] `D16-016` 🟧 P5 AM-09 — 16 KB page alignment and the toolchain-identity diff across libraries
 - [ ] `D16-017` ⬜ P1 AM-12 — Trace the JNI boundary with jnitrace before disassembling anything
-- [ ] `D16-018` 🟥 P1 AM-01/AM-02/AM-03 — Length, offset and size values crossing JNI that native code trusts
+- [ ] `D16-018` 🟥 p1 AM-01/AM-02/AM-03 — Length, offset and size values crossing JNI that native code trusts
 - [ ] `D16-019` ⬜ n/a n/a — The layer-ordering trap at the JNI boundary — a Java-side rejection does not prove the native parser is safe
-- [ ] `D16-020` 🟥 P1 AM-02/AM-03 — Unsafe C string and memory sinks reachable from a JNI entry point
-- [ ] `D16-021` 🟥 P1 AM-02/AM-03 — Native `system()` / `popen()` / `Runtime.exec` with concatenated attacker input
+- [ ] `D16-020` 🟥 p1 AM-02/AM-03 — Unsafe C string and memory sinks reachable from a JNI entry point
+- [ ] `D16-021` 🟥 p1 AM-02/AM-03 — Native `system()` / `popen()` / `Runtime.exec` with concatenated attacker input
 - [ ] `D16-022` 🟥 P3 AM-01/AM-12 — Secrets and request-signing keys recovered at the JNI boundary
-- [ ] `D16-023` 🟨 P5 AM-12 — Native anti-fraud, root-detection and pinning libraries: do they gate anything?
-- [ ] `D16-024` 🟥 P1 AM-01/AM-02/AM-03 — `int * int` size arithmetic — the highest-yield memory-safety grep in this chapter
-- [ ] `D16-025` 🟥 P1 AM-01/AM-02 — Signed/unsigned truncation on a file-controlled count
-- [ ] `D16-026` 🟥 P1 AM-01/AM-02 — Additive wrap that defeats a bound check (`x + n <= size`)
-- [ ] `D16-027` 🟥 P1 AM-01/AM-02 — Two-source dimension mismatch: the allocator reads one header, the writer reads another
-- [ ] `D16-028` 🟥 P1 AM-01/AM-02 — Treat an out-of-bounds read as a latent out-of-bounds write
-- [ ] `D16-029` 🟥 P1 AM-01/AM-02/AM-09 — Uninitialised and adjacent heap disclosure — prove the bytes cross the trust boundary
-- [ ] `D16-030` 🟥 P1 AM-02/AM-03 — Use-after-free, double free, and the controllability question you must answer explicitly
-- [ ] `D16-031` 🟥 P1 AM-03 — Attacker-controlled native pointer smuggled through IPC deserialisation
-- [ ] `D16-032` 🟥 P1 AM-02/AM-03 — C++ vtable pointer at offset 0 — the standard hijack, and the one indirection
-- [ ] `D16-033` 🟥 P1 AM-02/AM-03 — Negative or unchecked array index → write-four-anywhere → reuse the target's own imports
-- [ ] `D16-034` 🟥 P1 AM-02/AM-03 — The stack cookie only checks at RETURN — never call a stack overflow "mitigated"
-- [ ] `D16-035` 🟥 P1 AM-03 — Exported component → native crash: the tombstone is what changes the VRT category
+- [ ] `D16-023` 🟨 p5 AM-12 — Native anti-fraud, root-detection and pinning libraries: do they gate anything?
+- [ ] `D16-024` 🟥 p1 AM-01/AM-02/AM-03 — `int * int` size arithmetic — the highest-yield memory-safety grep in this chapter
+- [ ] `D16-025` 🟥 p1 AM-01/AM-02 — Signed/unsigned truncation on a file-controlled count
+- [ ] `D16-026` 🟥 p1 AM-01/AM-02 — Additive wrap that defeats a bound check (`x + n <= size`)
+- [ ] `D16-027` 🟥 p1 AM-01/AM-02 — Two-source dimension mismatch: the allocator reads one header, the writer reads another
+- [ ] `D16-028` 🟥 p1 AM-01/AM-02 — Treat an out-of-bounds read as a latent out-of-bounds write
+- [ ] `D16-029` 🟥 p1 AM-01/AM-02/AM-09 — Uninitialised and adjacent heap disclosure — prove the bytes cross the trust boundary
+- [ ] `D16-030` 🟥 p1 AM-02/AM-03 — Use-after-free, double free, and the controllability question you must answer explicitly
+- [ ] `D16-031` 🟥 p1 AM-03 — Attacker-controlled native pointer smuggled through IPC deserialisation
+- [ ] `D16-032` 🟥 p1 AM-02/AM-03 — C++ vtable pointer at offset 0 — the standard hijack, and the one indirection
+- [ ] `D16-033` 🟥 p1 AM-02/AM-03 — Negative or unchecked array index → write-four-anywhere → reuse the target's own imports
+- [ ] `D16-034` 🟥 p1 AM-02/AM-03 — The stack cookie only checks at RETURN — never call a stack overflow "mitigated"
+- [ ] `D16-035` 🟥 p1 AM-03 — Exported component → native crash: the tombstone is what changes the VRT category
 - [ ] `D16-036` 🟥 ? AM-01 — Enumerate the 0-click delivery paths that reach a decoder without a tap
-- [ ] `D16-037` 🟥 P1 AM-02/AM-09 — Decoder reached from network-fetched bytes the app requests itself
+- [ ] `D16-037` 🟥 p1 AM-02/AM-09 — Decoder reached from network-fetched bytes the app requests itself
 - [ ] `D16-038` 🟧 n/a AM-02/AM-09 — Same-process HALs: vendor GPU code inside the app's address space, holding a kernel fd
-- [ ] `D16-039` 🟥 P1 AM-03/AM-09 — Native library loaded from a path the attacker can write
+- [ ] `D16-039` 🟥 p1 AM-03/AM-09 — Native library loaded from a path the attacker can write
 - [ ] `D16-040` 🟨 n/a AM-12 — Linker-namespace violation: the app loads a private platform or vendor library
-- [ ] `D16-041` 🟥 P1 AM-02/AM-03 — Framework-plugin `.so` files: the JNI boundary an "otherwise managed" app still has
-- [ ] `D16-042` 🟧 P1 AM-03/AM-04/AM-12 — Debug and ptrace exposure of the running process
+- [ ] `D16-041` 🟥 p1 AM-02/AM-03 — Framework-plugin `.so` files: the JNI boundary an "otherwise managed" app still has
+- [ ] `D16-042` 🟧 p1 AM-03/AM-04/AM-12 — Debug and ptrace exposure of the running process
 - [ ] `D16-043` 🟨 ? AM-10/AM-11/AM-12 — `mlock` reduced to 64 KB per process (Android 14) — key buffers the app thought were pinned
 - [ ] `D16-044` ⬜ n/a n/a — Choose the fuzzer from the constraint, then build a harness that drives the DEEP path
-- [ ] `D16-045` 🟥 P1 AM-01/AM-02 — Build the ASan/UBSan harness against the app's own `.so` and cross-compile it on-device
-- [ ] `D16-046` 🟥 P1 n/a — Replicate the caller's exact call sequence — the reachability rule that decides payout
+- [ ] `D16-045` 🟥 p1 AM-01/AM-02 — Build the ASan/UBSan harness against the app's own `.so` and cross-compile it on-device
+- [ ] `D16-046` 🟥 p1 n/a — Replicate the caller's exact call sequence — the reachability rule that decides payout
 - [ ] `D16-047` ⬜ n/a n/a — Binary-only targets: AFL++ QEMU persistent mode, LibAFL QEMU, LibAFL Frida
 - [ ] `D16-048` ⬜ n/a n/a — Ship the Android ASan runtime with the emulated target
 - [ ] `D16-049` ⬜ n/a n/a — Capture the tombstone, not the fact of a crash
@@ -1275,10 +1275,10 @@
 - [ ] `D16-051` ⬜ n/a n/a — Root cause is the first ill behaviour, not the crash site
 - [ ] `D16-052` ⬜ ? n/a — A sanitizer shipping in production changes the finding, not just the crash
 - [ ] `D16-053` ⬜ P1 n/a — The mitigation reality check — name the layer that stopped you before writing "arbitrary write → RCE"
-- [ ] `D16-054` ⬜ P1 n/a — Check the SELinux domain before claiming any post-exploitation step
+- [ ] `D16-054` ⬜ p1 n/a — Check the SELinux domain before claiming any post-exploitation step
 - [ ] `D16-055` 🟨 n/a n/a — `isolatedProcess` around the parser: the honest upgrade and the honest downgrade
 - [ ] `D16-056` ⬜ ? AM-03 — Zygote-shared layout and kernel address hiding: do not over-credit ASLR
-- [ ] `D16-057` 🟧 P1 AM-03 — A Java-reachable native overflow is a managed→native escape — state the capability gain precisely
+- [ ] `D16-057` 🟧 p1 AM-03 — A Java-reachable native overflow is a managed→native escape — state the capability gain precisely
 - [ ] `D16-058` ⬜ n/a n/a — The evidence package for a native finding: negative control, one-shot script, and what to leave visible
 - [ ] `D16-059` ⬜ ? n/a — Run the pre-severity gate against the CRITICAL CLAIM, and hold the retraction line
 - [ ] `D16-060` ⬜ ? n/a — File the native chain as primitives first, consumer second — and count your sweep results
@@ -1346,7 +1346,7 @@
 - [ ] `D17-057` 🟧 P1 AM-02/AM-03 — `ZipPathValidator.clearCallback()` — a deliberate opt-out of the platform fix
 - [ ] `D17-058` 🟥 P1 AM-02/AM-03 — Symlink entries and non-empty destination directories
 - [ ] `D17-059` 🟨 n/a n/a — Generate the SBOM from the shipped binary, then scan it
-- [ ] `D17-060` ⬜ P5 n/a — Prove reachability before filing any dependency CVE — the closed-informative killer
+- [ ] `D17-060` ⬜ p5 n/a — Prove reachability before filing any dependency CVE — the closed-informative killer
 - [ ] `D17-061` 🟩 n/a n/a — Fingerprint library versions that R8 stripped the marker from
 - [ ] `D17-062` 🔷 P5 AM-02/AM-09 — Version-fingerprint every bundled `.so`, including engine-vendored parsers
 - [ ] `D17-063` 🟥 P1 AM-01 — MavenGate — a groupId whose publisher domain is purchasable
@@ -1471,27 +1471,27 @@
 - [ ] `D19-020` ⬜ n/a AM-12 — Load your own JS into the running RN app and intercept XHR above TLS
 - [ ] `D19-021` 🟧 P5 AM-09/AM-12 — Patch a Hermes string, reassemble, and prove the bundle carries no integrity control
 - [ ] `D19-022` 🟥 P1 AM-02 — `react-native-webview`: bridge props, `injectedJavaScriptObject`, and the media auto-grant
-- [ ] `D19-023` 🟩 P5 AM-06/AM-07 — React Native certificate pinning implemented only in JavaScript
+- [ ] `D19-023` 🟩 p5 AM-06/AM-07 — React Native certificate pinning implemented only in JavaScript
 - [ ] `D19-024` 🟧 P1 AM-09/AM-11/AM-12 — Read the framework's storage backend using the key names you already mined
 - [ ] `D19-025` ⬜ n/a AM-09 — Establish whether the app can replace its own code over the air at all
 - [ ] `D19-026` 🟥 P1 AM-06/AM-09 — expo-updates with no code-signing certificate, or `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS=true`
 - [ ] `D19-027` 🟥 P1 AM-01/AM-06/AM-09 — CodePush with no `CodePushPublicKey` — no bundle signature verification
 - [ ] `D19-028` 🟥 P1 AM-02 — Runtime override of the OTA update channel reachable from a deep link or bridge
-- [ ] `D19-029` 🟧 ? AM-03/AM-09 — OTA rollback and downgrade as a security-control bypass
+- [ ] `D19-029` 🟧 varies AM-03/AM-09 — OTA rollback and downgrade as a security-control bypass
 - [ ] `D19-030` 🟥 P1 AM-09 — Cordova / Capacitor live-update payload substitution
 - [ ] `D19-031` ⬜ n/a n/a — Capture OTA findings with before/after bundle identity, not a screenshot
-- [ ] `D19-032` 🟨 ? AM-01/AM-03/AM-06 — Flutter: distinguish release AOT from debug/profile — `kernel_blob.bin` in a store build
+- [ ] `D19-032` 🟨 varies AM-01/AM-03/AM-06 — Flutter: distinguish release AOT from debug/profile — `kernel_blob.bin` in a store build
 - [ ] `D19-033` ⬜ n/a n/a — Flutter: string-mine the Dart AOT snapshot — this always works
 - [ ] `D19-034` ⬜ n/a n/a — Flutter: recover Dart symbols with Blutter, and fall back to reFlutter when it cannot build
 - [ ] `D19-035` 🟥 P1 AM-01 — Flutter: harvest the Dart object pool for endpoints, keys and crypto parameters
 - [ ] `D19-036` 🟥 P1 AM-01 — Flutter: resolve pool-relative loads and Smi encoding to reconstruct an embedded key
 - [ ] `D19-037` 🟥 P1 AM-01 — Flutter, Unity and .NET: private keys and signing material inside the native blob
 - [ ] `D19-038` 🟥 P1 AM-01 — Flutter: recover the request-signing algorithm by hooking Dart string concatenation
-- [ ] `D19-039` ⬜ P5 AM-07 — Flutter carries its own BoringSSL trust store — the Android CA store and system proxy do not apply
+- [ ] `D19-039` ⬜ p5 AM-07 — Flutter carries its own BoringSSL trust store — the Android CA store and system proxy do not apply
 - [ ] `D19-040` 🟥 P1 AM-03/AM-09/AM-12 — Flutter: enumerate `MethodChannel`, `EventChannel` and `BasicMessageChannel`, then exercise the handlers
-- [ ] `D19-041` 🟧 ? AM-02 — Flutter: `flutter_deeplinking_enabled` defaults to ON when the meta-data is absent
+- [ ] `D19-041` 🟧 varies AM-02 — Flutter: `flutter_deeplinking_enabled` defaults to ON when the meta-data is absent
 - [ ] `D19-042` 🟧 P3 AM-03 — Flutter: force an arbitrary in-app route via the `route` intent extra
-- [ ] `D19-043` 🟩 P5 AM-12 — Flutter: engine substitution goes undetected — reFlutter and LIEF gadget injection
+- [ ] `D19-043` 🟩 p5 AM-12 — Flutter: engine substitution goes undetected — reFlutter and LIEF gadget injection
 - [ ] `D19-044` 🟨 P3 AM-01 — Flutter: obfuscation symbol maps leaking from CI or crash infrastructure
 - [ ] `D19-045` 🟥 P1 AM-08 — Dart and pub supply chain — Zip Slip in package extraction and malicious pub packages
 - [ ] `D19-046` 🟧 P1 AM-01 — Cordova / Capacitor: inventory the web root — the entire app is in `assets/`
@@ -1502,29 +1502,29 @@
 - [ ] `D19-051` 🟥 P1 AM-02 — Enumerate the full Capacitor plugin surface reachable from `androidBridge.postMessage`
 - [ ] `D19-052` 🟥 P1 AM-02 — Cordova `_cordovaNative` bridge and its `bridgeSecret` gate
 - [ ] `D19-053` 🟥 P1 AM-02 — Cordova `AndroidInsecureFileModeEnabled` — a one-preference universal file-read SOP bypass
-- [ ] `D19-054` 🟧 ? AM-01/AM-03 — Cordova plugins instantiated at startup via `onload`
+- [ ] `D19-054` 🟧 varies AM-01/AM-03 — Cordova plugins instantiated at startup via `onload`
 - [ ] `D19-055` 🟥 P1 AM-02 — Audit every custom plugin's exposed method surface
 - [ ] `D19-056` 🟥 P2 AM-02 — The WebView is the entire app — run the full web methodology against the bundled assets
 - [ ] `D19-057` 🟥 ? AM-02 — The CSP meta tag is the last control once the allow-list is loose
 - [ ] `D19-058` 🟧 P1 AM-11 — `webContentsDebuggingEnabled` / `InspectableWebview` in the release build
-- [ ] `D19-059` 🟧 ? AM-06 — Capacitor's native HTTP path silently skipping pinning
+- [ ] `D19-059` 🟧 varies AM-06 — Capacitor's native HTTP path silently skipping pinning
 - [ ] `D19-060` 🟨 ? AM-01/AM-06 — Capacitor scheme, `minWebViewVersion` and `allowMixedContent`
-- [ ] `D19-061` ⬜ P5 n/a — Unity: recover the C# type graph from `libil2cpp.so` and `global-metadata.dat`
+- [ ] `D19-061` ⬜ p5 n/a — Unity: recover the C# type graph from `libil2cpp.so` and `global-metadata.dat`
 - [ ] `D19-062` ⬜ n/a n/a — Unity: defeat encrypted, renamed or relocated `global-metadata.dat`
-- [ ] `D19-063` 🟥 ? AM-12 — Unity: client-authoritative entitlement and economy logic in `dump.cs`
-- [ ] `D19-064` 🟧 P5 AM-12 — Unity: PlayerPrefs and `persistentDataPath` treated as authoritative state
+- [ ] `D19-063` 🟥 varies AM-12 — Unity: client-authoritative entitlement and economy logic in `dump.cs`
+- [ ] `D19-064` 🟧 varies AM-12 — Unity: PlayerPrefs and `persistentDataPath` treated as authoritative state
 - [ ] `D19-065` 🟥 P1 AM-03 — Unity: exported player activity, intent extras, and the `unity` CLI extras bridge
 - [ ] `D19-066` ⬜ n/a n/a — Xamarin / .NET MAUI: extract the assemblies — the layout changed at .NET 9
 - [ ] `D19-067` 🟥 P1 AM-01/AM-06/AM-07 — Xamarin / MAUI: managed-layer pinning, root checks and crypto
-- [ ] `D19-068` 🟧 P5 AM-12 — Xamarin / MAUI: patch IL and rebuild the assembly store to prove a client-side check is the only control
+- [ ] `D19-068` 🟧 p5 AM-12 — Xamarin / MAUI: patch IL and rebuild the assembly store to prove a client-side check is the only control
 - [ ] `D19-069` ⬜ n/a n/a — Kotlin Multiplatform: map `commonMain` versus `androidMain` before rating the finding
 - [ ] `D19-070` 🟥 P1 AM-01 — Kotlin Multiplatform: secret injection via `expect/actual` and generated constants
 - [ ] `D19-071` 🟥 P1 AM-01/AM-12 — WebAssembly modules shipped in the WebView or the app runtime
 - [ ] `D19-072` 🟥 P1 AM-06/AM-09 — Other embedded JS runtimes evaluating network-fetched script
 - [ ] `D19-073` 🟥 P1 AM-01 — Shadow API — the mobile build's hardcoded backend calls are usually an older API version
 - [ ] `D19-074` 🟥 P1 AM-01 — Client-side-only validation, rate limits and MFA because the logic moved to shared code
-- [ ] `D19-075` 🟧 ? AM-06 — Framework cleartext and TLS configuration outside the Android Network Security Config
-- [ ] `D19-076` 🟧 ? AM-04/AM-11 — Framework verbose logging carrying bridge payloads
+- [ ] `D19-075` 🟧 varies AM-06 — Framework cleartext and TLS configuration outside the Android Network Security Config
+- [ ] `D19-076` 🟧 varies AM-04/AM-11 — Framework verbose logging carrying bridge payloads
 - [ ] `D19-077` ⬜ n/a n/a — False-positive discipline for framework-recovered endpoints, strings and behaviours
 - [ ] `D19-078` ⬜ n/a n/a — Report discipline: state the runtime and artefact identity; never report recovery as the finding
 - [ ] `D19-079` ⬜ n/a n/a — Chain-filing order for framework chains
@@ -1533,70 +1533,70 @@
 
 > **For each sensitive value the app handles: which principal other than the app and its own backend ends up holding that value — a co-resident app with one user grant, a third-party host, the lock screen, another signed-in user — and if none does, is any value the app emits an authenticator?**
 
-- [ ] `D20-001` ⬜ ? AM-04/AM-05/AM-08/AM-10/AM-12 — The reader test — name the principal who holds the value before writing the word "leak"
+- [ ] `D20-001` ⬜ varies AM-04/AM-05/AM-08/AM-10/AM-12 — The reader test — name the principal who holds the value before writing the word "leak"
 - [ ] `D20-002` ⬜ n/a n/a — Build the canary identity and the marker set before you capture anything
 - [ ] `D20-003` ⬜ n/a n/a — The crown-jewel sink map — follow the value, not the API
 - [ ] `D20-004` ⬜ n/a n/a — Count your sweep results — the shell-loop ban applied to log and traffic sweeps
 - [ ] `D20-005` ⬜ n/a n/a — Tester-side data minimisation — your evidence bundle is a breach surface
 - [ ] `D20-006` ⬜ n/a n/a — Redact victim PII in the PoC while keeping the proof intact
-- [ ] `D20-007` 🟧 ? AM-04/AM-08/AM-11 — The controlled one-flow logcat sweep — never read the buffer passively
+- [ ] `D20-007` 🟧 varies AM-04/AM-08/AM-11 — The controlled one-flow logcat sweep — never read the buffer passively
 - [ ] `D20-008` 🟧 P1 AM-04/AM-08/AM-11 — Cap logcat severity honestly — enumerate the readers or rate it P5
-- [ ] `D20-009` ⬜ ? n/a — Hook the logging APIs, not just the buffer — wrappers, Timber, println, stack traces
+- [ ] `D20-009` ⬜ varies n/a — Hook the logging APIs, not just the buffer — wrappers, Timber, println, stack traces
 - [ ] `D20-010` 🟧 P1 AM-04/AM-08/AM-11 — `HttpLoggingInterceptor` / Chucker / Stetho left at BODY in a release build
-- [ ] `D20-011` 🟧 ? AM-04/AM-11 — Cross-platform framework verbose logging carrying bridge payloads
-- [ ] `D20-012` 🟨 ? AM-04/AM-11 — ORM query logging enabled in production
+- [ ] `D20-011` 🟧 varies AM-04/AM-11 — Cross-platform framework verbose logging carrying bridge payloads
+- [ ] `D20-012` 🟨 varies AM-04/AM-11 — ORM query logging enabled in production
 - [ ] `D20-013` 🟩 P5 AM-11 — `StrictMode` violations logged in a production build
-- [ ] `D20-014` 🟨 ? AM-04/AM-11 — Tombstones, DropBox, ANR traces and `adb bugreport` — the off-app log path
+- [ ] `D20-014` 🟨 varies AM-04/AM-11 — Tombstones, DropBox, ANR traces and `adb bugreport` — the off-app log path
 - [ ] `D20-015` 🟧 P4 AM-04/AM-08/AM-11 — Full request URLs with tokens in the query string, written to the log
 - [ ] `D20-016` 🟧 P1 AM-08 — Crash reporter shipping the log buffer, breadcrumbs and custom keys off-device
-- [ ] `D20-017` 🟧 P5 AM-08 — Crash reporter capturing a view hierarchy or screenshot of a `FLAG_SECURE` screen
-- [ ] `D20-018` 🟥 ? AM-08 — Session-replay / heatmap SDK recording payment, KYC and OTP screens unmasked
-- [ ] `D20-019` 🟧 ? AM-08 — Per-SDK egress attribution — which class opened the socket
-- [ ] `D20-020` 🟧 ? AM-08 — The consent-off differential — identical traffic with every toggle off
-- [ ] `D20-021` 🟧 ? AM-08 — Pre-consent transmission — data leaving before the dialog is dismissed
+- [ ] `D20-017` 🟧 varies AM-08 — Crash reporter capturing a view hierarchy or screenshot of a `FLAG_SECURE` screen
+- [ ] `D20-018` 🟥 varies AM-08 — Session-replay / heatmap SDK recording payment, KYC and OTP screens unmasked
+- [ ] `D20-019` 🟧 varies AM-08 — Per-SDK egress attribution — which class opened the socket
+- [ ] `D20-020` 🟧 varies AM-08 — The consent-off differential — identical traffic with every toggle off
+- [ ] `D20-021` 🟧 varies AM-08 — Pre-consent transmission — data leaving before the dialog is dismissed
 - [ ] `D20-022` 🟧 ? n/a — `AppOpsManager.OnOpNotedCallback` — make the app confess its own private-data reads
 - [ ] `D20-023` 🟨 ? n/a — Attribution-tag mismatch — the Privacy Dashboard shows the wrong reason
 - [ ] `D20-024` ⬜ ? n/a — Archived or encrypted telemetry batches — hook the pre-compression boundary
-- [ ] `D20-025` 🟥 ? AM-08 — Undeclared PII on the wire versus the Play Data safety declaration
+- [ ] `D20-025` 🟥 varies AM-08 — Undeclared PII on the wire versus the Play Data safety declaration
 - [ ] `D20-026` 🟧 P4 AM-08/AM-09 — PII placed in URL query parameters, and the referer consequence
 - [ ] `D20-027` 🟥 P3 AM-05 — Fat profile endpoints returning fields the app never renders
 - [ ] `D20-028` 🟨 P5 AM-04/AM-05 — Authenticated responses cacheable, and cached on disk
-- [ ] `D20-029` 🟧 ? AM-08 — Contacts and calendar harvesting on the invite / find-friends flow
-- [ ] `D20-030` 🟧 P3 AM-10 — Lock-screen notification content — visibility, channel override, and `setPublicVersion`
-- [ ] `D20-031` 🟥 P3 AM-04 — `NotificationListenerService` reading `Notification.extras` — build the PoC listener
-- [ ] `D20-032` 🟧 P3 AM-04 — Android 15 OTP redaction for listeners, and the apps that route around it
-- [ ] `D20-033` 🟨 ? AM-05/AM-11 — Notification history retains the content after dismissal
+- [ ] `D20-029` 🟧 varies AM-08 — Contacts and calendar harvesting on the invite / find-friends flow
+- [ ] `D20-030` 🟧 varies AM-10 — Lock-screen notification content — visibility, channel override, and `setPublicVersion`
+- [ ] `D20-031` 🟥 varies AM-04 — `NotificationListenerService` reading `Notification.extras` — build the PoC listener
+- [ ] `D20-032` 🟧 p3 AM-04 — Android 15 OTP redaction for listeners, and the apps that route around it
+- [ ] `D20-033` 🟨 varies AM-05/AM-11 — Notification history retains the content after dismissal
 - [ ] `D20-034` 🟧 P3 AM-02 — Notification content during screen sharing, and the default-recorder exemption
-- [ ] `D20-035` 🟧 ? AM-04 — `RemoteInput` / Direct Reply actions exposed on a sensitive notification
+- [ ] `D20-035` 🟧 varies AM-04 — `RemoteInput` / Direct Reply actions exposed on a sensitive notification
 - [ ] `D20-036` ⬜ P5 AM-04/AM-08/AM-11 — The screen-capture consumer inventory — decide who can capture before testing whether they can
-- [ ] `D20-037` 🟧 ? AM-04 — `MediaProjection` per-session consent (Android 14) and the fallbacks apps chose instead
-- [ ] `D20-038` 🟧 ? AM-02 — `setContentSensitivity` / screen-share protection unused on payment and PIN views
+- [ ] `D20-037` 🟧 varies AM-04 — `MediaProjection` per-session consent (Android 14) and the fallbacks apps chose instead
+- [ ] `D20-038` 🟧 varies AM-02 — `setContentSensitivity` / screen-share protection unused on payment and PIN views
 - [ ] `D20-039` 🟧 P5 AM-04/AM-11 — Screenshot and screen-recording detection callbacks available but unused
-- [ ] `D20-040` 🟩 P5 AM-05/AM-11 — Recents snapshot and the `FLAG_SECURE` family — the privacy framing that changes the rating
+- [ ] `D20-040` 🟩 p5 AM-05/AM-11 — Recents snapshot and the `FLAG_SECURE` family — the privacy framing that changes the rating
 - [ ] `D20-041` 🟨 P5 AM-04/AM-11 — Framework single-surface rendering — one missing flag exposes the whole screen
-- [ ] `D20-042` 🟨 ? AM-04/AM-11/AM-12 — `uiautomator dump` — the on-screen text an accessibility-capable consumer reads
+- [ ] `D20-042` 🟨 varies AM-04/AM-11/AM-12 — `uiautomator dump` — the on-screen text an accessibility-capable consumer reads
 - [ ] `D20-043` 🟧 P3 AM-04 — Sensitive value copied to the clipboard without `EXTRA_IS_SENSITIVE`
 - [ ] `D20-044` 🟧 P5 AM-04 — Prove the cross-app clipboard read from a different UID — and state the mitigations honestly
-- [ ] `D20-045` 🟧 ? AM-04/AM-08 — Clipboard READ by the app, and the paste-validation direction
+- [ ] `D20-045` 🟧 varies AM-04/AM-08 — Clipboard READ by the app, and the paste-validation direction
 - [ ] `D20-046` 🟨 P5 AM-04/AM-05 — Keyboard cache on sensitive fields, and `IME_FLAG_NO_PERSONALIZED_LEARNING`
 - [ ] `D20-047` 🟧 P3 AM-04/AM-05 — The third-party IME as a single-grant attacker against unmarked fields
-- [ ] `D20-048` 🟨 ? AM-04 — Autofill `AssistStructure` exposure — `importantForAutofill` and `setDataIsSensitive`
-- [ ] `D20-049` 🟨 P5 AM-11 — Credential and OTP fields rendered in plain text
+- [ ] `D20-048` 🟨 varies AM-04 — Autofill `AssistStructure` exposure — `importantForAutofill` and `setDataIsSensitive`
+- [ ] `D20-049` 🟨 p5 AM-11 — Credential and OTP fields rendered in plain text
 - [ ] `D20-050` 🟧 P3 AM-04 — Accessibility node text exposing secrets, and `accessibilityDataSensitive`
-- [ ] `D20-051` 🟨 ? AM-04 — App-side defences against an untrusted accessibility service or an active overlay
+- [ ] `D20-051` 🟨 varies AM-04 — App-side defences against an untrusted accessibility service or an active overlay
 - [ ] `D20-052` 🟧 ? AM-03/AM-08 — Non-resettable hardware identifiers — IMEI, MEID, ESN, IMSI, build/SIM/USB serials
 - [ ] `D20-053` 🟨 ? AM-08 — `ANDROID_ID` / SSAID and advertising-ID linkage to a persistent identity
 - [ ] `D20-054` 🟧 ? AM-03/AM-08 — Hardware MAC recovery through `/sys`, native code, or an OEM hook
 - [ ] `D20-055` 🟧 ? AM-08 — High-rate motion sensors as an inference channel
 - [ ] `D20-056` 🟩 ? AM-08 — Installed-package enumeration as a fingerprinting surface
-- [ ] `D20-057` 🟧 P1 AM-01/AM-03 — The identifier that *is* the authentication factor — the one that escapes a privacy rating
-- [ ] `D20-058` 🟨 P3 AM-05 — EXIF geolocation not stripped — and the only variant with a rated VRT node
-- [ ] `D20-059` 🟥 ? AM-08 — Photo-picker versus full media grant — metadata for images the user never selected
-- [ ] `D20-060` 🟧 P5 AM-05 — Data surviving logout and account switch
-- [ ] `D20-061` 🟧 ? AM-05/AM-11 — Account deletion that does not actually delete
-- [ ] `D20-062` 🟧 P4 AM-05 — Deletion that does not revoke tokens, push registrations or third-party grants
-- [ ] `D20-063` 🟧 P5 AM-05/AM-11 — Uninstall / reinstall residue and Auto Backup restore
-- [ ] `D20-064` 🟥 ? AM-08 — Camera or microphone access not tied to a visible user action
+- [ ] `D20-057` 🟧 p1 AM-01/AM-03 — The identifier that *is* the authentication factor — the one that escapes a privacy rating
+- [ ] `D20-058` 🟨 p3 AM-05 — EXIF geolocation not stripped — and the only variant with a rated VRT node
+- [ ] `D20-059` 🟥 varies AM-08 — Photo-picker versus full media grant — metadata for images the user never selected
+- [ ] `D20-060` 🟧 varies AM-05 — Data surviving logout and account switch
+- [ ] `D20-061` 🟧 varies AM-05/AM-11 — Account deletion that does not actually delete
+- [ ] `D20-062` 🟧 p4 AM-05 — Deletion that does not revoke tokens, push registrations or third-party grants
+- [ ] `D20-063` 🟧 p5 AM-05/AM-11 — Uninstall / reinstall residue and Auto Backup restore
+- [ ] `D20-064` 🟥 varies AM-08 — Camera or microphone access not tied to a visible user action
 - [ ] `D20-065` 🟧 ? AM-08 — Concealment of collection — screen-off, muted device, invisible overlay
 - [ ] `D20-066` 🟧 ? AM-08 — A foreground service held purely to keep sensor or capture access alive
 - [ ] `D20-067` ⬜ n/a n/a — Run the pre-severity gate against the Critical claim, not against the leak
@@ -1635,34 +1635,34 @@
 - [ ] `D21-025` 🟧 varies AM-01 — Firebase App Check absent, monitoring-only, or shipping the debug provider
 - [ ] `D21-026` 🟧 varies AM-01 — Hardware key attestation checked on the device, or a boolean sent instead of the chain
 - [ ] `D21-027` 🟥 varies AM-01 — Attestation extension parsed from the leaf instead of the first occurrence nearest the root
-- [ ] `D21-028` 🟥 varies AM-01 — `attestationChallenge` not bound to a fresh server nonce — the chain replays
+- [ ] `D21-028` 🟥 p1 AM-01 — `attestationChallenge` not bound to a fresh server nonce — the chain replays
 - [ ] `D21-029` 🟧 varies AM-01 — `RootOfTrust` present in the attestation and ignored by the backend
 - [ ] `D21-030` 🟧 varies AM-01 — `attestationSecurityLevel` and revocation not checked — a Software root is accepted
 - [ ] `D21-031` 🟧 varies AM-01 — Hardware attestation treated as a device-integrity boolean — the clean-device relay
 - [ ] `D21-032` 🟧 varies AM-01 — Verified Boot state read from a system property instead of from attestation
-- [ ] `D21-033` 🟥 varies AM-01/AM-05/AM-12 — Root/emulator/Frida detection that gates a security decision — rate what the bypass unlocked
+- [ ] `D21-033` 🟥 p5 AM-01/AM-05/AM-12 — Root/emulator/Frida detection that gates a security decision — rate what the bypass unlocked
 - [ ] `D21-034` 🟧 varies AM-01/AM-12 — Detection that fails open — make it throw rather than bypassing it
 - [ ] `D21-035` 🟨 varies AM-03/AM-11 — Detection verdict cached in a backed-up, attacker-writable file
 - [ ] `D21-036` 🟥 varies AM-01/AM-11/AM-12 — Security-relevant local state consumed without an integrity check
-- [ ] `D21-037` 🟨 varies AM-12 — Self-signature / installer check that neither fails closed nor covers what executes
+- [ ] `D21-037` 🟨 p5 AM-12 — Self-signature / installer check that neither fails closed nor covers what executes
 - [ ] `D21-038` 🟧 varies AM-03/AM-08 — RASP initialised after an attacker-controlled library is already mapped
-- [ ] `D21-039` 🟥 ? AM-01/AM-03 — Destructive or lockout tamper response that an attacker can trigger
+- [ ] `D21-039` 🟥 p2 AM-01/AM-03 — Destructive or lockout tamper response that an attacker can trigger
 - [ ] `D21-040` 🟧 varies AM-02 — The app weakens the device's or the user's own security posture
 - [ ] `D21-041` 🟧 varies AM-02/AM-08 — App-level virtualization / cloning not detected — the sandbox has already collapsed
 - [ ] `D21-042` 🟧 varies AM-07 — MitM-detection that reads only the legacy CA path, blind to the Conscrypt APEX
-- [ ] `D21-043` 🟥 ? AM-08/AM-09 — The RASP SDK's own native component is the vulnerable dependency
+- [ ] `D21-043` 🟥 p5 AM-08/AM-09 — The RASP SDK's own native component is the vulnerable dependency
 - [ ] `D21-044` ⬜ n/a n/a — The SDK gates its own behaviour on proxy/VPN/debugger — your evidence is being suppressed
-- [ ] `D21-045` 🟥 ? AM-01/AM-05/AM-12 — Hook detection absent — extract the secret and report the secret
-- [ ] `D21-046` 🟨 ? AM-11/AM-12 — Debugger detection absent, or present only in debug variants
-- [ ] `D21-047` 🟥 ? AM-03/AM-06/AM-11 — `android:debuggable="true"` in the release build — the resilience story collapses entirely
-- [ ] `D21-048` 🟧 ? AM-03/AM-11 — `setWebContentsDebuggingEnabled(true)` in production
-- [ ] `D21-049` 🟥 varies AM-03/AM-11 — Debug, staging and god-mode surfaces surviving into the release build
-- [ ] `D21-050` 🟩 ? AM-11 — `StrictMode` left enabled in the production build
-- [ ] `D21-051` 🟧 ? AM-01 — Insufficient obfuscation — report the recovered business rule, never the absence
-- [ ] `D21-052` 🟨 ? AM-01 — Partial obfuscation that leaves the security-critical routines in the clear
+- [ ] `D21-045` 🟥 p5 AM-01/AM-05/AM-12 — Hook detection absent — extract the secret and report the secret
+- [ ] `D21-046` 🟨 p5 AM-11/AM-12 — Debugger detection absent, or present only in debug variants
+- [ ] `D21-047` 🟥 p1 AM-03/AM-06/AM-11 — `android:debuggable="true"` in the release build — the resilience story collapses entirely
+- [ ] `D21-048` 🟧 p1 AM-03/AM-11 — `setWebContentsDebuggingEnabled(true)` in production
+- [ ] `D21-049` 🟥 p1 AM-03/AM-11 — Debug, staging and god-mode surfaces surviving into the release build
+- [ ] `D21-050` 🟩 p5 AM-11 — `StrictMode` left enabled in the production build
+- [ ] `D21-051` 🟧 p5 AM-01 — Insufficient obfuscation — report the recovered business rule, never the absence
+- [ ] `D21-052` 🟨 p5 AM-01 — Partial obfuscation that leaves the security-critical routines in the clear
 - [ ] `D21-053` 🟧 varies AM-01 — A client-side-only policy engine that the server trusts
-- [ ] `D21-054` 🟥 varies AM-01 — The shadow API version that never enforced the integrity gate
-- [ ] `D21-055` 🟩 ? AM-01 — Emulator detection absent — the finding is the automation, not the absence
+- [ ] `D21-054` 🟥 p1 AM-01 — The shadow API version that never enforced the integrity gate
+- [ ] `D21-055` 🟩 p5 AM-01 — Emulator detection absent — the finding is the automation, not the absence
 - [ ] `D21-056` ⬜ n/a AM-11 — Compat-framework and `device_config` toggles — prove the protection is per-package switchable
 - [ ] `D21-057` ⬜ n/a n/a — Evidence, retraction and filing discipline for a domain that triagers distrust
 
@@ -1680,73 +1680,73 @@
 - [ ] `D22-008` ⬜ n/a AM-12 — Harvest the platform's own refusal strings as evidence artefacts
 - [ ] `D22-009` ⬜ n/a AM-12 — Inject StrictMode detectors rather than waiting for the app to ship them
 - [ ] `D22-010` ⬜ n/a AM-03 — Verify package-visibility filtering has not silently zeroed your own tooling
-- [ ] `D22-011` 🟧 ? AM-03 — `android:exported` is mandatory at targetSdk 31 — audit the value chosen, not its absence
+- [ ] `D22-011` 🟧 varies AM-03 — `android:exported` is mandatory at targetSdk 31 — audit the value chosen, not its absence
 - [ ] `D22-012` 🟥 P1 AM-03/AM-04 — PendingIntent mutability mandate made the flag explicit, not safe
 - [ ] `D22-013` 🟧 P1 AM-11 — `adb backup` excluded at targetSdk 31 — and the `android:debuggable` escape hatch
 - [ ] `D22-014` 🟧 P1 AM-11 — `<device-transfer>` omitted from `dataExtractionRules` — D2D transfers what cloud backup excludes
-- [ ] `D22-015` 🟧 ? AM-03 — Notification trampoline block (Android 12) and the redesign that replaced it
+- [ ] `D22-015` 🟧 varies AM-03 — Notification trampoline block (Android 12) and the redesign that replaced it
 - [ ] `D22-016` 🟩 P5 AM-04 — Untrusted-touch blocking (Android 12) — check whether the app is the one being let through
 - [ ] `D22-017` 🟧 P5 AM-08/AM-09 — BouncyCastle removed in Android 12 — find the bundled provider re-registered at priority 1
 - [ ] `D22-018` 🟨 P5 AM-01 — App hibernation and permission auto-reset — a security control that decays
 - [ ] `D22-019` 🟨 P5 AM-04 — POST_NOTIFICATIONS default-deny suppresses the app's only breach-alert channel
-- [ ] `D22-020` 🟨 ? AM-08 — Call-style and media-session exemptions used to post notifications the user declined
-- [ ] `D22-021` 🟧 ? AM-05/AM-09 — Granular media permissions taken instead of the Photo Picker
-- [ ] `D22-022` 🟨 ? AM-05 — `READ_MEDIA_VISUAL_USER_SELECTED` absent at targetSdk 34 — silent compatibility mode
+- [ ] `D22-020` 🟨 varies AM-08 — Call-style and media-session exemptions used to post notifications the user declined
+- [ ] `D22-021` 🟧 varies AM-05/AM-09 — Granular media permissions taken instead of the Photo Picker
+- [ ] `D22-022` 🟨 varies AM-05 — `READ_MEDIA_VISUAL_USER_SELECTED` absent at targetSdk 34 — silent compatibility mode
 - [ ] `D22-023` ⬜ n/a AM-04 — Restricted Settings for sideloaded apps — state the gate or your severity is wrong
 - [ ] `D22-024` 🟧 P3 AM-08 — `android:sharedUserId` retained past API 32
-- [ ] `D22-025` 🟧 ? AM-03 — APK Signature Scheme v3.1 rotation targeting — two keys, two OS ranges
+- [ ] `D22-025` 🟧 varies AM-03 — APK Signature Scheme v3.1 rotation targeting — two keys, two OS ranges
 - [ ] `D22-026` 🟧 P5 AM-11/AM-12 — Keystore/KeyMint structured errors swallowed into a software fallback
 - [ ] `D22-027` 🟨 P5 AM-01 — Foreground-service notifications dismissable and the high-priority FCM downgrade
-- [ ] `D22-028` 🟧 ? AM-03 — Foreground-service type mandate at targetSdk 34 as a capability map
-- [ ] `D22-029` 🟨 ? AM-08 — `specialUse` and `systemExempted` foreground-service types claimed without a matching reality
-- [ ] `D22-030` 🟧 ? AM-03 — Context-registered receivers must declare an export flag at targetSdk 34
-- [ ] `D22-031` 🟧 ? AM-03 — Implicit intents no longer reach internal components — find the export regression that "fixed" it
-- [ ] `D22-032` 🟧 ? AM-03 — Mutable PendingIntent with `setPackage()` but no component — the targetSdk-34-compliant variant
+- [ ] `D22-028` 🟧 varies AM-03 — Foreground-service type mandate at targetSdk 34 as a capability map
+- [ ] `D22-029` 🟨 varies AM-08 — `specialUse` and `systemExempted` foreground-service types claimed without a matching reality
+- [ ] `D22-030` 🟧 varies AM-03 — Context-registered receivers must declare an export flag at targetSdk 34
+- [ ] `D22-031` 🟧 varies AM-03 — Implicit intents no longer reach internal components — find the export regression that "fixed" it
+- [ ] `D22-032` 🟧 varies AM-03 — Mutable PendingIntent with `setPackage()` but no component — the targetSdk-34-compliant variant
 - [ ] `D22-033` 🟥 P1 AM-03/AM-09 — Dynamic-code-load read-only mandate at targetSdk 34 — and the paths apps moved to
 - [ ] `D22-034` 🟥 P1 AM-02/AM-03 — Zip path validation on by default at targetSdk 34 — find `ZipPathValidator.clearCallback()`
 - [ ] `D22-035` 🟧 P5 AM-06/AM-07/AM-12 — The CA trust store moved into the Conscrypt APEX at API 34
 - [ ] `D22-036` 🟨 P5 AM-04 — Screenshot and screen-recording detection APIs present but unused
-- [ ] `D22-037` 🟧 ? AM-04 — MediaProjection per-session consent at targetSdk 34 — and the fallbacks it pushed apps to
-- [ ] `D22-038` 🟧 ? AM-03 — `OWNER_PACKAGE_NAME` redaction (Android 14) — provenance checks that now fail open
-- [ ] `D22-039` 🟧 ? AM-08 — SDK Runtime (Privacy Sandbox) — `<uses-sdk-library>` pinning and what still crosses the boundary
-- [ ] `D22-040` 🟨 ? AM-05 — `ad_services` SDK-extension gating — Privacy Sandbox code reachable below its nominal API level
+- [ ] `D22-037` 🟧 varies AM-04 — MediaProjection per-session consent at targetSdk 34 — and the fallbacks it pushed apps to
+- [ ] `D22-038` 🟧 varies AM-03 — `OWNER_PACKAGE_NAME` redaction (Android 14) — provenance checks that now fail open
+- [ ] `D22-039` 🟧 varies AM-08 — SDK Runtime (Privacy Sandbox) — `<uses-sdk-library>` pinning and what still crosses the boundary
+- [ ] `D22-040` 🟨 varies AM-05 — `ad_services` SDK-extension gating — Privacy Sandbox code reachable below its nominal API level
 - [ ] `D22-041` 🟨 P5 AM-11 — Minimum installable targetSdk and `--bypass-low-target-sdk-block`
-- [ ] `D22-042` 🟧 ? AM-02/AM-08 — `USE_FULL_SCREEN_INTENT` held by a non-calling, non-alarm app
+- [ ] `D22-042` 🟧 varies AM-02/AM-08 — `USE_FULL_SCREEN_INTENT` held by a non-calling, non-alarm app
 - [ ] `D22-043` 🟧 n/a AM-12 — Non-SDK interface restrictions — and the raw-Binder bypass that means "blocked" is not "unreachable"
 - [ ] `D22-044` 🟧 P4 AM-06 — TLS 1.0/1.1 disallowed at targetSdk 35 — find the stack that re-enables them
-- [ ] `D22-045` 🟨 ? AM-03 — Background activity launch: sender opt-in at 34, creator opt-in at 35
+- [ ] `D22-045` 🟨 varies AM-03 — Background activity launch: sender opt-in at 34, creator opt-in at 35
 - [ ] `D22-046` 🟨 n/a AM-01 — Android 15 force-stop cancels every PendingIntent — a methodology trap and a persistence finding
 - [ ] `D22-047` 🟧 P3 AM-04 — OTP redaction from `NotificationListenerService` (Android 15) — and the delivery shapes that route around it
-- [ ] `D22-048` 🟧 ? AM-02 — Screen-share protection and `setContentSensitivity` (Android 15)
+- [ ] `D22-048` 🟧 varies AM-02 — Screen-share protection and `setContentSensitivity` (Android 15)
 - [ ] `D22-049` 🟧 P3 AM-05 — Private space (Android 15) — a second profile your enumeration must account for
 - [ ] `D22-050` 🟨 P3 AM-03 — Foreground-service time limits (Android 15) and the `device_config` compression that makes them testable
 - [ ] `D22-051` 🟨 P5 AM-01 — Edge-to-edge and large-screen layout enforcement hiding a security affordance
 - [ ] `D22-052` 🟥 P1 AM-02/AM-03 — Intent-redirection hardening on by default at Android 16 — grep `removeLaunchSecurityProtection()`
-- [ ] `D22-053` 🟧 ? AM-03 — `android:intentMatchingFlags` — the opt-in, and the per-component opt-out that undoes it
+- [ ] `D22-053` 🟧 varies AM-03 — `android:intentMatchingFlags` — the opt-in, and the per-component opt-out that undoes it
 - [ ] `D22-054` ⬜ n/a AM-03 — Ordered-broadcast priority scope no longer global (Android 16)
 - [ ] `D22-055` 🟧 P5 AM-01/AM-11 — Predictive back at targetSdk 36 — the security gate inside `onBackPressed()` that stopped running
 - [ ] `D22-056` 🟨 P4 AM-01 — `PRIORITY_SYSTEM_NAVIGATION_OBSERVER` used as a gate it cannot be
-- [ ] `D22-057` 🟨 ? AM-06 — Local network permission (Android 16) and the `RESTRICT_LOCAL_NETWORK` compat phase
+- [ ] `D22-057` 🟨 varies AM-06 — Local network permission (Android 16) and the `RESTRICT_LOCAL_NETWORK` compat phase
 - [ ] `D22-058` 🟥 P2 AM-08 — `KeyStoreManager.grantKeyAccess()` (Android 16) — Keystore keys shared across UIDs
-- [ ] `D22-059` 🟥 ? AM-05/AM-09 — Health Connect granular permissions replace `BODY_SENSORS` at targetSdk 36
+- [ ] `D22-059` 🟥 varies AM-05/AM-09 — Health Connect granular permissions replace `BODY_SENSORS` at targetSdk 36
 - [ ] `D22-060` 🟨 P5 AM-06 — Certificate Transparency: opt-in at Android 16, default at API 37 — and the custom-trust-anchor caveat
 - [ ] `D22-061` 🟨 n/a AM-01 — ART and Mainline module updates changing behaviour under a shipped app
 - [ ] `D22-062` ⬜ n/a n/a — The API 37 horizon — changes already landing that will invalidate current PoCs
-- [ ] `D22-063` 🟧 ? AM-03 — App Bundle split delivery — the code that is not in `base.apk`
+- [ ] `D22-063` 🟧 varies AM-03 — App Bundle split delivery — the code that is not in `base.apk`
 - [ ] `D22-064` 🟧 P1 AM-11/AM-12 — Base-only install — does the app fail closed when the integrity split is missing?
 - [ ] `D22-065` 🟧 P1 AM-12 — SafetyNet Attestation still called — dead since January 2025
 - [ ] `D22-066` 🟧 P1 AM-03/AM-12 — Play Integrity verdict consumed client-side, or without the four baseline checks
 - [ ] `D22-067` 🟧 P1 AM-03/AM-12 — Key attestation verified on-device, or accepted without CRL, security level and expiry checks
 - [ ] `D22-068` 🟧 P1 AM-02/AM-03 — Credential Manager adopted with the legacy sign-in path left in place
 - [ ] `D22-069` 🟧 P1 AM-11 — Restore Credentials and cross-device credential transfer
-- [ ] `D22-070` 🟧 ? AM-03 — LEGACY-live: targetSdk < 31 — components with an intent-filter exported without anyone typing it
+- [ ] `D22-070` 🟧 varies AM-03 — LEGACY-live: targetSdk < 31 — components with an intent-filter exported without anyone typing it
 - [ ] `D22-071` 🟥 P1 AM-03 — LEGACY-live: targetSdk < 17 — ContentProviders exported by default
 - [ ] `D22-072` 🟧 P5 AM-06/AM-07 — LEGACY-live: minSdk < 24 — user-added CAs trusted by default
 - [ ] `D22-073` 🟧 P4 AM-06 — LEGACY-live: targetSdk < 28 — cleartext HTTP permitted by default
 - [ ] `D22-074` 🟥 P1 AM-02/AM-06 — LEGACY-live: minSdk < 17 — `addJavascriptInterface` reflection RCE
-- [ ] `D22-075` 🟨 ? AM-03 — LEGACY-live: targetSdk < 30 — free package visibility, and why it changes discovery not delivery
+- [ ] `D22-075` 🟨 varies AM-03 — LEGACY-live: targetSdk < 30 — free package visibility, and why it changes discovery not delivery
 - [ ] `D22-076` 🟧 P5 AM-11 — LEGACY-live: device <= Android 11 — `adb backup` still yields app data
-- [ ] `D22-077` 🟧 ? AM-03 — LEGACY: Zygote `--runtime-flags` command injection (CVE-2024-31317)
+- [ ] `D22-077` 🟧 varies AM-03 — LEGACY: Zygote `--runtime-flags` command injection (CVE-2024-31317)
 - [ ] `D22-078` ⬜ n/a n/a — The three-line preconditions block on every version-gated finding
 - [ ] `D22-079` ⬜ n/a n/a — Prove the platform-mitigated negative explicitly
 - [ ] `D22-080` ⬜ n/a n/a — Do not retract when the platform changed under you mid-engagement
@@ -1760,10 +1760,10 @@
 - [ ] `D23-001` ⬜ n/a n/a — Build the monetisation map before touching anything
 - [ ] `D23-002` 🟧 varies AM-01/AM-12 — Purchase signature verified on the device with a key shipped in the APK
 - [ ] `D23-003` 🟧 varies AM-01/AM-12 — Entitlement granted from a local flag with no server round-trip
-- [ ] `D23-004` 🟧 varies AM-11/AM-12 — The non-root route to the entitlement store: modify-and-restore backup
-- [ ] `D23-005` 🟥 varies AM-01 — The two-half rule: does the backend honour the state the client claims?
+- [ ] `D23-004` 🟧 p5 AM-11/AM-12 — The non-root route to the entitlement store: modify-and-restore backup
+- [ ] `D23-005` 🟥 p1 AM-01 — The two-half rule: does the backend honour the state the client claims?
 - [ ] `D23-006` 🟧 varies AM-01 — `purchaseToken` replayed to the same account (idempotency)
-- [ ] `D23-007` 🟥 ? AM-05 — `purchaseToken` redeemed against a second account (uniqueness and binding)
+- [ ] `D23-007` 🟥 p1 AM-05 — `purchaseToken` redeemed against a second account (uniqueness and binding)
 - [ ] `D23-008` 🟧 varies AM-05 — `setObfuscatedAccountId()` never called, so the eligibility check cannot exist
 - [ ] `D23-009` 🟧 varies AM-01 — SKU substitution: a cheap product's token redeemed for an expensive entitlement
 - [ ] `D23-010` 🟧 varies AM-01 — Signature / `signedData` fields removed from the verification request
@@ -1777,9 +1777,9 @@
 - [ ] `D23-018` 🟧 varies AM-03 — Entitlement row writable through an exported `ContentProvider`
 - [ ] `D23-019` 🟥 varies AM-03 — Implicit bind to `InAppBillingService.BIND` — the billing-proxy app
 - [ ] `D23-020` 🟨 varies AM-01 — Play Integrity `appLicensingVerdict` unused, or evaluated on the client
-- [ ] `D23-021` 🟥 ? AM-01 — Client-computed price, total or credit posted to the server
+- [ ] `D23-021` 🟥 p2 AM-01 — Client-computed price, total or credit posted to the server
 - [ ] `D23-022` 🟥 varies AM-01 — Negative quantity, negative price and numeric-boundary values — carried to settlement
-- [ ] `D23-023` 🟥 ? AM-01 — Currency swap mid-checkout
+- [ ] `D23-023` 🟥 p2 AM-01 — Currency swap mid-checkout
 - [ ] `D23-024` 🟥 varies AM-01 — Cart-state TOCTOU: total priced at step 1, cart mutated at step 2, captured at step 3
 - [ ] `D23-025` 🟧 varies AM-01 — Free-amount fields: tip, donation, round-up, custom top-up
 - [ ] `D23-026` 🟧 varies AM-01 — Limits, thresholds and risk rules that live only in the client
@@ -1787,18 +1787,18 @@
 - [ ] `D23-028` 🟥 varies AM-02/AM-03 — Payment callback / return-URL forged through a deep link
 - [ ] `D23-029` 🟧 varies AM-01 — PSP SDK local "payment succeeded" callback treated as authoritative
 - [ ] `D23-030` 🟧 varies AM-01/AM-09 — Payment webhook replay — signature-verified but not idempotent
-- [ ] `D23-031` 🟥 ? AM-05 — Saved payment instrument reusable across accounts or on a new device
-- [ ] `D23-032` 🟥 ? AM-01 — Step-up not bound to the transaction it authorises
+- [ ] `D23-031` 🟥 p1 AM-05 — Saved payment instrument reusable across accounts or on a new device
+- [ ] `D23-032` 🟥 p1 AM-01 — Step-up not bound to the transaction it authorises
 - [ ] `D23-033` 🟥 varies AM-03/AM-12 — Money-moving action not bound to a user-presence-verified key (Protected Confirmation)
-- [ ] `D23-034` 🟥 ? AM-04 — High-risk flow fully automatable: overlay plus accessibility drives the payment
-- [ ] `D23-035` 🟥 ? AM-01 — 3-D Secure / SCA challenge outcome asserted by the client
+- [ ] `D23-034` 🟥 p1 AM-04 — High-risk flow fully automatable: overlay plus accessibility drives the payment
+- [ ] `D23-035` 🟥 p1 AM-01 — 3-D Secure / SCA challenge outcome asserted by the client
 - [ ] `D23-036` 🟧 varies AM-01 — Google Pay `PaymentsClient` built on the client, and `ENVIRONMENT_TEST` in a release build
-- [ ] `D23-037` 🟧 varies AM-01 — Test or sandbox payment instrument accepted in production
-- [ ] `D23-038` 🟥 ? AM-01 — Payment-processor **secret** key shipped in the client
-- [ ] `D23-039` 🟥 ? AM-01 — Hardcoded Basic credential for a production payment or vault host — the severity fork
+- [ ] `D23-037` 🟧 p2 AM-01 — Test or sandbox payment instrument accepted in production
+- [ ] `D23-038` 🟥 p1 AM-01 — Payment-processor **secret** key shipped in the client
+- [ ] `D23-039` 🟥 p1 AM-01 — Hardcoded Basic credential for a production payment or vault host — the severity fork
 - [ ] `D23-040` 🟥 varies AM-02 — Payment bridge methods reachable from a non-allow-listed WebView origin
 - [ ] `D23-041` 🟥 varies AM-03 — Payment `PendingIntent` replay and misrouting
-- [ ] `D23-042` 🟧 varies AM-01 — Promo, voucher and gift-code enumeration through the mobile API
+- [ ] `D23-042` 🟧 p4 AM-01 — Promo, voucher and gift-code enumeration through the mobile API
 - [ ] `D23-043` 🟥 varies AM-01 — One-time incentive reused: coupon, fee waiver, referral credit
 - [ ] `D23-044` 🟧 varies AM-01 — Referral self-redemption and referral farming
 - [ ] `D23-045` 🟥 varies AM-01 — Redemption and checkout races — single-packet, with a sequential baseline and a ledger read
@@ -1806,14 +1806,14 @@
 - [ ] `D23-047` 🟧 varies AM-01 — Gift card and stored value: balance-check oracle, enumeration, and the double-burn
 - [ ] `D23-048` 🟥 varies AM-01 — Wallet, payout and withdrawal races and limit overruns
 - [ ] `D23-049` 🟥 varies AM-01 — Refund and cancellation races, and refund-after-fulfilment
-- [ ] `D23-050` ⬜ n/a n/a — GraphQL alias batching misread as a race — the false-positive gate
-- [ ] `D23-051` 🟥 ? AM-05 — Multi-step money flows where one step is unauthorised
+- [ ] `D23-050` ⬜ varies n/a — GraphQL alias batching misread as a race — the false-positive gate
+- [ ] `D23-051` 🟥 p1 AM-05 — Multi-step money flows where one step is unauthorised
 - [ ] `D23-052` 🟥 varies AM-02/AM-03 — Payment-app hand-off: UPI, wallet and bank-app deep links
-- [ ] `D23-053` 🟥 ? AM-02 — Transaction executed without confirmation from a scanned or external input
+- [ ] `D23-053` 🟥 p1 AM-02 — Transaction executed without confirmation from a scanned or external input
 - [ ] `D23-054` 🟧 varies AM-02 — The confirmation prompt does not name the counterparty or amount that will execute
 - [ ] `D23-055` 🟧 varies AM-01 — Payment confirmation under edge-to-edge and predictive back
-- [ ] `D23-056` 🟥 varies AM-01 — Shadow API: the app's billing endpoints are an older API version than the web
-- [ ] `D23-057` ⬜ n/a n/a — The layer-ordering trap on a billing or payment endpoint
+- [ ] `D23-056` 🟥 p1 AM-01 — Shadow API: the app's billing endpoints are an older API version than the web
+- [ ] `D23-057` ⬜ p1 n/a — The layer-ordering trap on a billing or payment endpoint
 - [ ] `D23-058` 🟧 varies AM-04/AM-11 — Card data persisted, logged or left in memory on the device
 - [ ] `D23-059` 🟧 varies AM-10 — NFC Observe Mode and polling-frame handling — pre-authentication emission
 - [ ] `D23-060` 🟧 varies AM-03 — Wallet role versus the legacy default-payment assumption
@@ -1863,17 +1863,17 @@
 - [ ] `D25-033` 🟥 varies AM-11 — Verified Boot state — what it guarantees and what it does not
 - [ ] `D25-034` ⬜ n/a AM-12 — Kernel and GKI posture as context for every in-process native finding
 - [ ] `D25-035` ⬜ n/a AM-12 — Firmware acquisition and partition extraction
-- [ ] `D25-036` 🟥 ? AM-01 — Extract a vendor parser from firmware and fuzz it off-device
+- [ ] `D25-036` 🟥 p1 AM-01 — Extract a vendor parser from firmware and fuzz it off-device
 - [ ] `D25-037` ⬜ n/a n/a — Build a stable C-ABI shim instead of `dlsym`-ing C++ symbols
 - [ ] `D25-038` ⬜ n/a n/a — Derive struct offsets from the shipped image's own BTF rather than porting them
 - [ ] `D25-039` ⬜ n/a n/a — Identify which mitigation killed the payload before changing offsets
-- [ ] `D25-040` 🟥 varies AM-06/AM-11 — Firmware or OTA update accepted without integrity validation
-- [ ] `D25-041` 🟥 ? AM-01 — Hardcoded or shared credentials on the device image
+- [ ] `D25-040` 🟥 p3 AM-06/AM-11 — Firmware or OTA update accepted without integrity validation
+- [ ] `D25-041` 🟥 p1 AM-01 — Hardcoded or shared credentials on the device image
 - [ ] `D25-042` 🟥 varies AM-03/AM-11 — The client's own deployment writes to boot or system, or requires an unlocked bootloader
-- [ ] `D25-043` 🟧 varies AM-06/AM-11 — `adb` left listening over TCP, and wireless debugging
+- [ ] `D25-043` 🟧 p2 AM-06/AM-11 — `adb` left listening over TCP, and wireless debugging
 - [ ] `D25-044` 🟧 varies AM-11 — Developer-settings and USB posture the client's deployment depends on
 - [ ] `D25-045` 🟧 varies AM-03/AM-11 — Dialler secret codes into engineering and diagnostic menus
-- [ ] `D25-046` 🟥 ? AM-03/AM-06 — Local network listeners opened by the app or the image — check the bind address
+- [ ] `D25-046` 🟥 p1 AM-03/AM-06 — Local network listeners opened by the app or the image — check the bind address
 - [ ] `D25-047` 🟥 varies AM-03 — Enumerate the local escalation surface mechanically
 - [ ] `D25-048` 🟧 varies AM-10/AM-11 — Enumerate the USB modes one connector exposes simultaneously
 - [ ] `D25-049` 🟧 varies AM-10/AM-11 — USB `device_filter` auto-launch grants the app USB access with no permission prompt
@@ -1884,17 +1884,17 @@
 - [ ] `D25-054` 🟥 varies AM-10 — Target activity reachable over the lock screen
 - [ ] `D25-055` 🟧 varies AM-10/AM-11 — NFC dispatch as a no-touch entry point into the app
 - [ ] `D25-056` 🟥 varies AM-02/AM-10 — HCE `HostApduService` — the payment category, and Android 15 observe mode
-- [ ] `D25-057` 🟧 varies AM-04/AM-10 — BLE link content is readable by every app on the device
+- [ ] `D25-057` 🟧 p4 AM-04/AM-10 — BLE link content is readable by every app on the device
 - [ ] `D25-058` 🟥 varies AM-10 — The app's own GATT server accepts writes from an unbonded peer
 - [ ] `D25-059` 🟧 varies AM-03/AM-10 — CompanionDeviceManager association with an attacker-controlled device, and `removeBond()`
-- [ ] `D25-060` 🟧 ? AM-02/AM-06 — Scanner acting on `Barcode.getWifi()` — joining an attacker-chosen network on a scan
+- [ ] `D25-060` 🟧 varies AM-02/AM-06 — Scanner acting on `Barcode.getWifi()` — joining an attacker-chosen network on a scan
 - [ ] `D25-061` 🟧 varies AM-03 — Android Auto `CarAppService` with `ALLOW_ALL_HOSTS_VALIDATOR`
-- [ ] `D25-062` 🟥 varies AM-03/AM-10 — Wear OS `WearableListenerService` dispatching on path with no node or capability check
-- [ ] `D25-063` 🟥 ? AM-05 — The companion-surface API is a second, weaker client
-- [ ] `D25-064` 🟧 varies AM-01/AM-02 — Instant-App reachability and the endpoints a retired instant experience left live
+- [ ] `D25-062` 🟥 p1 AM-03/AM-10 — Wear OS `WearableListenerService` dispatching on path with no node or capability check
+- [ ] `D25-063` 🟥 p1 AM-05 — The companion-surface API is a second, weaker client
+- [ ] `D25-064` 🟧 p3 AM-01/AM-02 — Instant-App reachability and the endpoints a retired instant experience left live
 - [ ] `D25-065` ⬜ n/a AM-05/AM-11 — Enumerate every instance of the app that exists on the device
-- [ ] `D25-066` 🟧 varies AM-05 — Cross-user provider read and cross-user service bind
-- [ ] `D25-067` 🟧 ? AM-05/AM-11 — Private Space boundary (Android 15)
+- [ ] `D25-066` 🟧 p1 AM-05 — Cross-user provider read and cross-user service bind
+- [ ] `D25-067` 🟧 p1 AM-05/AM-11 — Private Space boundary (Android 15)
 - [ ] `D25-068` 🟧 varies AM-05/AM-11 — Work-profile data crossing the profile boundary
 - [ ] `D25-069` 🟧 varies AM-11 — App behaviour under a device-policy restriction it claims to honour
 - [ ] `D25-070` 🟥 varies AM-11 — Work-profile required-app replacement
@@ -1902,7 +1902,7 @@
 - [ ] `D25-072` 🟧 varies AM-11 — Kiosk, lock-task and screen-pinning escape from inside the app
 - [ ] `D25-073` 🟧 varies AM-03/AM-11 — OEM MDM and firmware layers (Knox, E-FOTA and equivalents), and the null-means-compliant trap
 - [ ] `D25-074` 🟥 varies AM-02 — Device-admin or accessibility status obtainable without informed consent
-- [ ] `D25-075` 🟥 ? AM-03/AM-11 — Mobile foothold as an enterprise pivot
+- [ ] `D25-075` 🟥 p3 AM-03/AM-11 — Mobile foothold as an enterprise pivot
 - [ ] `D25-076` ⬜ n/a n/a — Run the pre-severity gate against the Critical claim, not against the primitive
 - [ ] `D25-077` ⬜ n/a n/a — Body-diff, layer-ordering and server-policy-vs-state gates on privileged-surface probes
 - [ ] `D25-078` ⬜ n/a n/a — Chain-filing order, evidence hygiene and retraction discipline for a device chain
@@ -1915,7 +1915,7 @@
 - [ ] `D26-001` ⬜ n/a AM-12 — Run a green-baseline harness acceptance script before any billable testing
 - [ ] `D26-002` ⬜ n/a AM-12 — Pin and record the lab manifest so the engagement is reproducible a year later
 - [ ] `D26-003` ⬜ n/a AM-12 — Check all three rootable-AVD constraints before promising root-dependent work
-- [ ] `D26-004` ⬜ P5 AM-07 — Install the proxy CA into the system store — API 33 and below
+- [ ] `D26-004` ⬜ p5 AM-07 — Install the proxy CA into the system store — API 33 and below
 - [ ] `D26-005` ⬜ n/a AM-07 — API 34+: the Conscrypt APEX trust store and the zygote mount-namespace bind
 - [ ] `D26-006` ⬜ n/a AM-12 — Verify which trust store the target process actually sees, not which one your shell sees
 - [ ] `D26-007` ⬜ n/a AM-12 — `system.certs.enabled` — the per-process switch back to the legacy trust store
@@ -1961,8 +1961,8 @@
 - [ ] `D26-047` ⬜ n/a AM-12 — `frida-trace` reporting "Started tracing 0 functions" is a load-order artefact
 - [ ] `D26-048` ⬜ ? AM-12 — Reach classes in secondary dex and custom class loaders
 - [ ] `D26-049` ⬜ n/a AM-12 — The six Frida corrections that each cost a working day
-- [ ] `D26-050` ⬜ P5 AM-12 — objection as the pre-built hook harness — with job discipline and the sqlite caveat
-- [ ] `D26-051` ⬜ P5 AM-12 — Strip `FLAG_SECURE` so the evidence can actually be captured
+- [ ] `D26-050` ⬜ p5 AM-12 — objection as the pre-built hook harness — with job discipline and the sqlite caveat
+- [ ] `D26-051` ⬜ p5 AM-12 — Strip `FLAG_SECURE` so the evidence can actually be captured
 - [ ] `D26-052` 🟧 P1 AM-03 — Inject StrictMode's own detectors and let the app find its unsafe intent launches for you
 - [ ] `D26-053` 🟨 ? AM-03/AM-12 — Instrument the binder layer, not only the Java API
 - [ ] `D26-054` 🟧 P2 AM-12 — The one-file framework-API hook pack for obfuscated apps
@@ -1972,7 +1972,7 @@
 - [ ] `D26-058` ⬜ ? AM-12 — jnitrace for the JNI boundary
 - [ ] `D26-059` ⬜ ? AM-12 — r2frida and rabin2 for the live native process
 - [ ] `D26-060` ⬜ ? AM-12 — The cross-platform instrumentation matrix — one entry point per framework
-- [ ] `D26-061` 🟧 P5 AM-03/AM-09 — Native fuzzing harness: pick the engine by what you have, and ship the Android ASan runtime
+- [ ] `D26-061` 🟧 p5 AM-03/AM-09 — Native fuzzing harness: pick the engine by what you have, and ship the Android ASan runtime
 - [ ] `D26-062` ⬜ n/a n/a — Carry the validity-tagged tooling table, and the DEAD list, so you downgrade correctly
 - [ ] `D26-063` 🟨 n/a n/a — A tool's silence is never a negative result — calibrate against a known-vulnerable control
 - [ ] `D26-064` ⬜ n/a n/a — Control-app comparison — separate app behaviour from platform default
@@ -2008,7 +2008,7 @@
 - [ ] `D27-010` ⬜ n/a n/a — Give every finding an OWNER
 - [ ] `D27-011` ⬜ n/a n/a — Reportability opinion and submission order are part of the deliverable
 - [ ] `D27-012` 🟥 P1 AM-03 — Never file under a mobile VRT node when an impact node exists
-- [ ] `D27-013` 🟧 ? AM-03 — "Varies" is an invitation, not a rejection
+- [ ] `D27-013` 🟧 varies AM-03 — "Varies" is an invitation, not a rejection
 - [ ] `D27-014` ⬜ ? n/a — Pick the most specific *accurate* VRT node, then set severity separately
 - [ ] `D27-015` ⬜ n/a n/a — The severity-request paragraph, as the first body section
 - [ ] `D27-016` ⬜ P5 AM-01/AM-02/AM-12 — Rate by acquisition path, not by data class
@@ -2037,10 +2037,10 @@
 - [ ] `D27-039` ⬜ n/a n/a — Your own capture is subject to the protections you are testing
 - [ ] `D27-040` ⬜ ? AM-03/AM-12 — Prove the caller's privilege level — shell UID is not app UID
 - [ ] `D27-041` ⬜ n/a AM-03 — The two controls: baseline denial and negative control, in the same take
-- [ ] `D27-042` ⬜ ? AM-03 — Ship a runnable zero-permission attacker APK, not a manifest screenshot
+- [ ] `D27-042` ⬜ varies AM-03 — Ship a runnable zero-permission attacker APK, not a manifest screenshot
 - [ ] `D27-043` ⬜ n/a n/a — The one-shot reproduction script and the replayable command file
 - [ ] `D27-044` ⬜ ? AM-05 — Capture the response delta, not the screenshot
-- [ ] `D27-045` ⬜ P5 AM-02/AM-03 — Capture the tombstone, not the fact of a crash
+- [ ] `D27-045` ⬜ p5 AM-02/AM-03 — Capture the tombstone, not the fact of a crash
 - [ ] `D27-046` ⬜ n/a n/a — Evidence integrity — a SHA-256 manifest and a synced device clock
 - [ ] `D27-047` ⬜ n/a AM-03 — When evidence is unobtainable, substitute source-derived proof — never fabricate
 - [ ] `D27-048` ⬜ n/a n/a — The ruled-out register as a deliverable

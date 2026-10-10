@@ -1,0 +1,11 @@
+id,title,edition,url
+M1,Improper Credential Usage,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m1-improper-credential-usage
+M2,Inadequate Supply Chain Security,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m2-inadequate-supply-chain-security
+M3,Insecure Authentication/Authorization,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m3-insecure-authentication-authorization
+M4,Insufficient Input/Output Validation,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m4-insufficient-input-output-validation
+M5,Insecure Communication,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m5-insecure-communication
+M6,Inadequate Privacy Controls,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m6-inadequate-privacy-controls
+M7,Insufficient Binary Protections,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m7-insufficient-binary-protection
+M8,Security Misconfiguration,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m8-security-misconfiguration
+M9,Insecure Data Storage,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m9-insecure-data-storage
+M10,Insufficient Cryptography,2024,https://owasp.org/www-project-mobile-top-10/2023-risks/m10-insufficient-cryptography

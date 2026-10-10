@@ -53,9 +53,9 @@
     "D09"
    ],
    "has_code": true,
-   "body_md": "| | |\n|---|---|\n| **Severity ceiling** | Support |\n| **VRT** | — (methodology gate; every finding in this chapter inherits its artefact identity from here) |\n| **Attacker** | n/a (engagement control) |\n| **Applies to** | All |\n| **Maps to** | MASTG-TECH-0003 (Obtaining and Extracting Apps), MASTG-TOOL-0123 (apksigner) |\n\n- **Test:** Record, for every input byte, where it came from and what it hashes to. A client-supplied APK, a Play-downloaded APK and an APKMirror download of \"the same version\" routinely differ in signer, split set or content.\n- **How:**\n```bash\nfor f in apk/*.apk; do\n  printf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(stat -f%z \"$f\")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\napksigner verify --print-certs --verbose apk/base.apk | \\\n  grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme|key (algorithm|size)'\naapt2 dump badging apk/base.apk | grep -E 'package:|sdkVersion|targetSdkVersion'\n```\n  Record in the report: acquisition source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), SHA-256 of each split, signer SHA-256, and which schemes verified.\n- **Proof:** An appendix table from which the client's own build engineer can re-derive every hash, alongside `versionName`/`versionCode`.\n- **Escalation:** The signer SHA-256 is the input to the Digital Asset Links check (-> D09) and to every `checkSignatures`/signature-permission analysis (-> D03, -> D06). Capture once, reuse everywhere.\n- **Ruled out when:** Never ruled out — this is not a test, it is the record that makes a disputed finding pinnable to an artefact. Its absence is itself a deliverable defect.",
+   "body_md": "| | |\n|---|---|\n| **Severity ceiling** | Support |\n| **VRT** | — (methodology gate; every finding in this chapter inherits its artefact identity from here) |\n| **Attacker** | n/a (engagement control) |\n| **Applies to** | All |\n| **Maps to** | MASTG-TECH-0003 (Obtaining and Extracting Apps), MASTG-TOOL-0123 (apksigner) |\n\n- **Test:** Record, for every input byte, where it came from and what it hashes to. A client-supplied APK, a Play-downloaded APK and an APKMirror download of \"the same version\" routinely differ in signer, split set or content.\n- **How:**\n```bash\nfor f in apk/*.apk; do\n  printf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(wc -c < \"$f\" | tr -d \" \")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\napksigner verify --print-certs --verbose apk/base.apk | \\\n  grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme|key (algorithm|size)'\naapt2 dump badging apk/base.apk | grep -E 'package:|sdkVersion|targetSdkVersion'\n```\n  Record in the report: acquisition source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), SHA-256 of each split, signer SHA-256, and which schemes verified.\n- **Proof:** An appendix table from which the client's own build engineer can re-derive every hash, alongside `versionName`/`versionCode`.\n- **Escalation:** The signer SHA-256 is the input to the Digital Asset Links check (-> D09) and to every `checkSignatures`/signature-permission analysis (-> D03, -> D06). Capture once, reuse everywhere.\n- **Ruled out when:** Never ruled out — this is not a test, it is the record that makes a disputed finding pinnable to an artefact. Its absence is itself a deliverable defect.",
    "test": "Record, for every input byte, where it came from and what it hashes to. A client-supplied APK, a Play-downloaded APK and an APKMirror download of \"the same version\" routinely differ in signer, split set or content.",
-   "how": "```bash\nfor f in apk/*.apk; do\nprintf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(stat -f%z \"$f\")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\napksigner verify --print-certs --verbose apk/base.apk | \\\ngrep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme|key (algorithm|size)'\naapt2 dump badging apk/base.apk | grep -E 'package:|sdkVersion|targetSdkVersion'\n```\nRecord in the report: acquisition source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), SHA-256 of each split, signer SHA-256, and which schemes verified.",
+   "how": "```bash\nfor f in apk/*.apk; do\nprintf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(wc -c < \"$f\" | tr -d \" \")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\napksigner verify --print-certs --verbose apk/base.apk | \\\ngrep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme|key (algorithm|size)'\naapt2 dump badging apk/base.apk | grep -E 'package:|sdkVersion|targetSdkVersion'\n```\nRecord in the report: acquisition source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), SHA-256 of each split, signer SHA-256, and which schemes verified.",
    "proof": "An appendix table from which the client's own build engineer can re-derive every hash, alongside `versionName`/`versionCode`.",
    "escalation": "The signer SHA-256 is the input to the Digital Asset Links check (-> D09) and to every `checkSignatures`/signature-permission analysis (-> D03, -> D06). Capture once, reuse everywhere.",
    "ruled_out_when": "Never ruled out — this is not a test, it is the record that makes a disputed finding pinnable to an artefact. Its absence is itself a deliverable defect.",
@@ -1694,7 +1694,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium (High if the route exposes data or state rather than only crashing)",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) for a crash-only route; `broken_access_control.exposed_sensitive_android_intent` (varies) when it exposes data",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-03 zero-permission local app (any installed app can fire the intent); AM-02 if the scheme is web-reachable",
    "attacker_ids": [
     "AM-02",
@@ -2212,7 +2212,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) vs `...for_internal_asset` (**P3**) vs `...pay_per_use_abuse` (**P4**, the correct path for a billable-but-not-sensitive Maps/Places key) vs `...intentionally_public_sample_or_invalid` (**P5**, what you get if you skip the liveness proof). Also `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**) / `...non_privileged_user` (**P2**) for a static credential.",
-   "vrt_priority": "P1",
+   "vrt_priority": "p1",
    "attacker": "AM-01 remote, no interaction",
    "attacker_ids": [
     "AM-01"
@@ -2820,7 +2820,7 @@
    "severity_floor": "low",
    "severity_note": "Inherits the CVE's severity **only with reachability**; Low at most without it",
    "vrt": "`using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) for a version string alone — this is the closed-informative trap",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "n/a (inventory step) — rate each CVE by its real reachability: AM-01/AM-02 for a network- or link-reachable parser, AM-03 for an IPC-reachable one",
    "attacker_ids": [
     "AM-01",
@@ -2925,7 +2925,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical (a leaked keystore is app impersonation)",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) for signing material; `server_security_misconfiguration.directory_listing_enabled.sensitive_data_exposure` (varies) for an exposed release directory",
-   "vrt_priority": "P1",
+   "vrt_priority": "p1",
    "attacker": "AM-01 remote, no interaction",
    "attacker_ids": [
     "AM-01"
@@ -3064,7 +3064,7 @@
    "severity_floor": "high",
    "severity_note": "High when the gated code is a security check",
    "vrt": "Routes to the gated weakness (for the cited case, `server_side_injection.sql_injection` P1 via a provider)",
-   "vrt_priority": "P1",
+   "vrt_priority": "p1",
    "attacker": "AM-03 zero-permission local app (any app may declare an old `targetSdk` — the attacker chooses it freely)",
    "attacker_ids": [
     "AM-03"

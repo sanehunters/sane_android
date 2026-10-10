@@ -26,7 +26,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-02, AM-03",
    "attacker_ids": [
     "AM-02",
@@ -77,7 +77,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what the unintended combination reaches)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02, AM-03",
    "attacker_ids": [
     "AM-02",
@@ -127,7 +127,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03, AM-08",
    "attacker_ids": [
     "AM-03",
@@ -402,7 +402,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on the Dart route reached)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02, AM-03",
    "attacker_ids": [
     "AM-02",
@@ -453,7 +453,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02, AM-03",
    "attacker_ids": [
     "AM-02",
@@ -700,7 +700,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "file the consequence — `broken_access_control.exposed_sensitive_android_intent` (null), or P1 `authentication_bypass` once the hijacked link carries a login token",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -844,7 +844,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` if the over-trusted package can reach a login link",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03, AM-08",
    "attacker_ids": [
     "AM-03",
@@ -1625,7 +1625,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on the router sink reached)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-09 (the SDK's backend or whoever controls the link record), AM-02",
    "attacker_ids": [
     "AM-02",
@@ -1673,7 +1673,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) for the routing case; the entitlement case is a business-logic finding — file the consequence",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01 (anyone who can construct the referring URL)",
    "attacker_ids": [
     "AM-01"
@@ -1720,7 +1720,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "consequence-rated; `broken_access_control.exposed_sensitive_android_intent` (null) at minimum, P1 `authentication_bypass` when the scan completes a login or account link",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (a printed sticker over a legitimate code — no malware, no permissions)",
    "attacker_ids": [
     "AM-02"
@@ -1810,7 +1810,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` when the trusted path skips an auth gate",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (a web link carrying a forged signature)",
    "attacker_ids": [
     "AM-02"
@@ -1856,7 +1856,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` when the retired path skips an auth step",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 (launcher/shortcut access), AM-02 for the instant-app path",
    "attacker_ids": [
     "AM-02",
@@ -2097,7 +2097,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) → the sink's path",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (requires app-to-app delivery of a `Uri` **object**, not a browser link)",
    "attacker_ids": [
     "AM-03"
@@ -2188,7 +2188,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) → the framework sink's path",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02, AM-03",
    "attacker_ids": [
     "AM-02",
@@ -2237,7 +2237,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) — rated on the handler reached",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"
@@ -2280,7 +2280,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) — rated on what the escaped path reaches",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"
@@ -2372,7 +2372,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"
@@ -2416,7 +2416,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2461,7 +2461,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (local app; browser delivery remains filter-bound)",
    "attacker_ids": [
     "AM-03"
@@ -2508,7 +2508,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2554,7 +2554,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) → the sink's path",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"
@@ -2693,7 +2693,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.idor.*` when it lands on another user's object",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"
@@ -3015,7 +3015,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) → P1 by what the launched component does",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (delivered from a web page — this is what makes it worse than the D08 local variant)",
    "attacker_ids": [
     "AM-02"
@@ -3399,7 +3399,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) — informational on its own, so **do not file it alone**; it becomes reportable only via the session-loss delta below",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"

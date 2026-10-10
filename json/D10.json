@@ -2950,7 +2950,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null, rated on what it reaches) → P1-class when it reaches a private component/file grant",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (web content already in the WebView)",
    "attacker_ids": [
     "AM-02"

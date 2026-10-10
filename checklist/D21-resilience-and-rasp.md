@@ -15,7 +15,7 @@
 |---|---|
 | **Phases** | P4 static (detection-surface inventory, attestation call sites, obfuscation coverage, debug artefacts), P6 dynamic (control-vs-telemetry determination, fail-open probing, token replay/relay on the wire), P7 write-up (root-required payability gate, stock-device re-derivation) |
 | **Milestones** | M4 primary; M3 (harness acceptance) and M6 (server-side trust) where the items cross over |
-| **VRT ceiling** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269 — the server honouring a client-asserted integrity verdict, or a replayed/relayed attestation token, is the only shape in this domain that carries real severity); `application_level_denial_of_service_dos\|critical_impact_and_or_easy_difficulty` (**P2**) for an attacker-triggerable destructive tamper response; `sensitive_data_exposure\|disclosure_of_secrets\|for_publicly_accessible_asset` (**P1**) when the hook that nothing detected yields a shared credential. The domain's own nodes — `lack_of_binary_hardening\|lack_of_jailbreak_detection`, `\|lack_of_obfuscation`, `\|runtime_instrumentation_based`, `\|lack_of_exploit_mitigations` — are all **P5** and are never the headline |
+| **VRT ceiling** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269 — the server honouring a client-asserted integrity verdict, or a replayed/relayed attestation token, is the only shape in this domain that carries real severity); `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (**P2**) for an attacker-triggerable destructive tamper response; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) when the hook that nothing detected yields a shared credential. The domain's own nodes — `lack_of_binary_hardening.lack_of_jailbreak_detection`, `\|lack_of_obfuscation`, `\|runtime_instrumentation_based`, `\|lack_of_exploit_mitigations` — are all **P5** and are never the headline |
 | **Primary attacker model** | **AM-01 remote no interaction** and **AM-05 another user of the same app** — because the only payable shape is a *server* trusting a client claim, which any client can make. **AM-12 (your own rooted device) is not an attacker model**, and a finding whose entire PoC is "on my rooted phone I hooked a boolean" has no attacker. AM-03/AM-04 apply to the tamper-response and cloning items; AM-08 to the RASP-SDK supply-chain item |
 | **Maps to** | MASVS-RESILIENCE-1/-2/-3/-4, MASVS-CODE-4; MASTG-TEST-0324, -0325, -0338, -0341, -0351, -0352, -0353, -0368, -0369, -0263, -0264, -0265 (deprecated: -0045, -0046, -0049, -0051); MASTG-TECH-0008, -0013, -0016, -0017, -0018, -0023, -0024, -0031, -0032, -0040, -0043, -0144, -0157, -0165; MASTG-KNOW-0027, -0028, -0030, -0031, -0032, -0033, -0034, -0035, -0036, -0044, -0118, -0119, -0120; MASTG-BEST-0007, -0029, -0030, -0041, -0046, -0047, -0066; MASTG-TOOL-0001, -0009, -0011, -0018, -0019, -0021, -0029, -0034, -0038, -0100, -0103, -0146, -0147, -0149, -0151, -0152, -0153; MASWE-0006, -0039, -0040, -0051, -0053, -0054, -0056, -0057, -0058, -0059, -0061, -0064; CWE-250, CWE-269, CWE-471, CWE-489, CWE-497, CWE-540, CWE-693, CWE-912, CWE-1295, CWE-1326; ATT&CK T1617, T1629, T1629.002, T1629.003, T1630.002, T1630.003, T1632, T1632.001, T1633, T1633.001, T1642, T1655.001, T1662, T1471, T1418.001, mitigations M1002, M1010, detection DET0687 |
 
@@ -147,7 +147,7 @@ HackenProof: "Root/Jailbreak Detection Bypass - If the app doesn't promise root/
 | **VRT** | n/a (a filing gate) |
 | **Attacker** | AM-12 on input; the gate's job is to convert it to AM-01/AM-03/AM-05 or kill it |
 | **Applies to** | every finding whose PoC required root, Frida, a patched APK or a debuggable build |
-| **Maps to** | Google Mobile VRP non-qualifying "Attacks that require a rooted device"; HackerOne Core Ineligible; Bugcrowd `lack_of_binary_hardening\|lack_of_jailbreak_detection` (P5) |
+| **Maps to** | Google Mobile VRP non-qualifying "Attacks that require a rooted device"; HackerOne Core Ineligible; Bugcrowd `lack_of_binary_hardening.lack_of_jailbreak_detection` (P5) |
 
 - **Test:** A root-required observation is reportable only if you can additionally demonstrate at least
   **one** of six conditions, with an artefact. Run this before writing, not after rejection.
@@ -404,7 +404,7 @@ adb logcat -d | grep -iE 'SIGSEGV|abort|Fatal signal|tombstone'
 | | |
 |---|---|
 | **Severity ceiling** | Support (a resilience note in a SoW engagement) |
-| **VRT** | `lack_of_binary_hardening\|runtime_instrumentation_based` (P5) |
+| **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (P5) |
 | **Attacker** | AM-12 — i.e. not an attacker |
 | **Applies to** | all hardened apps |
 | **Maps to** | MASTG-TECH-0043, MASTG-KNOW-0030 |
@@ -434,7 +434,7 @@ frida -U -f com.target.app -l hooks.js --no-pause
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `lack_of_binary_hardening\|runtime_instrumentation_based` (P5) |
+| **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (P5) |
 | **Attacker** | AM-12 |
 | **Applies to** | hardened banking, wallet and identity apps |
 | **Maps to** | MASTG-KNOW-0030 (Reverse Engineering Tool Detection), MASTG-TOOL-0021 (Magisk + Zygisk/DenyList), MASTG-TOOL-0149 (LSPosed) |
@@ -593,7 +593,7 @@ curl -s -X POST https://api.target/v1/transfer -H 'Content-Type: application/jso
 | | |
 |---|---|
 | **Severity ceiling** | Critical when the gated action moves money or grants an entitlement; High otherwise |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 — any client can make the claim; no root is needed to send the request |
 | **Applies to** | any app that sends a device-state field to its backend |
 | **Maps to** | MASWE-0051 (CWE-1326), MASWE-0054, MASVS-RESILIENCE-1; Play Integrity overview's explicit "Do NOT" list ("Trust verdicts on client-side only", "Cache verdicts", "Make binary Allow/Deny decisions", "Rely solely on Play Integrity API") |
@@ -631,7 +631,7 @@ curl -i -X POST https://api.target/v1/session -H "Authorization: Bearer $TOK" \
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (the consequence); AM-12 for the mechanism |
 | **Applies to** | all Play Integrity integrations |
 | **Maps to** | MASTG-KNOW-0035, MASWE-0054, MASWE-0056; Play Integrity documentation: token decryption/verification belongs on Google's servers or the app's server, never in the app |
@@ -666,7 +666,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Play Integrity **classic** requests |
 | **Maps to** | MASTG-KNOW-0035 ("Include a NONCE with integrity verification requests"); Play Integrity documentation — the nonce "is used to protect against certain types of attacks, such as replay and tampering attacks"; MASWE-0054 |
@@ -699,7 +699,7 @@ grep -rn 'setNonce(\|requestIntegrityToken\|IntegrityTokenRequest' sources/ -B6 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Play Integrity **standard** requests |
 | **Maps to** | Play Integrity documentation — `requestHash` is "a digest of all relevant values from your app's request"; standard requests carry Google-managed replay mitigation but the backend must still validate `requestHash` against the protected action |
@@ -730,7 +730,7 @@ body B {"amount":9999,"to":"attacker"}  requestHash = 9f3c... > identical => bin
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all Play Integrity integrations |
 | **Maps to** | Play Integrity documented server check on `timestampMillis`; the overview's "No caching: Request verdicts on-demand to prevent replay/proxying attacks" and the "Do NOT cache verdicts (replay attack risk)" list entry |
@@ -768,7 +768,7 @@ grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putS
 | | |
 |---|---|
 | **Severity ceiling** | High for fraud-relevant flows |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (an emulator farm is a remote client) |
 | **Applies to** | all apps using Play Integrity |
 | **Maps to** | Play Integrity verdicts documentation: `MEETS_DEVICE_INTEGRITY` = "Genuine certified Android device with hardware-backed proof of locked bootloader and certified OS (Android 13+)"; `MEETS_BASIC_INTEGRITY` = "bootloader can be locked/unlocked (less strict)"; `MEETS_VIRTUAL_INTEGRITY` = "Android-powered emulator with Google Play services"; MASTG-KNOW-0035 |
@@ -799,7 +799,7 @@ grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putS
 | | |
 |---|---|
 | **Severity ceiling** | High where it lets a repackaged client reach a gated flow; Medium otherwise |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps using Play Integrity |
 | **Maps to** | Play Integrity verdicts: `appIntegrity.appRecognitionVerdict` (`PLAY_RECOGNIZED`, `UNRECOGNIZED_VERSION`, `UNEVALUATED`), `accountDetails.appLicensingVerdict` (`LICENSED`, `UNLICENSED`, `UNEVALUATED`); the documented caveat that `requestPackageName` can be spoofed mid-request and must not be the only app-identity check; MASTG-KNOW-0035 |
@@ -830,7 +830,7 @@ adb install -r modified-aligned-debugSigned.apk
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (anyone can induce the error condition) |
 | **Applies to** | all apps using Play Integrity |
 | **Maps to** | MASTG-KNOW-0035 — local errors `APP_NOT_INSTALLED`, `APP_UID_MISMATCH`, default quota 10,000 requests/day; MASWE-0054 |
@@ -864,7 +864,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | **LEGACY** — any app still shipping the SafetyNet Attestation dependency; still common in older enterprise and white-label builds |
 | **Maps to** | Android SafetyNet deprecation timeline (deprecated 2022; full turndown January 2025; "the attest API returns a task that always invokes the on failure listener with an `ApiException`", status code 7 `NETWORK_ERROR`); MASWE-0054 |
@@ -899,7 +899,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) |
 | **Attacker** | AM-09 / third-party processor exposure rather than a direct attacker |
 | **Applies to** | all apps using Play Integrity |
 | **Maps to** | Play Integrity documentation: data used for `requestHash` and `nonce` "is visible in cleartext to your app, and to Google. You should encrypt or hash the data before passing it to the Play Integrity API." |
@@ -927,7 +927,7 @@ echo "$NONCE" | tr '_-' '/+' | base64 -d 2>/dev/null | strings | head
 | | |
 |---|---|
 | **Severity ceiling** | High on money-moving screens; Medium otherwise |
-| **VRT** | `mobile_security_misconfiguration\|tapjacking` (P5) for the overlay half alone; argue up under `broken_access_control\|privilege_escalation` (**VARIES**) where the verdict was purchased to gate a transfer |
+| **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) for the overlay half alone; argue up under `broken_access_control.privilege_escalation` (**VARIES**) where the verdict was purchased to gate a transfer |
 | **Attacker** | AM-04 (a local app holding one common permission — overlay or accessibility) |
 | **Applies to** | apps with the `environmentDetails` opt-ins enabled; supported form factors only |
 | **Maps to** | Play Integrity verdicts: `environmentDetails.appAccessRiskVerdict.appsDetected` (`KNOWN_INSTALLED`/`UNKNOWN_INSTALLED`, `KNOWN_CAPTURING`/`UNKNOWN_CAPTURING`, `KNOWN_CONTROLLING`/`UNKNOWN_CONTROLLING`, `KNOWN_OVERLAYS`/`UNKNOWN_OVERLAYS`), `playProtectVerdict` (`NO_ISSUES`, `NO_DATA`, `POSSIBLE_RISK`, `MEDIUM_RISK`, `HIGH_RISK`, `UNEVALUATED`); MASWE-0039, MASWE-0040 |
@@ -960,7 +960,7 @@ grep -rnE 'canDrawOverlays|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSC
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure\|disclosure_of_secrets\|pii_leakage_exposure` (**VARIES**) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) |
 | **Attacker** | n/a (privacy/compliance, not an attacker model) |
 | **Applies to** | apps with the opt-in enabled |
 | **Maps to** | Play Integrity overview: "Device Recall: Store custom data per-device on Google servers; survives app reinstall and device reset"; `recentDeviceActivity` |
@@ -985,7 +985,7 @@ grep -rn -i 'deviceRecall\|device_recall\|recentDeviceActivity' sources/
 | | |
 |---|---|
 | **Severity ceiling** | High (a shipped debug provider/token is High on its own; Medium where App Check is simply absent) |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**); the data it exposes may rate higher under `sensitive_data_exposure\|disclosure_of_secrets\|*` |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); the data it exposes may rate higher under `sensitive_data_exposure.disclosure_of_secrets\|*` |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Firebase/GCP-backed services or the App Check custom-backend integration |
 | **Maps to** | Firebase App Check documentation — Play Integrity is the Android provider; protects Cloud Firestore, Realtime Database, Cloud Storage, callable Cloud Functions, Firebase Authentication (Preview) and custom backends; debug providers are local-development-only |
@@ -1016,7 +1016,7 @@ curl -s -X POST "https://firestore.googleapis.com/v1/projects/$PROJ/databases/(d
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**); `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**) where the chain is accepted unverified |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) where the chain is accepted unverified |
 | **Attacker** | AM-01 |
 | **Applies to** | Android 7.0+ (Keymaster 2 key attestation) |
 | **Maps to** | MASTG-KNOW-0044 (Key Attestation), MASTG-KNOW-0034 (Device Binding), MASWE-0054; Android security-key-attestation documentation — "Perform verification on a **separate server**, not on the device itself"; extension OID `1.3.6.1.4.1.11129.2.1.17` |
@@ -1050,7 +1050,7 @@ BAD   {"hardwareBacked":true,"securityLevel":"TrustedEnvironment"}   # a client 
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**, argue Critical); `broken_authentication_and_session_management\|authentication_bypass` (**P1**) where the attestation is the authentication for device enrolment |
+| **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**, argue Critical); `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the attestation is the authentication for device enrolment |
 | **Attacker** | AM-01 |
 | **Applies to** | all servers consuming Android key attestation |
 | **Maps to** | Android security-key-attestation documentation — "**Critical**: Only trust the **first occurrence** of the extension (nearest to root). Extensions in the leaf certificate may have been added by attackers"; `KeyDescription` ASN.1 shape in AOSP keystore attestation docs |
@@ -1082,7 +1082,7 @@ openssl x509 -in chain_0.pem -text -noout | grep -A40 '1.3.6.1.4.1.11129.2.1.17'
 | | |
 |---|---|
 | **Severity ceiling** | Critical where attestation gates enrolment or payment provisioning; High otherwise |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) for the enrolment case; otherwise `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) for the enrolment case; otherwise `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
 | **Maps to** | Android security-key-attestation verification checklist — "`attestationChallenge` matches your nonce"; `KeyDescription.attestationChallenge` in AOSP keystore attestation docs; MASTG-KNOW-0034 |
@@ -1111,7 +1111,7 @@ diff <(openssl x509 -in enrol1_leaf.pem -text -noout | grep -A5 'attestationChal
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | Android 7.0+ for the fields; Android 10+ for the VBMeta digest |
 | **Maps to** | AOSP keystore attestation — `RootOfTrust` contains `verifiedBootKey`, `deviceLocked`, `verifiedBootState` (`Verified`, `SelfSigned`, `Unverified`, `Failed`), `verifiedBootHash`; AOSP security-model paper §4.7 (the state "can be verified by apps as well as passed onto backend services to remotely verify boot integrity"; from Android 10 with AVB2 the VBMeta struct digest is included "to support firmware transparency") |
@@ -1140,7 +1140,7 @@ adb shell getprop ro.boot.flash.locked
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**) |
+| **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all servers consuming Android key attestation |
 | **Maps to** | Android security-key-attestation documentation — check `attestationSecurityLevel` is `TrustedEnvironment` or `StrongBox`, verify the root "is signed with Google's attestation root key", check the chain against the CRL at `https://android.googleapis.com/attestation/status`, roots listed at `https://android.googleapis.com/attestation/root`, official verifier `github.com/android/keyattestation`; AOSP `SecurityLevel` values `Software` / `TrustedEnvironment` / `StrongBox` |
@@ -1177,7 +1177,7 @@ adb shell pm list features | grep -iE 'strongbox|hardware_keystore'   # absent o
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (the attacker runs the modified client and owns a second clean handset) |
 | **Applies to** | apps that treat an AndroidKeyStore X.509 attestation chain as a device-integrity boolean |
 | **Maps to** | MASTG-KNOW-0044; AOSP key/ID attestation docs; the published key-attestation relay research |
@@ -1221,7 +1221,7 @@ adb shell pm list features | grep -iE 'strongbox|hardware_keystore'   # absent o
 | | |
 |---|---|
 | **Severity ceiling** | High when it gates a server decision; otherwise Support |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 for the consequence |
 | **Applies to** | all |
 | **Maps to** | AOSP security-model paper §4.7 (the Verified Boot state "is included in key attestation certificates (provided by Keymint/Strongbox) in the `deviceLocked` and `verifiedBootState` fields, which can be verified by apps as well as passed onto backend services"); AOSP verified-boot device-state documentation (LOCKED vs UNLOCKED, `fastboot flashing [unlock\|lock]` wiping data) |
@@ -1259,7 +1259,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High — rated on the unlocked capability, **never on the bypass itself**; Critical only where it gates money movement |
-| **VRT** | `lack_of_binary_hardening\|lack_of_jailbreak_detection` (**P5**) for the bypass; file the *consequence* under `broken_access_control\|privilege_escalation` (**VARIES**) or the relevant D11/D12/D13/D15 node |
+| **VRT** | `lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) for the bypass; file the *consequence* under `broken_access_control.privilege_escalation` (**VARIES**) or the relevant D11/D12/D13/D15 node |
 | **Attacker** | AM-12 for the bypass — which is why the bypass is never the finding; AM-01/AM-05 for whatever it reaches |
 | **Applies to** | all apps shipping root/emulator/hook detection |
 | **Maps to** | MASTG-TEST-0324, MASTG-TEST-0325, MASTG-TEST-0351, MASTG-TECH-0144, MASWE-0051 (CWE-1326), MASWE-0053, MASTG-KNOW-0027, MASTG-KNOW-0031, MASTG-TOOL-0029/-0038 (objection), MASTG-TOOL-0146 (RootBeer), MASTG-TOOL-0021 (Magisk), MASTG-TOOL-0149 (LSPosed), rule `mastg-android-root-detection`; ATT&CK T1633.001, T1630.003 |
@@ -1327,7 +1327,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High — rated on what the check gated; Support where the gate is client-side UI only |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) where a server decision or key release depends on it |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) where a server decision or key release depends on it |
 | **Attacker** | AM-12 for the mechanism; AM-01 where an induced error is remotely reachable |
 | **Applies to** | all |
 | **Maps to** | MASWE-0051, MASVS-RESILIENCE-1; AOSP security-model paper §3 rule ③ (rooting is "modifying the system to allow starting processes that are not subject to sandboxing and isolation" — a CDD non-compliance, and attestation rather than a local check is the supported mechanism) |
@@ -1363,7 +1363,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**); the backup path itself is `mobile_security_misconfiguration\|auto_backup_allowed_by_default` (**P5**) and is not the headline |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); the backup path itself is `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) and is not the headline |
 | **Attacker** | AM-11 physical unlocked / AM-03 where a backup transport is reachable — materially weaker preconditions than "root plus Frida" |
 | **Applies to** | apps with `allowBackup` effectively true, or any on-disk cache of the verdict |
 | **Maps to** | MASWE-0006, MASWE-0051, MASWE-0057 (CWE-471 "Modification of Assumed-Immutable Data") |
@@ -1394,7 +1394,7 @@ adb shell run-as com.target.app cat shared_prefs/security.xml
 | | |
 |---|---|
 | **Severity ceiling** | Critical when the flipped flag causes the **server** to grant an entitlement; Medium for a purely local unlock |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**); `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|identity_check_value` (**P4**) as the integrity-primitive framing |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); `cryptographic_weakness.insufficient_verification_of_data_authenticity.identity_check_value` (**P4**) as the integrity-primitive framing |
 | **Attacker** | AM-11 / AM-12 locally; AM-01 once the server honours it |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0338, MASTG-TECH-0008, MASWE-0057 (CWE-471), MASTG-KNOW-0036, MASTG-BEST-0066, MASVS-RESILIENCE-2, MASVS-CODE-4 |
@@ -1431,7 +1431,7 @@ adb shell am force-stop com.target.app; adb shell monkey -p com.target.app 1
 | | |
 |---|---|
 | **Severity ceiling** | Medium as a broken-control finding; do not inflate |
-| **VRT** | `lack_of_binary_hardening\|lack_of_exploit_mitigations` (**P5**) for the absence; `cryptographic_weakness\|insufficient_verification_of_data_authenticity\|cryptographic_signature` (**VARIES**) where the check is the integrity control the vendor claims |
+| **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) for the absence; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) where the check is the integrity control the vendor claims |
 | **Attacker** | AM-12 |
 | **Applies to** | all; cross-platform builds where the check lives in JS/Dart/C# are the weakest case |
 | **Maps to** | MASWE-0058 (Runtime Code Integrity Not Verified), MASTG-KNOW-0032 (Runtime Integrity Verification), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TECH-0039 |
@@ -1469,7 +1469,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High when combined with a write primitive |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**); rate through the D17 finding it enables |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); rate through the D17 finding it enables |
 | **Attacker** | AM-03/AM-08 where the writable path is reachable by another app or an SDK |
 | **Applies to** | apps with integrity or attestation claims |
 | **Maps to** | MASWE-0058; the Dirty Stream research pattern (the vendor hash check was defeated by overwriting the stored reference hash — the check ran against attacker-controlled reference data) |
@@ -1498,7 +1498,7 @@ ls -l /sdcard/Android/data/com.target.app/files 2>/dev/null
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** where the trigger is plantable by another app |
-| **VRT** | `application_level_denial_of_service_dos\|critical_impact_and_or_easy_difficulty` (**P2**), or `\|high_impact_and_or_medium_difficulty` (**P3**) |
+| **VRT** | `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (**P2**), or `\|high_impact_and_or_medium_difficulty` (**P3**) |
 | **Attacker** | AM-03 zero-permission local app where the trigger is a file on shared storage; AM-01 where the trigger is a server-influenced signal |
 | **Applies to** | all apps with a destructive tamper response |
 | **Maps to** | ATT&CK T1662 Data Destruction, T1630.002 File Deletion (`wipeData`), T1629.002 Device Lockout (`DevicePolicyManager.lockNow()`), T1642 Endpoint Denial of Service, T1471 Data Encrypted for Impact |
@@ -1537,7 +1537,7 @@ adb shell run-as com.target.app ls -la files shared_prefs databases   # before a
 | | |
 |---|---|
 | **Severity ceiling** | High — the app lowers the whole device's baseline; Medium where it is only a battery-optimisation request |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) where it reaches a privileged state; otherwise argue on the platform-protection removed |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) where it reaches a privileged state; otherwise argue on the platform-protection removed |
 | **Attacker** | AM-02 remote one click (the user is talked through it) |
 | **Applies to** | all |
 | **Maps to** | ATT&CK T1629.003 Disable or Modify Tools, T1629 Impair Defenses (detection DET0687, correlating "application-driven security modifications, degraded defensive telemetry, and continued activity under reduced monitoring"), T1632.001 |
@@ -1565,7 +1565,7 @@ adb shell settings get global install_non_market_apps
 | | |
 |---|---|
 | **Severity ceiling** | High as an app-side resilience finding for banking, wallet and DRM apps |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-02 (the user installs the container), AM-08 (the container is the hostile party) |
 | **Applies to** | banking, wallet and DRM apps; any app whose threat model assumes per-package UID isolation |
 | **Maps to** | MASWE-0058; the dex-load primitive `DexFile.openDexFile()` -> `openDexFileNative()` that containers hook and redirect |
@@ -1599,7 +1599,7 @@ adb shell dumpsys package com.target.app | grep -i 'userId=\|pkgFlags'
 | | |
 |---|---|
 | **Severity ceiling** | High for an app that markets MitM detection as a control (bank/fintech) |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**) where the detection gates a flow; otherwise Support |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) where the detection gates a flow; otherwise Support |
 | **Attacker** | AM-07 for the mechanism (tester convenience, not an attacker) — so the finding is the **false claim**, not the interception |
 | **Applies to** | **API 34+**: the live trust store moved to the Conscrypt APEX at `/apex/com.android.conscrypt/cacerts`; `/system/etc/security/cacerts` is ignored at runtime |
 | **Maps to** | AOSP Conscrypt modular-system documentation (dual location, Android 14+); MASWE-0058 |
@@ -1628,7 +1628,7 @@ adb shell ls /system/etc/security/cacerts | head
 | | |
 |---|---|
 | **Severity ceiling** | Critical — per the embedded library's advisory, and only with a reachability proof |
-| **VRT** | `using_components_with_known_vulnerabilities\|outdated_software_version` (**P5**) for the version string alone — you must reach the code path to rate it higher |
+| **VRT** | `using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) for the version string alone — you must reach the code path to rate it higher |
 | **Attacker** | AM-08 malicious third-party SDK / AM-09 where the vulnerable parser consumes remote data |
 | **Applies to** | apps with commercial RASP |
 | **Maps to** | D16 for the version ranges and the reachability proof; MASTG-TOOL-0009 (APKiD) for vendor fingerprinting |
@@ -1691,7 +1691,7 @@ run B: transparent interception (no proxy settings set; redirect at the gateway/
 | | |
 |---|---|
 | **Severity ceiling** | Critical — the extracted material's severity, where the token grants off-device account access; Low where the extraction is local-only |
-| **VRT** | `lack_of_binary_hardening\|runtime_instrumentation_based` (**P5**) for the missing detection — never the headline; file the extracted secret under its own node |
+| **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (**P5**) for the missing detection — never the headline; file the extracted secret under its own node |
 | **Attacker** | AM-12 for the extraction; the finding only exists once D21-002 condition 2 or 6 converts it to AM-01/AM-05 |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0341 (source of the API list below), MASWE-0058, MASTG-KNOW-0030, MASTG-KNOW-0032, MASTG-KNOW-0118, MASTG-BEST-0041, MASTG-TECH-0043, MASTG-TOOL-0001; ATT&CK T1617 Hooking (M1002, M1010) |
@@ -1740,7 +1740,7 @@ JS
 | | |
 |---|---|
 | **Severity ceiling** | Medium — rated on what the attached debugger reaches; the missing detection alone is Informational |
-| **VRT** | `lack_of_binary_hardening\|lack_of_exploit_mitigations` (**P5**) for the absence |
+| **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) for the absence |
 | **Attacker** | AM-11 physical unlocked with USB debugging, or AM-12 |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0352, MASTG-TEST-0353, MASWE-0064, MASTG-KNOW-0028 (Anti-Debugging), MASTG-KNOW-0007, MASTG-TECH-0031, MASTG-TECH-0040, MASTG-TECH-0018, MASTG-BEST-0007/-0029/-0047, rules `mastg-android-debugger-checks` and `mastg-android-native-debugger-checks`, MASTG-TOOL-0019 (jdb), MASTG-TOOL-0152 (lldb), MASTG-TOOL-0151 (debugmepLS); deprecated MASTG-TEST-0046 |
@@ -1778,7 +1778,7 @@ if (ptrace) Interceptor.replace(ptrace, new NativeCallback(function(){ return -1
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) where JDWP yields the session; otherwise rate on the data reached |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) where JDWP yields the session; otherwise rate on the data reached |
 | **Attacker** | AM-11 physical unlocked with USB access; AM-03/AM-06 where adb-over-TCP is enabled |
 | **Applies to** | all |
 | **Maps to** | MASTG-TECH-0031 (Debugging); drozer `app.package.debuggable`, `exploit.jdwp.check`; Android's `android-debuggable` risk documentation |
@@ -1814,7 +1814,7 @@ dz> run exploit.jdwp.check
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) where the DevTools session yields the authenticated web session; otherwise rate on the content reached |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the DevTools session yields the authenticated web session; otherwise rate on the content reached |
 | **Attacker** | AM-11 physical unlocked with USB/adb; AM-03 where another app can reach the abstract socket on an affected build |
 | **Applies to** | all apps with WebViews |
 | **Maps to** | MASTG-TECH-0031; Android's test/debug-features risk documentation; MASWE-0061 |
@@ -1842,7 +1842,7 @@ curl -s http://127.0.0.1:9222/json/version
 | | |
 |---|---|
 | **Severity ceiling** | Critical for a hardcoded credential or an auth bypass; High otherwise |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**); `insecure_os_firmware\|hardcoded_password\|privileged_user` (**P1**) for a shipped test credential; `broken_access_control\|exposed_sensitive_android_intent` (**VARIES**) for the reachable debug Activity |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**); `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**) for a shipped test credential; `broken_access_control.exposed_sensitive_android_intent` (**VARIES**) for the reachable debug Activity |
 | **Attacker** | AM-03 zero-permission local app where the debug component is exported; AM-11 otherwise |
 | **Applies to** | all |
 | **Maps to** | Android test/debug-features risk documentation; MASWE-0061 |
@@ -1875,7 +1875,7 @@ adb shell am start -n com.target.app/.debug.DevToolsActivity
 | | |
 |---|---|
 | **Severity ceiling** | Low — bundle it, do not file it alone |
-| **VRT** | `lack_of_binary_hardening\|lack_of_exploit_mitigations` (**P5**) |
+| **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) |
 | **Attacker** | AM-11 |
 | **Applies to** | all; the target of the test is explicitly the production build |
 | **Maps to** | MASTG-TEST-0263, MASTG-TEST-0264, MASTG-TEST-0265, MASTG-TECH-0009, MASWE-0061 (CWE-489, CWE-497, CWE-540, CWE-912, CWE-1295), MASVS-RESILIENCE-3, rule `mastg-android-strictmode` |
@@ -1903,7 +1903,7 @@ adb logcat --pid=$(adb shell pidof -s com.target.app) | grep -i StrictMode
 | | |
 |---|---|
 | **Severity ceiling** | High where the recovered rule lets you evade a fraud or abuse control; Informational for the obfuscation gap alone |
-| **VRT** | `lack_of_binary_hardening\|lack_of_obfuscation` (**P5**) for the gap; file the recovered rule under `sensitive_data_exposure\|disclosure_of_secrets\|for_internal_asset` (**P3**) or the control it defeats |
+| **VRT** | `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) for the gap; file the recovered rule under `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) or the control it defeats |
 | **Attacker** | AM-01 (anyone can download the APK) |
 | **Applies to** | all |
 | **Maps to** | MASTG-TEST-0368 (Java/Kotlin), MASTG-TEST-0369 (native), MASWE-0059 (CWE-693), MASTG-KNOW-0033 (Obfuscation), MASTG-TECH-0013, -0016, -0017, -0018, -0023, -0024, -0157, MASTG-BEST-0029, MASTG-TOOL-0018 (jadx), MASTG-TOOL-0011 (apktool), MASTG-TOOL-0153 (dProtect); deprecated MASTG-TEST-0051 |
@@ -1958,7 +1958,7 @@ r2 ./libnative.so
 | | |
 |---|---|
 | **Severity ceiling** | Medium — report bundled with the concrete bypass it enabled; Low alone |
-| **VRT** | `lack_of_binary_hardening\|lack_of_obfuscation` (**P5**) |
+| **VRT** | `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
 | **Maps to** | MASTG-KNOW-0033, MASTG-TECH-0165, MASTG-TOOL-0009 (APKiD) |
@@ -1992,7 +1992,7 @@ done | sort -t/ -k1 -n | head -20
 | | |
 |---|---|
 | **Severity ceiling** | High when money or entitlement moves |
-| **VRT** | `broken_access_control\|privilege_escalation` (**VARIES**, CWE-269) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
 | **Maps to** | MASVS-RESILIENCE-1; the generalised form of D21-013 |
@@ -2029,7 +2029,7 @@ curl -i -X POST https://api.target/v1/transfer -H "Authorization: Bearer $TOK" \
 | | |
 |---|---|
 | **Severity ceiling** | Critical where the old version bypasses auth entirely; High for a weakened control; **a version difference alone is Informational** |
-| **VRT** | `broken_authentication_and_session_management\|authentication_bypass` (**P1**) at the ceiling; `broken_access_control\|privilege_escalation` (**VARIES**) for the weakened control |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) at the ceiling; `broken_access_control.privilege_escalation` (**VARIES**) for the weakened control |
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API; every hardcoded endpoint in the APK is a candidate |
 | **Maps to** | the shadow/zombie-API class from the bug-hunting corpus — "a mobile app whose hardcoded backend calls look older than the current web app's" |
@@ -2071,7 +2071,7 @@ done
 | | |
 |---|---|
 | **Severity ceiling** | Low — Informational standalone; rated on the abuse it enables |
-| **VRT** | `lack_of_binary_hardening\|lack_of_jailbreak_detection` (**P5**) for the absence |
+| **VRT** | `lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) for the absence |
 | **Attacker** | AM-01 (an emulator farm is a remote client) |
 | **Applies to** | MAS-R scoped engagements for the observation; anti-fraud-relevant apps for the escalation |
 | **Maps to** | MASTG-TEST-0351, MASWE-0053, MASTG-KNOW-0031, MASTG-BEST-0046, MASTG-TECH-0032, MASTG-TOOL-0009 (APKiD `anti_vm`); deprecated MASTG-TEST-0049; ATT&CK T1633 Virtualization/Sandbox Evasion, T1633.001 System Checks |
@@ -2199,18 +2199,18 @@ grep -i 'authorization\|"cookie"\|integrity-token' out.sanitized.har | head -20 
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
-| "Root detection is missing" | `lack_of_binary_hardening\|lack_of_jailbreak_detection` = **P5** with an all-zero CVSS impact vector. HackerOne Core Ineligible lists it under "Optional security hardening steps / Missing best practices" | Nothing about the absence. Only what the rooted session reached, re-derived on a stock device or through a stock-reachable path (D21-002, D21-010) |
+| "Root detection is missing" | `lack_of_binary_hardening.lack_of_jailbreak_detection` = **P5** with an all-zero CVSS impact vector. HackerOne Core Ineligible lists it under "Optional security hardening steps / Missing best practices" | Nothing about the absence. Only what the rooted session reached, re-derived on a stock device or through a stock-reachable path (D21-002, D21-010) |
 | "Root detection is bypassable" | Same node, same P5. Every major programme excludes it: Google Mobile VRP "Attacks that require a rooted device", Xiaomi/Grab/Spotify "runtime hacking exploits using tools like Frida/Appmon", PayPal, Basecamp, Snapchat, Reddit, HackenProof, YesWeHack Gojek "Lack of binary protection / jailbreak and root detection / anti-debugging controls" | The **server** honouring the client's verdict (D21-013), or the specific control the bypass unlocked, filed under that control's domain (D21-033) |
-| "Frida can attach / the app has no hook detection" | `lack_of_binary_hardening\|runtime_instrumentation_based` = **P5**. AM-12 is not an attacker model | The credential the hook extracted, proved to authenticate other users or off the device (D21-045 + D21-002 condition 6) |
+| "Frida can attach / the app has no hook detection" | `lack_of_binary_hardening.runtime_instrumentation_based` = **P5**. AM-12 is not an attacker model | The credential the hook extracted, proved to authenticate other users or off the device (D21-045 + D21-002 condition 6) |
 | "The APK can be repackaged and re-signed" | HackenProof "Lack of obfuscation or repackaging protections"; Grab/Spotify/Starbucks/Xiaomi "Lack of binary protection control". The repackaged app attacks only its own installer | A distribution channel you can poison so the repackaged build reaches **other** users — that is D17, not D21 |
-| "The app is not obfuscated" | `lack_of_binary_hardening\|lack_of_obfuscation` = **P5**; MASVS: "the absence of any MAS-R measures does not inherently introduce vulnerabilities" | The business rule you read out of the decompile — a fraud threshold, a velocity limit, an allowlist of privileged account ids (D21-051) |
+| "The app is not obfuscated" | `lack_of_binary_hardening.lack_of_obfuscation` = **P5**; MASVS: "the absence of any MAS-R measures does not inherently introduce vulnerabilities" | The business rule you read out of the decompile — a fraud threshold, a velocity limit, an allowlist of privileged account ids (D21-051) |
 | "Emulator detection is missing" | P5, and an emulator is not a security boundary. Google Invalid Reports: "Rooted devices and emulators do not have the same security boundaries as regular devices" | The backend accepting `MEETS_VIRTUAL_INTEGRITY` where its own policy requires device integrity (D21-018), with the abuse rate quantified |
 | "Debugger detection is missing" | P5 standalone, and attaching needs USB debugging plus an unlocked device | What the attached debugger extracted or modified (D21-046), or `android:debuggable="true"` on the store build, which is a different item entirely (D21-047) |
 | "I bypassed the app's RASP with objection/Frida in five minutes" | A statement about your tooling. AOSP's own modifier table caps anything needing an unlocked bootloader or Developer Mode at **no higher than Low** | Nothing. Report what you reached afterwards, on a stock device where possible |
 | "Play Integrity can be defeated with Magisk + TrickyStore + a keybox" | This spoofs attestation *inputs*; Google's backend signature verification still succeeds because the JWT is genuine. It is an operator capability, not an app vulnerability — and abused keyboxes get revoked | The backend accepting a **replayed** or **relayed** token (D21-015, D21-016), or accepting one with no freshness or nonce binding — none of which needs a keybox |
 | "The app's root check can be defeated, and it uses Play Integrity" | If the verdict is server-verified, no local hook forges it. Stop and re-scope to server-side testing rather than burning hours on Frida | The server accepting requests that carry **no** integrity verdict at all, or carrying one bound to nothing (D21-006 routes you) |
 | "Production images cannot be rooted / `adb root` is denied" | `adbd cannot run as root in production builds` is a platform property of `user` builds, not an app finding | Nothing. It is a harness fact; record it in the methodology |
-| "The app stores a token in internal storage and root can read it" | `insecure_data_storage\|sensitive_application_data_stored_unencrypted\|on_internal_storage` = **P5**; the sandbox holds against every attacker except the device owner | The token authenticating a **different** account from your own machine, or a non-root path to the same bytes (backup, exported provider, debuggable build) |
+| "The app stores a token in internal storage and root can read it" | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` = **P5**; the sandbox holds against every attacker except the device owner | The token authenticating a **different** account from your own machine, or a non-root path to the same bytes (backup, exported provider, debuggable build) |
 | "The app does not use Play Integrity at all" | MASWE-0054/-0056 are hardening gaps. An app is not obliged to attest | Only in a MAS-R-scoped SoW engagement (D21-001), where it is a contractual finding, not a vulnerability |
 | "`StrictMode` violations appear in logcat" | Debug artefact; since Android 4.1 no ordinary app reads another app's log | A violation line that itself carries a token, a private path revealing an unreleased feature, or a reader you can name (a log-uploading SDK, a crash reporter, a debuggable build) |
 | "A RASP telemetry beacon fires when I attach Frida" | The SDK reporting a signal is working as designed. Telemetry is not a control | The beacon's *absence* changing a server decision — i.e. the backend gating on a signal a modified client simply never sends (D21-005 -> D21-013) |

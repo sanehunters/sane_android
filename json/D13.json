@@ -2401,7 +2401,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.weak_password_reset_implementation.token_leakage_via_host_header_poisoning` (**P2**)",
-   "vrt_priority": "P2",
+   "vrt_priority": "p2",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -3903,7 +3903,7 @@
    "severity_floor": "high",
    "severity_note": "High (destructive action reachable from any stolen token or any installed app); Critical if reachable pre-auth or cross-user",
    "vrt": "`server_security_misconfiguration.lack_of_password_confirmation.delete_account` (**P4**); `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the exported-surface variant",
-   "vrt_priority": "P4",
+   "vrt_priority": "p4",
    "attacker": "AM-03 (exported activity / deep link), AM-01 (stolen token), AM-02 (a one-tap link in a chat)",
    "attacker_ids": [
     "AM-01",

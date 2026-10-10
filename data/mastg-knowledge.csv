@@ -1,0 +1,76 @@
+id,status,platform,masvs_category,title,url,source_path
+MASTG-KNOW-0001,current,android,MASVS-AUTH,Biometric Authentication,https://mas.owasp.org/MASTG/knowledge/android/MASVS-AUTH/MASTG-KNOW-0001/,knowledge/android/MASVS-AUTH/MASTG-KNOW-0001.md
+MASTG-KNOW-0002,deprecated,android,MASVS-AUTH,FingerprintManager,https://mas.owasp.org/MASTG/knowledge/android/MASVS-AUTH/MASTG-KNOW-0002/,knowledge/android/MASVS-AUTH/MASTG-KNOW-0002.md
+MASTG-KNOW-0004,current,android,MASVS-CODE,Third-Party Libraries,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0004/,knowledge/android/MASVS-CODE/MASTG-KNOW-0004.md
+MASTG-KNOW-0005,current,android,MASVS-CODE,Memory Corruption Bugs,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0005/,knowledge/android/MASVS-CODE/MASTG-KNOW-0005.md
+MASTG-KNOW-0006,current,android,MASVS-CODE,Binary Protection Mechanisms,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0006/,knowledge/android/MASVS-CODE/MASTG-KNOW-0006.md
+MASTG-KNOW-0008,current,android,MASVS-CODE,Debugging Information and Debug Symbols,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0008/,knowledge/android/MASVS-CODE/MASTG-KNOW-0008.md
+MASTG-KNOW-0009,current,android,MASVS-CODE,StrictMode,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0009/,knowledge/android/MASVS-CODE/MASTG-KNOW-0009.md
+MASTG-KNOW-0010,current,android,MASVS-CODE,Exception Handling,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0010/,knowledge/android/MASVS-CODE/MASTG-KNOW-0010.md
+MASTG-KNOW-0117,current,android,MASVS-CODE,Android ContentProvider,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0117/,knowledge/android/MASVS-CODE/MASTG-KNOW-0117.md
+MASTG-KNOW-0138,current,android,MASVS-CODE,URI Schemes in Android Intent Results,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CODE/MASTG-KNOW-0138/,knowledge/android/MASVS-CODE/MASTG-KNOW-0138.md
+MASTG-KNOW-0011,current,android,MASVS-CRYPTO,Security Provider,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0011/,knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0011.md
+MASTG-KNOW-0012,current,android,MASVS-CRYPTO,Key Generation,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0012/,knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0012.md
+MASTG-KNOW-0013,current,android,MASVS-CRYPTO,Random Number Generation,https://mas.owasp.org/MASTG/knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0013/,knowledge/android/MASVS-CRYPTO/MASTG-KNOW-0013.md
+MASTG-KNOW-0014,current,android,MASVS-NETWORK,Android Network Security Configuration,https://mas.owasp.org/MASTG/knowledge/android/MASVS-NETWORK/MASTG-KNOW-0014/,knowledge/android/MASVS-NETWORK/MASTG-KNOW-0014.md
+MASTG-KNOW-0015,current,android,MASVS-NETWORK,Certificate Pinning,https://mas.owasp.org/MASTG/knowledge/android/MASVS-NETWORK/MASTG-KNOW-0015/,knowledge/android/MASVS-NETWORK/MASTG-KNOW-0015.md
+MASTG-KNOW-0016,placeholder,android,MASVS-NETWORK,TBD,https://mas.owasp.org/MASTG/knowledge/android/MASVS-NETWORK/MASTG-KNOW-0016/,knowledge/android/MASVS-NETWORK/MASTG-KNOW-0016.md
+MASTG-KNOW-0017,current,android,MASVS-PLATFORM,App Permissions,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0017/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0017.md
+MASTG-KNOW-0018,current,android,MASVS-PLATFORM,WebViews,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0018/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0018.md
+MASTG-KNOW-0019,current,android,MASVS-PLATFORM,Deep Links,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0019/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0019.md
+MASTG-KNOW-0020,current,android,MASVS-PLATFORM,Inter-Process Communication (IPC) Mechanisms,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0020/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0020.md
+MASTG-KNOW-0021,current,android,MASVS-PLATFORM,Object Serialization,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0021/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0021.md
+MASTG-KNOW-0022,current,android,MASVS-PLATFORM,Overlay Attacks,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0022/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0022.md
+MASTG-KNOW-0023,current,android,MASVS-PLATFORM,Enforced Updating,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0023/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0023.md
+MASTG-KNOW-0024,current,android,MASVS-PLATFORM,Pending Intents,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0024/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0024.md
+MASTG-KNOW-0025,current,android,MASVS-PLATFORM,Explicit vs Implicit Intents,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0025/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0025.md
+MASTG-KNOW-0105,placeholder,android,MASVS-PLATFORM,User-Initiated Screenshots and Screen Recording,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0105/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0105.md
+MASTG-KNOW-0106,placeholder,android,MASVS-PLATFORM,App-Initiated Screenshots and Screen Recording,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0106/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0106.md
+MASTG-KNOW-0107,placeholder,android,MASVS-PLATFORM,Screenshots and Screen Recording Detection,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0107/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0107.md
+MASTG-KNOW-0132,current,android,MASVS-PLATFORM,Android Activities,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0132/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0132.md
+MASTG-KNOW-0133,current,android,MASVS-PLATFORM,Android Services,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0133/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0133.md
+MASTG-KNOW-0134,current,android,MASVS-PLATFORM,Android Broadcast Receivers,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0134/,knowledge/android/MASVS-PLATFORM/MASTG-KNOW-0134.md
+MASTG-KNOW-0026,current,android,MASVS-STORAGE,Third-party Services Embedded in the App,https://mas.owasp.org/MASTG/knowledge/android/MASVS-PRIVACY/MASTG-KNOW-0026/,knowledge/android/MASVS-PRIVACY/MASTG-KNOW-0026.md
+MASTG-KNOW-0003,current,android,MASVS-RESILIENCE,App Signing,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0003/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0003.md
+MASTG-KNOW-0007,current,android,MASVS-CODE,Debuggable Apps,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0007/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0007.md
+MASTG-KNOW-0027,current,android,MASVS-RESILIENCE,Root Detection,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0027/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0027.md
+MASTG-KNOW-0028,current,android,MASVS-RESILIENCE,Anti-Debugging,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0028/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0028.md
+MASTG-KNOW-0029,current,android,MASVS-RESILIENCE,File Integrity Checks,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0029/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0029.md
+MASTG-KNOW-0030,current,android,MASVS-RESILIENCE,Reverse Engineering Tool Detection,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0030/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0030.md
+MASTG-KNOW-0031,current,android,MASVS-RESILIENCE,Emulator Detection,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0031/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0031.md
+MASTG-KNOW-0032,current,android,MASVS-RESILIENCE,Runtime Integrity Verification,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0032/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0032.md
+MASTG-KNOW-0033,current,android,MASVS-RESILIENCE,Obfuscation,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0033/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0033.md
+MASTG-KNOW-0034,current,android,MASVS-RESILIENCE,Device Binding,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0034/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0034.md
+MASTG-KNOW-0035,current,android,MASVS-RESILIENCE,Google Play Integrity API,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0035/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0035.md
+MASTG-KNOW-0118,current,android,MASVS-RESILIENCE,Runtime Application Self-Protection (RASP),https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0118/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0118.md
+MASTG-KNOW-0119,placeholder,android,MASVS-RESILIENCE,Key Attestation,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0119/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0119.md
+MASTG-KNOW-0120,placeholder,android,MASVS-RESILIENCE,Device Attestation,https://mas.owasp.org/MASTG/knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0120/,knowledge/android/MASVS-RESILIENCE/MASTG-KNOW-0120.md
+MASTG-KNOW-0036,current,android,MASVS-STORAGE,Shared Preferences,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0036/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0036.md
+MASTG-KNOW-0037,current,android,MASVS-STORAGE,SQLite Database,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0037/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0037.md
+MASTG-KNOW-0038,current,android,MASVS-STORAGE,SQLCipher Database,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0038/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0038.md
+MASTG-KNOW-0039,current,android,MASVS-STORAGE,Firebase Real-time Databases,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0039/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0039.md
+MASTG-KNOW-0040,current,android,MASVS-STORAGE,Realm Databases,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0040/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0040.md
+MASTG-KNOW-0041,current,android,MASVS-STORAGE,Internal Storage,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0041/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0041.md
+MASTG-KNOW-0042,current,android,MASVS-STORAGE,External Storage,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0042/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0042.md
+MASTG-KNOW-0043,current,android,MASVS-STORAGE,Android KeyStore,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0043/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0043.md
+MASTG-KNOW-0044,current,android,MASVS-STORAGE,Key Attestation,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0044/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0044.md
+MASTG-KNOW-0045,current,android,MASVS-STORAGE,Secure Key Import into Keystore,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0045/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0045.md
+MASTG-KNOW-0046,deprecated,android,MASVS-STORAGE,BouncyCastle KeyStore,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0046/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0046.md
+MASTG-KNOW-0047,current,android,MASVS-STORAGE,Cryptographic Key Storage,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0047/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0047.md
+MASTG-KNOW-0048,current,android,MASVS-STORAGE,KeyChain,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0048/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0048.md
+MASTG-KNOW-0049,current,android,MASVS-STORAGE,Logs,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0049/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0049.md
+MASTG-KNOW-0050,current,android,MASVS-STORAGE,Backups,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0050/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0050.md
+MASTG-KNOW-0051,current,android,MASVS-STORAGE,Process Memory,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0051/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0051.md
+MASTG-KNOW-0052,current,android,MASVS-STORAGE,User Interface Components,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0052/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0052.md
+MASTG-KNOW-0053,current,android,MASVS-STORAGE,Screenshots,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0053/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0053.md
+MASTG-KNOW-0054,current,android,MASVS-STORAGE,App Notifications,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0054/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0054.md
+MASTG-KNOW-0055,current,android,MASVS-STORAGE,Keyboard Cache,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0055/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0055.md
+MASTG-KNOW-0142,current,android,MASVS-STORAGE,Android DataStore,https://mas.owasp.org/MASTG/knowledge/android/MASVS-STORAGE/MASTG-KNOW-0142/,knowledge/android/MASVS-STORAGE/MASTG-KNOW-0142.md
+MASTG-KNOW-0109,current,generic,MASVS-RESILIENCE,Binary Patching,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0109/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0109.md
+MASTG-KNOW-0110,current,generic,MASVS-RESILIENCE,Code Injection,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0110/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0110.md
+MASTG-KNOW-0111,current,generic,MASVS-RESILIENCE,Obfuscation,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0111/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0111.md
+MASTG-KNOW-0112,current,generic,MASVS-RESILIENCE,Emulation-based Dynamic Analysis,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0112/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0112.md
+MASTG-KNOW-0113,current,generic,MASVS-RESILIENCE,Using Disassemblers and Decompilers,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0113/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0113.md
+MASTG-KNOW-0114,current,generic,MASVS-RESILIENCE,Debugging and Tracing,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0114/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0114.md
+MASTG-KNOW-0115,current,generic,MASVS-RESILIENCE,Dynamic Binary Instrumentation,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0115/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0115.md
+MASTG-KNOW-0116,current,generic,MASVS-RESILIENCE,Symbolic Execution,https://mas.owasp.org/MASTG/knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0116/,knowledge/generic/MASVS-RESILIENCE/MASTG-KNOW-0116.md

@@ -26,7 +26,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -210,7 +210,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — argue it)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03, AM-08",
    "attacker_ids": [
     "AM-03",
@@ -362,7 +362,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -412,7 +412,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -607,7 +607,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -652,7 +652,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -698,7 +698,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03; AM-02 when delivered through a WebView or deep link",
    "attacker_ids": [
     "AM-02",
@@ -742,7 +742,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -832,7 +832,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -876,7 +876,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -919,7 +919,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -962,7 +962,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1161,7 +1161,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02",
    "attacker_ids": [
     "AM-02"
@@ -1307,7 +1307,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1402,7 +1402,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1448,7 +1448,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1592,7 +1592,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — rated on the data)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (the attacker holds **no** runtime permissions)",
    "attacker_ids": [
     "AM-03"
@@ -1641,7 +1641,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 + one user tap (the picker/chooser)",
    "attacker_ids": [
     "AM-03"
@@ -1815,7 +1815,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null, CWE-269)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03, AM-04",
    "attacker_ids": [
     "AM-03",
@@ -1861,7 +1861,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null, CWE-269)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1906,7 +1906,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null, CWE-269)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 (needs the user to enable the listener — state the precondition explicitly)",
    "attacker_ids": [
     "AM-04"
@@ -2008,7 +2008,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null); financial replay argues into the programme's payment category",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03, AM-04",
    "attacker_ids": [
     "AM-03",
@@ -2151,7 +2151,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-09 (server content chooses the launch target), AM-03 where the item data comes from an exported provider or the app's cache",
    "attacker_ids": [
     "AM-03",
@@ -2197,7 +2197,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (any app able to obtain slice permission), plus the app's own hosts",
    "attacker_ids": [
     "AM-03"
@@ -2242,7 +2242,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null, CWE-269)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (no user grant needed — this is the acquisition path that beats D08-040 on rating)",
    "attacker_ids": [
     "AM-03"
@@ -2627,7 +2627,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 + one user share action",
    "attacker_ids": [
     "AM-03"
@@ -2674,7 +2674,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2766,7 +2766,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — Critical when the victim's held permission is re-delegated",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"

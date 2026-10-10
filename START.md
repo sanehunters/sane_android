@@ -87,6 +87,12 @@ blocker is non-fatal.
 | **P8 Evidence** | D27 | findings confirmed | per `docs/04`: seven-beat video with the negative control in the same take and a planted canary; evidence tree per finding | every finding has a complete evidence tree | `videos/`, `screenshots/`, `logs/` |
 | **P9 Report** | D27 | P8 | `templates/finding-report.md` per finding; `templates/assessment-report.md` with the ruled-out register; defend via `docs/06` triage ladder; hold the retest | findings accepted or declined with reasons; retest done | `final/` |
 
+**Gates are predicates over files, checked by a script, not a feeling.** `python3 scripts/gate.py $E p3`
+lists exactly which file or row is still missing; `python3 scripts/gate.py $E --pass p3` records
+`gates.P3=true` and moves `phase` to P4 only if the gate is open; `--all` shows every gate at once. A row only
+counts as settled when its `result` and `notes` satisfy §6 — a `completed=true` with no mechanism keeps the
+gate closed.
+
 **Budgets are exit conditions, not hours.** Per item: the three-strike rule (~15 tool calls without
 settling it, or the same probe re-run three times, or exploit code during P3–P6) means *park it and move on*.
 
@@ -101,7 +107,11 @@ settling it, or the same probe re-run three times, or exploit code during P3–P
 3. Walk the items in the card's triage order, not numeric order:
      python3 scripts/item.py Dnn-NNN             # the full item: Test / How / Proof / Escalation / Ruled out when
      run How; compare against Proof; write the raw output to logs/Dnn-NNN.txt
-     settle the row (see §6)                    # finding | ruled-out | blocked | n/a
+     settle the row with the validated writer (see §6):
+       python3 scripts/mark.py $E Dnn-NNN ruled-out --note "<mechanism, file:line>"
+       python3 scripts/mark.py $E Dnn-NNN finding   --note "H-0NN: <primitive>" [--finding F-0NN] --evidence logs/Dnn-NNN.txt
+       python3 scripts/mark.py $E Dnn-NNN blocked   --note "needs: <what>"
+       python3 scripts/mark.py $E Dnn     n/a       --note "<why the whole domain cannot apply>"
      if juicy: hypotheses/H-0NN.md (what you know, why juicy, next experiment, cost)  →  move on   (R0)
 4. Every 10–15 items, or when a phase ends:     update report/assessment-status.md; git add $E; git commit; git push
 5. Domain done when:       every Dnn row settled AND every matching instance in inventory/*.csv has tested=true
@@ -115,9 +125,9 @@ for P7).
 
 ## 6. How to record (the contract hooks and future sessions rely on)
 
-**`checklist-status.csv`** — one row per item. You maintain: `completed` (`true`/`false`), `result`
-(`finding` | `ruled-out` | `blocked` | `n/a`), `finding_id` (`F-0NN` when result=finding), `evidence`
-(path relative to the engagement folder), `notes`.
+**`checklist-status.csv`** — one row per item. Write it only through `scripts/mark.py`, which validates the
+vocabulary: `completed` (`true`/`false`), `result` (`finding` | `ruled-out` | `blocked` | `n/a`),
+`finding_id` (`F-NNN` when result=finding), `evidence` (path relative to the engagement folder), `notes`.
 
 | result | `notes` must contain |
 |---|---|
@@ -133,10 +143,16 @@ for P7).
 `FINDINGS` / `RULED OUT` / `NEXT TARGET (ordered by expected value)` / `BLOCKERS (stated, not faked)` /
 `CHAINING IDEAS`. A future session reads this before anything else and never re-walks `RULED OUT`.
 
-**Evidence naming** — `logs/<item_id>.txt` raw tool output · `screenshots/<item_id>-<n>.png` ·
-`findings/F-0NN/notes.md` · `pocs/F-0NN/` (attacker-app source, never a built APK) · `videos/F-0NN.mp4`
-(under 5 MB) · `requests/<endpoint>.http`. Finding ids are sequential, assigned at discovery, never reused;
-a retracted finding stays in the index struck through with its refutation.
+**ID grammar** — checklist item `Dnn-NNN` · component instance `C-NNN` · deep link `U-NNN` · WebView/bridge
+`W-NNN` · endpoint `E-NNN` · hypothesis `H-NNN` · finding `F-NNN` · chain `X-NNN`. Ids are sequential within
+an engagement, assigned at discovery, never reused; a retracted finding stays in the index struck through
+with its refutation.
+
+**Canonical paths** — decompiled output always lives at `$E/decompiled/apktool/` and
+`$E/decompiled/jadx/` (gitignored; the chapters write `$DEC` for `$E/decompiled`). Evidence:
+`logs/<item_id>.txt` raw tool output · `screenshots/<item_id>-<n>.png` · `findings/F-NNN/report.md` ·
+`pocs/F-NNN/` (attacker-app source, never a built APK) · `videos/F-NNN.mp4` (under 5 MB) ·
+`requests/<E-NNN>.http` and `responses/<E-NNN>.http` (credentials stripped) · `chains/X-NNN.md`.
 
 **Never commit** an APK, AAB, DEX, `.so`, keystore, HAR, a video over 5 MB, a credential, or any third
 party's data. `.gitignore` and the pre-commit hook block most of it; the rule is yours regardless.
@@ -157,7 +173,7 @@ party's data. `.gitignore` and the pre-commit hook block most of it; the rule is
 | They pushed back | `docs/06-triage-playbook.md` | P9 |
 | Why do I keep chasing one bug? | `docs/09-coverage-discipline.md` | when you notice |
 | What is the platform actually doing? | `docs/01-android-architecture-attack-surface.md` (108 KB — search it, do not read it whole) | on demand |
-| A real identifier (MASTG, MASWE, VRT, ATT&CK) | `data/standards-index.csv`, `data/bugcrowd-vrt-full.csv` | grep |
+| A real identifier (MASTG, MASWE, MASVS, VRT, ATT&CK, CWE) | `data/standards-index.csv`, `data/vrt.csv`, `data/maswe.csv`, `data/mastg-tests.csv` … (`data/README.md`) | grep |
 | Where does the output go? | `BugBountyTarget/README.md` | P0 |
 
 **Never load whole:** any `checklist/Dnn-*.md` (140–245 KB), `MASTER-CHECKLIST.md` (grep only),
@@ -174,7 +190,9 @@ party's data. `.gitignore` and the pre-commit hook block most of it; the rule is
 | `scripts/state.py <eng> [--json]` | the resume card from disk (hooks print it at session start) |
 | `scripts/item.py Dnn-NNN` · `--domain Dnn` · `--grep <re>` · `--xrefs` · `--field how` | per-item access |
 | `scripts/inventory.py base.apk --out <eng>/inventory/` | per-instance registers (components, deep links, WebViews, endpoints) |
-| `scripts/coverage.py <eng>/checklist-status.csv --components <eng>/inventory/ [--gate p7] [--brief]` | two-dimensional coverage; the P7 gate |
+| `scripts/mark.py <eng> Dnn-NNN <result> --note …` | the only writer of `checklist-status.csv` (validates the vocabulary) |
+| `scripts/gate.py <eng> p0…p8\|done\|--all\|--pass pN` | phase gates as file predicates; records a passed gate |
+| `scripts/coverage.py <eng>/checklist-status.csv --components <eng>/inventory/ [--gate p7] [--brief]` | two-dimensional coverage report |
 | `scripts/build-checklist.py` · `scripts/lint-checklist.py` · `scripts/refresh-data.py` | maintainers only |
 | `tools/01..07-*.sh` | static surface inventory, component sweep, provider sweep, App Link verify, storage sweep, secrets/endpoints, deep-link sweep |
 | `frida/*.js` | runtime scripts with the correctness rules baked in (concrete classes, live objects) |

@@ -1,0 +1,26 @@
+rank,id,name,year,url
+1,CWE-79,Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting'),2025,https://cwe.mitre.org/data/definitions/79.html
+2,CWE-89,Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection'),2025,https://cwe.mitre.org/data/definitions/89.html
+3,CWE-352,Cross-Site Request Forgery (CSRF),2025,https://cwe.mitre.org/data/definitions/352.html
+4,CWE-862,Missing Authorization,2025,https://cwe.mitre.org/data/definitions/862.html
+5,CWE-787,Out-of-bounds Write,2025,https://cwe.mitre.org/data/definitions/787.html
+6,CWE-22,Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal'),2025,https://cwe.mitre.org/data/definitions/22.html
+7,CWE-416,Use After Free,2025,https://cwe.mitre.org/data/definitions/416.html
+8,CWE-125,Out-of-bounds Read,2025,https://cwe.mitre.org/data/definitions/125.html
+9,CWE-78,Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection'),2025,https://cwe.mitre.org/data/definitions/78.html
+10,CWE-94,Improper Control of Generation of Code ('Code Injection'),2025,https://cwe.mitre.org/data/definitions/94.html
+11,CWE-120,Buffer Copy without Checking Size of Input ('Classic Buffer Overflow'),2025,https://cwe.mitre.org/data/definitions/120.html
+12,CWE-434,Unrestricted Upload of File with Dangerous Type,2025,https://cwe.mitre.org/data/definitions/434.html
+13,CWE-476,NULL Pointer Dereference,2025,https://cwe.mitre.org/data/definitions/476.html
+14,CWE-121,Stack-based Buffer Overflow,2025,https://cwe.mitre.org/data/definitions/121.html
+15,CWE-502,Deserialization of Untrusted Data,2025,https://cwe.mitre.org/data/definitions/502.html
+16,CWE-122,Heap-based Buffer Overflow,2025,https://cwe.mitre.org/data/definitions/122.html
+17,CWE-863,Incorrect Authorization,2025,https://cwe.mitre.org/data/definitions/863.html
+18,CWE-20,Improper Input Validation,2025,https://cwe.mitre.org/data/definitions/20.html
+19,CWE-284,Improper Access Control,2025,https://cwe.mitre.org/data/definitions/284.html
+20,CWE-200,Exposure of Sensitive Information to an Unauthorized Actor,2025,https://cwe.mitre.org/data/definitions/200.html
+21,CWE-306,Missing Authentication for Critical Function,2025,https://cwe.mitre.org/data/definitions/306.html
+22,CWE-918,Server-Side Request Forgery (SSRF),2025,https://cwe.mitre.org/data/definitions/918.html
+23,CWE-77,Improper Neutralization of Special Elements used in a Command ('Command Injection'),2025,https://cwe.mitre.org/data/definitions/77.html
+24,CWE-639,Authorization Bypass Through User-Controlled Key,2025,https://cwe.mitre.org/data/definitions/639.html
+25,CWE-770,Allocation of Resources Without Limits or Throttling,2025,https://cwe.mitre.org/data/definitions/770.html

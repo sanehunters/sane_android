@@ -1,0 +1,45 @@
+id,status,platform,title,knowledge_ids,url,source_path
+MASTG-BEST-0001,current,android,Use Secure Random Number Generator APIs,MASTG-KNOW-0013,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0001/,best-practices/MASTG-BEST-0001.md
+MASTG-BEST-0002,current,android,Remove Logging Code,MASTG-KNOW-0049,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0002/,best-practices/MASTG-BEST-0002.md
+MASTG-BEST-0003,current,android,Comply with Privacy Regulations and Best Practices,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0003/,best-practices/MASTG-BEST-0003.md
+MASTG-BEST-0004,current,android,Exclude Sensitive Data from Backups,MASTG-KNOW-0050,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0004/,best-practices/MASTG-BEST-0004.md
+MASTG-BEST-0005,current,android,Use Secure Encryption Modes,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0005/,best-practices/MASTG-BEST-0005.md
+MASTG-BEST-0006,current,android,Use Up-to-Date APK Signing Schemes,MASTG-KNOW-0003,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0006/,best-practices/MASTG-BEST-0006.md
+MASTG-BEST-0007,current,android,Debuggable Flag Disabled in the AndroidManifest,MASTG-KNOW-0007,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0007/,best-practices/MASTG-BEST-0007.md
+MASTG-BEST-0008,current,android,Debugging Disabled for WebViews,MASTG-KNOW-0018,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0008/,best-practices/MASTG-BEST-0008.md
+MASTG-BEST-0009,current,android,Use Secure Encryption Algorithms,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0009/,best-practices/MASTG-BEST-0009.md
+MASTG-BEST-0010,current,android,Use Up-to-Date minSdkVersion,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0010/,best-practices/MASTG-BEST-0010.md
+MASTG-BEST-0011,current,android,Securely Load File Content in a WebView,MASTG-KNOW-0018,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0011/,best-practices/MASTG-BEST-0011.md
+MASTG-BEST-0012,current,android,Disable JavaScript in WebViews,MASTG-KNOW-0018,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0012/,best-practices/MASTG-BEST-0012.md
+MASTG-BEST-0013,current,android,Disable Content Provider Access in WebViews,MASTG-KNOW-0018,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0013/,best-practices/MASTG-BEST-0013.md
+MASTG-BEST-0014,current,android,Preventing Screenshots and Screen Recording,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0014/,best-practices/MASTG-BEST-0014.md
+MASTG-BEST-0015,placeholder,android,Use `setRecentsScreenshotEnabled` to Prevent Screenshots When Backgrounded,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0015/,best-practices/MASTG-BEST-0015.md
+MASTG-BEST-0016,placeholder,android,Use `SECURE_FLAG` to Prevent Screenshots and Screen Recording,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0016/,best-practices/MASTG-BEST-0016.md
+MASTG-BEST-0017,placeholder,android,Use `setSecure` to Prevent Screenshots in SurfaceViews,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0017/,best-practices/MASTG-BEST-0017.md
+MASTG-BEST-0018,placeholder,android,Use `SecureFlagPolicy.SecureOn` to Prevent Screenshots in Compose Components,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0018/,best-practices/MASTG-BEST-0018.md
+MASTG-BEST-0019,placeholder,android,Use Non-Caching Input Types for Sensitive Fields,MASTG-KNOW-0055,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0019/,best-practices/MASTG-BEST-0019.md
+MASTG-BEST-0020,current,android,Update the GMS Security Provider,MASTG-KNOW-0011,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0020/,best-practices/MASTG-BEST-0020.md
+MASTG-BEST-0021,current,android,Ensure Proper Error and Exception Handling,MASTG-KNOW-0010,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0021/,best-practices/MASTG-BEST-0021.md
+MASTG-BEST-0027,placeholder,android,Preventing Sensitive Data Exposure in Notifications,MASTG-KNOW-0054,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0027/,best-practices/MASTG-BEST-0027.md
+MASTG-BEST-0028,current,android,WebViews Cache Cleanup,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0028/,best-practices/MASTG-BEST-0028.md
+MASTG-BEST-0029,placeholder,generic,Implementing Resilience and RASP Signals,MASTG-KNOW-0027;MASTG-KNOW-0028;MASTG-KNOW-0029;MASTG-KNOW-0030;MASTG-KNOW-0031;MASTG-KNOW-0032;MASTG-KNOW-0033;MASTG-KNOW-0034;MASTG-KNOW-0035;MASTG-KNOW-0089,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0029/,best-practices/MASTG-BEST-0029.md
+MASTG-BEST-0030,current,generic,Implementing Root Detection,MASTG-KNOW-0027,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0030/,best-practices/MASTG-BEST-0030.md
+MASTG-BEST-0031,current,android,Enforce Strong Biometrics for Sensitive Operations,MASTG-KNOW-0001,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0031/,best-practices/MASTG-BEST-0031.md
+MASTG-BEST-0035,current,android,Prefer Origin Scoped Messaging Over Legacy JavaScript Bridges,MASTG-KNOW-0018,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0035/,best-practices/MASTG-BEST-0035.md
+MASTG-BEST-0036,current,android,Use Cryptographic Binding for Biometric Authentication,MASTG-KNOW-0001,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0036/,best-practices/MASTG-BEST-0036.md
+MASTG-BEST-0037,current,android,Invalidate Biometric Keys on Enrollment Changes,MASTG-KNOW-0001,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0037/,best-practices/MASTG-BEST-0037.md
+MASTG-BEST-0038,current,android,Require Explicit User Confirmation for Biometric Authentication,MASTG-KNOW-0001,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0038/,best-practices/MASTG-BEST-0038.md
+MASTG-BEST-0039,current,android,Prevent SQL Injection in ContentProviders,MASTG-KNOW-0117,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0039/,best-practices/MASTG-BEST-0039.md
+MASTG-BEST-0040,current,android,Preventing Overlay Attacks,MASTG-KNOW-0022,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0040/,best-practices/MASTG-BEST-0040.md
+MASTG-BEST-0041,current,android,Hardening Against Runtime Hooking,MASTG-KNOW-0027;MASTG-KNOW-0030;MASTG-KNOW-0032;MASTG-KNOW-0118;MASTG-KNOW-0033;MASTG-KNOW-0119;MASTG-KNOW-0120,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0041/,best-practices/MASTG-BEST-0041.md
+MASTG-BEST-0046,current,android,Hardening Against Emulation,MASTG-KNOW-0031;MASTG-KNOW-0035;MASTG-KNOW-0033;MASTG-KNOW-0030,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0046/,best-practices/MASTG-BEST-0046.md
+MASTG-BEST-0047,current,android,Continuous Anti-Debugging Checks,MASTG-KNOW-0028,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0047/,best-practices/MASTG-BEST-0047.md
+MASTG-BEST-0049,current,android,Restrict and Validate Access to Exported Content Providers,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0049/,best-practices/MASTG-BEST-0049.md
+MASTG-BEST-0050,current,android,Store Data Encrypted in App Sandbox Directory,MASTG-KNOW-0036,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0050/,best-practices/MASTG-BEST-0050.md
+MASTG-BEST-0052,current,android,Restrict Access to Android App Components,MASTG-KNOW-0017;MASTG-KNOW-0132;MASTG-KNOW-0133;MASTG-KNOW-0134;MASTG-KNOW-0020,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0052/,best-practices/MASTG-BEST-0052.md
+MASTG-BEST-0056,current,android,Use Explicit Intents for Internal IPC,MASTG-KNOW-0025,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0056/,best-practices/MASTG-BEST-0056.md
+MASTG-BEST-0057,current,android,Sanitize Data Coming from External Components,MASTG-KNOW-0025;MASTG-KNOW-0138,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0057/,best-practices/MASTG-BEST-0057.md
+MASTG-BEST-0063,current,android,Use Immutable PendingIntents with Explicit Intents,,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0063/,best-practices/MASTG-BEST-0063.md
+MASTG-BEST-0066,current,android,Implementing Storage Integrity Checks on Android,MASTG-KNOW-0036,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0066/,best-practices/MASTG-BEST-0066.md
+MASTG-BEST-0070,current,android,Verify Android App Links with autoVerify and Digital Asset Links,MASTG-KNOW-0019,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0070/,best-practices/MASTG-BEST-0070.md
+MASTG-BEST-0071,current,android,Validate Input Parameters in Deep Link and Custom URL Scheme Handlers,MASTG-KNOW-0019,https://mas.owasp.org/MASTG/best-practices/MASTG-BEST-0071/,best-practices/MASTG-BEST-0071.md

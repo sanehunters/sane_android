@@ -819,7 +819,7 @@ call that runs them?**
   ```bash
   adb install-multiple base.apk attacker_split.apk           # mismatched signature should fail
   SID=$(adb shell pm install-create -p com.target.app | grep -oE '[0-9]+')
-  adb shell pm install-write -S $(stat -f%z split_x.apk) $SID split_x.apk /dev/stdin < split_x.apk
+  adb shell pm install-write -S $(wc -c < split_x.apk | tr -d " ") $SID split_x.apk /dev/stdin < split_x.apk
   adb shell pm install-commit $SID
   adb logcat -d | grep -iE 'INSTALL_FAILED|signature|split'
   ```

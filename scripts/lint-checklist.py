@@ -8,7 +8,7 @@ Checks
   structure   every chapter has the required sections; every item has the five body fields and the
               five metadata rows; ids are Dnn-NNN, sequential, unique; severity in the allowed set
   attacker    every Attacker field resolves to AM-01..AM-12 or n/a
-  vrt         every VRT path in backticks exists in data/bugcrowd-vrt-full.csv
+  vrt         every VRT path in backticks exists in data/vrt.csv
   standards   every MASTG-*/MASWE-* id exists in data/standards-index.csv (regenerate with scripts/refresh-data.py)
   xrefs       every Dnn-NNN reference points at an item that exists; every Dnn reference is a real domain
   links       every relative markdown link in the repo resolves
@@ -61,8 +61,14 @@ def load_set(path, col):
     return s
 
 
-vrt = load_set(os.path.join(DATA, "bugcrowd-vrt-full.csv"), "vrt_path")
+vrt = load_set(os.path.join(DATA, "vrt.csv"), "vrt_path")
 std = load_set(os.path.join(DATA, "standards-index.csv"), "id")
+std_status = {}
+_p = os.path.join(DATA, "standards-index.csv")
+if os.path.exists(_p):
+    with open(_p, newline="", encoding="utf-8") as _f:
+        for _r in csv.DictReader(_f):
+            std_status[_r["id"]] = (_r.get("status") or "").strip()
 
 chapters = sorted(glob.glob(os.path.join(CH, "D*.md")))
 domains = {os.path.basename(p)[:3] for p in chapters}
@@ -144,6 +150,10 @@ for p in chapters:
             for sid in set(re.findall(r'MASTG-[A-Z]+-\d{4}|MASWE-\d{4}', b)):
                 if sid not in std:
                     err(f, f"{iid}: unknown standards id {sid}")
+                elif std_status.get(sid) == "placeholder":
+                    warn(f, f"{iid}: cites {sid}, which is a placeholder page upstream (no content)")
+                elif std_status.get(sid) == "deprecated" and "deprecated" not in b:
+                    warn(f, f"{iid}: cites deprecated {sid} without saying so (see data/mastg-tests.csv covered_by)")
         rw = re.search(r'- \*\*Ruled out when:?\*\*\s*(.{0,60})', body)
         if rw and len(rw.group(1).strip()) < 25:
             warn(f, f"{iid}: 'Ruled out when' is very short")

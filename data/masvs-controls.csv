@@ -1,0 +1,25 @@
+id,group,group_title,statement,url
+MASVS-STORAGE-1,MASVS-STORAGE,Storage,The app securely stores sensitive data.,https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-1/
+MASVS-STORAGE-2,MASVS-STORAGE,Storage,The app prevents leakage of sensitive data.,https://mas.owasp.org/MASVS/controls/MASVS-STORAGE-2/
+MASVS-CRYPTO-1,MASVS-CRYPTO,Cryptography,The app employs current strong cryptography and uses it according to industry best practices.,https://mas.owasp.org/MASVS/controls/MASVS-CRYPTO-1/
+MASVS-CRYPTO-2,MASVS-CRYPTO,Cryptography,The app performs key management according to industry best practices.,https://mas.owasp.org/MASVS/controls/MASVS-CRYPTO-2/
+MASVS-AUTH-1,MASVS-AUTH,Authentication and Authorization,The app uses secure authentication and authorization protocols and follows the relevant best practices.,https://mas.owasp.org/MASVS/controls/MASVS-AUTH-1/
+MASVS-AUTH-2,MASVS-AUTH,Authentication and Authorization,The app performs local authentication securely according to the platform best practices.,https://mas.owasp.org/MASVS/controls/MASVS-AUTH-2/
+MASVS-AUTH-3,MASVS-AUTH,Authentication and Authorization,The app secures sensitive operations with additional authentication.,https://mas.owasp.org/MASVS/controls/MASVS-AUTH-3/
+MASVS-NETWORK-1,MASVS-NETWORK,Network Communication,The app secures all network traffic according to the current best practices.,https://mas.owasp.org/MASVS/controls/MASVS-NETWORK-1/
+MASVS-NETWORK-2,MASVS-NETWORK,Network Communication,The app performs identity pinning for all remote endpoints under the developer's control.,https://mas.owasp.org/MASVS/controls/MASVS-NETWORK-2/
+MASVS-PLATFORM-1,MASVS-PLATFORM,Platform Interaction,The app uses IPC mechanisms securely.,https://mas.owasp.org/MASVS/controls/MASVS-PLATFORM-1/
+MASVS-PLATFORM-2,MASVS-PLATFORM,Platform Interaction,The app uses WebViews securely.,https://mas.owasp.org/MASVS/controls/MASVS-PLATFORM-2/
+MASVS-PLATFORM-3,MASVS-PLATFORM,Platform Interaction,The app uses the user interface securely.,https://mas.owasp.org/MASVS/controls/MASVS-PLATFORM-3/
+MASVS-CODE-1,MASVS-CODE,Code Quality,The app requires an up-to-date platform version.,https://mas.owasp.org/MASVS/controls/MASVS-CODE-1/
+MASVS-CODE-2,MASVS-CODE,Code Quality,The app has a mechanism for enforcing app updates.,https://mas.owasp.org/MASVS/controls/MASVS-CODE-2/
+MASVS-CODE-3,MASVS-CODE,Code Quality,The app only uses software components without known vulnerabilities.,https://mas.owasp.org/MASVS/controls/MASVS-CODE-3/
+MASVS-CODE-4,MASVS-CODE,Code Quality,The app validates and sanitizes all untrusted inputs.,https://mas.owasp.org/MASVS/controls/MASVS-CODE-4/
+MASVS-RESILIENCE-1,MASVS-RESILIENCE,Resilience Against Reverse Engineering and Tampering,The app validates the integrity of the platform.,https://mas.owasp.org/MASVS/controls/MASVS-RESILIENCE-1/
+MASVS-RESILIENCE-2,MASVS-RESILIENCE,Resilience Against Reverse Engineering and Tampering,The app implements anti-tampering mechanisms.,https://mas.owasp.org/MASVS/controls/MASVS-RESILIENCE-2/
+MASVS-RESILIENCE-3,MASVS-RESILIENCE,Resilience Against Reverse Engineering and Tampering,The app implements anti-static analysis mechanisms.,https://mas.owasp.org/MASVS/controls/MASVS-RESILIENCE-3/
+MASVS-RESILIENCE-4,MASVS-RESILIENCE,Resilience Against Reverse Engineering and Tampering,The app implements anti-dynamic analysis techniques.,https://mas.owasp.org/MASVS/controls/MASVS-RESILIENCE-4/
+MASVS-PRIVACY-1,MASVS-PRIVACY,Privacy,The app minimizes access to sensitive data and resources.,https://mas.owasp.org/MASVS/controls/MASVS-PRIVACY-1/
+MASVS-PRIVACY-2,MASVS-PRIVACY,Privacy,The app prevents identification of the user.,https://mas.owasp.org/MASVS/controls/MASVS-PRIVACY-2/
+MASVS-PRIVACY-3,MASVS-PRIVACY,Privacy,The app is transparent about data collection and usage.,https://mas.owasp.org/MASVS/controls/MASVS-PRIVACY-3/
+MASVS-PRIVACY-4,MASVS-PRIVACY,Privacy,The app offers user control over their data.,https://mas.owasp.org/MASVS/controls/MASVS-PRIVACY-4/

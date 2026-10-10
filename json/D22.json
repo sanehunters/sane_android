@@ -489,7 +489,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what the component does)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -686,7 +686,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -927,7 +927,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.privilege_escalation` (null) — a permission decision circumvented",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 (an SDK that adds the scaffolding) or the app itself against its own user",
    "attacker_ids": [
     "AM-08"
@@ -971,7 +971,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — rated on the data); Critical framing where EXIF GPS is shipped",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05 / AM-09 (the app's own backend receives more than the user chose to share)",
    "attacker_ids": [
     "AM-05",
@@ -1018,7 +1018,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05",
    "attacker_ids": [
     "AM-05"
@@ -1150,7 +1150,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) when a signature-protected custom permission resolves to the pre-rotation key",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 on a pre-Android-13 device",
    "attacker_ids": [
     "AM-03"
@@ -1291,7 +1291,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) when an unprivileged app can start the typed FGS",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1339,7 +1339,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -1383,7 +1383,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1429,7 +1429,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1477,7 +1477,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); P1 via D08 when the reachable internal component performs an authenticated action",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1709,7 +1709,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 / the app itself against its own user",
    "attacker_ids": [
     "AM-04"
@@ -1753,7 +1753,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) — a provenance-based authorisation decision bypassed",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (an app that places a file into shared media)",
    "attacker_ids": [
     "AM-03"
@@ -1798,7 +1798,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the data hand-off; `broken_access_control.privilege_escalation` (null) for an unpinned SDK identity",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 malicious third-party SDK",
    "attacker_ids": [
     "AM-08"
@@ -1843,7 +1843,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05",
    "attacker_ids": [
     "AM-05"
@@ -1931,7 +1931,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) when the destination is attacker-influenced; the phishing outcome is rated by what it captures",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (push-delivered) / AM-08",
    "attacker_ids": [
     "AM-02",
@@ -2066,7 +2066,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); the phishing outcome is rated by what the raised UI captures",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (the party holding the PendingIntent)",
    "attacker_ids": [
     "AM-03"
@@ -2200,7 +2200,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (a remote-access support or casting session the user was talked into)",
    "attacker_ids": [
     "AM-02"
@@ -2433,7 +2433,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2608,7 +2608,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.privilege_escalation` (null) where the LAN protocol lets you control a device; the discovery half is Support",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-06 (an attacker on the same LAN)",
    "attacker_ids": [
     "AM-06"
@@ -2697,7 +2697,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — Critical framing when reproductive or mental-health records leave the device",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05 / AM-09",
    "attacker_ids": [
     "AM-05",
@@ -2873,7 +2873,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) when a split exports a component; rated on what the unreviewed code does",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3197,7 +3197,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3444,7 +3444,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) when the installed-app inventory is transmitted",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3544,7 +3544,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) — it is a platform bug, reported to the OEM/Google, not to the app vendor",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "a principal holding `WRITE_SECURE_SETTINGS` — normally ADB or an OEM-privileged app; **not** AM-03",
    "attacker_ids": [
     "AM-03"

@@ -1,0 +1,23 @@
+id,status,platform,title,source,url,source_path
+MASTG-APP-0001,current,android,AndroGoat,https://github.com/satishpatnayak/AndroGoat,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0001/,apps/android/MASTG-APP-0001.md
+MASTG-APP-0002,current,android,Android License Validator,https://mas.owasp.org/crackmes/Android#android-license-validator,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0002/,apps/android/MASTG-APP-0002.md
+MASTG-APP-0003,current,android,Android UnCrackable L1,https://mas.owasp.org/crackmes/Android#android-uncrackable-l1,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0003/,apps/android/MASTG-APP-0003.md
+MASTG-APP-0004,current,android,Android UnCrackable L2,https://mas.owasp.org/crackmes/Android#android-uncrackable-l2,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0004/,apps/android/MASTG-APP-0004.md
+MASTG-APP-0005,current,android,Android UnCrackable L3,https://mas.owasp.org/crackmes/Android#android-uncrackable-l3,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0005/,apps/android/MASTG-APP-0005.md
+MASTG-APP-0006,current,android,Digitalbank,https://github.com/CyberScions/Digitalbank,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0006/,apps/android/MASTG-APP-0006.md
+MASTG-APP-0007,current,android,DIVA Android,https://github.com/payatu/diva-android,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0007/,apps/android/MASTG-APP-0007.md
+MASTG-APP-0008,current,android,DodoVulnerableBank,https://github.com/CSPF-Founder/DodoVulnerableBank,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0008/,apps/android/MASTG-APP-0008.md
+MASTG-APP-0009,current,android,DVHMA,https://github.com/logicalhacking/DVHMA,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0009/,apps/android/MASTG-APP-0009.md
+MASTG-APP-0010,current,android,InsecureBankv2,https://github.com/dineshshetty/Android-InsecureBankv2,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0010/,apps/android/MASTG-APP-0010.md
+MASTG-APP-0011,current,android,MASTG Hacking Playground (Java),https://github.com/OWASP/MASTG-Hacking-Playground/tree/master/Android/MSTG-Android-Java-App,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0011/,apps/android/MASTG-APP-0011.md
+MASTG-APP-0012,current,android,MASTG Hacking Playground (Kotlin),https://github.com/OWASP/MASTG-Hacking-Playground/tree/master/Android/MASTG-Android-Kotlin-App,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0012/,apps/android/MASTG-APP-0012.md
+MASTG-APP-0013,current,android,OVAA,https://github.com/oversecured/ovaa,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0013/,apps/android/MASTG-APP-0013.md
+MASTG-APP-0014,deprecated,android,InsecureShop,https://github.com/hax0rgb/InsecureShop/,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0014/,apps/android/MASTG-APP-0014.md
+MASTG-APP-0015,current,android,Android UnCrackable L4,https://mas.owasp.org/crackmes/Android#android-uncrackable-l4,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0015/,apps/android/MASTG-APP-0015.md
+MASTG-APP-0016,current,android,Finstergram,https://github.com/netlight/finstergram,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0016/,apps/android/MASTG-APP-0016.md
+MASTG-APP-0017,current,android,Disable-flutter-tls-verification,https://github.com/NVISOsecurity/disable-flutter-tls-verification/blob/main/test_app/pinning.apk,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0017/,apps/android/MASTG-APP-0017.md
+MASTG-APP-0018,current,android,MASTestApp-Android-NETWORK,https://github.com/sydseter/MASTestApp-Android-NETWORK,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0018/,apps/android/MASTG-APP-0018.md
+MASTG-APP-0029,current,android,BugBazaar,https://github.com/payatu/BugBazaar,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0029/,apps/android/MASTG-APP-0029.md
+MASTG-APP-0031,current,android,VulnForum,https://github.com/macik09/Vulnforum,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0031/,apps/android/MASTG-APP-0031.md
+MASTG-APP-0032,current,android,RootBeer Sample,https://github.com/scottyab/rootbeer,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0032/,apps/android/MASTG-APP-0032.md
+MASTG-APP-0033,current,android,Android RASP Sample,https://github.com/securevale/android-rasp,https://mas.owasp.org/MASTG/apps/android/MASTG-APP-0033/,apps/android/MASTG-APP-0033.md

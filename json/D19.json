@@ -1062,7 +1062,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) — never file this as a finding",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-06/AM-07",
    "attacker_ids": [
     "AM-06",
@@ -1368,7 +1368,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null — rated on the control the old bundle lacks); or the specific vulnerability class the rollback target reintroduces",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 zero-permission local app (corrupting the current bundle requires only the app's own writable cache in the `run-as`/rooted case); AM-09 for the served-downgrade variant",
    "attacker_ids": [
     "AM-03",
@@ -1499,7 +1499,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) when it also enables the Dart VM service; otherwise Informational/Low",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01 for the artefact; AM-03/AM-06 if the VM service is reachable",
    "attacker_ids": [
     "AM-01",
@@ -1851,7 +1851,7 @@
    "severity_floor": "support",
    "severity_note": "Support (the resulting traffic findings carry the severity)",
    "vrt": "`mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) if filed as a pinning issue — do not file it there",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-07 network attacker with a trusted CA is a **tester convenience, not an attacker**; the real finding is what the decrypted traffic shows",
    "attacker_ids": [
     "AM-07"
@@ -1961,7 +1961,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what the route exposes)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 remote one-click",
    "attacker_ids": [
     "AM-02"
@@ -2061,7 +2061,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) — do not file; report what the substitution unlocks",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-12 own device — **not an attack**",
    "attacker_ids": [
     "AM-12"
@@ -2593,7 +2593,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "rated by behaviour; `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) or the sink the plugin reaches",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01/AM-03 depending on what the plugin does pre-authentication",
    "attacker_ids": [
     "AM-01",
@@ -2834,7 +2834,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`insecure_data_transport.cleartext_transmission_of_sensitive_data` (null) where the excluded host carries authentication material; the filed finding is what the intercepted traffic exposes",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-06 network attacker",
    "attacker_ids": [
     "AM-06"
@@ -2921,7 +2921,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "n/a as recon; `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) if filed as a finding — do not",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Unity IL2CPP Android builds. Il2CppDumper supports Unity **5.3–2022.2**; frida-il2cpp-bridge covers **5.3.0–6000.3.x**. Mono-backend builds instead ship managed `.dll` assemblies under `assets/bin/Data/Managed/` and are directly ILSpy-able",
@@ -3015,7 +3015,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.privilege_escalation` (null — rated on the entitlement obtained); Critical where it produces direct revenue loss",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-12 own device for the manipulation; the impact is on the vendor",
    "attacker_ids": [
     "AM-12"
@@ -3059,7 +3059,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) when the server accepts the edited value; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) if filed as a storage issue — do not",
-   "vrt_priority": "P5",
+   "vrt_priority": "varies",
    "attacker": "AM-12 own device",
    "attacker_ids": [
     "AM-12"
@@ -3251,7 +3251,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium standalone; High by what the bypass unlocks",
    "vrt": "`lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) if filed as a resilience issue — file the unlocked control instead",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-12 own device",
    "attacker_ids": [
     "AM-12"
@@ -3578,7 +3578,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`insecure_data_transport.cleartext_transmission_of_sensitive_data` (null — rated on what travels)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-06 network attacker, no trusted CA required",
    "attacker_ids": [
     "AM-06"
@@ -3628,7 +3628,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); Critical only when the logged value is authentication material and a local reader exists",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 local app with a common permission (`READ_LOGS` where granted), AM-11 physical unlocked, or anyone receiving a bug report",
    "attacker_ids": [
     "AM-04",

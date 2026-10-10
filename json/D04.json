@@ -26,7 +26,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -78,7 +78,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -169,7 +169,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -220,7 +220,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -263,7 +263,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -552,7 +552,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -643,7 +643,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -737,7 +737,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -965,7 +965,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1055,7 +1055,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); rate on the provider reached",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1099,7 +1099,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); rate on the sink",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1148,7 +1148,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1327,7 +1327,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1372,7 +1372,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1416,7 +1416,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1591,7 +1591,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1637,7 +1637,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1680,7 +1680,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2056,7 +2056,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-11",
    "attacker_ids": [
     "AM-11"
@@ -2101,7 +2101,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); rate on the action confirmed",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01 (no attacker required — the app does it to itself), escalating with AM-04",
    "attacker_ids": [
     "AM-01",
@@ -2147,7 +2147,7 @@
    "severity_floor": "low",
    "severity_note": "Low",
    "vrt": "`mobile_security_misconfiguration.tapjacking` (**P5**)",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-04 (`SYSTEM_ALERT_WINDOW` is a user-granted special permission from Android 6.x)",
    "attacker_ids": [
     "AM-04"
@@ -2490,7 +2490,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); rate on what the control protected",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01 (the platform disables it) escalating with AM-11",
    "attacker_ids": [
     "AM-01",
@@ -2534,7 +2534,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); usually a business-logic defect",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01",
    "attacker_ids": [
     "AM-01"
@@ -2625,7 +2625,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.privilege_escalation` (null) for the cross-user case",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-05 another user of the same device/profile; AM-10 for the pre-unlock case",
    "attacker_ids": [
     "AM-05",
@@ -2671,7 +2671,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03; AM-02 through the browser",
    "attacker_ids": [
     "AM-02",
@@ -2725,7 +2725,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); inherits the PendingIntent finding in D08",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 / AM-08",
    "attacker_ids": [
     "AM-03",
@@ -2770,7 +2770,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**)",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2817,7 +2817,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; to be paid you must move it to `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) or `.critical_impact_and_or_easy_difficulty` (**P2**)",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3224,7 +3224,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); rises with what the extra controls",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"

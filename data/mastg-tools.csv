@@ -1,0 +1,82 @@
+id,status,platform,title,source,url,source_path
+MASTG-TOOL-0001,current,android,Frida (Android),https://github.com/frida/frida,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0001/,tools/android/MASTG-TOOL-0001.md
+MASTG-TOOL-0002,current,android,MobSF (Android),https://github.com/MobSF/Mobile-Security-Framework-MobSF,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0002/,tools/android/MASTG-TOOL-0002.md
+MASTG-TOOL-0003,current,android,nm (Android),https://ftp.gnu.org/gnu/binutils/,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0003/,tools/android/MASTG-TOOL-0003.md
+MASTG-TOOL-0004,current,android,adb,https://developer.android.com/studio/command-line/adb,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0004/,tools/android/MASTG-TOOL-0004.md
+MASTG-TOOL-0005,current,android,Android NDK,https://developer.android.com/ndk/guides/standalone_toolchain,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0005/,tools/android/MASTG-TOOL-0005.md
+MASTG-TOOL-0006,current,android,Android SDK,https://developer.android.com/tools/releases/platform-tools,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0006/,tools/android/MASTG-TOOL-0006.md
+MASTG-TOOL-0007,current,android,Android Studio,https://developer.android.com/studio/index.html,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0007/,tools/android/MASTG-TOOL-0007.md
+MASTG-TOOL-0008,deprecated,android,Android-SSL-TrustKiller,https://github.com/iSECPartners/Android-SSL-TrustKiller,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0008/,tools/android/MASTG-TOOL-0008.md
+MASTG-TOOL-0009,current,android,APKiD,https://github.com/rednaga/APKiD,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0009/,tools/android/MASTG-TOOL-0009.md
+MASTG-TOOL-0010,current,android,APKLab,https://github.com/APKLab/APKLab,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0010/,tools/android/MASTG-TOOL-0010.md
+MASTG-TOOL-0011,current,android,Apktool,https://github.com/iBotPeaches/Apktool,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0011/,tools/android/MASTG-TOOL-0011.md
+MASTG-TOOL-0012,current,android,apkx,https://github.com/muellerberndt/apkx,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0012/,tools/android/MASTG-TOOL-0012.md
+MASTG-TOOL-0013,current,android,Busybox,https://busybox.net,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0013/,tools/android/MASTG-TOOL-0013.md
+MASTG-TOOL-0014,current,android,Bytecode Viewer,https://bytecodeviewer.com/,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0014/,tools/android/MASTG-TOOL-0014.md
+MASTG-TOOL-0015,current,android,drozer,https://github.com/ReversecLabs/drozer,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0015/,tools/android/MASTG-TOOL-0015.md
+MASTG-TOOL-0016,current,android,gplaycli,https://github.com/matlink/gplaycli,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0016/,tools/android/MASTG-TOOL-0016.md
+MASTG-TOOL-0017,current,android,House,https://github.com/nccgroup/house,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0017/,tools/android/MASTG-TOOL-0017.md
+MASTG-TOOL-0018,current,android,jadx,https://github.com/skylot/jadx,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0018/,tools/android/MASTG-TOOL-0018.md
+MASTG-TOOL-0019,current,android,jdb,https://docs.oracle.com/javase/7/docs/technotes/tools/windows/jdb.html,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0019/,tools/android/MASTG-TOOL-0019.md
+MASTG-TOOL-0020,current,android,JustTrustMe,https://github.com/Fuzion24/JustTrustMe,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0020/,tools/android/MASTG-TOOL-0020.md
+MASTG-TOOL-0021,current,android,Magisk,https://topjohnwu.github.io/Magisk/,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0021/,tools/android/MASTG-TOOL-0021.md
+MASTG-TOOL-0022,current,android,ProGuard,https://github.com/Guardsquare/proguard,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0022/,tools/android/MASTG-TOOL-0022.md
+MASTG-TOOL-0023,deprecated,android,RootCloak Plus,https://github.com/devadvance/rootcloakplus,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0023/,tools/android/MASTG-TOOL-0023.md
+MASTG-TOOL-0024,current,android,Scrcpy,https://github.com/Genymobile/scrcpy,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0024/,tools/android/MASTG-TOOL-0024.md
+MASTG-TOOL-0025,current,android,SSLUnpinning,https://github.com/ac-pm/SSLUnpinning_Xposed,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0025/,tools/android/MASTG-TOOL-0025.md
+MASTG-TOOL-0026,current,android,Termux,https://github.com/termux/termux-app,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0026/,tools/android/MASTG-TOOL-0026.md
+MASTG-TOOL-0027,deprecated,android,Xposed,https://github.com/ElderDrivers/EdXposed,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0027/,tools/android/MASTG-TOOL-0027.md
+MASTG-TOOL-0028,current,android,radare2 for Android,https://github.com/radare/radare2,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0028/,tools/android/MASTG-TOOL-0028.md
+MASTG-TOOL-0029,current,android,objection (Android),https://github.com/sensepost/objection,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0029/,tools/android/MASTG-TOOL-0029.md
+MASTG-TOOL-0030,current,android,Angr,https://github.com/angr/angr,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0030/,tools/android/MASTG-TOOL-0030.md
+MASTG-TOOL-0099,current,android,FlowDroid,https://github.com/secure-software-engineering/FlowDroid,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0099/,tools/android/MASTG-TOOL-0099.md
+MASTG-TOOL-0103,current,android,uber-apk-signer,https://github.com/patrickfav/uber-apk-signer,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0103/,tools/android/MASTG-TOOL-0103.md
+MASTG-TOOL-0107,current,android,jnitrace,https://github.com/chame1eon/jnitrace,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0107/,tools/android/MASTG-TOOL-0107.md
+MASTG-TOOL-0112,current,android,pidcat,https://github.com/1fexd/pidcat,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0112/,tools/android/MASTG-TOOL-0112.md
+MASTG-TOOL-0116,current,android,blutter,https://github.com/worawit/blutter,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0116/,tools/android/MASTG-TOOL-0116.md
+MASTG-TOOL-0120,current,android,ProxyDroid,https://github.com/madeye/proxydroid/,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0120/,tools/android/MASTG-TOOL-0120.md
+MASTG-TOOL-0123,current,android,apksigner,https://developer.android.com/tools/apksigner,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0123/,tools/android/MASTG-TOOL-0123.md
+MASTG-TOOL-0124,current,android,aapt2,https://developer.android.com/tools/aapt2,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0124/,tools/android/MASTG-TOOL-0124.md
+MASTG-TOOL-0125,current,android,Apkleaks,https://github.com/dwisiswant0/apkleaks,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0125/,tools/android/MASTG-TOOL-0125.md
+MASTG-TOOL-0130,current,android,blint,https://github.com/owasp-dep-scan/blint,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0130/,tools/android/MASTG-TOOL-0130.md
+MASTG-TOOL-0140,current,android,frida-multiple-unpinning,https://codeshare.frida.re/@akabe1/frida-multiple-unpinning,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0140/,tools/android/MASTG-TOOL-0140.md
+MASTG-TOOL-0146,current,android,RootBeer,https://github.com/scottyab/rootbeer,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0146/,tools/android/MASTG-TOOL-0146.md
+MASTG-TOOL-0147,current,android,Android RASP,https://github.com/securevale/android-rasp,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0147/,tools/android/MASTG-TOOL-0147.md
+MASTG-TOOL-0148,current,android,apkeep,https://github.com/EFForg/apkeep,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0148/,tools/android/MASTG-TOOL-0148.md
+MASTG-TOOL-0149,current,android,LSPosed,https://github.com/JingMatrix/LSPosed,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0149/,tools/android/MASTG-TOOL-0149.md
+MASTG-TOOL-0151,current,android,debugmepLS,https://github.com/sgIOlas/debugmepLS,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0151/,tools/android/MASTG-TOOL-0151.md
+MASTG-TOOL-0152,current,android,lldb (Android),https://lldb.llvm.org/,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0152/,tools/android/MASTG-TOOL-0152.md
+MASTG-TOOL-0153,current,android,dProtect,https://github.com/open-obfuscator/dprotect,https://mas.owasp.org/MASTG/tools/android/MASTG-TOOL-0153/,tools/android/MASTG-TOOL-0153.md
+MASTG-TOOL-0031,current,generic,Frida,https://github.com/frida/frida,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0031/,tools/generic/MASTG-TOOL-0031.md
+MASTG-TOOL-0032,current,generic,Frida CodeShare,https://codeshare.frida.re/,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0032/,tools/generic/MASTG-TOOL-0032.md
+MASTG-TOOL-0033,current,generic,Ghidra,https://github.com/NationalSecurityAgency/ghidra,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0033/,tools/generic/MASTG-TOOL-0033.md
+MASTG-TOOL-0034,current,generic,LIEF,https://github.com/lief-project/LIEF,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0034/,tools/generic/MASTG-TOOL-0034.md
+MASTG-TOOL-0035,current,generic,MobSF,https://github.com/MobSF/Mobile-Security-Framework-MobSF,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0035/,tools/generic/MASTG-TOOL-0035.md
+MASTG-TOOL-0036,current,generic,r2frida,https://github.com/nowsecure/r2frida,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0036/,tools/generic/MASTG-TOOL-0036.md
+MASTG-TOOL-0037,current,generic,RMS Runtime Mobile Security,https://github.com/m0bilesecurity/RMS-Runtime-Mobile-Security,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0037/,tools/generic/MASTG-TOOL-0037.md
+MASTG-TOOL-0038,current,generic,objection,https://github.com/sensepost/objection,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0038/,tools/generic/MASTG-TOOL-0038.md
+MASTG-TOOL-0098,current,generic,iaito,https://github.com/radareorg/iaito,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0098/,tools/generic/MASTG-TOOL-0098.md
+MASTG-TOOL-0100,current,generic,reFlutter,https://github.com/Impact-I/reFlutter,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0100/,tools/generic/MASTG-TOOL-0100.md
+MASTG-TOOL-0101,current,generic,disable-flutter-tls-verification,https://github.com/NVISOsecurity/disable-flutter-tls-verification,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0101/,tools/generic/MASTG-TOOL-0101.md
+MASTG-TOOL-0104,current,generic,hermes-dec,https://github.com/P1sec/hermes-dec/,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0104/,tools/generic/MASTG-TOOL-0104.md
+MASTG-TOOL-0106,current,generic,Fridump,https://github.com/Nightbringer21/fridump,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0106/,tools/generic/MASTG-TOOL-0106.md
+MASTG-TOOL-0108,current,generic,Corellium,https://corellium.com,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0108/,tools/generic/MASTG-TOOL-0108.md
+MASTG-TOOL-0110,current,generic,semgrep,https://github.com/semgrep/semgrep,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0110/,tools/generic/MASTG-TOOL-0110.md
+MASTG-TOOL-0129,current,generic,rabin2,https://github.com/radareorg/radare2,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0129/,tools/generic/MASTG-TOOL-0129.md
+MASTG-TOOL-0131,current,generic,dependency-check,https://github.com/jeremylong/DependencyCheck,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0131/,tools/generic/MASTG-TOOL-0131.md
+MASTG-TOOL-0132,current,generic,dependency-track,https://github.com/DependencyTrack/dependency-track,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0132/,tools/generic/MASTG-TOOL-0132.md
+MASTG-TOOL-0133,current,generic,Visual Studio Code (vscode),https://github.com/microsoft/vscode,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0133/,tools/generic/MASTG-TOOL-0133.md
+MASTG-TOOL-0134,current,generic,cdxgen,https://github.com/CycloneDX/cdxgen,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0134/,tools/generic/MASTG-TOOL-0134.md
+MASTG-TOOL-0144,current,generic,gitleaks,https://github.com/gitleaks/gitleaks,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0144/,tools/generic/MASTG-TOOL-0144.md
+MASTG-TOOL-0145,current,generic,Frooky,https://github.com/cpholguera/frooky,https://mas.owasp.org/MASTG/tools/generic/MASTG-TOOL-0145/,tools/generic/MASTG-TOOL-0145.md
+MASTG-TOOL-0075,current,network,tcpdump (Android),https://www.androidtcpdump.com,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0075/,tools/network/MASTG-TOOL-0075.md
+MASTG-TOOL-0076,current,network,bettercap,https://github.com/bettercap/bettercap,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0076/,tools/network/MASTG-TOOL-0076.md
+MASTG-TOOL-0077,current,network,Burp Suite,https://portswigger.net/burp/communitydownload,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0077/,tools/network/MASTG-TOOL-0077.md
+MASTG-TOOL-0078,current,network,MITM Relay,https://github.com/jrmdev/mitm_relay,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0078/,tools/network/MASTG-TOOL-0078.md
+MASTG-TOOL-0079,current,network,ZAP (Zed Attack Proxy),https://github.com/zaproxy/zaproxy,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0079/,tools/network/MASTG-TOOL-0079.md
+MASTG-TOOL-0080,current,network,tcpdump,https://www.tcpdump.org,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0080/,tools/network/MASTG-TOOL-0080.md
+MASTG-TOOL-0081,current,network,Wireshark,https://github.com/wireshark/wireshark,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0081/,tools/network/MASTG-TOOL-0081.md
+MASTG-TOOL-0097,current,network,mitmproxy,https://github.com/mitmproxy/mitmproxy/,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0097/,tools/network/MASTG-TOOL-0097.md
+MASTG-TOOL-0109,current,network,Nope-Proxy,https://github.com/summitt/Nope-Proxy,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0109/,tools/network/MASTG-TOOL-0109.md
+MASTG-TOOL-0115,current,network,HTTP Toolkit,https://httptoolkit.com,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0115/,tools/network/MASTG-TOOL-0115.md
+MASTG-TOOL-0143,current,network,badssl,https://github.com/chromium/badssl.com,https://mas.owasp.org/MASTG/tools/network/MASTG-TOOL-0143/,tools/network/MASTG-TOOL-0143.md

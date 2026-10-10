@@ -1,0 +1,5 @@
+# apk/versions.txt — the artefact identity. Binaries never enter git; this file does.
+# acquired  <YYYY-MM-DD>   source <play | apkmirror | client | device:<serial>>   acquired_by <tool>
+# package   <com.example.app>   versionName <v>   versionCode <n>   minSdk <n>   targetSdk <n>
+# signer    <SHA-256 of the signing certificate>   schemes <v1 v2 v3 v3.1 v4>
+# sha256                                                            bytes   file

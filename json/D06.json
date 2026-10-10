@@ -68,7 +68,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "n/a — inventory; `broken_access_control.exposed_sensitive_android_intent` (null) only once a reached action is demonstrated",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -257,7 +257,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null — rated on what is exposed)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -444,7 +444,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.privilege_escalation` (null) — rated on the transaction reached",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -491,7 +491,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -779,7 +779,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) — \"a permission check that does not fail closed is a complete access-control bypass\"",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -826,7 +826,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -871,7 +871,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -963,7 +963,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (with a shared-UID sibling) or AM-08",
    "attacker_ids": [
     "AM-03",
@@ -1009,7 +1009,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1099,7 +1099,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (the relaying app holds nothing)",
    "attacker_ids": [
     "AM-03"
@@ -1189,7 +1189,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (requests the permission) or AM-04",
    "attacker_ids": [
     "AM-03",
@@ -1640,7 +1640,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — rate on the capture); `broken_access_control.privilege_escalation` (null) for the permission-model bypass",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1691,7 +1691,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) when the work is sensor or PII collection",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-12 for the observation; the *finding* is a privacy/disclosure one about the app itself",
    "attacker_ids": [
     "AM-12"
@@ -1736,7 +1736,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.privilege_escalation` (null) — background-execution restriction bypass",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "n/a (app-configuration finding)",
    "attacker_ids": [],
    "applies_to": "targetSdk 34+",
@@ -1863,7 +1863,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) — a permission-model bypass with a privacy payload",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1910,7 +1910,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`broken_access_control.privilege_escalation` (null) — a third party holds a sensitive background capability inside the app's UID",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 (malicious or compromised third-party SDK); AM-03 once an exported entry point can start that service",
    "attacker_ids": [
     "AM-03",
@@ -1960,7 +1960,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); Critical when the forged answer is an entitlement or auth verdict",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2005,7 +2005,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2051,7 +2051,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) — a delegated background activity launch",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (the peer) or AM-08",
    "attacker_ids": [
     "AM-03",
@@ -2143,7 +2143,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null) — rated on what the callback accepts",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2292,7 +2292,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 (the user enables a third-party autofill or accessibility consumer)",
    "attacker_ids": [
     "AM-04"
@@ -2389,7 +2389,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); `broken_access_control.privilege_escalation` (null) for an unauthenticated state change",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2529,7 +2529,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); `broken_access_control.privilege_escalation` (null) for the command channel",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2619,7 +2619,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 when the bind permission is missing; otherwise the finding is the data the targets disclose",
    "attacker_ids": [
     "AM-03"
@@ -2666,7 +2666,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium",
    "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); the install-collision variant is availability only",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 (an SDK's initializer) for the code path; AM-03 for the authority-collision hypothesis",
    "attacker_ids": [
     "AM-03",
@@ -2713,7 +2713,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2858,7 +2858,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2903,7 +2903,7 @@
    "severity_floor": "high",
    "severity_note": "High",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3088,7 +3088,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.privilege_escalation` (null); Critical when it turns a validated object into a different one after the boundary",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3311,7 +3311,7 @@
    "severity_floor": "high",
    "severity_note": "High — as a fleet/MDM finding; as an app finding, only when the app itself exposes such a broker or trusts state a broker can forge",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04 (the user completes the pairing flow)",
    "attacker_ids": [
     "AM-04"
@@ -3354,7 +3354,7 @@
    "severity_floor": "critical",
    "severity_note": "Critical",
    "vrt": "`broken_access_control.privilege_escalation` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the redirected traffic",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-06 for a LAN-reachable listener; AM-09 for the VPN case",
    "attacker_ids": [
     "AM-06",

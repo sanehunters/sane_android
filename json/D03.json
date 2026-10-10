@@ -118,7 +118,7 @@
    "severity_floor": "support",
    "severity_note": "Support",
    "vrt": "none (the *reached behaviour* is what gets filed, under `broken_access_control.exposed_sensitive_android_intent`)",
-   "vrt_priority": "n/a",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -221,7 +221,7 @@
    "severity_floor": "high",
    "severity_note": "High (when the declared level and the enforced level differ)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -402,7 +402,7 @@
    "severity_floor": "critical",
    "severity_note": "**Critical** (inherited)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -452,7 +452,7 @@
    "severity_floor": "critical",
    "severity_note": "**Critical** (inherited)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) or `broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (normal) / AM-04 (dangerous — one tap)",
    "attacker_ids": [
     "AM-03",
@@ -511,7 +511,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -554,7 +554,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -600,7 +600,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (Critical when the guarded interface issues tokens or performs privileged writes)",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -644,7 +644,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (requires the legitimate definer to be absent or removed)",
    "attacker_ids": [
     "AM-03"
@@ -687,7 +687,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -734,7 +734,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 / AM-09 (a backend that controls the permission name)",
    "attacker_ids": [
     "AM-03",
@@ -781,7 +781,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-04",
    "attacker_ids": [
     "AM-04"
@@ -825,7 +825,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 (a partner or rotated-away key holder)",
    "attacker_ids": [
     "AM-08"
@@ -869,7 +869,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium — the High belongs to whichever preinstalled holder you then pivot through, and that is filed in D25",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 / OEM scope",
    "attacker_ids": [
     "AM-08"
@@ -914,7 +914,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (inherited)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1006,7 +1006,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-02 (one user tap to change the role holder)",
    "attacker_ids": [
     "AM-02"
@@ -1051,7 +1051,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1147,7 +1147,7 @@
    "severity_floor": "critical",
    "severity_note": "**Critical**",
    "vrt": "`broken_access_control.privilege_escalation` (null) -> P1 as above",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1191,7 +1191,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1234,7 +1234,7 @@
    "severity_floor": "critical",
    "severity_note": "**Critical**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1277,7 +1277,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1323,7 +1323,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1368,7 +1368,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (Low as first disclosed — rate on what the component holds)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1415,7 +1415,7 @@
    "severity_floor": "critical",
    "severity_note": "**Critical**",
    "vrt": "`broken_access_control.privilege_escalation` (null); files to P1 when the delegated read yields another user's data via `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers`",
-   "vrt_priority": "P1",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1465,7 +1465,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 / AM-04",
    "attacker_ids": [
     "AM-03",
@@ -1513,7 +1513,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1561,7 +1561,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (Critical when the component performs an authenticated state change)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1611,7 +1611,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1654,7 +1654,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1698,7 +1698,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1742,7 +1742,7 @@
    "severity_floor": "medium",
    "severity_note": "Medium — an enabler; the High lives in whatever runs inside the collapsed boundary (D16)",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08",
    "attacker_ids": [
     "AM-08"
@@ -1832,7 +1832,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -1879,7 +1879,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (when the screen exposes logs, tokens, or toggles a security control)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (broadcast it programmatically) / AM-02 (social-engineer the user into dialling)",
    "attacker_ids": [
     "AM-02",
@@ -1925,7 +1925,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (Low if it only crashes)",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null); the crash-only case is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**)",
-   "vrt_priority": "P5",
+   "vrt_priority": "varies",
    "attacker": "AM-03 (forge the intent from an app) / AM-10–AM-11 (present the physical device or tag)",
    "attacker_ids": [
     "AM-03",
@@ -2018,7 +2018,7 @@
    "severity_floor": "medium",
    "severity_note": "**High** (when the exempt component routes an arbitrary URI); Medium standalone",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2063,7 +2063,7 @@
    "severity_floor": "high",
    "severity_note": "**High**",
    "vrt": "`broken_access_control.privilege_escalation` (null); rate on the control the gate protects",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -2154,7 +2154,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (when the op gates a *defensive* feature that then fails open); Medium otherwise",
    "vrt": "`mobile_security_misconfiguration.tapjacking` (**P5**) when the failed-open control is an overlay guard — escalate through what the disabled defence permits",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-11 (to set the op) / AM-08",
    "attacker_ids": [
     "AM-08",
@@ -2244,7 +2244,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (for an app-store / enterprise-installer target)",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 / AM-09 (the installer is the third party making the decision)",
    "attacker_ids": [
     "AM-08",
@@ -2772,7 +2772,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (full-screen-intent target is attacker-influenced); Low-Medium for the exact-alarm auto-grant case",
    "vrt": "`broken_access_control.exposed_sensitive_android_intent` (null) for the FSI phishing surface",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-01/AM-09 (a push payload) for the FSI case",
    "attacker_ids": [
     "AM-01",
@@ -2818,7 +2818,7 @@
    "severity_floor": "high",
    "severity_note": "**High** on the defensive half (Critical only where the redressed control authorises a payment or a permission grant); the *holding* half alone is Support",
    "vrt": "`mobile_security_misconfiguration.tapjacking` (**P5** — a pinned node). This item exists to feed D04's PoC and to remove a triager's \"the attacker cannot draw over us\" objection, never to be filed alone",
-   "vrt_priority": "P5",
+   "vrt_priority": "p5",
    "attacker": "AM-04 — the overlay app needs `SYSTEM_ALERT_WINDOW`, which ATT&CK records as *\"at least under certain conditions, automatically granted to applications installed from the Google Play Store\"*",
    "attacker_ids": [
     "AM-04"
@@ -3014,7 +3014,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (when the shared-storage file holds credentials or PII)",
    "vrt": "`insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (**P4**)",
-   "vrt_priority": "P4",
+   "vrt_priority": "p4",
    "attacker": "AM-04 (a second app with storage/media access)",
    "attacker_ids": [
     "AM-04"
@@ -3062,7 +3062,7 @@
    "severity_floor": "critical",
    "severity_note": "**Critical**",
    "vrt": "`broken_access_control.privilege_escalation` (null)",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-03",
    "attacker_ids": [
     "AM-03"
@@ -3110,7 +3110,7 @@
    "severity_floor": "high",
    "severity_note": "**High** (Critical when a low-assurance sibling is exported and the privileged sibling holds tokens)",
    "vrt": "`broken_access_control.privilege_escalation` (null) escalating through whatever the sibling holds",
-   "vrt_priority": "?",
+   "vrt_priority": "varies",
    "attacker": "AM-08 (compromise the weak sibling) / AM-11",
    "attacker_ids": [
     "AM-08",
