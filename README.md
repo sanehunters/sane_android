@@ -86,7 +86,7 @@ python3 ~/sane_android/scripts/coverage.py <eng>/checklist-status.csv --componen
 | [`frida/`](frida/) | Six runtime scripts with the correctness rules baked in |
 | [`tools/`](tools/) | Seven sweep harnesses — all emit candidates, never findings |
 | [`scripts/`](scripts/) | `new-engagement.sh` · `inventory.py` · `coverage.py` · `build-checklist.py` |
-| [`skills/android-bounty/`](skills/android-bounty/) | Claude Code skill that auto-loads the methodology |
+| [`.claude/skills/android-bounty/`](.claude/skills/android-bounty/) | Claude Code skill that auto-loads the methodology |
 | [`data/`](data/) | Machine-extracted standards datasets |
 
 ### The identifiers are extracted, not typed

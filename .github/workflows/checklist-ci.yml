@@ -1,0 +1,32 @@
+name: Checklist integrity
+
+# The chapters are the source of truth; everything else is generated and verified here.
+on:
+  push:
+    paths: [ 'checklist/**', 'docs/**', 'scripts/**', 'data/**', 'cards/**', 'json/**', 'checklist.csv', 'CHECKLIST.md', 'MASTER-CHECKLIST.md', 'START.md', 'AGENTS.md', 'CLAUDE.md', '.claude/**', 'tools/**', 'frida/**', '.github/workflows/checklist-ci.yml' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Lint the chapters (format, ids, attacker models, VRT paths, standards ids, cross-references, links)
+        run: python3 scripts/lint-checklist.py
+      - name: Generated views must be current
+        run: python3 scripts/build-checklist.py --check
+      - name: Python compiles
+        run: python3 -m py_compile scripts/*.py
+      - name: Shell scripts parse
+        run: for f in scripts/*.sh tools/*.sh .claude/hooks/*.sh; do bash -n "$f" || exit 1; done
+      - name: Hooks dry-run
+        run: |
+          export CLAUDE_PROJECT_DIR="$PWD"
+          echo '{"tool_input":{"command":"git push --force origin main"}}' | bash .claude/hooks/pre-bash.sh && { echo "destructive git was not blocked"; exit 1; } || true
+          echo '{}' | bash .claude/hooks/session-start.sh >/dev/null
+          echo '{"stop_hook_active":true}' | bash .claude/hooks/stop-guard.sh
+      - name: Item lookup works
+        run: python3 scripts/item.py D10-004 >/dev/null && python3 scripts/item.py --grep JavascriptInterface | head -3

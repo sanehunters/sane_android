@@ -13,7 +13,7 @@ engagement folder** — combine into one operation.
 |---|---|---|
 | [`prompt.md`](prompt.md) | The block you paste into a fresh Claude Code session | You, once per engagement |
 | **This repository** | The methodology: SOP, checklist, docs, tools, issues, board | The Opus 5 session, on demand |
-| [`skills/android-bounty/SKILL.md`](skills/android-bounty/SKILL.md) | A Claude Code skill that auto-loads the methodology whenever an APK is mentioned | Claude, automatically |
+| [`.claude/skills/android-bounty/SKILL.md`](.claude/skills/android-bounty/SKILL.md) | A Claude Code skill that auto-loads the methodology whenever an APK is mentioned | Claude, automatically |
 | [`BugBountyTarget/<Target>_<date>/`](BugBountyTarget/) | Where that engagement's evidence and findings live, on GitHub and locally | Every future session |
 
 ---

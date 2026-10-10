@@ -28,3 +28,10 @@ BugBountyTarget/**/*.keystore
 BugBountyTarget/**/*.jks
 BugBountyTarget/**/*.har
 .DS_Store
+
+# regenerable snapshots and captures
+state-snapshot.json
+*.pcap
+*.pcapng
+*.apks
+*.xapk

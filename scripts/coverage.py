@@ -3,7 +3,7 @@
 
 Two-dimensional coverage for one engagement.
 
-  DIMENSION 1  the methodology  - checklist-status.csv, one row per checklist item (all 27 domains)
+  DIMENSION 1  the methodology  - checklist-status.csv, one row per checklist item (every domain)
   DIMENSION 2  the application  - inventory/*.csv, one row per component that EXISTS in this app
 
 Dimension 2 is what lets you tell a client "all 47 exported components were individually tested".
@@ -22,8 +22,9 @@ TRUE = ("true","yes","1","y","done","complete")
 def truthy(v): return str(v or "").strip().lower() in TRUE
 def isna(r):   return str(r.get("result") or "").strip().lower() in ("n/a","na","not applicable")
 
-# domains worked during the breadth phases P3-P6; D27 etc. are report-time
-BREADTH_DOMAINS = {f"D{i:02d}" for i in range(1, 26)}
+# domains worked during the breadth phases P3-P6. D26 (harness) and D27 (reporting) are not breadth;
+# every other domain present in the tracker is.
+NON_BREADTH = {"D26", "D27"}
 
 def load(p):
     try: return list(csv.DictReader(open(p, encoding="utf-8")))
@@ -112,7 +113,7 @@ def main():
 
     # ---- the gate
     if gate == "p7":
-        blocking = [r for r in todo if (r.get("domain") or "").strip() in BREADTH_DOMAINS]
+        blocking = [r for r in todo if (r.get("domain") or "").strip() not in NON_BREADTH]
         if blocking or inst_open or bad_na:
             print("\n" + "="*74)
             print("  ⛔  P7 GATE CLOSED — ESCALATION MAY NOT BEGIN")

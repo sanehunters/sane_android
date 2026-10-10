@@ -1,0 +1,10 @@
+---
+description: Android bug-bounty methodology — operating rules for any agent working in this repository
+alwaysApply: true
+---
+Read START.md in full before acting; AGENTS.md is the SOP. Work the phases P0→P9 in order; no escalation
+before P7 (R0). Load domains via cards/Dnn.md and items via `python3 scripts/item.py Dnn-NNN`; never load a
+whole chapter. Record every settled item in the engagement's checklist-status.csv with a mechanism, and keep
+engagement.json / report/assessment-status.md current. Commit and push after every batch of items. Never
+commit an APK/DEX/SO/keystore/credential. Run `bash .claude/hooks/pre-commit-check.sh` before committing and
+`bash .claude/hooks/stop-guard.sh --manual` before stopping.
