@@ -25,6 +25,11 @@ SECTIONS = ["Why this domain pays", "The crux question", "Triage order", "Items"
             "Graveyard for this domain", "Cross-surface joins", "Sources"]
 BODY = ["Test", "How", "Proof", "Escalation", "Ruled out when"]
 META = ["Severity ceiling", "VRT", "Attacker", "Applies to", "Maps to"]
+REQ_TAGS = {"webview", "js-bridge", "native", "flutter", "react-native", "hermes", "xamarin", "unity", "cordova", "capacitor", "kmp",
+            "provider", "exported-activity", "exported-service", "exported-receiver", "deeplink", "applink", "backend-api",
+            "oauth", "biometric", "payments", "push", "firebase", "ads-sdk", "ai-feature", "two-accounts", "device", "root",
+            "mitm", "frida", "physical", "oem-scope", "enterprise", "wear", "tv", "auto", "legacy"}
+REQ_NUM = re.compile(r"^(api|targetsdk|minsdk)(<=|>=|<|>|=)\d{1,2}$")
 VRT_PREFIXES = ("server_side_injection", "broken_access_control", "broken_authentication_and_session_management",
                 "sensitive_data_exposure", "cross_site_scripting_xss", "mobile_security_misconfiguration",
                 "insecure_data_storage", "lack_of_binary_hardening", "cryptographic_weakness", "insecure_os_firmware",
@@ -154,6 +159,11 @@ for p in chapters:
                     warn(f, f"{iid}: cites {sid}, which is a placeholder page upstream (no content)")
                 elif std_status.get(sid) == "deprecated" and "deprecated" not in b:
                     warn(f, f"{iid}: cites deprecated {sid} without saying so (see data/mastg-tests.csv covered_by)")
+        rq = re.search(r'^\|\s*\*\*Requires\*\*\s*\|\s*(.*?)\s*\|', b, re.M)
+        if rq:
+            for tag in [x.strip().lower() for x in rq.group(1).replace("`", "").split(",") if x.strip()]:
+                if tag not in REQ_TAGS and not REQ_NUM.match(tag) and tag not in ("—", "-", "none", "all"):
+                    err(f, f"{iid}: Requires tag '{tag}' not in the docs/11 vocabulary")
         rw = re.search(r'- \*\*Ruled out when:?\*\*\s*(.{0,60})', body)
         if rw and len(rw.group(1).strip()) < 25:
             warn(f, f"{iid}: 'Ruled out when' is very short")

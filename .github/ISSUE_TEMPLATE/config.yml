@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 📖 Start here — the ordered engagement workflow
-    url: https://github.com/sanehunters/sane_android/blob/main/ISSUES.md
-    about: What to do first, second and third. Read this before opening anything.
+    url: https://github.com/sanehunters/sane_android/blob/main/START.md
+    about: The entry point for any model or human. Read it in full before opening anything.
   - name: ⚖️ Severity & reportability doctrine
     url: https://github.com/sanehunters/sane_android/blob/main/docs/02-severity-and-reportability.md
     about: What counts as a finding, and the graveyard of classes that never pay.

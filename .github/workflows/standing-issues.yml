@@ -1,0 +1,24 @@
+name: Standing issues stay open
+
+# Methodology issues (label do-not-close) are reference material regenerated from the files.
+# Closing one removes it from the work queue every engagement relies on, so it is reopened with a comment.
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  reopen:
+    if: contains(github.event.issue.labels.*.name, 'do-not-close')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reopen and explain
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUM: ${{ github.event.issue.number }}
+        run: |
+          gh issue reopen "$NUM" --repo "$REPO"
+          gh issue comment "$NUM" --repo "$REPO" --body "Reopened automatically: this is a standing methodology issue (\`do-not-close\`). Engagement progress is tracked in the engagement folder (\`scripts/state.py\`), not by closing standing issues. If the content is wrong, fix the file it is generated from and run \`scripts/gh-sync.py\`."

@@ -1,40 +1,69 @@
-name: "📋 Checklist gap — propose a new test item"
-description: "Found a class the checklist misses? Propose it here. This is how the methodology compounds."
-title: "[GAP] D<nn> — <proposed item title>"
-labels: ["type: checklist"]
+name: "📋 Checklist gap — propose a new or corrected item"
+description: "The checklist missed a class, or an item is wrong. Corrections outrank additions. Format: docs/11-item-schema.md."
+title: "[GAP] D<nn> — <proposed item title as a claim about the app>"
+labels: ["type: gap"]
 projects: ["sanehunters/1"]
 body:
   - type: markdown
     attributes:
       value: |
-        The checklist is only worth what the team feeds back into it. If an engagement turned up a class
-        we had no item for, that gap cost us on this client and will cost us on the next one.
+        If an engagement turned up a class we had no item for, that gap cost us on this client and will cost
+        us on the next one. Write the item exactly as `docs/11-item-schema.md` specifies; a maintainer pastes
+        it into the chapter, runs `scripts/build-checklist.py` and `scripts/lint-checklist.py`, and closes this.
 
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind
+      options: ["New item", "Correction to an existing item (give its id below)", "Severity / VRT / attacker-model re-rating", "Applicability (Requires) fix"]
+    validations: {required: true}
   - type: dropdown
     id: domain
     attributes:
       label: Domain
-      options: ["D01 Recon & Surface Mapping","D02 APK/AAB, Signing & Build Integrity","D03 Manifest & Permission Model","D04 Exported Activities, Task & UI Redress","D05 Broadcast Receivers & Implicit Intents","D06 Services, AIDL & Bound IPC","D07 ContentProviders & FileProvider","D08 Intent Redirection, PendingIntent & URI Grants","D09 Deep Links, App Links & URI Schemes","D10 WebView & JavaScript Bridges","D11 Local Data Storage","D12 Cryptography & Key Management","D13 Auth, Session, OTP & Biometrics","D14 Network Security, TLS & Pinning","D15 Backend API, IDOR/BOLA & Business Logic","D16 Native Code, JNI & Memory Safety","D17 Dynamic Code Loading, Deserialization & Supply Chain","D18 Cloud Backend & Third-Party SDK Config","D19 Cross-Platform Frameworks","D20 Privacy, PII & Data Leakage","D21 Anti-Tampering, RASP & Resilience","D22 Platform & OS Version Behaviour","D23 Payments, Entitlements & Fraud","D24 Push, Notifications & Messaging","D25 Device, OEM & Privileged Surfaces","D26 Runtime Instrumentation & Tooling","D27 Reporting, Severity & Evidence"]
+      options: ["D01 Recon & Attack-Surface Mapping", "D02 APK/AAB, Signing & Build Integrity", "D03 Manifest & Permission Model", "D04 Exported Activities, Task & UI Redress", "D05 Broadcast Receivers & Implicit Intents", "D06 Services, AIDL & Bound IPC", "D07 ContentProviders & FileProvider", "D08 Intent Redirection, PendingIntent & URI Grants", "D09 Deep Links, App Links & URI Schemes", "D10 WebView & JavaScript Bridges", "D11 Local Data Storage", "D12 Cryptography & Key Management", "D13 Auth, Session, OTP & Biometrics", "D14 Network Security, TLS & Pinning", "D15 Backend API, IDOR/BOLA & Business Logic", "D16 Native Code, JNI & Memory Safety", "D17 Dynamic Code Loading, Deserialization & Supply Chain", "D18 Cloud Backend & Third-Party SDK Config", "D19 Cross-Platform Frameworks", "D20 Privacy, PII & Data Leakage", "D21 Anti-Tampering, RASP & Resilience", "D22 Platform & OS Version Behaviour", "D23 Payments, Entitlements & Fraud", "D24 Push, Notifications & Messaging", "D25 Device, OEM & Privileged Surfaces", "D26 Runtime Instrumentation & Tooling", "D27 Reporting, Severity & Evidence", "D28 AI / LLM Features in Apps", "New domain (explain)"]
     validations: {required: true}
+  - type: input
+    id: existing
+    attributes: {label: Existing item id (for corrections), placeholder: D10-042}
+  - type: input
+    id: severity
+    attributes: {label: "Severity ceiling (what the Proof demonstrates standalone) and VRT path from data/vrt.csv", placeholder: "high · sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset (P1)"}
+    validations: {required: true}
+  - type: input
+    id: attacker
+    attributes: {label: Attacker model (AM-xx), placeholder: "AM-03"}
+    validations: {required: true}
+  - type: input
+    id: applies
+    attributes: {label: Applies to, placeholder: "targetSdk ≥ 31; apps declaring runtime-registered receivers"}
+    validations: {required: true}
+  - type: input
+    id: requires
+    attributes: {label: Requires tags (docs/11 §4), placeholder: "exported-receiver, targetsdk>=31"}
   - type: textarea
     id: test
-    attributes: {label: "Test — what to check"}
+    attributes: {label: "Test — what to check, mechanism-first"}
     validations: {required: true}
   - type: textarea
     id: how
-    attributes: {label: "How — exact command, grep, or tool step", render: shell}
+    attributes: {label: "How — exact, portable, copy-pasteable commands ($DEC for decompiled output)", render: shell}
     validations: {required: true}
   - type: textarea
     id: proof
     attributes: {label: "Proof — the exact observable that confirms it"}
     validations: {required: true}
-  - type: input
-    id: severity
-    attributes: {label: "Severity ceiling, and the VRT path it reaches"}
+  - type: textarea
+    id: escalation
+    attributes: {label: "Escalation — what it chains into, by item id"}
+    validations: {required: true}
+  - type: textarea
+    id: ruled_out
+    attributes: {label: "Ruled out when — the mechanism that closes it (file:line or experiment + precondition)"}
     validations: {required: true}
   - type: textarea
     id: evidence
     attributes:
       label: Evidence this is real
-      description: A source, a CVE, a disclosed report, or an engagement where you proved it. Do not propose speculative items without marking them HYPOTHESIS and stating the experiment that would confirm them.
+      description: "A MASTG/MASWE id from data/standards-index.csv, a CVE, a disclosed report, a HackTricks page, or the engagement where you proved it. Speculative items must be marked HYPOTHESIS with the experiment that would confirm them."
     validations: {required: true}

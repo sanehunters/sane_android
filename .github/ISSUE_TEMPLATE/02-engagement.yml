@@ -1,74 +1,81 @@
-name: "🎯 Engagement — start a new client assessment"
-description: "Open one of these per client engagement. It becomes the parent tracker for that engagement's work."
-title: "[ENGAGEMENT] <client> — <package> — <start date>"
+name: "🎯 Engagement — start a new assessment"
+description: "One per target. The parent tracker; the engagement folder (BugBountyTarget/<Target>_<date>/) is the record of truth."
+title: "[ENGAGEMENT] <Target> — <package> — <YYYY-MM-DD>"
 labels: ["type: engagement", "phase: 0 scope"]
 projects: ["sanehunters/1"]
 body:
   - type: markdown
     attributes:
       value: |
-        This issue is the parent tracker. Do not begin Phase 1 until the authorisation box below is ticked.
-        Full scoping form: [`templates/scoping-questionnaire.md`](../blob/main/templates/scoping-questionnaire.md)
+        Nothing is touched until the authorisation gate below is satisfied and recorded in `engagement.json`.
+        Scoping decision tree: [`templates/scoping-questionnaire.md`](../blob/main/templates/scoping-questionnaire.md) → `templates/scope.yaml`.
 
   - type: input
-    id: client
-    attributes: {label: Client, placeholder: "Acme Ltd"}
+    id: folder
+    attributes: {label: Engagement folder, placeholder: BugBountyTarget/Nisho_07092026}
     validations: {required: true}
   - type: input
     id: packages
-    attributes:
-      label: Package(s) in scope
-      description: Include flavours and white-labels
-      placeholder: com.acme.app, com.acme.app.lite
+    attributes: {label: Package(s) in scope, description: "Include flavours and white-labels", placeholder: "com.acme.app, com.acme.app.lite"}
     validations: {required: true}
   - type: input
     id: hosts
-    attributes: {label: API hosts in scope, placeholder: "api.acme.com, *.acme-cdn.com"}
+    attributes: {label: Backend hosts in scope, placeholder: "api.acme.com, *.acme-cdn.com (or: app only)"}
+    validations: {required: true}
+  - type: dropdown
+    id: basis
+    attributes:
+      label: Authorisation basis
+      options: ["Public bug-bounty programme (rules bind; in-scope assets only)", "Signed statement of work", "Own / employer's app", "Vendor VDP (no third-party user data)", "Deliberately vulnerable lab app"]
     validations: {required: true}
   - type: input
-    id: window
-    attributes: {label: Testing window, placeholder: "2026-10-01 to 2026-10-14, IST"}
+    id: programme
+    attributes: {label: Programme URL / SoW reference, placeholder: "https://hackerone.com/acme"}
+  - type: textarea
+    id: exclusions
+    attributes: {label: Exclusions and rules that bind, description: "Copy the programme's out-of-scope list verbatim; map each to graveyard rows and attacker models in scope.yaml"}
     validations: {required: true}
-
   - type: checkboxes
-    id: authorisation
+    id: gate
     attributes:
-      label: Authorisation gate — nothing is touched until every box is ticked
+      label: Authorisation gate
       options:
-        - {label: "Signed authorisation naming these packages and hosts is on file", required: true}
-        - {label: "Rules of engagement agreed, including which attacker models are in scope", required: true}
-        - {label: "Emergency contact for production impact recorded", required: true}
-
+        - {label: "The basis above is recorded in engagement.json.authorisation", required: true}
+        - {label: "Attacker models in scope agreed (docs/05); AM-10/AM-11 explicitly in or out", required: true}
+        - {label: "Emergency contact for production impact recorded (SoW/own app) or programme safe harbour read (bounty)", required: true}
   - type: checkboxes
     id: prereqs
     attributes:
-      label: Prerequisites (chase these on day 1 — each blank is a day lost later)
+      label: Prerequisites — chase on day 0; each blank becomes a BLOCKER line, never a guessed result
       options:
-        - {label: "TWO tester-owned accounts provisioned (required for cross-account IDOR)"}
+        - {label: "Two tester-owned accounts (A and B) — required for cross-account testing"}
         - {label: "Accounts at each privilege level (user / premium / admin / merchant)"}
-        - {label: "KYC / verification state pre-completed, or a route to complete it"}
-        - {label: "Payment sandbox and test instruments available"}
-        - {label: "OTP delivery route the tester can actually receive"}
-        - {label: "Full APK set obtainable (base + config splits)"}
-        - {label: "Build track confirmed as production (a debug build invalidates several checks)"}
-        - {label: "Staging environment available for destructive tests"}
-        - {label: "Rate limits / WAF allow-listing arranged"}
-
+        - {label: "KYC / verification state completed, or a route to complete it"}
+        - {label: "Payment sandbox and test instruments"}
+        - {label: "OTP delivery route the tester can receive"}
+        - {label: "Full APK set obtainable (base + every config split)"}
+        - {label: "Build track confirmed production (a debug build invalidates several checks)"}
+        - {label: "Staging environment for destructive tests"}
+        - {label: "Rate-limit / WAF allow-listing arranged"}
   - type: dropdown
     id: framework
     attributes:
-      label: Framework (decides where the logic lives — answer before Phase 3)
-      options: ["Native Java/Kotlin","React Native (Hermes)","React Native (JSC/plain JS)","Flutter","Cordova / Ionic / Capacitor","Unity (il2cpp)","Xamarin / MAUI","Kotlin Multiplatform","Unknown — determine in Phase 2"]
+      label: Framework (decides where the logic lives — confirm in P2)
+      options: ["Native Java/Kotlin", "React Native (Hermes)", "React Native (JSC/plain JS)", "Flutter", "Cordova / Ionic / Capacitor", "Unity (il2cpp)", "Xamarin / MAUI", "Kotlin Multiplatform", "Unknown — determine in P2"]
     validations: {required: true}
-
   - type: dropdown
     id: ota
     attributes:
       label: OTA code delivery present?
-      description: "If yes, the APK is not the code that runs. Re-base all analysis on the on-device bundle."
-      options: ["Unknown — check in Phase 2","No","Yes — expo-updates","Yes — CodePush","Yes — custom updater"]
+      description: "If yes, the APK is not the code that runs — re-base all analysis on the on-device bundle (P2)."
+      options: ["Unknown — check in P2", "No", "Yes — expo-updates", "Yes — CodePush", "Yes — custom updater"]
     validations: {required: true}
-
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode (scripts/doctor.sh)
+      options: ["Dynamic — device/emulator, root, MitM, Frida verified in P1", "Static-only — no device; dynamic items will be settled blocked"]
+    validations: {required: true}
   - type: textarea
     id: notes
-    attributes: {label: Scope notes, exclusions and anything unusual}
+    attributes: {label: Scope notes and anything unusual}
