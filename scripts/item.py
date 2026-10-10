@@ -3,6 +3,7 @@
 
   python3 scripts/item.py D10-004              full item as markdown (metadata + Test/How/Proof/…)
   python3 scripts/item.py D10-004 D10-006      several items
+  python3 scripts/item.py D10-004 --brief      Test + How + Proof only (the cheapest way to run an item)
   python3 scripts/item.py D10-004 --json       the parsed item as JSON
   python3 scripts/item.py --domain D10         every item id + title in a domain (same as the card table)
   python3 scripts/item.py --grep "javascriptinterface"   search titles + bodies, print matching ids
@@ -37,16 +38,23 @@ def find(iid):
     sys.exit(f"!! no item {iid}")
 
 
-def render(i):
+def render(i, brief=False):
     L = []
+    if brief:
+        A = L.append
+        A(f"### {i['id']} · {i['title']}  [{i['severity']}{'' if i['severity_floor'] == i['severity'] else ' / ' + i['severity_floor'] + ' alone'} · {i['vrt_priority']} · {'/'.join(i['attacker_ids']) or 'n/a'}]")
+        if i.get("requires"): A(f"Requires: {i['requires']}")
+        for k, lab in [("skip_when", "Skip when"), ("test", "Test"), ("how", "How"), ("proof", "Proof")]:
+            if i.get(k): A(f"- **{lab}:** " + i[k].replace("\n", "\n  "))
+        return "\n".join(L)
     A = L.append
     A(f"### {i['id']} · {i['title']}")
     A("")
     A("| | |"); A("|---|---|")
     A(f"| **Severity ceiling** | {E[i['severity']]} {i['severity']} ({i['vrt_priority']}) |")
     for k, lab in [("vrt", "VRT"), ("attacker", "Attacker"), ("applies_to", "Applies to"),
-                   ("prerequisites", "Prerequisites"), ("depends_on", "Depends on"), ("evidence", "Evidence"),
-                   ("cost", "Cost"), ("maps_to", "Maps to")]:
+                   ("requires", "Requires"), ("record", "Record"), ("prerequisites", "Prerequisites"),
+                   ("depends_on", "Depends on"), ("evidence", "Evidence"), ("cost", "Cost"), ("maps_to", "Maps to")]:
         if i.get(k):
             A(f"| **{lab}** | {i[k]} |")
     A("")
@@ -88,6 +96,7 @@ def main():
     if a[0] == "--field":
         field = a[1]; a = a[2:]
     as_json = "--json" in a
+    brief = "--brief" in a
     ids = [x.upper() for x in a if re.fullmatch(r'D\d\d-\d{3}', x, re.I)]
     if not ids:
         print(__doc__); sys.exit(1)
@@ -98,7 +107,7 @@ def main():
         elif field:
             print(i.get(field, ""))
         else:
-            print(render(i)); print()
+            print(render(i, brief)); print()
 
 
 if __name__ == "__main__":

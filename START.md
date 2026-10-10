@@ -104,6 +104,8 @@ settling it, or the same probe re-run three times, or exploit code during P3–P
 1. Load the card           cat cards/Dnn.md            (one line per item; the crux question; the applicability probe; triage order)
 2. Decide applicability    run the card's Applicability probe. If the domain does not apply, set every row
                            result=n/a with the probe's exact note text, record engagement.json.domains_na.Dnn, done.
+   Think first             answer the crux question for THIS app in three lines → hypotheses/_notes-Dnn.md
+                           (which surface, which trust boundary, which value would an attacker want here)
 3. Walk the items in the card's triage order, not numeric order:
      python3 scripts/item.py Dnn-NNN             # the full item: Test / How / Proof / Escalation / Ruled out when
      run How; compare against Proof; write the raw output to logs/Dnn-NNN.txt
@@ -178,6 +180,18 @@ party's data. `.gitignore` and the pre-commit hook block most of it; the rule is
 
 **Never load whole:** any `checklist/Dnn-*.md` (140–245 KB), `MASTER-CHECKLIST.md` (grep only),
 `json/Dnn.json` (jq/python only), `docs/01` (search). Your context is for the target, not for the manual.
+
+**Token economy — the second design goal of this repository.** A model that reads less finds more,
+because the tokens go to the target instead of the manual. The rules:
+
+| Rule | How |
+|---|---|
+| Raw output goes to files; you read digests | every tool writes `$E/logs/<tool>.txt` and prints counts + candidates; `--full` only when you need it; never `cat` a decompiled file — `grep -n`, `sed -n 'a,bp'` |
+| One card per domain, one item at a time | `cards/Dnn.md` once; `python3 scripts/item.py Dnn-NNN --brief` (Test + How + Proof) for the item you are on; `--field how` when you only need the commands |
+| Never re-derive state | `scripts/state.py` and `scripts/next.py` answer "where am I / what next" in one screen; do not re-read the tracker |
+| Think in writing, briefly | before a domain: answer its crux question for *this* app in three lines in `hypotheses/_notes-Dnn.md`; after it: three cross-surface hypotheses. Thirty seconds of thinking saves an hour of probing |
+| Batch what batches | run every `grep` of a domain's static items in one pass over `$DEC`, then settle rows from the log |
+| Park, do not chase | a parked hypothesis costs 100 tokens; a rabbit hole costs the engagement |
 
 ---
 
