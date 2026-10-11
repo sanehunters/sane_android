@@ -1,57 +1,54 @@
 # attacker-app — `probe`
 
-The zero-permission attacker application. **This is how AM-03 is established.**
+The zero-permission test application. **This is how attacker model AM-03 is established.**
 
-> `adb shell am start` runs as the **shell** UID, which holds far more privilege than any real
-> attacker. Discovery with adb is fine. **A finding proved only by adb has not established AM-03.**
-> Re-prove every candidate from this app, and commit its manifest as evidence.
+> `adb shell am start` runs as the **shell** UID, which holds far more privilege than any installed app.
+> Discovery with adb is fine; **a finding proved only by adb has not established AM-03.** Re-prove every
+> candidate from this app, and commit its manifest as evidence — the empty permission block is the argument.
 
-## The manifest is the argument
-
-`app/src/main/AndroidManifest.xml` has an **empty** permission block, on purpose. Screenshot it for the
-evidence tree — that emptiness is the single most rating-relevant fact in any finding proved here.
-
-If a test genuinely needs a permission, you have dropped to **AM-04** and the finding must say so.
-
-## Use
+## Build (no wrapper jar is committed)
 
 ```bash
-# 1. edit the CONFIGURE block at the top of MainActivity.java
-#    VICTIM, FINDING, CLASS, PRECOND, PROXY, NONEXPORT, AUTHORITY, TRAVERSAL, DEEPLINK
-# 2. also set <queries><package android:name="com.victim.app"/> in the manifest (API 30+)
-./gradlew :app:assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb logcat -s PROBE:V          # LootActivity reports here
+cd attacker-app && ./build.sh            # uses ./gradlew if present, else a system gradle; tells you what is missing
+./build.sh --install                     # also adb install -r
 ```
 
-`targetSdk` in `app/build.gradle` matters: raise or lower it to match what you are testing, because
-component export defaults and PendingIntent mutability are gated on it.
+`app/build.gradle` sets `targetSdk 35`; raise or lower it to match what you are testing — component
+export defaults and PendingIntent mutability are gated on it. Set the victim package in the manifest's
+`<queries>` element (API 30+ package visibility) before building.
 
-## What each button proves
+## Drive it headlessly (what a model does)
 
-| Button | Domain | Proves |
+```bash
+adb shell am start -n com.sanehunters.probe/.MainActivity \
+  --es run baseline,enumerate,provider,read,redirect,deeplink \
+  --es victim com.target.app \
+  --es authority com.target.app.fileprovider \
+  --es uri "content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/session.xml" \
+  --es proxy com.target.app.ProxyActivity --es extra intent --es mode loot \
+  --es deeplink "targetapp://open?url=https://example.test/" \
+  --ez finish false
+adb logcat -s PROBE:V          # one line per result:  PROBE|<step>|<key>=<value>
+```
+
+| Step | Domain | Prints |
 |---|---|---|
-| `0) BASELINE` | — | **Beat 4 of the PoC standard.** What the app *cannot* do, before any exploit, in the same take |
-| `1) ENUMERATE` | D03–D06 | The victim's exported surface as an unprivileged UID actually sees it |
-| `2) PROVIDER` | D07 | `query` / `call` / traversal tested as **three separate questions** |
-| `3) EXPLOIT` | D07 | The read primitive, with byte count and content |
-| `4) REDIRECTION` | D08 | Nested Intent through an exported proxy, with all four `FLAG_GRANT_*` set |
-| `5) DEEP LINK` | D09 | Fires as a `BROWSABLE` `VIEW` intent — exactly what a web page can do |
+| `baseline` | — | Beat 4 of the evidence standard: `checkUriPermission=-1 (DENIED)` and the failing direct read, *before* any test |
+| `enumerate` | D03–D06 | the victim's exported components as an unprivileged UID sees them (package-visibility artefacts flagged) |
+| `provider` | D07 | `query` / `call()` tested as separate questions, with raw results |
+| `read` | D07 | the read under test, with byte count and head |
+| `redirect` | D08 | a nested Intent through the victim's exported proxy; `mode=loot` targets our `LootActivity` so a forwarded URI grant is recorded (`PROBE|loot|…`), `mode=internal` targets a victim-internal component (reachability only) |
+| `deeplink` | D09 | fires a `BROWSABLE` `VIEW` intent — exactly what a web page can do |
 
-`LootActivity` catches whatever the victim redirects, takes a persistable URI permission if the grant
-allows, and dumps the bytes. That is the payload half of intent redirection: the confused deputy grants
-*you* access to *its own* non-exported provider.
-
-Commented-out in the manifest, enable as needed: `HijackActivity` for task hijacking (D04) and
-`Sniffer` for implicit-intent interception (D05).
+`HijackActivity` (D04) and `Sniffer` (D05) are compiled but disabled; enable their manifest blocks as needed.
 
 ## The log pane is the narration
 
-No voiceover, no captions. Print the **raw** platform return value with its meaning in parentheses —
-`checkUriPermission -> 0 (0 = GRANTED, -1 = DENIED)` — never a paraphrase. Finish with one line naming
-the impact. See [`docs/04-poc-and-evidence-standard.md`](../docs/04-poc-and-evidence-standard.md).
+Raw platform return values with their meaning in parentheses — `checkUriPermission=0 (0=GRANTED, -1=DENIED)`
+— never a paraphrase. Everything it prints is a **candidate**; the finding is what the chain reaches (P7).
+See [`docs/04-poc-and-evidence-standard.md`](../docs/04-poc-and-evidence-standard.md).
 
 ## Never
 
-Point this at an app you are not authorised to test. Exfiltrate a third party's data — use planted
-canary values. Commit a built APK to this repository.
+Point this at an app you are not authorised to test · exfiltrate a third party's data (plant canary values) ·
+commit a built APK or a Gradle wrapper jar to this repository.

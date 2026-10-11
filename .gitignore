@@ -35,3 +35,8 @@ __pycache__/
 
 # standards source clones for scripts/refresh-data.py
 .refs/
+
+# never commit built artefacts of the probe app
+attacker-app/app/build/
+attacker-app/.gradle/
+attacker-app/gradle/wrapper/*.jar

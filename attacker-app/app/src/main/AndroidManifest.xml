@@ -5,18 +5,16 @@
       ════════════════════════════════════════════════════════════════════════
       THIS BLOCK IS THE ARGUMENT. IT IS EMPTY ON PURPOSE. DO NOT ADD TO IT.
 
-      The entire point of this app is that it declares NO permissions. That is
-      what establishes attacker model AM-03 and it is the single most
-      rating-relevant fact in any finding proved with this app. Screenshot this
-      file for the evidence tree.
-
-      If a test genuinely needs a permission, you have dropped to AM-04 and the
-      finding must say so.
+      This app declares NO permissions. That is what establishes attacker model AM-03 and it is the
+      single most rating-relevant fact in any finding proved with it. Screenshot this file for the
+      evidence tree. If a test genuinely needs a permission, the finding has dropped to AM-04 and must
+      say so.
       ════════════════════════════════════════════════════════════════════════
     -->
 
     <queries>
-        <!-- API 30+ package visibility. Narrow this to the victim only. -->
+        <!-- API 30+ package visibility: name the victim, nothing else. Also settable at runtime via
+             --es victim only for Intent delivery; getPackageInfo needs this entry. -->
         <package android:name="com.victim.app" />
     </queries>
 
@@ -35,7 +33,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Receives redirected Intents and URI grants from the victim. -->
+        <!-- Receives whatever a victim component forwards to us. -->
         <activity
             android:name=".LootActivity"
             android:exported="true"
@@ -43,10 +41,8 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.NoDisplay" />
 
-        <!--
-          TASK HIJACK (D04). Uncomment and set the victim's package as taskAffinity,
-          then confirm with:  adb shell dumpsys activity activities | grep -A3 'Task{'
-        -->
+        <!-- D04 task-affinity test (disabled by default): set taskAffinity to the victim package, then
+             confirm with: adb shell dumpsys activity activities | grep -A3 'Task{' -->
         <!--
         <activity
             android:name=".HijackActivity"
@@ -56,10 +52,7 @@
             android:launchMode="singleTask" />
         -->
 
-        <!--
-          IMPLICIT-INTENT INTERCEPTION (D05). Uncomment and set the action the victim
-          sends implicitly, to win the resolver or the chooser.
-        -->
+        <!-- D05 implicit-broadcast test (disabled by default): set the action the victim sends implicitly. -->
         <!--
         <receiver android:name=".Sniffer" android:exported="true">
             <intent-filter android:priority="999">
