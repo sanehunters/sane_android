@@ -230,7 +230,8 @@ def write_outputs(chapters, root):
     cols = ["item_id", "domain", "phase", "title", "severity_ceiling", "severity_floor", "attacker_model",
             "vrt_priority", "applies_to", "completed", "result", "finding_id", "evidence", "notes"]
     with open(os.path.join(root, "checklist.csv"), "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, cols); w.writeheader()
+        # LF, not the csv module's default CRLF: the repo is LF and a stray \r leaks into cut/grep pipelines
+        w = csv.DictWriter(f, cols, lineterminator="\n"); w.writeheader()
         for c in chapters:
             ph, _ = PHASE.get(c["id"], ("P4", "M4"))
             for i in c["items"]:
@@ -297,9 +298,14 @@ def write_outputs(chapters, root):
     for s in SEV_ORDER:
         if sev_all.get(s): A(f"| {E[s]} **{s.title()}** | {sev_all[s]} |")
     A(f"| | **{total} total** |\n")
+    # Contents + explicit anchors. GitHub slugs a heading from its rendered text (punctuation dropped, nothing
+    # collapsed), so a slug computed here drifts whenever the heading carries ' — ', '·', '&' or links; an
+    # explicit <a id> is renderer-independent. The blank line after the anchor keeps the heading a heading.
+    A("**Contents:** " + " · ".join(f"[{c['id']}](#{c['id'].lower()})" for c in chapters) + "\n")
     for c in chapters:
         ph, ms = PHASE.get(c["id"], ("P4", "M4"))
-        A(f"\n## {c['id']} {c['name']} — {ph} · {len(c['items'])} items · [card](cards/{c['id']}.md) · [chapter](checklist/{c['file']})\n")
+        A(f'\n<a id="{c["id"].lower()}"></a>\n')
+        A(f"## {c['id']} {c['name']} — {ph} · {len(c['items'])} items · [card](cards/{c['id']}.md) · [chapter](checklist/{c['file']})\n")
         if c["crux"]: A(f"> {c['crux']}\n")
         for i in c["items"]:
             A(f"- [ ] `{i['id']}` {E[i['severity']]} {i['vrt_priority']} {('/'.join(i['attacker_ids']) or 'n/a')} — {i['title']}")

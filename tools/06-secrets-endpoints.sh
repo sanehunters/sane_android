@@ -1,45 +1,234 @@
 #!/usr/bin/env bash
-# 06-secrets-endpoints.sh <decompiled-dir>
-# Endpoint map + secret extraction. VERIFY RESTRICTION BEFORE REPORTING ANY KEY.
+# 06-secrets-endpoints.sh <decompiled-dir> [OUT] [--out DIR] [--inventory DIR] [--json] [--help]
+# Endpoint map + secret extraction from a jadx/apktool tree, with file:line provenance on every hit.
+# Produces CANDIDATES. VERIFY RESTRICTION BEFORE REPORTING ANY KEY (hints are printed per shape, never run).
+#
+# Portability: grep -I (binary files skipped -- BSD grep otherwise prints "Binary file ... matches" on
+# stdout and pollutes the lists), [[:space:]] instead of \s, --exclude-dir globs that both greps accept.
+# The heavy scan is grep; classification, masking, the Basic-auth decode filter and the CSV/JSON
+# writers are python3 (stdlib only).
+#
+# Outputs in OUT (default: secrets/):
+#   endpoints.txt    unique URLs            endpoints-hits.csv  url,file,line
+#   routes.csv       method,path,file,line  (Retrofit annotation VALUES survive R8 -- authoritative)
+#   endpoints.csv    inventory schema: instance_id(E-NNN),method,path,source,auth_required,tested_idor,
+#                    tested_massassign,result,notes   (--inventory DIR merges into DIR/endpoints.csv)
+#   fields.txt       @SerializedName / R8-renamed @x("name") on field lines (mass-assignment candidates)
+#   graphql.txt      operation names        base-urls.txt   Retrofit baseUrl()/BASE_URL constants
+#   secrets.csv      shape,value,file,line,confidence,verify,restricted_signature   (FULL values: keep out of git)
+#   verify-hints.sh  one benign read-only probe per secret, commented out, for the operator to run
+#   cloud.csv        host,kind,file,line,probe      summary.json
+# Exit: 0 ran and found >=1 secret/cloud/endpoint candidate; 1 ran, nothing found; 2 usage/environment.
 set -uo pipefail
-DIR="${1:?usage: $0 <decompiled-dir>}"
-OUT="${2:-secrets}"
-mkdir -p "$OUT"
 
-echo "[*] endpoints"
-grep -rhoE 'https?://[a-zA-Z0-9._~:/?#@!$&()*+,;=%-]{6,}' "$DIR" 2>/dev/null | sort -u > "$OUT/endpoints.txt"
-wc -l < "$OUT/endpoints.txt" | xargs echo "    unique URLs:"
+usage() { sed -n '2,3p' "$0" | sed 's/^# //'; sed -n '12,21p' "$0" | sed 's/^# //'; exit 2; }
+DIR=""; OUT=""; INV=""; JSON=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --out)       OUT="${2:-}"; shift ;;
+    --inventory) INV="${2:-}"; shift ;;
+    --json)      JSON=1 ;;
+    -h|--help)   usage ;;
+    -*)          echo "unknown option: $1" >&2; usage ;;
+    *)           if [ -z "$DIR" ]; then DIR="$1"; elif [ -z "$OUT" ]; then OUT="$1"; else echo "unexpected: $1" >&2; usage; fi ;;
+  esac
+  shift
+done
+[ -z "$DIR" ] && usage
+[ -d "$DIR" ] || { echo "ERROR: not a directory: $DIR" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "UNVERIFIED: python3 missing"; exit 2; }
+[ -z "$OUT" ] && OUT="secrets"
+mkdir -p "$OUT/raw" || { echo "ERROR: cannot create $OUT" >&2; exit 2; }
 
-echo "[*] Retrofit/OkHttp route map (annotation VALUES survive R8 -- authoritative even when obfuscated)"
-grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD)\("[^"]*"' "$DIR" 2>/dev/null | sort -u > "$OUT/routes.txt"
-wc -l < "$OUT/routes.txt" | xargs echo "    routes:"
+# G <ERE>: recursive, file:line:match, text files only, skipping native libs and image resources.
+G() {
+  grep -rnoIE --exclude-dir=lib --exclude-dir=META-INF --exclude-dir=original --exclude-dir='drawable*' \
+       --exclude-dir='mipmap*' --exclude-dir=font --exclude-dir=.git "$1" "$DIR" 2>/dev/null
+}
 
-echo "[*] Gson @SerializedName after R8 (mass-assignment candidates)"
-grep -rhoE '@c\("[^"]*"\)|@SerializedName\("[^"]*"\)' "$DIR" 2>/dev/null | sort -u | head -200 > "$OUT/fields.txt"
+echo "[*] scanning $DIR  (grep -I: binaries skipped; provenance kept as file:line)"
+G 'https?://[a-zA-Z0-9._~:/?#@!$&()*+,;=%-]{6,}'                                   > "$OUT/raw/urls.txt"
+G '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\("[^"]*"\)|@HTTP\(method = "[A-Z]+", path = "[^"]*"' > "$OUT/raw/routes.txt"
+G 'baseUrl\("[^"]+"\)|BASE_URL[[:space:]]*=[[:space:]]*"[^"]+"'                     > "$OUT/raw/baseurls.txt"
+G '@SerializedName\("[^"]+"\)|@Json\(name = "[^"]+"\)|@SerialName\("[^"]+"\)|@JsonProperty\("[^"]+"\)' > "$OUT/raw/fields.txt"
+# R8 renames the annotation class to any 1-3 letter name but the VALUE survives; the python filter keeps
+# only hits that sit on a field declaration line to drop @c("x") on methods/classes.
+grep -rnIE --exclude-dir=lib --exclude-dir=META-INF --exclude-dir=original --exclude-dir='drawable*' \
+     --exclude-dir='mipmap*' --exclude-dir=font --exclude-dir=.git \
+     '^[[:space:]]*@[A-Za-z]{1,3}\("[^"]+"\)[[:space:]]+(public |private |protected |final |static |transient )*[A-Za-z0-9_.<>?,\[\]]+ [A-Za-z0-9_]+( =.*)?;' "$DIR" 2>/dev/null \
+     > "$OUT/raw/fields-r8.txt"
+G '(query|mutation|subscription)[[:space:]]+[A-Za-z0-9_]+[[:space:]]*[({]'          > "$OUT/raw/graphql.txt"
+G 'AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|(sk|rk)_live_[0-9a-zA-Z]{24,}|xox[baprs]-[0-9A-Za-z-]{10,}|sk-(proj-)?[A-Za-z0-9_-]{32,}|SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}|AC[0-9a-f]{32}|SK[0-9a-f]{32}|[ps]k\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}|Basic [A-Za-z0-9+/=]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|"current_key"[[:space:]]*:[[:space:]]*"[^"]+"|[Aa][Ww][Ss][A-Za-z_]{0,20}[Ss][Ee][Cc][Rr][Ee][Tt][^"'"'"']{0,30}["'"'"'][A-Za-z0-9/+=]{40}["'"'"']' \
+                                                                                      > "$OUT/raw/secrets.txt"
+G '[a-z0-9.-]+\.(firebaseio\.com|firebasedatabase\.app|appspot\.com|cloudfunctions\.net|run\.app|supabase\.co|blob\.core\.windows\.net|storage\.googleapis\.com|amazonaws\.com)|firebasestorage\.googleapis\.com/v0/b/[a-z0-9.-]+|s3://[a-z0-9.-]+|storage\.googleapis\.com/[a-z0-9._-]+' \
+                                                                                      > "$OUT/raw/cloud.txt"
 
-echo "[*] GraphQL documents"
-grep -rhoE '(query|mutation|subscription)\s+[A-Za-z0-9_]+\s*[({]' "$DIR" 2>/dev/null | sort -u > "$OUT/graphql.txt"
+python3 - "$OUT" "$INV" "$JSON" "$DIR" <<'PY'
+import base64, csv, json, os, re, sys
+out, inv, js, root = sys.argv[1:5]
+raw = lambda n: [l.rstrip("\n") for l in open(os.path.join(out, "raw", n), errors="replace")]
+def split(line):                       # grep -rno -> file:line:match ; the match may itself contain ':'
+    m = re.match(r"^(.*?):(\d+):(.*)$", line)
+    return m.groups() if m else None
+def rel(p): return os.path.relpath(p, root)
+def mask(v): return v if len(v) <= 14 else v[:6] + "..." + v[-4:]
+def w(name, header, rows):
+    with open(os.path.join(out, name), "w", newline="", encoding="utf-8") as f:
+        c = csv.writer(f); c.writerow(header); c.writerows(rows)
 
-echo "[*] high-signal secret shapes"
-grep -rhoE 'AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk_live_[0-9a-zA-Z]{24}|xox[baprs]-[0-9A-Za-z-]{10,}|Basic [A-Za-z0-9+/=]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----' \
-  "$DIR" 2>/dev/null | sort -u | tee "$OUT/secrets.txt"
+# -- endpoints -------------------------------------------------------------------------------------
+urls = {}
+for l in raw("urls.txt"):
+    s = split(l)
+    if not s: continue
+    f, n, u = s
+    u = u.rstrip(").,;'\"")
+    if re.search(r"schemas\.android\.com|w3\.org|apache\.org/licenses|xmlpull\.org|example\.com|developer\.android\.com", u): continue
+    urls.setdefault(u, (rel(f), n))
+open(os.path.join(out, "endpoints.txt"), "w").write("\n".join(sorted(urls)) + ("\n" if urls else ""))
+w("endpoints-hits.csv", ["url", "file", "line"], [[u, f, n] for u, (f, n) in sorted(urls.items())])
+routes = {}
+for l in raw("routes.txt"):
+    s = split(l)
+    if not s: continue
+    f, n, a = s
+    m = re.match(r'@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\("([^"]*)"', a) or re.match(r'@HTTP\(method = "([A-Z]+)", path = "([^"]*)"', a)
+    if m: routes.setdefault((m.group(1), m.group(2)), (rel(f), n))
+w("routes.csv", ["method", "path", "file", "line"], [[m, p, f, n] for (m, p), (f, n) in sorted(routes.items())])
+bases = sorted({split(l)[2] for l in raw("baseurls.txt") if split(l)})
+open(os.path.join(out, "base-urls.txt"), "w").write("\n".join(bases) + ("\n" if bases else ""))
+# inventory schema (scripts/inventory.py): one row per route, plus literal URLs as method=URL
+cols = ["instance_id", "method", "path", "source", "auth_required", "tested_idor", "tested_massassign", "result", "notes"]
+existing, target = [], os.path.join(inv, "endpoints.csv") if inv else os.path.join(out, "endpoints.csv")
+if inv and os.path.exists(target):
+    existing = list(csv.DictReader(open(target, newline="", encoding="utf-8")))
+have = {(r.get("method", ""), r.get("path", "")) for r in existing}
+nid = 1 + max([int(m.group(1)) for r in existing for m in [re.match(r"E-(\d+)", r.get("instance_id", ""))] if m] or [0])
+new = []
+for (m, p), (f, n) in sorted(routes.items()):
+    if (m, p) in have: continue
+    new.append(dict(instance_id=f"E-{nid:03d}", method=m, path=p, source=f"{f}:{n}", auth_required="", tested_idor="false",
+                    tested_massassign="false", result="", notes="retrofit")); nid += 1
+for u, (f, n) in sorted(urls.items()):
+    if ("URL", u) in have: continue
+    new.append(dict(instance_id=f"E-{nid:03d}", method="URL", path=u, source=f"{f}:{n}", auth_required="", tested_idor="false",
+                    tested_massassign="false", result="", notes="literal")); nid += 1
+if inv: os.makedirs(inv, exist_ok=True)
+with open(target, "w", newline="", encoding="utf-8") as fh:
+    c = csv.DictWriter(fh, cols); c.writeheader(); c.writerows(existing + new)
+# -- fields / graphql ------------------------------------------------------------------------------
+fields = sorted({re.search(r'"([^"]+)"', split(l)[2]).group(1) for l in raw("fields.txt") if split(l) and re.search(r'"([^"]+)"', split(l)[2])})
+r8 = []
+for l in raw("fields-r8.txt"):
+    m = re.match(r'^(.*?):(\d+):\s*(@[A-Za-z]{1,3}\("[^"]+"\).*)$', l)
+    if m: r8.append(f'{m.group(3).strip()[:120]}    # {rel(m.group(1))}:{m.group(2)}')
+open(os.path.join(out, "fields.txt"), "w").write("\n".join(fields + ["# R8-renamed annotation on a field line (heuristic):"] + sorted(set(r8))[:400]) + "\n")
+gql = sorted({split(l)[2] for l in raw("graphql.txt") if split(l)})
+open(os.path.join(out, "graphql.txt"), "w").write("\n".join(gql) + ("\n" if gql else ""))
 
-echo "[*] firebase / cloud config"
-grep -rhoE '[a-z0-9-]+\.firebaseio\.com|[a-z0-9-]+\.appspot\.com|firebasestorage\.googleapis\.com/v0/b/[a-z0-9.-]+' \
-  "$DIR" 2>/dev/null | sort -u | tee "$OUT/cloud.txt"
+# -- secrets ---------------------------------------------------------------------------------------
+SHAPES = [  # (name, regex, confidence, probe template, restricted/unrestricted signature)
+ ("google-api-key", r"AIza[0-9A-Za-z_-]{35}", "high",
+  'curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=London&key={v}" | head -c 300',
+  'REQUEST_DENIED + "Requests from this Android client are blocked" = package+SHA-1 restricted (P5, ruled-out row); "status": "OK" = unrestricted -> D18-010/012'),
+ ("google-services-key", r'"current_key"\s*:\s*"([^"]+)"', "high",
+  'curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=London&key={v}" | head -c 300',
+  'same as google-api-key; google-services.json keys are usually restricted by design'),
+ ("aws-access-key", r"AKIA[0-9A-Z]{16}", "medium",
+  'AWS_ACCESS_KEY_ID={v} AWS_SECRET_ACCESS_KEY=<40-char value near the hit> aws sts get-caller-identity',
+  'InvalidClientTokenId = dead; an ARN = live (never paste the secret into the report)'),
+ ("aws-secret-key", r"[Aa][Ww][Ss][A-Za-z_]{0,20}[Ss][Ee][Cc][Rr][Ee][Tt][^\"']{0,30}[\"']([A-Za-z0-9/+=]{40})[\"']", "low",
+  '# pair with the AKIA id in the same tree, then: aws sts get-caller-identity', 'as aws-access-key'),
+ ("github-token", r"ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}", "high",
+  'curl -s -o /dev/null -w "%{http_code}\\n" -H "Authorization: token {v}" https://api.github.com/user', '200 = live; 401 = revoked'),
+ ("stripe-secret", r"sk_live_[0-9a-zA-Z]{24,}", "high",
+  'curl -s -o /dev/null -w "%{http_code}\\n" -u "{v}:" https://api.stripe.com/v1/balance', '200 = live secret key (P1); 401 = revoked'),
+ ("stripe-restricted", r"rk_live_[0-9a-zA-Z]{24,}", "medium",
+  'curl -s -o /dev/null -w "%{http_code}\\n" -u "{v}:" https://api.stripe.com/v1/balance', 'restricted key: rate on its granted permissions, not P1 by default'),
+ ("slack-token", r"xox[baprs]-[0-9A-Za-z-]{10,}", "high",
+  'curl -s -H "Authorization: Bearer {v}" https://slack.com/api/auth.test', '"ok":true = live'),
+ ("openai-key", r"sk-(?:proj-)?[A-Za-z0-9_-]{32,}", "medium",
+  'curl -s -o /dev/null -w "%{http_code}\\n" -H "Authorization: Bearer {v}" https://api.openai.com/v1/models', '200 = live; 401 = revoked'),
+ ("sendgrid-key", r"SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}", "high",
+  'curl -s -o /dev/null -w "%{http_code}\\n" -H "Authorization: Bearer {v}" https://api.sendgrid.com/v3/scopes', '200 = live; 401 = revoked'),
+ ("twilio-sid", r"AC[0-9a-f]{32}", "low",
+  'curl -s -o /dev/null -w "%{http_code}\\n" -u "{v}:<auth token or SK key near the hit>" https://api.twilio.com/2010-04-01/Accounts/{v}.json', '200 = live; 401 = dead'),
+ ("twilio-api-key", r"SK[0-9a-f]{32}", "low", '# pair with the AC... SID; same probe as twilio-sid', 'as twilio-sid'),
+ ("mapbox-token", r"[ps]k\.eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}", "medium",
+  'curl -s "https://api.mapbox.com/tokens/v2?access_token={v}" | head -c 300',
+  'pk. = public by design (P5) unless scopes exceed styles:read/fonts:read; sk. = secret token'),
+ ("jwt", r"eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}", "medium",
+  "python3 -c 'import base64,sys; [print(base64.urlsafe_b64decode(p+\"=\"*(-len(p)%4)).decode(errors=\"replace\")) for p in sys.argv[1].split(\".\")[:2]]' '{v}'",
+  'read alg/role/exp: a Supabase anon key ("role":"anon") is public by design; anything else is replayed against its issuer'),
+ ("private-key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "high",
+  '# openssl pkey -in <file> -noout -text | head -3 ; is it a client-cert key (D14 mTLS) or a signing key?', 'rate on what it signs or authenticates, never on presence'),
+ ("basic-auth", r"Basic [A-Za-z0-9+/=]{20,}", "medium",
+  '# decoded user:pass is in secrets.csv; replay against the host it sits next to in the same file', 'live credentials = P1-P2 by asset'),
+]
+rows, seen = [], set()
+for l in raw("secrets.txt"):
+    s = split(l)
+    if not s: continue
+    f, n, v = s
+    for name, rx, conf, probe, sig in SHAPES:
+        m = re.search(rx, v)
+        if not m: continue
+        val = m.group(1) if m.groups() else m.group(0)
+        if name == "basic-auth":
+            try: dec = base64.b64decode(val[6:].strip() + "=" * (-len(val[6:].strip()) % 4)).decode()
+            except Exception: dec = ""
+            if ":" not in dec or not dec.isprintable(): break   # prose that happens to look like base64
+            val = f"{val}  ({dec})"
+        key = (name, val)
+        if key in seen: break
+        seen.add(key)
+        rows.append([name, val, rel(f), n, conf, probe.replace("{v}", val.split("  ")[0]), sig]); break
+w("secrets.csv", ["shape", "value", "file", "line", "confidence", "verify", "restricted_signature"], rows)
+with open(os.path.join(out, "verify-hints.sh"), "w") as fh:
+    fh.write("#!/usr/bin/env bash\n# Benign, read-only probes. Run ONE AT A TIME, by hand, and record the exact response in the\n# ruled-out table or the finding. Nothing here is executed by 06-secrets-endpoints.sh.\n")
+    for r in rows: fh.write(f"\n# {r[0]}  {r[2]}:{r[3]}\n#   expect: {r[6]}\n# {r[5]}\n")
+# -- cloud -----------------------------------------------------------------------------------------
+cloud, cseen = [], set()
+for l in raw("cloud.txt"):
+    s = split(l)
+    if not s: continue
+    f, n, h = s
+    kind = ("firebase-rtdb" if re.search(r"firebaseio\.com|firebasedatabase\.app", h) else "firebase-storage" if "firebasestorage" in h else
+            "appspot" if "appspot" in h else "cloud-functions" if "cloudfunctions" in h or "run.app" in h else "supabase" if "supabase" in h else
+            "azure-blob" if "blob.core.windows" in h else "gcs" if "storage.googleapis" in h else "s3" if "amazonaws" in h or h.startswith("s3://") else "cloud")
+    probe = {"firebase-rtdb": f'curl -s "https://{h}/.json?shallow=true" -w "\\nHTTP %{{http_code}}\\n" | head -c 300',
+             "firebase-storage": f'curl -s "https://{h}" | head -c 300',
+             "supabase": f'curl -s "https://{h}/rest/v1/" -H "apikey: <anon JWT from secrets.csv>" | head -c 300'}.get(kind,
+             f'curl -s -o /dev/null -w "%{{http_code}}\\n" "https://{h.replace("s3://", "")}"')
+    if h in cseen: continue
+    cseen.add(h); cloud.append([h, kind, rel(f), n, probe])
+w("cloud.csv", ["host", "kind", "file", "line", "probe"], cloud)
+
+# -- report ----------------------------------------------------------------------------------------
+print(f"    unique URLs: {len(urls)}   retrofit routes: {len(routes)}   base URLs: {len(bases)}   graphql ops: {len(gql)}   serialized fields: {len(fields)}")
+print(f"    endpoints.csv: {len(new)} new rows -> {target}")
+print("[*] secret-shaped CANDIDATES (full value + probe in secrets.csv / verify-hints.sh):")
+for r in rows: print(f"    CANDIDATE secret/{r[0]:20s} {r[2]}:{r[3]}  {mask(r[1].split('  ')[0])}  [{r[4]}]")
+if not rows: print("    (none; a negative here only means these shapes were absent -- check strings.xml, assets/*.json, native .so (D16) and the network capture)")
+print("[*] cloud resources (probe column in cloud.csv):")
+for c in cloud: print(f"    CANDIDATE cloud/{c[1]:17s} {c[0]}  ({c[2]}:{c[3]})")
+summary = {"tool": "06-secrets-endpoints", "dir": root, "out": out, "urls": len(urls), "routes": len(routes), "base_urls": bases,
+           "graphql": len(gql), "fields": len(fields), "secrets": [{"shape": r[0], "masked": mask(r[1].split("  ")[0]), "file": r[2], "line": r[3], "confidence": r[4]} for r in rows],
+           "cloud": [{"host": c[0], "kind": c[1], "file": c[2], "line": c[3]} for c in cloud], "endpoints_csv": target,
+           "note": "candidates only; every key must be verified with the benign probe and the exact response recorded either way"}
+json.dump(summary, open(os.path.join(out, "summary.json"), "w"), indent=1)
+if js == "1": print(json.dumps(summary, indent=1))
+sys.exit(0 if (rows or cloud or urls or routes) else 1)
+PY
+RC=$?
 
 cat <<'NOTE'
 
   ****  DO NOT REPORT A KEY UNTIL YOU HAVE VERIFIED IT IS UNRESTRICTED  ****
-
-  Most Google/Maps/Firebase keys in APKs are package+signature restricted and are
-  PUBLIC BY DESIGN. Reporting one unverified is the fastest way to lose credibility.
+  Most Google/Maps/Firebase keys in APKs are package+signature restricted and PUBLIC BY DESIGN.
   VRT: sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid = P5
        sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset        = P1
-  The difference is one benign probe. Run it, and record the result either way.
-
-  Maps key:      curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=X&key=<KEY>" | head -c 300
-  Firebase RTDB: curl -s "https://<project>.firebaseio.com/.json?shallow=true" | head -c 300
-  FB Storage:    curl -s "https://firebasestorage.googleapis.com/v0/b/<bucket>/o" | head -c 300
-  Record the exact response in the ruled-out table if it is restricted.
+  The difference is one benign probe (verify-hints.sh). Run it by hand, record the exact response
+  either way (ruled-out table or finding). Rate on what the key reaches (D18-012), not on its presence.
 NOTE
+exit "$RC"

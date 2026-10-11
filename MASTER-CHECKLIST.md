@@ -1,6 +1,6 @@
 # MASTER CHECKLIST — compact view
 
-> 1933 items · 26 domains · generated 2026-10-10. One line per item, for `grep`. To work a domain load `cards/Dnn.md`; to run an item use `python3 scripts/item.py Dnn-NNN`.
+> 1933 items · 26 domains · generated 2026-10-11. One line per item, for `grep`. To work a domain load `cards/Dnn.md`; to run an item use `python3 scripts/item.py Dnn-NNN`.
 
 | | Items |
 |---|---|
@@ -12,6 +12,10 @@
 | 🔷 **Varies** | 3 |
 | | **1933 total** |
 
+**Contents:** [D01](#d01) · [D02](#d02) · [D03](#d03) · [D04](#d04) · [D05](#d05) · [D06](#d06) · [D07](#d07) · [D08](#d08) · [D09](#d09) · [D10](#d10) · [D11](#d11) · [D12](#d12) · [D13](#d13) · [D14](#d14) · [D15](#d15) · [D16](#d16) · [D17](#d17) · [D18](#d18) · [D19](#d19) · [D20](#d20) · [D21](#d21) · [D22](#d22) · [D23](#d23) · [D25](#d25) · [D26](#d26) · [D27](#d27)
+
+
+<a id="d01"></a>
 
 ## D01 Recon & Attack-Surface Mapping — P3 · 80 items · [card](cards/D01.md) · [chapter](checklist/D01-recon-and-surface-mapping.md)
 
@@ -98,6 +102,8 @@
 - [ ] `D01-079` ⬜ n/a n/a — The soft-404 and body-diff controls before you call an APK-derived endpoint "live"
 - [ ] `D01-080` ⬜ n/a n/a — The shell-loop ban: count your results or the sweep silently lied
 
+<a id="d02"></a>
+
 ## D02 APK/AAB Structure, Signing & Build Integrity — P2 · 72 items · [card](cards/D02.md) · [chapter](checklist/D02-apk-structure-signing.md)
 
 > Does any security decision anywhere — this app's own self-check, a sibling app's signature-level permission, an in-app updater's verifier, or the backend — actually depend on this APK's signing identity or its unmodified bytes, because if nothing does, the only payable thing left in the package is a live secret.
@@ -174,6 +180,8 @@
 - [ ] `D02-070` ⬜ n/a n/a — Run the pre-severity gate against the Critical claim, not against the repack
 - [ ] `D02-071` ⬜ n/a n/a — Chain-filing order for D02 primitives
 - [ ] `D02-072` ⬜ n/a n/a — Evidence capture for an integrity finding: what to show and what to mask
+
+<a id="d03"></a>
 
 ## D03 AndroidManifest & Permission Model — P3 · 76 items · [card](cards/D03.md) · [chapter](checklist/D03-manifest-and-permissions.md)
 
@@ -256,6 +264,8 @@
 - [ ] `D03-075` 🟥 P1 AM-06/AM-09 — `REQUEST_INSTALL_PACKAGES` and the update-identity boundary
 - [ ] `D03-076` ⬜ n/a n/a — Rate the reached behaviour, not the manifest attribute — and file the chain in the right order
 
+<a id="d04"></a>
+
 ## D04 Exported Activities, Task & UI-Redress Attacks — P5 · 72 items · [card](cards/D04.md) · [chapter](checklist/D04-exported-activities-and-task.md)
 
 > **Is there any screen in this app whose security depends on the user having arrived from the previous screen — and can I start it directly, from a package that holds no permissions, with the arguments of my choice?**
@@ -333,6 +343,8 @@
 - [ ] `D04-071` 🟨 P5 AM-10 — The widget or lock-screen surface renders the account data the in-app screen protects
 - [ ] `D04-072` ⬜ ? n/a — False-positive discipline for the four claims this chapter makes
 
+<a id="d05"></a>
+
 ## D05 Broadcast Receivers & Implicit Intents — P5 · 64 items · [card](cards/D05.md) · [chapter](checklist/D05-receivers-and-implicit-intents.md)
 
 > Does any broadcast this app sends or receives carry, or act on, a value that decides authentication, entitlement, or where the app sends its data — and can an app that declares no permissions supply or read that value?
@@ -401,6 +413,8 @@
 - [ ] `D05-062` ⬜ n/a n/a — Run the pre-severity gate against the Critical claim, not against the receiver
 - [ ] `D05-063` ⬜ n/a n/a — The five-screenshot pattern for a receiver state-change finding
 - [ ] `D05-064` ⬜ n/a n/a — Chain-filing order for receiver primitives
+
+<a id="d06"></a>
 
 ## D06 Services, AIDL & Bound IPC — P5 · 81 items · [card](cards/D06.md) · [chapter](checklist/D06-services-aidl-bound-ipc.md)
 
@@ -488,6 +502,8 @@
 - [ ] `D06-080` ⬜ n/a AM-03 — `adb shell` is UID 2000 — re-prove every candidate from a zero-permission app
 - [ ] `D06-081` ⬜ n/a n/a — Severity governance and chain-filing order for binder findings
 
+<a id="d07"></a>
+
 ## D07 ContentProviders & FileProvider — P5 · 76 items · [card](cards/D07.md) · [chapter](checklist/D07-contentproviders-and-fileprovider.md)
 
 > **Does any caller outside this app's UID reach a provider method that either resolves a caller-controlled string into a filesystem path or concatenates a caller-controlled string into SQL — and if the answer is no, can the app itself be made to call that method on the attacker's behalf?**
@@ -569,6 +585,8 @@
 - [ ] `D07-075` ⬜ n/a n/a — Pre-severity gate against the Critical claim, not against the bug
 - [ ] `D07-076` ⬜ n/a n/a — Chain-filing order for provider primitives
 
+<a id="d08"></a>
+
 ## D08 Intent Redirection, PendingIntent & URI Grants — P5 · 66 items · [card](cards/D08.md) · [chapter](checklist/D08-intent-redirection-and-pendingintent.md)
 
 > **Does any attacker-reachable entry point in this app hand a `Intent`, `Uri`, `Bundle` or `PendingIntent` that the attacker fully or partially controls to a framework call that executes with the app's own UID — and if so, which non-exported component, private provider URI or held runtime permission does that reach that the attacker cannot reach directly?**
@@ -639,6 +657,8 @@
 - [ ] `D08-064` ⬜ n/a n/a — Counted sweeps and the two-stack reproduction bar
 - [ ] `D08-065` ⬜ n/a n/a — Pre-severity gate against the Critical claim, not against the bug
 - [ ] `D08-066` ⬜ n/a n/a — Evidence package, chain-filing order and the severity-request paragraph
+
+<a id="d09"></a>
 
 ## D09 Deep Links, App Links & Custom URI Schemes — P5 · 80 items · [card](cards/D09.md) · [chapter](checklist/D09-deeplinks-and-applinks.md)
 
@@ -725,6 +745,8 @@
 - [ ] `D09-079` ⬜ n/a n/a — Evidence standard for a deep-link finding
 - [ ] `D09-080` ⬜ n/a n/a — Pre-severity gate, chain-filing order, and the programme's deep-link stance
 
+<a id="d10"></a>
+
 ## D10 WebView & JavaScript Bridges — P5 · 72 items · [card](cards/D10.md) · [chapter](checklist/D10-webview-and-js-bridges.md)
 
 > **Can attacker-influenced content — a deep-link `url=`, an open redirect on the allowed origin, a third-party iframe, a MitM'd subresource, a stored profile field, a malicious `content://` — end up executing JavaScript inside a WebView that also carries a JS bridge, the app's session cookies, file/content access, or a real web origin; and if so, what is the single most sensitive thing that reachable context can read or do?**
@@ -801,6 +823,8 @@
 - [ ] `D10-070` 🟨 ? AM-03 — Custom Tabs navigation-callback cross-site login oracle (web-side finding)
 - [ ] `D10-071` 🟨 ? AM-05/AM-11 — Predictive back inside WebView escaping the app's history guard (targetSdk 36)
 - [ ] `D10-072` 🟥 P1 AM-02/AM-05 — Trusted-origin content renders attacker HTML → the allow-list is a non-defence → bridge credential theft
+
+<a id="d11"></a>
 
 ## D11 Local Data Storage — P4 · 73 items · [card](cards/D11.md) · [chapter](checklist/D11-local-data-storage.md)
 
@@ -879,6 +903,8 @@
 - [ ] `D11-071` ⬜ n/a n/a — Evidence hygiene for a storage-exfil PoC — the five-shot pattern and the PII split
 - [ ] `D11-072` 🟥 P1 AM-01 — The mobile store points at an OLDER, weaker backend — the shadow API
 - [ ] `D11-073` ⬜ n/a n/a — Layer-ordering: a "field required" 400 from a storage-derived request is not an auth pass
+
+<a id="d12"></a>
 
 ## D12 Cryptography & Key Management — P4 · 80 items · [card](cards/D12.md) · [chapter](checklist/D12-crypto-and-key-management.md)
 
@@ -964,6 +990,8 @@
 - [ ] `D12-078` ⬜ n/a AM-12 — Auth-bound key generation failing without a lockscreen is a harness problem
 - [ ] `D12-079` ⬜ n/a AM-12 — The impact requirement — a crypto finding without a decryption or a forgery is Informational
 - [ ] `D12-080` ⬜ n/a AM-12 — Severity and filing discipline for a crypto chain
+
+<a id="d13"></a>
 
 ## D13 Authentication, Session, OTP & Biometrics — P6 · 90 items · [card](cards/D13.md) · [chapter](checklist/D13-auth-session-otp-biometrics.md)
 
@@ -1060,6 +1088,8 @@
 - [ ] `D13-089` 🟥 P1 AM-03/AM-08 — Autofill and Credential Manager leaking credentials into a WebView or an unverified package
 - [ ] `D13-090` 🟥 P1 AM-03/AM-04/AM-11/AM-12 — Credential or long-lived token stored on device instead of a short-lived service token
 
+<a id="d14"></a>
+
 ## D14 Network Security, TLS & Certificate Pinning — P6 · 58 items · [card](cards/D14.md) · [chapter](checklist/D14-network-tls-pinning.md)
 
 > **Is there any request on this app's wire that an attacker holding no trusted CA can read or rewrite — and does that request carry an authentication assertion, PII, or content the app will execute?** If the answer needs your CA installed to be true, you have a P5 pinning observation, not a finding.
@@ -1122,6 +1152,8 @@
 - [ ] `D14-056` ⬜ n/a n/a — Discipline for network sweeps: body diffs, statistics, and counted loops
 - [ ] `D14-057` ⬜ n/a n/a — Evidence hygiene for a network finding
 - [ ] `D14-058` ⬜ n/a n/a — Severity governance for this chapter
+
+<a id="d15"></a>
 
 ## D15 Backend API, IDOR/BOLA, Mass Assignment & Business Logic — P6 · 90 items · [card](cards/D15.md) · [chapter](checklist/D15-backend-api-and-authz.md)
 
@@ -1218,6 +1250,8 @@
 - [ ] `D15-089` 🟧 varies AM-02/AM-05 — Content-type manipulation against the mobile API
 - [ ] `D15-090` 🟥 P1 AM-05 — Hand the client-only parameter set to the injection and SSRF batteries
 
+<a id="d16"></a>
+
 ## D16 Native Code, JNI & Memory Safety — P4 · 60 items · [card](cards/D16.md) · [chapter](checklist/D16-native-code-and-memory.md)
 
 > **Which bytes that an attacker fully controls reach C/C++ inside this app's process, by what path they get there, and does the code that consumes them compute a size, an index or a lifetime from those same bytes without checking it?**
@@ -1282,6 +1316,8 @@
 - [ ] `D16-058` ⬜ n/a n/a — The evidence package for a native finding: negative control, one-shot script, and what to leave visible
 - [ ] `D16-059` ⬜ ? n/a — Run the pre-severity gate against the CRITICAL CLAIM, and hold the retraction line
 - [ ] `D16-060` ⬜ ? n/a — File the native chain as primitives first, consumer second — and count your sweep results
+
+<a id="d17"></a>
 
 ## D17 Dynamic Code Loading, Deserialization & Supply Chain — P4 · 80 items · [card](cards/D17.md) · [chapter](checklist/D17-dynamic-loading-and-supplychain.md)
 
@@ -1368,6 +1404,8 @@
 - [ ] `D17-079` ⬜ n/a n/a — Chain-filing order — primitives first, consumer second
 - [ ] `D17-080` ⬜ n/a n/a — False-positive discipline for substitution proofs
 
+<a id="d18"></a>
+
 ## D18 Cloud Backend & Third-Party SDK Configuration — P6 · 72 items · [card](cards/D18.md) · [chapter](checklist/D18-cloud-and-sdk-config.md)
 
 > For every backend identity the package contains — project id, bucket, identity-pool id, anon key, vendor API key — does it still do anything when it is used from a host that is not the app, by an identity that is not a legitimate user?
@@ -1444,6 +1482,8 @@
 - [ ] `D18-070` ⬜ n/a n/a — Sweep hygiene: count your results, and never claim a negative from an uncounted loop
 - [ ] `D18-071` ⬜ n/a n/a — Body-diff and restriction claims: a status code is not a result
 - [ ] `D18-072` ⬜ n/a n/a — Evidence hygiene, severity governance and filing order for cloud findings
+
+<a id="d19"></a>
 
 ## D19 Cross-Platform Frameworks — P4 · 79 items · [card](cards/D19.md) · [chapter](checklist/D19-cross-platform-frameworks.md)
 
@@ -1529,6 +1569,8 @@
 - [ ] `D19-078` ⬜ n/a n/a — Report discipline: state the runtime and artefact identity; never report recovery as the finding
 - [ ] `D19-079` ⬜ n/a n/a — Chain-filing order for framework chains
 
+<a id="d20"></a>
+
 ## D20 Privacy, PII, Logging & Data Leakage — P4 · 70 items · [card](cards/D20.md) · [chapter](checklist/D20-privacy-and-data-leakage.md)
 
 > **For each sensitive value the app handles: which principal other than the app and its own backend ends up holding that value — a co-resident app with one user grant, a third-party host, the lock screen, another signed-in user — and if none does, is any value the app emits an authenticator?**
@@ -1604,6 +1646,8 @@
 - [ ] `D20-069` ⬜ n/a n/a — Chain-filing order for privacy primitives — file the primitive, then the consumer
 - [ ] `D20-070` ⬜ n/a n/a — The five-screenshot pattern adapted to a data-leak PoC
 
+<a id="d21"></a>
+
 ## D21 Anti-Tampering, RASP, Root/Emulator Detection & Resilience — P4 · 57 items · [card](cards/D21.md) · [chapter](checklist/D21-resilience-and-rasp.md)
 
 > **Does any decision that matters get made off this device on the strength of something this device claimed — and if so, is that claim an opaque, server-verified, freshly-bound attestation, or a boolean the client chose?** If the honest answer is "the check only stops the device's own owner from seeing their own data", you have a P5 hardening observation, and the correct output is a ruled-out entry, not a report.
@@ -1665,6 +1709,8 @@
 - [ ] `D21-055` 🟩 P5 AM-01 — Emulator detection absent — the finding is the automation, not the absence
 - [ ] `D21-056` ⬜ n/a AM-11 — Compat-framework and `device_config` toggles — prove the protection is per-package switchable
 - [ ] `D21-057` ⬜ n/a n/a — Evidence, retraction and filing discipline for a domain that triagers distrust
+
+<a id="d22"></a>
 
 ## D22 Platform & OS Version-Specific Behaviour — P4 · 82 items · [card](cards/D22.md) · [chapter](checklist/D22-platform-version-behaviour.md)
 
@@ -1753,6 +1799,8 @@
 - [ ] `D22-081` ⬜ n/a n/a — File version-gated primitives before their consumer
 - [ ] `D22-082` ⬜ n/a n/a — Check the programme's OS-version floor before spending the day
 
+<a id="d23"></a>
+
 ## D23 Payments, Entitlements, Subscriptions & Fraud — P6 · 66 items · [card](cards/D23.md) · [chapter](checklist/D23-payments-and-entitlements.md)
 
 > **Does any monetary or entitlement decision in this app get made anywhere other than the vendor's own server — and where the server does decide, does it independently re-derive the amount, the payer identity and the uniqueness of the receipt, or does it echo what the client sent?**
@@ -1823,6 +1871,8 @@
 - [ ] `D23-064` ⬜ n/a n/a — Evidence discipline for money findings
 - [ ] `D23-065` ⬜ n/a n/a — The pre-severity gate, applied to the Critical claim rather than to the bug
 - [ ] `D23-066` ⬜ n/a n/a — Chain-filing order for a payment chain
+
+<a id="d25"></a>
 
 ## D25 Device, OEM, Firmware & Privileged Surfaces — P5 · 79 items · [card](cards/D25.md) · [chapter](checklist/D25-device-oem-and-privileged.md)
 
@@ -1908,6 +1958,8 @@
 - [ ] `D25-078` ⬜ n/a n/a — Chain-filing order, evidence hygiene and retraction discipline for a device chain
 - [ ] `D25-079` ⬜ n/a AM-12 — Never instrument production hardware; record the root path you used
 
+<a id="d26"></a>
+
 ## D26 Runtime Instrumentation, Tooling & Harness — P1 · 79 items · [card](cards/D26.md) · [chapter](checklist/D26-instrumentation-and-tooling.md)
 
 > **Before I write "not vulnerable" anywhere in this report: has this exact instrument produced a positive result on this exact device in this session — and if the answer is "the tool printed nothing", what is my positive control?**
@@ -1991,6 +2043,8 @@
 - [ ] `D26-077` 🟨 n/a AM-12 — Run a scripted full-feature tour so no screen is left unvisited
 - [ ] `D26-078` ⬜ n/a n/a — Keep the evidence workspace and the command journal from the first minute
 - [ ] `D26-079` ⬜ n/a n/a — Calibrate the harness against a known-vulnerable app before touching the client build
+
+<a id="d27"></a>
 
 ## D27 Reporting, Severity Rating & Evidence — P9 · 79 items · [card](cards/D27.md) · [chapter](checklist/D27-reporting-and-evidence.md)
 

@@ -1,6 +1,6 @@
 # CHECKLIST.md — domain index
 
-> 1933 test items across 26 domains, generated 2026-10-10 from `checklist/`. Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
+> 1933 test items across 26 domains, generated 2026-10-11 from `checklist/`. Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
 
 | Domain | Phase | Items | Ceiling mix | Card | Chapter |
 |---|---|---|---|---|---|
