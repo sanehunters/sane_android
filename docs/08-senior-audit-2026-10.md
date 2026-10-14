@@ -197,5 +197,5 @@ The tree is green (lint 0 errors, `build-checklist.py --check` current, selftest
    built probe APK never enters git.
 6. **Sources sections.** 14 chapters cite corpus notes (`primary/`, `secondary/`, `local/` …) that are not in the repository: vendor
    them under `docs/sources/` or cite the public origin.
-7. **GitHub projection.** `python3 scripts/gh-sync.py --repo sanehunters/sane_android` creates the D12–D28 battery issues and updates
-   the legacy issues #1–#7 (dry run verified).
+7. ~~**GitHub projection.**~~ Done 2026-10-14: `scripts/gh-sync.py` created the D12–D28 battery issues and five doctrine issues
+   and updated the legacy issues in place (144 actions, no duplicates); every domain D01–D28 now has its standing issue.
