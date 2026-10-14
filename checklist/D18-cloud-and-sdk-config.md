@@ -12,7 +12,7 @@
 
 ## Why this domain pays
 
-It pays because the severity is decided on a server that is in scope, by an attacker model with no preconditions at all. A Firebase Realtime Database that answers `GET /.json` is read by anyone on the internet who has done nothing more than download a free app from Google Play — no device, no root, no proximity, no user interaction, no installed malicious app. Contrast the rest of the mobile surface, where the best exported-component finding still has to argue that a victim installed the attacker's app. Bugcrowd's VRT reflects this asymmetry exactly: the whole `mobile_security_misconfiguration` branch is P5, while `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` is P1 and `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` is P1. The corpus's disclosed-report base rate says the same thing from the other direction: the Firebase open-database finding is the single most repeated mobile-recon finding in the HackerOne set (Zego #1065134 High 7.5, Periscope #684099 Critical, MTN #1447751 / #1351326 / #1351329 / #1691888, MobiSystems #731724 for the Firestore variant), and the FCM server-key class alone earned one researcher a reported $30,000+ in aggregate across programs.
+It pays because the severity is decided on a server that is in scope, by an attacker model with no preconditions at all. A Firebase Realtime Database that answers `GET /.json` is read by anyone on the internet who has done nothing more than download a free app from Google Play — no device, no root, no proximity, no user interaction, no installed malicious app. Contrast the rest of the mobile surface, where the best exported-component finding still has to argue that a victim installed the attacker's app. Bugcrowd's VRT reflects this asymmetry exactly: the whole `mobile_security_misconfiguration` branch is P5, while `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` is P1 and `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` is P1. The corpus's disclosed-report base rate says the same thing from the other direction: the Firebase open-database finding is the single most repeated mobile-recon finding in the HackerOne set (Zego #1065134 High 7.5, Periscope #684099 Critical, MTN #1447751 / #1351326 / #1351329 / #1691888, MobiSystems #731724 for the Firestore variant), and the FCM server-key class alone earned one researcher a reported $30,000+ in aggregate across programs — historical: the legacy send endpoint shut down on 2024-07-22, and the live forms of that class are the service-account JSON (D18-032) and the push-vendor REST key (D18-074).
 
 It also pays *badly* if you skip one step. The same grep that finds a P1 finds a P5 far more often. `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` is P5, and a Firebase Web API key, a Stripe publishable key, a correctly package-restricted Maps key and an analytics ingest key all live there. Reddit explicitly excludes Firebase keys as hardcoded secrets; Basecamp excludes hardcoded keys outright "unless chained with a demonstrated cross-user impact that does not require physical device access"; YesWeHack's Gojek program lists "non important secrets (such as 3rd party secrets)" as non-qualifying. So the restriction-verification gate in this chapter (D18-009 through D18-013) is not procedural politeness — it is the entire difference between the ceiling and the graveyard, and it costs one HTTP request per key.
 
@@ -71,6 +71,9 @@ Block-level n/a note template:
 11. **Support/chat and identity-verification SDKs (D18-051 to D18-054).** Under-tested, and support threads carry recovery correspondence.
 12. **Runtime SDK data flows and consent (D18-056 to D18-065).** These need a proxy and a device, so they come last; they are also where the privacy-band rating applies, which is materially lower at most vendors.
 13. **Discipline items (D18-068 to D18-072).** Run them continuously, not at the end.
+14. **The extension items (D18-073 to D18-077)** run with the block each extends: the environment table (073) with
+    D18-068, the push-vendor REST key (074) with D18-031..D18-034, second data-plane instances (075) with D18-014..D18-022,
+    flag-vendor keys (076) with D18-023..D18-025, client-side URL signers (077) with D18-035 / D18-040.
 
 ## Items
 
@@ -334,7 +337,7 @@ grep -rn '"n_intent_uri"\|"restoreId"\|"af_dp"\|"~referring_link"\|"user_hash"' 
 grep -rn 'R.string\.\|R.layout\.' $S/ | grep -iE 'zendesk|intercom|braze|clevertap|engage|crop'
 grep -rn 'zui_\|intercom_\|com_appboy\|ct_\|branch_' $R/values/*.xml | head
 # anchor 4: JNI exports
-nm -D --defined-only $L/arm64-v8a/*.so | grep ' T Java_'
+llvm-nm -D --defined-only $L/arm64-v8a/*.so | grep ' T Java_'   # llvm-nm (NDK / Homebrew llvm) reads ELF on both hosts; binutils nm is Linux-only
 # SBOM if the build ships one
 cdxgen -t android -o sbom.json target.apk
 dependency-check --scan "$DEC" --format JSON
@@ -1741,7 +1744,7 @@ Java.perform(function () {
 });
 ```
 ```bash
-frida-trace -D "$SERIAL" -p "$(adb -s "$SERIAL" shell pidof com.target.app)" \
+frida-trace -D "$SERIAL" -p "$(adb -s "$SERIAL" shell pidof -s com.target.app)" \
   -j '*analytics*!*/iu' -j '*firebase*!log*/i' -j '*appsflyer*!*/i' -o sdk.log
 ```
 - **Proof:** A hook log line showing real PII or credential material handed to a third-party SDK method, with the stack trace naming the app class that supplied it, **and** the corresponding outbound request to the vendor host captured in the proxy. Both halves — the hook without the wire capture is weaker. A log with no `[hooks-loaded]` line is a detached session, not a negative. Decode the body per D18-058 before claiming which app or field was transmitted.
@@ -1753,7 +1756,7 @@ frida-trace -D "$SERIAL" -p "$(adb -s "$SERIAL" shell pidof com.target.app)" \
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the data itself |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the data itself; the egress as such sits under privacy_concerns › unnecessary_data_collection, a parent whose only leaf is WiFi SSID+password — a programme with a privacy table rates it there |
 | **Attacker** | AM-08 |
 | **Applies to** | Apps serving EU/California users, or any app with a published privacy policy |
 | **Requires** | device, mitm |
@@ -1854,7 +1857,7 @@ adb -s emulator-5554 shell "su 0 sh -c 'kill -11 $(pidof com.target.app)'"      
 | **Attacker** | AM-08 malicious third-party SDK |
 | **Applies to** | All; weight it up for apps carrying session-replay, attribution, chat-support, ad or crash SDKs |
 | **Requires** | device, frida, mitm |
-| **Maps to** | AOSP security-model paper §4.3.4 — "libraries that are embedded by an app are considered to be within the app's security boundary"; the SDK Runtime (Android 13) is the only exception, giving ads SDKs "a secondary bound application sandbox with a separate UID", a separate SELinux policy and "a very limited set of permissions", and even there "there is no security boundary between SDKs for the same app"; `developer.android.com/privacy-and-security/risks/insecure-library` |
+| **Maps to** | AOSP security-model paper §4.3.4 — "libraries that are embedded by an app are considered to be within the app's security boundary"; the SDK Runtime (Android 13) was the only exception (its retirement, with the rest of Privacy Sandbox on Android, was announced in October 2025 — verify the current status before citing it), giving ads SDKs "a secondary bound application sandbox with a separate UID", a separate SELinux policy and "a very limited set of permissions", and even there "there is no security boundary between SDKs for the same app"; `developer.android.com/privacy-and-security/risks/insecure-library` |
 
 - **Test:** Every SDK in the APK runs with the app's UID, its permissions, its Keystore access and its network identity. The corpus covers how SDKs get compromised but rarely asks what a compromised one would reach. Enumerate the blast radius at runtime, not from the manifest.
 - **How:**
@@ -1963,7 +1966,7 @@ curl -s -i -X POST https://api.target/v1/rewards/claim -H "Authorization: Bearer
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) for the egress; rate up where a pre-auth config fetch is a control-plane injection point |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for what the egress carries (privacy_concerns › unnecessary_data_collection is a parent with no fitting leaf); rate up where a pre-auth config fetch is a control-plane injection point |
 | **Attacker** | AM-08; AM-09 for the config-fetch half |
 | **Applies to** | Any app using AndroidX App Startup |
 | **Requires** | device, mitm |
@@ -1990,7 +1993,7 @@ adb shell monkey -p com.target.app 1 ; adb logcat -d | head -100
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for a component; `privacy_concerns.unnecessary_data_collection` (varies) for a permission |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for a component; for a permission no dedicated leaf (privacy_concerns › unnecessary_data_collection holds only the WiFi leaf) — rated on the data the permission reaches (D20) |
 | **Attacker** | AM-03 for components; AM-08 for permissions and background execution |
 | **Applies to** | All; the FGS-type half applies at targetSdk 34+ |
 | **Requires** | — |
@@ -2138,14 +2141,14 @@ tail -1 sweep.log                                 # the script's own "probed=N h
 | **Requires** | — |
 | **Maps to** | The corpus's Body-Diff Rule ("status-code-only claims are the most common rejected-as-N/A category on bug-bounty platforms") and Server-Policy-vs-State |
 
-- **Test:** A bypass or an "unrestricted key" claim requires a response **body** differential, not a status code. A 200 with a byte-identical body is not a bypass. Equally, a server-side policy that always denies is not a state oracle — establish whether the differentiator tracks *your input* or a fixed deny-list.
+- **Test:** The body-diff rule is chapter-independent (D27-053 states it for every report, D01-079 for endpoint liveness); this item keeps only its D18 application — the restriction pair of D18-011 and the `X-Android-*` header diff below. A bypass or an "unrestricted key" claim requires a response **body** differential, not a status code. A 200 with a byte-identical body is not a bypass. Equally, a server-side policy that always denies is not a state oracle — establish whether the differentiator tracks *your input* or a fixed deny-list.
 - **How:**
 ```bash
 diff <(curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=London&key=$K") \
      <(curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=London&key=$K" \
          -H "X-Android-Package: $PKG" -H "X-Android-Cert: $CERT")
 # size + hash comparison for large bodies
-for h in "" "-H X-Android-Package:$PKG"; do curl -s $h "$URL" | wc -c; curl -s $h "$URL" | sha256sum; done
+for h in "" "-H X-Android-Package:$PKG"; do curl -s $h "$URL" | wc -c; curl -s $h "$URL" | shasum -a 256; done   # shasum exists on macOS and Linux
 ```
   Then identify what changed: a correlation id, a timestamp, or real content. A five-byte difference might be meaningful; identify it rather than asserting it.
 - **Proof:** The byte-level diff in the report. For every "the key is unrestricted" claim, include the body, not only `"status": "OK"`.
@@ -2196,6 +2199,7 @@ grep -i 'authorization\|"cookie"\|apikey' out.sanitized.har | head -20   # verif
 | **Maps to** | MASWE-0004; API8:2023; the D18-055 / D18-068 staging-host class |
 | **Record** | logs/D18-073.txt; requests/E-NNN.http for the redirected request |
 
+- **Skip when:** the first two greps of How print nothing (paste both with `| wc -l` = 0) → notes `n/a: no staging/dev/loopback endpoint in the release build (both host greps 0)`.
 - **Test:** A release build that still holds a staging, dev or `http://localhost:<port>` entry in an environment enum, plus a selector (debug menu, preference, remote flag, deep-link parameter, restored backup value) that chooses among them. The table is a P3 leak of internal hosts; the selector decides whether an attacker can point an authenticated client at a weaker or cleartext backend. D18-055 compares keys across builds and D18-068 diffs API versions — neither asks whether the environment can be flipped.
 - **How:**
 ```bash
@@ -2223,12 +2227,13 @@ grep -rnE 'BuildConfig\.(FLAVOR|BUILD_TYPE|DEBUG)' "$S" | grep -iE 'url|env|host
 | **Maps to** | CWE-798; MASWE-0004; the H1 #789370 FCM-server-key class (D18-031), re-hosted at the vendor now that the legacy FCM endpoint is gone |
 | **Record** | logs/D18-074.txt |
 
+- **Skip when:** `grep -rliE 'onesignal|braze|appboy|urbanairship|airship|pushwoosh|moengage|clevertap' "$S" "$R/values" | wc -l` is 0 → notes `n/a: no third-party push/engagement SDK in the package`.
 - **Test:** Each vendor ships an **app id** (client, public) and a **REST/API key** (server: sends to the whole install base, exports the audience). The REST key in the APK is the current form of the FCM-server-key finding; the vendor's *read* endpoint is the non-mutating validator. D18-046's generic read-key test does not name these endpoints or the audience-export impact.
 - **How:**
 ```bash
 grep -rnoiE 'onesignal_app_id|os_v2_app_[a-z0-9_]{40,}|OneSignal\.(initWithContext|setAppId)|com_braze_api_key|braze_api_key|airship|UA_[A-Za-z0-9_-]{20,}|pushwoosh|moe_app_id|clevertap_account_(id|token)|rest_api_key|api_key_(prod|production)' "$S" "$R/values" "$A" | sort -u
 # validate with a READ endpoint only — never a send, never a segment create
-curl -s "https://api.onesignal.com/apps/<app_id>" -H "Authorization: Key <candidate>" | jq '{name, players, messageable_players, updated_at, error: .errors}'   # 200 with counts = REST key; 403 = app id / client key
+curl -s "https://api.onesignal.com/notifications?app_id=<app_id>&limit=1" -H "Authorization: Key <candidate>" | jq '{total_count, error: .errors}'   # 200 with total_count = app REST key (legacy keys: "Authorization: Basic <key>"; GET /apps/<id> needs the organisation key instead); 401/403 = app id / client value
 curl -s "https://rest.<cluster>.braze.com/segments/list" -H "Authorization: Bearer <candidate>" | head -c 300
 curl -s "https://go.urbanairship.com/api/segments" -u "<app_key>:<candidate>" -H 'Accept: application/vnd.urbanairship+json; version=3' | head -c 300
 ```
@@ -2248,6 +2253,7 @@ curl -s "https://go.urbanairship.com/api/segments" -u "<app_key>:<candidate>" -H
 | **Maps to** | MASTG-KNOW-0039; Firebase insecure-rules documentation (rules are per database and per bucket) |
 | **Record** | logs/D18-075.txt; the three instance lists |
 
+- **Skip when:** after the three greps of How, `firestore_dbs.txt` is empty, `rtdb_instances.txt` and `buckets_fb.txt` hold at most the default instance, and no `supabase.co` host is in `inventory/cloud-hosts.txt` → notes `n/a: one default instance per data plane (counts pasted); D18-014..D18-022 cover it`.
 - **Test:** Rules are per instance. A project may hold several Firestore databases (`FirebaseFirestore.getInstance(app, "<name>")`, GA since 2023), several RTDB instances and several Storage buckets; teams lock `(default)` and leave the others. Supabase adds Storage buckets and Edge Functions beside PostgREST. D18-014 to D18-022 and D18-044 probe only the default instance — probe every instance the package names.
 - **How:**
 ```bash
@@ -2277,13 +2283,15 @@ grep -rnoE 'functions/v1/[A-Za-z0-9_-]+|storage/v1/object/(public/)?[A-Za-z0-9_-
 | **Maps to** | API8:2023; MASWE-0004; the D18-023 / D18-025 Remote Config class at another vendor |
 | **Record** | logs/D18-076.txt |
 
+- **Skip when:** `grep -rliE 'launchdarkly|statsig|optimizely|growthbook|split\.io|flagsmith' "$S" | wc -l` is 0 → notes `n/a: no hosted feature-flag or experimentation SDK`.
 - **Test:** Client-side flag SDKs ship a key that returns the **entire** flag/experiment set with targeting rules to any caller. The set names unreleased features, internal hosts, employee cohorts (emails in a rule) and security toggles. D18-024 names these vendors in Applies-to but the chapter's probes are Firebase-only.
 - **How:**
 ```bash
 grep -rnoE 'mob-[0-9a-f-]{36}|sdk-[0-9a-f-]{36}|client-[A-Za-z0-9]{20,}|secret-[A-Za-z0-9]{20,}|launchdarkly|statsig|optimizely|growthbook|split\.io|flagsmith' "$S" "$R/values" | sort -u
-CTX=$(printf '{"kind":"user","key":"zq7x4kd2"}' | base64 | tr '+/' '-_' | tr -d '=')
-curl -s "https://clientsdk.launchdarkly.com/msdk/evalx/contexts/$CTX" -H 'Authorization: mob-…' | jq 'keys | length'                                   # LaunchDarkly mobile key: whole flag set for any context
-curl -s -X POST https://featuregates.org/v1/initialize -H 'statsig-api-key: client-…' -H 'Content-Type: application/json' -d '{"user":{"userID":"zq7x4kd2"},"statsigMetadata":{"sdkType":"android"}}' | jq '{gates: (.feature_gates|length), configs: (.dynamic_configs|length)}'
+# copy the exact host and auth header from the SDK's own request in the proxy; the forms below are the current defaults
+CTX=$(printf '{"kind":"user","key":"zq7x4kd2"}' | base64 | tr -d '\n' | tr '+/' '-_' | tr -d '=')
+curl -s "https://clientsdk.launchdarkly.com/msdk/evalx/contexts/$CTX" -H 'Authorization: api_key mob-…' | jq 'keys | length'                          # LaunchDarkly mobile key: whole flag set for any context
+curl -s -X POST https://api.statsig.com/v1/initialize -H 'statsig-api-key: client-…' -H 'Content-Type: application/json' -d '{"user":{"userID":"zq7x4kd2"},"statsigMetadata":{"sdkType":"android"}}' | jq '{gates: (.feature_gates|length), configs: (.dynamic_configs|length)}'
 curl -s "https://cdn.optimizely.com/datafiles/<sdk_key>.json" | jq '{experiments: (.experiments|length), audiences: [.audiences[]?.conditions]}'
 ```
 - **Proof:** The flag/experiment inventory with any internal hostname, security toggle or PII-bearing targeting rule highlighted; one flag that D18-025 then shows the client obeys.
@@ -2302,6 +2310,7 @@ curl -s "https://cdn.optimizely.com/datafiles/<sdk_key>.json" | jq '{experiments
 | **Maps to** | CWE-798; MASWE-0004; D18-035, D18-043, D18-049 |
 | **Record** | logs/D18-077.txt |
 
+- **Skip when:** the first grep of How prints nothing **and** no request URL in the proxy capture carries `X-Amz-Signature`, `X-Goog-Signature` or `Signature=` → notes `n/a: no client-side URL signer and no signed storage URL in traffic`.
 - **Test:** A correct backend mints the signed URL server-side and hands the client only the URL. If the app builds the signature itself it holds the signer: an AWS secret, a GCS service-account key, a CDN key pair or a vendor API secret — with no vendor prefix for D18-035/-049 to grep. Holding it means minting URLs for any object key: the D18-043 IDOR without the listing.
 - **How:**
 ```bash
@@ -2358,14 +2367,16 @@ Java.perform(function () {   // what key material initialises the signer, and wh
 
 ## Sources
 
+Paths such as primary/…, secondary/…, local/… and architecture/… below name the maintainers' research notes, which are not shipped in this public repository; every claim they support is restated in the item that relies on it.
+
 - **OWASP MASTG/MASVS/MASWE** — MASTG-TEST-0318 and MASTG-TEST-0319 (static and runtime SDK data handling, with the Firebase Analytics worked example), MASTG-TEST-0206, MASTG-KNOW-0039 (Firebase Real-time Databases), MASTG-KNOW-0026, MASTG-TECH-0007/-0019/-0033/-0043/-0100, MASTG-TOOL-0125 (Apkleaks), MASTG-TOOL-0144 (gitleaks), MASTG-TOOL-0134 (cdxgen), MASTG-TOOL-0131 (dependency-check); MASWE-0004, MASWE-0044, MASWE-0069, MASWE-0073, MASWE-0078; MASVS-STORAGE-1, MASVS-PRIVACY-1/-3/-4. The corpus notes there is **no dedicated Android MASTG-TEST for cloud-backend misconfiguration** — a documented MASTG gap that this chapter fills.
 - **Bugcrowd VRT (release 2026-07-08, 581 entries)** — every VRT path in this chapter was taken from the full tree, including the `cloud_security` branch (`…publicly_accessible_iam_credentials` P1, `…overly_permissive_iam_roles` P2, `…publicly_accessible_cloud_storage` VARIES, `…unencrypted_sensitive_data_at_rest` P2, `…insecure_api_endpoints` P4) and the `sensitive_data_exposure.disclosure_of_secrets` branch (`…for_publicly_accessible_asset` P1, `…for_internal_asset` P3, `…pay_per_use_abuse` P4, `…pii_leakage_exposure` VARIES, `…intentionally_public_sample_or_invalid` P5).
 - **Disclosed HackerOne reports** — #1065134 (Zego, Firebase database takeover, High 7.5), #684099 (Periscope, Critical), #1447751 / #1351326 / #1351329 / #1691888 (MTN), #731724 (MobiSystems, Firestore REST), #789370 (Smule, FCM server key, Critical), #941590 (Hostinger, GCM sender key, Low), #351555 (Reverb, Cloudinary), #412772 (8x8, High, $500), #753868 (Zenly, $750), #440629 (Starbucks), #1641475 (GlassWire), #792850 (NordVPN), #488371 (Mail.ru), #401793 (Grab, support-SDK WebView bridge, High 7.1), #180349 (Zendesk Android SDK broadcast), #532836 / #1455987 (Exness, SurveyMonkey SDK), #258460 (Quora, gotev UploadService), #192886 (Mapbox SDK), #694053 (Lark), #41856 (Crashlytics/fabric.io), #1021906, #361438, #231460, #753602, #716292, #352869.
 - **Vendor documentation** — Firebase insecure-rules documentation (the `".read": true` / `request.auth != null` cases, cascading rules, open Storage rules); Firebase Remote Config parameters and conditions ("Don't store confidential data in Remote Config parameter keys or values"); `firebase.google.com/docs/app-check` (Play Integrity provider, the protected services list, debug providers as local-development-only); Google Cloud API key documentation (`X-Android-Package` / `X-Android-Cert` restriction enforcement); `developers.google.com/maps/api-security-best-practices` (package + SHA-1 restriction, API restrictions, customer financial liability, Secrets Gradle Plugin); Amazon Cognito identity pools (guest access and per-identity-type IAM roles); `developers.intercom.com/installing-intercom/android/identity-verification` (`setUserHash`, HMAC-SHA256, server-side secret, 401 on failure); `developer.android.com` risk pages for insecure library, insecure API usage, hardcoded cryptographic secrets, android-exported, access control to exported components, log info disclosure; App Startup, manifest merge / `AD_ID` auto-merge, foreground-service types, Photo Picker backport.
 - **Google App Security Improvement campaigns** — "Exposed Firebase Cloud Messaging Server Keys" (started 2021-10-12, `support.google.com/faqs/topic/11015404`), including the remediation warning that removing a key from the current build does not fix it; the ad-SDK campaigns (Supersonic, Vpon, Airpush, MoPub, AdMarvel, Vungle, Vitamio) and the library campaigns (Libpng, Libjpeg-turbo, OpenSSL, Libupup, Apache Cordova, GnuTLS) with their named CVEs.
-- **AOSP security-model paper** — §3 rule ① (all static code and data in an APK is public), §4.3.4 (embedded libraries are inside the app's security boundary; the Android 13 SDK Runtime exception for ads SDKs and its lack of inter-SDK isolation).
+- **AOSP security-model paper** — §3 rule ① (all static code and data in an APK is public), §4.3.4 (embedded libraries are inside the app's security boundary; the Android 13 SDK Runtime exception for ads SDKs — retirement announced October 2025 — and its lack of inter-SDK isolation).
 - **MITRE ATT&CK Mobile** — T1481.002 Bidirectional Communication (Firebase named as a C2 channel for Mandrake, TERRACOTTA, VajraSpy S9006), T1437.001 Web Protocols, T1474.001, T1533, T1532, T1646, T1430 / T1430.001.
 - **OWASP Mobile Top 10 2024** — M2, M6 Inadequate Privacy Controls, M8, M9 (whose example list names "misconfiguring cloud storage permissions"); **OWASP API Security Top 10 2023** — API1, API2, API5, API8, API10.
 - **Third-party research and program rules** — Oversecured's SDK-security research and its seven SDK vulnerability classes; the EngageLab EngageSDK case (≤ v4.5.4, fixed 5.2.1 on 2025-11-03); CVE-2020-8913 (Play Core); Cobalt's "Mobile Vulnerabilities: Pen tester's guide" AWS-key example; YesWeHack's Android recon guide and its credential-handling boundary; Intigriti's triage standards on out-of-scope testing; Xiaomi's General Assessment Rules and its separate privacy bounty table; Google Mobile VRP's Low-Impact-Data definition; Basecamp's hardcoded-key carve-out; Reddit's Firebase-key exclusion; HackerOne's PII and leaked-credential standards; the Datafarm Flutter secret-hunting write-up; the FCM-takeover research (abss0x7tbh) and the reported $30,000+ aggregate; the Tea App breach (misconfigured Storage bucket, ~72,000 images and ~1.1M private messages) and the 2025 reporting of ~150 unauthenticated Firebase endpoints across top-ranked apps.
-- **The bug-hunting corpus (`secondary/claude-bughunter.md`)** — the 60-pattern secret grep and its "validate before claiming" rule; the shadow-API version-diff method; Marker Discipline, the Body-Diff Rule, the Statistical-Sample Rule, Server-Policy-vs-State and the Shell-Loop Ban; the layer-ordering trap; the pre-severity gate run against the Critical claim; the five-screenshot state-change pattern and the PII mask/leave-visible split; retraction discipline and its patched-mid-engagement inverse; primitives-first chain filing and the never-submit list.
+- **The bug-hunting corpus (secondary/claude-bughunter.md)** — the 60-pattern secret grep and its "validate before claiming" rule; the shadow-API version-diff method; Marker Discipline, the Body-Diff Rule, the Statistical-Sample Rule, Server-Policy-vs-State and the Shell-Loop Ban; the layer-ordering trap; the pre-severity gate run against the Critical claim; the five-screenshot state-change pattern and the PII mask/leave-visible split; retraction discipline and its patched-mid-engagement inverse; primitives-first chain filing and the never-submit list.
 - **Local senior-researcher corpus** — the restriction-verification discipline ("verify Google/Firebase API-key restriction precisely", the three distinct responses), the living-report ruled-out register as a deliverable, the evidence tree layout, and the graveyard of classes that reliably do not pay.

@@ -1,6 +1,6 @@
 # CHECKLIST.md — domain index
 
-> 2107 test items across 28 domains, generated from `checklist/` (source digest `bfded18066fb`). Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
+> 2161 test items across 28 domains, generated from `checklist/` (source digest `e6e8df042793`). Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
 
 | Domain | Phase | Items | Ceiling mix | Card | Chapter |
 |---|---|---|---|---|---|
@@ -18,22 +18,22 @@
 | **D12** Cryptography & Key Management | P4 | 84 | 🟥19 🟧40 🟨14 🟩2 ⬜9 | [card](cards/D12.md) | [`D12-crypto-and-key-management.md`](checklist/D12-crypto-and-key-management.md) |
 | **D13** Authentication, Session, OTP & Biometrics | P6 | 95 | 🟥52 🟧31 🟨2 ⬜10 | [card](cards/D13.md) | [`D13-auth-session-otp-biometrics.md`](checklist/D13-auth-session-otp-biometrics.md) |
 | **D14** Network Security, TLS & Certificate Pinning | P6 | 63 | 🟥15 🟧16 🟨15 🟩4 ⬜13 | [card](cards/D14.md) | [`D14-network-tls-pinning.md`](checklist/D14-network-tls-pinning.md) |
-| **D15** Backend API, IDOR/BOLA, Mass Assignment & Business Logic | P6 | 90 | 🟥55 🟧14 🟨1 🟩1 ⬜19 | [card](cards/D15.md) | [`D15-backend-api-and-authz.md`](checklist/D15-backend-api-and-authz.md) |
-| **D16** Native Code, JNI & Memory Safety | P4 | 60 | 🟥22 🟧4 🟨6 🟩8 ⬜20 | [card](cards/D16.md) | [`D16-native-code-and-memory.md`](checklist/D16-native-code-and-memory.md) |
+| **D15** Backend API, IDOR/BOLA, Mass Assignment & Business Logic | P6 | 97 | 🟥61 🟧14 🟨1 🟩1 ⬜20 | [card](cards/D15.md) | [`D15-backend-api-and-authz.md`](checklist/D15-backend-api-and-authz.md) |
+| **D16** Native Code, JNI & Memory Safety | P4 | 65 | 🟥24 🟧4 🟨6 🟩9 ⬜22 | [card](cards/D16.md) | [`D16-native-code-and-memory.md`](checklist/D16-native-code-and-memory.md) |
 | **D17** Dynamic Code Loading, Deserialization & Supply Chain | P4 | 86 | 🟥49 🟧14 🟨6 🟩2 ⬜12 🔷3 | [card](cards/D17.md) | [`D17-dynamic-loading-and-supplychain.md`](checklist/D17-dynamic-loading-and-supplychain.md) |
 | **D18** Cloud Backend & Third-Party SDK Configuration | P6 | 77 | 🟥40 🟧21 🟨4 🟩2 ⬜10 | [card](cards/D18.md) | [`D18-cloud-and-sdk-config.md`](checklist/D18-cloud-and-sdk-config.md) |
-| **D19** Cross-Platform Frameworks | P4 | 79 | 🟥36 🟧14 🟨6 🟩2 ⬜21 | [card](cards/D19.md) | [`D19-cross-platform-frameworks.md`](checklist/D19-cross-platform-frameworks.md) |
-| **D20** Privacy, PII, Logging & Data Leakage | P4 | 70 | 🟥6 🟧35 🟨13 🟩3 ⬜13 | [card](cards/D20.md) | [`D20-privacy-and-data-leakage.md`](checklist/D20-privacy-and-data-leakage.md) |
-| **D21** Anti-Tampering, RASP, Root/Emulator Detection & Resilience | P4 | 57 | 🟥11 🟧23 🟨6 🟩2 ⬜15 | [card](cards/D21.md) | [`D21-resilience-and-rasp.md`](checklist/D21-resilience-and-rasp.md) |
-| **D22** Platform & OS Version-Specific Behaviour | P4 | 82 | 🟥8 🟧37 🟨18 🟩1 ⬜18 | [card](cards/D22.md) | [`D22-platform-version-behaviour.md`](checklist/D22-platform-version-behaviour.md) |
-| **D23** Payments, Entitlements, Subscriptions & Fraud | P6 | 66 | 🟥29 🟧29 🟨1 ⬜7 | [card](cards/D23.md) | [`D23-payments-and-entitlements.md`](checklist/D23-payments-and-entitlements.md) |
+| **D19** Cross-Platform Frameworks | P4 | 84 | 🟥40 🟧14 🟨6 🟩1 ⬜23 | [card](cards/D19.md) | [`D19-cross-platform-frameworks.md`](checklist/D19-cross-platform-frameworks.md) |
+| **D20** Privacy, PII, Logging & Data Leakage | P4 | 74 | 🟥6 🟧35 🟨16 🟩3 ⬜14 | [card](cards/D20.md) | [`D20-privacy-and-data-leakage.md`](checklist/D20-privacy-and-data-leakage.md) |
+| **D21** Anti-Tampering, RASP, Root/Emulator Detection & Resilience | P4 | 63 | 🟥12 🟧26 🟨6 🟩2 ⬜17 | [card](cards/D21.md) | [`D21-resilience-and-rasp.md`](checklist/D21-resilience-and-rasp.md) |
+| **D22** Platform & OS Version-Specific Behaviour | P4 | 86 | 🟥8 🟧38 🟨19 🟩1 ⬜20 | [card](cards/D22.md) | [`D22-platform-version-behaviour.md`](checklist/D22-platform-version-behaviour.md) |
+| **D23** Payments, Entitlements, Subscriptions & Fraud | P6 | 74 | 🟥33 🟧32 🟨1 ⬜8 | [card](cards/D23.md) | [`D23-payments-and-entitlements.md`](checklist/D23-payments-and-entitlements.md) |
 | **D24** Push, Notifications & Messaging | P6 | 52 | 🟥11 🟧20 🟨11 ⬜10 | [card](cards/D24.md) | [`D24-push-notifications-messaging.md`](checklist/D24-push-notifications-messaging.md) |
-| **D25** Device, OEM, Firmware & Privileged Surfaces | P5 | 79 | 🟥26 🟧28 🟨2 ⬜23 | [card](cards/D25.md) | [`D25-device-oem-and-privileged.md`](checklist/D25-device-oem-and-privileged.md) |
-| **D26** Runtime Instrumentation, Tooling & Harness | P1 | 79 | 🟥3 🟧7 🟨7 ⬜62 | [card](cards/D26.md) | [`D26-instrumentation-and-tooling.md`](checklist/D26-instrumentation-and-tooling.md) |
-| **D27** Reporting, Severity Rating & Evidence | P9 | 79 | 🟥2 🟧2 ⬜75 | [card](cards/D27.md) | [`D27-reporting-and-evidence.md`](checklist/D27-reporting-and-evidence.md) |
+| **D25** Device, OEM, Firmware & Privileged Surfaces | P5 | 84 | 🟥27 🟧29 🟨2 ⬜26 | [card](cards/D25.md) | [`D25-device-oem-and-privileged.md`](checklist/D25-device-oem-and-privileged.md) |
+| **D26** Runtime Instrumentation, Tooling & Harness | P1 | 85 | 🟥3 🟧7 🟨7 ⬜68 | [card](cards/D26.md) | [`D26-instrumentation-and-tooling.md`](checklist/D26-instrumentation-and-tooling.md) |
+| **D27** Reporting, Severity Rating & Evidence | P9 | 83 | 🟥2 🟧2 ⬜79 | [card](cards/D27.md) | [`D27-reporting-and-evidence.md`](checklist/D27-reporting-and-evidence.md) |
 | **D28** AI/LLM Features in Apps | P4 | 57 | 🟥17 🟧16 🟨15 ⬜9 | [card](cards/D28.md) | [`D28-ai-llm-features.md`](checklist/D28-ai-llm-features.md) |
 
-**Total: 2107 items** — 🟥 595 critical · 🟧 710 high · 🟨 225 medium · 🟩 47 low · ⬜ 527 support · 🔷 3 varies
+**Total: 2161 items** — 🟥 613 critical · 🟧 718 high · 🟨 229 medium · 🟩 47 low · ⬜ 551 support · 🔷 3 varies
 
 ## The crux question for each domain
 

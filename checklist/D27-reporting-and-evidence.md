@@ -12,7 +12,7 @@
 |---|---|
 | **Phases** | P8 write-up and severity, P9 submission, triage and retest |
 | **Milestones** | M8, M9 |
-| **VRT ceiling** | No node of its own. The domain's job is to reach the consumer node the evidence supports: `server_side_injection.remote_code_execution_rce` (P1), `broken_authentication_and_session_management.authentication_bypass` (P1), `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1), `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1), `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1) — and, where the finding is genuinely Android-native, `broken_access_control.exposed_sensitive_android_intent` (**priority null — rated entirely on what you demonstrate**, CWE-927) |
+| **VRT ceiling** | No node of its own. The domain's job is to reach the consumer node the evidence supports: `server_side_injection.remote_code_execution_rce` (P1), `broken_authentication_and_session_management.authentication_bypass` (P1), `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1), `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1), `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1) — and, where the finding is genuinely Android-native, `broken_access_control.exposed_sensitive_android_intent` (**priority `varies` — `null` in the upstream JSON, `varies` in data/vrt.csv — rated entirely on what you demonstrate**, CWE-927) |
 | **Primary attacker model** | AM-03 zero-permission local app — the model most mobile findings actually claim, and the one whose wording decides the rating. AM-12 own rooted device appears throughout as the model that must never be presented as an attack |
 | **Maps to** | MASVS-STORAGE-1/2, MASVS-AUTH-1, MASVS-PLATFORM-1/2, MASVS-CODE-4, MASVS-RESILIENCE-1..4, MASVS-PRIVACY-1..4 (all 24 v2 controls are the anchoring vocabulary); MASTG-TEST-0003, MASTG-TEST-0028 (`status: deprecated`, `covered_by: [MASTG-TEST-0393, MASTG-TEST-0394]`), MASTG-TEST-0204, MASTG-TEST-0223, MASTG-TEST-0226, MASTG-TEST-0232, MASTG-TEST-0235, MASTG-TEST-0242, MASTG-TEST-0243, MASTG-TEST-0244, MASTG-TEST-0304 (`status: placeholder`), MASTG-TEST-0316, MASTG-TEST-0324, MASTG-TEST-0325, MASTG-TEST-0326, MASTG-TEST-0329, MASTG-TEST-0338, MASTG-TEST-0341, MASTG-TEST-0351, MASTG-TEST-0352, MASTG-TEST-0353, MASTG-TEST-0399; MASTG-TECH-0009, MASTG-TECH-0023, MASTG-TECH-0033, MASTG-TECH-0035, MASTG-TECH-0043, MASTG-TECH-0165, MASTG-TECH-0173; MASTG-TOOL-0024 (Scrcpy), MASTG-TOOL-0104, MASTG-TOOL-0140; MASWE-0001..MASWE-0078 as the impact vocabulary; CWE-319, CWE-798, CWE-321, CWE-359, CWE-266, CWE-306, CWE-925, CWE-926, CWE-927, CWE-939, CWE-919, CWE-729, CWE-922, CWE-311, CWE-693, CWE-929; ATT&CK Mobile tactics TA0027, TA0041, TA0028, TA0029, TA0030, TA0031, TA0032, TA0033, TA0035, TA0036, TA0037, TA0034; NIST SP 800-115 §6.6, §8.1, §8.2, §8.3, Appendix B §3.1, §3.2, §5.3, §6; FIRST CVSS v3.1 and v4.0 |
 
@@ -73,7 +73,7 @@ unzip -Z1 "$E"/apk/base.apk | grep -E 'index.android.bundle|flutter_assets|asset
 # 4. Is a live backend in scope, and do two accounts exist?  (backend-evidence and cross-account items)
 python3 -c 'import json;e=json.load(open("'"$E"'/engagement.json"));print(e["authorisation"].get("scope"), len(e.get("accounts",[])))'
 
-# 5. Is a device attached for capture?  (D27-030..034, D27-039..042, D27-045)
+# 5. Is a device attached for capture?  (D27-030..034, D27-039..042, D27-045, D27-072, D27-080)
 adb devices -l | awk 'NR>1 && $2=="device"' | wc -l
 ```
 
@@ -83,7 +83,7 @@ Decision:
 - Step 2 shows a non-Bugcrowd programme → `python3 scripts/mark.py $E D27-012 n/a --note "D27-012..D27-015 n/a: programme is not on Bugcrowd (authorisation.programme_url=<host>); severity vocabulary is CVSS 3.1 (D27-017) / CVSS 4.0 (D27-019) / vendor ladder (D27-027)"` (repeat for D27-013, D27-014, D27-015). No vendor ladder published → the same form for D27-027.
 - Step 3 returns nothing on both lines → `python3 scripts/mark.py $E D27-004 n/a --note "no OTA or dynamic-code channel: grep for CodePush|expo-updates|LiveUpdate|DexClassLoader|createPackageContext in $DEC/jadx/sources returned 0 files and the APK carries no JS/Dart bundle; the shipped APK is the executing artefact"`.
 - Step 4 shows no backend in scope → for each of D27-038, D27-044, D27-052, D27-053, D27-054, D27-055, D27-056, D27-075: `python3 scripts/mark.py $E D27-0NN n/a --note "no backend in authorisation.scope; static-only evidence rules apply (D27-047)"`. Fewer than two accounts → D27-036, D27-037, D27-044, D27-077 are `blocked --note "needs: second tester-owned account (engagement.json.blockers)"`.
-- Step 5 returns 0 → D27-030, D27-031, D27-032, D27-033, D27-034, D27-039, D27-040, D27-041, D27-042, D27-045, D27-072 are `blocked --note "needs: a device for capture; evidence is source-derived per D27-047 until one is attached"`.
+- Step 5 returns 0 → D27-030, D27-031, D27-032, D27-033, D27-034, D27-039, D27-040, D27-041, D27-042, D27-045, D27-072, D27-080 are `blocked --note "needs: a device for capture; evidence is source-derived per D27-047 until one is attached"`.
 - Everything else in D27 is always applicable; an item is never marked n/a for being 'client-only' or 'bounty-only' — compress per its own Ruled-out-when instead.
 
 ## Triage order
@@ -117,6 +117,7 @@ Decision:
 | **VRT** | none directly — but the title is what routes the report to `broken_authentication_and_session_management.authentication_bypass` (P1) instead of `mobile_security_misconfiguration.*` (P5) |
 | **Attacker** | AM-03 (the model most mobile titles claim) |
 | **Applies to** | every report |
+| **Requires** | — |
 | **Maps to** | H1 #1225158, #288955, #3399016, #3829030, #1667998; Bugcrowd VRT release `2026-07-08`; CWE-927 |
 
 - **Test:** The title must contain a noun the attacker **gains** (token, session, file, money, code
@@ -153,7 +154,8 @@ Decision:
 | **VRT** | none — this block is what moves a `null`-priority node to its final priority |
 | **Attacker** | AM-01 … AM-12, stated by ID |
 | **Applies to** | every finding |
-| **Maps to** | AOSP security-model paper §2.3 adversary taxonomy and §4.3.1 (DAC = apps, MAC = platform, Android permissions = users); AOSP "Application Sandbox"; Bugcrowd VRT `broken_access_control.exposed_sensitive_android_intent` (priority null) |
+| **Requires** | — |
+| **Maps to** | AOSP security-model paper §2.3 adversary taxonomy and §4.3.1 (DAC = apps, MAC = platform, Android permissions = users); AOSP "Application Sandbox"; Bugcrowd VRT `broken_access_control.exposed_sensitive_android_intent` (priority varies — `null` in the upstream JSON) |
 
 - **Test:** Three facts, before any prose: the attacker's starting position, the boundary crossed, and
   what was obtained. If any of the three is missing the finding is not yet reportable. Add the AOSP
@@ -166,7 +168,7 @@ Decision:
   Obtained       : /data/data/com.target.app/databases/app.db — session JWT + 1,204 PII rows
   Replay         : HTTP 200 from api.target.example/v1/me using the extracted JWT
   Preconditions  : victim has the app installed and has logged in once; no user interaction thereafter
-  Tested on      : Pixel 7a, Android 15 (API 35), patch 2026-08-01, stock non-rooted, USB debugging off
+  Tested on      : <current-generation device>, newest released Android (API <n>), patch <yyyy-mm-dd>, stock non-rooted, USB debugging off
   ```
   Name which of the three enforcement mechanisms was defeated — DAC, MAC (SELinux) or Android
   permissions — and whose authorisation was bypassed (user, developer, platform, or the DPC in a managed
@@ -188,6 +190,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | AM-12 (own harness; not an attack) |
 | **Applies to** | every finding, every report |
+| **Requires** | — |
 | **Maps to** | H1 #2553411 (Basecamp), #1737358 (Shopify), #1667998 (KAYAK) — all three opened with this block and all three were reproduced by the vendor first try; Exploit-DB entry format (`Version:` / `Tested on:` / `CVE:`; EDB 44690 and 46933 are visibly weaker for omitting them) |
 
 - **Test:** A version-blind Android report is the single most common cause of a valid finding being closed
@@ -197,18 +200,26 @@ Decision:
   ```bash
   PKG=com.target.app
   aapt2 dump badging base.apk | grep -E 'package: name|versionName|versionCode|sdkVersion|targetSdkVersion'
-  sha256sum base.apk
+  shasum -a 256 base.apk                      # portable (macOS ships no sha256sum); same format as the D27-046 manifest
   apksigner verify --print-certs base.apk | grep -i 'Signer #1 certificate SHA-256'
   adb shell dumpsys package $PKG | grep -E 'versionName|versionCode|targetSdk|minSdk|firstInstallTime|flags='
   adb shell getprop ro.build.version.release; adb shell getprop ro.build.version.sdk
   adb shell getprop ro.build.version.security_patch; adb shell getprop ro.build.fingerprint
   adb shell getprop ro.product.model; adb shell getprop | grep build.version.extensions
   date -u
+  # device class and flag state — server-delivered flags differ per device and from the compiled default
+  adb shell getprop ro.build.type; adb shell getprop ro.build.tags          # user/release-keys vs userdebug/test-keys
+  adb shell pm has-feature android.hardware.nfc; adb shell pm has-feature android.hardware.strongbox_keystore
+  # record the OBSERVED value of every remote-config flag the finding depends on, on THIS device class, at test
+  # time (instrumented read on the lab device, behavioural inference on the stock phone; D26-084) — never rate
+  # from the emulator's flags
   ```
 - **Proof:** A fixed header on every finding carrying package name, versionName + versionCode, APK
   SHA-256, signer SHA-256, min/target SDK, device model and fingerprint, Android release + API level, and
-  security patch level. `user/release-keys` in the fingerprint is what proves the finding is not an
-  emulator artefact.
+  security patch level — plus the device class (`ro.build.type`/`ro.build.tags`), the observed value of each
+  remote-config flag the finding depends on, and the newest released Android version the finding was
+  reproduced on: programmes that rate only on the current release treat any other image as "not current".
+  `user/release-keys` in the fingerprint is what proves the finding is not an emulator artefact.
 - **Escalation:** -> D22 for the version-gate verdict; -> D02 where the pulled artefact's hash does not
   match the store build. The same block is the retest baseline (D27-071).
 - **Ruled out when:** Never — this block is unconditional. The only variation is that OTA-capable apps
@@ -222,7 +233,7 @@ Decision:
 | **VRT** | none — but omitting it produces a finding whose every `file:line` is accurate and whose conclusion is wrong |
 | **Attacker** | AM-08 / AM-09 (the SDK or backend that can change the executing code) |
 | **Applies to** | React Native with CodePush or expo-updates; Cordova/Capacitor live-update plugins; any app with `DexClassLoader`/`System.load` from a writable path |
-| **Requires** | react-native, hermes, cordova, capacitor, flutter |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0104 (`file`-based engine identification), MASTG-TECH-0165; `CodePushConstants.DEFAULT_JS_BUNDLE_NAME`, `CODE_PUSH_FOLDER_PREFIX`, `STATUS_FILE`; expo `UpdatesConfiguration.kt` |
 
 - **Test:** For any app that can replace its own code after install, the APK you decompiled may not be the
@@ -255,6 +266,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG v2 test structure Overview → Steps → **Observation** → **Evaluation** → "Further Validation Required"; developer.android.com `privacy-and-security/risks` page structure (Overview → Impact → Mitigations → MASVS category) — triagers recognise both shapes |
 
 - **Test:** Every finding carries the same fields in the same order. A missing field is not neutral; it is
@@ -278,6 +290,8 @@ Decision:
   OWNER                           CLIENT-FIX | SERVER-FIX | BOTH | THIRD-PARTY-SDK
   LIMITATIONS                     what was NOT proven, and the environment that would prove it
   ```
+  This field list **is** `templates/finding-report.md`, and `findings/F-0NN.md` is written from that template
+  (D27-029); the two are kept in sync — a field added here is added there in the same change.
 - **Proof:** A completed template per finding with no empty field; `LIMITATIONS` and `EXISTING DEFENCE`
   populated even when the answer is "none found, grep attached".
 - **Escalation:** The `CHAINING` field is the input to D27-021 (two-verified-links) and D27-067
@@ -294,6 +308,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | AM-03 |
 | **Applies to** | every sentence in every report |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP: "Impact is judged based on the actual reported impact … not on a potential impact … if you do not demonstrate this in your report, the reward amount will not reflect this" |
 
 - **Test:** Either the thing happens or it does not. Conditional-impact language is the triager's signal
@@ -326,6 +341,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | AM-03 |
 | **Applies to** | bug-bounty submissions; the client-report equivalent is the executive summary |
+| **Requires** | — |
 | **Maps to** | Intigriti Triage Standards ("All submissions are required to come with a written, step-by-step demonstration of an attack", "the simplest possible demonstration that proves the vulnerability's exploitability and impact beyond reasonable doubt"); Bugcrowd "Reporting a Bug" (overview, walkthrough/PoC, evidence, demonstrated impact) |
 
 - **Test:** The observed read sequence is title (≈3 s) → first impact paragraph (≈15 s) → **the curl
@@ -336,7 +352,7 @@ Decision:
   words and push analysis below it.
   ```bash
   # the one line that must appear above the fold
-  adb shell am start -W -a android.intent.action.VIEW -d "<the exact payload>"
+  adb shell "am start -W -a android.intent.action.VIEW -d '<the exact payload>'"   # ONE quoted remote string: the device shell re-parses ; & ? (D27-041)
   ```
 - **Proof:** A reader who stops after 600 words can restate the mechanism and the impact correctly.
 - **Escalation:** For a client deliverable the same discipline produces the executive summary: what was
@@ -354,6 +370,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0023 (Reviewing Decompiled Java Code); Google Mobile VRP "Exceptional Quality (1.5x)" — "includes a root cause analysis, which helps us find other similar variants of the issue" |
 
 - **Test:** Every finding sits next to a control someone believed worked. Write the mechanism, not the
@@ -389,6 +406,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | AM-03 |
 | **Applies to** | every High or Critical claim |
+| **Requires** | — |
 | **Maps to** | MHL CVE-2025-48595 ("Important: What This Is (and Isn't)"); MHL CVE-2026-28576 TL;DR severity row, where the authors argue **down** against GitHub's 10.0 Critical because "the victim must pick a contact inside the attacker's app" while the Android bulletin rates it High |
 
 - **Test:** Write a short "what this is and is not" paragraph next to the impact claim. This is the single
@@ -416,6 +434,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | client engagements; useful on bounty reports where the programme routes internally |
+| **Requires** | — |
 | **Maps to** | NIST SP 800-115 §8.2 (results "made available to the appropriate staff… as well as appropriate program managers or system owners"), §8.3 (POA&M coordination through the configuration control board) |
 
 - **Test:** A mobile assessment delivered only to the mobile team dies for every finding whose fix is
@@ -451,6 +470,7 @@ Decision:
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | corpus reportability convention (`reportable / informative / likely duplicate`) |
 
 - **Test:** For every finding, state plainly whether it is **reportable**, **informative** or a **likely
@@ -475,6 +495,7 @@ Decision:
 | **VRT** | target `broken_authentication_and_session_management.authentication_bypass` (P1), `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1), `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1), `server_side_injection.remote_code_execution_rce` (P1), `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1), `server_security_misconfiguration.oauth_misconfiguration.account_takeover` (P2), `cryptographic_weakness.key_reuse.inter_environment` (P2) |
 | **Attacker** | AM-03 |
 | **Applies to** | Bugcrowd directly; the logic transfers to HackerOne, Intigriti and YesWeHack |
+| **Requires** | — |
 | **Maps to** | Bugcrowd VRT JSON, `metadata.release_date` `2026-07-08`, parsed directly; Bugcrowd guidance that the recommended priority "might apply without context" and that researchers should "submit the issue regardless and use the Bugcrowd Crowdcontrol commenting system to clearly communicate their reasoning" |
 
 - **Test:** Bugcrowd's mobile-specific taxonomy is almost entirely P5/P4. The same technical issue filed
@@ -497,10 +518,14 @@ Decision:
   P5  application_level_denial_of_service_dos|app_crash|malformed_android_intents
   P4  sensitive_data_exposure|via_localstorage_sessionstorage|sensitive_token
   P5  sensitive_data_exposure|sensitive_data_hardcoded|oauth_secret
-  null broken_access_control|exposed_sensitive_android_intent          <- the ONE that is rated on impact
+  null broken_access_control|exposed_sensitive_android_intent          <- the ONE that is rated on impact (JSON null = `varies` in data/vrt.csv)
   ```
-  Re-verify the file rather than trusting this snapshot:
+  Re-verify against the repository's own mirror rather than trusting this snapshot (`data/vrt.csv`,
+  regenerated by `scripts/refresh-data.py`; its `release` column carries the taxonomy release date):
   ```bash
+  python3 -c 'import csv;print(sorted({r["release"] for r in csv.DictReader(open("data/vrt.csv"))})[-1])'   # release date of the local mirror
+  python3 -c 'import csv;[print(r["vrt_path"],r["priority"] or "varies",sep="\t") for r in csv.DictReader(open("data/vrt.csv")) if any(k in r["vrt_path"] for k in ("mobile_security_misconfiguration","lack_of_binary_hardening","insecure_data_storage","exposed_sensitive_android_intent"))]'
+  # upstream cross-check against the VRT JSON release:
   jq -r '.metadata.release_date' vulnerability-rating-taxonomy.json
   jq -r '.content[] | .. | objects | select(has("id") and has("priority")) | "\(.id)\t\(.priority)"' \
      vulnerability-rating-taxonomy.json | grep -Ei 'mobile|binary_hardening|insecure_data_storage'
@@ -520,6 +545,7 @@ Decision:
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (priority **null**, CWE-927, placeholder CVSS `AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N`) |
 | **Attacker** | AM-03 |
 | **Applies to** | Bugcrowd; the only Android-native node not pinned to P5 |
+| **Requires** | — |
 | **Maps to** | Bugcrowd VRT `broken_access_control/exposed_sensitive_android_intent`; CWE-927 (Use of Implicit Intent for Sensitive Communication) |
 
 - **Test:** The placeholder vector is all-None on every impact metric. That is the taxonomy telling you
@@ -547,6 +573,7 @@ Decision:
 | **VRT** | whichever node genuinely fits; `... → Other` with a mapping note when none does |
 | **Attacker** | n/a |
 | **Applies to** | Bugcrowd submissions |
+| **Requires** | — |
 | **Maps to** | Bugcrowd VRT node→default-severity binding; the corpus's own caveat that VRT defaults are not constants — Bugcrowd revises the schema and programmes remap defaults |
 
 - **Test:** The VRT dropdown's default severity is bound to the node. Choosing a node that misrepresents
@@ -560,7 +587,9 @@ Decision:
   Password oracle with no rate limit          -> Broken Auth → Authentication Bypass → Other
                                        else   -> Server Security Misconfig → No Rate Limiting on Form → Login
   GraphQL persisted-query allow-list bypass   -> Server Security Misconfig → Other (justify in body)
-  Username -> real-name PII enumeration       -> Sensitive Data Exposure → PII Leakage → Non-Corporate User
+  Username -> real-name PII enumeration       -> Sensitive Data Exposure → Disclosure of Secrets → PII Leakage/Exposure
+                                                 (priority varies — argue it in the body; NOT "Non-Corporate User",
+                                                 the P5 node for a non-corporate user's own leaked secret)
   Email-change OTP / reset-token brute force  -> Broken Auth → Authentication Bypass → Other
   ```
   If nothing fits, pick `→ Other` and lead the body with a **"VRT mapping note"**.
@@ -578,6 +607,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | Bugcrowd; the framing transfers to HackerOne and Intigriti |
+| **Requires** | — |
 | **Maps to** | Bugcrowd Crowdcontrol commenting guidance; the observation that CVSS 3.1, the Bugcrowd VRT and HackerOne's default severity disagree roughly 30% of the time |
 
 - **Test:** Triagers auto-close when they see P4 in the form. Pre-empt it with a literal, recognisable
@@ -607,9 +637,10 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Support (the ladder itself); the finding it rates reaches Critical |
-| **VRT** | the path decides the node: root-only reads land at `insecure_data_storage...on_internal_storage` (P5); an app-reachable read lands at `broken_access_control.exposed_sensitive_android_intent` (null) or the consumer's P1 node |
+| **VRT** | the path decides the node: root-only reads land at `insecure_data_storage...on_internal_storage` (P5); an app-reachable read lands at `broken_access_control.exposed_sensitive_android_intent` (varies) or the consumer's P1 node |
 | **Attacker** | AM-12 at the bottom of the ladder, AM-02/AM-01 at the top |
 | **Applies to** | every storage, crypto and client-side finding |
+| **Requires** | — |
 | **Maps to** | Bugcrowd VRT priority semantics; MAS testing profiles (MAS-L1 assumes co-installed apps are adversaries and the OS is intact; MAS-L2 assumes the OS may not be intact and the user may be an adversary; MAS-R assumes the primary user is the adversary) |
 
 - **Test:** "Token stored in plaintext" spans P5 to Critical depending only on how an attacker gets it.
@@ -642,6 +673,7 @@ Decision:
 | **VRT** | n/a — this is the vector convention behind every mobile rating |
 | **Attacker** | AM-03 |
 | **Applies to** | every CVSS v3.1 vector on an Android finding |
+| **Requires** | — |
 | **Maps to** | FIRST CVSS v3.1 specification; Bugcrowd VRT baseline vectors — `insecure_data_storage|...|on_external_storage` is `AV:P/AC:H/…`, `mobile_security_misconfiguration|auto_backup_allowed_by_default` is `AV:P/AC:L/PR:H/…`, `mobile_security_misconfiguration|clipboard_enabled` is `AV:L/AC:H/PR:N/UI:R/S:C/C:L/…`; HackerOne Platform Standards |
 
 - **Test:** Three metrics do most of the work on mobile. Get them right and the band follows; get them
@@ -709,6 +741,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | programmes and clients scoring on v4.0 |
+| **Requires** | — |
 | **Maps to** | FIRST CVSS v4.0 specification — four metric groups; Base AV, AC, AT, PR, UI, VC, VI, VA, SC, SI, SA; Threat E; Environmental CR, IR, AR and MAV, MAC, MAT, MPR, MUI, MVC, MVI, MVA, MSC, MSI, MSA; Supplemental S, AU, R, V, RE, U ("supplemental metrics will not modify the final score"); NIST SP 800-115 §8.3 |
 
 - **Test:** v4.0 splits impact into the **vulnerable** system (VC/VI/VA) and the **subsequent** system
@@ -746,6 +779,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | HackerOne, Intigriti, Bugcrowd |
+| **Requires** | — |
 | **Maps to** | HackerOne's CVSS 3.0 is a **custom** implementation that "factors in BOTH the environmental score and the base score" with environmental modifiers ×0.0 / ×0.5 / ×1.0 / ×1.5; Bugcrowd VRT `mappings/cvss_v3/cvss_v3.json` whose `metadata.default` is `AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N` (score 0.0 — which is why the whole `lack_of_binary_hardening` branch scores zero); Intigriti uses CVSS v3.1 and v4.0 |
 
 - **Test:** The same vector produces different numbers on different platforms. Check which calculator the
@@ -778,6 +812,7 @@ Decision:
 | **VRT** | the chain's end node, not the entry node |
 | **Attacker** | AM-03 typically at the entry, AM-05 or AM-01 at the end |
 | **Applies to** | every multi-step finding |
+| **Requires** | — |
 | **Maps to** | HackerOne Platform Standards bug-chain rule ("These reports should be evaluated by their overall impact and paid accordingly"); Bugcrowd VRT README ("application complexity, bounty brief restrictions or unusual impact could result in a different rating") |
 
 - **Test:** **Two verified links plus one unproven link is a Medium with a stated precondition, not a
@@ -791,7 +826,7 @@ Decision:
 
   Rating sentence: "Medium (arbitrary file write within the app's data directory). Impact ceiling =
   code execution as the app IF a loader reads from a writable path; hooked System.load, dlopen,
-  DexClassLoader and PathClassLoader for the session and observed none — see evidence/F-014/loaders.log."
+  DexClassLoader and PathClassLoader for the session and observed none — see logs/F-014/loaders.log."
   ```
   Where the fork genuinely cannot be resolved from outside, state both branches, say static evidence
   cannot distinguish them, say you did not test which is true, and ask the vendor the question they can
@@ -813,6 +848,7 @@ Decision:
 | **VRT** | n/a — this gate governs every P1/P2 claim you make |
 | **Attacker** | n/a |
 | **Applies to** | every Critical or High claim |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's PRE-SEVERITY GATE and its worked failure: a JWT `alg:none` finding labelled Critical on a confirmed signature-bypass primitive at the audience-validation layer — the issuer-trust check still rejected unsigned tokens, the ATO chain never completed, and the finding had to be retracted |
 
 - **Test:** Write the draft Critical title, then substitute **the Critical claim** for "the bug" in each
@@ -836,6 +872,9 @@ Decision:
   programme's accepted list; is the root cause in an in-scope asset; does it require privileged access an
   attacker cannot realistically get; is it already known or intended; can you prove impact beyond
   "technically possible" (failing this **downgrades**, it does not kill); is it on the never-submit list.
+  This item is the canonical gate. A domain chapter that restates it keeps only its one domain-specific
+  question (D08: "is a grant flag actually reaching another UID?") and points here for the five; the
+  record it produces is the one attached to the finding.
 - **Proof:** A recorded pass/kill decision per finding, with the answer to Q4 naming the gate you checked
   and the command that showed it absent.
 - **Escalation:** Kill-fast rules keep it cheap: five minutes to write the attacker's request or move on;
@@ -852,6 +891,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | AM-01 … AM-12 |
 | **Applies to** | every submission |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP "Report Quality" and the four attack-scenario columns; Android & Google Devices "Evaluation Criteria for Maximum Payouts"; Samsung "Severity rating can be lowered by the following downgrade factors"; Meta mobile-RCE click multipliers; HackerOne Core Ineligible Findings |
 
 - **Test:** Eleven triggers account for almost every unexplained downgrade. Audit the draft against each
@@ -864,7 +904,9 @@ Decision:
   2  Rooted / dev mode       -> "Reproduced on a stock, unrooted <model> running <version>, build <id>,
                                 Play release build, USB debugging disabled."
   3  Non-current version     -> "Reproduced on versionName <x> (versionCode <y>), the current Play release
-                                as of <date>, security patch <yyyy-mm-dd>."
+                                as of <date>, security patch <yyyy-mm-dd>." Front-load the programme's
+                                latest-OS rule: where it rates only on the newest released Android, that
+                                image is the one that counts — reproduce there first (D27-003).
   4  Artificial reachability -> "Input is delivered through the app's own exported activity / a received
                                 message / a deep link; no internal API is invoked directly at any point."
   5  Impact asserted         -> replace every "could lead to" with the demonstrated outcome plus artefact.
@@ -903,6 +945,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | AM-01 (column 1) → AM-02 (column 2) → AM-03/AM-04 (column 3) → AM-06 (column 4) |
 | **Applies to** | Google Mobile VRP directly; the logic applies wherever user interaction is priced (Meta's click multipliers, Samsung's User Interaction criterion, Xiaomi's Remote/Local split) |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP's four attack-scenario columns: Remote/No User Interaction · User must follow a link · User must install a malicious app or the app is configured non-default · Attacker on the same network. **The reward figures in the corpus disagree between sources — do not quote a figure to a triager; re-read the live rules page before scoping** |
 
 - **Test:** For each finding identify the **cheapest realistic delivery** and build the PoC for that one,
@@ -917,7 +960,7 @@ Decision:
   ```bash
   adb shell dumpsys package com.target.app | sed -n '/android.intent.category.BROWSABLE/,+6p'
   adb shell pm get-app-links com.target.app
-  adb shell am start -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "<payload>"
+  adb shell "am start -a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d '<payload>'"   # quoted for the device shell (D27-041)
   ```
 - **Proof:** The PoC delivered by the higher-value vector, recorded from the browser or the push
   notification rather than from `adb`.
@@ -936,6 +979,7 @@ Decision:
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) vs `.for_internal_asset` (P3) vs `.pay_per_use_abuse` (P4) vs `.intentionally_public_sample_or_invalid` (P5) |
 | **Attacker** | AM-03 |
 | **Applies to** | every data-theft finding |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP "Theft of sensitive data" definitions, quoted verbatim; the rules also note rewards are calculated with the **HIGHEST** impact where several apply |
 
 - **Test:** State explicitly whether the data you obtained is High Impact or Low Impact, quoting the
@@ -971,6 +1015,7 @@ Decision:
 | **VRT** | the whole `lack_of_binary_hardening` branch is P5 with an all-zero CVSS baseline |
 | **Attacker** | AM-12 (the user as adversary) for MAS-R |
 | **Applies to** | every engagement sold as standards-aligned |
+| **Requires** | — |
 | **Maps to** | MASVS v2.0.0 (verification levels removed; MAS Testing Profiles in the MASTG, aligned with NIST OSCAL); MASTG test front-matter `profiles:` field with values `L1`, `L2`, `R`, `P`; `mas.owasp.org/checklists/` now redirects to the removal notice "MASTG v2.0.0 Removes MAS Checklists" (2026/07/14) |
 
 - **Test:** Declare the profiles in scope, using the MASVS threat assumptions verbatim, and filter the
@@ -1013,6 +1058,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a (reporting procedure) — the finding's own attacker model carries through |
 | **Applies to** | Samsung, Xiaomi, Google-owned apps, AOSP; the technique generalises |
+| **Requires** | — |
 | **Maps to** | Samsung Mobile Security Risk Classification ("Last updated: September 8, 2026") and its explicit appeal clause; Xiaomi's Remote/Local and privileged/ordinary/restricted process definitions; AOSP severity table and modifiers at `source.android.com/docs/security/overview/updates-resources` |
 
 - **Test:** Use the target vendor's own severity words so the triager can map your report directly onto
@@ -1052,6 +1098,7 @@ Decision:
 | **VRT** | n/a — the matrix's output is which node D27-012 aims at |
 | **Attacker** | AM-03 at entry |
 | **Applies to** | every finding set, run once the candidate list is complete |
+| **Requires** | — |
 | **Maps to** | ATT&CK Mobile tactics TA0027 Initial Access, TA0041 Execution, TA0028 Persistence, TA0029 Privilege Escalation, TA0030 Defense Evasion, TA0031 Credential Access, TA0032 Discovery, TA0033 Lateral Movement, TA0035 Collection, TA0037 Command and Control, TA0036 Exfiltration, TA0034 Impact (verified on attack.mitre.org/tactics/mobile/) |
 
 - **Test:** VERIFY → DEEPEN → ESCALATE → CHAIN → PROVE → RECORD → REPORT. Ask the same questions of every
@@ -1087,6 +1134,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | corpus evidence-tree layout; NIST SP 800-115 Appendix B §5.3 (Data Handling — gathering, storing, transmitting and destroying test data) |
 
 - **Test:** Every finding gets a directory; every dynamically demonstrable finding gets a verified `.mp4`.
@@ -1094,32 +1142,33 @@ Decision:
   never a reconstructed video.
 - **How:**
   ```text
-  <engagement>/
-    INDEX.md
-    ARTEFACT-MANIFEST.txt          # sha256 of every APK/split analysed  (-> D02)
-    LAB-MANIFEST.txt               # the harness that reproduces it      (-> D26)
-    findings/F-0NN/finding.md      # the template (D27-005)
-    findings/F-0NN/code/           # the decompiled snippets, at file:line
-    recordings/F-0NN/F-0NN_POC.mp4
-    screenshots/F-0NN/01-… 02-… 03-…   # named in beat order (D27-037)
-    requests/F-0NN/  responses/F-0NN/  # the captured HTTP pairs
-    logs/F-0NN/logcat.txt              # bounded to the target pid
-    pocs/F-0NN/repro.sh                # runs clean on a lab rebuilt from LAB-MANIFEST.txt
-    pocs/F-0NN/attacker-app/           # source + signed debug APK
-    ruled-out.md                       # the register (D27-048)
-    retest/F-0NN/                      # baseline-on-old-build + run-on-new-build (D27-071)
+  $E/   (BugBountyTarget/<Target>_<DDMMYYYY>, scaffolded from BugBountyTarget/_TEMPLATE; its own git repo, D27-082)
+    engagement.json · checklist-status.csv
+    apk/versions.txt + ARTEFACT-MANIFEST.txt        # sha256 of every APK/split analysed   (-> D02)
+    decompiled/{jadx,apktool}                       # = $DEC; never committed
+    logs/harness/lab.md + LAB-MANIFEST.txt          # the harness that reproduces it       (-> D26)
+    findings/F-0NN.md                               # templates/finding-report.md         (D27-005)
+    report/findings-index.md · report/assessment-status.md   # living report; its RULED OUT section is the register (D27-048)
+    hypotheses/H-0NN.md · chains/                   # parked leads, chain graphs
+    videos/F-0NN-<what-it-shows>.mp4 · screenshots/F-0NN/01-… 02-… 03-…   # named in beat order (D27-037)
+    requests/F-0NN/ · responses/F-0NN/              # the captured HTTP pairs
+    logs/F-0NN/logcat.txt · logs/Dnn-NNN.txt        # bounded to the target pid; raw tool output per item
+    pocs/F-0NN/repro.sh · pocs/F-0NN/attacker-app/  # runs clean on a lab rebuilt from LAB-MANIFEST.txt; source + signed debug APK
+    final/submission-checklist.md · final/remediation-tracker.csv · final/retest/F-0NN/   # baseline-on-old-build + run-on-new-build (D27-071)
   ```
-- **Proof:** The tree, populated, with `INDEX.md` mapping every finding id to its artefacts and every
-  artefact referenced by path from the report body.
+  The tree **is** the scaffold `scripts/new-engagement.sh` creates; a layout that diverges from it (an
+  `INDEX.md`, a `recordings/` folder, a `findings/F-0NN/finding.md`) is one the scripts and hooks cannot read.
+- **Proof:** The tree, populated, with `report/findings-index.md` mapping every finding id to its artefacts
+  and every artefact referenced by path from the report body.
 - **Escalation:** The tree is the input to the hash manifest (D27-046), the leak grep (D27-038) and the
   remediation tracker. Emit the tracker mechanically so the client can import it:
   ```bash
-  printf 'id,title,severity,cvss,cwe,component,evidence,repro,owner,status\n' > final/remediation-tracker.csv
-  for f in findings/F-*/finding.md; do id=$(basename "$(dirname "$f")"); printf '%s,"%s",%s,%s,%s,"%s",%s,%s,%s,OPEN\n' \
+  printf 'id,title,severity,cvss,cwe,component,evidence,repro,owner,status\n' > "$E/final/remediation-tracker.csv"
+  for f in "$E"/findings/F-*.md; do id=$(basename "$f" .md); printf '%s,"%s",%s,%s,%s,"%s",%s,%s,%s,OPEN\n' \
     "$id" "$(grep -m1 '^# ' "$f" | sed 's/^# //')" "$(grep -m1 -i '^severity:' "$f" | cut -d: -f2- | xargs)" \
     "$(grep -m1 -o 'CVSS:[34]\.[01][^ ]*' "$f")" "$(grep -m1 -o 'CWE-[0-9]\+' "$f")" \
-    "$(grep -m1 -i '^component:' "$f" | cut -d: -f2- | xargs)" "evidence/$id" "pocs/$id/repro.sh" \
-    "$(grep -m1 -i '^owner:' "$f" | cut -d: -f2- | xargs)" >> final/remediation-tracker.csv; done
+    "$(grep -m1 -i '^component:' "$f" | cut -d: -f2- | xargs)" "logs/$id" "pocs/$id/repro.sh" \
+    "$(grep -m1 -i '^owner:' "$f" | cut -d: -f2- | xargs)" >> "$E/final/remediation-tracker.csv"; done
   ```
 - **Ruled out when:** Never — a single-finding bounty submission still needs the directory, because the
   triage ladder (D27-064) consumes it one rung at a time.
@@ -1198,10 +1247,15 @@ Decision:
   # 1. plant it through the app's own UI (a note title, a display name, a saved address)
   # 2. prove it is in the victim's private store, on camera, before the attack
   adb shell run-as com.target.app cat shared_prefs/com.target.app.xml | grep -o "$CANARY"
-  # 3. run the attack; the attacker app must print the SAME string
-  adb logcat -s evil | grep -o "$CANARY"
-  # 4. baseline check: the canary must NOT appear anywhere before the attack
-  adb logcat -d | grep -c "$CANARY"          # expect 0 in the pre-attack capture
+  # 3. run the attack; read the canary from the attacker's OWN file — logcat is display only (some stock
+  #    builds drop app-level Log.i, and a busy ring buffer rotates within minutes)
+  adb shell run-as com.attacker cat files/result.txt | grep -o "$CANARY"
+  adb logcat -d -s evil | grep -o "$CANARY"
+  # 4. baseline: the canary must NOT appear before the attack — a 0 counts only while the buffer still reaches
+  #    back past the plant time (D26-016 sizes the buffer; D26-082 is the file-mirror rule)
+  adb logcat -d -v time | head -1              # first retained timestamp must precede the plant time
+  adb logcat -d | grep -c "$CANARY"            # expect 0
+  adb logcat -d | grep -c 'PROBE-START'        # positive control: the probe's own banner is retained
   ```
   Never use `test`, `marker`, `evil`, `attacker`, `payload`, `AAAA` or your own domain as the canary —
   word collisions in help text, SDK strings and framework resources produce false reflections. Where the
@@ -1304,7 +1358,7 @@ Decision:
 - **How:**
   ```bash
   adb shell pm path com.target.app && adb pull <each split> ./apk/
-  adb -s <rooted>    install-multiple -r -t apk/base.apk apk/split_config.*.apk
+  adb -s <rooted>    install-multiple -r -t --no-incremental apk/base.apk apk/split_config.*.apk   # .idsig files beside the APKs otherwise force incremental install (D27-042)
   adb -s <rooted>    root && adb -s <rooted> shell id           # must print uid=0(root)
   adb -s <nonrooted> shell cat /data/data/com.target.app/shared_prefs/com.target.app.xml   # Permission denied
   adb -s <rooted>    shell cat /data/data/com.target.app/shared_prefs/com.target.app.xml   # the contents
@@ -1448,9 +1502,11 @@ Decision:
       for h in list(flow.response.headers):
           if SENS.search(h.encode()): flow.response.headers[h] = "<redacted-at-capture>"
   PY
+  # -w FILE truncates FILE at start-up; +FILE appends. Use a per-run name or +, never a shared bare name —
+  # a control capture overwritten by the next mode's run is the commonest way a negative loses its evidence
   mitmdump --set stream_large_bodies=1m --allow-hosts '^(api|auth)\.target\.example$' \
-           -s scripts/strip.py -w evidence/flows.mitm
-  adb shell pidof com.target.app | xargs -I{} adb logcat --pid={} -d > evidence/F-007/logcat.txt
+           -s scripts/strip.py -w "+$E/logs/harness/flows-$(date -u +%Y%m%dT%H%M%SZ).mitm"
+  adb shell pidof com.target.app | xargs -I{} adb logcat --pid={} -d > "$E/logs/F-007/logcat.txt"
   ```
   For a HAR:
   ```bash
@@ -1469,7 +1525,19 @@ Decision:
   system — never email.
   Then the hard gate before the bundle is encrypted:
   ```bash
-  grep -rEl '(?i)authorization: bearer|set-cookie:|[0-9]{13,16}' engagement/evidence | tee /tmp/leaks.txt
+  # (?i) is a PCRE flag — a syntax error under grep -E on GNU and BSD alike; use -i. A bare [0-9]{13,16} matches
+  # every 13-digit epoch-millisecond timestamp in logcat and HAR files, so card numbers are Luhn-checked instead
+  grep -rEil 'authorization: bearer|set-cookie:|eyJ[A-Za-z0-9_-]{20,}\.' "$E"/{logs,requests,responses,screenshots,videos,pocs} | tee "$E/final/leaks-headers.txt"
+  python3 - "$E" <<'PY'
+  import re, sys, pathlib
+  def luhn(s):
+      d = [int(c) for c in s][::-1]
+      return (sum(d[0::2]) + sum(sum(divmod(2 * x, 10)) for x in d[1::2])) % 10 == 0
+  for p in pathlib.Path(sys.argv[1]).rglob('*'):
+      if p.is_file() and p.stat().st_size < 50_000_000:
+          for m in re.finditer(r'(?<!\d)\d{13,19}(?!\d)', p.read_text(errors='ignore')):
+              if luhn(m.group()): print(p, m.group()[:6] + '…')
+  PY
   ```
 - **Proof:** The leak grep returns only the deliberate instances — where the unredacted value **is** the
   finding (a token in a log, a key in prefs), keep exactly one instance, in one file, referenced by one
@@ -1497,9 +1565,11 @@ Decision:
   ```bash
   adb shell screenrecord --bit-rate 8000000 /sdcard/poc.mp4      # FLAG_SECURE content will be black
   adb exec-out screencap -p > shot.png
-  # if a protection must be disabled to record, RECORD THAT YOU DID:
-  adb shell settings put global disable_screen_share_protections 1
-  adb shell settings get global disable_screen_share_protections
+  # if a protection must be disabled to record, RECORD THAT YOU DID. Android 15+: this key lifts only the
+  # screen-share hiding of notification content and sensitive input; it does NOT un-black a FLAG_SECURE window
+  adb shell settings put global disable_screen_share_protections_for_apps 1
+  adb shell settings get global disable_screen_share_protections_for_apps
+  # FLAG_SECURE surfaces: the only honest captures are a camera or a second, display-only device with the roles labelled (D27-034)
   ```
 - **Proof:** The PoC video **plus** a written note in the finding naming every protection disabled to
   record it and stating that none of them was part of the attack.
@@ -1523,7 +1593,8 @@ Decision:
   shell` (UID 2000) or a rooted shell, then written up as "any app can do this". Record **two** results.
 - **How:**
   ```bash
-  adb shell id                                                          # uid=2000(shell)
+  adb shell id   # MUST print uid=2000(shell). uid=0(root) means the harness is a rooted AVD: the "shell" result is
+                 # then a ROOT artefact (export checks are bypassed) — repeat from the stock device's shell or skip to the probe
   adb shell cmd content query --uri content://com.target.provider/items  # shell UID
   # then from an installed app context
   drozer> run app.provider.query content://com.target.provider/items     # app UID, no permissions
@@ -1539,7 +1610,7 @@ Decision:
   (-> D07, -> D11, -> D02).
 - **Ruled out when:** The app-context attempt returns `SecurityException … not exported from uid` or
   `Permission Denial`. Quote the exception verbatim in the ruled-out register — that is a strong
-  negative, unlike a tool's silence (D27-049).
+  negative, unlike a tool's silence (D27-049). A uid-0 shell result is discarded, not downgraded.
 
 ### D27-041 · The two controls: baseline denial and negative control, in the same take
 
@@ -1557,17 +1628,23 @@ Decision:
 - **How:**
   ```bash
   # BASELINE DENIAL — the direct path must fail
-  adb shell am start -n com.target/.SensitiveActivity          # expect: Permission Denial … not exported
-  adb shell content query --uri content://com.target.internal/ # expect: SecurityException
+  adb shell 'am start -n com.target/.SensitiveActivity'           # expect: Permission Denial … not exported
+  adb shell 'content query --uri content://com.target.internal/'  # expect: SecurityException
 
-  # THE BUG — the indirect path succeeds
-  adb shell am start -n com.target/.ProxyActivity \
-    --es redirect_intent 'intent:#Intent;component=com.target/.SensitiveActivity;end'
+  # THE BUG — the indirect path succeeds. The WHOLE remote command is ONE quoted string: adb hands it to the
+  # device's /system/bin/sh, which splits on ; | & and strips quotes a second time — an unquoted ';' silently
+  # truncates the extra to 'intent:#Intent' and reads as "the app ignores that extra" (D26-080)
+  adb shell "am start -n com.target/.ProxyActivity --es redirect_intent 'intent:#Intent;component=com.target/.SensitiveActivity;end'"
+  # positive control that the value ARRIVED intact (run once per sweep):
+  adb shell 'dumpsys activity top' | grep -A3 'extras='
 
   # NEGATIVE CONTROL — the identical action with the control present must fail
-  adb shell am compat enable <CHANGE_ID> com.poc.app     # or install the patched build / flip the server flag
+  adb shell 'am compat enable <CHANGE_ID> com.poc.app'   # or install the patched build / flip the server flag
   #   repeat the exact same command and capture the exception, the empty result or the SecurityException
   ```
+  Any value containing `; | & $ # ? '` or a space is single-quoted *inside* a double-quoted `adb shell "…"`,
+  because the device shell parses it a second time (D26-080). The same rule governs D27-007 and D27-024:
+  write `adb shell "am start -W -a android.intent.action.VIEW -d '<payload>'"`, never `-d "<payload>"`.
   Where a "stable fallback" response exists (a default avatar, a placeholder record), compare **size, hash
   or decoded pixels** rather than eyeballing — that is also what makes enumeration provable.
 - **Proof:** The paired transcript: the direct attempt denied, the indirect attempt succeeding, and the
@@ -1588,7 +1665,7 @@ Decision:
 | **VRT** | the difference between `broken_access_control.exposed_sensitive_android_intent` rated at P4 and rated on impact |
 | **Attacker** | AM-03 |
 | **Applies to** | every D04–D08 IPC finding |
-| **Requires** | device, provider, exported-activity, exported-service, exported-receiver |
+| **Requires** | device |
 | **Maps to** | the Oversecured PoC style (attacker activity/provider/receiver with `android:priority="999"` and no permissions); YesWeHack programmes' third-party-app PoC requirement; the observation that "requires root" and "requires physical access" are the two commonest ways a technically valid mobile finding is closed |
 
 - **Test:** Triagers reproduce. An `adb`-only PoC is frequently dismissed as requiring ADB or physical
@@ -1598,8 +1675,20 @@ Decision:
   ```bash
   # prove the attacker app really holds nothing
   adb shell dumpsys package com.attacker | sed -n '/requested permissions/,/install permissions/p'
-  adb install -r attacker.apk && adb shell am start -n com.attacker/.Main && adb logcat -s evil
+  # apksigner leaves <apk>.idsig beside what it signs; adb then prefers incremental install and
+  # "Incremental installation not allowed" masks the real verdict — pass --no-incremental or delete the .idsig
+  adb install -r --no-incremental attacker.apk
+  # -S: a live probe activity is otherwise "brought to the front" (START_DELIVERED_TO_TOP) and onCreate never runs
+  adb shell am start -S -n com.attacker/.Main
+  # logcat is the display; the probe's own file is the proof — some stock builds drop app-level Log.i entirely
+  adb shell run-as com.attacker cat files/result.txt
+  adb logcat -d -s evil | grep -c 'PROBE-START'        # positive control: the probe's banner line must be retained
   ```
+  Probe contract (D26-082): print a `PROBE-START <nonce>` line first, mirror every result line to
+  `getFilesDir()/result.txt` (readable with `run-as` because the debug-signed PoC is debuggable), and give
+  each iteration of a sweep its own action (`-a probe.fire.$N`) or force-stop between fires —
+  `filterEquals`-equal launch intents are delivered to the running instance and `onNewIntent` is not
+  reliably called.
   Build the non-rooted PoC path **first** — objection `patchapk`, or the debuggable-repack plus `run-as`
   route — because that is the path that survives the exclusion lists.
 - **Proof:** `dumpsys package com.attacker` showing an empty requested-permissions list, next to the
@@ -1618,6 +1707,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MHL's `exploit.sh --setup-emulator` pattern (CVE-2026-0047), `deploy_exploit_mp4.sh` + `REPRODUCE.md` (CVE-2026-0006), and the CVE-2026-28576 repo shape ("the complete source for the PoC app, a prebuilt APK, step-by-step reproduction instructions, and the captured evidence logs"); drozer `load`/`set`/`unset`; objection `commands save`, `import` |
 
 - **Test:** The report should contain a command a triager runs unmodified, end to end, with no tribal
@@ -1708,11 +1798,13 @@ Decision:
   ```bash
   adb shell getprop ro.build.fingerprint
   adb logcat -b crash -d -v threadtime > crash.txt
-  adb shell ls -t /data/tombstones | head -1
-  adb pull /data/tombstones/<tombstone_N>
+  adb bugreport bugreport.zip && unzip -l bugreport.zip | grep -i tombstone   # user build: tombstones ride inside the bugreport (FS/data/tombstones/)
+  adb -s <rooted> shell ls -t /data/tombstones | head -1; adb -s <rooted> pull /data/tombstones/<tombstone_N>   # display device only (D27-034)
   adb shell 'ps -AZ | grep -E "ipservice|media\.codec|mediacodec"'
   PID=$(adb shell pidof <proc> | tr -d '\r'); adb shell su -c "grep -E 'quram|codec|skia|hwui' /proc/$PID/maps"
   ```
+  On a `user` build `/data/tombstones` is not listable by uid 2000: a `Permission denied` there is a harness
+  limit, not an absent crash — the `logcat -b crash` DEBUG block is readable on every build.
   The exemplar shape:
   ```text
   F DEBUG : Build fingerprint: 'google/sdk_gphone64_arm64/emu64a:15/AE3A.240806.036/12592187:user/release-keys'
@@ -1739,6 +1831,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all; strictly required where the report may be relied on by a third party (finance, health, regulatory) |
+| **Requires** | — |
 | **Maps to** | NIST SP 800-115 Appendix B §5.3 (Data Handling), §6.6 (data-handling requirements set by the legal department) |
 
 - **Test:** The client must be able to verify that the bundle they hold is the bundle you produced, and
@@ -1774,6 +1867,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | findings where `adb root` is refused, the app is not debuggable, or the bug returns no bytes |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0023 (Reviewing Decompiled Java Code); corpus evidence-grade lessons |
 
 - **Test:** When you cannot show the contents, prove what the file *contains* from the app's own code. A
@@ -1807,6 +1901,7 @@ Decision:
 | **VRT** | n/a — this is the section that makes a clean report worth its fee |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | corpus living-report convention (*Confirmed* / *Candidate* / *Ruled out*); MASTG v2 "Observation → Evaluation" structure; NIST SP 800-115 §8.2 |
 
 - **Test:** Keep a living `report.md` from minute one with three standing sections, written **as you go**.
@@ -1815,12 +1910,19 @@ Decision:
 - **How:** The commercial-grade row format — the bare `| # | Hypothesis | Evidence | Verdict |` is one
   column short for a coverage claim:
   ```text
-  | # | Hypothesis | Method (static-read / dynamic-exec / tool-output) | Artefact (versionCode + sha256 prefix) | Evidence path | API level | Verdict | Confidence |
+  | # | Hypothesis | Method (static-read / dynamic-exec / tool-output) | Artefact (versionCode + sha256 prefix) | Evidence path | API level | Verdict | Confidence | Grade |
   ```
   Rules: (a) `tool-output` **alone is never sufficient for a negative** — pair it with a static read;
   (b) every negative names the API level it was established on; (c) a negative that depended on a
   suppressed control (an allow-listed WAF, a disabled RASP) says so; (d) include the rows that refuted
-  **your own** earlier claims, keeping the superseded text with a `(Superseded:)` marker.
+  **your own** earlier claims, keeping the superseded text with a `(Superseded:)` marker;
+  (e) every ruled-out **and** graveyard row names the MECHANISM that closes it in one re-verifiable sentence
+  (e.g. "`PendingIntent.send()` runs with the creator's identity and the receiver passes no fill-in Intent,
+  so a caller-supplied token borrows nothing") — a verdict without its mechanism is re-raised every
+  engagement; (f) grade the negative in the `Grade` column: observed-absence (no state change seen) <
+  mechanism-read (file:line) < instrumented-negative (hook or flow capture with a positive control), and
+  write what would upgrade it ("no write on entry" becomes "no request issued" once the proxy window is
+  correlated against the sweep).
   Worked rows the corpus treats as exemplary: Maps and Firebase keys checked and found restricted; the
   WebView allow-list blocks `@`, `data:` and `javascript:`; providers non-exported with the
   `SecurityException` quoted; no SSL-error bypass in `onReceivedSslError`; CVE-X present but the
@@ -1844,6 +1946,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every negative you intend to write down |
+| **Requires** | — |
 | **Maps to** | drozer scanner sources — `scanner.provider.injection` probes a single `'` and flags only when the exception text contains `unrecognized token`; `scanner.provider.traversal` uses one fixed payload, sixteen `../` levels, `/etc/hosts` only; `scanner.misc.native` sees only libraries bundled inside the APK; Frida hooks miss inlined, late-loaded and abstract-class targets |
 
 - **Test:** "drozer found no exported components", "finduris returned nothing", "`adb backup` produced an
@@ -1878,6 +1981,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every global negative and every user-facing string in the report |
+| **Requires** | — |
 | **Maps to** | the corpus's own recorded failure: a false existential claim in an already-submitted report — "there is no `createChooser` … anywhere in the app's own code" — where there were nine, several attaching a FileProvider URI with `FLAG_GRANT_READ_URI_PERMISSION` |
 
 - **Test:** Two classes of sentence are trivially falsifiable and are therefore the first things a
@@ -1886,10 +1990,10 @@ Decision:
 - **How:**
   ```bash
   # before writing "there is no X anywhere"
-  grep -rn '<X>' $DEC/jadx/sources out/smali/ base_apktool/res/ | tee evidence/negatives/X.txt | wc -l
+  grep -rn '<X>' "$DEC/jadx/sources" "$DEC"/apktool/smali* "$DEC/apktool/res" | tee "$E/logs/negatives/X.txt" | wc -l
 
   # before quoting a user-facing string, grep the EXECUTING bundle/resources for the literal
-  grep -rn 'Verify your identity' base_apktool/res/values*/strings.xml
+  grep -rn 'Verify your identity' "$DEC"/apktool/res/values*/strings.xml
   strings -a assets/index.android.bundle | grep -F 'Verify your identity'
   ```
   Attach the grep output next to the sentence it supports.
@@ -1911,6 +2015,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every finding, before it leaves Candidate |
+| **Requires** | — |
 | **Maps to** | corpus false-positive taxonomy; the refuted example — a finding asserting the app's secure storage was a no-op stub, refuted by a fully implemented `com.oblador.keychain.KeychainModule` (`RNKeychainManager`) registered alongside it and actually used by the JS |
 
 - **Test:** Five ways a finding is wrong while every `file:line` in it is correct. Run all five before the
@@ -1953,25 +2058,21 @@ Decision:
 | **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's Marker Discipline; the recorded case — `X-Forwarded-Proto: javascript` appeared to reflect across multiple pages because the word `javascript` occurs naturally in SharePoint help-link hrefs |
 
-- **Test:** The injected marker must be unique and unmistakable, or your "reflection" is a word collision.
-  **Search the BASELINE response for the marker before claiming reflection** — this single check kills
-  roughly eighty per cent of false reflection reports.
-- **How:**
-  ```bash
-  MARK="x4hd2k9pq$(openssl rand -hex 3)"          # 8+ chars, random alphanumeric, no English words
-  curl -s "$URL" | grep -c "$MARK"                # BASELINE first — must be 0
-  curl -s "$URL?q=$MARK" | grep -o "$MARK"        # only now is a hit signal
+- **Test:** The method is D15-029 (marker discipline: a unique random marker, the baseline searched first —
+  the one check that kills most false reflection reports). The reporting consequence: a reflection,
+  injection, cache-poisoning or out-of-band claim is reportable only with the D15-029 artefacts attached —
+  the baseline response *without* the marker and the test response *with* it.
+- **How:** Attach the two artefacts by name and quote the marker in the finding:
+  ```text
+  requests/F-0NN/baseline.http + responses/F-0NN/baseline.body   (grep -c "$MARK" = 0)
+  requests/F-0NN/marker.http   + responses/F-0NN/marker.body     (grep -o "$MARK" = the hit)
   ```
-  Never use `test`, `marker`, `evil`, `attacker`, `payload`, `javascript`, `script`, `AAAA` or your own
-  domain. Good forms: `cpmark987abc`, `x4hd2k9pq`, `__ZZ_MARKER_<random>_ZZ__`, or a Collaborator
-  subdomain prefix. For out-of-band tests, sub-tag each payload per sink so you can tell which one fired.
-- **Proof:** The marker present in the test response and **absent from the baseline**, with both outputs
-  attached.
+- **Proof:** Both files referenced from the finding, the marker visible in one and absent from the other.
 - **Escalation:** The same discipline is the canary rule for on-device evidence (D27-031) — one mechanism,
-  two surfaces.
-- **Ruled out when:** The baseline already contains the marker string, or the marker is a natural-language
-  word. Then the observation is a collision, and it goes in the retraction appendix if it was ever
-  claimed (D27-062).
+  two surfaces. Method, marker forms and the recorded collision case: D15-029.
+- **Ruled out when:** The D15-029 baseline already contains the marker, or the marker is a natural-language
+  word. Then the observation is a collision; record it in the register, and in the retraction appendix if
+  it was ever claimed (D27-062).
 
 ### D27-053 · The body-diff rule
 
@@ -1984,18 +2085,14 @@ Decision:
 | **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's Body-Diff Rule; the recorded case — `Host: target.example:80@evil.example.com` returned 200 instead of the baseline 403, body byte-identical at 8,341 bytes both ways; the AWS ELB had normalised the Host and dropped the `@evil` portion. **Status-code-only claims are the most common rejected-as-N/A category on bug-bounty platforms** |
 
-- **Test:** A bypass claim requires a response **body** differential, not a status code. A 200 with a
-  byte-identical body is not a bypass.
-- **How:**
-  ```bash
-  diff <(curl -sS "$BASE" -H "$CTRL") <(curl -sS "$BASE" -H "$TEST")
-  curl -sS "$BASE" -H "$CTRL" -o /tmp/a -w '%{http_code} %{size_download}\n'
-  curl -sS "$BASE" -H "$TEST" -o /tmp/b -w '%{http_code} %{size_download}\n'
-  cmp -l /tmp/a /tmp/b | head        # identify WHAT changed, byte by byte
-  ```
-  A five-byte difference might be real — identify it. A correlation id or a timestamp is not content; a
-  changed record is.
-- **Proof:** A byte-level diff in the report, with the changed bytes identified and explained.
+- **Test:** The method is D15-029 (the body-diff rule: a bypass needs a response-**body** differential, not a
+  status code). The reporting consequence: a bypass claim ships the byte-level diff with the changed bytes
+  identified — status-code-only claims are the commonest rejected-as-N/A category on bounty platforms.
+- **How:** Attach `responses/F-0NN/control.body` and `responses/F-0NN/test.body` with their
+  `%{http_code} %{size_download}` lines and the `cmp -l` excerpt that names the differing bytes (D15-029
+  gives the commands).
+- **Proof:** A byte-level diff in the report, with the changed bytes identified and explained; a correlation
+  id or a timestamp is not content, a changed record is.
 - **Escalation:** Where the body does differ, the next question is whether it differs because of *your
   input* or because of a fixed server policy (D27-055).
 - **Ruled out when:** The bodies are identical. Record it in the ruled-out register with the byte counts —
@@ -2067,7 +2164,7 @@ Decision:
   the edge but not at origin) — test the origin directly if scope allows.
 - **Ruled out when:** The 2×2 shows a fixed deny-list. Record it; this is the cheapest retraction to avoid.
 
-### D27-056 · The layer-ordering trap — a validation error does not prove you passed auth
+### D27-056 · The layer-ordering trap, reporting side — attach the `{}` re-test to every auth-bypass claim
 
 | | |
 |---|---|
@@ -2078,32 +2175,22 @@ Decision:
 | **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's LAYER-ORDERING TRAP — described there as the single most transferable item in the repository; it applies equally to WAF and CDN layers, where an edge block is not an origin response |
 
-- **Test:** The highest-confidence false positive in the entire auth-bypass class. Many stacks put a
-  global input sanitiser, body parser or schema filter **in front of** the auth middleware, so a
-  malformed body is rejected before auth is ever consulted — and the response is indistinguishable from
-  "auth passed, validation failed". A 400 saying "field X is required" from an unauthenticated request
-  does **not** prove you reached business logic.
-- **How:** Re-send with a minimal **well-formed** body.
-  ```bash
-  curl -s -X POST https://target/api/v1/resource -d '{'
-  # 400 {"code":"ERR-INPUT-0001","message":"Invalid text. Only permitted characters are allowed"}  <- looks like bypass
-
-  curl -s -X POST https://target/api/v1/resource -H 'Content-Type: application/json' -d '{}'
-  # 401 {"code":"ERR-AUTH-0001","message":"Not authenticated. Please log in."}   <- where auth actually sits
-  ```
-  Only the second response tells you where the auth layer is. If the error text is about **input shape or
-  character class**, you are talking to a parser. If it names a **domain field** (`accountId is
-  required`) *and* a well-formed `{}` still returns it, that is real signal — and mandatory fields named
-  `is_admin`, `is_internal`, `requested_by`, `role_id` or `account_type` mean authorisation is derived
-  from client-supplied parameters, which is Critical-class (-> D15).
-- **Proof:** Both responses side by side, with the well-formed `{}` request as the decisive one.
+- **Test:** The method is D15-024 (a validation error from a global parser that sits in front of the auth
+  middleware is indistinguishable from "auth passed, validation failed"). The reporting consequence: an
+  auth-bypass claim at `broken_authentication_and_session_management.authentication_bypass` (P1) is
+  reportable only with the minimal well-formed `{}` re-test attached, and its response named as the one
+  that located the auth layer.
+- **How:** Attach the pair — the malformed request and its parser error, the well-formed `{}` request and
+  its response — as `requests/F-0NN/malformed.http` / `requests/F-0NN/wellformed.http` with both response
+  bodies (commands and the error-text reading rules: D15-024).
+- **Proof:** Both responses side by side in the report, with the well-formed `{}` request as the decisive one.
 - **Escalation:** Once the auth layer is located, the mobile-specific follow-ups are the client-only rate
-  limit the API never enforces, and client-side-only MFA checks — where response manipulation is a real
-  finding **only if the subsequent API calls also work** (-> D13, -> D15).
-- **Ruled out when:** The minimal well-formed body returns 401/403. Record both responses in the
-  ruled-out register; this gate has prevented false Criticals against production financial infrastructure.
+  limit the API never enforces and client-side-only MFA checks — a real finding **only if the subsequent
+  API calls also work** (-> D13, -> D15).
+- **Ruled out when:** The minimal well-formed body returns 401/403. Record both responses in the ruled-out
+  register; this gate has prevented false Criticals against production financial infrastructure.
 
-### D27-057 · The shell-loop ban — count your results
+### D27-057 · The shell-loop ban, reporting side — a sweep row carries both counts
 
 | | |
 |---|---|
@@ -2111,36 +2198,24 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every automated sweep, including agent-driven ones |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's Shell-Loop Ban; the recorded case — roughly fifty probes' worth of verb-tampering testing silently lost to zsh array expansion, with output that looked complete |
 
-- **Test:** zsh array expansion fails **silently**. `for x in "${arr[@]}"` can produce zero iterations with
-  no error when the array was not populated by the previous command, and the transcript still looks
-  correct. A sweep that quietly did nothing becomes a false negative in the ruled-out register, which is
-  worse than a false positive because nobody checks it.
-- **How:** Loops of five or fewer hardcoded items in shell are fine. Anything iterating a list, a file or
-  a computed range goes to Python with `try/except` per iteration and explicit per-iteration logging —
-  and **always count**:
-  ```python
-  import sys
-  targets = [l.strip() for l in open("uris.txt") if l.strip()]
-  ok = 0
-  for i, t in enumerate(targets, 1):
-      try:
-          probe(t); ok += 1
-      except Exception as e:
-          print(f"[{i}/{len(targets)}] FAIL {t}: {e}", file=sys.stderr)
-      print(f"[{i}/{len(targets)}] {t}")
-  assert ok == len(targets), f"expected {len(targets)} probes, completed {ok}"
+- **Test:** The method lives in D26-067 (the canonical shell-loop ban: zsh array expansion and `adb shell`
+  eating a loop's stdin both fail **silently**, so a sweep that quietly did nothing becomes a false negative
+  in the ruled-out register, which is worse than a false positive because nobody checks it). The
+  reporting-side rule here: a ruled-out row produced by a sweep carries the asserted result count **and**
+  the input count; a row without both is a TODO row, not a negative.
+- **How:** Run the sweep per D26-067 (Python with per-iteration logging and an `assert ok == len(targets)`,
+  or `adb shell -n` inside any file-reading loop per D26-080), then write the two counts into the row:
+  ```text
+  | 14 | no exported activity accepts an unvalidated redirect extra | dynamic-exec | 8.2.1 / 3f9c… | logs/D04-sweep.txt (37/37 components launched) | 35 | negative | high | instrumented-negative |
   ```
-  ```bash
-  wc -l probe-results.txt          # compare against the input count, every time
-  ```
-- **Proof:** The result count equals the input count, asserted rather than eyeballed. If you expected 100
-  probes and got fewer than 50 lines, the loop ate something.
-- **Escalation:** Apply the same counting discipline to `adb shell` loops over provider URIs, deep-link
-  payloads and component names — those are exactly the sweeps whose zero results end up as ruled-out rows.
-- **Ruled out when:** The sweep is five or fewer hardcoded items typed inline and visible in the
-  transcript.
+- **Proof:** Every sweep-derived row shows `n/N` with n = N, cross-checkable against the log it cites.
+- **Escalation:** -> D26-067 (method and counts), D26-080 (adb quoting and stdin), D27-048 (the register's
+  `Grade` column).
+- **Ruled out when:** The sweep is five or fewer hardcoded items typed inline and visible in the transcript —
+  then the transcript is the count.
 
 ### D27-058 · Emulator artefacts that must never be reported
 
@@ -2153,17 +2228,33 @@ Decision:
 | **Requires** | device |
 | **Maps to** | corpus never-report list; MASTG false-positive notes |
 
-- **Test:** Three observations are properties of the harness, not of the app. Re-test on a physical device
+- **Test:** Seven observations are properties of the harness, not of the app. Re-test on a physical device
   or with the precondition satisfied before the observation reaches the candidate list.
 - **How:**
   ```text
-  1 KeyInfo.isInsideSecureHardware() == false / getSecurityLevel() == 0
+  1 KeyInfo.isInsideSecureHardware() == false / getSecurityLevel() == 0                      (-> D12 graveyard)
       Emulator keystores are software-backed. NEVER report this. Re-test on hardware, or state the
       limitation and check the app's key attestation instead (-> D12).
-  2 "Key generation throws" with setUserAuthenticationRequired(true) on a fresh emulator
+  2 "Key generation throws" with setUserAuthenticationRequired(true) on a fresh emulator         (-> D26-017)
       There is no screen lock. Set one and retry:   adb shell locksettings set-pin 1234
-  3 "adbd cannot run as root" on a production user-build / Play image
+  3 "adbd cannot run as root" on a production user-build / Play image                          (-> D26-003)
       Production images cannot be rooted. NOT A FINDING; it is the definition of the platform.
+  4 "adb shell can query an exported=false provider / start a non-exported activity"            (rooted AVD)
+      On a rooted AVD the shell is uid 0 and bypasses export checks. `adb shell id` must print uid=2000(shell)
+      before a shell result means anything; otherwise re-run from the stock device's shell or the
+      zero-permission probe (D27-040, D26-036).
+  5 "@webview_devtools_remote_<pid> socket exposed"                                               (userdebug / AVD)
+      System WebView exposes it for EVERY WebView process on userdebug images; an uninstrumented comparison
+      app shows it too. Reportable only on a user build, with an uninstrumented control app that does NOT
+      show it (D26-064).
+  6 "Activity class does not exist" / "No activity found" right after boot                      (CE storage locked)
+      A device with a lock-screen credential boots RUNNING_LOCKED and non-direct-boot components are
+      invisible. `adb shell dumpsys user | grep -i state` must say RUNNING_UNLOCKED before a launch negative
+      is recorded (D26-017).
+  7 A background or lock-screen launch, or a non-matching-filter delivery, proven from adb        (shell exemptions)
+      Shell is exempt from background-activity-launch limits and from strict intent-filter matching; an
+      `am start` or `am broadcast` that lands says nothing about AM-03. Re-prove from the zero-permission
+      probe (D27-040, D26-065).
   ```
 - **Proof:** The corrected result on a device where the precondition holds, or an explicit limitation note
   saying the claim was not testable on this harness.
@@ -2180,6 +2271,7 @@ Decision:
 | **VRT** | n/a — pre-empting these stops a valid finding being closed as noise and stops you filing an invalid one |
 | **Attacker** | n/a |
 | **Applies to** | any engagement mapped to MASTG |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0223, MASTG-TEST-0232, MASTG-TEST-0235, MASTG-TEST-0242, MASTG-TEST-0243, MASTG-TEST-0244, MASTG-TEST-0316, MASTG-TEST-0325, MASTG-TEST-0338 (`false_negative_prone: true`), MASTG-TEST-0351, MASTG-TEST-0352, MASTG-TEST-0353, MASTG-TEST-0204 |
 
 - **Test:** MASTG documents expected false positives and negatives. Check the finding against them before
@@ -2228,6 +2320,7 @@ Decision:
 | **VRT** | governs every P1/P2 claim |
 | **Attacker** | n/a |
 | **Applies to** | every Critical and High |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's Multi-Tool Reproduction Bar and its recorded case — a curl-only timing differential that vanished under Python `requests` was a tool artefact, not a bug; corpus adversarial-verification practice, which in one run refuted one of the author's own findings whose every citation was accurate |
 
 - **Test:** Two gates before submission. First: reproduce every Critical or High via **two independent
@@ -2258,6 +2351,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | client deliverables; the top half applies to bounty submissions too |
+| **Requires** | — |
 | **Maps to** | operationalises the corpus's "never write a global negative without running the global grep" and "never assert a user-facing string you have not grepped" into a gate with a named owner; NIST SP 800-115 §8.2 |
 
 - **Test:** The adversarial pass (D27-060) attacks the technical claim. This gate catches the errors
@@ -2295,6 +2389,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every engagement |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's RETRACTION DISCIPLINE — "a clean 11-finding report with a retraction appendix is more trustworthy than a 13-finding report where 2 fall apart at triage" |
 
 - **Test:** When a claimed finding fails reproduction, document the retraction in an appendix rather than
@@ -2327,6 +2422,7 @@ Decision:
 | **VRT** | the finding keeps its original node |
 | **Attacker** | n/a |
 | **Applies to** | live engagements against monitored targets |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's recorded engagement — a client SOC patched a confirmed SQLi within roughly thirty minutes of the first probe, and a separate external attacker was observed locking legitimate users' accounts during the test window |
 
 - **Test:** A confirmed finding that stops reproducing is not automatically a false positive. On a
@@ -2336,7 +2432,8 @@ Decision:
   ```bash
   # this is why every capture carries a synced clock and a timestamp (D27-046)
   date -u; adb shell date -u
-  ls -l --time-style=full-iso evidence/F-009/
+  # GNU-only `ls --time-style` is rejected by BSD ls; print UTC mtimes portably
+  python3 -c 'import os,sys,datetime as d; [print(d.datetime.fromtimestamp(os.stat(p).st_mtime,d.timezone.utc).isoformat(timespec="seconds"), p) for p in sys.argv[1:]]' "$E"/logs/F-009/* "$E"/requests/F-009/*
   ```
   In the finding, state: the time of first observation, the time reproduction stopped, the evidence held
   from before the change, and the fact that you notified the client at <timestamp>.
@@ -2356,6 +2453,7 @@ Decision:
 | **VRT** | moves the report from a P5 close to its true node |
 | **Attacker** | AM-03 |
 | **Applies to** | every confused-deputy and read-primitive report |
+| **Requires** | — |
 | **Maps to** | corpus triage-ladder table and the verbatim triage responses it was built from |
 
 - **Test:** Triage rejections are specific and predictable. Build the next rung's artefact **before**
@@ -2396,6 +2494,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every disputed report |
+| **Requires** | — |
 | **Maps to** | corpus triage-pushback playbook; the verbatim rejection it was built from — "if you are able to read shared preferences with sensitive information **or** perform any unwanted action", which is two acceptance criteria, not one |
 
 - **Test:** Answer the literal bar the triager set, in their words, and lead with the artefact rather than
@@ -2436,6 +2535,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | Bugcrowd; the framing transfers to HackerOne and Intigriti |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's OOS rebuttal templates and their honest caveat |
 
 - **Test:** Triagers map findings to an out-of-scope clause without reading. Include an "In-scope
@@ -2485,6 +2585,7 @@ Decision:
 | **VRT** | each primitive at its standalone node (typically P3/P4), the consumer at the chained node (P1/P2) |
 | **Attacker** | AM-03 at the primitives, AM-02 or AM-01 at the consumer |
 | **Applies to** | every multi-finding engagement |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's chain-filing workflow and submission-order strategy; HackerOne's systemic-issue standard, which fully rewards "typically the first 3 unique submissions establishing the systemic issue" and treats later same-fix instances as duplicates |
 
 - **Test:** A consumer report references the primitives' submission ids — which only exist once the
@@ -2525,6 +2626,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all bounty work |
+| **Requires** | — |
 | **Maps to** | corpus duplicate-avoidance guidance; the disclosed-payout dataset in which heavily-hunted apps yield many $0 reports for shallow classes while larger payouts cluster on unusual surfaces |
 
 - **Test:** A duplicate pays nothing and costs the same effort. Choose the surface before choosing the
@@ -2544,10 +2646,8 @@ Decision:
   - Read the programme's DISCLOSED REPORTS first, and its changelog for silent fixes.
   - Read the programme's KNOWN-ISSUES admissions — they cost nothing and save whole days.
   ```
-  ```bash
-  apktool d old.apk -o old/ && apktool d new.apk -o new/
-  diff -r old/smali new/smali | grep -A5 '^[<>].*\(startsWith\|contains\|equals\|check\|valid\)'
-  ```
+  Diff two releases with the D27-072 recipe (apktool both builds into `$E/lab/`, `diff -r` the smali, grep
+  the added checks).
 - **Proof:** A written rationale for the chosen target and feature, dated before the testing started.
 - **Escalation:** Finish one chain to demonstrated impact rather than opening four — the second and third
   hop is where the value is, and it is exactly the work an unfocused engagement never reaches.
@@ -2562,6 +2662,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | Google programmes directly; the rules are spreading |
+| **Requires** | — |
 | **Maps to** | Android & Google Devices "How We Handle Duplicate Reports", "Reward Adjustments for Known and Trending Issues", "Published Threat Models and Non-Bugs"; Google Mobile VRP SDK duplicate rule; Xiaomi General Assessment Rules |
 
 - **Test:** Filing a placeholder to secure a timestamp now actively loses the bounty, and one root cause
@@ -2603,6 +2704,7 @@ Decision:
 | **VRT** | n/a — but every P5 you file costs you future access |
 | **Attacker** | n/a |
 | **Applies to** | all bounty work, especially anyone running an automated or agent-driven pipeline |
+| **Requires** | — |
 | **Maps to** | Android & Google Devices Code of Conduct and SNR clause, quoted verbatim; Samsung's per-researcher submission limits and deprioritisation of "repeated or bulk submissions of substantially similar reports"; Google's April 2026 VRP statements about automated tooling |
 
 - **Test:** The graveyard is not merely unpaid work — filing it damages future access. Treat submission
@@ -2639,6 +2741,7 @@ Decision:
 | **VRT** | each row names the P5/P4 node the claim actually lands on, and the node it could reach |
 | **Attacker** | AM-03 / AM-12 depending on the row |
 | **Applies to** | every draft, checked before the QA gate |
+| **Requires** | — |
 | **Maps to** | Bugcrowd VRT demotion pairs; HackerOne Core Ineligible Findings (19 May 2025); AOSP "no higher than Low" cap for unlocked-bootloader and Developer-Mode PoCs; HackerOne Core Clarifications on Availability |
 
 - **Test:** Twenty-three claim/reality pairs account for nearly every unexplained downgrade. Check the
@@ -2706,8 +2809,8 @@ Decision:
   than finding something new. Diff the new APK, find the added check, and attack the check itself.
 - **How:**
   ```bash
-  apktool d old.apk -o old/ && apktool d new.apk -o new/
-  diff -r old/smali new/smali | grep -A5 '^[<>].*\(startsWith\|contains\|equals\|check\|valid\)'
+  apktool d -f old.apk -o "$E/lab/old" && apktool d -f new.apk -o "$E/lab/new"
+  diff -r "$E/lab/old/smali" "$E/lab/new/smali" | grep -A5 '^[<>].*\(startsWith\|contains\|equals\|check\|valid\)'
   ```
   Known-incomplete fix shapes from the corpus: `startsWith("/data/data/")` (bypass with `/data/user/0/`);
   a host allow-list with no scheme check (bypass with `javascript:`); a check on one `UriMatcher` branch
@@ -2729,13 +2832,18 @@ Decision:
   ```
   Verify against the build users actually get, not staging:
   ```bash
-  adb shell pm path com.target.app | sed 's/package://' | while read p; do adb pull "$p" retest/store/; done
-  shasum -a 256 retest/store/*.apk | tee retest/ARTEFACT-MANIFEST.txt
+  # adb reads the loop's stdin, so a bare `| while read` stops after ONE row and a split app is "verified"
+  # against base.apk alone (D26-067, D26-080): read from a file, feed adb /dev/null, count both ends
+  RT="$E/final/retest"; mkdir -p "$RT/store"
+  adb shell pm path com.target.app | sed 's/package://' | tr -d '\r' > "$RT/paths.txt"; wc -l "$RT/paths.txt"
+  while IFS= read -r p; do adb pull "$p" "$RT/store/" < /dev/null; done < "$RT/paths.txt"
+  ls "$RT"/store/*.apk | wc -l          # must equal the path count — a loop that lost rows reads as "fixed"
+  shasum -a 256 "$RT"/store/*.apk | tee "$RT/ARTEFACT-MANIFEST.txt"
   adb uninstall com.target.app && adb install --bypass-low-target-sdk-block old-vulnerable.apk
   adb logcat -d | grep -iE 'force.?update|min.?version|unsupported.?version|upgrade required'
   ```
 - **Proof:** Per finding: the baseline run against the old build (bug reproduces) and the run against the
-  new build (bug does not), both in `retest/F-0NN/`. Plus either a forced-upgrade block on the old build,
+  new build (bug does not), both in `$E/final/retest/F-0NN/`. Plus either a forced-upgrade block on the old build,
   or the old build transacting normally — which is a finding in its own right, because a fix nobody
   installs is not remediation.
 - **Escalation:** A bypass is a **new finding with a new ID**, cross-referenced to the original, not a
@@ -2753,6 +2861,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | corpus convention that refutations are recorded next to the findings they kill |
 
 - **Test:** Renumbering between the draft, the final and the retest destroys the client's ability to track
@@ -2779,6 +2888,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | the named programmes; check every brief for an equivalent |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP "how to submit a complete bug report" and Good Quality criteria; Samsung "Report Quality" items 1–4 and `submission_template_v10.yaml`; PayPal "Bug Submission Requirements"; Xiaomi "General Assessment Rules"; Intigriti Triage Standards |
 
 - **Test:** Confirm the report includes every field the vendor requires before sending. Some of it is
@@ -2823,24 +2933,16 @@ Decision:
   current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field
   exposure. Diff **behaviourally** across versions, not by response shape. **A version difference alone
   is Informational**; the weakened control is the finding.
-- **How:** Enumerate, then diff four security-relevant behaviours for the **same operation**:
-  ```bash
-  for v in v1 v2 v3 v4 beta alpha internal legacy old 2022-01-01 2023-01-01 2024-01-01; do
-    curl -s -o /dev/null -w "%{http_code} /api/$v/\n" "https://$TARGET/api/$v/"
-  done
-  curl -s -H "X-API-Version: 1" https://$TARGET/api/users
-  curl -s -H "Accept: application/vnd.company.v1+json" https://$TARGET/api/users
-  for sub in api api-v1 api-v2 apiv1 apiv2 legacy-api old-api internal-api staging-api; do
-    curl -s -o /dev/null -w "%{http_code} $sub\n" "https://$sub.$TARGET/"
-  done
-  ```
+- **How:** The enumeration and the four-axis diff are D15-012 (version paths, `X-API-Version`/`Accept`
+  headers, legacy hosts; auth strength, rate limiting, input validation, field exposure). What this item
+  owns is the framing: report the weakened control, with the **same request** against both versions side
+  by side:
   ```text
-  AUTH STRENGTH     does v1 accept no token / an expired token / a lower-privilege token that v2 rejects?
-  RATE LIMITING     burst both; a missing 429 on v1 means throttling was never backported
-  INPUT VALIDATION  the same injection or oversized payload to both
-  FIELD EXPOSURE    does v1 return internal ids or PII that the current version redacts?
+  | Request (identical)             | current path           | old path                 | control weakened |
+  | GET /api/v2 vs /api/v1/users/42 | 403 (not your object)  | 200, 1.9 KB, PII fields  | object authz     |
+  | POST …/login x 50 in 10 s       | 429 after 10           | 50 x 200, no 429         | rate limiting    |
   ```
-  Anything other than 404 or connection-refused means live. A static "this version is deprecated" 200 is
+  Anything other than 404 or connection-refused means live; a static "this version is deprecated" 200 is
   not a finding — the underlying operation must actually execute.
 - **Proof:** A security regression on the old path, demonstrated with the **same request** against both
   versions, side by side in the report. Run the layer-ordering check (D27-056) before claiming the auth
@@ -2861,6 +2963,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | client engagements; optional for open bounty submissions |
+| **Requires** | — |
 | **Maps to** | NIST SP 800-115 §8.2 ("Because a report may have multiple audiences, multiple report formats may be required") and Appendix B §1.3 (Assumptions and Limitations); MASTG v2 coverage built from the repo front-matter rather than the withdrawn checklists |
 
 - **Test:** Every engagement has features that could not be exercised — payments in production, KYC that
@@ -2874,6 +2977,15 @@ Decision:
   | Payments (live)     | no      | n/a          | no test PSP mode              | HIGH |
   | Region: IN wallet   | no      | n/a          | geo-gated build               | MEDIUM |
   ```
+  Every `Blocked by` cell cites the command that established the block, never the lab's spec sheet or the
+  device's marketing name — a capability matrix that *asserts* NFC/HCE hardware the device does not have
+  produces engagement-wide false "blocked on hardware" rows, and integrity-tier items are silently
+  untestable without a Play-certified image:
+  ```text
+  | NFC / HCE tap flows        | no | n/a | `pm has-feature android.hardware.nfc`=false; `service check nfc` not found   | HIGH |
+  | Integrity tiers (D21)      | no | n/a | no Play-certified (google_apis_playstore user) image, no unlocked-bootloader device | HIGH |
+  ```
+  Re-run the capability probes at P0 and at P8; a row whose probe output is missing is a TODO row.
   For a standards-aligned engagement, build the MASTG coverage table from the authoritative source rather
   than promising a checklist that no longer exists:
   ```bash
@@ -2938,6 +3050,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | client engagements; the bounty equivalent is simply submitting immediately |
+| **Requires** | — |
 | **Maps to** | NIST SP 800-115 Appendix B §3.2 (Incident Handling and Response — halt criteria, the client's call tree, and a process for resuming testing) and §6 (interim report frequency); H1 #1667998, patched by the vendor within 24 hours of a well-formed report |
 
 - **Test:** Holding a Critical found on day 3 until delivery on day 10 leaves the client exposed for a
@@ -2974,6 +3087,7 @@ Decision:
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | corpus hard-lines list; NIST SP 800-115 §6.6 (Legal Considerations); the ownership boundary as stated in the corpus |
 
 - **Test:** Four lines, each of which costs more to cross than any technical gap is worth. Say the
@@ -3007,6 +3121,147 @@ Decision:
 - **Escalation:** Where a line blocks a proof you need, ask for what would unblock it (an OTP, a second
   test account, a sandbox card the operator owns). **Blocking on politeness is worse than asking.**
 - **Ruled out when:** Never.
+
+### D27-080 · Single-driver attestation — a recorded take is void if another driver touched the device
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — it decides whether a take is evidence at all |
+| **Attacker** | AM-12 (own harness; not an attack) |
+| **Applies to** | every recorded take on a shared device or emulator; every instrumented run |
+| **Requires** | device |
+| **Maps to** | D27-030, D27-033, D26-081; NIST SP 800-115 Appendix B §5.3 (Data Handling) |
+| **Record** | logs/D27-080.txt; logs/F-0NN/take-<n>-lifecycle.txt (pid before/after and the lifecycle grep for the window) |
+
+- **Skip when:** `engagement.json` records one worker and one device for the whole session and
+  LAB-MANIFEST.txt says so — note `D27-080 n/a: single-session harness (one worker, serial <serial>) per
+  LAB-MANIFEST.txt`.
+- **Test:** On a shared harness a second session can `am force-stop`, `pm clear`, respawn (`frida -f`) or
+  re-attach to the target mid-take; the capture then shows a dead pid, a missed canary or an unrelated
+  foreground and reads as a negative — or, worse, as staged evidence.
+- **How:**
+  ```bash
+  # before the take: hold the device lock (acquire/release from D26-081), record the holder and the target pid
+  acquire && echo "$OWNER $(date -u +%FT%TZ) F-0NN take-$N" >> "$E/logs/F-0NN/take-$N-lifecycle.txt"
+  adb -s "$SERIAL" shell pidof -s "$PKG" | tee "$E/logs/F-0NN/pid-before.txt"
+  # … record the take …
+  # after the take: same pid, and nobody stopped/spawned/attached to the target inside the window
+  adb -s "$SERIAL" shell pidof -s "$PKG" | diff - "$E/logs/F-0NN/pid-before.txt" && echo "pid stable"
+  adb -s "$SERIAL" logcat -d -v time | grep -E "Force stopping .*$PKG|Start proc .*$PKG|frida" \
+    | tee -a "$E/logs/F-0NN/take-$N-lifecycle.txt" | wc -l     # expect 0 lines from another driver inside the window
+  release
+  ```
+- **Proof:** pid-before equals pid-after, an empty lifecycle grep for the window, and the lock holder named
+  in the take's caption (D27-033 identity coherence).
+- **Escalation:** A lifecycle line from another driver voids the take: re-record, never splice (D27-030).
+  Process-lifecycle commands (`am force-stop`, `pm clear`, `am crash`, instrumentation spawn/attach) count
+  as device drivers and take the same lock (D26-081).
+- **Ruled out when:** Not a finding. The take is admissible when the pid and lifecycle checks are clean; a
+  device that was single-session for the whole engagement states it in LAB-MANIFEST.txt instead.
+
+### D27-081 · Submission-slot budgeting — know the platform's pending-report cap before deciding the filing order
+
+| | |
+|---|---|
+| **Severity ceiling** | Support — a capped account files nothing |
+| **VRT** | n/a |
+| **Attacker** | n/a |
+| **Applies to** | every bounty submission; decisive for new or low-reputation accounts and for agent-driven pipelines |
+| **Requires** | — |
+| **Maps to** | the programme rate-limiting clause quoted in D27-070; platform help-centre pages on report limits for new researchers; D27-067, D27-069 |
+| **Record** | logs/D27-081.txt; final/submission-checklist.md (slots-available / slots-used / next-free-date per platform) |
+
+- **Skip when:** The channel is a direct vendor inbox with no platform cap — note `D27-081 n/a: direct
+  vendor channel, no submission cap; D27-067 order governs alone`.
+- **Test:** Platforms cap pending reports (new-account trial quotas, per-programme pending caps,
+  account-wide slots shared across programmes) and auto-close bursts. A filing order that ignores the cap
+  spends the slot on a P3 and locks the P1 out; a report re-filed after a limiter close is treated as
+  circumvention.
+- **How:**
+  ```text
+  1 Before P9, open the platform's new-report form for THIS programme; record whether it is reachable and
+    the cap text shown. A visible Submit button is not eligibility — the quota check happens on submit.
+  2 Budget = min(cap, slots free). Rank by D27-011 and fill from the top: consumer-grade P1/P2 first;
+    primitives only if a slot remains; standalone P3/P4 only with headroom. Same-root-cause instances go
+    in ONE report (D27-067, D27-069), never one slot each.
+  3 Never re-file a report the rate limiter closed. Wait for the first triage decision, then re-file once,
+    citing it. Log every limiter-closed id in final/submission-checklist.md.
+  4 Agent pipelines: one human-approved submission at a time; the pipeline never holds a platform credential.
+  ```
+- **Proof:** The submission checklist carries, per report, the slot it consumed and the date the next slot
+  frees.
+- **Escalation:** A full queue is the signal to build D27-064's next rung for the pending report, not to
+  find a new one; a limiter close is logged, never argued around.
+- **Ruled out when:** Not a finding. The budget is settled when every filed report has a slot row and no
+  report was filed into a closed queue.
+
+### D27-082 · Evidence residency — the engagement folder has its own private remote, never the methodology repository's
+
+| | |
+|---|---|
+| **Severity ceiling** | Support — a leaked evidence tree is a breach you caused (D27-038) |
+| **VRT** | n/a |
+| **Attacker** | n/a |
+| **Applies to** | every engagement run from a public or shared methodology checkout |
+| **Requires** | — |
+| **Maps to** | NIST SP 800-115 Appendix B §5.3 (Data Handling); D27-038, D27-046; START.md R7 |
+| **Record** | logs/D27-082.txt; engagement.json `evidence_remote` (host-neutral name) and the `git -C $E remote -v` output |
+
+- **Skip when:** The methodology checkout is itself private and single-tenant — note `D27-082 n/a: private
+  single-tenant checkout` in LAB-MANIFEST.txt.
+- **Test:** R7 ("state on disk, committed after every batch, pushed to its private remote when one exists")
+  and a public methodology repository are compatible only if `$E` is its own git repository with a private
+  origin. Check it at P0, not at delivery — an engagement that was committed locally only, or pushed to the
+  public origin, is discovered at the worst moment.
+- **How:**
+  ```bash
+  git -C "$E" rev-parse --show-toplevel          # must be $E itself, not the methodology checkout
+  git -C "$E" remote get-url origin               # a private remote; never the methodology repo's origin
+  grep -n 'BugBountyTarget/' .gitignore           # the methodology repo ignores engagement folders
+  git -C "$E" ls-files | grep -Ei '\.(apk|dex|so|har|pcap|mitm|keystore)$' | wc -l    # expect 0 (hook-blocked)
+  # set the remote once, before the first batch:
+  export SANE_EVIDENCE_REMOTE=<private-remote-url>   # consumed by scripts/new-engagement.sh and the push hooks
+  scripts/new-engagement.sh <Target> --remote "$SANE_EVIDENCE_REMOTE"   # or: git -C "$E" remote add origin <private url>
+  ```
+- **Proof:** `git -C "$E" remote get-url origin` resolves to a private repository and the methodology repo's
+  `git status` shows no engagement files.
+- **Escalation:** With no private remote available, R7 degrades to "commit locally after every batch" with
+  `evidence_remote` recorded as `null` and the missing remote written to `engagement.json.blockers`; the
+  stop hook accepts that state, and the report's Limitations names it.
+- **Ruled out when:** Not a finding. Residency is settled when the three `git -C "$E"` checks pass and the
+  remote is recorded in `engagement.json`.
+
+### D27-083 · Transcript-backed claims — every factual sentence in an agent-written report maps to an executed command
+
+| | |
+|---|---|
+| **Severity ceiling** | Support — unverified automated findings are a Code-of-Conduct violation on major programmes (D27-070) |
+| **VRT** | n/a |
+| **Attacker** | n/a |
+| **Applies to** | every report whose testing or drafting involved an autonomous or AI-assisted pipeline |
+| **Requires** | — |
+| **Maps to** | the programme Code-of-Conduct clause on unverified or automated findings quoted in D27-070; D27-050, D27-061 |
+| **Record** | logs/D27-083.txt; logs/F-0NN/T<nnn>.txt per cited transcript; report/findings-index.md column `transcripts` |
+
+- **Skip when:** Never — the tag convention costs nothing on a hand-written report either; note
+  `D27-083: hand-tested, tags applied` when no pipeline was involved.
+- **Test:** A model writes fluent sentences about commands it did not run. The defence is structural: a
+  sentence of observed fact without a transcript tag is a hypothesis and is written as one.
+- **How:**
+  ```bash
+  # convention: '[T012]' after any sentence of observed fact names logs/F-0NN/T012.txt, a verbatim command + output capture
+  grep -oE '\[T[0-9]{3}\]' "$E/findings/F-0NN.md" | tr -d '[]' | sort -u > "$E/lab/cited.txt"
+  ls "$E"/logs/F-0NN/T*.txt | sed 's#.*/##;s#\.txt##' | sort > "$E/lab/have.txt"
+  comm -23 "$E/lab/cited.txt" "$E/lab/have.txt"       # cited transcripts that do not exist — must be empty
+  grep -nE '(returns|contains|allows|reads|exposes|succeeds|fails)' "$E/findings/F-0NN.md" | grep -v '\[T[0-9]{3}\]'   # untagged factual sentences to review
+  ```
+- **Proof:** The `comm` output is empty, and the D27-061 reviewer spot-checks three tags per finding against
+  the raw capture.
+- **Escalation:** One sentence in LIMITATIONS states the pipeline's role ("analysis assisted by an automated
+  pipeline; every observed fact above is logged") — disclosure beats discovery (D27-070).
+- **Ruled out when:** Not a finding. The report is admissible when every observed-fact sentence carries a tag
+  that resolves to a transcript; an untagged factual sentence is rewritten as a hypothesis or deleted.
 
 ## Graveyard for this domain
 
@@ -3084,8 +3339,8 @@ Decision:
 
 - **Bugcrowd Vulnerability Rating Taxonomy**, release `2026-07-08` (581 entries), parsed directly from
   `vulnerability-rating-taxonomy.json` and its `mappings/cvss_v3/cvss_v3.json` and CWE mappings; mirrored
-  locally at `data/bugcrowd-vrt-full.csv`. Every VRT path and priority quoted in this chapter came from
-  that file.
+  locally at `data/vrt.csv` (regenerated by `scripts/refresh-data.py`; its `release` column carries the
+  release date). Every VRT path and priority quoted in this chapter came from that mirror.
 - **HackerOne**: Platform Standards (IDOR attack complexity, PII handling, AITM, leaked credentials, the
   bug-chain rule), Core Ineligible Findings (19 May 2025), Core Clarifications (the Availability/deletion
   rule), the systemic-issue standard, and the custom CVSS 3.0 implementation with ×0.0/×0.5/×1.0/×1.5

@@ -74,7 +74,7 @@ adb -s $SERIAL shell dumpsys package $PKG | grep -E 'codePath=|pkgFlags=|private
 grep -cE 'android.hardware.usb.action|android.nfc.action|HostApduService|androidx.car.app.CarAppService|com.google.android.gms.wearable|showWhenLocked|BIND_DEVICE_ADMIN|BIND_ACCESSIBILITY_SERVICE|CompanionDeviceManager' $DEC/apktool/AndroidManifest.xml
 grep -rlE 'BluetoothGattServer|CompanionDeviceManager|getWifi\(\)|INTERACT_ACROSS_PROFILES|CrossProfileApps' $DEC/jadx/sources | wc -l
 # 4. Hardware the physical block needs on THIS test device (false = blocked, never n/a)
-adb -s $SERIAL shell 'for f in android.hardware.nfc android.hardware.nfc.hce android.hardware.bluetooth_le android.hardware.usb.host android.hardware.usb.accessory android.software.managed_users; do echo "$f=$(pm has-feature $f && echo true || echo false)"; done; pm list users; pm get-max-users'
+adb -s $SERIAL shell 'for f in android.hardware.nfc android.hardware.nfc.hce android.hardware.bluetooth_le android.hardware.usb.host android.hardware.usb.accessory android.software.managed_users; do pm has-feature $f >/dev/null && echo "$f=true" || echo "$f=false"; done; pm list users; pm get-max-users'
 ```
 
 Decision table (all four read together):
@@ -112,10 +112,14 @@ n/a note (write it into the tracker for every row the table excludes, verbatim s
    "arbitrary write → RCE" claims die at policy, and dying in your own notes is free.
 9. **Firmware and kernel work** (D25-035 → D25-042) last, and only on an explicit device/firmware scope —
    it is the most expensive work in the chapter and the most likely to be out of scope.
-10. **Reporting discipline** (D25-070 → D25-074) before submission, because this domain's findings are
+10. **Managed-device block** (D25-068 → D25-073, D25-075, D25-082 → D25-083) only when an enrolled device
+    or the client's DPC is in scope — the Applicability probe decides.
+11. **Reporting discipline** (D25-076 → D25-079) before submission, because this domain's findings are
     the ones triagers most often bounce for vector vagueness and for shell-UID reachability claims.
 
 ## Items
+
+`$DEC` = `$E/decompiled` (START.md §6): `$DEC/jadx/sources` for jadx output, `$DEC/apktool` for the apktool tree.
 
 ### D25-001 · Settle device / image / app scope and route each finding to the correct programme
 
@@ -125,6 +129,7 @@ n/a note (write it into the tracker for every row the table excludes, verbatim s
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | Google's three-programme routing rules; Samsung Mobile Security Rewards eligible-device list; Xiaomi VRP mobile/hardware tiers |
 
 - **Test:** Three different products can be "the target": the Play build of an app, a preinstalled build
@@ -229,6 +234,7 @@ OTHER VECTORS INTO THE SAME SURFACE: <list>
 | **VRT** | n/a |
 | **Attacker** | AM-12 (own device; not an attack) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | AOSP Verified Boot (hardware root of trust → bootloader → dm-verity-verified partitions; AVB footers and rollback protection from Android 8.0); AOSP kernel documentation (ACK 5.10+ GKI, KMI, vendor modules/DLKMs) |
 
 - **Test:** A finding produced on a permissive, unlocked, non-current device is closed as unrealistic and
@@ -264,17 +270,26 @@ adb shell ls -l /apex | grep '@'             # versioned mounts: name@version
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | every reachability claim in this chapter |
-| **Maps to** | MASTG-KNOW-0020 caveat: `adb shell` runs as the `shell` user with extra permissions; always re-prove from an ordinary third-party app UID |
+| **Requires** | device |
+| **Maps to** | MASTG-KNOW-0020 caveat: `adb shell` runs as the `shell` user with extra permissions; always re-prove from an ordinary third-party app UID; How owner for receivers: D05-011 (this item keeps the SELinux-domain difference and the probe discipline) |
 
 - **Test:** The `shell` UID holds permissions no third-party app holds — `READ_LOGS` on some builds,
   `DUMP`, `WRITE_SECURE_SETTINGS` on userdebug, `INTERACT_ACROSS_USERS` behaviour, and a *different
   SELinux domain* (`u:r:shell:s0`, not `u:r:untrusted_app:s0:c…`). A `service call` or `content query`
   that succeeds from `adb shell` frequently fails from an app, and a report built on the shell result is
   closed as unreproducible.
-- **How:** Confirm the domain difference, then re-run from a PoC APK that declares **no** permissions:
+- **How:** D05-011 owns this gate for receivers; this item adds the SELinux-domain difference and the probe
+  discipline for the whole chapter. Probe prerequisite: the shared probe app ships no `binder` step
+  (`getService` + `writeInterfaceToken` + transaction-code sweep with the reply bytes dumped); build
+  `pocs/D25/probe-D25` from the D05/D06 probe templates before running D25-005, D25-019 and D25-022, and
+  list its steps in the evidence. Run discipline: `am start -S -n com.probe/.MainActivity -a probe.fire.$N`
+  with a distinct action per iteration (a filterEquals-equal relaunch returns `START_DELIVERED_TO_TOP` and
+  `onCreate` never runs — a silently EMPTY sweep); mirror every PROBE line to `getExternalFilesDir()`
+  because some OEM builds drop app-level `Log.i`. Confirm the domain difference, then re-run from a PoC
+  APK that declares **no** permissions:
 ```bash
-adb shell id -Z                       # u:r:shell:s0
-adb shell ps -AZ | grep com.poc.app   # u:r:untrusted_app_35:s0:c123,c256,c512,c768
+adb -s "$SERIAL" shell id -Z                       # u:r:shell:s0
+adb -s "$SERIAL" shell ps -AZ | grep com.poc.app   # u:r:untrusted_app:s0:c123,… (unversioned for targetSdk 34+; untrusted_app_NN below that)
 ```
 ```java
 // in the zero-permission PoC app
@@ -303,6 +318,7 @@ Log.i("poc", "reply=" + reply.readInt() + " " + reply.readString());
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every sweep in this chapter that iterates the package list |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's Shell-Loop Ban |
 
 - **Test:** Every high-yield sweep here iterates 200–400 packages. Shell array and command-substitution
@@ -312,23 +328,36 @@ Log.i("poc", "reply=" + reply.readInt() + " " + reply.readString());
 - **How:** Loops of five or fewer hardcoded items in shell are fine. Anything iterating a list goes to
   Python with per-iteration `try/except` and explicit logging — and you count:
 ```python
-import subprocess
+import re, subprocess
+SERIAL = '<serial>'
 pkgs = [l.split(':',1)[1].strip() for l in subprocess.run(
-    ['adb','shell','pm','list','packages','-s'], capture_output=True, text=True
+    ['adb','-s',SERIAL,'shell','pm','list','packages'], capture_output=True, text=True
 ).stdout.splitlines() if l.startswith('package:')]
 print(f'input packages: {len(pkgs)}')
 hits, errs = [], 0
-for p in pkgs:
+# one `dumpsys package packages` parsed offline replaces 300-400 per-package adb round-trips (and 300-400 chances to lose one silently)
+raw = subprocess.run(['adb','-s',SERIAL,'shell','dumpsys','package','packages'], capture_output=True, text=True, timeout=120).stdout
+raw = raw.split('\nHidden system packages:')[0]       # updated system apps are listed twice; parse the live section only
+blocks = re.split(r'\n  Package \[', raw)[1:]
+missing = sorted(set(pkgs) - {b.split(']')[0] for b in blocks})
+print('packages parsed', len(blocks), 'missing', len(missing))   # missing must be 0; otherwise the dump was cut — do not interpret it
+for b in blocks:
     try:
-        d = subprocess.run(['adb','shell','dumpsys','package',p],
-                           capture_output=True, text=True, timeout=20).stdout
-        if 'READ_LOGS' in d: hits.append(p)
+        p = b.split(']')[0]
+        if 'android.permission.READ_LOGS: granted=true' in b: hits.append(p)
     except Exception as e:
-        errs += 1; print(f'ERR {p}: {e}')
-print(f'probed={len(pkgs)-errs} errors={errs} hits={len(hits)}')
+        errs += 1; print(f'ERR {b[:40]}: {e}')
+print(f'probed={len(blocks)-errs} errors={errs} hits={len(hits)}')
 ```
   Rule: if you expected 300 probes and the log shows fewer than 300 lines, the loop ate something. Fix
-  the loop, do not interpret the output.
+  the loop, do not interpret the output. Second silent failure: never nest `sh -c` through adb.
+  `adb` joins its argv with spaces and the remote shell re-splits, so quotes inside the inner command
+  vanish and the sub-query returns empty with rc=0. Pass the whole remote command as ONE string and quote
+  inside it — `subprocess.run(['adb','-s',SERIAL,'shell', "dumpsys package packages | grep -c 'granted=true'"], capture_output=True, text=True)` —
+  and quote the remote command whenever it contains `*`, `[`, `$`, `;`, `|`, `&` or a space (under zsh an
+  unquoted glob is expanded, or aborts with "no matches found", on the host before adb runs). Add a
+  positive control to every sweep (one package you know matches) and require `probed == input` AND the
+  control hit before any zero-hit result is written as a negative.
 - **Proof:** The `probed=`/`errors=`/`hits=` counter line in the evidence, with `probed` equal to the
   input count.
 - **Escalation:** n/a — it is a correctness gate on D25-014, D25-015, D25-017 and D25-021.
@@ -342,6 +371,7 @@ print(f'probed={len(pkgs)-errs} errors={errs} hits={len(hits)}')
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | the three-layer sandbox model: per-app UID DAC, SELinux type enforcement, per-app MLS categories |
 
 - **Test:** A cross-app compromise must defeat all three layers. When a read or write primitive fails,
@@ -378,18 +408,20 @@ adb shell ls -laZ /data/data/$PKG          # u:object_r:app_data_file:s0:c123,c2
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) once a component is driven |
 | **Attacker** | AM-03 |
 | **Applies to** | any app that also ships on an OEM, carrier or enterprise image |
+| **Requires** | device |
 | **Maps to** | AOSP Application Sandbox (privileged vs non-privileged app domains); AOSP System API "available only to partners and OEMs for inclusion in bundled applications"; MASTG-KNOW-0017 |
 
 - **Test:** The same code defect in a `priv_app` is a far higher-severity finding than in an
   `untrusted_app`, because an exported component in a privileged package is a privilege-escalation
-  primitive for every installed app. Find out which the target is before you rate anything.
+  primitive for every installed app. Find out which the target is before you rate anything. (The tier
+  table for the permissions it then holds is D25-009; D03-066 is the manifest-side counterpart.)
 - **How:**
 ```bash
 adb shell pm list packages -f | grep -i target
-adb shell ls -l /system/priv-app/ /system/app/ /product/priv-app/ /vendor/app/ 2>/dev/null
+adb -s "$SERIAL" shell 'ls -l /system/priv-app /system/app /system_ext/priv-app /system_ext/app /product/priv-app /product/app /vendor/app /vendor/priv-app /odm/app /odm/priv-app /apex/*/priv-app 2>/dev/null'   # quoted: the glob expands on the device
 adb shell dumpsys package com.target.app | grep -E 'codePath|flags=|privateFlags=|pkgFlags='
 adb shell ps -A -Z | grep target                       # priv_app vs untrusted_app domain
-adb shell cat /etc/permissions/privapp-permissions*.xml 2>/dev/null | grep -A10 com.target.app
+adb -s "$SERIAL" shell 'cat /system/etc/permissions/privapp-permissions*.xml /system_ext/etc/permissions/privapp-permissions*.xml /product/etc/permissions/privapp-permissions*.xml /vendor/etc/permissions/privapp-permissions*.xml /odm/etc/permissions/privapp-permissions*.xml 2>/dev/null' | grep -B2 -A10 com.target.app
 adb shell dumpsys package com.target.app | grep -iE 'sharedUser|signatures|userId='
 ```
 - **Proof:** `codePath=/system/priv-app/…` with `pkgFlags=[ SYSTEM ]`, an SELinux domain of `priv_app` in
@@ -398,7 +430,8 @@ adb shell dumpsys package com.target.app | grep -iE 'sharedUser|signatures|userI
   activity in a Play build is a Medium; the same activity in a `priv_app` holding
   `WRITE_SECURE_SETTINGS` is the OEM VRP class.
 - **Ruled out when:** `codePath` is under `/data/app/`, `pkgFlags` carries no `SYSTEM`, and `ps -A -Z`
-  shows `untrusted_app_NN`. The app is an ordinary third-party install on this image; record the model
+  shows `untrusted_app_NN`. Judge by the flag, never by the path alone: a Mainline/updated system app keeps
+  `pkgFlags=[ SYSTEM UPDATED_SYSTEM_APP ]` with `codePath=/data/app/…`. The app is an ordinary third-party install on this image; record the model
   and fingerprint you checked, because the answer can differ per OEM.
 
 ### D25-009 · Tier the privileged permissions a preloaded build holds, and treat each as a multiplier
@@ -409,7 +442,8 @@ adb shell dumpsys package com.target.app | grep -iE 'sharedUser|signatures|userI
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 |
 | **Applies to** | preloaded, OEM, carrier and enterprise-imaged apps |
-| **Maps to** | MASTG-KNOW-0017 (the Uraniborg-derived risk-scored permission table), MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366, MASWE-0018 |
+| **Requires** | oem-scope, device |
+| **Maps to** | MASTG-KNOW-0017 (the Uraniborg-derived risk-scored permission table), MASTG-TEST-0364, MASTG-TEST-0365, MASTG-TEST-0366, MASWE-0018; D03-066 is the manifest-side counterpart (this item owns the tier table) |
 
 - **Test:** Enumerate every `signature` / `signatureOrSystem` / privileged permission the preloaded
   package holds and rate it against MASTG's risk table. An exported, unprotected component in a package
@@ -456,17 +490,18 @@ adb shell pm list permissions -d -g
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 (the consequence); AM-12 for the observation |
 | **Applies to** | OEM images, Android 8.0+ for the mechanism, Android 9+ for boot-blocking enforcement |
+| **Requires** | oem-scope, device |
 | **Maps to** | AOSP privileged-permission allowlist documentation (`ro.control_privapp_permissions`, per-partition allowlists, boot-blocking from Android 9) |
 
-- **Test:** Every `signature|privileged` permission held by an app in `/system/priv-app` (or the vendor
-  and product equivalents) must be allowlisted in `/etc/permissions/privapp-permissions-*.xml` **on the
-  same partition**. A device booting with `ro.control_privapp_permissions=log` has the platform's own
+- **Test:** Every `signature|privileged` permission held by an app in `/system/priv-app` (or the
+  `system_ext`, `product`, `vendor` and `odm` equivalents, and `/apex/*/priv-app`) must be allowlisted in
+  that partition's `/etc/permissions/privapp-permissions-*.xml` **on the same partition**. A device booting with `ro.control_privapp_permissions=log` has the platform's own
   guard rail for privileged permissions switched off on a shipping image.
 - **How:**
 ```bash
 adb shell getprop ro.control_privapp_permissions          # expect "enforce"
 adb shell cat /etc/permissions/privapp-permissions-platform.xml
-adb shell cat /etc/permissions/privapp-permissions-*.xml | grep -A20 'com.oem.target'
+adb -s "$SERIAL" shell 'cat /system/etc/permissions/privapp-permissions-*.xml /system_ext/etc/permissions/privapp-permissions-*.xml /product/etc/permissions/privapp-permissions-*.xml /vendor/etc/permissions/privapp-permissions-*.xml /odm/etc/permissions/privapp-permissions-*.xml 2>/dev/null' | grep -A20 'com.oem.target'   # quoted so the device expands the glob
 adb logcat -b all | grep 'not in privapp-permissions allowlist'
 adb shell dumpsys package com.oem.target | sed -n '/install permissions/,/runtime permissions/p'
 ```
@@ -486,8 +521,9 @@ adb shell dumpsys package com.oem.target | sed -n '/install permissions/,/runtim
 |---|---|
 | **Severity ceiling** | Medium |
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
-| **Attacker** | AM-12 for the observation |
+| **Attacker** | AM-03 through the over-privileged app's exported surface (AM-12 to observe) |
 | **Applies to** | Android 15+, platform-signed **non-system** apps only (platform-signed system apps are explicitly unaffected); not enforced on debuggable builds |
+| **Requires** | oem-scope, device |
 | **Maps to** | AOSP signature-permission allowlist documentation (`<signature-permissions package="…">` under `/etc/permissions/`, named `signature-permissions-OEM_NAME.xml` / `signature-permissions-DEVICE_NAME.xml`) |
 
 - **Test:** Android 15 added a second allowlist covering platform signature permissions held by
@@ -496,7 +532,7 @@ adb shell dumpsys package com.oem.target | sed -n '/install permissions/,/runtim
 - **How:**
 ```bash
 adb shell ls -la /etc/permissions/ | grep -i signature-permissions
-adb shell cat /etc/permissions/signature-permissions-*.xml
+adb -s "$SERIAL" shell 'cat /etc/permissions/signature-permissions-*.xml 2>/dev/null'   # quoted: zsh would otherwise abort on the unmatched local glob
 adb shell dumpsys package com.oem.target | grep -E 'signatures|granted=true'
 adb shell getprop ro.build.type                    # not enforced on userdebug/eng
 ```
@@ -516,6 +552,7 @@ adb shell getprop ro.build.type                    # not enforced on userdebug/e
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 via the weakest sibling |
 | **Applies to** | all; deprecated from API 29 but still shipping in OEM and enterprise apps |
+| **Requires** | — |
 | **Maps to** | Oversecured "Android security checklist: theft of arbitrary files" §9 Shared User ID Exploitation; "Two weeks of securing Samsung devices: Part 1" (CVE-2021-25393 / SVE-2021-20731) |
 
 - **Test:** Packages declaring the same `android:sharedUserId` and signed with the same key share a UID
@@ -524,14 +561,21 @@ adb shell getprop ro.build.type                    # not enforced on userdebug/e
   "share absolutely all resources and have full access to each other's components".
 - **How:**
 ```bash
-grep -n 'sharedUserId' out/AndroidManifest.xml
+grep -n 'sharedUserId' $DEC/apktool/AndroidManifest.xml
 adb shell dumpsys package com.target.app | grep -iE 'userId=|sharedUser'
 UID=$(adb shell dumpsys package com.target.app | grep -oE 'userId=[0-9]+' | head -1 | cut -d= -f2)
 adb shell pm list packages -U | grep -w "uid:$UID"
-# then enumerate the whole group's exported surface
-for p in $(adb shell pm list packages -U | grep -w "uid:$UID" | sed 's/package://;s/ uid:.*//'); do
-  echo "== $p"; adb shell dumpsys package "$p" | grep -E 'exported=true'
-done
+# then enumerate the whole group's exported surface — in Python, with the D25-006 counter (no shell list loops)
+python3 - <<'PY'
+import subprocess
+S='<serial>'; UID='<uid>'
+pk=[l.split(':',1)[1].split()[0] for l in subprocess.run(['adb','-s',S,'shell','pm','list','packages','-U'],capture_output=True,text=True).stdout.splitlines() if l.endswith('uid:'+UID)]
+print('input',len(pk)); hits=0
+for p in pk:
+    d=subprocess.run(['adb','-s',S,'shell','dumpsys','package',p],capture_output=True,text=True).stdout
+    n=d.count('exported=true'); hits+=n; print('==',p,'exported',n)
+print('probed',len(pk),'hits',hits)
+PY
 ```
 - **Proof:** A second installed package resolving to the same `userId`, plus a file read across the two
   data directories or a component call that succeeds without permission. When the shared UID is
@@ -550,6 +594,7 @@ done
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | the versioned app-domain model (`untrusted_app_NN` selected by `minTargetSdkVersion` in `seapp_contexts`); `execute` on `app_data_file` denied outright for `untrusted_app_29`+ |
 
 - **Test:** A lower `targetSdk` places the app in a versioned SELinux domain with a materially wider
@@ -559,13 +604,14 @@ done
 ```bash
 adb shell ps -AZ | grep $PKG            # u:r:untrusted_app_30:s0:c… etc.
 adb shell dumpsys package $PKG | grep -E 'targetSdk|minSdk'
-adb shell cat /system/etc/selinux/plat_seapp_contexts | grep -n minTargetSdkVersion
+adb -s "$SERIAL" shell 'grep -n minTargetSdkVersion /system/etc/selinux/plat_seapp_contexts'   # the authoritative targetSdk→domain table for THIS build (currently _25/_27/_29/_30/_32, unversioned untrusted_app for 34+)
 ```
   Then cross-reference the domain name against the policy (D25-026).
 - **Proof:** The domain name from `ps -AZ` next to the `targetSdk` value, and the `sesearch` result for
   that specific domain — not for the generic `untrusted_app` attribute.
 - **Escalation:** → D25-026. A `untrusted_app_27` domain on a legacy build is a materially different
-  ceiling from `untrusted_app_35`, and rating a write primitive without checking which one you are in is
+  ceiling from the unversioned `untrusted_app` domain that apps targeting 34+ run in (the versioned
+  domains stop at `untrusted_app_32`), and rating a write primitive without checking which one you are in is
   how "arbitrary write → RCE" claims get closed.
 - **Ruled out when:** `ps -AZ` shows the current unversioned or highest-versioned domain and `sesearch`
   shows no writable-and-executable type for it. Write the sentence out; it is the defensible negative.
@@ -578,6 +624,7 @@ adb shell cat /system/etc/selinux/plat_seapp_contexts | grep -n minTargetSdkVers
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16); `broken_access_control.privilege_escalation` (**VARIES**) when the debuggable package is privileged |
 | **Attacker** | AM-11 physical unlocked, or AM-06/AM-04 where `adb` is reachable |
 | **Applies to** | all API levels; highest yield on OEM and carrier handsets |
+| **Requires** | device |
 | **Maps to** | drozer `app.package.debuggable`, `exploit.jdwp.check`; ATT&CK M1012 (do not enable USB debugging unless needed) |
 
 - **Test:** Debuggable *release* builds still ship — staging APKs published by mistake, OEM preinstalls,
@@ -586,14 +633,17 @@ adb shell cat /system/etc/selinux/plat_seapp_contexts | grep -n minTargetSdkVers
   direct path to system-adjacent capability.
 - **How:** Use Python, not a shell loop (D25-006):
 ```python
-import subprocess
-pkgs=[l.split(':',1)[1].strip() for l in subprocess.run(['adb','shell','pm','list','packages'],
-     capture_output=True,text=True).stdout.splitlines() if l.startswith('package:')]
-print('input',len(pkgs)); hits=[]
-for p in pkgs:
-    r=subprocess.run(['adb','shell','run-as',p,'id'],capture_output=True,text=True)
+import re, subprocess
+S='<serial>'
+raw=subprocess.run(['adb','-s',S,'shell','dumpsys','package','packages'],capture_output=True,text=True,timeout=120).stdout
+raw=raw.split('\nHidden system packages:')[0]       # live section only (updated system apps appear twice)
+blocks=re.split(r'\n  Package \[', raw)[1:]
+cands=[b.split(']')[0] for b in blocks if re.search(r'\n\s+flags=\[[^\]]*DEBUGGABLE', b)]   # pre-filter on the flag; run-as only the candidates
+print('parsed',len(blocks),'candidates',len(cands)); hits=[]
+for p in cands:
+    r=subprocess.run(['adb','-s',S,'shell','run-as',p,'id'],capture_output=True,text=True)
     if 'uid=' in r.stdout: hits.append(p); print('DEBUGGABLE',p,r.stdout.strip())
-print('probed',len(pkgs),'hits',len(hits))
+print('probed',len(cands),'hits',len(hits))        # probed must equal candidates
 ```
 ```bash
 adb shell dumpsys package <pkg> | grep -i 'flags=.*DEBUGGABLE'
@@ -616,21 +666,24 @@ adb jdwp                                      # confirm the JDWP port is live
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) for the image observation; the rated finding stays in D20 |
 | **Attacker** | AM-03 (the preinstalled reader is already on the device) |
 | **Applies to** | all; strength depends on the target's device demographics |
-| **Maps to** | MASTG-TEST-0203 (verbatim: "the vast ecosystem of Android devices includes pre-loaded apps with the `READ_LOGS` privilege, increasing the risk of sensitive data exposure"), MASTG-KNOW-0017 (`READ_LOGS` rated HIGH, `signature`), MASTG-KNOW-0049, MASWE-0005 (CWE-532) |
+| **Requires** | device |
+| **Maps to** | MASTG-TEST-0203 (verbatim: "the vast ecosystem of Android devices includes pre-loaded apps with the `READ_LOGS` privilege, increasing the risk of sensitive data exposure"), MASTG-KNOW-0017 (`READ_LOGS` rated HIGH, `signature`), MASTG-KNOW-0049, MASWE-0005 (CWE-532); How owner for the reader enumeration: D20-008 (this item keeps the device-demographic argument) |
 
-- **Test:** The standard triage response to a logcat leak is "logcat needs root or a privileged
+- **Test:** D20-008 owns the reader enumeration for the leak itself; this item adds the device-demographic
+  argument. The standard triage response to a logcat leak is "logcat needs root or a privileged
   permission, so it is Informational". The counter is a named preinstalled package on a device from the
   client's real user base that already holds `READ_LOGS`.
 - **How:** On the OEM handsets the client's users actually run, not on a Pixel emulator:
 ```python
-import subprocess
-pkgs=[l.split(':',1)[1].strip() for l in subprocess.run(['adb','shell','pm','list','packages','-s'],
-     capture_output=True,text=True).stdout.splitlines() if l.startswith('package:')]
-holders=[]
-for p in pkgs:
-    d=subprocess.run(['adb','shell','dumpsys','package',p],capture_output=True,text=True).stdout
-    if 'android.permission.READ_LOGS' in d and 'granted=true' in d: holders.append(p)
-print('probed',len(pkgs),'holders',holders)
+import re, subprocess
+S='<serial>'
+pk={l.split(':',1)[1].strip() for l in subprocess.run(['adb','-s',S,'shell','pm','list','packages'],capture_output=True,text=True).stdout.splitlines() if l.startswith('package:')}
+raw=subprocess.run(['adb','-s',S,'shell','dumpsys','package','packages'],capture_output=True,text=True,timeout=120).stdout   # one call, not one per package
+raw=raw.split('\nHidden system packages:')[0]       # live section only (updated system apps appear twice)
+blocks=re.split(r'\n  Package \[', raw)[1:]
+print('packages parsed',len(blocks),'input',len(pk),'missing',len(pk-{b.split(']')[0] for b in blocks}))   # missing must be 0
+holders=[b.split(']')[0] for b in blocks if 'android.permission.READ_LOGS: granted=true' in b]
+print('holders',holders)
 ```
 ```bash
 adb shell getprop ro.build.fingerprint           # record which image this is
@@ -652,6 +705,7 @@ adb logcat --pid=$(adb shell pidof -s com.target.app) | grep -iE 'token|bearer|o
 | **VRT** | n/a |
 | **Attacker** | AM-12 for the diff |
 | **Applies to** | OEM/VRP engagements |
+| **Requires** | oem-scope, device |
 | **Maps to** | the senior-researcher corpus's "third-party modifications" method; Oversecured "Discovering vendor-specific vulnerabilities in Android" |
 
 - **Test:** OEM and carrier code is the least-audited code on the device and it is where the
@@ -663,11 +717,10 @@ adb logcat --pid=$(adb shell pidof -s com.target.app) | grep -iE 'token|bearer|o
 adb shell ps -A            > ps.$DEV
 adb shell ls /system/bin /system/xbin /vendor/bin /vendor/bin/hw 2>/dev/null | sort > bin.$DEV
 adb shell ls /system/lib64 /vendor/lib64 2>/dev/null | sort      > lib.$DEV
-adb shell 'ls /system/app /system/priv-app /product/app /product/priv-app /vendor/app 2>/dev/null' \
-                           | sort > apps.$DEV
+adb -s "$SERIAL" shell pm list packages -f -s | sed 's/^package://' | tr -d '\r' | sort > apps.$DEV   # <apk path>=<pkg>; covers system_ext, odm and /apex/*/priv-app too
 adb shell 'cat /init*.rc /vendor/etc/init/*.rc 2>/dev/null' | grep -E '^service|^on ' > initrc.$DEV
 # then
-comm -23 apps.oem apps.aosp > oem-only-apps.txt ; wc -l oem-only-apps.txt
+comm -23 <(sed 's/.*=//' apps.oem | sort) <(sed 's/.*=//' apps.aosp | sort) > oem-only-pkgs.txt ; wc -l oem-only-pkgs.txt   # PACKAGE NAMES — what dumpsys and pm path accept (a directory name is neither)
 comm -23 bin.oem  bin.aosp  > oem-only-bins.txt ; wc -l oem-only-bins.txt
 adb shell service list | sort > svc.$DEV ; comm -23 svc.oem svc.aosp > oem-only-services.txt
 ```
@@ -686,6 +739,7 @@ adb shell service list | sort > svc.$DEV ; comm -23 svc.oem svc.aosp > oem-only-
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | OEM/VRP engagements and managed-device assessments |
+| **Requires** | oem-scope, device |
 | **Maps to** | CVE-2026-20983 (Samsung Dialer, improper export → arbitrary activity launch at Dialer privilege); CVE-2026-21059 (Samsung Contacts, arbitrary file delete at Contacts' system privilege, fixed SMR Aug-2026 Release 1); CVE-2026-20990 (Secure Folder, fixed SMR Mar-2026 Release 1); CVE-2015-7889, CVE-2015-7893; Oversecured "176 vulnerabilities in Samsung preinstalled apps"; CWE-926 |
 
 - **Test:** The shape is identical to D04–D08 — the impact is device-wide because the caller inherits the
@@ -693,11 +747,19 @@ adb shell service list | sort > svc.$DEV ; comm -23 svc.oem svc.aosp > oem-only-
   D25-016, not against every package on the image.
 - **How:**
 ```bash
-for p in $(cat oem-only-apps.txt); do
-  echo "== $p"
-  adb shell dumpsys package "$p" | sed -n '/Activity Resolver Table/,/Permissions:/p' | grep -B4 'exported=true'
-done
-adb shell pm path com.sec.android.app.samsungapps && adb pull <path>
+python3 - <<'PY'      # D25-006 form; oem-only-pkgs.txt holds package names (D25-016)
+import subprocess
+S='<serial>'; pk=[l.strip() for l in open('oem-only-pkgs.txt') if l.strip()]; print('input',len(pk)); hits=[]; errs=0
+for p in pk:
+    try:
+        d=subprocess.run(['adb','-s',S,'shell','dumpsys','package',p],capture_output=True,text=True,timeout=30).stdout
+        ex=[l.strip() for l in d.split('Permissions:')[0].splitlines() if 'exported=true' in l]
+        if ex: hits.append(p); print('EXPORTED',p,len(ex))
+    except Exception as e:
+        errs+=1; print('ERR',p,e)
+print('probed',len(pk)-errs,'errors',errs,'hits',len(hits))
+PY
+adb -s "$SERIAL" shell pm path <oem.pkg> | sed 's/^package://' | tr -d '\r' | while IFS= read -r a; do adb -s "$SERIAL" pull "$a" "oem/<oem.pkg>-$(basename "$a")"; done   # one file per base/split APK
 drozer> run app.package.attacksurface <oem.pkg>
 ```
   Then drive each unprotected component from a zero-permission PoC app (D25-005) and apply the
@@ -723,22 +785,25 @@ drozer> run app.package.attacksurface <oem.pkg>
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM-scope engagements |
+| **Requires** | oem-scope, device |
 | **Maps to** | Oversecured "Discovering vendor-specific vulnerabilities in Android" — the `semIsBackupEnabled()`-beside-`isBackupEnabled()` pattern ("returns the value with no checks at all") and the `IPowerManager.reboot()` `enforceCallingOrSelfPermission()` contrast |
 
 - **Test:** The highest-yield OEM bug class. An OEM adds a method next to an AOSP one and omits the
   enforcement that the AOSP sibling has. The diff against AOSP for the same interface *is* the method.
 - **How:**
 ```bash
-adb pull /system/framework/framework.jar ./
-adb pull /system/framework/oat/arm64/services.odex ./ 2>/dev/null
-adb shell service list | head -80
-adb shell dumpsys -l | head -80
-# decompile and compare the vendor Stub against AOSP's for the same interface name
-jadx -d fw_oem framework.jar ; jadx -d fw_aosp aosp-framework.jar
-grep -rn 'public .*sem[A-Z]\|public .*oem[A-Z]\|public .*mi[A-Z]' fw_oem/ | head -50
-# methods with no caller check at all
-grep -rLn 'enforceCallingPermission\|enforceCallingOrSelfPermission\|checkPermission' \
-     $(grep -rl 'extends IInterface\|Stub' fw_oem/ | head -200)
+adb -s "$SERIAL" pull /system/framework/framework.jar ./     # interfaces only: Stub TRANSACTION_ codes and the vendor method NAMES
+adb -s "$SERIAL" pull /system/framework/services.jar ./      # system_server implementations: where enforceCallingOrSelfPermission() checks ARE
+unzip -l services.jar | grep -c 'classes.*dex' || {   # dex-preopted user build: recover the dex from the vdex (oatdump --oat-file=services.odex --export-dex-to=. is the fallback)
+  adb -s "$SERIAL" pull /system/framework/oat/arm64/services.vdex ./ && vdexExtractor -i services.vdex -o . ; }
+adb -s "$SERIAL" shell service list | head -80
+adb -s "$SERIAL" shell dumpsys -l | head -80
+# decompile the service impls and compare the vendor *ManagerService against AOSP's for the same interface name
+jadx -d svc_oem services.jar ; jadx -d svc_aosp aosp-services.jar   # vdex route: point jadx at the extracted *classes*.dex files instead of the dex-less jar
+grep -rnE 'public .*\b(sem|oem|mi|op|vivo|hw)[A-Z][A-Za-z]+\(' svc_oem/ | head -50      # vendor-added public methods on service impls
+# then, per method, read the body for an enforce/check call — framework.jar holds only Stub/Proxy glue and never contains them
+grep -rLn 'enforceCallingPermission\|enforceCallingOrSelfPermission\|checkPermission\|checkCallingOrSelfPermission' \
+     $(grep -rlE 'extends I[A-Za-z]+\.Stub' svc_oem/ | head -200)
 ```
 - **Proof:** The vendor method invoked from an unprivileged app producing a privileged effect — a reboot,
   a settings write, a data read — with the AOSP sibling throwing `SecurityException` for the same caller.
@@ -758,6 +823,7 @@ grep -rLn 'enforceCallingPermission\|enforceCallingOrSelfPermission\|checkPermis
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (**P2**) for a locally triggerable reboot |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM-scope engagements |
+| **Requires** | oem-scope, device |
 | **Maps to** | Oversecured — the Samsung `StorageManagerService.java` case where the broadcast action `com.samsung.intent.action.RESTART_OF_SDCARDBADREMOVED_HASAPK` triggers a device reboot, "effectively sidestepping permission restrictions" |
 
 - **Test:** OEM system components register receivers for vendor-specific actions with no
@@ -768,18 +834,22 @@ adb shell dumpsys package r | grep -iE '^\s+[a-z0-9.]*(samsung|oneplus|xiaomi|op
 adb shell dumpsys activity broadcasts | grep -iE 'vendor|sem\.|oem' | head -40
 # for each candidate action, read the receiver's guard
 adb shell dumpsys package <oem.pkg> | sed -n '/Receiver Resolver Table/,/Service Resolver/p'
-# fire it from an app UID, not just from shell
-adb shell am broadcast -a com.oem.intent.action.SOME_PRIVILEGED_ACTION
+# implicit broadcasts never reach manifest receivers of apps targeting API 26+: send EXPLICITLY (works regardless of targetSdk)
+adb -s "$SERIAL" shell am broadcast -a com.oem.intent.action.SOME_PRIVILEGED_ACTION -n <oem.pkg>/<ReceiverClass>
 ```
-  Then re-fire from the zero-permission PoC app with `sendBroadcast(new Intent("com.oem…"))`.
+  Then re-fire from the zero-permission PoC app with
+  `sendBroadcast(new Intent("com.oem…").setPackage("<oem.pkg>"))` — package-scoped intents are delivered,
+  a bare action is not. The shared probe's `broadcast` step takes the explicit component; build the
+  binder/broadcast probe per D25-005 before this item.
 - **Proof:** The privileged effect occurring — a reboot, a mode change, a log dump written to a readable
   path — from the PoC app, with the vendor receiver's manifest entry showing no `android:permission`.
   For a reboot, record the uptime before and after.
 - **Escalation:** DoS at minimum; a state change that opens a further surface at best. Check whether the
   reboot is recoverable — a crash fixed by reboot is not payable, one requiring a factory reset is.
 - **Ruled out when:** Every vendor receiver in the resolver table carries an `android:permission` at
-  `signature` or `signature|privileged`, or the broadcast from an app UID produces
-  `Permission Denial: not exported from uid`.
+  `signature` or `signature|privileged`, or the **explicit** broadcast from an app UID produces
+  `Permission Denial: not exported from uid`. An implicit send that produced nothing is not a negative —
+  only the explicit send's denial or the receiver's `android:permission` is.
 
 ### D25-020 · OEM ROM add-on ContentProvider that bypasses the permission it should require
 
@@ -789,6 +859,7 @@ adb shell am broadcast -a com.oem.intent.action.SOME_PRIVILEGED_ACTION
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) for what comes back |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM builds — enumerate per ROM, not per app |
+| **Requires** | oem-scope, device |
 | **Maps to** | CVE-2025-10184 (OnePlus OxygenOS Telephony provider permission bypass, Rapid7); HackTricks android-checklist "Check OEM ROM add-ons … for extra exported ContentProviders that bypass permissions" |
 
 - **Test:** OxygenOS, ColorOS, MIUI, One UI and the rest add providers that are not in AOSP and that
@@ -819,6 +890,7 @@ adb shell content update --uri content://<authority>/<path> --bind x:s:y   # wri
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) escalating to `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM builds |
+| **Requires** | oem-scope, device |
 | **Maps to** | Oversecured Samsung `com.sec.factory.camera` — a debug app on production with system privileges and an unprotected receiver accepting test commands, producing silent video recording with no camera indicator |
 
 - **Test:** Debug and factory packages that were meant for the production line ship to retail. They hold
@@ -851,6 +923,7 @@ adb shell dumpsys media.camera | grep -i 'active\|clients'    # confirm the effe
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM builds; out of scope for most app engagements — confirm scope first |
+| **Requires** | oem-scope, device |
 | **Maps to** | AOSP Binder IPC (`/dev/binder` context for framework and app AIDL); AOSP `service_contexts` / `hal_attribute_service` access model; MASTG-KNOW-0020, MASTG-TOOL-0004; AOSP AIDL fuzzing as the systematic follow-up |
 
 - **Test:** OEMs register services that AOSP does not have. Test each for a missing caller check by
@@ -859,14 +932,14 @@ adb shell dumpsys media.camera | grep -i 'active\|clients'    # confirm the effe
 ```bash
 adb shell service list | grep -viE '^[0-9]+\s+(activity|package|window|power|notification|media|audio|wifi|connectivity|telephony|input|display|clipboard|content|batterystats|appops|permission|user|account|alarm|jobscheduler|device_policy|bluetooth|location|sensor|usb|vibrator|statusbar|search|print|dropbox|netstats|procstats|settings|shortcut|slice|storage|telecom|textservices|trust|uimode|wallpaper|webviewupdate)'
 # raw probe from shell first (discovery)
-for c in $(seq 1 40); do echo "== code $c"; adb shell service call <svcname> $c i32 0; done
+for c in $(seq 1 40); do echo "== code $c"; adb -s "$SERIAL" shell service call <svcname> $c i32 0; echo "rc=$?"; done   # hardcoded range, so shell is fine; print rc so a silent adb failure is visible
 adb shell dmesg | grep -i 'avc: denied.*service_manager'
 # which services may an app domain even look up?
 adb shell su 0 cat /sys/fs/selinux/policy > policy.bin
 sesearch -A -s untrusted_app -c service_manager policy.bin
 ```
   Then re-issue the winning transaction from the zero-permission PoC app via `ServiceManager.getService`
-  + `IBinder.transact` (D25-005).
+  + `IBinder.transact` — the shared probe has no `binder` step; build it per D25-005 first.
 - **Proof:** A non-AOSP service returning a non-error `Parcel` for a transaction issued from a plain app
   UID, where the returned data is something the app should not have — an IMEI, a file path, a config
   blob. Decode and quote the reply bytes, and pair with the `sesearch -c service_manager` line proving
@@ -885,6 +958,7 @@ sesearch -A -s untrusted_app -c service_manager policy.bin
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM-scope engagements |
+| **Requires** | oem-scope, device |
 | **Maps to** | `protectionLevel` semantics; AOSP permissions documentation on OEMs being able to define custom permissions as `normal` or `dangerous`; AOSP privileged-permission allowlist |
 
 - **Test:** OEM images define custom permissions at `normal` that gate genuinely privileged vendor
@@ -893,15 +967,18 @@ sesearch -A -s untrusted_app -c service_manager policy.bin
 ```bash
 adb shell pm list permissions -f | awk '/^permission:/{p=$0} /protectionLevel:/{print p" -> "$0}' \
   | grep -vE 'permission:android\.' | grep -E 'normal|dangerous'
-adb shell pm list packages -s | sed 's/package://' | tr -d '\r' > syspkgs.txt
-python3 - <<'PY'
-import subprocess
-pk=[l.strip() for l in open('syspkgs.txt') if l.strip()]
-print('input',len(pk))
+adb -s "$SERIAL" shell pm list packages -s | sed 's/package://' | tr -d '\r' > syspkgs.txt
+python3 - <<'PY'      # one dumpsys, parsed offline (D25-006)
+import re, subprocess
+S='<serial>'; pk=[l.strip() for l in open('syspkgs.txt') if l.strip()]; print('input',len(pk))
+raw=subprocess.run(['adb','-s',S,'shell','dumpsys','package','packages'],capture_output=True,text=True,timeout=120).stdout
+raw=raw.split('\nHidden system packages:')[0]       # live section only (updated system apps appear twice)
+blocks={b.split(']')[0]: b for b in re.split(r'\n  Package \[', raw)[1:]}
+print('parsed',len(blocks)); hits=0
 for p in pk:
-    d=subprocess.run(['adb','shell','dumpsys','package',p],capture_output=True,text=True).stdout
-    if 'protectionLevel=normal' in d and 'declared permissions' in d:
-        print('CANDIDATE',p)
+    d=blocks.get(p,'')
+    if 'protectionLevel=normal' in d and 'declared permissions' in d: hits+=1; print('CANDIDATE',p)
+print('probed',sum(1 for p in pk if p in blocks),'hits',hits)
 PY
 ```
   Then declare the permission in the PoC app's manifest, install, confirm it is granted, and call the
@@ -922,6 +999,7 @@ PY
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 on a non-vendor device; AM-08 where the sibling is the SDK's |
 | **Applies to** | OEM-bundled or OEM-integrated apps |
+| **Requires** | — |
 | **Maps to** | Oversecured "Discovering vendor-specific vulnerabilities in Android", "20 Security Issues Found in Xiaomi Devices", "176 vulnerabilities in Samsung preinstalled apps"; `developer.android.com/privacy-and-security/risks/create-package-context` |
 
 - **Test:** Apps integrated with an OEM trust a vendor package by name — `com.samsung.*`, `com.miui.*`,
@@ -930,8 +1008,8 @@ PY
 - **How:**
 ```bash
 grep -rnE 'com\.samsung|com\.miui|com\.xiaomi|com\.huawei|com\.oppo|com\.vivo|com\.oneplus|com\.sec\.android' \
-     sources/ out/AndroidManifest.xml
-grep -rnE 'createPackageContext|getPackagesForUid|checkSignatures|getPackageInfo\(.*GET_SIGNING' sources/ -A6
+     $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml
+grep -rnE 'createPackageContext|getPackagesForUid|checkSignatures|getPackageInfo\(.*GET_SIGNING' $DEC/jadx/sources/ -A6
 adb shell pm list packages -s | head -50
 ```
   For each hit, determine whether the app verifies the signing certificate or merely the string. Then
@@ -952,6 +1030,7 @@ adb shell pm list packages -s | head -50
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16); `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**, CWE-259) where credentials are embedded |
 | **Attacker** | AM-01 remote (the implant's operator) |
 | **Applies to** | cheap and whitelabel devices, TV boxes, carrier and reseller firmware |
+| **Requires** | oem-scope, device |
 | **Maps to** | HackTricks README "Pre-installed privileged Android TV-box implants (OEM / reseller firmware abuse)", citing Bitsight's Fuyao Enterprise research; ATT&CK T1474.002 Compromise Hardware Supply Chain, T1474.003, mitigation M1001 |
 
 - **Test:** Some malicious packages are baked into OEM or reseller firmware as *privileged* packages
@@ -995,6 +1074,7 @@ strings impl/lib/*/*.so | grep -EiA1 'http|socks|backconnect|\.onion'
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | every write-primitive finding in the engagement |
+| **Requires** | device, root |
 | **Maps to** | the senior-researcher corpus's SELinux discipline; W^X enforced by MAC, not only by `mprotect`; `execute` on `app_data_file` denied for `untrusted_app_29`+ |
 
 - **Test:** Before rating any native or filesystem write primitive, check what the policy on **that
@@ -1005,7 +1085,8 @@ adb shell su 0 cat /sys/fs/selinux/policy > policy.bin
 sesearch -A -s untrusted_app -t system_file -c file policy.bin
 sesearch -A -s untrusted_app -c file -p write policy.bin
 sesearch -A -s untrusted_app -c file -p execute policy.bin
-sesearch -A -s untrusted_app_35 -c file -p 'execute execmem execmod execute_no_trans' policy.bin
+sesearch -A -s <domain from ps -AZ> -c file -p execute,execmem,execmod,execute_no_trans policy.bin   # setools 4: -p is comma-separated; a space-joined token silently matches nothing
+sesearch -A -s untrusted_app -c file -p read policy.bin | head -3     # positive control: must be non-empty before any empty result above is trusted
 sesearch -A -t app_data_file policy.bin
 ```
   Facts to verify rather than assume on the target build: `untrusted_app` cannot write `system_file`,
@@ -1027,6 +1108,7 @@ sesearch -A -t app_data_file policy.bin
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM/VRP engagements, Android 8.0+ (Treble) |
+| **Requires** | oem-scope, root |
 | **Maps to** | AOSP SELinux device-policy documentation (the "5–10% device-specific policy" model; Treble assembling policy at boot from `system` and `vendor`); AOSP security-model paper §4.8 |
 
 - **Test:** OEMs add `allow` rules to make preinstalled apps work, and the rules land too broad. The diff
@@ -1064,6 +1146,7 @@ seinfo -adomain -x oem_policy.bin
 | **Attacker** | AM-03 for the exercised impact |
 | **Maps to** | AOSP `system/sepolicy` `neverallow` assertions, enforced at build time and re-tested by CTS; AOSP SELinux concepts (permissive vs enforcing; `permissive=0` in an AVC means enforcing) |
 | **Applies to** | OEM builds |
+| **Requires** | oem-scope, root |
 
 - **Test:** `neverallow` assertions are build-time invariants that CTS re-tests. An OEM build shipping a
   policy that violates one — or a permissive domain on a production build — has failed a compatibility
@@ -1071,7 +1154,7 @@ seinfo -adomain -x oem_policy.bin
   agree with your threat model.
 - **How:**
 ```bash
-sepolicy-analyze oem_policy.bin permissive          # permissive domains  <- finding candidate
+seinfo --permissive oem_policy.bin                  # permissive domains <- finding candidate (setools 4, pip-installable; `sepolicy-analyze oem_policy.bin permissive` when an AOSP build tree exists)
 adb shell dmesg | grep -E 'avc: .*permissive=1'
 adb shell ps -Z | awk '{print $1}' | sort -u | \
   grep -vE 'untrusted_app|isolated_app|platform_app|priv_app|system_app'
@@ -1084,7 +1167,7 @@ grep -rn 'neverallow untrusted_app' system/sepolicy/
 - **Proof:** The permissive domain or the violating rule, paired with the CTS/VTS test name **and** the
   exercised impact — an app reaching something the invariant forbids.
 - **Escalation:** A reachable permissive vendor daemon → kernel and driver attack surface → D16/D26.
-- **Ruled out when:** `sepolicy-analyze … permissive` returns nothing on a `user` build and `ps -Z`
+- **Ruled out when:** `seinfo --permissive` (or `sepolicy-analyze … permissive`) returns nothing on a `user` build and `ps -Z`
   shows no unexpected domains. Note that a permissive domain on a `userdebug` build is expected and is
   not a finding — check `ro.build.type` first.
 
@@ -1096,6 +1179,7 @@ grep -rn 'neverallow untrusted_app' system/sepolicy/
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 |
 | **Applies to** | OEM engagements |
+| **Requires** | oem-scope, root |
 | **Maps to** | AOSP `seapp_contexts` selectors (`user=`, `seinfo=`, `name=`, `isPrivApp=`, `minTargetSdkVersion=`, `levelFrom=`) and `mac_permissions.xml` mapping signing certificates to `seinfo`; zygote assigning the domain at fork from signing cert, priv status and targetSdk |
 
 - **Test:** These two files decide which SELinux domain a package runs in. A `name=`-matched rule that a
@@ -1107,7 +1191,7 @@ adb shell cat /vendor/etc/selinux/vendor_seapp_contexts 2>/dev/null
 adb shell cat /system/etc/selinux/plat_mac_permissions.xml
 adb shell cat /vendor/etc/selinux/vendor_mac_permissions.xml 2>/dev/null
 # does any rule select on name= rather than seinfo=?
-adb shell cat /system/etc/selinux/*seapp_contexts | grep -n 'name='
+adb -s "$SERIAL" shell 'cat /system/etc/selinux/*seapp_contexts /vendor/etc/selinux/*seapp_contexts 2>/dev/null' | grep -n 'name='
 adb shell ps -AZ | grep com.poc.app     # what domain did YOUR app actually get?
 ```
 - **Proof:** A `seapp_contexts` rule selecting on a package name that a third-party app can claim, plus
@@ -1126,6 +1210,7 @@ adb shell ps -AZ | grep com.poc.app     # what domain did YOUR app actually get?
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | all dynamic testing on rooted or userdebug devices |
+| **Requires** | device, root |
 | **Maps to** | AOSP SELinux concepts (AVC, `dontaudit`, `permissive=0`/`permissive=1` in the denial line) |
 
 - **Test:** A denial tells you that you **reached the check** — your input travelled all the way to a real
@@ -1160,6 +1245,7 @@ adb logcat -b all | grep -i 'avc:'
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | OEM engagements |
+| **Requires** | oem-scope, root |
 | **Maps to** | Android's documented divergence from classic Flask/SELinux |
 
 - **Test:** Four parts of the classic model do not transfer. Testers who learned SELinux on servers burn
@@ -1229,24 +1315,23 @@ adb reboot && adb wait-for-device && adb shell getprop persist.vendor.foo.debug
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-11 physical unlocked |
 | **Applies to** | all for the recording; device/firmware engagements for the finding |
+| **Requires** | device |
 | **Maps to** | AOSP Verified Boot (chain of trust from hardware root → bootloader → boot and other verified partitions; dm-verity from Android 4.4, FEC in 7.0; AVB standardised footers and rollback protection in Android 8.0); ATT&CK mitigation M1004 System Partition Integrity, M1002 Attestation |
 
 - **Test:** A green, locked boot state means the platform's chain of trust is intact. It says nothing
   about the app's own integrity, and nothing about an APEX the user cannot modify but Google can update.
   Record it, and check separately whether the client's own software requires it to be off.
-- **How:**
+- **How:** This item is the environment record only; the finding half (a client footprint under an
+  init/service directory, a deployment that needs an unlocked bootloader) lives wholly in D25-042.
 ```bash
-adb shell getprop ro.boot.verifiedbootstate ro.boot.flash.locked
-adb shell getprop ro.boot.vbmeta.digest ro.boot.vbmeta.device_state
-adb shell "su -c 'ls -la /system/etc/init /system/su.d /data/adb/service.d 2>/dev/null'"
-rg -n -i 'init\.rc|/system/bin|remount|/system/priv-app|setprop|magisk module' out/sources
+adb -s "$SERIAL" shell getprop ro.boot.verifiedbootstate ro.boot.flash.locked
+adb -s "$SERIAL" shell getprop ro.boot.vbmeta.digest ro.boot.vbmeta.device_state
 ```
-- **Proof:** For the environment record, the four property values. For the finding: `verifiedbootstate`
-  not `green` on a device the client treats as trusted, or a client-installed file under an init/service
-  directory that survives reboot.
-- **Escalation:** Critical when the client's own deployment requires disabling Verified Boot or an
-  unlocked bootloader — the device's whole integrity model is off, and every app-level control built on
-  it is void. Report to the OEM VRP as well; a system-partition write is a device-integrity issue.
+- **Proof:** The four property values, with one sentence on what green/locked does and does not guarantee
+  (platform chain of trust intact; nothing about the app's own integrity or an updatable APEX).
+- **Escalation:** → D25-042 when `verifiedbootstate` is not `green` on a device the client treats as
+  trusted, or the client's deployment requires Verified Boot off or an unlocked bootloader (Critical there;
+  the OEM VRP owns a system-partition write).
 - **Ruled out when:** `verifiedbootstate=green`, `flash.locked=1`, and the client's install footprint is
   entirely inside `/data/app`. Note explicitly that your own test device being unlocked does **not**
   make this a finding (see the Graveyard).
@@ -1259,19 +1344,17 @@ rg -n -i 'init\.rc|/system/bin|remount|/system/priv-app|setprop|magisk module' o
 | **VRT** | n/a |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | AOSP kernel documentation (ACK 5.10+ GKI separating hardware-agnostic core from vendor modules via the KMI; vendor modules/DLKMs); AOSP security enhancements (seccomp for all untrusted apps in Android 8; hardened usercopy, KASLR, PAN emulation, read-only-after-init; HWASan/BoundSan/IntSan/XOM/Scudo/ShadowCallStack in Android 10) |
 
 - **Test:** Record the kernel version, GKI status and hardening sysctls. This is the layer under
   everything and it sets the realistic ceiling for a sandbox escape from an in-process native bug. It is
   **not** a finding on its own — "old kernel" filed against an app is closed immediately.
-- **How:**
+- **How:** The posture block from D25-004 already holds `uname`, `lsmod` and the hardening sysctls — do not
+  re-run them; this item adds only the GKI/mitigation read:
 ```bash
-adb shell uname -a ; adb shell cat /proc/version
-adb shell lsmod 2>/dev/null | head -30
-adb shell getprop ro.kernel.version ro.build.version.security_patch
-adb shell cat /proc/sys/kernel/kptr_restrict /proc/sys/kernel/dmesg_restrict \
-             /proc/sys/kernel/perf_event_paranoid
-adb shell cat /proc/config.gz 2>/dev/null | gunzip | grep -E 'CC_STACKPROTECTOR|CFI|SHADOW_CALL|KASAN'
+adb -s "$SERIAL" shell getprop ro.kernel.version ro.build.version.security_patch
+adb -s "$SERIAL" shell 'cat /proc/config.gz 2>/dev/null' | gunzip | grep -E 'CC_STACKPROTECTOR|CFI|SHADOW_CALL|KASAN'
 ```
 - **Proof:** A kernel version, security-patch level and sysctl block recorded as environment.
 - **Escalation:** → D16 for the reachability argument. It is also the reason an in-process memory bug is
@@ -1286,6 +1369,7 @@ adb shell cat /proc/config.gz 2>/dev/null | gunzip | grep -E 'CC_STACKPROTECTOR|
 | **VRT** | n/a |
 | **Attacker** | AM-12 |
 | **Applies to** | OEM/firmware engagements only; explicitly out of scope for a store-app assessment |
+| **Requires** | oem-scope, device |
 | **Maps to** | Mobile Hacking Lab's Samsung firmware workflow (official firmware pulled from a mirror, unpacked to a rootfs, target `.so` extracted); its prerequisite article "Accessing Samsung Firmware Files" was 404 at the time the corpus was read, so the steps below are the ones the corpus records working |
 
 - **Test:** Code that is not in the APK — vendor codecs, HALs, kernel, bootloader — has to come from the
@@ -1333,7 +1417,8 @@ AFL_INST_LIBS=1 afl-fuzz -Q -i seeds/ -o out/ -- ./harness_shim @@
 - **Proof:** The harness decoding a known-good vendor file, then producing crashes. The corpus records the
   first crash matching CVE-2020-8899 at 47 minutes and 674 crashes collected overall — use that as the
   sanity bar for whether your harness is actually reaching the parser.
-- **Escalation:** → D16 for triage of the crash, D24 for the MMS/RCS delivery vector, D27 for the
+- **Escalation:** → D16 for triage of the crash, D05/D09 for the MMS/RCS delivery vector (no messaging
+  chapter exists yet), D27 for the
   controlled-write write-up ("a controlled write of N bytes at offset X; register R is attacker-controlled,
   as shown in the attached tombstone").
 - **Ruled out when:** The vendor parser is not reachable from any auto-render path you can enumerate, or
@@ -1439,13 +1524,14 @@ adb logcat -b all | grep -iE 'defex|rkp|kdp'
 | **VRT** | `insecure_os_firmware.weakness_in_firmware_updates.firmware_does_not_validate_update_integrity` (**P3** baseline, CWE-434, baseline vector `AV:N/AC:H/PR:H/UI:R/S:C/C:H/I:H/A:H` — if your PoC needs neither `PR:H` nor `UI:R`, say so and argue the score up); `insecure_os_firmware.weakness_in_firmware_updates.firmware_is_not_encrypted` (**P5**); `insecure_os_firmware.weakness_in_firmware_updates.firmware_cannot_be_updated` (**VARIES**) |
 | **Attacker** | AM-06 network attacker, or AM-11 physical for a local update path |
 | **Applies to** | device/IoT/companion-hardware programmes |
+| **Requires** | oem-scope, device |
 | **Maps to** | ATT&CK T1474.002 Compromise Hardware Supply Chain, mitigation M1001 |
 
 - **Test:** Intercept the update fetch, modify the package, and observe whether it installs. Do the same
   for the companion-hardware firmware pushed over BLE or USB by the phone app.
 - **How:**
 ```bash
-rg -n -i 'BluetoothGatt|writeCharacteristic|createBond|setPin|firmware|dfu|OTA|\.bin"|crc|signature' out/sources
+rg -n -i 'BluetoothGatt|writeCharacteristic|createBond|setPin|firmware|dfu|OTA|\.bin"|crc|signature' $DEC/jadx/sources
 # capture the fetch
 mitmproxy --listen-port 8080
 # flip one byte in the image and re-serve it; then watch the device
@@ -1468,6 +1554,7 @@ adb logcat -b all | grep -iE 'update|ota|dfu|verify|signature'
 | **VRT** | `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**, CWE-259, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`); `\|non_privileged_user` (**P2**, baseline `AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N`); `insecure_os_firmware.shared_credentials_on_storage` (**P3**, CWE-798); `insecure_os_firmware.over_permissioned_credentials_on_storage` (**P2**, CWE-250) |
 | **Attacker** | AM-01 remote where the credential authenticates to a network service |
 | **Applies to** | device and firmware programmes |
+| **Requires** | oem-scope, device |
 | **Maps to** | the VRT `insecure_os_firmware` credential branch — the one place in the mobile-adjacent taxonomy that reaches P1 without a chain |
 
 - **Test:** Static credentials in a system app, a `/vendor` config, or a firmware blob. This is the
@@ -1477,7 +1564,15 @@ adb logcat -b all | grep -iE 'update|ota|dfu|verify|signature'
 ```bash
 adb shell 'grep -rniE "password|passwd|secret|token|apikey" /system/etc /vendor/etc 2>/dev/null' | head -30
 strings /path/to/firmware.bin | grep -EiA1 'password|BEGIN .*PRIVATE KEY|ssh-rsa'
-for a in $(cat oem-only-apps.txt); do adb pull $a ./oem/ ; done
+python3 - <<'PY'     # resolve each package to its APK path first (D25-016 lists package names, not paths); D25-006 counts
+import subprocess
+S='<serial>'; pk=[l.strip() for l in open('oem-only-pkgs.txt') if l.strip()]; print('input',len(pk)); pulled=0
+for p in pk:
+    for l in subprocess.run(['adb','-s',S,'shell','pm','path',p],capture_output=True,text=True).stdout.splitlines():
+        if l.startswith('package:'):
+            a=l[8:].strip(); r=subprocess.run(['adb','-s',S,'pull',a,f'oem/{p}-'+a.rsplit('/',1)[-1]],capture_output=True,text=True); pulled+=(r.returncode==0)
+print('probed',len(pk),'pulled',pulled)
+PY
 rg -n -i --no-ignore 'password|secret|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY' ./oem/
 ```
 - **Proof:** The credential **plus a successful authentication with it**. A string that looks like a
@@ -1497,7 +1592,7 @@ rg -n -i --no-ignore 'password|secret|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY' ./oem/
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-11 physical unlocked, or AM-03 once persistence exists |
 | **Applies to** | rooted / OEM / firmware engagements only — out of scope for a store-app-only assessment; say so explicitly so the tester does not burn time |
-| **Requires** | oem-scope, enterprise, device |
+| **Requires** | device |
 | **Maps to** | ATT&CK T1398 Boot or Logon Initialization Scripts (these "are part of the operating system and require device rooting or jailbreaking to access"; OldBoot "leverages elevated privileges to alter init scripts on the boot partition"; FlexiSpy "installs boot hooks into `/system/su.d`"); T1645 Compromise Client Software Binary; T1625.001 System Runtime API Hijacking (Zen S0494 "can replace `framework.jar`"); mitigations M1004, M1002 |
 
 - **Test:** For a kiosk, fleet or provisioned-hardware client: does their own software write to boot or
@@ -1507,7 +1602,7 @@ rg -n -i --no-ignore 'password|secret|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY' ./oem/
 adb shell "su -c 'ls -la /system/etc/init /system/su.d /data/adb/service.d 2>/dev/null'"
 adb shell getprop ro.boot.verifiedbootstate ro.boot.flash.locked
 adb shell "su -c 'ls -la /system/app /system/priv-app'" | grep -i <client>
-rg -n -i 'init\.rc|remount|/system/priv-app|magisk module|adb root' out/sources provisioning-docs/
+rg -n -i 'init\.rc|remount|/system/priv-app|magisk module|adb root' $DEC/jadx/sources provisioning-docs/
 ```
 - **Proof:** A client-installed file under an init or service directory that survives reboot, or
   `verifiedbootstate` not `green` on the client's standard build.
@@ -1524,6 +1619,7 @@ rg -n -i 'init\.rc|remount|/system/priv-app|magisk module|adb root' out/sources 
 | **VRT** | `insecure_os_firmware.local_administrator_on_default_environment` (**P2**, CWE-276) on a fleet build where it is the default; otherwise `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**) |
 | **Attacker** | AM-06 network attacker on the same Wi-Fi; AM-11 physical unlocked for the enablement |
 | **Applies to** | all — but be explicit that adb-over-TCP requires the user or the fleet image to have enabled it. Do not present it as a default |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/android-debuggable` and the test/debug-features risk page; ATT&CK T1458 Replication Through Removable Media, mitigation M1012 ("prevent enabling USB debugging on Android devices unless specifically needed") |
 
 - **Test:** Two separate questions. (a) Does the *device* expose adb to the network, turning a Wi-Fi
@@ -1558,7 +1654,7 @@ adb -s <victim-ip>:5555 shell run-as com.target.app cat shared_prefs/auth.xml
 | **VRT** | `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
 | **Attacker** | AM-11 physical unlocked |
 | **Applies to** | kiosk, fleet, POS and enterprise deployments especially; consumer apps where the client ships a companion desktop tool |
-| **Requires** | enterprise, physical, device |
+| **Requires** | device |
 | **Maps to** | ATT&CK T1458 (adversaries "may utilize the physical connection of a device to a compromised or malicious charging station or PC to bypass application store requirements and install malicious applications directly"; DualToy side-loads "to both Android and iOS devices via a USB connection"), mitigation M1012 |
 
 - **Test:** Does the app or the fleet require USB debugging, accept data over USB, or rely on a
@@ -1566,15 +1662,17 @@ adb -s <victim-ip>:5555 shell run-as com.target.app cat shared_prefs/auth.xml
   setting is a deployment decision rather than a user's.
 - **How:**
 ```bash
-adb shell settings get global adb_enabled
-adb shell settings get global development_settings_enabled
-adb shell getprop persist.sys.usb.config
-adb shell dumpsys usb | grep -iE 'mCurrentFunctions|mScreenUnlockedFunctions|permission'
-rg -n -i 'UsbManager|UsbAccessory|UsbDevice|ACTION_USB_DEVICE_ATTACHED|MTP|adb' out/sources out/AndroidManifest.xml
-rg -n 'android.hardware.usb.action' -A6 out/AndroidManifest.xml
+# adb/developer-settings posture: D25-043 already reads adb_enabled and development_settings_enabled — reuse its row
+adb -s "$SERIAL" shell getprop persist.sys.usb.config
+adb -s "$SERIAL" shell dumpsys usb | grep -iE 'mCurrentFunctions|mScreenUnlockedFunctions|permission'
+rg -n -i 'UsbManager|UsbAccessory|UsbDevice|ACTION_USB_DEVICE_ATTACHED|MTP|adb' $DEC/jadx/sources $DEC/apktool/AndroidManifest.xml
+rg -n 'android.hardware.usb.action' -A6 $DEC/apktool/AndroidManifest.xml
 ```
-- **Proof:** A fleet device with `adb_enabled=1` from which `adb backup` or `run-as` recovers app data,
-  or `persist.sys.usb.config` exposing a data function on a locked device.
+- **Proof:** A fleet device with `adb_enabled=1` from which the app's private data is recovered — via
+  `run-as` on a debuggable build (D25-014), via the OEM's backup/clone agent, or via `adb pull` of an
+  app-written external path — or `persist.sys.usb.config` exposing a data function on a locked device.
+  `adb backup` applies only to debuggable apps from Android 12 (API 31) onward; on older fleet images it
+  still honours `allowBackup`.
 - **Escalation:** ADB access plus a debuggable build (D02/D25-014) is full app compromise from a charging
   cable. → D25-049 for the auto-launch path.
 - **Ruled out when:** `adb_enabled=0` and `development_settings_enabled=0` are enforced by the DPC
@@ -1589,18 +1687,23 @@ rg -n 'android.hardware.usb.action' -A6 out/AndroidManifest.xml
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) for what the screen shows |
 | **Attacker** | AM-11 physical unlocked (dialler), or AM-03 via the broadcast |
 | **Applies to** | all devices with a telephony stack; yield highest on OEM, carrier and telematics builds |
-| **Maps to** | drozer `scanner.misc.secretcodes`; MobSF `dialer_code_found` (level `warning`, `[android:scheme="android_secret_code"]`) |
+| **Requires** | device |
+| **Maps to** | drozer `scanner.misc.secretcodes`; MobSF `dialer_code_found` (level `warning`, `[android:scheme="android_secret_code"]`); How owner for the target's receiver: D03-041 (this item runs it across the OEM image) |
 
-- **Test:** `android.provider.Telephony.SECRET_CODE` receivers fire when `*#*#<code>#*#*` is typed, with
+- **Test:** D03-041 owns the receiver test for the target; this item runs it across the whole OEM image.
+  `android.provider.Telephony.SECRET_CODE` receivers fire when `*#*#<code>#*#*` is typed, with
   no permission, no consent dialog and no UI trail. On an OEM image they routinely open engineering
-  menus; the broadcast can also be fired programmatically, which removes the physical precondition.
+  menus; the receiver is exported, so a zero-permission app can deliver the `SECRET_CODE` action
+  explicitly (`setComponent`/`setPackage`), which removes the physical precondition —
+  `TelephonyManager.sendDialerSpecialCode()` itself is restricted to the default dialer, and an implicit
+  send does not reach a receiver in an app targeting API 26+.
 - **How:**
 ```bash
-grep -rn 'android_secret_code' out/AndroidManifest.xml out/res/
+grep -rn 'android_secret_code' $DEC/apktool/AndroidManifest.xml $DEC/apktool/res/
 drozer> run scanner.misc.secretcodes
 drozer> run scanner.misc.secretcodes -v
 # trigger without the dialler UI (and then from a zero-permission PoC app):
-adb shell am broadcast -a android.provider.Telephony.SECRET_CODE -d android_secret_code://1234
+adb -s "$SERIAL" shell am broadcast -a android.provider.Telephony.SECRET_CODE -d android_secret_code://1234 -n <pkg>/<SecretCodeReceiver>   # explicit: implicit sends are dropped for API 26+ receivers
 adb shell dumpsys activity activities | head -30
 ```
   `scanner.misc.secretcodes` loads a helper class onto the drozer agent and iterates
@@ -1623,22 +1726,27 @@ adb shell dumpsys activity activities | head -30
 | **Severity ceiling** | Critical when it binds `0.0.0.0` and serves files; High on loopback |
 | **VRT** | `server_side_injection.file_inclusion.local` (**P1**) where a path handler traverses; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) when the served file is a credential |
 | **Attacker** | AM-06 network attacker on the same Wi-Fi for the `0.0.0.0` case; AM-03 zero-permission local app for loopback |
-| **Applies to** | all. Android 16's Local Network Protection gates LAN sockets behind `NEARBY_WIFI_DEVICES` — **loopback is not covered**, so LNP does not mitigate the local-app variant |
-| **Maps to** | H1 #292761 (VK, "Stealing Private Information in VK Android App through PlayerProxy Port **Remotely**", $700); Oversecured "Android security checklist: theft of arbitrary files", local-web-servers section — "these servers become available from the local network while the app is running, which makes a possible vulnerability even more dangerous" |
+| **Applies to** | all. Android 16 ships Local Network Protection as an **opt-in** (developer option / app-level opt-in behind `RESTRICT_LOCAL_NETWORK`); it is not enforced for any shipping targetSdk, and **loopback is outside it either way**, so LNP mitigates neither variant today |
+| **Requires** | device |
+| **Maps to** | H1 #292761 (VK, "Stealing Private Information in VK Android App through PlayerProxy Port **Remotely**", $700); Oversecured "Android security checklist: theft of arbitrary files", local-web-servers section — "these servers become available from the local network while the app is running, which makes a possible vulnerability even more dangerous"; How owner for the listener inventory: D14-023 (this item keeps the bind-address test) |
 
-- **Test:** Apps that run an embedded HTTP server, media proxy, WebSocket or debug port expose it to every
-  app on the device and — if the bind address is not loopback — to the LAN. The bind address is the crux,
+- **Test:** D14-023 owns the listener inventory for the app; this item adds the bind-address test and the
+  image-level listeners. Apps that run an embedded HTTP server, media proxy, WebSocket or debug port expose
+  it to every app on the device and — if the bind address is not loopback — to the LAN. The bind address is the crux,
   not the port.
 - **How:**
 ```bash
 adb shell netstat -tulpn 2>/dev/null | grep LISTEN
 adb shell ss -ltnp 2>/dev/null
 adb shell 'cat /proc/net/tcp /proc/net/tcp6' | awk '{print $2, $4}'   # 0A == LISTEN
-grep -rn 'NanoHTTPD\|ServerSocket\|newFixedLengthResponse\|serve(IHTTPSession\|WebSocketServer' out/sources
-# probe from the device, then from ANOTHER host on the same Wi-Fi
-adb shell curl -s "http://127.0.0.1:<port>/"
-adb shell curl -s "http://127.0.0.1:<port>/cache/../../shared_prefs/secrets.xml"
+grep -rn 'NanoHTTPD\|ServerSocket\|newFixedLengthResponse\|serve(IHTTPSession\|WebSocketServer' $DEC/jadx/sources
+# stock Android ships no curl: reach the loopback socket through adb forward (tests the HANDLER, not the bind address)
+adb -s "$SERIAL" forward tcp:18080 tcp:<port>
+curl -s "http://127.0.0.1:18080/cache/../../shared_prefs/secrets.xml"
+adb -s "$SERIAL" shell 'cat /proc/net/tcp /proc/net/tcp6' | awk '$4=="0A"{print $2}'   # 00000000:PORT = all interfaces, 0100007F = loopback
+# then from ANOTHER host on the same Wi-Fi: the bind-address test
 curl -s "http://<device-ip>:<port>/cache/../../shared_prefs/secrets.xml"
+# local-app variant: the zero-permission probe opens the socket itself (HttpURLConnection to 127.0.0.1:<port>)
 ```
   The canonical vulnerable shape:
 ```java
@@ -1671,22 +1779,25 @@ if (requestUri.startsWith(CACHE_PREFIX)) {
   socket and shared-memory region reachable by the victim UID and groups.
 - **How:**
 ```bash
-# file-system-exposed endpoints: run as root, pass the VICTIM uid/groups
-./canhazaxs -u shell -g 1003,1004,1007,1009,1011,1015,1028,3001,3002,3003,3006 /dev /data
-# sockets
-cat /proc/net/unix      # PF_UNIX + abstract namespace (@name) - NO filesystem entry => cannot be permissioned
-cat /proc/net/tcp /proc/net/udp   # PF_INET - needs the inet group (AID 3003)
-cat /proc/net/netlink   # kernel<->user events; USER PROCESSES CAN FORGE KERNEL MESSAGES
-busybox netstat -anp | grep /dev/socket/
+# file-system-exposed endpoints reachable by the VICTIM uid/groups (canhazaxs is a 2014 binary with no releases — cite it, do not depend on it)
+adb -s "$SERIAL" shell 'id; cat /proc/$(pidof -s com.target.app)/status | grep Groups'      # the victim's uid+groups
+adb -s "$SERIAL" shell 'find /dev /dev/socket /data/local /sys/kernel/debug -perm -o+w ! -type l 2>/dev/null'
+adb -s "$SERIAL" shell 'find / -xdev -type f \( -perm -4000 -o -perm -2000 \) 2>/dev/null'
+adb -s "$SERIAL" shell 'ls -lZ /dev /dev/socket'
+# sockets (quote every remote command that carries a glob: zsh expands it on the host otherwise)
+adb -s "$SERIAL" shell 'cat /proc/net/unix'      # PF_UNIX + abstract namespace (@name) - NO filesystem entry => cannot be permissioned
+adb -s "$SERIAL" shell 'cat /proc/net/tcp /proc/net/udp'   # PF_INET - needs the inet group (AID 3003)
+adb -s "$SERIAL" shell 'cat /proc/net/netlink'   # kernel<->user events; USER PROCESSES CAN FORGE KERNEL MESSAGES
+adb -s "$SERIAL" shell 'netstat -anp | grep /dev/socket/'   # toybox netstat; -p resolves other UIDs only as root
 # else: inode from /proc/net/unix -> ls -l /proc/[0-9]*/fd/* | grep <inode> -> ps <pid>
-ls -l /proc/[0-9]*/fd/* | grep /dev/ashmem       # shared memory (+ vendor pmem/NvMap/ION)
+adb -s "$SERIAL" shell 'ls -l /proc/[0-9]*/fd/* 2>/dev/null | grep /dev/ashmem'       # shared memory (+ vendor pmem/NvMap/ION)
 ```
 - **Proof:** Set-uid and set-gid binaries, writable character devices, writable sockets and writable
   directories reachable by the victim UID — quoted from the tool output, then exercised from an app UID.
 - **Escalation:** Abstract-namespace sockets (`@android:debuggerd` and vendor equivalents) are a prime
   target because they cannot be permissioned; netlink forging is the GingerBreak/Exploid shape. → D16 for
   the primitive.
-- **Ruled out when:** `canhazaxs` returns no writable privileged endpoint for the app's UID and group set,
+- **Ruled out when:** the `find -perm` sweeps return no writable privileged endpoint for the app's UID and group set,
   and every abstract socket you found belongs to a process in a domain `sesearch` shows `untrusted_app`
   cannot `connectto`.
 
@@ -1698,6 +1809,7 @@ ls -l /proc/[0-9]*/fd/* | grep /dev/ashmem       # shared memory (+ vendor pmem/
 | **VRT** | `physical_security_issues.bypass_of_physical_access_control` (**VARIES**) where it defeats a lock; otherwise rated by the reached parser |
 | **Attacker** | AM-10 physical locked / AM-11 physical unlocked |
 | **Applies to** | device engagements. Pre-4.2.2 unauthenticated ADB over USB is **LEGACY**; 4.2.2 added RSA host allow-listing |
+| **Requires** | oem-scope, physical |
 | **Maps to** | the senior-researcher corpus's USB-surface enumeration; ATT&CK T1458 |
 
 - **Test:** USB modes are mutually exclusive function sets, but Android supports several
@@ -1705,11 +1817,13 @@ ls -l /proc/[0-9]*/fd/* | grep /dev/ashmem       # shared memory (+ vendor pmem/
   protocol parsers at once. Enumerate them rather than assuming "it's just charging".
 - **How:**
 ```bash
-adb shell cat /init.*.usb.rc                      # every supported mode + VID/PID
-adb shell ls /sys/class/android_usb/android0/     # live Gadget Framework state
-adb shell getprop persist.sys.usb.config sys.usb.config sys.usb.state
+adb -s "$SERIAL" shell 'cat /vendor/etc/init/hw/init.*.usb.rc /vendor/etc/init/*usb*.rc 2>/dev/null | grep -E "^on property:sys.usb.config=|functions"'   # every supported mode
+adb -s "$SERIAL" shell 'ls /config/usb_gadget/g1/functions/ /config/usb_gadget/g1/configs/b.1/ 2>/dev/null; cat /config/usb_gadget/g1/UDC'   # configfs (4.4+ kernels, every Android 10+ device): the live function set
+adb -s "$SERIAL" shell getprop persist.sys.usb.config sys.usb.config sys.usb.state
+adb -s "$SERIAL" shell dumpsys usb | grep -iE 'mCurrentFunctions|mScreenUnlockedFunctions|mCurrentUsbFunctions'
+adb -s "$SERIAL" shell 'ls /sys/class/android_usb/android0/ 2>/dev/null'   # LEGACY (3.x kernels) android_usb driver — absent on current devices
 lsusb -v -d <VID>:<PID>                           # interfaces + endpoints, from the host
-git grep USB_FUNCTION_ frameworks/base            # modes the framework knows about
+# `git grep USB_FUNCTION_ frameworks/base` lists the modes the framework knows about — needs an AOSP checkout
 ```
   Modes seen in the wild: ADB, fastboot, vendor download (Odin/RUU), MTP (the modern default), PTP, mass
   storage (≤4.0), RNDIS tethering, audio source.
@@ -1717,8 +1831,8 @@ git grep USB_FUNCTION_ frameworks/base            # modes the framework knows ab
   which of them are reachable while the screen is locked.
 - **Escalation:** ADB over USB is still the fastest physical win where USB debugging is on (D25-043); the
   rest feed D25-052 and D16.
-- **Ruled out when:** `sys.usb.config` is charging-only until unlock and `ls /sys/class/android_usb/android0/functions`
-  shows no data function on a locked device. State the Android version — behaviour differs.
+- **Ruled out when:** `sys.usb.config` is charging-only until unlock and `/config/usb_gadget/g1/configs/b.1/`
+  (legacy: `/sys/class/android_usb/android0/functions`) shows no data function on a locked device. State the Android version — behaviour differs.
 
 ### D25-049 · USB `device_filter` auto-launch grants the app USB access with no permission prompt
 
@@ -1728,15 +1842,17 @@ git grep USB_FUNCTION_ frameworks/base            # modes the framework knows ab
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the entry point; the reached impact sets the rating |
 | **Attacker** | AM-10/AM-11 physical (malicious accessory) |
 | **Applies to** | apps shipping a `device_filter`. Requires physical USB contact — a charging kiosk, a rental car, a borrowed cable — state that precondition |
+| **Requires** | physical |
 | **Maps to** | `developer.android.com/develop/connectivity/usb/host`, verbatim: "When users connect a device that matches your device filter, the system presents them with a dialog that asks if they want to start your application… **If users accept, your application automatically has permission to access the device until the device is disconnected**"; and "If your application uses an intent filter to discover USB devices as they're connected, it automatically receives permission if the user allows your application to handle the intent" |
 
+- **Skip when:** `adb -s "$SERIAL" shell 'for f in android.hardware.usb.host; do pm has-feature $f >/dev/null && echo "$f=true" || echo "$f=false"; done'` prints `false` for USB host on the test device: record the row as `blocked (hardware: <feature> absent on <serial>)` — never `n/a` and never a negative; move it to a device that has the feature.
 - **Test:** The filter declares the VID/PID an attacker must present. Accepting the launch dialog grants
   USB access **without a separate permission prompt**, after which the app opens the device and parses
   whatever it sends. The attacker builds or emulates a device with the declared identifiers.
 - **How:**
 ```bash
-cat out/res/xml/device_filter.xml     # VID/PID the attacker must present
-grep -rnE 'openDevice|UsbDeviceConnection|bulkTransfer|controlTransfer|claimInterface|UsbRequest' sources/ -A10
+cat $DEC/apktool/res/xml/device_filter.xml     # VID/PID the attacker must present
+grep -rnE 'openDevice|UsbDeviceConnection|bulkTransfer|controlTransfer|claimInterface|UsbRequest' $DEC/jadx/sources/ -A10
 # emulate with Linux gadget mode (Pi Zero / Facedancer / USB-IP)
 modprobe libcomposite
 echo 0x1234 > /sys/kernel/config/usb_gadget/g1/idVendor
@@ -1763,15 +1879,17 @@ adb logcat | grep -E "START u0 .*USB_DEVICE_ATTACHED"
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) where the app derives trust from the identity; otherwise rated by the reached sink |
 | **Attacker** | AM-10/AM-11 physical |
 | **Applies to** | apps shipping an `accessory_filter` |
+| **Requires** | physical |
 | **Maps to** | `developer.android.com/develop/connectivity/usb/accessory` — the filter attributes `manufacturer`, `model`, `version`, the `openAccessory()` → `FileInputStream(fd)` pattern, and the documentation's own statement that "The accessory sends these attributes [to] the Android-powered device" |
 
+- **Skip when:** `adb -s "$SERIAL" shell 'for f in android.hardware.usb.accessory; do pm has-feature $f >/dev/null && echo "$f=true" || echo "$f=false"; done'` prints `false` for USB accessory on the test device: record the row as `blocked (hardware: <feature> absent on <serial>)` — never `n/a` and never a negative; move it to a device that has the feature.
 - **Test:** `accessory_filter.xml` matches on `manufacturer`, `model` and `version` — values the accessory
   sends during AOA enumeration. There is no cryptographic identity. Any accessory can claim to be the
   genuine one, after which the app opens a raw `FileDescriptor` and reads.
 - **How:**
 ```bash
-cat out/res/xml/accessory_filter.xml
-grep -rnE 'openAccessory|UsbAccessory|getManufacturer\(\)|getModel\(\)|getSerial\(\)|FileInputStream\(.*fd' sources/ -A12
+cat $DEC/apktool/res/xml/accessory_filter.xml
+grep -rnE 'openAccessory|UsbAccessory|getManufacturer\(\)|getModel\(\)|getSerial\(\)|FileInputStream\(.*fd' $DEC/jadx/sources/ -A12
 adb shell dumpsys usb | grep -A5 accessory
 ```
   Determine whether the app verifies anything beyond the filter — a challenge/response, a signature, a
@@ -1839,8 +1957,9 @@ adb shell su -c 'ls /data/user/0/com.target.app' ; echo "BFU rc=$?"
   crafted descriptors and reports to reachable drivers.
 - **How:** Enumerate what is reachable while locked (from D25-048), then map each to its kernel driver:
 ```bash
-adb shell ls /sys/class/android_usb/android0/functions
-adb shell dmesg | grep -iE 'usb|hid|uvc|snd-usb|mtp' | tail -40
+adb -s "$SERIAL" shell 'ls /config/usb_gadget/g1/configs/b.1/ 2>/dev/null; ls /sys/class/android_usb/android0/functions 2>/dev/null'   # configfs; the android_usb path is LEGACY
+adb -s "$SERIAL" shell dumpsys usb | grep -iE 'mScreenUnlockedFunctions|mCurrentFunctions'
+adb -s "$SERIAL" shell dmesg | grep -iE 'usb|hid|uvc|snd-usb|mtp' | tail -40
 adb shell cat /proc/net/ptype /proc/net/protocols | head -40
 ```
 - **Proof:** Kernel code execution followed by reading already-decrypted CE storage — at which point app
@@ -1893,23 +2012,34 @@ adb shell cat /proc/net/ptype /proc/net/protocols | head -40
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `broken_authentication_and_session_management.authentication_bypass` (**P1**) if it reaches the account |
 | **Attacker** | AM-10 physical locked |
 | **Applies to** | all |
-| **Maps to** | AOSP severity guidance rating "Lockscreen bypass" as High; the Android & Google Devices top-tier table entry "Software-Based Lockscreen Bypass"; Google Mobile VRP's non-qualifying "Secondary lockscreen bypasses" — check which lock you are bypassing before filing |
+| **Requires** | device |
+| **Maps to** | AOSP severity guidance rating "Lockscreen bypass" as High; the Android & Google Devices top-tier table entry "Software-Based Lockscreen Bypass"; Google Mobile VRP's non-qualifying "Secondary lockscreen bypasses" — check which lock you are bypassing before filing; How owner for the static half: D04-056 (this item keeps the keyguard experiment) |
 
 - **Test:** An activity that can show over the keyguard and then exposes data or a state-changing control
   is a lock-screen-scoped finding on the app rather than on the platform.
 - **How:**
+  D04-056 owns the static half and the first launch; this chapter adds the keyguard experiment that proves
+  reach from an **app**, because the shell UID is exempt from background-activity-launch limits and the
+  keyguard gate — `am start` while locked is NOT an AM-03 proof.
 ```bash
 grep -nE 'showWhenLocked|turnScreenOn|FLAG_SHOW_WHEN_LOCKED|FLAG_DISMISS_KEYGUARD|setShowWhenLocked|requestDismissKeyguard' \
-     out/AndroidManifest.xml out/smali/ sources/
-adb shell input keyevent 26          # screen off / lock
-adb shell am start -n com.target.app/.LockscreenActivity
-adb shell dumpsys window | grep -iE 'mShowWhenLocked|KeyguardOccluded'
+     $DEC/apktool/AndroidManifest.xml $DEC/apktool/smali/ $DEC/jadx/sources/
+adb -s "$SERIAL" shell locksettings set-pin 1234            # a real keyguard must exist on the test device (keyevent 26 only toggles power); afterwards: locksettings clear --old 1234
+# probe: its MainActivity schedules startActivity(<target>/.LockscreenActivity) after --ei delay_ms; its own
+# LockActivity is declared android:showWhenLocked="true" and is the positive control
+adb -s "$SERIAL" shell "am start -S -n com.probe/.MainActivity --ei delay_ms 20000 --es target com.target.app/.LockscreenActivity"
+adb -s "$SERIAL" shell input keyevent KEYCODE_SLEEP          # lock inside the delay window
+adb -s "$SERIAL" logcat -d -b all | grep -E 'ActivityTaskManager: (START u0|Background activity launch blocked|Abort background activity)'
+adb -s "$SERIAL" shell dumpsys window | grep -iE 'mShowWhenLocked|KeyguardOccluded|isKeyguardShowing'
 ```
 - **Proof:** Sensitive content or a usable state-changing control on a locked device, recorded end to end
-  with the lock visibly engaged before and after.
+  with the lock visibly engaged before and after — the target activity's `START u0 … callingUid=<probe uid>`
+  line with `isKeyguardShowing=true` in the same capture, AND the negative control (the probe launching a
+  non-`showWhenLocked` activity from the background) producing the BAL-blocked line.
 - **Escalation:** → D13 when it reaches the session; → D20 when it only renders data.
-- **Ruled out when:** No component declares `showWhenLocked`/`FLAG_SHOW_WHEN_LOCKED`, and a direct
-  `am start` against each activity while locked shows the keyguard in front. Distinguish the platform
+- **Ruled out when:** No component declares `showWhenLocked`/`FLAG_SHOW_WHEN_LOCKED`, or the probe's launch
+  of the target is BAL-blocked or lands behind the keyguard while the probe's own LockActivity (control)
+  shows — quote both logcat lines; a shell `am start` result proves nothing either way. Distinguish the platform
   keyguard from the app's own PIN screen — Google does not pay for secondary lock-screen bypasses, while
   Xiaomi rates an app-lock bypass Medium and a system lock-screen bypass High.
 
@@ -1921,27 +2051,31 @@ adb shell dumpsys window | grep -iE 'mShowWhenLocked|KeyguardOccluded'
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); rated by the reached sink |
 | **Attacker** | AM-10/AM-11 physical proximity (<8 cm) |
 | **Applies to** | apps registering `ACTION_NDEF_DISCOVERED` / `TECH_DISCOVERED` / `TAG_DISCOVERED` |
+| **Requires** | physical |
 | **Maps to** | `developer.android.com/develop/connectivity/nfc/nfc` — the three dispatch actions and their priority order (`NDEF_DISCOVERED` > `TECH_DISCOVERED` > `TAG_DISCOVERED`), AAR precedence, and the tech-list XML |
 
+- **Skip when:** `adb -s "$SERIAL" shell 'for f in android.hardware.nfc; do pm has-feature $f >/dev/null && echo "$f=true" || echo "$f=false"; done'` prints `false` for NFC (also `service check nfc` must not say `not found`) on the test device: record the row as `blocked (hardware: <feature> absent on <serial>)` — never `n/a` and never a negative; move it to a device that has the feature.
 - **Test:** Components registered for NFC dispatch **must** be exported, because the system delivers the
   intent, and they usually carry no permission. Some NFC actions fire with no interaction at all. An
   attacker-written tag therefore delivers attacker bytes into an exported component with proximity as the
   only precondition.
 - **How:**
 ```bash
-grep -nE 'android.nfc.action.(NDEF|TECH|TAG)_DISCOVERED' out/AndroidManifest.xml -B6 -A10
-ls out/res/xml/ | grep -iE 'nfc_tech'
-cat out/res/xml/nfc_tech*.xml 2>/dev/null
+grep -nE 'android.nfc.action.(NDEF|TECH|TAG)_DISCOVERED' $DEC/apktool/AndroidManifest.xml -B6 -A10
+ls $DEC/apktool/res/xml/ | grep -iE 'nfc_tech'
+cat $DEC/apktool/res/xml/nfc_tech*.xml 2>/dev/null
 # emulate without a tag
-adb shell am start -a android.nfc.action.NDEF_DISCOVERED -n com.target.app/.NfcActivity \
-  -d "https://attacker.example/path"
+adb -s "$SERIAL" shell "am start -a android.nfc.action.NDEF_DISCOVERED -n com.target.app/.NfcActivity -d 'https://attacker.example/path'"
+# router precedence: a host-less, non-BROWSABLE NFC filter can hand the full https route table to a router that checks host before scheme
+adb -s "$SERIAL" shell "am start -a android.nfc.action.NDEF_DISCOVERED -n com.target.app/.NfcActivity -d 'https://<verified-host>/<auth-gated route>'"
 # with a real tag: write the NDEF record with NFC Tools onto an NTAG215
 adb logcat -d | grep -iE 'NfcDispatch|NDEF_DISCOVERED|START u0 .*com.target'
 ```
 - **Proof:** The dispatch line in logcat showing the activity started from the tag, plus the effect of the
   payload — a URL loaded, a route taken, a file written.
 - **Escalation:** → D09 when the payload is a URI (the tag becomes a deep-link delivery vector with no
-  browser and no click); → D10 when it reaches a WebView; → D16 when it reaches a native parser.
+  browser and no click); → D10 when it reaches a WebView; → D16 when it reaches a native parser. Record
+  every route the NDEF path reaches that the BROWSABLE path gates → D09-002 / D09-022.
 - **Ruled out when:** The app registers no NFC action in the merged manifest, or the handler validates
   the record's origin (an AAR pinned to the app's own package plus a signed payload) before acting.
 
@@ -1954,18 +2088,21 @@ adb logcat -d | grep -iE 'NfcDispatch|NDEF_DISCOVERED|START u0 .*com.target'
 | **Attacker** | AM-02 remote one click (the user installs the relay app) for the relay; AM-10 proximity for the reader side |
 | **Applies to** | apps registering `HostApduService`; Android 15+ for observe mode and polling-frame handling |
 | **Requires** | payments, device |
-| **Maps to** | `HostApduService.processPollingFrames()`, `CardEmulation.registerPollingLoopPatternFilterForService()` and the Android 15 observe-mode APIs; `res/xml/apduservice.xml` AID registration |
+| **Maps to** | `HostApduService.processPollingFrames()`, `CardEmulation.registerPollingLoopPatternFilterForService()` and the Android 15 observe-mode APIs; `res/xml/apduservice.xml` AID registration; How owner for the configuration checks: D23-059 / D23-061 (this item keeps the relay framing) |
 
-- **Test:** Two questions. (a) Does the app register a `HostApduService` in the `payment` category and ask
+- **Skip when:** `adb -s "$SERIAL" shell 'for f in android.hardware.nfc android.hardware.nfc.hce; do pm has-feature $f >/dev/null && echo "$f=true" || echo "$f=false"; done'` prints `false` for either NFC feature (the AVD has no NFC controller) on the test device: record the row as `blocked (hardware: <feature> absent on <serial>)` — never `n/a` and never a negative; move it to a device that has the feature.
+- **Test:** D23-059 (observe mode, polling frames) and D23-061 (AID registration, `requireDeviceUnlock`,
+  relay exposure) own the configuration checks — run them and reuse the rows; this item keeps only the
+  relay framing. Two questions. (a) Does the app register a `HostApduService` in the `payment` category and ask
   to become the default NFC payment app — the shape that allows relaying live EMV transactions, with the
   POS talking ISO 14443-4/EMV to the phone and the app forwarding APDUs over a C2 channel while a backend
   crafts responses? (b) On Android 15+, does the app run logic in `processPollingFrames()` *before* the
   user has consented to anything?
 - **How:**
 ```bash
-grep -n 'HostApduService\|android.nfc.cardemulation' out/AndroidManifest.xml -A8
-cat out/res/xml/apduservice.xml 2>/dev/null
-grep -rnE 'processCommandApdu|processPollingFrames|registerPollingLoopPatternFilterForService|setPreferredService|CardEmulation' sources/ -A10
+grep -n 'HostApduService\|android.nfc.cardemulation' $DEC/apktool/AndroidManifest.xml -A8
+cat $DEC/apktool/res/xml/apduservice.xml 2>/dev/null
+grep -rnE 'processCommandApdu|processPollingFrames|registerPollingLoopPatternFilterForService|setPreferredService|CardEmulation' $DEC/jadx/sources/ -A10
 adb shell dumpsys nfc | grep -iE 'aid|default|payment|observe'
 ```
 - **Proof:** For (a): the registered AIDs from `apduservice.xml` plus a captured APDU exchange being
@@ -1983,18 +2120,23 @@ adb shell dumpsys nfc | grep -iE 'aid|default|payment|observe'
 | **VRT** | `broken_authentication_and_session_management.cleartext_transmission_of_session_token` (**P4**) where a token crosses; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) otherwise |
 | **Attacker** | AM-04 local app with one common permission; AM-10 proximity for the replay |
 | **Applies to** | any app using BLE. Android 12+ splits `BLUETOOTH_CONNECT`/`SCAN`/`ADVERTISE` — note which the eavesdropping app needs |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/develop/connectivity/bluetooth/ble/ble-overview`, verbatim caution: "When a user pairs their device with another device using BLE, the data that's communicated between the two devices is accessible to **all** apps on the user's device. For this reason, if your app captures sensitive data, you should implement app-layer security to protect the privacy of that data"; MASWE-0026 |
 
+- **Skip when:** `adb -s "$SERIAL" shell 'for f in android.hardware.bluetooth_le; do pm has-feature $f >/dev/null && echo "$f=true" || echo "$f=false"; done'` prints `false` for BLE on the test device: record the row as `blocked (hardware: <feature> absent on <serial>)` — never `n/a` and never a negative; move it to a device that has the feature.
 - **Test:** Google documents the channel as device-wide readable. If the app's BLE protocol carries tokens,
   health readings, door or vehicle commands, or firmware, and relies on BLE link-layer encryption rather
   than app-layer crypto, then any other app on the phone can read it — no root, one common permission.
 - **How:**
 ```bash
-grep -rnE 'connectGatt|BluetoothGatt|writeCharacteristic|readCharacteristic|setCharacteristicNotification|BluetoothGattServer|PERMISSION_(READ|WRITE)_ENCRYPTED|createBond' sources/ -A8
-adb shell settings put secure bluetooth_hci_log 1    # or Developer options > Enable Bluetooth HCI snoop log
-# reproduce the app's flow, then pull and open in Wireshark
-adb shell dumpsys bluetooth_manager | grep -iE 'snoop|bonded|GATT'
-adb pull /sdcard/Android/data/btsnoop_hci.log        # path varies by OEM; check dumpsys
+grep -rnE 'connectGatt|BluetoothGatt|writeCharacteristic|readCharacteristic|setCharacteristicNotification|BluetoothGattServer|PERMISSION_(READ|WRITE)_ENCRYPTED|createBond' $DEC/jadx/sources/ -A8
+adb -s "$SERIAL" shell setprop persist.bluetooth.btsnooplogmode full   # Android 9+; or Developer options > Enable Bluetooth HCI snoop log (the pre-9 `bluetooth_hci_log` setting is LEGACY)
+adb -s "$SERIAL" shell 'svc bluetooth disable; sleep 2; svc bluetooth enable'   # the mode is read at stack start
+# reproduce the app's flow, then collect the log (written to /data/misc/bluetooth/logs/, retrievable without root via bugreport)
+adb -s "$SERIAL" shell dumpsys bluetooth_manager | grep -iE 'snoop|bonded|GATT'
+adb -s "$SERIAL" bugreport br.zip && unzip -o br.zip 'FS/data/misc/bluetooth/logs/btsnoop_hci.log' -d br/
+# rooted: adb -s "$SERIAL" shell su -c 'cat /data/misc/bluetooth/logs/btsnoop_hci.log' > btsnoop_hci.log
+wireshark br/FS/data/misc/bluetooth/logs/btsnoop_hci.log   # filter: btatt
 ```
 - **Proof:** The plaintext token, command or reading visible in a Wireshark ATT packet from the snoop log,
   with the corresponding app action timestamped. The finding is "no app-layer confidentiality on a channel
@@ -2016,27 +2158,36 @@ adb pull /sdcard/Android/data/btsnoop_hci.log        # path varies by OEM; check
 | **Requires** | physical |
 | **Maps to** | the BLE overview's app-layer-security requirement; MASWE-0018 |
 
+- **Skip when:** `adb -s "$SERIAL" shell 'for f in android.hardware.bluetooth_le; do pm has-feature $f >/dev/null && echo "$f=true" || echo "$f=false"; done'` prints `false` for BLE on the test device: record the row as `blocked (hardware: <feature> absent on <serial>)` — never `n/a` and never a negative; move it to a device that has the feature.
 - **Test:** Apps exposing a GATT server for companion pairing, file transfer or "connect your watch"
   frequently register characteristics with `PERMISSION_WRITE` rather than `PERMISSION_WRITE_ENCRYPTED` or
   `_SIGNED`, so any nearby device can connect and write without bonding.
 - **How:**
 ```bash
-grep -rnE 'BluetoothGattServer|addService|BluetoothGattCharacteristic\(|PERMISSION_WRITE|PERMISSION_WRITE_ENCRYPTED|PROPERTY_WRITE|onCharacteristicWriteRequest|getBondState|BOND_BONDED' sources/ -A10
+grep -rnE 'BluetoothGattServer|addService|BluetoothGattCharacteristic\(|PERMISSION_WRITE|PERMISSION_WRITE_ENCRYPTED|PROPERTY_WRITE|onCharacteristicWriteRequest|getBondState|BOND_BONDED' $DEC/jadx/sources/ -A10
 ```
   The vulnerable shape is `onCharacteristicWriteRequest(...)` acting on `value` with no
   `device.getBondState() == BOND_BONDED` check and no app-layer authentication. From a second machine:
 ```bash
 bluetoothctl scan on           # find the advertised name/UUID
-gatttool -b <MAC> -I           # connect / char-write-req <handle> <hex>
+bluetoothctl connect <MAC>     # then interactively: menu gatt / select-attribute <uuid> / write "0x01 0x02"   (gatttool is deprecated in BlueZ 5 and not built by default)
+python3 - <<'PY'               # or bleak (pip install bleak), the same write without pairing
+import asyncio
+from bleak import BleakClient
+async def main():
+    async with BleakClient("<MAC>") as c:
+        await c.write_gatt_char("<uuid>", bytes([0x01, 0x02]), response=True)
+asyncio.run(main())
+PY
 # or: nRF Connect on a second phone, write the characteristic
 ```
 - **Proof:** The app reacting to a write from an unbonded peer — logcat from the target app plus the
-  `gatttool` or nRF transcript showing no pairing occurred.
+  `bluetoothctl`/`bleak` or nRF transcript showing no pairing occurred.
 - **Escalation:** → D16 if the written bytes reach native code; → D17 if they are a firmware image; →
   D25-040 for the firmware-integrity question.
 - **Ruled out when:** Every writable characteristic is declared `PERMISSION_WRITE_ENCRYPTED` or `_SIGNED`,
   or `onCharacteristicWriteRequest` returns `GATT_INSUFFICIENT_AUTHENTICATION` for an unbonded device —
-  show the refusal in the `gatttool` transcript.
+  show the refusal in the `bluetoothctl`/`bleak` transcript.
 
 ### D25-059 · CompanionDeviceManager association with an attacker-controlled device, and `removeBond()`
 
@@ -2058,7 +2209,7 @@ gatttool -b <MAC> -I           # connect / char-write-req <handle> <hex>
 - **How:**
 ```bash
 grep -rnE 'CompanionDeviceManager|AssociationRequest|BluetoothLeDeviceFilter|BluetoothDeviceFilter|WifiDeviceFilter|setNamePattern|REQUEST_COMPANION|removeBond' \
-     sources/ out/AndroidManifest.xml -A8
+     $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml -A8
 adb shell dumpsys companiondevice
 adb shell dumpsys companiondevice | grep -A5 com.target.app
 ```
@@ -2079,9 +2230,10 @@ adb shell dumpsys companiondevice | grep -A5 com.target.app
 | | |
 |---|---|
 | **Severity ceiling** | High when the app has any unpinned host; Medium otherwise |
-| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (priority **null** — argue it) via the network position; the rated finding is whatever the MitM then reaches |
+| **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (**VARIES**, CWE-319 — rated on what the network position then reaches) via the network position; the rated finding is whatever the MitM then reaches |
 | **Attacker** | AM-02 remote one click (the user scans a sticker); then AM-06 network attacker |
 | **Applies to** | apps whose scanner enables the Wi-Fi barcode format |
+| **Requires** | device |
 | **Maps to** | `developers.google.com/ml-kit/vision/barcode-scanning/android` — `Barcode.getWifi()`, `getValueType()`; the page gives no validation guidance |
 
 - **Test:** A scanner that supports the Wi-Fi barcode type (`WIFI:T:WPA;S:…;P:…;;`) can offer to join a
@@ -2112,25 +2264,19 @@ adb shell dumpsys wifi | grep -iE 'SSID|Suggestion'
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | any app shipping an Android for Cars integration (categories `androidx.car.app.category.NAVIGATION` / `.POI` / `.IOT` / `.WEATHER`) |
 | **Requires** | auto |
-| **Maps to** | `developer.android.com/training/cars/apps` — the docs name `createHostValidator()` and `HostValidator.ALLOW_ALL_HOSTS_VALIDATOR` and explicitly warn to validate the binding host; MASWE-0018 |
+| **Maps to** | `developer.android.com/training/cars/apps` — the docs name `createHostValidator()` and `HostValidator.ALLOW_ALL_HOSTS_VALIDATOR` and explicitly warn to validate the binding host; MASWE-0018; How owner: D06-054 |
 
 - **Test:** The `CarAppService` is exported by necessity so the car host can bind it. The library's gate
   deciding *which* host may bind is `createHostValidator()`. Shipping
   `HostValidator.ALLOW_ALL_HOSTS_VALIDATOR` means any app on the phone can bind and drive the car session
   — a surface no phone-app checklist covers, and one that renders account data with no phone UI and no
   lock-screen involvement.
-- **How:**
-```bash
-grep -nB2 -A10 'androidx.car.app.CarAppService' out/AndroidManifest.xml
-grep -rnE 'createHostValidator|HostValidator|ALLOW_ALL_HOSTS_VALIDATOR|addAllowedHosts' sources/
-```
-```java
-Intent i = new Intent("androidx.car.app.CarAppService").setPackage("com.target.app");
-bindService(i, conn, BIND_AUTO_CREATE);
-```
-- **Proof:** `onServiceConnected` firing in the unprivileged binder and `onCreateSession()` running in the
-  target — visible as the app's car-session lifecycle logs with your package as the client — followed by
-  template contents captured in your bind callback: trip history, saved places, vehicle, payment method.
+- **How:** Run D06-054 — it owns the `createHostValidator()` grep and the bind-from-an-unprivileged-app
+  PoC; reuse its row. This chapter adds only the scope note: the car surface renders account data with no
+  phone UI and no lock-screen involvement, so route the finding to the programme that owns the Auto
+  integration and rate the rendered data, not the bind.
+- **Proof:** As D06-054 (the car-session lifecycle logs with your package as the client, and the template
+  contents captured in the bind callback).
 - **Escalation:** Session data read → account enumeration; command injection into navigation. Join with
   D25-063: the car surface's endpoints are a second, weaker client.
 - **Ruled out when:** `createHostValidator()` returns a validator built with `addAllowedHosts()` pinned to
@@ -2146,23 +2292,18 @@ bindService(i, conn, BIND_AUTO_CREATE);
 | **Attacker** | AM-03 (an app that can reach the Data Layer) / AM-10 (a paired attacker node) |
 | **Applies to** | any app with a Wear OS companion. The Data Layer is Android-phone-only, so the path set is often *less* tested than the main API |
 | **Requires** | wear |
-| **Maps to** | `developer.android.com/training/wearables/data/data-layer` and `.../data/messages` (`DataClient`, `MessageClient`, `WearableListenerService`, `sendMessage(nodeId, path, data)`); MASWE-0018, MASWE-0032; CVE-2025-12080 (intent abuse in Google Messages for Wear OS, patched May 2025) as evidence the form factor is a live surface |
+| **Maps to** | `developer.android.com/training/wearables/data/data-layer` and `.../data/messages` (`DataClient`, `MessageClient`, `WearableListenerService`, `sendMessage(nodeId, path, data)`); MASWE-0018, MASWE-0032; CVE-2025-12080 (intent abuse in Google Messages for Wear OS, patched May 2025) as evidence the form factor is a live surface; How owner: D06-055 |
 
 - **Test:** The Wear Data Layer delivers `DataItem`s and messages addressed by **path** (`/sync`, `/auth`,
   `/logout`). The receiving service is exported so Google Play services can bind it. Test whether
   `onMessageReceived` / `onDataChanged` dispatches on path alone with no `getSourceNodeId()` comparison
   against a known, capability-verified node.
-- **How:**
-```bash
-grep -nB2 -A12 'com.google.android.gms.wearable' out/AndroidManifest.xml
-grep -rnE 'onMessageReceived|onDataChanged|getSourceNodeId|getPath\(\)|CapabilityClient|getCapability' sources/
-grep -rnE 'onMessageReceived|getPath\(\)' sources/ -A20 | grep -iE 'auth|unlock|verified|session|token'
-```
-  The `<data android:scheme="wear" android:host="*" android:pathPrefix="/…"/>` filters in the manifest are
-  the complete undocumented API of the phone↔watch channel — enumerate every `pathPrefix`.
-- **Proof:** A `when (messageEvent.path)` or `path.startsWith(...)` dispatch with no `getSourceNodeId()`
-  comparison anywhere in the method, then delivering that path with attacker-chosen `getData()` bytes and
-  observing the phone app act on it — ideally entering an authenticated state.
+- **How:** Run D06-055 — it owns the path/`getSourceNodeId()` greps and the attacker-node delivery; reuse
+  its row. This chapter adds only the scope note: the watch is a second device, so the paired-node attacker
+  (AM-10) and the programme's wearable scope decide where the report goes; enumerate every `pathPrefix`
+  as the channel's undocumented API.
+- **Proof:** As D06-055 (a path-only dispatch with no node comparison, then the phone app acting on
+  attacker-chosen bytes delivered on that path).
 - **Escalation:** A trusted-by-path "auth complete" message is a direct authentication bypass over a
   channel nobody tested → D13. On Wear the surface widens further: activities, foreground services (with
   `FLAG_ACTIVITY_NEW_TASK`), Tiles and Complications can all fire the same payload — exercise all four.
@@ -2177,7 +2318,7 @@ grep -rnE 'onMessageReceived|getPath\(\)' sources/ -A20 | grep -iE 'auth|unlock|
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**); `\|view_sensitive_information_iterable_object_identifiers` (**P3**) for read-only |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | apps with Wear, Auto, TV, widget or Tile companions |
-| **Requires** | wear, auto, tv, backend-api |
+| **Requires** | backend-api |
 | **Maps to** | the shadow-API method from the bug-hunting corpus: a mobile client's hardcoded backend calls are frequently an *older* API version than the current web app uses, with weaker auth, weaker rate limits, weaker validation and more field exposure. **Diff behaviourally, not by response shape. A version difference alone is Informational; the weakened control is the finding** |
 
 - **Test:** Wear, Auto, TV and widget code paths frequently call *different* endpoints, or the same
@@ -2187,7 +2328,7 @@ grep -rnE 'onMessageReceived|getPath\(\)' sources/ -A20 | grep -iE 'auth|unlock|
 - **How:**
 ```bash
 # endpoints referenced only by companion code
-grep -rnE 'https?://[a-zA-Z0-9./_-]+' sources/ | grep -iE 'wear|watch|auto|car|tv|widget|tile|glance' | sort -u > companion-hosts.txt
+grep -rnE 'https?://[a-zA-Z0-9./_-]+' $DEC/jadx/sources/ | grep -iE 'wear|watch|auto|car|tv|widget|tile|glance' | sort -u > companion-hosts.txt
 wc -l companion-hosts.txt          # count, per the shell-loop ban
 # diff against the phone client's endpoint set
 comm -23 <(sort -u companion-hosts.txt) <(sort -u phone-hosts.txt)
@@ -2224,11 +2365,11 @@ comm -23 <(sort -u companion-hosts.txt) <(sort -u phone-hosts.txt)
   and permissions. Those endpoints frequently remain deployed long after the client is dead.
 - **How:**
 ```bash
-grep -n 'visibleToInstantApps' out/AndroidManifest.xml
-grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' sources/ out/AndroidManifest.xml
-grep -rnE 'instant|/i/|/lite/|guest' sources/ | grep -iE 'http' | sort -u
+grep -n 'visibleToInstantApps' $DEC/apktool/AndroidManifest.xml
+grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml
+grep -rnE 'instant|/i/|/lite/|guest' $DEC/jadx/sources/ | grep -iE 'http' | sort -u
 # the deep links that used to launch the instant experience usually still resolve
-grep -nE 'android:host=|android:pathPrefix=' out/AndroidManifest.xml | sort -u
+grep -nE 'android:host=|android:pathPrefix=' $DEC/apktool/AndroidManifest.xml | sort -u
 adb shell am start -a android.intent.action.VIEW -d 'https://<host>/<instant-era-path>'
 ```
   Then probe the discovered server paths unauthenticated.
@@ -2251,23 +2392,18 @@ adb shell am start -a android.intent.action.VIEW -d 'https://<host>/<instant-era
 | **Attacker** | AM-05 / AM-11 |
 | **Applies to** | Android 5+ for multi-user; Android 15+ for Private Space; OEM clone features vary |
 | **Requires** | device |
-| **Maps to** | `developer.android.com/about/versions/15/features#private-space` — "The private space uses a separate user profile", "Apps in the private space are installed as separate copies from any apps in the main space", and the explicit compatibility warning about apps "with work profile logic that assume any installed copies of their app that aren't in the main profile are in the work profile" |
+| **Maps to** | `developer.android.com/about/versions/15/features#private-space` — "The private space uses a separate user profile", "Apps in the private space are installed as separate copies from any apps in the main space", and the explicit compatibility warning about apps "with work profile logic that assume any installed copies of their app that aren't in the main profile are in the work profile"; How owner: D01-052 |
 
 - **Test:** Every checklist assumes one install per device. On a real device the app may exist as user 0, a
   work profile (user 10+), a Private Space profile, an OEM dual-app/clone instance, and a guest-user
   instance. Each has its own data directory, its own FCM token and its own session — so any device-binding
   or entitlement scheme that counts installs is wrong.
-- **How:**
-```bash
-adb shell pm list users
-adb shell pm list packages --user all | grep target
-adb shell pm path --user 10 com.target.app
-adb shell dumpsys package com.target.app | grep -E 'userId|User [0-9]+:|installed=|ceDataInode'
-adb shell ls -la /data/user/0/com.target.app /data/user/10/com.target.app 2>&1
-adb shell pm list users | grep -iE 'dual|clone|999'     # Samsung Dual Messenger / Xiaomi Dual Apps
-```
-- **Proof:** Two live data directories for the same package under different user ids, each with its own
-  session token file — both `ls -la` outputs side by side.
+- **How:** Run D01-052 — it owns the enumeration (`pm list users`, `pm list packages --user all`, per-user
+  data directories, OEM clone ids); reuse its row. This chapter adds only what the enumeration feeds:
+  the reach tests in D25-066/067 and the device-demographic note (which OEM clone features the client's
+  fleet actually ships).
+- **Proof:** As D01-052 (two live data directories for the same package under different user ids, side by
+  side).
 - **Escalation:** Feeds D11 (cross-user data), D13 (device binding), D23 (trial and entitlement
   duplication), and D25-066 (the reach tests).
 - **Ruled out when:** `pm list users` shows only user 0 and the OEM provides no clone feature on this
@@ -2282,34 +2418,42 @@ adb shell pm list users | grep -iE 'dual|clone|999'     # Samsung Dual Messenger
 | **Attacker** | AM-05 another user of the same device |
 | **Applies to** | Android 5+ multi-user; Private Space Android 15+ |
 | **Requires** | device |
-| **Maps to** | Android & Google Devices in-scope impact, verbatim: "**Multi-User & Private Space:** Cross-user sensitive data access, or unlocking Private Space without the designated lock factor"; Samsung High: "Bypass Operating System protections including access memory or file contents across application, user, or profile boundaries" |
+| **Maps to** | Android & Google Devices in-scope impact, verbatim: "**Multi-User & Private Space:** Cross-user sensitive data access, or unlocking Private Space without the designated lock factor"; Samsung High: "Bypass Operating System protections including access memory or file contents across application, user, or profile boundaries"; How owners for the per-component tests: D07-011, D06-023 (this item keeps the crossing routes) |
 
-- **Test:** Everything in every checklist binds and queries from user 0. A work profile, Private Space or
-  OEM clone instance runs as a different UID with a different data directory — and a service that guards
-  on `getCallingUid()` or on a same-signature check passes trivially for a *clone of the same app*.
+- **Test:** D07-011 (provider from a second user / locked Private Space) and D06-023 (caller check never
+  compares the user id) own the per-component tests; this item adds the crossing **routes**. Everything in
+  every checklist binds and queries from user 0. A work profile, Private Space or OEM clone instance runs
+  as a different UID with a different data directory — and a service that guards on `getCallingUid()` or
+  on a same-signature check passes trivially for a *clone of the same app*. A plain app cannot resolve
+  another user's provider or bind its service without `INTERACT_ACROSS_USERS*` — which `adb shell` holds,
+  so every shell `--user` success is a false positive. The routes to test are: (1) a clone/work instance
+  in the SAME profile group reached through connected apps (D25-082) or `CrossProfileApps`; (2) a
+  preinstalled target with `android:singleUser="true"` services or an `INTERACT_ACROSS_USERS*` holder
+  acting as deputy; (3) user-shared storage (`/storage/emulated/<id>` on OEM clones, MediaStore); (4) a
+  backend identity keyed by device id rather than account.
 - **How:**
 ```bash
-adb shell pm create-user gapuser && adb shell pm list users
-adb shell pm install -r --user 10 attacker.apk
-adb shell content query --user 10 --uri content://com.target.app.provider/data
-adb shell content query --user 0  --uri content://com.target.app.provider/data
-adb shell am start-service --user 10 -n com.target.app/.ExportedService
-adb shell am start --user 10 -n com.target.app/.MainActivity
-adb shell dumpsys activity services com.target.app | grep -E 'user|clientUid|ConnectionRecord'
+UID2=$(adb -s "$SERIAL" shell pm create-user gapuser | tr -d '\r' | grep -oE '[0-9]+$')   # never assume 10 (10 is usually the work profile)
+adb -s "$SERIAL" shell am switch-user $UID2
+adb -s "$SERIAL" install --user $UID2 probe.apk     # host path; a managed/private profile with DISALLOW_DEBUGGING_FEATURES needs `pm install-existing --user <id> com.probe` or the DPC test app
+# the probe (NOT shell) queries content://0@com.target.app.provider/data and binds the service -> expect SecurityException naming INTERACT_ACROSS_USERS
+# shell is the DISCOVERY tool only: proves the data exists, not reachability
+adb -s "$SERIAL" shell content query --user 0 --uri content://com.target.app.provider/data
+adb -s "$SERIAL" shell dumpsys activity services com.target.app | grep -E 'user|clientUid|ConnectionRecord'
 # the guard itself
-grep -rnE 'getCallingUid|getCallingPackage|checkSignatures|getPackagesForUid' sources/ -A6
+grep -rnE 'getCallingUid|getCallingPackage|checkSignatures|getPackagesForUid|singleUser|INTERACT_ACROSS_USERS' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml -A6
 ```
   The specific defect to look for: a guard that checks the UID or the signature but never compares
-  `UserHandle.getUserId(uid)`. Also test the file form: `file:///data/user/10/com.target.app/…`.
-- **Proof:** Rows returned with `--user 10`, or a `ConnectionRecord` in `dumpsys activity services` naming
-  a client in a different user id with the service still returning data. Screenshot `pm list users` and
-  the dumpsys together. A `Permission Denial` naming the user id is also a reportable data point — it is
-  the negative.
+  `UserHandle.getUserId(uid)`. Also test the file form: `file:///data/user/$UID2/com.target.app/…`.
+- **Proof:** The probe's result from user B with its uid in `dumpsys activity services` / the provider's
+  log — never a `--user` shell call. Screenshot `pm list users` and the dumpsys together. A
+  `Permission Denial … requires android.permission.INTERACT_ACROSS_USERS_FULL` for the probe is also a
+  reportable data point — it is the negative.
 - **Escalation:** → D11 cross-user data read → D23 entitlement duplication → D15 if the rows contain
   server object ids you can then enumerate.
-- **Ruled out when:** The bind and the query both fail with a denial naming the user id, **and** you have
-  also tested the clone/work-profile variant (same profile group, different UID), which is the case that
-  most often crosses when a plain second user does not. By default a second user cannot see user 0's
+- **Ruled out when:** The probe gets `Permission Denial … INTERACT_ACROSS_USERS_FULL` for both query and
+  bind **and** routes 1–4 above were each tested, including the clone/work-profile variant (same profile
+  group, different UID), which is the case that most often crosses when a plain second user does not. By default a second user cannot see user 0's
   packages — prove whether your call actually crossed rather than assuming it did.
 
 ### D25-067 · Private Space boundary (Android 15)
@@ -2331,7 +2475,7 @@ grep -rnE 'getCallingUid|getCallingPackage|checkSignatures|getPackagesForUid' so
 adb shell pm list users
 adb shell pm list packages --user <privateSpaceUserId> | grep com.target.app
 adb shell am start --user <privateSpaceUserId> -n com.target.app/.MainActivity
-grep -rn 'ACCESS_HIDDEN_PROFILES\|getLauncherUserInfo\|requestQuietModeEnabled\|ACTION_PROFILE_AVAILABLE\|ACTION_PROFILE_UNAVAILABLE\|ROLE_HOME' sources/ out/AndroidManifest.xml
+grep -rn 'ACCESS_HIDDEN_PROFILES\|getLauncherUserInfo\|requestQuietModeEnabled\|ACTION_PROFILE_AVAILABLE\|ACTION_PROFILE_UNAVAILABLE\|ROLE_HOME' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml
 # then lock the private space and retry - apps there should be stopped
 adb shell am get-current-user
 ```
@@ -2352,6 +2496,7 @@ adb shell am get-current-user
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) for the leaked corporate data |
 | **Attacker** | AM-05 / AM-11 |
 | **Applies to** | managed devices only — work profile API 21+, fully managed API 21+. Confirm the engagement includes an enrolled device |
+| **Requires** | enterprise |
 | **Maps to** | community work-profile checklists on cross-profile clipboard, sharing, notifications and file mediation; `DISALLOW_CROSS_PROFILE_COPY_PASTE` |
 
 - **Test:** In a managed setup, confirm the app does not leak work data into the personal profile via
@@ -2384,6 +2529,7 @@ adb shell dumpsys package | grep -A10 'Cross-profile'
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-11 physical unlocked (the enrolled user) |
 | **Applies to** | managed devices only |
+| **Requires** | enterprise |
 | **Maps to** | community MDM checklists on screen-capture, camera, backup and managed-configuration enforcement |
 
 - **Test:** Apply the policy restrictions the target claims to support — screen capture disabled, camera
@@ -2411,6 +2557,7 @@ adb shell screencap /sdcard/t.png && adb pull /sdcard/t.png
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the replaced app holds the enterprise session |
 | **Attacker** | AM-11 physical unlocked (temporary access to enable Developer Options and USB debugging) |
 | **Applies to** | Android Enterprise BYOD work profiles with required-app policies |
+| **Requires** | enterprise |
 | **Maps to** | CVE-2023-21257 (the patch being bypassed — ADB sideloads blocked under `DISALLOW_INSTALL_APPS` / `DISALLOW_DEBUGGING_FEATURES`); HackTricks android-enterprise-work-profile-bypass |
 
 - **Test:** An MDM that marks an app *required* for the work profile auto-installs it if missing.
@@ -2450,6 +2597,7 @@ android { namespace = "com.workday.workdroidapp"
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-11 physical unlocked; AM-03 where an app surface reaches the removal |
 | **Applies to** | managed and enterprise deployments |
+| **Requires** | enterprise |
 | **Maps to** | Android & Google Devices in-scope impact, verbatim: "**Enterprise Bypasses:** Unauthorized removal of the Device Policy Controller (DPC)" — explicitly named in-scope and rarely covered in public checklists |
 
 - **Test:** Whether a managed device's DPC can be removed, or its policies neutered, without
@@ -2477,6 +2625,7 @@ adb shell dpm remove-active-admin com.dpc/.Receiver
 | **VRT** | `insecure_os_firmware.kiosk_escape_or_breakout` (**VARIES**) |
 | **Attacker** | AM-11 physical unlocked (a member of the public at the kiosk) |
 | **Applies to** | dedicated/COSU/kiosk deployments only; scope it explicitly |
+| **Requires** | enterprise |
 | **Maps to** | VRT `insecure_os_firmware > kiosk_escape_or_breakout`; community COSU/lock-task checklists |
 
 - **Test:** Where the app runs as a kiosk or is used under screen pinning, look for a path out — a WebView
@@ -2506,6 +2655,7 @@ adb shell am start -a android.intent.action.GET_CONTENT -t '*/*'
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 / AM-11 |
 | **Applies to** | OEM-managed fleets; out of scope for a standard app engagement unless the app itself ships the integration |
+| **Requires** | enterprise |
 | **Maps to** | community enterprise checklists on Knox Guard, Knox Platform for Enterprise, E-FOTA, enterprise firmware update abuse, and generic Android Enterprise / EMM / UEM bypasses |
 
 - **Test:** Where the app relies on an OEM container or policy API, check whether its assumptions hold when
@@ -2515,7 +2665,7 @@ adb shell am start -a android.intent.action.GET_CONTENT -t '*/*'
 ```bash
 adb shell getprop | grep -iE 'knox|oem|miui|emui|coloros|oneui'
 adb shell pm list packages | grep -iE 'knox|enterprise|kme|efota'
-grep -rn 'com.samsung.android.knox\|EnterpriseDeviceManager\|KnoxContainerManager' jadx-out/sources -A10
+grep -rn 'com.samsung.android.knox\|EnterpriseDeviceManager\|KnoxContainerManager' $DEC/jadx/sources -A10
 ```
   Then run the app on a device where the OEM API is absent (a non-Samsung handset, or one with the Knox
   packages disabled) and observe whether it proceeds with its normal security posture.
@@ -2534,6 +2684,7 @@ grep -rn 'com.samsung.android.knox\|EnterpriseDeviceManager\|KnoxContainerManage
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-02 remote one click |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | TapTrap (USENIX Security 2025), which explicitly lists Device Administrator status — "enables remote device wipe" — among the reachable outcomes; MASWE-0070 / MASWE-0078 (inadequate awareness/consent for privacy-relevant actions) |
 
 - **Test:** Whether the app's own flows, or a TapTrap-style animation attack against them, can result in
@@ -2541,7 +2692,7 @@ grep -rn 'com.samsung.android.knox\|EnterpriseDeviceManager\|KnoxContainerManage
   giving.
 - **How:**
 ```bash
-grep -n 'BIND_DEVICE_ADMIN\|DeviceAdminReceiver\|BIND_ACCESSIBILITY_SERVICE' out/AndroidManifest.xml -A6
+grep -n 'BIND_DEVICE_ADMIN\|DeviceAdminReceiver\|BIND_ACCESSIBILITY_SERVICE' $DEC/apktool/AndroidManifest.xml -A6
 adb shell dpm list-owners
 adb shell settings get secure enabled_accessibility_services
 adb shell dumpsys device_policy | head -40
@@ -2568,6 +2719,7 @@ adb shell dumpsys accessibility
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) for the recovered credential; the demonstrated corporate access sets the real rating |
 | **Attacker** | AM-03 / AM-11 |
 | **Applies to** | enterprise and BYOD apps |
+| **Requires** | enterprise |
 | **Maps to** | the "From APK to Golden Ticket" write-up (Pierini & Trotta, 2017) as the canonical shape of a mobile foothold leading to domain compromise |
 
 - **Test:** For an enterprise or BYOD app, assess whether compromising the app yields corporate
@@ -2594,6 +2746,7 @@ adb shell dumpsys connectivity | grep -i vpn
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every Critical/High claim in this domain |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's Pre-Severity Gate and Multi-Tool Reproduction Bar |
 
 - **Test:** This domain produces more mid-chain primitives than any other — a policy rule, a reachable
@@ -2632,6 +2785,7 @@ adb shell dumpsys package com.poc.app | sed -n '/requested permissions/,/install
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every probe in this chapter that reads a status, a Parcel or an HTTP response |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's Body-Diff Rule, the Layer-Ordering Trap, Server-Policy-vs-State, Marker Discipline and the Statistical-Sample Rule |
 
 - **Test:** Four false positives dominate this domain, and all four look like a bypass.
@@ -2677,6 +2831,7 @@ adb shell content query  --uri content://<authority>/x | grep -c "$MARK"
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every multi-finding device or OEM engagement |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's chain-filing order, five-screenshot pattern, PII mask/leave-visible split, and retraction discipline |
 
 - **Test:** Device chains are long — a policy rule, an exported component, a file write, an install — and
@@ -2717,6 +2872,7 @@ These primitives have independent fix surfaces and are filed separately per the 
 | **VRT** | n/a |
 | **Attacker** | AM-12 (own device; not an attack) |
 | **Applies to** | test devices only; never on client-owned production hardware without written authorisation |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's operational boundary; drozer `tools.setup.minimalsu`, `tools.setup.toybox`, `shell.exec`, `shell.start`, `shell.send`, `clean` |
 
 - **Test:** A rooted device changes the validity of every resilience claim and most device claims. Obtain
@@ -2741,6 +2897,149 @@ dz> clean
 - **Ruled out when:** n/a — it is a rule, not a test. The only acceptable output is the recorded UID and
   the `clean` confirmation.
 
+### D25-080 · The target, or an OEM preload, holds UICC carrier privileges — a privileged class the permission tables miss
+
+| | |
+|---|---|
+| **Severity ceiling** | Support for the determination; High when an exported component re-delegates a carrier-privileged call |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
+| **Attacker** | AM-03 |
+| **Applies to** | packages whose signing certificate is in the SIM's ARA-M access rules or in `carrier_config` `carrier_certificate_string_array`; carrier, MVNO and OEM telephony apps |
+| **Requires** | device |
+| **Maps to** | MASTG-KNOW-0017; AOSP "UICC Carrier Privileges" documentation; `TelephonyManager.hasCarrierPrivileges()` / `getCarrierPrivilegeStatus()` |
+| **Record** | `logs/D25-080.txt` (the tracker and carrier_config dumps, the SIM MCC/MNC); `pocs/F-NNN/` for a re-delegated call |
+
+- **Skip when:** no SIM is inserted in any held device (`adb -s "$SERIAL" shell getprop gsm.sim.state` prints only `ABSENT` / `NOT_READY`) — write `D25-080 blocked: no SIM`, not n/a, because the privileges are granted per inserted SIM.
+- **Test:** Carrier privileges grant identifier reads (IMEI/IMSI), `iccOpenLogicalChannel`/`iccTransmitApdu`, `setLine1NumberForDisplay`, carrier-config overrides and network-selection control with no manifest permission and no runtime prompt. They are granted per inserted SIM and never appear as `granted=true`, so every permission sweep in this chapter misses them. A holder is a privileged package by another route and its exported surface re-rates like D25-009.
+- **How:**
+```bash
+adb -s "$SERIAL" shell dumpsys phone | grep -iA6 -e 'CarrierPrivilegesTracker' -e 'UiccCarrierPrivilegeRules'   # privileged packages per subscription (the tracker on 13+, the UICC rules dump before)
+adb -s "$SERIAL" shell dumpsys carrier_config | grep -iE 'carrier_certificate|privileged'
+grep -rnE 'hasCarrierPrivileges|getCarrierPrivilegeStatus|iccOpenLogicalChannel|iccTransmitApdu|setLine1NumberForDisplay|CarrierConfigManager' $DEC/jadx/sources | head
+# hasCarrierPrivileges() answers only for the calling app and getCarrierPrivilegeStatus(uid) is a SystemApi: a zero-permission
+# probe cannot census other packages — the dumps above are the census; the probe is for exercising a holder's exported component
+```
+- **Proof:** `CarrierPrivilegesTracker` naming the package for the active subscription (or `hasCarrierPrivileges()==true` in its own log), plus an exported component of that package returning a restricted identifier or performing a call/SMS/APDU action for the zero-permission PoC.
+- **Escalation:** → D25-009 (treat as HIGH tier), D20-052 (identifiers), D13 (SMS/call interception), D25-017 (the component mechanics).
+- **Ruled out when:** no package on the image is carrier-privileged for the inserted SIM (tracker empty for every subscription) and the target never calls the carrier APIs; state the SIM MCC/MNC checked — privileges differ per SIM, so a negative on one carrier is not a negative on another.
+
+### D25-081 · A preload's effective capability is permissions + app-ops + roles + pre-enabled services — census all four
+
+| | |
+|---|---|
+| **Severity ceiling** | Support; High when a pre-granted op, role or listener is reachable through an exported component |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**, CWE-16) |
+| **Attacker** | AM-03 |
+| **Applies to** | OEM/carrier images; the target where it is preloaded |
+| **Requires** | oem-scope, device |
+| **Maps to** | MASTG-KNOW-0017; Android `AppOpsManager` / `RoleManager` documentation; D03-022 for role mechanics; MASTG-DEMO-0104 (`SYSTEM_ALERT_WINDOW`) |
+| **Record** | `logs/D25-081.txt` (the four dumps and the counted app-ops sweep); `inventory/oem-capabilities.csv`: `package \| grant table \| capability \| exported component that re-delegates it` |
+
+- **Skip when:** the Applicability probe excluded the OEM block (store build only, target not preinstalled) — write the partial-n/a note; on an OEM scope this item always runs.
+- **Test:** `granted=true` (D25-009) is one of four grant tables. OEM images pre-allow app-ops (`PROJECT_MEDIA`, `SYSTEM_ALERT_WINDOW`, `GET_USAGE_STATS`, `ACCESS_RESTRICTED_SETTINGS`), pre-hold roles (gallery, dialer, SMS, assistant, wallet, notes) and pre-enable accessibility, notification-listener and device-admin components for vendor packages with no prompt; each is a capability, and an exported component in the holder re-delegates it to a zero-permission caller (the factory/diagnostic-preload shape).
+- **How:**
+```bash
+adb -s "$SERIAL" shell dumpsys role | grep -iE 'name=|role\.|holders' | head -80     # holders per role (or: cmd role get-role-holders <role>)
+adb -s "$SERIAL" shell settings get secure enabled_accessibility_services
+adb -s "$SERIAL" shell settings get secure enabled_notification_listeners
+adb -s "$SERIAL" shell 'dpm list-owners; dumpsys device_policy | grep -A3 Admin'
+python3 - <<'PY'     # app-ops per OEM-only package, counted (D25-006)
+import subprocess
+S='<serial>'; pk=[l.strip() for l in open('oem-only-pkgs.txt') if l.strip()]; print('input',len(pk)); hits=[]
+OPS=('PROJECT_MEDIA','SYSTEM_ALERT_WINDOW','GET_USAGE_STATS','ACCESS_RESTRICTED_SETTINGS','MANAGE_EXTERNAL_STORAGE','RECORD_AUDIO','CAMERA','ACCESS_ACCESSIBILITY')
+for p in pk:
+    o=subprocess.run(['adb','-s',S,'shell','appops','get',p],capture_output=True,text=True).stdout
+    bad=[l.strip() for l in o.splitlines() if ':' in l and l.split(':')[0].strip() in OPS and l.split(':',1)[1].split(';')[0].strip()=='allow']   # line = "OP: mode; time=…"
+    if bad: hits.append((p,bad)); print('OP',p,bad)
+print('probed',len(pk),'hits',len(hits))
+PY
+```
+- **Proof:** The op/role/listener line naming the package, plus the effect reached from the zero-permission PoC through that package's exported surface — a screen capture started under `PROJECT_MEDIA`, a notification body returned, an accessibility action performed.
+- **Escalation:** → D25-009 tiers; → D25-021 when the holder is a factory/diag package; → D20 for what a listener reads; → D04 overlay items for `SYSTEM_ALERT_WINDOW`.
+- **Ruled out when:** every pre-allowed op, role holder and enabled listener belongs to a package whose components are all guarded by signature permissions (verified from the PoC, D25-017), and `appops get` over the OEM-only set shows only `default`/`ignore` for the listed ops — with `probed == input`.
+
+### D25-082 · Connected-apps / `INTERACT_ACROSS_PROFILES` — the sanctioned IPC bridge between the work and personal instances is unauthenticated
+
+| | |
+|---|---|
+| **Severity ceiling** | High (work↔personal data crossing in a managed deployment) |
+| **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) |
+| **Attacker** | AM-03 — a zero-permission app in the personal (or work) profile of the same device |
+| **Applies to** | apps requesting `INTERACT_ACROSS_PROFILES` (Android 11+) or shipping `CrossProfileApps` / a connected-apps SDK, on a managed device whose DPC allow-lists them |
+| **Requires** | enterprise, device |
+| **Maps to** | Android `CrossProfileApps`, `DevicePolicyManager#setCrossProfilePackages`, the `INTERACT_ACROSS_PROFILES` app-op; MASWE-0018 |
+| **Record** | `logs/D25-082.txt`; `pocs/F-NNN/` with the probe's bind transcript |
+
+- **Skip when:** `grep -rlE 'INTERACT_ACROSS_PROFILES|CrossProfileApps|CrossProfileConnector|@CrossProfile' $DEC/jadx/sources $DEC/apktool/AndroidManifest.xml` is empty — write `D25-082 n/a: no cross-profile bridge in the APK`.
+- **Test:** An allow-listed connected app binds its own instance in the other profile and exposes an internal binder across the boundary — the one route a plain app has across users (D25-066). The defect is the bridge service accepting any caller: exported, or `getCallingUid()` never compared by signing certificate, or the work instance trusting the personal instance for work data.
+- **How:**
+```bash
+grep -rnE 'INTERACT_ACROSS_PROFILES|CrossProfileApps|getTargetUserProfiles|canInteractAcrossProfiles|CrossProfileConnector|@CrossProfile' $DEC/jadx/sources $DEC/apktool/AndroidManifest.xml
+adb -s "$SERIAL" shell appops get $PKG INTERACT_ACROSS_PROFILES          # allow = bridge live on this device
+adb -s "$SERIAL" shell dumpsys device_policy | grep -iE 'crossProfilePackages|CrossProfile'
+adb -s "$SERIAL" shell dumpsys activity services $PKG | grep -E 'ConnectionRecord|user'
+# bind the bridge service from the zero-permission probe in the personal profile; then from a repackaged personal instance
+```
+- **Proof:** The bridge service returning work-profile data (or performing a work action) to a caller that is not the app's own signed instance — `ConnectionRecord` naming the probe UID as client, and the data in the probe log.
+- **Escalation:** → D25-068 (the restriction bypassed), D11 for the data, D06 for the service mechanics.
+- **Ruled out when:** the bridge service is not exported and every cross-profile call checks `PackageManager.checkSignatures(getCallingUid(), Process.myUid()) == SIGNATURE_MATCH` before serving; or the app-op is `default`/`ignore` on the enrolled device (then record "bridge not enabled by DPC").
+
+### D25-083 · Enterprise provisioning payload (QR / NFC bump / zero-touch): weak DPC binding or a reusable enrolment secret
+
+| | |
+|---|---|
+| **Severity ceiling** | High (a rogue device enrolled into the fleet, or a downgraded DPC on a fleet device); Critical only if a device installs a substituted DPC from an unpinned download |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) for a reusable enrolment token or PSK; `insecure_os_firmware.weakness_in_firmware_updates.firmware_does_not_validate_update_integrity` (**P3**, argue up) for an unbound or downgradable DPC download |
+| **Attacker** | AM-06 network attacker during enrolment; AM-11 physical at a factory-reset device, holding a copy of the payload (QR codes are routinely printed or posted) |
+| **Applies to** | fleets provisioned by QR, NFC bump or zero-touch; the client's DPC |
+| **Requires** | enterprise |
+| **Maps to** | Android `DevicePolicyManager` `EXTRA_PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION` / `_PACKAGE_CHECKSUM` / `_SIGNATURE_CHECKSUM`, `EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE`, `EXTRA_PROVISIONING_WIFI_PASSWORD`; the Android Enterprise provisioning guide |
+| **Record** | `logs/D25-083.txt` (the decoded payload, redacted of the Wi-Fi PSK and the token); `pocs/F-NNN/` with the enrolment transcript |
+
+- **Skip when:** the client provisions no device (no QR, NFC or zero-touch payload exists; BYOD work profile only) — write `D25-083 n/a: no provisioning payload in scope`.
+- **Test:** The payload names where the DPC is downloaded from and how it is verified, and usually carries secrets. Current ManagedProvisioning refuses a download location that has neither `…_PACKAGE_CHECKSUM` nor `…_SIGNATURE_CHECKSUM` — confirm that on the test unit instead of assuming it, because a device that provisions from an unpinned download hands device owner to whoever serves the APK (the Critical). The realistic defects are weaker and common: (1) `SIGNATURE_CHECKSUM` alone pins the signer, not the build, so an `http://` or attacker-reachable download location can serve an **older, vulnerable** DPC signed by the same key; (2) the enrolment token in `…_ADMIN_EXTRAS_BUNDLE` is reusable, unexpiring or not device-bound, so anyone holding the payload enrols a rogue device and receives the fleet's managed configuration; (3) the enrolment Wi-Fi PSK travels in the clear inside the payload.
+- **How:**
+```bash
+zbarimg -q --raw enrol.png | jq .      # or decode the NFC NDEF record / the zero-touch configuration JSON
+# inspect: android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION (scheme, host),
+#   PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM (pins the file) vs PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM (pins only the signer),
+#   PROVISIONING_ADMIN_EXTRAS_BUNDLE (the enrolment token: single-use? expiry? device-bound?), PROVISIONING_WIFI_PASSWORD,
+#   PROVISIONING_SKIP_ENCRYPTION, PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED
+grep -rnE 'PROVISIONING_DEVICE_ADMIN_(PACKAGE|SIGNATURE)_CHECKSUM|DOWNLOAD_LOCATION|ADMIN_EXTRAS_BUNDLE' $DEC/jadx/sources provisioning-docs/
+# on a factory-reset test unit, with the client's written permission: enrol a second unit with the same payload (token reuse);
+# where only the signer is pinned, serve an older signed DPC build from the download location (downgrade)
+adb -s "$SERIAL" logcat -d | grep -iE 'ManagedProvisioning|checksum|DownloadPackage|VerifyPackage'
+adb -s "$SERIAL" shell dpm list-owners
+```
+- **Proof:** The decoded payload showing the weakness, plus one of: a second unit enrolled with the same token and receiving the managed configuration (`dpm list-owners` naming the DPC on both); an older DPC build installed from your host under a signature-only pin (`dumpsys package <dpc> | grep versionName`); or — the Critical — a unit provisioning from an unpinned download, with the logcat.
+- **Escalation:** device owner = every policy in D25-068..073 is the attacker's; → D25-075 enterprise pivot; the Wi-Fi PSK in the payload → D14 (a network position on the enrolment SSID).
+- **Ruled out when:** the payload pins the file with `…_PACKAGE_CHECKSUM` (or the unit refuses an unpinned or substituted download — the ManagedProvisioning checksum failure in logcat), the download URL is https on a client-controlled host, and the second enrolment with the same token is refused — quote the refusal.
+
+### D25-084 · Advanced Protection Mode (Android 16) in the posture block, and the app's handling of it
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (posture); Medium when the app claims a mode-dependent control it does not read from the API |
+| **VRT** | n/a for the record; `insecure_os_firmware.poorly_configured_operating_system_security` (**VARIES**) for a vector still open with the mode on (OEM VRP) |
+| **Attacker** | AM-12 for the record; AM-10 / AM-11 / AM-03 for the vectors it closes |
+| **Applies to** | Android 16+ (API 36) devices |
+| **Requires** | device, api>=36 |
+| **Maps to** | Android 16 Advanced Protection (`android.security.advancedprotection.AdvancedProtectionManager`, `isAdvancedProtectionEnabled()`, `registerAdvancedProtectionCallback()`): blocks unknown-source installs and USB data while locked, disables 2G, enables MTE where supported |
+| **Record** | `logs/D25-084.txt` (the mode state beside every physical-vector finding) |
+
+- **Skip when:** `adb -s "$SERIAL" shell getprop ro.build.version.sdk` prints less than 36 on every held device — write `Advanced Protection: n/a, API <36`.
+- **Test:** With the mode on, locked-device USB data (D25-048/052) and sideload-dependent AM-03 proofs (`adb install` of the probe) change; record the state with every physical-vector finding. Separately, an app offering to honour the mode must read it from the API, not infer it.
+- **How:**
+```bash
+adb -s "$SERIAL" shell getprop ro.build.version.sdk                          # >= 36 or record n/a
+adb -s "$SERIAL" shell 'settings list secure | grep -i advanced_protection; dumpsys advanced_protection 2>/dev/null | head'   # discover the OEM's flag/service name
+grep -rnE 'AdvancedProtectionManager|isAdvancedProtectionEnabled|AdvancedProtectionCallback' $DEC/jadx/sources
+# from the probe (declares the normal permission QUERY_ADVANCED_PROTECTION_MODE): AdvancedProtectionManager.isAdvancedProtectionEnabled() -> log; toggle the mode in Settings > Security and re-run D25-043, D25-048 and an `adb install` of the probe
+```
+- **Proof:** The mode state in the posture block; for a finding: the app asserting a mode-dependent control while `isAdvancedProtectionEnabled()` returned false, or a USB/sideload vector still open with the mode on (route that to the OEM VRP).
+- **Escalation:** → D25-004 posture; → D21 if the app's risk engine keys on it; → D25-048/052 re-run under both states.
+- **Ruled out when:** device < API 36 (recorded as above), or the state is recorded and every physical-vector finding names the state it was produced in.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
@@ -2753,7 +3052,7 @@ dz> clean
 | "There is an exported component in a preinstalled OEM app" | Exported is intended behaviour; the finding is the unauthorised access it grants | The component driven from a zero-permission app to produce a privileged effect (D25-017) |
 | "I found a root exploit / I rooted the device" | Rooting your own device is not an attack on the app, and most programmes exclude root-required findings outright | The root was obtained **from an app UID** with no user interaction on a stock, locked, enforcing retail device |
 | "The app's data is readable once I have root" | Root defeats the sandbox by definition. Xiaomi, Grab and Spotify all exclude "sensitive data stored in the app private directory" | A non-root reader — a debuggable build (D25-014), a cross-user path (D25-066), or a backup/extraction path |
-| "`allowBackup="true"` on an OEM build" | P5 everywhere and excluded by name at Google and Xiaomi; VRT `mobile_security_misconfiguration.auto_backup_allowed_by_default` = **P5** with a physical-vector, high-privilege CVSS baseline | The credential you actually extracted from the backup and replayed (D11/D13) |
+| "`allowBackup="true"` on an OEM build" | P5 everywhere and excluded by name at Google and Xiaomi; VRT `mobile_security_misconfiguration.auto_backup_allowed_by_default` = **P5** with a physical-vector, high-privilege CVSS baseline; and from Android 12 (API 31) `adb backup` includes only debuggable apps regardless of `allowBackup` | The credential you actually extracted from the backup and replayed (D11/D13) |
 | "Firmware is not encrypted" | VRT `insecure_os_firmware.weakness_in_firmware_updates.firmware_is_not_encrypted` = **P5**. Obscurity was never the control | The update is not *integrity*-validated (D25-040), which is a different node at P3 and argues upward |
 | "The OEM image contains 40 preinstalled apps with dangerous permissions" | An inventory is not a finding, and the permission set is the OEM's product decision | One of them exporting a component that re-delegates the permission to a zero-permission caller (D25-009, D25-017) |
 | "This OEM bug is Critical" — filed against the app client | Wrong programme. It is the OEM's bug and the app client cannot fix it | Two artefacts: an environmental-risk note to the app client, and a separate report to the OEM's VRP (D25-001) |

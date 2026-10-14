@@ -1,6 +1,6 @@
 {
- "source_digest": "bfded18066fb",
- "total_items": 2107,
+ "source_digest": "e6e8df042793",
+ "total_items": 2161,
  "domains": {
   "D01": {
    "name": "Recon & Attack-Surface Mapping",
@@ -147,7 +147,7 @@
    "file": "D15-backend-api-and-authz.md",
    "phase": "P6",
    "milestone": "M6",
-   "items": 90,
+   "items": 97,
    "crux": "**For every object identifier and every security-relevant field the client is capable of sending, does the server re-derive the answer from its own state — or does it trust the identifier, the field, the version, the header or the client's arithmetic?**",
    "card": "cards/D15.md",
    "json": "json/D15.json"
@@ -157,7 +157,7 @@
    "file": "D16-native-code-and-memory.md",
    "phase": "P4",
    "milestone": "M4",
-   "items": 60,
+   "items": 65,
    "crux": "**Which bytes that an attacker fully controls reach C/C++ inside this app's process, by what path they get there, and does the code that consumes them compute a size, an index or a lifetime from those same bytes without checking it?**",
    "card": "cards/D16.md",
    "json": "json/D16.json"
@@ -187,7 +187,7 @@
    "file": "D19-cross-platform-frameworks.md",
    "phase": "P4",
    "milestone": "M4",
-   "items": 79,
+   "items": 84,
    "crux": "**Which artefact in this package actually holds the app's logic, and once I have opened it, does it hand me a credential that authenticates, an endpoint the UI never calls, a bridge that reaches native capability, or a code channel that can replace the app after the store review?**",
    "card": "cards/D19.md",
    "json": "json/D19.json"
@@ -197,7 +197,7 @@
    "file": "D20-privacy-and-data-leakage.md",
    "phase": "P4",
    "milestone": "M4",
-   "items": 70,
+   "items": 74,
    "crux": "**For each sensitive value the app handles: which principal other than the app and its own backend ends up holding that value — a co-resident app with one user grant, a third-party host, the lock screen, another signed-in user — and if none does, is any value the app emits an authenticator?**",
    "card": "cards/D20.md",
    "json": "json/D20.json"
@@ -207,7 +207,7 @@
    "file": "D21-resilience-and-rasp.md",
    "phase": "P4",
    "milestone": "M4",
-   "items": 57,
+   "items": 63,
    "crux": "**Does any decision that matters get made off this device on the strength of something this device claimed — and if so, is that claim an opaque, server-verified, freshly-bound attestation, or a boolean the client chose?** If the honest answer is \"the check only stops the device's own owner from seeing their own data\", you have a P5 hardening observation, and the correct output is a ruled-out entry, not a report.",
    "card": "cards/D21.md",
    "json": "json/D21.json"
@@ -217,7 +217,7 @@
    "file": "D22-platform-version-behaviour.md",
    "phase": "P4",
    "milestone": "M4",
-   "items": 82,
+   "items": 86,
    "crux": "**For every candidate finding in this engagement: at which `minSdkVersion`, `targetSdkVersion` and device API level is it actually reachable — and has this app explicitly opted out of the platform hardening that would otherwise close it?**",
    "card": "cards/D22.md",
    "json": "json/D22.json"
@@ -227,7 +227,7 @@
    "file": "D23-payments-and-entitlements.md",
    "phase": "P6",
    "milestone": "M6",
-   "items": 66,
+   "items": 74,
    "crux": "**Does any monetary or entitlement decision in this app get made anywhere other than the vendor's own server — and where the server does decide, does it independently re-derive the amount, the payer identity and the uniqueness of the receipt, or does it echo what the client sent?**",
    "card": "cards/D23.md",
    "json": "json/D23.json"
@@ -247,7 +247,7 @@
    "file": "D25-device-oem-and-privileged.md",
    "phase": "P5",
    "milestone": "M5",
-   "items": 79,
+   "items": 84,
    "crux": "**Is the device, the OEM image, or a preinstalled build of this app in scope — and if only the app is, which of its own manifest-declared physical, companion and cross-user surfaces hands an attacker a channel that the phone UI and the lock screen never gate?**",
    "card": "cards/D25.md",
    "json": "json/D25.json"
@@ -257,7 +257,7 @@
    "file": "D26-instrumentation-and-tooling.md",
    "phase": "P1",
    "milestone": "M1",
-   "items": 79,
+   "items": 85,
    "crux": "**Before I write \"not vulnerable\" anywhere in this report: has this exact instrument produced a positive result on this exact device in this session — and if the answer is \"the tool printed nothing\", what is my positive control?**",
    "card": "cards/D26.md",
    "json": "json/D26.json"
@@ -267,7 +267,7 @@
    "file": "D27-reporting-and-evidence.md",
    "phase": "P9",
    "milestone": "M9",
-   "items": 79,
+   "items": 83,
    "crux": "**For this finding, what is the cheapest attacker position from which I have actually observed the boundary being crossed — and does the title, the VRT node, the CVSS vector and the recorded evidence all say exactly that, with the unproven link named rather than hidden?**",
    "card": "cards/D27.md",
    "json": "json/D27.json"
@@ -14774,7 +14774,9 @@
    "attacker": "AM-01/AM-05/AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "backend-api"
+   ],
    "phase": "P6"
   },
   "D15-002": {
@@ -14785,18 +14787,22 @@
    "attacker": "AM-05",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "backend-api"
+   ],
    "phase": "P6"
   },
   "D15-003": {
    "domain": "D15",
-   "title": "Recover hidden request parameters from Retrofit parameter annotations",
+   "title": "Load the hidden request parameters recovered from Retrofit parameter annotations into the authz sweep",
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-05",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "backend-api"
+   ],
    "phase": "P6"
   },
   "D15-004": {
@@ -14807,7 +14813,9 @@
    "attacker": "AM-05",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "backend-api"
+   ],
    "phase": "P6"
   },
   "D15-005": {
@@ -14848,14 +14856,7 @@
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
    "requires": [
-    "backend-api",
-    "flutter",
-    "react-native",
-    "hermes",
-    "cordova",
-    "unity",
-    "xamarin",
-    "kmp"
+    "backend-api"
    ],
    "phase": "P6"
   },
@@ -14906,7 +14907,9 @@
    "attacker": "AM-01",
    "vrt_priority": "P4",
    "vrt_best": "P4",
-   "requires": [],
+   "requires": [
+    "backend-api"
+   ],
    "phase": "P6"
   },
   "D15-012": {
@@ -14957,10 +14960,7 @@
    "vrt_priority": "P1",
    "vrt_best": "P1",
    "requires": [
-    "backend-api",
-    "wear",
-    "tv",
-    "auto"
+    "backend-api"
    ],
    "phase": "P6"
   },
@@ -15072,7 +15072,7 @@
   },
   "D15-024": {
    "domain": "D15",
-   "title": "THE LAYER-ORDERING TRAP — a validation error does NOT prove you passed auth",
+   "title": "THE LAYER-ORDERING TRAP at the API — a validation error does NOT prove you passed auth",
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-01",
@@ -15292,7 +15292,9 @@
    "attacker": "AM-01",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "backend-api"
+   ],
    "phase": "P6"
   },
   "D15-041": {
@@ -15303,7 +15305,10 @@
    "attacker": "AM-05",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-042": {
@@ -15314,7 +15319,10 @@
    "attacker": "AM-05",
    "vrt_priority": "varies",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-043": {
@@ -15325,7 +15333,10 @@
    "attacker": "AM-05",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-044": {
@@ -15336,7 +15347,10 @@
    "attacker": "AM-05",
    "vrt_priority": "P3",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-045": {
@@ -15347,7 +15361,10 @@
    "attacker": "AM-05",
    "vrt_priority": "P3",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-046": {
@@ -15371,7 +15388,10 @@
    "attacker": "AM-01",
    "vrt_priority": "P3",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-048": {
@@ -15382,7 +15402,10 @@
    "attacker": "AM-01/AM-05",
    "vrt_priority": "P3",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-049": {
@@ -15393,7 +15416,10 @@
    "attacker": "AM-05",
    "vrt_priority": "P3",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-050": {
@@ -15404,7 +15430,10 @@
    "attacker": "AM-05",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-051": {
@@ -15415,7 +15444,10 @@
    "attacker": "AM-05",
    "vrt_priority": "P2",
    "vrt_best": "P2",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-052": {
@@ -15498,7 +15530,10 @@
    "attacker": "AM-01/AM-05",
    "vrt_priority": "P2",
    "vrt_best": "P2",
-   "requires": [],
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
    "phase": "P6"
   },
   "D15-058": {
@@ -15893,7 +15928,9 @@
    "attacker": "AM-01",
    "vrt_priority": "P4",
    "vrt_best": "P4",
-   "requires": [],
+   "requires": [
+    "backend-api"
+   ],
    "phase": "P6"
   },
   "D15-087": {
@@ -15948,6 +15985,103 @@
    ],
    "phase": "P6"
   },
+  "D15-091": {
+   "domain": "D15",
+   "title": "Attribute every observed backend flow to the process and client stack that issued it",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "backend-api",
+    "device",
+    "mitm"
+   ],
+   "phase": "P6"
+  },
+  "D15-092": {
+   "domain": "D15",
+   "title": "Find the compiled-in environment table and prove its selector is not attacker-writable",
+   "severity": "critical",
+   "severity_floor": "low",
+   "attacker": "AM-02/AM-03",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "backend-api"
+   ],
+   "phase": "P6"
+  },
+  "D15-093": {
+   "domain": "D15",
+   "title": "Realtime channel subscription keyed on a guessable identifier",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-05",
+   "vrt_priority": "P3",
+   "vrt_best": "P1",
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "phase": "P6"
+  },
+  "D15-094": {
+   "domain": "D15",
+   "title": "Model-proxy endpoints: metering, prompt/tool disclosure and server-side tool authorisation",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-01/AM-05",
+   "vrt_priority": "P4",
+   "vrt_best": "P1",
+   "requires": [
+    "backend-api",
+    "ai-feature"
+   ],
+   "phase": "P6"
+  },
+  "D15-095": {
+   "domain": "D15",
+   "title": "Host-header and SNI routing on the shared edge",
+   "severity": "critical",
+   "severity_floor": "low",
+   "attacker": "AM-01",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "backend-api"
+   ],
+   "phase": "P6"
+  },
+  "D15-096": {
+   "domain": "D15",
+   "title": "Opaque pagination cursor carrying the authorisation filter",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-05",
+   "vrt_priority": "P3",
+   "vrt_best": "P1",
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "phase": "P6"
+  },
+  "D15-097": {
+   "domain": "D15",
+   "title": "Batch/multiplex envelope: sub-requests that skip per-route authorisation and throttling",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-05",
+   "vrt_priority": "varies",
+   "vrt_best": "P1",
+   "requires": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "phase": "P6"
+  },
   "D16-001": {
    "domain": "D16",
    "title": "Pull every ABI split before concluding the app has no native code",
@@ -15956,7 +16090,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D16-002": {
@@ -15967,7 +16103,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P4"
   },
   "D16-003": {
@@ -16351,11 +16490,7 @@
    "vrt_priority": "P1",
    "vrt_best": "P1",
    "requires": [
-    "native",
-    "exported-activity",
-    "exported-service",
-    "exported-receiver",
-    "provider"
+    "native"
    ],
    "phase": "P4"
   },
@@ -16408,11 +16543,7 @@
    "vrt_best": "P1",
    "requires": [
     "native",
-    "device",
-    "exported-activity",
-    "exported-service",
-    "exported-receiver",
-    "provider"
+    "device"
    ],
    "phase": "P4"
   },
@@ -16493,13 +16624,7 @@
    "vrt_priority": "P1",
    "vrt_best": "P1",
    "requires": [
-    "native",
-    "flutter",
-    "react-native",
-    "unity",
-    "xamarin",
-    "cordova",
-    "capacitor"
+    "native"
    ],
    "phase": "P4"
   },
@@ -16752,6 +16877,77 @@
    "vrt_best": "?",
    "requires": [
     "native"
+   ],
+   "phase": "P4"
+  },
+  "D16-061": {
+   "domain": "D16",
+   "title": "Native code mapped from another package into the app's process — attribute it before you drop it",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-01/AM-02/AM-03",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "native",
+    "device",
+    "frida"
+   ],
+   "phase": "P4"
+  },
+  "D16-062": {
+   "domain": "D16",
+   "title": "Manifest-declared memory mitigations: MTE mode, GWP-ASan mode, heap pointer tagging",
+   "severity": "low",
+   "severity_floor": "low",
+   "attacker": "n/a",
+   "vrt_priority": "P5",
+   "vrt_best": "P5",
+   "requires": [
+    "native"
+   ],
+   "phase": "P4"
+  },
+  "D16-063": {
+   "domain": "D16",
+   "title": "Read the free sanitizer verdict in the tombstone (GWP-ASan, MTE) before building a harness",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "native",
+    "device"
+   ],
+   "phase": "P4"
+  },
+  "D16-064": {
+   "domain": "D16",
+   "title": "ASan/HWASan on the real caller path: `wrap.sh` repack or an HWASan system image",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-01/AM-02/AM-03/AM-12",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "native",
+    "device"
+   ],
+   "phase": "P4"
+  },
+  "D16-065": {
+   "domain": "D16",
+   "title": "Peripheral and proximity channels that feed a native parser without a tap (NFC, BLE, USB, Nearby)",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-01/AM-02",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "native",
+    "device",
+    "physical"
    ],
    "phase": "P4"
   },
@@ -17658,7 +17854,7 @@
   },
   "D17-069": {
    "domain": "D17",
-   "title": "Duplicate-class shadowing (Maven-Hijack) in the release classpath",
+   "title": "Duplicate-class shadowing (Maven-Hijack) — the binary-side check and the D17-063 chain",
    "severity": "high",
    "severity_floor": "high",
    "attacker": "AM-01/AM-08",
@@ -18923,7 +19119,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D19-002": {
@@ -18934,7 +19132,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D19-003": {
@@ -18956,11 +19156,11 @@
   "D19-004": {
    "domain": "D19",
    "title": "Read the framework's own manifest meta-data and `strings.xml` keys",
-   "severity": "critical",
-   "severity_floor": "critical",
-   "attacker": "AM-09",
-   "vrt_priority": "P1",
-   "vrt_best": "P1",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
    "requires": [
     "react-native",
     "flutter"
@@ -19522,8 +19722,8 @@
   "D19-043": {
    "domain": "D19",
    "title": "Flutter: engine substitution goes undetected — reFlutter and LIEF gadget injection",
-   "severity": "low",
-   "severity_floor": "low",
+   "severity": "support",
+   "severity_floor": "support",
    "attacker": "AM-12",
    "vrt_priority": "P5",
    "vrt_best": "P5",
@@ -19827,7 +20027,7 @@
    "title": "Unity: client-authoritative entitlement and economy logic in `dump.cs`",
    "severity": "critical",
    "severity_floor": "critical",
-   "attacker": "AM-12",
+   "attacker": "AM-01/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "requires": [
@@ -19843,7 +20043,7 @@
    "title": "Unity: PlayerPrefs and `persistentDataPath` treated as authoritative state",
    "severity": "high",
    "severity_floor": "high",
-   "attacker": "AM-12",
+   "attacker": "AM-01/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "P5",
    "requires": [
@@ -19903,7 +20103,7 @@
    "title": "Xamarin / MAUI: patch IL and rebuild the assembly store to prove a client-side check is the only control",
    "severity": "high",
    "severity_floor": "medium",
-   "attacker": "AM-12",
+   "attacker": "AM-01/AM-12",
    "vrt_priority": "P5",
    "vrt_best": "P5",
    "requires": [
@@ -20045,7 +20245,7 @@
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
    "requires": [
-    "backend-api"
+    "—"
    ],
    "phase": "P4"
   },
@@ -20058,7 +20258,77 @@
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
    "requires": [
+    "—"
+   ],
+   "phase": "P4"
+  },
+  "D19-080": {
+   "domain": "D19",
+   "title": "Compiled-in backend environment table and the selector that chooses the row",
+   "severity": "critical",
+   "severity_floor": "support",
+   "attacker": "AM-02/AM-03/AM-06",
+   "vrt_priority": "varies",
+   "vrt_best": "P1",
+   "requires": [
     "backend-api"
+   ],
+   "phase": "P4"
+  },
+  "D19-081": {
+   "domain": "D19",
+   "title": "Flutter code push (Shorebird) with no patch-signing key — the Dart analogue of an unsigned OTA channel",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-06/AM-09",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "flutter"
+   ],
+   "phase": "P4"
+  },
+  "D19-082": {
+   "domain": "D19",
+   "title": "expo-dev-launcher / expo-dev-client shipped in a store build — the `url=` deep link loads an arbitrary bundle",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-02/AM-03",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "react-native",
+    "deeplink"
+   ],
+   "phase": "P4"
+  },
+  "D19-083": {
+   "domain": "D19",
+   "title": "Flutter WebView JavaScript channels and handlers reachable from any loaded origin",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "attacker": "AM-02",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "flutter",
+    "webview",
+    "js-bridge"
+   ],
+   "phase": "P4"
+  },
+  "D19-084": {
+   "domain": "D19",
+   "title": "Capacitor `server.allowNavigation` wildcard keeps the bridge on an off-origin page",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-02/AM-06",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "capacitor",
+    "webview",
+    "js-bridge"
    ],
    "phase": "P4"
   },
@@ -20070,7 +20340,9 @@
    "attacker": "AM-04/AM-05/AM-08/AM-10/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-002": {
@@ -20081,7 +20353,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-003": {
@@ -20092,7 +20366,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-004": {
@@ -20103,7 +20379,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-005": {
@@ -20114,7 +20392,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-006": {
@@ -20125,7 +20405,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-007": {
@@ -20206,7 +20488,9 @@
    "attacker": "AM-04/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-013": {
@@ -20423,7 +20707,7 @@
    "title": "Authenticated responses cacheable, and cached on disk",
    "severity": "medium",
    "severity_floor": "medium",
-   "attacker": "AM-04/AM-05",
+   "attacker": "AM-04/AM-05/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "P5",
    "requires": [
@@ -20715,7 +20999,9 @@
    "attacker": "AM-11",
    "vrt_priority": "P5",
    "vrt_best": "P5",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-050": {
@@ -20858,7 +21144,7 @@
    "title": "Data surviving logout and account switch",
    "severity": "high",
    "severity_floor": "medium",
-   "attacker": "AM-05",
+   "attacker": "AM-05/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "P4",
    "requires": [
@@ -20873,7 +21159,7 @@
    "title": "Account deletion that does not actually delete",
    "severity": "high",
    "severity_floor": "medium",
-   "attacker": "AM-05/AM-11",
+   "attacker": "AM-05/AM-11/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "requires": [
@@ -20901,7 +21187,7 @@
    "title": "Uninstall / reinstall residue and Auto Backup restore",
    "severity": "high",
    "severity_floor": "high",
-   "attacker": "AM-05/AM-11",
+   "attacker": "AM-05/AM-11/AM-12",
    "vrt_priority": "P5",
    "vrt_best": "P1",
    "requires": [
@@ -20960,7 +21246,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-068": {
@@ -20971,7 +21259,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-069": {
@@ -20982,7 +21272,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D20-070": {
@@ -20993,7 +21285,62 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
+   "phase": "P4"
+  },
+  "D20-071": {
+   "domain": "D20",
+   "title": "Shortcut and conversation donations put account data on launcher, share-sheet and widget surfaces — and keep it after logout",
+   "severity": "medium",
+   "severity_floor": "low",
+   "attacker": "AM-04/AM-05/AM-11",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "device"
+   ],
+   "phase": "P4"
+  },
+  "D20-072": {
+   "domain": "D20",
+   "title": "Delegate-process blind spot: egress from the SDK Runtime sandbox or a delegate package is invisible to in-process hooks",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device"
+   ],
+   "phase": "P4"
+  },
+  "D20-073": {
+   "domain": "D20",
+   "title": "Content Capture: PIN, OTP and card views handed to the system content-capture service without an opt-out",
+   "severity": "medium",
+   "severity_floor": "low",
+   "attacker": "AM-11",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "device",
+    "api>=29"
+   ],
+   "phase": "P4"
+  },
+  "D20-074": {
+   "domain": "D20",
+   "title": "Device-fingerprint signals joined to an account identifier in one payload",
+   "severity": "medium",
+   "severity_floor": "low",
+   "attacker": "AM-08",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "mitm"
+   ],
    "phase": "P4"
   },
   "D21-001": {
@@ -21004,7 +21351,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D21-002": {
@@ -21015,7 +21364,9 @@
    "attacker": "AM-01/AM-03/AM-05/AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D21-003": {
@@ -21039,7 +21390,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D21-005": {
@@ -21189,8 +21542,7 @@
    "vrt_best": "varies",
    "requires": [
     "backend-api",
-    "mitm",
-    "two-accounts"
+    "mitm"
    ],
    "phase": "P4"
   },
@@ -21204,8 +21556,7 @@
    "vrt_best": "varies",
    "requires": [
     "backend-api",
-    "mitm",
-    "two-accounts"
+    "mitm"
    ],
    "phase": "P4"
   },
@@ -21219,8 +21570,7 @@
    "vrt_best": "varies",
    "requires": [
     "backend-api",
-    "mitm",
-    "two-accounts"
+    "mitm"
    ],
    "phase": "P4"
   },
@@ -21314,7 +21664,9 @@
    "attacker": "n/a",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D21-025": {
@@ -21529,7 +21881,9 @@
    "attacker": "AM-02",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D21-041": {
@@ -21595,8 +21949,7 @@
    "vrt_priority": "P5",
    "vrt_best": "P5",
    "requires": [
-    "frida",
-    "two-accounts"
+    "frida"
    ],
    "phase": "P4"
   },
@@ -21674,7 +22027,9 @@
    "attacker": "AM-01",
    "vrt_priority": "P5",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D21-052": {
@@ -21685,7 +22040,9 @@
    "attacker": "AM-01",
    "vrt_priority": "P5",
    "vrt_best": "P5",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D21-053": {
@@ -21749,7 +22106,92 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
+   "phase": "P4"
+  },
+  "D21-058": {
+   "domain": "D21",
+   "title": "Integrity-header coverage census — every endpoint that ever carried a token, called without it",
+   "severity": "high",
+   "severity_floor": "high",
+   "attacker": "AM-01",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "backend-api",
+    "mitm"
+   ],
+   "phase": "P4"
+  },
+  "D21-059": {
+   "domain": "D21",
+   "title": "Play Integrity remediation-dialog outcome trusted instead of a fresh verdict",
+   "severity": "high",
+   "severity_floor": "medium",
+   "attacker": "AM-01/AM-12",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "backend-api",
+    "frida"
+   ],
+   "phase": "P4"
+  },
+  "D21-060": {
+   "domain": "D21",
+   "title": "Detection coverage stops at the Java layer — the cross-platform layer that owns the logic is unprotected",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "P5",
+   "vrt_best": "P5",
+   "requires": [
+    "device"
+   ],
+   "phase": "P4"
+  },
+  "D21-061": {
+   "domain": "D21",
+   "title": "Native exploit-mitigation table — the mitigating-factor line every D16 finding needs",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "P5",
+   "vrt_best": "P5",
+   "requires": [
+    "native"
+   ],
+   "phase": "P4"
+  },
+  "D21-062": {
+   "domain": "D21",
+   "title": "App Check token lifetime and cross-service replay",
+   "severity": "high",
+   "severity_floor": "medium",
+   "attacker": "AM-01",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "firebase",
+    "backend-api",
+    "mitm"
+   ],
+   "phase": "P4"
+  },
+  "D21-063": {
+   "domain": "D21",
+   "title": "Integrity verified at session creation only — the protected action is never re-attested",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-01",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "backend-api",
+    "mitm"
+   ],
    "phase": "P4"
   },
   "D22-001": {
@@ -21760,7 +22202,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-002": {
@@ -21771,7 +22215,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-003": {
@@ -21782,7 +22228,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-004": {
@@ -21793,7 +22241,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-005": {
@@ -21804,7 +22254,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-006": {
@@ -21815,7 +22267,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-007": {
@@ -21826,7 +22280,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-008": {
@@ -21837,7 +22293,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-009": {
@@ -22049,7 +22507,9 @@
    "attacker": "AM-08",
    "vrt_priority": "varies",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-025": {
@@ -22060,7 +22520,9 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-026": {
@@ -22071,7 +22533,9 @@
    "attacker": "AM-11/AM-12",
    "vrt_priority": "P5",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-027": {
@@ -22161,7 +22625,9 @@
    "attacker": "AM-03/AM-09",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-034": {
@@ -22172,7 +22638,9 @@
    "attacker": "AM-02/AM-03",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-035": {
@@ -22535,7 +23003,7 @@
   },
   "D22-062": {
    "domain": "D22",
-   "title": "The API 37 horizon — changes already landing that will invalidate current PoCs",
+   "title": "API 37 (Android 17) mandates — the rows the targetSdk-37 bump turns on",
    "severity": "support",
    "severity_floor": "support",
    "attacker": "n/a",
@@ -22580,7 +23048,9 @@
    "attacker": "AM-12",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-066": {
@@ -22617,7 +23087,9 @@
    "attacker": "AM-02/AM-03",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-069": {
@@ -22628,7 +23100,9 @@
    "attacker": "AM-11",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-070": {
@@ -22755,7 +23229,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-079": {
@@ -22766,7 +23242,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-080": {
@@ -22777,7 +23255,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-081": {
@@ -22788,7 +23268,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P4"
   },
   "D22-082": {
@@ -22799,7 +23281,65 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
+   "phase": "P4"
+  },
+  "D22-083": {
+   "domain": "D22",
+   "title": "Explicit intents to a targetSdk-33+ exported component must match its filter — and the senders the rule exempts",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-03",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "targetsdk>=33",
+    "api>=33"
+   ],
+   "phase": "P4"
+  },
+  "D22-084": {
+   "domain": "D22",
+   "title": "Exact alarms denied by default (Android 14, targetSdk 33+) — the security timer that never fires",
+   "severity": "medium",
+   "severity_floor": "low",
+   "attacker": "AM-01/AM-11",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "targetsdk>=33",
+    "api>=34"
+   ],
+   "phase": "P4"
+  },
+  "D22-085": {
+   "domain": "D22",
+   "title": "Cached-app freezer (Android 14+) — the probe that stopped listening before the payload arrived",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device",
+    "api>=34"
+   ],
+   "phase": "P4"
+  },
+  "D22-086": {
+   "domain": "D22",
+   "title": "LEGACY-live: targetSdk < 30 — unscoped shared storage and `requestLegacyExternalStorage`",
+   "severity": "high",
+   "severity_floor": "medium",
+   "attacker": "AM-04",
+   "vrt_priority": "P4",
+   "vrt_best": "P4",
+   "requires": [
+    "targetsdk<30",
+    "legacy"
+   ],
    "phase": "P4"
   },
   "D23-001": {
@@ -22810,7 +23350,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P6"
   },
   "D23-002": {
@@ -23055,8 +23597,6 @@
    "vrt_best": "varies",
    "requires": [
     "payments",
-    "exported-receiver",
-    "deeplink",
     "device"
    ],
    "phase": "P6"
@@ -23400,9 +23940,7 @@
    "requires": [
     "payments",
     "webview",
-    "js-bridge",
-    "targetsdk<17",
-    "legacy"
+    "js-bridge"
    ],
    "phase": "P6"
   },
@@ -23416,9 +23954,6 @@
    "vrt_best": "varies",
    "requires": [
     "payments",
-    "exported-activity",
-    "exported-receiver",
-    "exported-service",
     "device"
    ],
    "phase": "P6"
@@ -23731,10 +24266,6 @@
    "vrt_priority": "varies",
    "vrt_best": "P4",
    "requires": [
-    "exported-activity",
-    "exported-receiver",
-    "exported-service",
-    "deeplink",
     "device"
    ],
    "phase": "P6"
@@ -23788,6 +24319,122 @@
    "vrt_best": "n/a",
    "requires": [
     "payments"
+   ],
+   "phase": "P6"
+  },
+  "D23-067": {
+   "domain": "D23",
+   "title": "Money engine in another package: attribute the flow before marking items n/a",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "payments"
+   ],
+   "phase": "P6"
+  },
+  "D23-068": {
+   "domain": "D23",
+   "title": "Server-issued authorisation artefact does not bind the parameters it is named for",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-01",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "payments",
+    "backend-api",
+    "mitm"
+   ],
+   "phase": "P6"
+  },
+  "D23-069": {
+   "domain": "D23",
+   "title": "Entitlement SDK: client-chosen user id and client-forwarded entitlements trusted",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-01/AM-05",
+   "vrt_priority": "varies",
+   "vrt_best": "P1",
+   "requires": [
+    "payments",
+    "backend-api",
+    "mitm",
+    "two-accounts"
+   ],
+   "phase": "P6"
+  },
+  "D23-070": {
+   "domain": "D23",
+   "title": "Premium flag or credits in a client-writable BaaS document",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-01",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "payments",
+    "backend-api"
+   ],
+   "phase": "P6"
+  },
+  "D23-071": {
+   "domain": "D23",
+   "title": "Pending purchase granted as purchased",
+   "severity": "high",
+   "severity_floor": "high",
+   "attacker": "AM-01",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "payments",
+    "backend-api",
+    "mitm"
+   ],
+   "phase": "P6"
+  },
+  "D23-072": {
+   "domain": "D23",
+   "title": "User-choice / alternative billing and external-offer paths: entitlement from the client listener, `externalTransactionToken` unreconciled",
+   "severity": "high",
+   "severity_floor": "high",
+   "attacker": "AM-01",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "payments",
+    "backend-api",
+    "mitm"
+   ],
+   "phase": "P6"
+  },
+  "D23-073": {
+   "domain": "D23",
+   "title": "Wallet-pass issuance JWT signed on the client with an issuer key shipped in the APK",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-01",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "requires": [
+    "payments"
+   ],
+   "phase": "P6"
+  },
+  "D23-074": {
+   "domain": "D23",
+   "title": "Metered AI / generation credits decremented by the client or by a client-asserted usage report",
+   "severity": "high",
+   "severity_floor": "low",
+   "attacker": "AM-01",
+   "vrt_priority": "varies",
+   "vrt_best": "P4",
+   "requires": [
+    "payments",
+    "ai-feature",
+    "backend-api"
    ],
    "phase": "P6"
   },
@@ -24529,7 +25176,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-002": {
@@ -24566,7 +25215,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-005": {
@@ -24577,7 +25228,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-006": {
@@ -24588,7 +25241,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-007": {
@@ -24599,7 +25254,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-008": {
@@ -24610,7 +25267,9 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-009": {
@@ -24621,7 +25280,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-010": {
@@ -24632,7 +25294,10 @@
    "attacker": "AM-03/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-011": {
@@ -24640,10 +25305,13 @@
    "title": "Android 15 `signature-permissions` allowlist for platform-signed non-system apps",
    "severity": "medium",
    "severity_floor": "medium",
-   "attacker": "AM-12",
+   "attacker": "AM-03/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-012": {
@@ -24654,7 +25322,9 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-013": {
@@ -24665,7 +25335,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-014": {
@@ -24676,7 +25348,9 @@
    "attacker": "AM-04/AM-06/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-015": {
@@ -24687,7 +25361,9 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-016": {
@@ -24698,7 +25374,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-017": {
@@ -24709,7 +25388,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-018": {
@@ -24720,7 +25402,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-019": {
@@ -24731,7 +25416,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "P2",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-020": {
@@ -24742,7 +25430,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-021": {
@@ -24753,7 +25444,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-022": {
@@ -24764,7 +25458,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-023": {
@@ -24775,7 +25472,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-024": {
@@ -24786,7 +25486,9 @@
    "attacker": "AM-03/AM-08",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-025": {
@@ -24797,7 +25499,10 @@
    "attacker": "AM-01",
    "vrt_priority": "varies",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-026": {
@@ -24808,7 +25513,10 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "root"
+   ],
    "phase": "P5"
   },
   "D25-027": {
@@ -24819,7 +25527,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "root"
+   ],
    "phase": "P5"
   },
   "D25-028": {
@@ -24830,7 +25541,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "root"
+   ],
    "phase": "P5"
   },
   "D25-029": {
@@ -24841,7 +25555,10 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "root"
+   ],
    "phase": "P5"
   },
   "D25-030": {
@@ -24852,7 +25569,10 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "root"
+   ],
    "phase": "P5"
   },
   "D25-031": {
@@ -24863,7 +25583,10 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "root"
+   ],
    "phase": "P5"
   },
   "D25-032": {
@@ -24888,7 +25611,9 @@
    "attacker": "AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-034": {
@@ -24899,7 +25624,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-035": {
@@ -24910,7 +25637,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-036": {
@@ -24979,7 +25709,10 @@
    "attacker": "AM-06/AM-11",
    "vrt_priority": "P3",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-041": {
@@ -24990,7 +25723,10 @@
    "attacker": "AM-01",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-042": {
@@ -25002,8 +25738,6 @@
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "requires": [
-    "oem-scope",
-    "enterprise",
     "device"
    ],
    "phase": "P5"
@@ -25016,7 +25750,9 @@
    "attacker": "AM-06/AM-11",
    "vrt_priority": "P2",
    "vrt_best": "P2",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-044": {
@@ -25028,8 +25764,6 @@
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "requires": [
-    "enterprise",
-    "physical",
     "device"
    ],
    "phase": "P5"
@@ -25042,7 +25776,9 @@
    "attacker": "AM-03/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-046": {
@@ -25053,7 +25789,9 @@
    "attacker": "AM-03/AM-06",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-047": {
@@ -25078,7 +25816,10 @@
    "attacker": "AM-10/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "oem-scope",
+    "physical"
+   ],
    "phase": "P5"
   },
   "D25-049": {
@@ -25089,7 +25830,9 @@
    "attacker": "AM-10/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "physical"
+   ],
    "phase": "P5"
   },
   "D25-050": {
@@ -25100,7 +25843,9 @@
    "attacker": "AM-10/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "physical"
+   ],
    "phase": "P5"
   },
   "D25-051": {
@@ -25154,7 +25899,9 @@
    "attacker": "AM-10",
    "vrt_priority": "varies",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-055": {
@@ -25165,7 +25912,9 @@
    "attacker": "AM-10/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "physical"
+   ],
    "phase": "P5"
   },
   "D25-056": {
@@ -25190,7 +25939,9 @@
    "attacker": "AM-04/AM-10",
    "vrt_priority": "P4",
    "vrt_best": "P4",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-058": {
@@ -25227,7 +25978,9 @@
    "attacker": "AM-02/AM-06",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P5"
   },
   "D25-061": {
@@ -25265,9 +26018,6 @@
    "vrt_priority": "P1",
    "vrt_best": "P1",
    "requires": [
-    "wear",
-    "auto",
-    "tv",
     "backend-api"
    ],
    "phase": "P5"
@@ -25333,7 +26083,9 @@
    "attacker": "AM-05/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "enterprise"
+   ],
    "phase": "P5"
   },
   "D25-069": {
@@ -25344,7 +26096,9 @@
    "attacker": "AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "enterprise"
+   ],
    "phase": "P5"
   },
   "D25-070": {
@@ -25355,7 +26109,9 @@
    "attacker": "AM-11",
    "vrt_priority": "varies",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "enterprise"
+   ],
    "phase": "P5"
   },
   "D25-071": {
@@ -25366,7 +26122,9 @@
    "attacker": "AM-03/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "enterprise"
+   ],
    "phase": "P5"
   },
   "D25-072": {
@@ -25377,7 +26135,9 @@
    "attacker": "AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "enterprise"
+   ],
    "phase": "P5"
   },
   "D25-073": {
@@ -25388,7 +26148,9 @@
    "attacker": "AM-03/AM-11",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "enterprise"
+   ],
    "phase": "P5"
   },
   "D25-074": {
@@ -25399,7 +26161,9 @@
    "attacker": "AM-02",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-075": {
@@ -25410,7 +26174,9 @@
    "attacker": "AM-03/AM-11",
    "vrt_priority": "P3",
    "vrt_best": "P3",
-   "requires": [],
+   "requires": [
+    "enterprise"
+   ],
    "phase": "P5"
   },
   "D25-076": {
@@ -25421,7 +26187,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-077": {
@@ -25432,7 +26200,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-078": {
@@ -25443,7 +26213,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P5"
   },
   "D25-079": {
@@ -25454,7 +26226,77 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
+   "phase": "P5"
+  },
+  "D25-080": {
+   "domain": "D25",
+   "title": "The target, or an OEM preload, holds UICC carrier privileges — a privileged class the permission tables miss",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-03",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "device"
+   ],
+   "phase": "P5"
+  },
+  "D25-081": {
+   "domain": "D25",
+   "title": "A preload's effective capability is permissions + app-ops + roles + pre-enabled services — census all four",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-03",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "oem-scope",
+    "device"
+   ],
+   "phase": "P5"
+  },
+  "D25-082": {
+   "domain": "D25",
+   "title": "Connected-apps / `INTERACT_ACROSS_PROFILES` — the sanctioned IPC bridge between the work and personal instances is unauthenticated",
+   "severity": "high",
+   "severity_floor": "high",
+   "attacker": "AM-03",
+   "vrt_priority": "varies",
+   "vrt_best": "P3",
+   "requires": [
+    "enterprise",
+    "device"
+   ],
+   "phase": "P5"
+  },
+  "D25-083": {
+   "domain": "D25",
+   "title": "Enterprise provisioning payload (QR / NFC bump / zero-touch): weak DPC binding or a reusable enrolment secret",
+   "severity": "critical",
+   "severity_floor": "high",
+   "attacker": "AM-06/AM-11",
+   "vrt_priority": "P3",
+   "vrt_best": "P3",
+   "requires": [
+    "enterprise"
+   ],
+   "phase": "P5"
+  },
+  "D25-084": {
+   "domain": "D25",
+   "title": "Advanced Protection Mode (Android 16) in the posture block, and the app's handling of it",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-03/AM-10/AM-11/AM-12",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "device",
+    "api>=36"
+   ],
    "phase": "P5"
   },
   "D26-001": {
@@ -25465,7 +26307,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-002": {
@@ -25476,7 +26320,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-003": {
@@ -25516,7 +26362,12 @@
    "attacker": "AM-07",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "root",
+    "mitm",
+    "api>=34"
+   ],
    "phase": "P1"
   },
   "D26-006": {
@@ -25527,7 +26378,12 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "root",
+    "mitm",
+    "api>=34"
+   ],
    "phase": "P1"
   },
   "D26-007": {
@@ -25567,7 +26423,10 @@
    "attacker": "AM-11/AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-010": {
@@ -25578,7 +26437,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-011": {
@@ -25589,7 +26451,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-012": {
@@ -25626,7 +26491,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-015": {
@@ -25637,7 +26504,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-016": {
@@ -25648,7 +26517,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-017": {
@@ -25659,7 +26530,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-018": {
@@ -25670,7 +26543,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-019": {
@@ -25681,7 +26556,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-020": {
@@ -25692,7 +26569,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-021": {
@@ -25703,7 +26582,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-022": {
@@ -25714,7 +26595,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-023": {
@@ -25725,7 +26608,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-024": {
@@ -25736,7 +26621,9 @@
    "attacker": "AM-01",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-025": {
@@ -25747,7 +26634,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-026": {
@@ -25758,7 +26647,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-027": {
@@ -25769,7 +26660,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-028": {
@@ -25792,9 +26685,11 @@
    "severity": "medium",
    "severity_floor": "medium",
    "attacker": "AM-12",
-   "vrt_priority": "?",
-   "vrt_best": "?",
-   "requires": [],
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-030": {
@@ -25805,7 +26700,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-031": {
@@ -25816,7 +26713,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-032": {
@@ -25827,7 +26726,9 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-033": {
@@ -25838,7 +26739,9 @@
    "attacker": "AM-03",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-034": {
@@ -25849,7 +26752,9 @@
    "attacker": "AM-03",
    "vrt_priority": "inherit:D07",
    "vrt_best": "inherit:D07",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-035": {
@@ -25860,7 +26765,9 @@
    "attacker": "AM-04",
    "vrt_priority": "P4",
    "vrt_best": "P4",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-036": {
@@ -25912,7 +26819,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-040": {
@@ -25923,7 +26832,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-041": {
@@ -25934,7 +26845,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-042": {
@@ -25945,7 +26859,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-043": {
@@ -25956,7 +26873,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-044": {
@@ -25967,7 +26887,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-045": {
@@ -25978,7 +26901,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-046": {
@@ -25989,7 +26915,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-047": {
@@ -26000,7 +26929,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-048": {
@@ -26011,18 +26943,24 @@
    "attacker": "AM-12",
    "vrt_priority": "inherit:D17",
    "vrt_best": "inherit:D17",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-049": {
    "domain": "D26",
-   "title": "The six Frida corrections that each cost a working day",
+   "title": "The Frida corrections not covered by D26-041/043",
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-050": {
@@ -26033,7 +26971,10 @@
    "attacker": "AM-12",
    "vrt_priority": "P5",
    "vrt_best": "P5",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-051": {
@@ -26044,7 +26985,10 @@
    "attacker": "AM-12",
    "vrt_priority": "P5",
    "vrt_best": "P5",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-052": {
@@ -26070,7 +27014,10 @@
    "attacker": "AM-03/AM-12",
    "vrt_priority": "inherit:D06",
    "vrt_best": "inherit:D06",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-054": {
@@ -26081,7 +27028,10 @@
    "attacker": "AM-12",
    "vrt_priority": "P2",
    "vrt_best": "P2",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-055": {
@@ -26092,7 +27042,10 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida"
+   ],
    "phase": "P1"
   },
   "D26-056": {
@@ -26130,7 +27083,11 @@
    "attacker": "AM-12",
    "vrt_priority": "inherit:D16",
    "vrt_best": "inherit:D16",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida",
+    "native"
+   ],
    "phase": "P1"
   },
   "D26-059": {
@@ -26141,7 +27098,11 @@
    "attacker": "AM-12",
    "vrt_priority": "inherit:D16",
    "vrt_best": "inherit:D16",
-   "requires": [],
+   "requires": [
+    "device",
+    "frida",
+    "native"
+   ],
    "phase": "P1"
   },
   "D26-060": {
@@ -26154,14 +27115,7 @@
    "vrt_best": "inherit:D19",
    "requires": [
     "device",
-    "frida",
-    "flutter",
-    "react-native",
-    "hermes",
-    "cordova",
-    "capacitor",
-    "unity",
-    "xamarin"
+    "frida"
    ],
    "phase": "P1"
   },
@@ -26186,7 +27140,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-063": {
@@ -26197,7 +27153,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-064": {
@@ -26221,7 +27179,9 @@
    "attacker": "AM-03/AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-066": {
@@ -26232,7 +27192,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-067": {
@@ -26243,7 +27205,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-068": {
@@ -26254,7 +27218,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-069": {
@@ -26265,7 +27231,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-070": {
@@ -26276,7 +27244,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-071": {
@@ -26287,7 +27257,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-072": {
@@ -26298,7 +27270,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-073": {
@@ -26309,7 +27283,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-074": {
@@ -26320,7 +27296,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "device"
+   ],
    "phase": "P1"
   },
   "D26-075": {
@@ -26331,7 +27309,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-076": {
@@ -26370,7 +27350,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P1"
   },
   "D26-079": {
@@ -26386,6 +27368,86 @@
    ],
    "phase": "P1"
   },
+  "D26-080": {
+   "domain": "D26",
+   "title": "The adb quoting contract — the device shell re-parses everything you send",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device"
+   ],
+   "phase": "P1"
+  },
+  "D26-081": {
+   "domain": "D26",
+   "title": "Serialise every worker that touches a shared device — instrumentation, process lifecycle and UI alike",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device"
+   ],
+   "phase": "P1"
+  },
+  "D26-082": {
+   "domain": "D26",
+   "title": "The probe app's run contract — fresh launch, foreground, file-mirrored output, positive control",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-03",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device"
+   ],
+   "phase": "P1"
+  },
+  "D26-083": {
+   "domain": "D26",
+   "title": "Attribute traffic to a UID, and run a negative TLS test against one app only",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device",
+    "root",
+    "mitm"
+   ],
+   "phase": "P1"
+  },
+  "D26-084": {
+   "domain": "D26",
+   "title": "Record remote-config and feature-flag state per device before settling any gated item",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device"
+   ],
+   "phase": "P1"
+  },
+  "D26-085": {
+   "domain": "D26",
+   "title": "Know which Android user the target is installed in — private space and work profile are separate users",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device"
+   ],
+   "phase": "P1"
+  },
   "D27-001": {
    "domain": "D27",
    "title": "Title the impact category, never the Android mechanism",
@@ -26394,7 +27456,9 @@
    "attacker": "AM-03",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-002": {
@@ -26405,7 +27469,9 @@
    "attacker": "AM-01/AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-003": {
@@ -26416,7 +27482,9 @@
    "attacker": "AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-004": {
@@ -26428,11 +27496,7 @@
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
    "requires": [
-    "react-native",
-    "hermes",
-    "cordova",
-    "capacitor",
-    "flutter"
+    "—"
    ],
    "phase": "P9"
   },
@@ -26444,7 +27508,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-006": {
@@ -26455,7 +27521,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-007": {
@@ -26466,7 +27534,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-008": {
@@ -26477,7 +27547,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-009": {
@@ -26488,7 +27560,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-010": {
@@ -26499,7 +27573,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-011": {
@@ -26510,7 +27586,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-012": {
@@ -26521,7 +27599,9 @@
    "attacker": "AM-03",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-013": {
@@ -26532,7 +27612,9 @@
    "attacker": "AM-03",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-014": {
@@ -26543,7 +27625,9 @@
    "attacker": "n/a",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-015": {
@@ -26554,7 +27638,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-016": {
@@ -26565,7 +27651,9 @@
    "attacker": "AM-01/AM-02/AM-12",
    "vrt_priority": "varies",
    "vrt_best": "varies",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-017": {
@@ -26576,7 +27664,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-018": {
@@ -26600,7 +27690,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-020": {
@@ -26611,7 +27703,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-021": {
@@ -26622,7 +27716,9 @@
    "attacker": "AM-01/AM-03/AM-05",
    "vrt_priority": "?",
    "vrt_best": "?",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-022": {
@@ -26633,7 +27729,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-023": {
@@ -26644,7 +27742,9 @@
    "attacker": "AM-01/AM-12",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-024": {
@@ -26655,7 +27755,9 @@
    "attacker": "AM-01/AM-02/AM-03/AM-04/AM-06",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-025": {
@@ -26666,7 +27768,9 @@
    "attacker": "AM-03",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-026": {
@@ -26677,7 +27781,9 @@
    "attacker": "AM-12",
    "vrt_priority": "?",
    "vrt_best": "?",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-027": {
@@ -26688,7 +27794,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-028": {
@@ -26699,7 +27807,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-029": {
@@ -26710,7 +27820,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-030": {
@@ -26882,11 +27994,7 @@
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "requires": [
-    "device",
-    "provider",
-    "exported-activity",
-    "exported-service",
-    "exported-receiver"
+    "device"
    ],
    "phase": "P9"
   },
@@ -26898,7 +28006,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-044": {
@@ -26936,7 +28046,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-047": {
@@ -26947,7 +28059,9 @@
    "attacker": "AM-03",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-048": {
@@ -26958,7 +28072,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-049": {
@@ -26969,7 +28085,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-050": {
@@ -26980,7 +28098,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-051": {
@@ -26991,7 +28111,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-052": {
@@ -27048,7 +28170,7 @@
   },
   "D27-056": {
    "domain": "D27",
-   "title": "The layer-ordering trap — a validation error does not prove you passed auth",
+   "title": "The layer-ordering trap, reporting side — attach the `{}` re-test to every auth-bypass claim",
    "severity": "support",
    "severity_floor": "support",
    "attacker": "AM-01",
@@ -27061,13 +28183,15 @@
   },
   "D27-057": {
    "domain": "D27",
-   "title": "The shell-loop ban — count your results",
+   "title": "The shell-loop ban, reporting side — a sweep row carries both counts",
    "severity": "support",
    "severity_floor": "support",
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-058": {
@@ -27091,7 +28215,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-060": {
@@ -27102,7 +28228,9 @@
    "attacker": "n/a",
    "vrt_priority": "inherit",
    "vrt_best": "inherit",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-061": {
@@ -27113,7 +28241,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-062": {
@@ -27124,7 +28254,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-063": {
@@ -27135,7 +28267,9 @@
    "attacker": "n/a",
    "vrt_priority": "?",
    "vrt_best": "?",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-064": {
@@ -27146,7 +28280,9 @@
    "attacker": "AM-03",
    "vrt_priority": "?",
    "vrt_best": "?",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-065": {
@@ -27157,7 +28293,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-066": {
@@ -27168,7 +28306,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-067": {
@@ -27179,7 +28319,9 @@
    "attacker": "AM-01/AM-02/AM-03",
    "vrt_priority": "P1",
    "vrt_best": "P1",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-068": {
@@ -27190,7 +28332,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-069": {
@@ -27201,7 +28345,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-070": {
@@ -27212,7 +28358,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-071": {
@@ -27223,7 +28371,9 @@
    "attacker": "AM-03/AM-12",
    "vrt_priority": "?",
    "vrt_best": "?",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-072": {
@@ -27247,7 +28397,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-074": {
@@ -27258,7 +28410,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-075": {
@@ -27282,7 +28436,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-077": {
@@ -27307,7 +28463,9 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D27-079": {
@@ -27318,7 +28476,61 @@
    "attacker": "n/a",
    "vrt_priority": "n/a",
    "vrt_best": "n/a",
-   "requires": [],
+   "requires": [
+    "—"
+   ],
+   "phase": "P9"
+  },
+  "D27-080": {
+   "domain": "D27",
+   "title": "Single-driver attestation — a recorded take is void if another driver touched the device",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "AM-12",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "device"
+   ],
+   "phase": "P9"
+  },
+  "D27-081": {
+   "domain": "D27",
+   "title": "Submission-slot budgeting — know the platform's pending-report cap before deciding the filing order",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "—"
+   ],
+   "phase": "P9"
+  },
+  "D27-082": {
+   "domain": "D27",
+   "title": "Evidence residency — the engagement folder has its own private remote, never the methodology repository's",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "—"
+   ],
+   "phase": "P9"
+  },
+  "D27-083": {
+   "domain": "D27",
+   "title": "Transcript-backed claims — every factual sentence in an agent-written report maps to an executed command",
+   "severity": "support",
+   "severity_floor": "support",
+   "attacker": "n/a",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "requires": [
+    "—"
+   ],
    "phase": "P9"
   },
   "D28-001": {

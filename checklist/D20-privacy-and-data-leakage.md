@@ -17,7 +17,7 @@
 | **Milestones** | M4 (the logout / deletion / residue items land in M5) |
 | **VRT ceiling** | Natively, **P3** — `sensitive_data_exposure.exif_geolocation_data_not_stripped_from_uploaded_images.automatic_user_enumeration` is the only concrete rated node this domain owns above P4 (`...manual_user_enumeration` is P4; `privacy_concerns.unnecessary_data_collection.wifi_ssid_password` is the only concrete `privacy_concerns` child, at P4). The honest ceiling is reached by **leaving the branch**: `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` carries a **null** priority — "varies by demonstrated impact" — and HackerOne's Platform Standards put multi-user sensitive-PII exposure by an unprivileged internet attacker at **Critical**; a logged or notification-borne OTP files as `broken_authentication_and_session_management.two_fa_bypass` (**P3**); a logged bearer token that authenticates files as `broken_authentication_and_session_management.authentication_bypass` (**P1**); a server-side send credential recovered alongside the telemetry files as `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**). Never file a privacy observation under a P5 node when the value is an authenticator — file the authenticator. |
 | **Primary attacker model** | **AM-04** — a co-resident app holding exactly one user-granted capability: notification access, an accessibility service, being the default IME, or a MediaProjection consent. This is the model that makes the chapter real, and it is one toggle, not an exploit. Also **AM-08** malicious or over-collecting third-party SDK (the crash/analytics/session-replay items), **AM-10** physical locked (lock-screen notifications), **AM-05** another user of the same app (EXIF, shared devices), **AM-03** zero-permission local app (shared-storage and broadcast leakage). **AM-12 own rooted device is not an attack** and is the single most common reason a D20 report closes informational. |
-| **Maps to** | MASVS-PRIVACY-1, MASVS-PRIVACY-2, MASVS-PRIVACY-3, MASVS-PLATFORM-3, MASVS-STORAGE-1, MASVS-STORAGE-2 · MASTG-TEST-0203, MASTG-TEST-0206, MASTG-TEST-0231, MASTG-TEST-0254, MASTG-TEST-0255, MASTG-TEST-0256, MASTG-TEST-0257, MASTG-TEST-0258, MASTG-TEST-0263, MASTG-TEST-0264, MASTG-TEST-0265, MASTG-TEST-0289, MASTG-TEST-0291, MASTG-TEST-0292, MASTG-TEST-0293, MASTG-TEST-0294, MASTG-TEST-0315, MASTG-TEST-0316, MASTG-TEST-0318, MASTG-TEST-0319, MASTG-TEST-0320; deprecated v1 predecessors MASTG-TEST-0003, MASTG-TEST-0005, MASTG-TEST-0006, MASTG-TEST-0008, MASTG-TEST-0010, MASTG-TEST-0041 · MASTG-TECH-0002, MASTG-TECH-0009, MASTG-TECH-0010, MASTG-TECH-0022, MASTG-TECH-0043, MASTG-TECH-0100, MASTG-TECH-0142 · MASTG-KNOW-0009, MASTG-KNOW-0049, MASTG-KNOW-0053, MASTG-KNOW-0054, MASTG-KNOW-0055 · MASTG-BEST-0002, MASTG-BEST-0014, MASTG-BEST-0019, MASTG-BEST-0027 · MASTG-TOOL-0001, MASTG-TOOL-0015, MASTG-TOOL-0029, MASTG-TOOL-0077, MASTG-TOOL-0079, MASTG-TOOL-0081, MASTG-TOOL-0097, MASTG-TOOL-0106, MASTG-TOOL-0112 · MASWE-0005, MASWE-0019, MASWE-0025, MASWE-0030, MASWE-0036, MASWE-0037, MASWE-0038, MASWE-0040, MASWE-0050, MASWE-0061, MASWE-0067, MASWE-0068, MASWE-0073, MASWE-0074 · CWE-200, CWE-256, CWE-312, CWE-359, CWE-459, CWE-524, CWE-532, CWE-668, CWE-732, CWE-921, CWE-927 · T1414, T1417.001, T1429, T1430, T1453, T1512, T1513, T1517, T1532, T1533, T1541, T1628, T1628.002, T1636 (.001–.005), T1641.001, T1644, T1646 · AOSP security-model threats [T.A5], [T.D1], [T.P3], [T.P4] |
+| **Maps to** | MASVS-PRIVACY-1, MASVS-PRIVACY-2, MASVS-PRIVACY-3, MASVS-PLATFORM-3, MASVS-STORAGE-1, MASVS-STORAGE-2 · MASTG-TEST-0203, MASTG-TEST-0206, MASTG-TEST-0231, MASTG-TEST-0254, MASTG-TEST-0258, MASTG-TEST-0263, MASTG-TEST-0264, MASTG-TEST-0265, MASTG-TEST-0289, MASTG-TEST-0291, MASTG-TEST-0315, MASTG-TEST-0316, MASTG-TEST-0318, MASTG-TEST-0319, MASTG-TEST-0320; v1 predecessors MASTG-TEST-0003 (deprecated), MASTG-TEST-0005 (deprecated), MASTG-TEST-0006 (deprecated), MASTG-TEST-0008 (deprecated), MASTG-TEST-0010 (deprecated), MASTG-TEST-0041 (deprecated) · MASTG-TECH-0002, MASTG-TECH-0009, MASTG-TECH-0010, MASTG-TECH-0022, MASTG-TECH-0043, MASTG-TECH-0100, MASTG-TECH-0142 · MASTG-KNOW-0009, MASTG-KNOW-0049, MASTG-KNOW-0053, MASTG-KNOW-0054, MASTG-KNOW-0055 · MASTG-BEST-0002, MASTG-BEST-0014 · MASTG-TOOL-0001, MASTG-TOOL-0015, MASTG-TOOL-0029, MASTG-TOOL-0077, MASTG-TOOL-0079, MASTG-TOOL-0081, MASTG-TOOL-0097, MASTG-TOOL-0106, MASTG-TOOL-0112 · MASWE-0005, MASWE-0019, MASWE-0025, MASWE-0030, MASWE-0036, MASWE-0037, MASWE-0038, MASWE-0040, MASWE-0050, MASWE-0061, MASWE-0066, MASWE-0067, MASWE-0068, MASWE-0071, MASWE-0072, MASWE-0073, MASWE-0074, MASWE-0076, MASWE-0077 · CWE-200, CWE-256, CWE-312, CWE-359, CWE-459, CWE-524, CWE-532, CWE-668, CWE-732, CWE-921, CWE-927 · T1414, T1417.001, T1429, T1430, T1453, T1512, T1513, T1517, T1532, T1533, T1541, T1628, T1628.002, T1636 (.001–.005), T1641.001, T1644, T1646 · AOSP security-model threats [T.A5], [T.D1], [T.P3], [T.P4] |
 
 ## Why this domain pays
 
@@ -69,23 +69,31 @@ signed-in user — and if none does, is any value the app emits an authenticator
 D20 never goes `n/a` as a whole — every app emits log lines, renders a screen and usually posts a notification. The probe decides which of the five item groups apply and records the baseline facts the items reuse. Run it once in P4 before the Triage order; it takes under a minute.
 
 ```bash
-DEC=$E/decompiled; M=$DEC/apktool/AndroidManifest.xml; SRC=$DEC/jadx/sources
-# 1. third-party hosts and SDKs — decides the egress group (D20-016..025, D20-053..056, D20-072/073)
-grep -rhoE 'https?://[A-Za-z0-9.-]+\.[a-z]{2,}' $SRC $DEC/apktool/res/values 2>/dev/null | sort -u | tee $E/inventory/hosts-static.txt | wc -l
-grep -nE 'InitProvider|meta-data' $M | grep -iE 'crashlytics|sentry|bugsnag|instabug|datadog|uxcam|smartlook|clarity|fullstory|quantum|logrocket|firebase|AD_ID|appsearch' | wc -l   # R8-safe SDK census
-# 2. notification, capture, input and sensor surfaces — decides D20-030..035, D20-036..051, D20-029/055/059/064..066
-grep -oE 'POST_NOTIFICATIONS|BIND_NOTIFICATION_LISTENER_SERVICE|DETECT_SCREEN_CAPTURE|FOREGROUND_SERVICE_MEDIA_PROJECTION|QUERY_ALL_PACKAGES|HIGH_SAMPLING_RATE_SENSORS|READ_CONTACTS|READ_CALENDAR|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|RECORD_AUDIO|android.permission.CAMERA|foregroundServiceType="[a-zA-Z|]+"' $M | sort | uniq -c
-grep -rlE 'Notification\$Builder|NotificationCompat\$Builder|FLAG_SECURE|setContentSensitivity|EXTRA_IS_SENSITIVE|accessibilityDataSensitive|importantForAutofill|SetSchemaRequest|ShortcutManager' $SRC $DEC/apktool/res/layout 2>/dev/null | wc -l
+DEC="$E/decompiled"; M="$DEC/apktool/AndroidManifest.xml"; SRC="$DEC/jadx/sources"
+# 1. third-party hosts and SDKs — decides the egress group (D20-016..025, D20-053..056, D20-072, D20-074)
+grep -rhoE 'https?://[A-Za-z0-9.-]+\.[a-z]{2,}' "$SRC" "$DEC/apktool/res/values" 2>/dev/null | sort -u | tee "$E/inventory/hosts-static.txt" | wc -l
+grep -nE 'InitProvider|meta-data' "$M" | grep -iE 'crashlytics|sentry|bugsnag|instabug|datadog|uxcam|smartlook|clarity|fullstory|quantum|logrocket|firebase|AD_ID|appsearch' | wc -l   # R8-safe SDK census
+# 2. notification, capture, input and sensor surfaces — decides D20-030..035, D20-036..051, D20-029/055/059/064..066, D20-071, D20-073
+grep -oE 'POST_NOTIFICATIONS|BIND_NOTIFICATION_LISTENER_SERVICE|DETECT_SCREEN_CAPTURE|FOREGROUND_SERVICE_MEDIA_PROJECTION|QUERY_ALL_PACKAGES|HIGH_SAMPLING_RATE_SENSORS|READ_CONTACTS|READ_CALENDAR|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|RECORD_AUDIO|android.permission.CAMERA|foregroundServiceType="[a-zA-Z|]+"' "$M" | sort | uniq -c
+grep -rlE 'Notification\$Builder|NotificationCompat\$Builder|FLAG_SECURE|setContentSensitivity|EXTRA_IS_SENSITIVE|accessibilityDataSensitive|importantForAutofill|importantForContentCapture|ContentCaptureManager|SetSchemaRequest|ShortcutManager' "$SRC" "$DEC/apktool/res/layout" 2>/dev/null | wc -l
 # 3. backend and accounts — decides D20-027/028/058/060..063 (two-accounts for the cross-user halves)
-jq -c '{scope: .authorisation.scope, accounts: (.accounts|length), framework: .target.framework, targetSdk: .target.targetSdk, minSdk: .target.minSdk}' $E/engagement.json
+jq -c '{scope: .authorisation.scope, accounts: (.accounts|length), framework: .target.framework, targetSdk: .target.targetSdk, minSdk: .target.minSdk}' "$E/engagement.json"
 ```
 
-Write the result into `assessment-status.md` as one line per group, then mark rows in `coverage.csv`:
+Save the output as `logs/D20-probe.txt` and write one line per group into `assessment-status.md`. The domain
+decision is therefore always `applies`:
 
-- Egress group `n/a` only when step 1 lists zero third-party hosts AND zero SDK registrations AND the D14 proxy capture of a full flow pass contacted first-party hosts only. Note text: `D20-016..025 n/a — static host sweep: N hosts, all first-party (inventory/hosts-static.txt); 0 SDK init providers; D14 capture M flows, 0 third-party hosts`.
-- Notification group `n/a` when the manifest has no `POST_NOTIFICATIONS` and step 2 finds 0 Notification builders. Note text: `D20-030..035 n/a — no POST_NOTIFICATIONS, 0 Notification builder classes; minSdk=<n>`.
-- Sensor/contacts/media group `n/a` per permission absent in step 2 (one note per item: `D20-029 n/a — READ_CONTACTS/READ_CALENDAR absent from manifest`).
-- Backend/cross-user items are `blocked`, never `n/a`, when `accounts < 2` or the backend is out of scope: `D20-058/061/062 blocked — second account missing (engagement.json.blockers)`.
+```bash
+python3 scripts/mark.py "$E" D20 applies --note "D20 probe: <N> static hosts (<k> third-party), <m> SDK registrations, surfaces: <permissions from step 2> (logs/D20-probe.txt)"
+```
+
+Then settle the groups with one `mark.py` call per id — for a range,
+`for n in $(seq -w 16 25); do python3 scripts/mark.py "$E" D20-0$n n/a --note "<note text>"; done`:
+
+- Egress group `n/a` only when step 1 lists zero third-party hosts AND zero SDK registrations AND the D14 proxy capture of a full flow pass contacted first-party hosts only. Note text: `static host sweep: N hosts, all first-party (inventory/hosts-static.txt); 0 SDK init providers; D14 capture M flows, 0 third-party hosts`.
+- Notification group `n/a` when the manifest has no `POST_NOTIFICATIONS` and step 2 finds 0 Notification builders. Note text (D20-030..035): `no POST_NOTIFICATIONS, 0 Notification builder classes; minSdk=<n>`.
+- Sensor/contacts/media group `n/a` per permission absent in step 2 (one note per item, e.g. D20-029: `READ_CONTACTS/READ_CALENDAR absent from the merged manifest`).
+- Backend/cross-user items are `blocked`, never `n/a`, when `accounts < 2` or the backend is out of scope: `python3 scripts/mark.py "$E" D20-058 blocked --note "needs: second account B for the cross-user half (engagement.json.blockers)"`, and the same for D20-061 and D20-062 (`mark.py` rejects a `blocked` note without `needs:`).
 - Everything else (method items D20-001..006, logcat D20-007..015, screen/input D20-036..051, lifecycle D20-060/063, governance D20-067..070) is always applicable; record `targetSdk/minSdk` and the device API from step 3 so the `api>=N` items can be marked `n/a` on an older device image with the note `D20-0xx n/a — device API <n> below the item gate`.
 
 ## Triage order
@@ -95,7 +103,7 @@ Write the result into `assessment-status.md` as one line per group, then mark ro
    capture unsearchable and produces word-collision false positives.
 2. **One controlled flow, all log buffers, then grep** (D20-007). Ten minutes, and it decides whether the
    logging half of the chapter is live or a verified negative.
-3. **Enumerate `READ_LOGS` holders on the target's supported device set** (D20-008). One loop. Without a
+3. **Enumerate `READ_LOGS` holders on the target's supported device set** (D20-008). One `dumpsys package packages` call, parsed once. Without a
    named holder, every logcat item below is P5 and you should say so in the report rather than inflate it.
 4. **Proxy one authenticated session and grep the capture for the canaries** (D20-025). This is the item
    with the highest realistic ceiling and it reuses the capture you already have from D14/D15.
@@ -118,17 +126,41 @@ Write the result into `assessment-status.md` as one line per group, then mark ro
     and it is where "privacy" becomes "the token still works".
 13. **Clipboard, keyboard cache, autofill, Recents** (D20-040, D20-043 to D20-049). All P5 by VRT. Run them
     for completeness, for the chain, and for the ruled-out register — never as headline findings.
+14. **Process attribution, platform donations, capture and fingerprint joins** (D20-072 before trusting any
+    egress table when an `sdk_sandbox` or delegate process exists; then D20-071, D20-073, D20-074). An AI
+    feature's prompt and attachment egress is D28-047, not a D20 row.
 
 ## Items
+
+Conventions for every `How` in this chapter: `$E` is the engagement folder, `DEC=$E/decompiled` with
+`$DEC/apktool` and `$DEC/jadx/sources` (both produced in P2), `PKG=<target package>`, `$SERIAL` is the device from
+`scripts/doctor.sh --json` (never the `-U`/`-d` selectors — with a phone plus emulators attached they pick
+silently), `MASTG_RULES=${MASTG_RULES:-.refs/owasp-mastg/rules}` is the MASTG checkout's semgrep rules directory
+(`scripts/refresh-data.py` clones OWASP MASTG into `.refs/owasp-mastg`), and `AS '<command>'` is the sandbox
+read as root — `adb root` on the AVD, `su -c` on a Magisk phone (docs/03); `run-as` works only on a debuggable
+build (D02), so use it only when D02 proved the build debuggable. Root is the evidence path (docs/05: AM-12 to
+observe), never the precondition; the finding's reader is whoever the item names. The argument to `AS` must not
+contain a single quote:
+
+```bash
+AS(){ if [ "$(adb -s "$SERIAL" shell id -u | tr -d '\r')" = 0 ]; then adb -s "$SERIAL" exec-out "cd /data/data/$PKG && $*"
+      else adb -s "$SERIAL" exec-out "su -c 'cd /data/data/$PKG && $*'"; fi; }    # exec-out: no pty, so tar and binary reads arrive intact
+```
+
+Captures are written with `mitmdump -w +<file>` (append; a re-run must never truncate the baseline) and
+`frida … -f "$PKG" -l x.js -q -t <seconds>` keeps a spawn-mode session alive for the UI walk — without `-t` the
+script detaches after load and every hook shows zero hits. Working files named bare (`run.mitm`, `run.log`,
+`ui.xml`) live under `$E/logs/`; run the item from there.
 
 ### D20-001 · The reader test — name the principal who holds the value before writing the word "leak"
 
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null = rated on demonstrated impact) — this item exists to get you **into** that node instead of the P5 mechanism nodes |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies = rated on demonstrated impact) — this item exists to get you **into** that node instead of the P5 mechanism nodes |
 | **Attacker** | AM-04 / AM-08 / AM-10 / AM-05; explicitly **not** AM-12 |
 | **Applies to** | all — this is the gate for every other item in the chapter |
+| **Requires** | — |
 | **Maps to** | HackerOne Platform Standards (multi-user sensitive PII → Critical; enumerated list: SSN, passport number, driver's licence number, hashed passwords, card numbers, owned-property information such as a VIN, physical address, date of birth); NIST SP 800-122 §3; AOSP security-model threat [T.A5] "Reading content from system or other app user interfaces"; CWE-200, CWE-359 |
 
 - **Test:** Before writing anything, answer in one sentence: *which principal other than this app ends up
@@ -139,14 +171,12 @@ Write the result into `assessment-status.md` as one line per group, then mark ro
 - **How:**
 ```bash
 PKG=com.target.app
-# 1. who holds READ_LOGS on this device image?
-for p in $(adb shell pm list packages | sed 's/package://' | tr -d '\r'); do
-  adb shell dumpsys package "$p" 2>/dev/null | grep -q 'android.permission.READ_LOGS' && echo "READ_LOGS $p"
-done | tee /tmp/readlogs.txt; wc -l < /tmp/readlogs.txt
+# 1. who holds READ_LOGS on this device image? run D20-008 step 1 once per device image and reuse its count
+#    (one `dumpsys package packages` parsed in Python — never a per-package shell loop, D20-004)
 # 2. which listeners / accessibility services / IMEs are enabled right now?
-adb shell settings get secure enabled_notification_listeners
-adb shell settings get secure enabled_accessibility_services
-adb shell settings get secure default_input_method
+adb -s "$SERIAL" shell settings get secure enabled_notification_listeners
+adb -s "$SERIAL" shell settings get secure enabled_accessibility_services
+adb -s "$SERIAL" shell settings get secure default_input_method
 # 3. which third-party hosts already received something? (from the D14 capture)
 mitmdump -nr flows.mitm -s /dev/stdin <<'PY'
 def request(f):
@@ -161,7 +191,8 @@ PY
 - **Ruled out when:** No package on the target's supported device set holds `READ_LOGS`; no listener,
   accessibility service or third-party IME is enabled by default; every outbound host is first-party and
   named in the privacy policy; and a second account cannot retrieve the first account's artefacts. Record
-  the `READ_LOGS` loop's **count** (`wc -l`) — an empty result you can point at is the defensible negative.
+  the D20-008 enumeration's **counts** (`packages:` > 0, `READ_LOGS holders:`) — an empty holder list you can
+  point at is the defensible negative.
 
 ### D20-002 · Build the canary identity and the marker set before you capture anything
 
@@ -171,6 +202,7 @@ PY
 | **VRT** | n/a — method |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0206 prerequisite `identify-sensitive-data`; MASTG-TECH-0100 (Logging Sensitive Data from Network Traffic); Marker Discipline (8+ character random markers; search the BASELINE for the marker before claiming a hit) |
 
 - **Test:** Every leak claim in this chapter is "value X reached place Y". That is only greppable if X is
@@ -190,12 +222,12 @@ PY
 # example set: first=zq4h7m2kx9  email=zq4h7m2kx9@example.invalid  phone=+15550137742
 #              street="zq4h7m2kx9 Lane"   note=zk8v3p1nd6
 # 2. BASELINE FIRST — capture a session with none of the markers typed, then prove absence
-mitmdump -w baseline.mitm     # drive the app WITHOUT entering any marker
+mitmdump -w +baseline.mitm     # drive the app WITHOUT entering any marker
 for m in zq4h7m2kx9 zk8v3p1nd6; do
   echo -n "$m in baseline: "; mitmdump -nr baseline.mitm --set flow_detail=3 2>/dev/null | grep -c "$m"
 done          # every line must print 0
 # 3. now register/enter the markers and capture the real session
-mitmdump -w run.mitm
+mitmdump -w +run.mitm
 ```
 - **Proof:** Two numbers per marker: `0` occurrences in the baseline, `N > 0` in the run capture, with the
   host and path of each occurrence. A marker that appears in the baseline is not a leak, it is a collision —
@@ -213,6 +245,7 @@ mitmdump -w run.mitm
 | **VRT** | n/a — method |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0318 / MASTG-TEST-0319 (References to / Runtime Use of SDK APIs Known to Handle Sensitive User Data) for the sink half; local corpus `references/20` Part B item 3 |
 
 - **Test:** Catalogues are organised by *mechanism* (logs, clipboard, notifications). Attackers care about
@@ -225,11 +258,11 @@ mitmdump -w run.mitm
 ```bash
 # 1. find the value's identity across every layer
 VAL=access_token
-grep -rn "$VAL" out/sources/ | head -40                        # Java/Kotlin
-strings -n 6 out/resources/resources.arsc | grep -i "$VAL"     # string table
-for so in out/lib/*/*.so; do strings -n 6 "$so" | grep -i "$VAL" && echo "  ^ $so"; done
+grep -rn "$VAL" $DEC/jadx/sources/ | head -40                        # Java/Kotlin
+unzip -p "$E"/apk/base.apk resources.arsc | strings -n 6 | grep -i "$VAL"     # string table
+for so in $DEC/apktool/lib/*/*.so; do strings -n 6 "$so" | grep -i "$VAL" && echo "  ^ $so"; done
 # 2. enumerate its sinks at runtime in one pass
-frida -D "$SERIAL" -f $PKG -l sinkmap.js
+frida -D "$SERIAL" -f "$PKG" -l sinkmap.js -q -t 600 | tee "$E/logs/D20-003.txt"      # -q -t keeps the session alive non-interactively; without -t it detaches after load and every hook shows zero hits
 ```
 ```javascript
 // sinkmap.js — one hook per sink class, all printing the same marker
@@ -265,6 +298,7 @@ Java.perform(function () {
 | **VRT** | n/a — method |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | Shell-Loop Ban (shell array loops fail silently — always count your results); Statistical-Sample Rule (n ≥ 10 interleaved trials before claiming a timing or rate property) |
 
 - **Test:** A privacy sweep that returns nothing is indistinguishable from a privacy sweep that silently
@@ -275,11 +309,11 @@ Java.perform(function () {
 - **How:**
 ```bash
 # BAD: silent failure looks identical to a clean result
-adb logcat -d | grep -iE 'token|password'            # prints nothing — buffer empty? grep wrong? app not run?
+adb -s "$SERIAL" logcat -d | grep -iE 'token|password'            # prints nothing — buffer empty? grep wrong? app not run?
 
 # GOOD: prove the pipeline works before trusting its silence
-adb logcat -c
-adb logcat -b all -v threadtime -d > run.log
+adb -s "$SERIAL" logcat -c
+adb -s "$SERIAL" logcat -b all -v threadtime -d > run.log
 echo "lines captured: $(wc -l < run.log)"            # MUST be large; 0 means the capture failed
 echo "control marker:  $(grep -c 'zq4h7m2kx9' run.log)"   # a marker you KNOW was typed — MUST be >0 somewhere
 echo "secret hits:     $(grep -icE 'bearer |eyJ[A-Za-z0-9_-]{10,}|"password"' run.log)"
@@ -295,7 +329,7 @@ PY
   A zero in the first two invalidates the third.
 - **Escalation:** The same rule governs the "no leak found" negatives you will write in the ruled-out
   register — a negative without a line count is not a negative.
-- **Ruled out when:** n/a — method.
+- **Ruled out when:** n/a — method: complete when every sweep in this chapter records its count and its positive-control hit.
 
 ### D20-005 · Tester-side data minimisation — your evidence bundle is a breach surface
 
@@ -305,6 +339,7 @@ PY
 | **VRT** | n/a — method, with a real consequence |
 | **Attacker** | n/a |
 | **Applies to** | every engagement against a live backend or production data |
+| **Requires** | — |
 | **Maps to** | NIST SP 800-115 Appendix B §5.3 (Data Handling — gathering, storing, transmitting and destroying test data); §6.6 (privacy concerns for captured data that does not belong to the organisation) |
 
 - **Test:** The redaction rules in D20-006 govern the *rendered* evidence. They do not govern what your
@@ -314,10 +349,7 @@ PY
   live production token is a breach you introduced while being paid to prevent them.
 - **How:**
 ```bash
-# proxy: bound the scope and strip credentials at WRITE time, not at report time
-mitmdump --set stream_large_bodies=1m \
-  --allow-hosts '^(api|auth)\.target\.example$' \
-  -s scripts/strip.py -w evidence/flows.mitm
+# proxy: bound the scope and strip credentials at WRITE time, not at report time (the script must exist before mitmdump starts)
 cat > scripts/strip.py <<'PY'
 import re
 SENS = re.compile(rb'(?i)(authorization|cookie|set-cookie|x-api-key|otp|password|pan|cvv)')
@@ -327,17 +359,21 @@ def response(flow):
     for h in list(flow.response.headers):
         if SENS.search(h.encode()): flow.response.headers[h] = "<redacted-at-capture>"
 PY
+mitmdump --set stream_large_bodies=1m \
+  --allow-hosts '^(api|auth)\.target\.example$' \
+  -s scripts/strip.py -w +evidence/flows.mitm
 # logcat: bound to the target's pid and to the window you need
-adb shell pidof -s $PKG | xargs -I{} adb logcat --pid={} -d > evidence/F-007/logcat.txt
+adb -s "$SERIAL" shell pidof -s $PKG | xargs -I{} adb -s "$SERIAL" logcat --pid={} -d > evidence/F-007/logcat.txt
 # QA GATE before the bundle is encrypted — run this and paste the output into the notes
-grep -rEl '(?i)authorization: bearer|set-cookie:|[0-9]{13,16}' engagement/evidence | tee /tmp/leaks.txt
-wc -l < /tmp/leaks.txt
+echo 'Authorization: Bearer control' > "$E/evidence/_qa-control.txt"          # positive control: must be listed below
+grep -rEil 'authorization: bearer|set-cookie:|[0-9]{13,16}' "$E/evidence" | tee "$E/logs/D20-005-leaks.txt"   # -i, not a PCRE (?i) flag: grep -E rejects it on GNU and BSD alike
+echo "files flagged: $(wc -l < "$E/logs/D20-005-leaks.txt")"; rm -f "$E/evidence/_qa-control.txt"
 ```
 - **Proof:** The QA-gate grep returns only the deliberate instances — the one file per finding where the
   unredacted value *is* the finding. Rotate or invalidate that value immediately after delivery.
 - **Escalation:** Run the gate as a hard step before the bundle is encrypted, alongside the D20-006
   redaction pass.
-- **Ruled out when:** n/a — method.
+- **Ruled out when:** n/a — method: complete when the QA gate above lists only its own control file and the bundle holds no un-redacted credential.
 
 ### D20-006 · Redact victim PII in the PoC while keeping the proof intact
 
@@ -347,6 +383,7 @@ wc -l < /tmp/leaks.txt
 | **VRT** | n/a — method; it is what makes a `pii_leakage_exposure` report land instead of being quarantined |
 | **Attacker** | n/a |
 | **Applies to** | every cross-account or PII finding |
+| **Requires** | — |
 | **Maps to** | Evidence-hygiene §3 (the mask / leave-visible split); §§2, 4, 5, 6, 8 (cookie-redaction protocol) |
 
 - **Test:** The evidence must convince a triager and distribute nothing further. The useful part is the
@@ -369,7 +406,7 @@ jq '.log.entries |= map(
   (.response.headers |= map(if .name|ascii_downcase|IN("set-cookie") then .value="<REDACTED>" else . end)) |
   (.request.cookies  |= map(.value="<REDACTED>")) |
   (.response.cookies |= map(.value="<REDACTED>")))' in.har > out.sanitized.har
-grep -ic 'authorization\|"cookie"\|set-cookie' out.sanitized.har
+grep -ic -E 'authorization|"cookie"|set-cookie' out.sanitized.har
 ```
   Then state it in the report body: *"Real PII fields in the response are masked to limit unauthorised
   exposure of victim data, per responsible-disclosure hygiene. The unredacted response is available
@@ -378,47 +415,49 @@ grep -ic 'authorization\|"cookie"\|set-cookie' out.sanitized.har
 - **Proof:** A PoC that proves the boundary crossing without redistributing the victim's data, plus the
   verification grep returning only your own deliberate values.
 - **Escalation:** Pair with D20-005 (redact at capture time) and with the five-shot pattern in D20-069.
-- **Ruled out when:** n/a — method.
+- **Ruled out when:** n/a — method: complete when every PoC artefact shows canary values only and any third-party PII is masked.
 
 ### D20-007 · The controlled one-flow logcat sweep — never read the buffer passively
 
 | | |
 |---|---|
 | **Severity ceiling** | Low standalone (High only via the value, see D20-008) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — the mechanism alone has no node above P5 |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) — the mechanism alone has no node above P5 |
 | **Attacker** | AM-04 (a `READ_LOGS` holder), AM-08 (a log-forwarding SDK), AM-11 (ADB on an unlocked device) |
 | **Applies to** | all |
 | **Requires** | device |
 | **Maps to** | MASTG-TEST-0203 (Runtime Use of Logging APIs), MASTG-TEST-0231 (References to Logging APIs), MASTG-TECH-0009 (Monitoring System Logs), MASTG-TOOL-0112 (pidcat), MASTG-KNOW-0049, MASTG-BEST-0002, MASWE-0005, CWE-532; deprecated predecessor MASTG-TEST-0003 |
 
-- **Test:** Clear the buffers, capture **all** of them, drive exactly **one** flow, then sweep. Passive
+- **Test:** (Owner of the logcat sweep; D11-062 is its storage-chapter duplicate — record this verdict on both ids.) Clear the buffers, capture **all** of them, drive exactly **one** flow, then sweep. Passive
   reading produces noise you cannot attribute and misses the flow-specific leak — a token appears for two
   seconds during refresh and never again.
 - **How:**
 ```bash
-PKG=com.target.app
-adb logcat -c                                   # clear FIRST
-adb logcat -b all -v threadtime > run.log &     # -b all: apps and SDKs use different buffers
+adb -s "$SERIAL" logcat -G 64M && adb -s "$SERIAL" logcat -c             # enlarge FIRST: a busy device rotates the default buffer in minutes
+adb -s "$SERIAL" logcat -b all -v threadtime > run.log &     # -b all: apps and SDKs use different buffers
+adb -s "$SERIAL" shell log -t SANE 'control-zq4h7m2kx9'                                                   # shell-level control inside the window
+adb -s "$SERIAL" shell "am start -S -n com.sanehunters.probe/.MainActivity --es run baseline"          # app-level control: the zero-permission probe logs PROBE|baseline|… through Log.i
 #   ... perform exactly ONE flow: login / payment / token refresh / deep-link open / password reset ...
 kill %1
-echo "lines: $(wc -l < run.log)"
+echo "lines: $(wc -l < run.log)  shell-control: $(grep -c control-zq4h7m2kx9 run.log)  app-control: $(grep -c 'PROBE|baseline' run.log)"
 grep -nEi 'authorization|bearer |eyJ[A-Za-z0-9_-]{10,}|password|passwd|refresh_token|otp|secret|sessionid|set-cookie|api[_-]?key|cvv|\b[0-9]{13,19}\b|ssn|iban' run.log
 # scoped variants
-adb logcat --pid=$(adb shell pidof -s $PKG)
-adb logcat -b radio -v time -d                  # telephony / SMS paths
-adb logcat -b crash -d -v threadtime
-adb logcat *:E
+adb -s "$SERIAL" logcat --pid=$(adb -s "$SERIAL" shell pidof -s $PKG)
+adb -s "$SERIAL" logcat -b radio -v time -d                  # telephony / SMS paths
+adb -s "$SERIAL" logcat -b crash -d -v threadtime
+adb -s "$SERIAL" logcat '*:E'
 pidcat $PKG                                     # MASTG-TOOL-0112
 # static side: the mobsfscan rule deliberately ignores literal-only logging and matches concatenation
-grep -rnE 'Log\.[vdiwef]\(|System\.(out|err)\.print|Timber\.|printStackTrace' out/sources/ | grep -E '\+|String\.format|%s'
+grep -rnE 'Log\.[vdiwef]\(|System\.(out|err)\.print|Timber\.|printStackTrace' $DEC/jadx/sources/ | grep -E '\+|String\.format|%s'
 ```
 - **Proof:** The matched line with its tag and timestamp, tied to the single flow you drove, and — where the
   value is a token — a `curl` using that exact value returning the account's data.
 - **Escalation:** -> D20-008 for the rating, -> D20-016 if a crash SDK forwards the same buffer off-device,
   -> D13 if the value is an authenticator.
 - **Ruled out when:** A controlled sweep across every flow (login, payment, profile edit, password reset,
-  token refresh, deep-link open) yields a non-zero line count and **zero** hits on the regex above. Record
-  the line count — the local corpus's own worked negative reads *"no credential leakage to logcat — 149k
+  token refresh, deep-link open) yields a non-zero line count, **both controls non-zero**, and **zero** hits on the
+  regex above. If the app-level control is 0 the device image drops app logs and logcat is not a usable sink
+  there — say so and test on a second device image. Record the line count — the local corpus's own worked negative reads *"no credential leakage to logcat — 149k
   lines, controlled sweep"*, and that sentence is what a defensible negative looks like.
 
 ### D20-008 · Cap logcat severity honestly — enumerate the readers or rate it P5
@@ -426,38 +465,40 @@ grep -rnE 'Log\.[vdiwef]\(|System\.(out|err)\.print|Timber\.|printStackTrace' ou
 | | |
 |---|---|
 | **Severity ceiling** | Low (Medium–High only with a named reader) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with a *demonstrated* off-device recipient it becomes a third-party disclosure, and with an authenticator `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with a *demonstrated* off-device recipient it becomes a third-party disclosure, and with an authenticator `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-04 / AM-08 / AM-11 |
 | **Applies to** | **CURRENT** on every modern target |
 | **Requires** | device |
 | **Maps to** | Google Mobile VRP Invalid Reports, "Logging sensitive data" — *"since debugging privileges are required to access logs, an app logging sensitive data is not considered a severe enough vulnerability to qualify"*; HackenProof: "Debug Logs / Stack Traces — unless they expose sensitive data like credentials or tokens"; H1 #462416 (Grammarly, Low, $0); H1 #5314 (Coinbase, OAuth code in logcat, payable only once chained with the hardcoded client secret); AOSP threats [T.P3]/[T.P4] |
 
-- **Test:** `READ_LOGS` has been `signature|privileged` since **Android 4.1 (API 16)**, so a third-party app
-  cannot read another app's logcat; from **API 30** a log-access request additionally raises a user-consent
-  dialog. The realistic readers are therefore exactly four: a pre-installed or OEM package that holds
+- **Test:** (Owner of the logcat rating; D11-062 duplicates it — rate here, record on both ids.) `READ_LOGS` has been `signature|privileged` since **Android 4.1 (API 16)**, so a third-party app
+  cannot read another app's logcat; from **Android 13 (API 33)** a `READ_LOGS` holder that opens the log also
+  triggers a log-access consent dialog the user must approve (some system readers are exempt) — before
+  Android 13 a holder reads silently. The realistic readers are therefore exactly four: a pre-installed or OEM package that holds
   `READ_LOGS`, a debuggable build (`run-as` / any local process you can influence), an ADB/bug-report capture
   on the target's supported device set, and an in-process SDK that ships the buffer off-device. Name one, or
   rate it P5 and say why in the report.
 - **How:**
 ```bash
-# 1. enumerate READ_LOGS holders on the exact device image in scope — count the result
-python3 - <<'PY'
-import subprocess
-out = subprocess.run(['adb','shell','pm','list','packages'],capture_output=True,text=True).stdout
-pkgs = [l.replace('package:','').strip() for l in out.splitlines() if l.startswith('package:')]
-hold = []
-for p in pkgs:
-    d = subprocess.run(['adb','shell','dumpsys','package',p],capture_output=True,text=True).stdout
-    if 'android.permission.READ_LOGS' in d: hold.append(p)
-print('packages:', len(pkgs), 'READ_LOGS holders:', len(hold))
-for h in hold: print(' ', h)
+# 1. enumerate READ_LOGS holders on the exact device image in scope — ONE dumpsys call, parsed once (a per-package loop is ~400 adb -s "$SERIAL" round-trips)
+adb -s "$SERIAL" shell dumpsys package packages > "$E/logs/D20-008-packages.txt"
+python3 - "$E/logs/D20-008-packages.txt" <<'PY'
+import re, sys
+cur=None; pkgs=set(); hold=set()
+for line in open(sys.argv[1], errors='replace'):
+    m = re.match(r'  (?:Package|SharedUser) \[([^\]]+)\]', line)   # a shared-user grant is listed under SharedUser
+    if m: cur = m.group(1); pkgs.add(cur); continue
+    if cur and 'android.permission.READ_LOGS: granted=true' in line: hold.add(cur)
+hold.discard('com.android.shell')   # the shell holds it by design and is AM-11, not a reader
+print('packages:', len(pkgs), 'READ_LOGS holders:', len(hold))   # packages must be > 0 or the dump failed
+for h in sorted(hold): print(' ', h)
 PY
 # 2. is the build debuggable? (that changes the answer entirely — see D02)
-adb shell run-as $PKG id
+adb -s "$SERIAL" shell run-as $PKG id
 # 3. does an in-process SDK forward logs?
-grep -rnE 'Crashlytics|FirebaseCrashlytics|Sentry\.|Bugsnag|Instabug|Datadog|setCustomKey|addBreadcrumb|leaveBreadcrumb|attachLogs|recordException' out/sources/
+grep -rnE 'Crashlytics|FirebaseCrashlytics|Sentry\.|Bugsnag|Instabug|Datadog|setCustomKey|addBreadcrumb|leaveBreadcrumb|attachLogs|recordException' $DEC/jadx/sources/
 # 4. the bug-report path
-adb bugreport /tmp/br.zip && unzip -l /tmp/br.zip | grep -iE 'bugreport.*txt|FS/data/tombstones'
+adb -s "$SERIAL" bugreport "$E/logs/D20-008-bugreport.zip" && unzip -l "$E/logs/D20-008-bugreport.zip" | grep -iE 'bugreport.*txt|FS/data/tombstones'
 ```
 - **Proof:** Either the package name of a `READ_LOGS` holder shipped on the target's supported devices, or a
   captured upload to a telemetry host containing the same line. Without one of these, the report states
@@ -473,7 +514,7 @@ adb bugreport /tmp/br.zip && unzip -l /tmp/br.zip | grep -iE 'bugreport.*txt|FS/
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | n/a — instrumentation |
 | **Applies to** | all; essential where R8 has renamed the logging wrapper |
 | **Requires** | device, frida |
@@ -486,7 +527,7 @@ adb bugreport /tmp/br.zip && unzip -l /tmp/br.zip | grep -iE 'bugreport.*txt|FS/
   never reach the buffer because the wrapper is a no-op in release but still formats the string in memory.
 - **How:**
 ```bash
-frida -D "$SERIAL" -f $PKG -l loghooks.js
+frida -D "$SERIAL" -f "$PKG" -l loghooks.js -q -t 600 | tee "$E/logs/D20-009.txt"
 ```
 ```javascript
 Java.perform(function () {
@@ -513,14 +554,15 @@ Java.perform(function () {
 - **Escalation:** The backtrace usually identifies an SDK rather than app code -> D18. It also finds the
   `HttpLoggingInterceptor` from D20-010 without grepping for it.
 - **Ruled out when:** The hooks fire (prove it with a benign line, so you know the overloads matched) and no
-  invocation carries a value from the marker set or the secret regex across a full functional pass.
+  invocation carries a value from the marker set or the secret regex across a full functional pass. A hook log
+  with zero lines and no control line is a detached session, not a negative.
 
 ### D20-010 · `HttpLoggingInterceptor` / Chucker / Stetho left at BODY in a release build
 
 | | |
 |---|---|
 | **Severity ceiling** | High (when a live session token or credential is in the dumped body) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with a working token, `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with a working token, `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-04 / AM-08 / AM-11 |
 | **Applies to** | all OkHttp/Retrofit apps; check the **release** flavour specifically |
 | **Requires** | device, frida |
@@ -532,9 +574,10 @@ Java.perform(function () {
   library default overrides.
 - **How:**
 ```bash
-grep -rnE 'HttpLoggingInterceptor|Level\.(BODY|HEADERS)|setLevel\(|Stetho|Chucker|ChuckerInterceptor|FlipperOkhttpInterceptor|addNetworkInterceptor|addInterceptor' out/sources/
+grep -rnE 'HttpLoggingInterceptor|Level\.(BODY|HEADERS)|setLevel\(|Stetho|Chucker|ChuckerInterceptor|FlipperOkhttpInterceptor|addNetworkInterceptor|addInterceptor' $DEC/jadx/sources/
+# a class-name grep is confirmatory only: R8 renames library classes — the manifest provider/meta-data, string-literal and META-INF checks in D20-016 are the presence test
 # who is actually installed at runtime?
-frida -D "$SERIAL" -f $PKG -l interceptors.js
+frida -D "$SERIAL" -f "$PKG" -l interceptors.js -q -t 600 | tee "$E/logs/D20-010.txt"
 ```
 ```javascript
 Java.perform(function () {
@@ -550,9 +593,9 @@ Java.perform(function () {
 });
 ```
 ```bash
-adb logcat -c && <exercise login and one authenticated call> && adb logcat -d \
+adb -s "$SERIAL" logcat -c && <exercise login and one authenticated call> && adb -s "$SERIAL" logcat -d \
   | grep -aoE 'https?://[^ ]*(authToken|accessCode|token|sig|key|session)=[^& ]*' | head
-adb logcat -d | grep -iE 'authorization: bearer|set-cookie|"access_token"'
+adb -s "$SERIAL" logcat -d | grep -iE 'authorization: bearer|set-cookie|"access_token"'
 ```
 - **Proof:** A logcat line containing a live `Authorization: Bearer …` or a full response body with PII,
   captured after a clean `logcat -c`, plus the interceptor's class name from the hook. Then replay the token
@@ -568,7 +611,7 @@ adb logcat -d | grep -iE 'authorization: bearer|set-cookie|"access_token"'
 | | |
 |---|---|
 | **Severity ceiling** | Medium (High when the logged argument is a token or PAN) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 / AM-11 |
 | **Applies to** | Capacitor, Cordova, Ionic; the React Native and Flutter equivalents are `console.log` / `debugPrint` left in |
 | **Requires** | capacitor, cordova, react-native, flutter |
@@ -579,12 +622,12 @@ adb logcat -d | grep -iE 'authorization: bearer|set-cookie|"access_token"'
   the entire bridge traffic lands in logcat.
 - **How:**
 ```bash
-python3 -c "import json;print(json.load(open('out/assets/capacitor.config.json')).get('loggingBehavior'))"
-grep -rn 'loggingEnabled\|loggingBehavior' out/assets/ out/res/xml/ 2>/dev/null
-adb logcat -c
+python3 -c "import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('loggingBehavior'))"
+grep -rn -E 'loggingEnabled|loggingBehavior' $DEC/apktool/assets/ $DEC/apktool/res/xml/ 2>/dev/null
+adb -s "$SERIAL" logcat -c
 # exercise login + one data-heavy flow
-adb logcat -d | grep -aiE 'To native \(|Plugin|Capacitor|Cordova|ReactNative|flutter' | head -80
-adb logcat -d | grep -aiE 'token|bearer|password|authorization|"pan"|otp|ssn|zq4h7m2kx9'
+adb -s "$SERIAL" logcat -d | grep -aiE 'To native \(|Plugin|Capacitor|Cordova|ReactNative|flutter' | head -80
+adb -s "$SERIAL" logcat -d | grep -aiE 'token|bearer|password|authorization|"pan"|otp|ssn|zq4h7m2kx9'
 ```
 - **Proof:** A logcat line from a **release** build containing a real credential or PII value, with the
   producing bridge method named in the same line.
@@ -597,19 +640,20 @@ adb logcat -d | grep -aiE 'token|bearer|password|authorization|"pan"|otp|ssn|zq4
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 / AM-11 |
 | **Applies to** | Sugar ORM (manifest-driven) and, by the same mechanism, Room / Realm / greenDAO / ObjectBox with a debug-logging switch |
+| **Requires** | — |
 | **Maps to** | mindedsecurity rule `MSTG-PLATFORM-8_2` — *"The application logs debug information on all the Sugar ORM queries, potentially disclosing critical information"*; the rule inspects `AndroidManifest.xml`; CWE-532 |
 
 - **Test:** A rarely-checked variant: the app's own logging hygiene can be immaculate while the ORM dumps
   every statement, with row values inline, to logcat.
 - **How:**
 ```bash
-grep -nE 'QUERY_LOG|DATABASE_QUERY_LOG|LOG_QUERY|sugar' out/AndroidManifest.xml
-grep -rniE 'setLogLevel|enableLogging|debugMode|loggingEnabled|setQueryCallback' out/sources/ -B4 \
+grep -nE 'QUERY_LOG|DATABASE_QUERY_LOG|LOG_QUERY|sugar' $DEC/apktool/AndroidManifest.xml
+grep -rniE 'setLogLevel|enableLogging|debugMode|loggingEnabled|setQueryCallback' $DEC/jadx/sources/ -B4 \
   | grep -inE 'room|realm|sugar|greendao|objectbox|sqldelight'
-adb logcat -c && <drive a data flow> && adb logcat -d | grep -aiE 'SELECT |INSERT INTO|UPDATE .* SET'
+adb -s "$SERIAL" logcat -c && <drive a data flow> && adb -s "$SERIAL" logcat -d | grep -aiE 'SELECT |INSERT INTO|UPDATE .* SET'
 ```
 - **Proof:** Logcat lines containing SQL with real values — e.g. `INSERT INTO users … 'zq4h7m2kx9@example.invalid','<token>'`.
 - **Escalation:** The statements also hand you the local schema for D11 without opening a database.
@@ -631,9 +675,9 @@ adb logcat -c && <drive a data flow> && adb logcat -d | grep -aiE 'SELECT |INSER
   network call sites — into logcat. On its own this is a resilience/debug-artefact item, not a finding.
 - **How:**
 ```bash
-grep -rnE 'StrictMode|setVmPolicy|setThreadPolicy|penaltyLog|penaltyDeath|detectAll|detectLeakedClosableObjects' out/sources/
-semgrep -c rules/mastg-android-strictmode.yml out/sources/
-adb logcat -d | grep -i 'StrictMode'
+grep -rnE 'StrictMode|setVmPolicy|setThreadPolicy|penaltyLog|penaltyDeath|detectAll|detectLeakedClosableObjects' $DEC/jadx/sources/
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES/mastg-android-strictmode.yml" $DEC/jadx/sources/ --json -o "$E/logs/D20-013-semgrep.json" && python3 -c "import json;d=json.load(open('$E/logs/D20-013-semgrep.json'));print('scanned',len(d['paths']['scanned']),'findings',len(d['results']))"   # scanned must be in the thousands for a jadx tree: semgrep honours .gitignore and the decompiled tree is ignored
+adb -s "$SERIAL" logcat -d | grep -i 'StrictMode'
 ```
 - **Proof:** `StrictMode policy violation` lines in logcat on the production build naming internal paths or
   queries.
@@ -646,7 +690,7 @@ adb logcat -d | grep -i 'StrictMode'
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-11 (physical unlocked with ADB), AM-04 (an OEM diagnostics package) |
 | **Applies to** | all |
 | **Requires** | device |
@@ -657,11 +701,11 @@ adb logcat -d | grep -i 'StrictMode'
   routinely asks users to send. Secrets that were in memory at crash time land there.
 - **How:**
 ```bash
-adb shell dumpsys dropbox --print 2>/dev/null | head -200
-adb shell ls -la /data/tombstones/ /data/anr/ 2>/dev/null
-adb bugreport /tmp/br.zip
-unzip -o /tmp/br.zip -d /tmp/br && grep -rinE 'bearer |eyJ[A-Za-z0-9_-]{10,}|"password"|otp|zq4h7m2kx9' /tmp/br | head -30
-echo "bugreport files: $(find /tmp/br -type f | wc -l)"
+adb -s "$SERIAL" shell dumpsys dropbox --print 2>/dev/null | head -200
+adb -s "$SERIAL" shell ls -la /data/tombstones/ /data/anr/ 2>/dev/null
+adb -s "$SERIAL" bugreport "$E/logs/D20-014-bugreport.zip"
+unzip -oq "$E/logs/D20-014-bugreport.zip" -d "$E/logs/D20-014-bugreport" && grep -rinE 'bearer |eyJ[A-Za-z0-9_-]{10,}|"password"|otp|zq4h7m2kx9' "$E/logs/D20-014-bugreport" | head -30
+echo "bugreport files: $(find "$E/logs/D20-014-bugreport" -type f | wc -l)"
 ```
 - **Proof:** The secret inside the bug-report archive or a DropBox entry, with the path inside the zip. The
   attacker story is the support flow — "send us a bug report" — not root.
@@ -676,19 +720,19 @@ echo "bugreport files: $(find /tmp/br -type f | wc -l)"
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.sensitive_token_in_url.user_facing` (P4); the log copy files as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); a reset token reaching a third party is `sensitive_data_exposure.token_leakage_via_referer.untrusted_third_party` (P4) |
+| **VRT** | `sensitive_data_exposure.sensitive_token_in_url.user_facing` (P4); the log copy files as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); a reset token reaching a third party is `sensitive_data_exposure.token_leakage_via_referer.untrusted_third_party` (P4) |
 | **Attacker** | AM-04 / AM-08 / AM-11 |
 | **Applies to** | all apps with a remote backend |
 | **Requires** | backend-api, mitm |
 | **Maps to** | CVE-2014-1664 (GoToMeeting for Android, EDB 39061); CVE-2018-11505 (EDB 44776); OWASP Mobile Top 10 2024 M6 — "URL query parameters: data visible in server logs and browser history"; CWE-532, CWE-598 |
 
-- **Test:** A token in a query string is copied into every log that touches the request: the app's log, the
+- **Test:** (Owner of the query-string sweep; D20-026 adds the Referer consequence on the same capture.) A token in a query string is copied into every log that touches the request: the app's log, the
   CDN's, the proxy's, the analytics host's, and the WebView's history. The mobile-specific twist is that the
   app often logs the URL itself, so the token leaks locally *and* remotely from one mistake.
 - **How:**
 ```bash
-grep -rnE 'HttpLoggingInterceptor|Log\.(d|v|i)\(.*(url|URL|request)|Uri\.Builder|appendQueryParameter' out/sources/
-adb logcat -d | grep -aoE 'https?://[^ ]*(authToken|accessCode|access_token|token|sig|key|sessionid|otp)=[^& ]*'
+grep -rnE 'HttpLoggingInterceptor|Log\.(d|v|i)\(.*(url|URL|request)|Uri\.Builder|appendQueryParameter' $DEC/jadx/sources/
+adb -s "$SERIAL" logcat -d | grep -aoE 'https?://[^ ]*(authToken|accessCode|access_token|token|sig|key|sessionid|otp)=[^& ]*'
 # the wire side, over the capture from D20-002
 mitmdump -nr run.mitm -s /dev/stdin <<'PY'
 import urllib.parse
@@ -712,7 +756,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with a live token in the payload, `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with a live token in the payload, `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-08 (the SDK's own backend is now a copy-holder) |
 | **Applies to** | all apps embedding Crashlytics / Sentry / Bugsnag / Instabug / Datadog |
 | **Requires** | device, mitm |
@@ -724,11 +768,17 @@ PY
   body. Force a crash while a secret is in scope and read the upload.
 - **How:**
 ```bash
-grep -rnE 'Crashlytics|FirebaseCrashlytics|Sentry\.|SentryAndroid|Bugsnag|Instabug|Datadog|setCustomKey|setUserIdentifier|setUser\(|addBreadcrumb|leaveBreadcrumb|recordException|beforeSend|attachStacktrace|attachScreenshot|attachViewHierarchy|enableLogcat' out/sources/
+grep -rnE 'Crashlytics|FirebaseCrashlytics|Sentry\.|SentryAndroid|Bugsnag|Instabug|Datadog|setCustomKey|setUserIdentifier|setUser\(|addBreadcrumb|leaveBreadcrumb|recordException|beforeSend|attachStacktrace|attachScreenshot|attachViewHierarchy|enableLogcat' $DEC/jadx/sources/
+# R8 renames library classes and inlines constants, so the class-name grep above returns 0 on obfuscated builds that DO embed the SDK.
+# R8 keeps: manifest <provider>/<meta-data> entries (SDK init providers), string literals (host names, config keys such as
+# io.sentry.dsn / firebase_crashlytics_collection_enabled), res/values/strings.xml, assets/ and res/raw config files, META-INF/*.version|*.properties
+grep -nE 'InitProvider|meta-data' $DEC/apktool/AndroidManifest.xml | grep -iE 'crashlytics|sentry|bugsnag|instabug|datadog|firebase'
+unzip -Z1 "$E"/apk/base.apk | grep -E 'META-INF/.*(version|properties)$'
+grep -rhoE 'https?://[a-z0-9.-]+' $DEC/jadx/sources/ $DEC/apktool/res/values 2>/dev/null | sort -u | grep -iE 'crashlytics|sentry|bugsnag|instabug|datadog'
 # force a crash on the most sensitive screen, with the proxy up
-adb shell am crash $PKG
+adb -s "$SERIAL" shell am crash $PKG
 # or reach a crash through input, e.g. the D04 extras fuzz
-adb shell am start -n $PKG/.TargetActivity --es id "$(python3 -c 'print("A"*100000)')"
+adb -s "$SERIAL" shell am start -n $PKG/.TargetActivity --es id "$(python3 -c 'print("A"*100000)')"
 # read the upload
 mitmdump -nr run.mitm -s /dev/stdin <<'PY'
 HOSTS = ('crashlytics','sentry','bugsnag','instabug','datadoghq','firebase')
@@ -757,7 +807,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — **not** `insecure_data_storage.screen_caching_enabled`, because the capture is in-process and `FLAG_SECURE` is irrelevant to it |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) — **not** `insecure_data_storage.screen_caching_enabled`, because the capture is in-process and `FLAG_SECURE` is irrelevant to it |
 | **Attacker** | AM-08 |
 | **Applies to** | all; any API level |
 | **Requires** | device, mitm |
@@ -771,8 +821,9 @@ PY
   shipped off-device anyway.
 - **How:**
 ```bash
-grep -rnE 'attachScreenshot|attachViewHierarchy|screenshotOnError|captureScreenshot|setCaptureViewHierarchy|Instabug.*setScreenshot|takeScreenshot' out/sources/ out/res/values/*.xml out/AndroidManifest.xml
-grep -rnE 'FLAG_SECURE' out/sources/                 # note WHICH activities set it
+grep -rnE 'attachScreenshot|attachViewHierarchy|screenshotOnError|captureScreenshot|setCaptureViewHierarchy|Instabug.*setScreenshot|takeScreenshot' $DEC/jadx/sources/ $DEC/apktool/res/values/*.xml $DEC/apktool/AndroidManifest.xml
+# a class-name grep is confirmatory only: R8 renames library classes — the manifest provider/meta-data, string-literal and META-INF checks in D20-016 are the presence test
+grep -rnE 'FLAG_SECURE' $DEC/jadx/sources/                 # note WHICH activities set it
 # crash on a FLAG_SECURE screen with the proxy up, then look for image/JSON attachments
 mitmdump -nr run.mitm -s /dev/stdin <<'PY'
 def request(f):
@@ -809,7 +860,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | High (Critical where the vendor console exposes multiple users' sessions) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — HackerOne's multi-user PII standard applies once the console holds many users' recordings) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies — HackerOne's multi-user PII standard applies once the console holds many users' recordings) |
 | **Attacker** | AM-08 |
 | **Applies to** | any app embedding UXCam, Smartlook, Microsoft Clarity, FullStory, Quantum Metric, Contentsquare, Glassbox, LogRocket or an in-house replay SDK |
 | **Requires** | device, mitm |
@@ -821,12 +872,13 @@ PY
   medical-history form.
 - **How:**
 ```bash
-grep -rniE 'uxcam|smartlook|clarity|fullstory|quantummetric|contentsquare|glassbox|logrocket|sessionreplay' out/sources/ out/AndroidManifest.xml | cut -d: -f1 | sort -u
-grep -rniE 'occludeSensitiveView|setSensitive|markSensitive|hideSensitive|maskView|maskAllInputs|addPrivateView|privateView|FS\.privacy|setPrivate|redact' out/sources/
+grep -rniE 'uxcam|smartlook|clarity|fullstory|quantummetric|contentsquare|glassbox|logrocket|sessionreplay' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml $DEC/apktool/res/values/strings.xml | cut -d: -f1 | sort -u   # manifest + strings survive R8; a class-name hit is confirmatory only (D20-016)
+grep -rniE 'occludeSensitiveView|setSensitive|markSensitive|hideSensitive|maskView|maskAllInputs|addPrivateView|privateView|FS\.privacy|setPrivate|redact' $DEC/jadx/sources/
 # is a replay URL reachable from a JS bridge? (that hands the third party's console link to web content)
-grep -rniE 'getUxCamSessionUrl|getSessionUrl|sessionReplayUrl' out/sources/
+grep -rniE 'getUxCamSessionUrl|getSessionUrl|sessionReplayUrl' $DEC/jadx/sources/
 # then type a test PAN and a test OTP and read the upload
-mitmdump -nr run.mitm -q ~ 'uxcam|smartlook|clarity|fullstory|quantummetric|contentsquare'
+mitmdump -nr run.mitm --set flow_detail=2 '~d "uxcam|smartlook|clarity|fullstory|quantummetric|contentsquare|glassbox|logrocket"' | tee "$E/logs/D20-018-replay-flows.txt"; echo "output lines: $(grep -c '^' "$E/logs/D20-018-replay-flows.txt") (0 = no replay-vendor host in this capture)"
+# replay payloads are gzipped frames/hierarchies: run the D20-024 inflate pass on those bodies before judging them opaque
 ```
 - **Proof:** The vendor dashboard replay — or the captured upload payload — showing the typed card number,
   CVV, OTP or document image. Screenshot the replay with the value visible, next to the app screen.
@@ -842,7 +894,7 @@ mitmdump -nr run.mitm -q ~ 'uxcam|smartlook|clarity|fullstory|quantummetric|cont
 | | |
 |---|---|
 | **Severity ceiling** | High (the attribution is what makes the payload finding actionable) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | all |
 | **Requires** | mitm, frida |
@@ -853,8 +905,13 @@ mitmdump -nr run.mitm -q ~ 'uxcam|smartlook|clarity|fullstory|quantummetric|cont
   to the payload contents.
 - **How:**
 ```bash
-mitmdump -s dump.py --set block_global=false -w flows.mitm   # SDKs often ignore the app's proxy settings
-frida -D "$SERIAL" -f $PKG -l attrib.js
+# proxy-ignoring SDKs (Cronet, native sockets) never consult the Wi-Fi proxy: capture by UID, not by proxy setting
+# (a) no root: mitmproxy WireGuard mode + the WireGuard app on the device, tunnel limited to $PKG
+mitmdump --mode wireguard -w +flows.mitm                  # import the printed config; Applications -> include only $PKG
+# (b) root (AS, ## Items): per-UID socket census sampled during the flow — attribution without decryption (uid = column 8 of /proc/net/tcp*)
+APPUID=$(adb -s "$SERIAL" shell dumpsys package "$PKG" | grep -m1 -oE 'userId=[0-9]+' | cut -d= -f2)   # not UID: bash and zsh reserve it read-only
+for i in $(seq 1 30); do AS 'cat /proc/net/tcp /proc/net/tcp6' | awk -v u="$APPUID" '$8==u && $4=="01" {print $3}'; sleep 2; done | sort | uniq -c | sort -rn > "$E/logs/D20-019-uid-sockets.txt"   # remote addr:port (hex) of ESTABLISHED sockets; repeat with the sdk_sandbox UID (D20-072)
+frida -D "$SERIAL" -f "$PKG" -l attrib.js -q -t 600 | tee frida.log
 ```
 ```javascript
 // attrib.js — attribute every URL to the stack that requested it
@@ -872,6 +929,15 @@ Java.perform(function () {
     console.log('[note] Cronet present: ' + CU.$className);
   } catch (e) {}
 });
+// flows the proxy cannot see or decrypt are at least attributed to a stack at the socket:
+Interceptor.attach(Process.getModuleByName('libc.so').getExportByName('connect'), {   // Frida 17: the static Module.getExportByName(module, sym) is gone
+  onEnter: function (args) {
+    var sa = args[1], fam = sa.readU16(), port = (sa.add(2).readU8() << 8) | sa.add(3).readU8();
+    if (fam !== 2 && fam !== 10) return;                                     // AF_INET / AF_INET6 only
+    var dst = fam === 2 ? [4, 5, 6, 7].map(function (o) { return sa.add(o).readU8(); }).join('.') : 'AF_INET6';
+    console.log('[connect] ' + dst + ':' + port + '\n' + Thread.backtrace(this.context, Backtracer.ACCURATE).map(DebugSymbol.fromAddress).join('\n'));
+  }
+});
 ```
 ```bash
 # join: host -> owning SDK -> payload fields
@@ -883,15 +949,16 @@ awk '/^\[URL\]/{u=$2} /at com\./{if(u){print u" <- "$2; u=""}}' frida.log | sort
 - **Escalation:** -> D20-025 (compare against the Data safety declaration); -> D20-020 (run it again with
   consent off); -> D18 (the SDK's own backend).
 - **Ruled out when:** Every third-party host in the capture receives only non-identifying telemetry (event
-  names, app version, coarse locale), attributed by stack trace, and the payload sweep for the marker set
-  returns zero across a full flow pass. Attach the host→SDK→fields table with the zero column.
+  names, app version, coarse locale), attributed by stack trace, the payload sweep for the marker set
+  returns zero across a full flow pass, and the per-UID capture's flow count matches the proxy-based count (no
+  proxy-bypassing SDK) or the difference is attributed. Attach the host→SDK→fields table with the zero column.
 
 ### D20-020 · The consent-off differential — identical traffic with every toggle off
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null; the only concrete child, `…wifi_ssid_password`, is P4) — escalate via `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies; the only concrete child, `…wifi_ssid_password`, is P4) — escalate via `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | all apps with a consent banner, a "do not sell/share" toggle, or a privacy-settings screen |
 | **Requires** | device, mitm |
@@ -905,8 +972,8 @@ awk '/^\[URL\]/{u=$2} /at com\./{if(u){print u" <- "$2; u=""}}' frida.log | sort
 - **How:**
 ```bash
 # run A: accept everything.  run B: decline everything.  Same flow, same account shape, fresh install each.
-adb shell pm clear $PKG && mitmdump -w consent_on.mitm    # ... drive flow, accept all ...
-adb shell pm clear $PKG && mitmdump -w consent_off.mitm   # ... drive flow, decline all ...
+adb -s "$SERIAL" shell pm clear $PKG && mitmdump -w +consent_on.mitm    # ... drive flow, accept all ...
+adb -s "$SERIAL" shell pm clear $PKG && mitmdump -w +consent_off.mitm   # ... drive flow, decline all ...
 for f in consent_on consent_off; do
   mitmdump -nr $f.mitm -s /dev/stdin <<'PY' > $f.hosts
 def request(f): print(f.request.pretty_host, f.request.path.split('?')[0])
@@ -934,20 +1001,20 @@ done
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | all apps that show a consent, ToS or privacy dialog on first launch |
 | **Requires** | device, mitm |
-| **Maps to** | MASWE-0073; MASVS-PRIVACY-1; hackwithsingh sec-14-18 #15 "logs user location data without proper consent", #25, #30; riya78 §7 |
+| **Maps to** | MASWE-0073; MASWE-0071 (Inadequate Defaults for Privacy Relevant Actions); MASVS-PRIVACY-1; hackwithsingh sec-14-18 #15 "logs user location data without proper consent", #25, #30; riya78 §7 |
 
 - **Test:** Pre-consent transmission is the step that converts a hygiene note into a reportable finding — the
   app has not merely collected more than it declared, it has processed before any lawful basis existed.
   Analytics SDKs initialise in `Application.onCreate()`, which runs before the first Activity draws.
 - **How:**
 ```bash
-adb shell pm clear $PKG
-mitmdump -w firstlaunch.mitm &
-adb shell am start -n $PKG/.MainActivity
+adb -s "$SERIAL" shell pm clear $PKG
+mitmdump -w +firstlaunch.mitm &
+adb -s "$SERIAL" shell am start -n $PKG/.MainActivity
 # DO NOT TOUCH THE DEVICE. wait 30s with the consent dialog still on screen.
 sleep 30; kill %1
 mitmdump -nr firstlaunch.mitm -s /dev/stdin <<'PY'
@@ -955,7 +1022,7 @@ def request(f):
     print(f.request.timestamp_start, f.request.pretty_host, f.request.path[:70], len(f.request.content or b''))
 PY
 # what identifiers went with it?
-AID=$(adb shell settings get secure android_id | tr -d '\r')
+AID=$(adb -s "$SERIAL" shell settings get secure android_id | tr -d '\r')
 mitmdump -nr firstlaunch.mitm --set flow_detail=3 2>/dev/null | grep -c "$AID"
 ```
 - **Proof:** A timestamped request to a third-party host sent **before** the consent dialog was dismissed,
@@ -972,7 +1039,7 @@ mitmdump -nr firstlaunch.mitm --set flow_detail=3 2>/dev/null | grep -c "$AID"
 | | |
 |---|---|
 | **Severity ceiling** | High (as evidence for an undeclared-collection report) |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | n/a — instrumentation that produces the strongest evidence in this chapter |
 | **Applies to** | **Android 11+ (API 30+)**; `<attribution android:tag>` is required for targetSdk 31+ |
 | **Requires** | device, frida, api>=30 |
@@ -996,28 +1063,32 @@ Java.perform(() => {
       onAsyncNoted(op) { console.log('[async] ' + op.getOp() + ' msg=' + op.getMessage()); }
     }
   });
-  ctx.getSystemService(Java.use('android.app.AppOpsManager').class)
-     .setOnOpNotedCallback(ctx.getMainExecutor(), Cb.$new());
+  const AOM = Java.use('android.app.AppOpsManager');
+  const aom = Java.cast(ctx.getSystemService(AOM.class), AOM);   // the raw Object from getSystemService has no setOnOpNotedCallback under Frida 17 ('TypeError: not a function')
+  aom.setOnOpNotedCallback(ctx.getMainExecutor(), Cb.$new());
+  console.log('[opcb] installed');   // positive control: this line must print before any op is read
 });
 ```
 ```bash
+frida -D "$SERIAL" -f "$PKG" -l opcb.js -q -t 600 | tee "$E/logs/D20-022.txt"
 # cross-check against the system's own record
-adb shell appops get $PKG | grep -iE 'CAMERA|RECORD_AUDIO|FINE_LOCATION|READ_CONTACTS|time='
+adb -s "$SERIAL" shell appops get $PKG | grep -iE 'CAMERA|RECORD_AUDIO|FINE_LOCATION|READ_CONTACTS|time='
 ```
 - **Proof:** Stack traces naming a **third-party package** as the caller of a location/contacts/camera read,
   with the op name and attribution tag, correlated to a request body in the proxy.
 - **Escalation:** -> D18 SDK accountability; -> D20-025 for the declaration mismatch; -> D03 if the
   permission exists only because an SDK's manifest merged it in.
 - **Ruled out when:** Across a full functional pass the callback reports only ops the app's own packages
-  perform, each tied to a user-initiated action, with attribution tags that match the feature. Save the op
-  log; an empty third-party column is the negative.
+  perform, each tied to a user-initiated action, with attribution tags that match the feature — and only if
+  `[opcb] installed` printed and a user-initiated location/camera read produced an `[noted]` line (positive
+  control). Save the op log; an empty third-party column is the negative.
 
 ### D20-023 · Attribution-tag mismatch — the Privacy Dashboard shows the wrong reason
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | n/a — transparency defect |
 | **Applies to** | **targetSdk 31+** |
 | **Requires** | device, frida, targetsdk>=31 |
@@ -1028,11 +1099,11 @@ adb shell appops get $PKG | grep -iE 'CAMERA|RECORD_AUDIO|FINE_LOCATION|READ_CON
   describe the actual purpose, presents the user with an inaccurate account of why their data was accessed.
 - **How:**
 ```bash
-grep -n '<attribution' out/AndroidManifest.xml
+grep -n '<attribution' $DEC/apktool/AndroidManifest.xml
 # map tag -> user-visible label
 python3 - <<'PY'
 import re,sys
-m=open('out/AndroidManifest.xml').read()
+m=open('$DEC/apktool/AndroidManifest.xml').read()
 for t,l in re.findall(r'<attribution[^>]*android:tag="([^"]+)"[^>]*android:label="([^"]+)"',m):
     print(t,'->',l)
 PY
@@ -1075,7 +1146,22 @@ Java.perform(function () {
 });
 ```
 ```bash
-grep -rnE 'GZIPOutputStream|Deflater|ZipOutputStream|GzipSource|Okio|protobuf|Cipher\.getInstance' out/sources/ | head -30
+grep -rnE 'GZIPOutputStream|Deflater|ZipOutputStream|GzipSource|Okio|protobuf|Cipher\.getInstance' $DEC/jadx/sources/ | head -30
+# analytics batches (app-measurement, GA4, several ad SDKs) are gzip bodies WITHOUT a Content-Encoding header: the
+# marker sweeps in D20-016/019/025 see opaque bytes. Inflate on magic bytes over the saved capture:
+mitmdump -nr run.mitm -s /dev/stdin <<'PY'
+import gzip, zlib
+NEEDLES = [b'zq4h7m2kx9', b'15550137742']
+def request(f):
+    b = f.request.raw_content or b''
+    try:
+        if b[:2] == b'\x1f\x8b': b = gzip.decompress(b)
+        elif b[:1] == b'\x78': b = zlib.decompress(b)          # zlib stream, also header-less
+    except Exception: pass
+    hits = [n.decode() for n in NEEDLES if n in b]
+    if hits: print(f.request.pretty_host, f.request.path[:60], len(b), hits)
+PY
+# protobuf bodies still need the field-level decode before a marker is declared absent: protoc --decode_raw < body.bin
 ```
 - **Proof:** The decompressed or pre-encryption payload printed by the hook, containing PII the app never
   disclosed it collects, matched to the opaque upload in the proxy by size and timestamp.
@@ -1088,11 +1174,11 @@ grep -rnE 'GZIPOutputStream|Deflater|ZipOutputStream|GzipSource|Okio|protobuf|Ci
 | | |
 |---|---|
 | **Severity ceiling** | High (Critical where it is multi-user sensitive PII per the HackerOne standard) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 (a third-party recipient) — for a first-party-only flow this is a compliance finding, which most bounty programmes route to a privacy track rather than pay |
 | **Applies to** | all apps handling user data |
 | **Requires** | backend-api, mitm |
-| **Maps to** | MASTG-TEST-0206 (Undeclared PII in Network Traffic Capture) — the test fails *"if you can find the PII you entered in the app that is not declared in the app's marketplace privacy declarations (e.g. Data Safety section in Google Play) and/or in its privacy policy"*; prerequisites `identify-sensitive-data`, `privacy-policy`, `app-store-privacy-declarations`; MASTG-TECH-0100; MASTG-TOOL-0097 (mitmproxy), MASTG-TOOL-0077 (Burp), MASTG-TOOL-0079 (ZAP), MASTG-TOOL-0081 (Wireshark); MASWE-0073 (Inadequate Data Collection Declarations), MASWE-0074 (Inadequate Tracking Domains Declarations); MASVS-PRIVACY-1, MASVS-PRIVACY-3; OWASP Mobile Top 10 2024 M6; CWE-359 |
+| **Maps to** | MASWE-0072 (Inadequate Privacy Policy); MASTG-TEST-0206 (Undeclared PII in Network Traffic Capture) — the test fails *"if you can find the PII you entered in the app that is not declared in the app's marketplace privacy declarations (e.g. Data Safety section in Google Play) and/or in its privacy policy"*; prerequisites `identify-sensitive-data`, `privacy-policy`, `app-store-privacy-declarations`; MASTG-TECH-0100; MASTG-TOOL-0097 (mitmproxy), MASTG-TOOL-0077 (Burp), MASTG-TOOL-0079 (ZAP), MASTG-TOOL-0081 (Wireshark); MASWE-0073 (Inadequate Data Collection Declarations), MASWE-0074 (Inadequate Tracking Domains Declarations); MASVS-PRIVACY-1, MASVS-PRIVACY-3; OWASP Mobile Top 10 2024 M6; CWE-359 |
 
 - **Test:** The evaluation is a compliance **delta**, not a judgement: capture decrypted traffic while
   entering the marker set from D20-002, then compare what leaves against the Play listing's Data safety
@@ -1100,7 +1186,7 @@ grep -rnE 'GZIPOutputStream|Deflater|ZipOutputStream|GzipSource|Okio|protobuf|Ci
   D20-019 / MASTG-TEST-0318-0319 to name the SDK and call site, which is what makes it actionable.
 - **How:**
 ```bash
-mitmdump -w traffic.flows --set connection_strategy=lazy &
+mitmdump -w +traffic.flows --set connection_strategy=lazy &
 # exercise every flow, typing the canaries
 mitmdump -nr traffic.flows -s /dev/stdin <<'PY'
 NEEDLES = [b'zq4h7m2kx9', b'zq4h7m2kx9@example.invalid', b'15550137742', b'1970-01-01', b'zk8v3p1nd6']
@@ -1118,7 +1204,7 @@ PY
 ```bash
 # the Data safety section is on the Play listing; record data types + "shared with third parties"
 # and the privacy policy URL from the same listing
-aapt2 d badging app.apk | grep -i 'package:\|versionName'
+aapt2 d badging app.apk | grep -i -E 'package:|versionName'
 ```
 - **Proof:** A `sensitive_data.log`-shaped entry showing the marker leaving the device to a named host, side
   by side with the app's published Data safety declaration that omits that data type or that recipient —
@@ -1128,7 +1214,7 @@ REQUEST URL: https://collector.example-analytics.com/v2/e
 Request Body: uid=…&email=zq4h7m2kx9%40example.invalid&lat=51.5074&lon=-0.1278
 ```
   with the listing declaring neither "Email address" nor "Approximate/precise location" as shared.
-- **Escalation:** -> D20-019 to name the SDK; -> D20-020 if consent toggles do not change it; -> D18 if the
+- **Escalation:** -> D28-047 when the undeclared data is a prompt, chat history or attachment sent to a model host (owned there); -> D20-019 to name the SDK; -> D20-020 if consent toggles do not change it; -> D18 if the
   recipient's backend is itself misconfigured. Frame it as data exposure to an unauthorised party with a
   concrete captured payload — **never as a compliance argument**, which Intigriti's standard rejects
   outright.
@@ -1147,12 +1233,12 @@ Request Body: uid=…&email=zq4h7m2kx9%40example.invalid&lat=51.5074&lon=-0.1278
 | **Requires** | backend-api, mitm |
 | **Maps to** | OWASP Mobile Top 10 2024 M6 — *"URL query parameters: Data visible in server logs and browser history"*; MASWE-0073; MASVS-PRIVACY-3 |
 
-- **Test:** A value in a query string is copied into CDN logs, proxy logs, WebView history and — if the URL
+- **Test:** (D20-015 owns the query-string sweep and the log copy; this item adds only the Referer consequence and the WebView half — one capture, two VRT rows.) A value in a query string is copied into CDN logs, proxy logs, WebView history and — if the URL
   is loaded in a WebView with third-party resources — the `Referer` header sent to each of them. The
   remediation to state is exactly M6's: move the value into the POST body or a header.
 - **How:** Use the mitmproxy query-key sweep from D20-015, then check the WebView half:
 ```bash
-grep -rnE 'loadUrl\(|loadDataWithBaseURL|CustomTabsIntent|setAcceptThirdPartyCookies' out/sources/
+grep -rnE 'loadUrl\(|loadDataWithBaseURL|CustomTabsIntent|setAcceptThirdPartyCookies' $DEC/jadx/sources/
 # capture what the WebView sends as Referer to third-party hosts on that page
 mitmdump -nr run.mitm -s /dev/stdin <<'PY'
 def request(f):
@@ -1172,7 +1258,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | Critical (recovery codes, password hashes, auth tokens) down to Medium (excess PII) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); a recovery-code dump chains to `broken_authentication_and_session_management.two_fa_bypass` (P3) or `…authentication_bypass` (P1) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); a recovery-code dump chains to `broken_authentication_and_session_management.two_fa_bypass` (P3) or `…authentication_bypass` (P1) |
 | **Attacker** | AM-05 (own account, own token — then escalate cross-user via D15) |
 | **Applies to** | all mobile backends |
 | **Requires** | backend-api |
@@ -1185,7 +1271,9 @@ PY
 - **How:**
 ```bash
 # 1. what does the UI render? (from the layout and the model class)
-grep -rnE 'data class (User|Profile|Account|Me)\b' -A40 out/sources/
+# jadx emits Java: a Kotlin `data class` decompiles to a class with copy()/componentN(), never the `data class` keyword
+grep -rlE 'public final [A-Za-z<>]+ copy\(|component1\(\)' $DEC/jadx/sources/ | xargs grep -lE 'class (User|Profile|Account|Me|Customer)\b' | head
+# list that class's fields, then grep the getters' call sites in Activity/Fragment/Compose classes for the rendered set (getEmail\(\)|\.email\b)
 # 2. what does the API actually return?
 curl -s https://api.target.example/v1/me -H "Authorization: Bearer $A" | jq 'keys'
 curl -s https://api.target.example/v1/me -H "Authorization: Bearer $A" \
@@ -1207,8 +1295,8 @@ jq -r '.components.schemas | keys[]' openapi.json 2>/dev/null
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); the on-disk half is `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) |
-| **Attacker** | AM-05 (a shared device), AM-04 where the cache is reachable |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); the on-disk half is `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) |
+| **Attacker** | AM-05 (a shared device), AM-04 where the cache is reachable — AM-12 to observe (the root read of the sandbox is evidence, never the precondition) |
 | **Applies to** | all |
 | **Requires** | backend-api, device |
 | **Maps to** | sehno "Test for cache management on HTTP (eg Pragma, Expires, Max-age)"; MASTG-TEST-0320 (WebViews Not Cleaning Up Sensitive Data) for the WebView cache half; CWE-524 |
@@ -1218,9 +1306,9 @@ jq -r '.components.schemas | keys[]' openapi.json 2>/dev/null
 - **How:**
 ```bash
 curl -sI -H "Authorization: Bearer $TOK" https://api.target.example/v1/me | grep -iE 'cache-control|pragma|expires|vary'
-adb shell run-as $PKG sh -c 'ls -la cache/ files/ app_webview/Default 2>/dev/null'
-adb shell run-as $PKG sh -c 'grep -rl "zq4h7m2kx9" cache/ files/ 2>/dev/null' | head
-adb exec-out run-as $PKG tar c app_webview/Default 2>/dev/null > webview.tar && tar xf webview.tar
+AS 'ls -la cache/ files/ app_webview/Default 2>/dev/null'              # AS(): root read of the sandbox (## Items); run-as only works on a debuggable build
+AS 'grep -rl "zq4h7m2kx9" cache/ files/ 2>/dev/null' | head
+AS 'tar c app_webview/Default' > webview.tar && tar xf webview.tar     # AS() uses exec-out: no pty, the tar stream arrives intact
 strings -n 6 "app_webview/Default/Local Storage/leveldb/"*.log 2>/dev/null | grep -aiE 'zq4h7m2kx9|token|email'
 ```
 - **Proof:** `Cache-Control: public` (or a missing `no-store`) on a PII response, and the same marker found
@@ -1236,11 +1324,11 @@ strings -n 6 "app_webview/Default/Local Storage/leveldb/"*.log 2>/dev/null | gre
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — this is third-party PII (the contacts themselves never consented) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) — this is third-party PII (the contacts themselves never consented) |
 | **Attacker** | AM-08; the data subjects are people who are not users of the app at all |
 | **Applies to** | all apps with an invite, "find people you know", or contact-sync feature |
 | **Requires** | device, mitm |
-| **Maps to** | T1636.003 Protected User Data: Contact List; T1636.001 Calendar Entries; MASTG-TEST-0254 (Dangerous App Permissions), MASTG-TEST-0255 (Permission Requests Not Minimized); MASWE-0067 (Lack of Anonymisation or Pseudonymisation Measures); CWE-359 |
+| **Maps to** | T1636.003 Protected User Data: Contact List; T1636.001 Calendar Entries; MASTG-TEST-0254 (Dangerous App Permissions), MASWE-0066 (Inadequate Permission Management — its MASTG test "Permission Requests Not Minimized" is a placeholder upstream); MASWE-0067 (Lack of Anonymisation or Pseudonymisation Measures); CWE-359 |
 
 - **Test:** Four questions, each a different finding: (a) is the **whole** address book uploaded or only the
   contact the user picked; (b) is it uploaded **before** the user picks anyone; (c) are phone numbers hashed,
@@ -1248,11 +1336,11 @@ strings -n 6 "app_webview/Default/Local Storage/leveldb/"*.log 2>/dev/null | gre
   the data retained server-side after the invite is sent.
 - **How:**
 ```bash
-grep -rnE 'ContactsContract|READ_CONTACTS|CalendarContract|READ_CALENDAR|CommonDataKinds\.(Phone|Email)|uploadContacts|syncContacts|hashPhone|normalizePhone' out/sources/
+grep -rnE 'ContactsContract|READ_CONTACTS|CalendarContract|READ_CALENDAR|CommonDataKinds\.(Phone|Email)|uploadContacts|syncContacts|hashPhone|normalizePhone' $DEC/jadx/sources/
 # seed canary contacts, then proxy the invite flow
-adb shell content insert --uri content://com.android.contacts/raw_contacts \
+adb -s "$SERIAL" shell content insert --uri content://com.android.contacts/raw_contacts \
   --bind account_name:s:canary --bind account_type:s:canary
-adb shell content insert --uri content://com.android.contacts/data \
+adb -s "$SERIAL" shell content insert --uri content://com.android.contacts/data \
   --bind raw_contact_id:i:1 --bind mimetype:s:vnd.android.cursor.item/name \
   --bind data1:s:zq4h7m2kx9
 # then: open the invite screen and capture BEFORE tapping any contact
@@ -1273,11 +1361,11 @@ curl -s https://api.target.example/v1/me/contacts -H "Authorization: Bearer $A" 
 | | |
 |---|---|
 | **Severity ceiling** | High (an OTP on a locked screen is a second-factor bypass for anyone holding the device) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**) |
 | **Attacker** | **AM-10** physical locked — the rare item where AM-10 is the primary model |
 | **Applies to** | all. MASTG's evaluation uses **`minSdkVersion`**, not `targetSdkVersion`, because that "ensures the test accounts for the least secure environment in which the app can operate": it fails if sensitive data is exposed **and** (`minSdkVersion >= 33` with `POST_NOTIFICATIONS` declared) **or** (`minSdkVersion <= 32`, regardless of the permission) |
 | **Requires** | device |
-| **Maps to** | MASTG-TEST-0315 (Sensitive Data Exposed via Notifications) — named data types "personally identifiable information (PII), one-time passwords (OTPs), or other sensitive data, like health or financial details"; MASWE-0037 (CWE-200, CWE-359); MASTG-KNOW-0054; MASTG-BEST-0027; semgrep rules `mastg-android-sensitive-data-in-notifications` and `…-manifest`; mobsfscan `android_sensitive_notification`; deprecated predecessor MASTG-TEST-0005; developer.android.com `develop/ui/views/notifications/build-notification` (`VISIBILITY_PUBLIC` / `VISIBILITY_PRIVATE` / `VISIBILITY_SECRET`, `setPublicVersion()`, channel `lockscreenVisibility`); T1517 |
+| **Maps to** | MASTG-TEST-0315 (Sensitive Data Exposed via Notifications) — named data types "personally identifiable information (PII), one-time passwords (OTPs), or other sensitive data, like health or financial details"; MASWE-0037 (CWE-200, CWE-359); MASTG-KNOW-0054; the MASTG best practice "Preventing Sensitive Data Exposure in Notifications" (a placeholder upstream); semgrep rules `mastg-android-sensitive-data-in-notifications` and `…-manifest`; mobsfscan `android_sensitive_notification`; deprecated predecessor MASTG-TEST-0005; developer.android.com `develop/ui/views/notifications/build-notification` (`VISIBILITY_PUBLIC` / `VISIBILITY_PRIVATE` / `VISIBILITY_SECRET`, `setPublicVersion()`, channel `lockscreenVisibility`); T1517 |
 
 - **Test:** Three settings interact and developers get the precedence wrong. `VISIBILITY_PUBLIC` shows full
   content on the keyguard; `VISIBILITY_PRIVATE` shows only basic info **and should be paired with
@@ -1285,16 +1373,16 @@ curl -s https://api.target.example/v1/me/contacts -H "Authorization: Bearer $A" 
   **channel's** `lockscreenVisibility` can override the per-notification value, so check both.
 - **How:**
 ```bash
-grep -rnE 'NotificationCompat\.Builder|Notification\.Builder|setContentTitle\(|setContentText\(|setStyle\(|BigTextStyle|setTicker\(|setVisibility\(|VISIBILITY_(PUBLIC|PRIVATE|SECRET)|setPublicVersion\(|lockscreenVisibility|createNotificationChannel' out/sources/
-semgrep -c rules/mastg-android-sensitive-data-in-notifications.yml out/sources/
-semgrep -c rules/mastg-android-sensitive-data-in-notifications-manifest.yml out/resources/AndroidManifest.xml
-xmlstarlet sel -t -v "//uses-sdk/@android:minSdkVersion" -n out/AndroidManifest.xml
-grep -n 'POST_NOTIFICATIONS' out/AndroidManifest.xml
+grep -rnE 'NotificationCompat\.Builder|Notification\.Builder|setContentTitle\(|setContentText\(|setStyle\(|BigTextStyle|setTicker\(|setVisibility\(|VISIBILITY_(PUBLIC|PRIVATE|SECRET)|setPublicVersion\(|lockscreenVisibility|createNotificationChannel' $DEC/jadx/sources/
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES/mastg-android-sensitive-data-in-notifications.yml" $DEC/jadx/sources/ --json -o "$E/logs/D20-030-semgrep.json" && python3 -c "import json;d=json.load(open('$E/logs/D20-030-semgrep.json'));print('scanned',len(d['paths']['scanned']),'findings',len(d['results']))"
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES/mastg-android-sensitive-data-in-notifications-manifest.yml" $DEC/apktool/AndroidManifest.xml
+xmlstarlet sel -t -v "//uses-sdk/@android:minSdkVersion" -n $DEC/apktool/AndroidManifest.xml
+grep -n 'POST_NOTIFICATIONS' $DEC/apktool/AndroidManifest.xml
 # empirical
-adb shell input keyevent KEYCODE_SLEEP
+adb -s "$SERIAL" shell input keyevent KEYCODE_SLEEP
 # trigger the OTP / transaction / message notification, then:
-adb shell dumpsys notification --noredact | sed -n "/$PKG/,/^$/p" | grep -iE 'visibility|android.title|android.text|android.bigText|tickerText|channel'
-adb exec-out screencap -p > lockscreen.png
+adb -s "$SERIAL" shell dumpsys notification --noredact | sed -n "/$PKG/,/^$/p" | grep -iE 'visibility|android.title|android.text|android.bigText|tickerText|channel'
+adb -s "$SERIAL" exec-out screencap -p > lockscreen.png
 ```
 - **Proof:** `dumpsys notification --noredact` showing `android.text` (or `android.bigText`, or `tickerText`)
   carrying the OTP / balance / message body, **plus** the lock-screen capture showing it rendered, **plus**
@@ -1311,13 +1399,13 @@ adb exec-out screencap -p > lockscreen.png
 | | |
 |---|---|
 | **Severity ceiling** | High (Critical when the value is an OTP that completes an account takeover) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**) |
 | **Attacker** | **AM-04** — notification access is a single user toggle, no dangerous permission |
 | **Applies to** | all |
 | **Requires** | device |
 | **Maps to** | developer.android.com `reference/android/service/notification/NotificationListenerService` (`BIND_NOTIFICATION_LISTENER_SERVICE`, `onNotificationPosted`, `getActiveNotifications()`, `Notification.extras`, `Notification.EXTRA_TEXT`, `contentIntent`); MASWE-0037; MASTG-TEST-0315; Google Mobile VRP Low Impact Data includes "content of a user's messages (email, instant messages, text messages)"; empirical: Mail.ru "read new emails from any inbox in notification center" **$10,000**; T1517 Access Notifications (ATT&CK: *"In the case of Credential Access, adversaries may attempt to intercept one-time code sent to the device"*; Escobar "steals Google Authenticator MFA codes"; SharkBot "intercepts notifications and leverages Direct Reply features"; mitigation: **Application Developer Guidance — avoid sensitive data in notification text**); T1644 Out of Band Data |
 
-- **Test:** Lock-screen visibility settings are irrelevant here: a listener reads `Notification.extras`
+- **Test:** (Owner of the listener PoC; D06-048 covers the same listener from the service side and D08-040 the mutable-PendingIntent exploitation step — build the PoC once, here.) Lock-screen visibility settings are irrelevant here: a listener reads `Notification.extras`
   regardless, including `EXTRA_TEXT`, `EXTRA_BIG_TEXT`, `EXTRA_TITLE`, every action's label, and the
   `contentIntent` itself. The notification-access grant is a normal, user-facing toggle that banking
   trojans routinely obtain, and it is the precondition you must state honestly.
@@ -1330,9 +1418,14 @@ adb exec-out screencap -p > lockscreen.png
 ```
 ```java
 public class Listener extends NotificationListenerService {
+  // every fact goes to logcat AND a file: some OEM user builds drop app-level logcat entirely, so a logcat-only PoC reads as zero hits
+  static void poc(Context c, String line) {
+    Log.e("POC", line);
+    try (java.io.FileWriter w = new java.io.FileWriter(new java.io.File(c.getExternalFilesDir(null), "poc.log"), true)) { w.write(line + "\n"); } catch (java.io.IOException ignored) {}
+  }
   @Override public void onNotificationPosted(StatusBarNotification sbn) {
     Bundle x = sbn.getNotification().extras;
-    Log.e("POC", sbn.getPackageName() + " | title=" + x.getCharSequence(Notification.EXTRA_TITLE)
+    poc(this, sbn.getPackageName() + " | title=" + x.getCharSequence(Notification.EXTRA_TITLE)
         + " | text=" + x.getCharSequence(Notification.EXTRA_TEXT)
         + " | big=" + x.getCharSequence(Notification.EXTRA_BIG_TEXT)
         + " | intent=" + sbn.getNotification().contentIntent);
@@ -1340,21 +1433,23 @@ public class Listener extends NotificationListenerService {
 }
 ```
 ```bash
-adb install poc-listener.apk
-adb shell cmd notification allow_listener com.poc/.Listener
-adb shell settings get secure enabled_notification_listeners
-# trigger the target's OTP / message / transaction notification
-adb logcat -s POC:E -d
+adb -s "$SERIAL" install poc-listener.apk
+adb -s "$SERIAL" shell cmd notification allow_listener <poc-pkg>/.Listener
+adb -s "$SERIAL" shell settings get secure enabled_notification_listeners
+# post a benign notification first (positive control), then trigger the target's OTP / message / transaction notification
+adb -s "$SERIAL" logcat -s POC:E -d
+adb -s "$SERIAL" pull /sdcard/Android/data/<poc-pkg>/files/poc.log "$E/logs/D20-031-poc.log"
 ```
-- **Proof:** Your PoC's own log line containing the OTP / message body / balance, with the target's package
-  name in the same line, plus a screenshot of the ordinary settings toggle the user flipped. State the
+- **Proof:** Your PoC's own `poc.log` line (not only logcat) containing the OTP / message body / balance, with
+  the target's package name in the same line, plus a screenshot of the ordinary settings toggle the user flipped. State the
   attacker app's permission set — ideally empty besides the listener binding.
 - **Escalation:** -> D09/D24 join: the listener also reads the notification's deep link and its extras, then
   replays that deep link itself (see Cross-surface joins); -> D08 if the `contentIntent` is a mutable
   `PendingIntent`; -> D13 for the OTP.
 - **Ruled out when:** The target's notifications carry no sensitive value in any `extras` key — the OTP is
   delivered only in-app, the message body is replaced by "New message", the balance is omitted — verified by
-  the PoC listener logging only generic strings. Keep that log as the negative.
+  the PoC listener logging only generic strings while `poc.log` holds the positive-control line from the benign
+  notification, proving the channel. Keep that log as the negative.
 
 ### D20-032 · Android 15 OTP redaction for listeners, and the apps that route around it
 
@@ -1374,12 +1469,12 @@ adb logcat -s POC:E -d
   code split across an action label, the code in an accessibility node, or the code placed on the clipboard.
 - **How:**
 ```bash
-grep -rn 'BIND_NOTIFICATION_LISTENER_SERVICE\|NotificationListenerService' out/AndroidManifest.xml out/sources/
-grep -rn 'CompanionDeviceManager\|REQUEST_COMPANION_PROFILE\|REQUEST_COMPANION_RUN_IN_BACKGROUND\|associate(' out/AndroidManifest.xml out/sources/
-adb shell cmd notification allow_listener com.poc/.Listener
-adb shell dumpsys notification | grep -iE 'listener|redact'
+grep -rn -E 'BIND_NOTIFICATION_LISTENER_SERVICE|NotificationListenerService' $DEC/apktool/AndroidManifest.xml $DEC/jadx/sources/
+grep -rn -E 'CompanionDeviceManager|REQUEST_COMPANION_PROFILE|REQUEST_COMPANION_RUN_IN_BACKGROUND|associate\(' $DEC/apktool/AndroidManifest.xml $DEC/jadx/sources/
+adb -s "$SERIAL" shell cmd notification allow_listener com.poc/.Listener
+adb -s "$SERIAL" shell dumpsys notification | grep -iE 'listener|redact'
 # trigger the target's OTP notification on an Android 15 device and read the PoC's log
-adb logcat -s POC:E -d
+adb -s "$SERIAL" logcat -s POC:E -d
 ```
 - **Proof:** The test listener receiving an **unredacted** 6-digit code on Android 15 from the target app —
   which proves the app's OTP delivery falls outside the platform's redaction heuristics — or the target
@@ -1395,7 +1490,7 @@ adb logcat -s POC:E -d
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-11 physical unlocked, AM-05 shared device |
 | **Applies to** | **Android 11+ (API 30+)** where the user has enabled notification history |
 | **Requires** | device, api>=30 |
@@ -1406,11 +1501,11 @@ adb logcat -s POC:E -d
   whoever next picks up the unlocked device. Apps that rely on "the notification is transient" are wrong.
 - **How:**
 ```bash
-adb shell settings put secure notification_history_enabled 1
+adb -s "$SERIAL" shell settings put secure notification_history_enabled 1
 # trigger the notification, dismiss it, then:
-adb shell dumpsys notification --noredact | grep -iA6 'history\|HistoryArchive'
+adb -s "$SERIAL" shell dumpsys notification --noredact | grep -iA6 -E 'history|HistoryArchive'
 # and on device: Settings > Notifications > Notification history
-adb exec-out screencap -p > nhistory.png
+adb -s "$SERIAL" exec-out screencap -p > nhistory.png
 ```
 - **Proof:** The dismissed OTP or message body still visible in notification history, screenshotted, with
   the time elapsed since dismissal.
@@ -1424,7 +1519,7 @@ adb exec-out screencap -p > nhistory.png
 | | |
 |---|---|
 | **Severity ceiling** | High (for an OTP or message body) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
 | **Attacker** | AM-02 (a remote party on a support or casting session — the classic remote-access-scam vector) |
 | **Applies to** | **Android 15+** for the platform protection; below that there is no protection at all |
 | **Requires** | device, api>=35 |
@@ -1437,10 +1532,10 @@ adb exec-out screencap -p > nhistory.png
   one, or you will report a false negative.
 - **How:**
 ```bash
-grep -rn 'setPublicVersion\|VISIBILITY_PRIVATE\|VISIBILITY_SECRET\|setVisibility(' out/sources/
+grep -rn -E 'setPublicVersion|VISIBILITY_PRIVATE|VISIBILITY_SECRET|setVisibility\(' $DEC/jadx/sources/
 # start the BUILT-IN screen recorder (Quick Settings tile), then post the sensitive notification
-adb shell screenrecord --time-limit 20 /sdcard/r.mp4 &   # note: adb screenrecord is a separate path — see D20-039
-adb pull /sdcard/r.mp4
+# use the Quick Settings recorder or a cast/share session: `adb screenrecord` is not a MediaProjection consumer and never engages the protection (see D20-039 for the shell path)
+adb -s "$SERIAL" pull /sdcard/r.mp4
 ```
 - **Proof:** The OTP, balance or message body visible in the default recorder's output, or in a screen-share
   session recorded from the far end.
@@ -1453,7 +1548,7 @@ adb pull /sdcard/r.mp4
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null = rated on what it exposes) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies = rated on what it exposes) |
 | **Attacker** | AM-04 (notification access) |
 | **Applies to** | all apps posting notifications with actions |
 | **Requires** | device |
@@ -1465,8 +1560,8 @@ adb pull /sdcard/r.mp4
   read primitive.
 - **How:**
 ```bash
-grep -rnE 'addAction\(|Notification\.Action|RemoteInput\.Builder|setAllowGeneratedReplies|PendingIntent\.getBroadcast|PendingIntent\.getService' out/sources/ | grep -i notif -A4
-adb shell dumpsys notification --noredact | grep -iE 'actions|actionIntent|remoteInput'
+grep -rnE 'addAction\(|Notification\.Action|RemoteInput\.Builder|setAllowGeneratedReplies|PendingIntent\.getBroadcast|PendingIntent\.getService' $DEC/jadx/sources/ | grep -i notif -A4
+adb -s "$SERIAL" shell dumpsys notification --noredact | grep -iE 'actions|actionIntent|remoteInput'
 ```
   From the PoC listener, enumerate and fire:
 ```java
@@ -1490,7 +1585,7 @@ if (n.actions != null) for (Notification.Action a : n.actions) {
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) is the trap node; the escalation is `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) is the trap node; the escalation is `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 (MediaProjection or accessibility consumer), AM-08 (in-process SDK), AM-11 (physical) |
 | **Applies to** | all |
 | **Requires** | device |
@@ -1508,11 +1603,11 @@ if (n.actions != null) for (Notification.Action a : n.actions) {
 - **How:**
 ```bash
 # who is capable right now?
-adb shell dumpsys media_projection
-adb shell settings get secure enabled_accessibility_services
-grep -rn 'DETECT_SCREEN_CAPTURE\|MediaProjection\|FOREGROUND_SERVICE_MEDIA_PROJECTION' out/AndroidManifest.xml
+adb -s "$SERIAL" shell dumpsys media_projection
+adb -s "$SERIAL" shell settings get secure enabled_accessibility_services
+grep -rn -E 'DETECT_SCREEN_CAPTURE|MediaProjection|FOREGROUND_SERVICE_MEDIA_PROJECTION' $DEC/apktool/AndroidManifest.xml
 # and what does the app itself do about it?
-grep -rnE 'FLAG_SECURE|setContentSensitivity|setRecentsScreenshotEnabled|setFilterTouchesWhenObscured|registerScreenCaptureCallback|addScreenRecordingCallback' out/sources/
+grep -rnE 'FLAG_SECURE|setContentSensitivity|setRecentsScreenshotEnabled|setFilterTouchesWhenObscured|registerScreenCaptureCallback|addScreenRecordingCallback' $DEC/jadx/sources/
 ```
 - **Proof:** A one-line statement in the report naming which consumer you demonstrated, with the artefact
   from the corresponding item. Do not present `adb screencap` on your own rooted device as the attack.
@@ -1528,7 +1623,7 @@ grep -rnE 'FLAG_SECURE|setContentSensitivity|setRecentsScreenshotEnabled|setFilt
 | | |
 |---|---|
 | **Severity ceiling** | High (persistent screen capture beyond the consent the user gave) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 for a third-party capturer; for the target app itself this is a covert-collection finding |
 | **Applies to** | **targetSdk 34+** for the per-session rule; Android 15+ adds the status-bar chip and auto-stop on lock |
 | **Requires** | device |
@@ -1541,12 +1636,12 @@ grep -rnE 'FLAG_SECURE|setContentSensitivity|setRecentsScreenshotEnabled|setFilt
   what the user perceives as separate sessions, or an accessibility service.
 - **How:**
 ```bash
-grep -rnE 'createScreenCaptureIntent|getMediaProjection|createVirtualDisplay|MediaProjection\.Callback|registerCallback|FOREGROUND_SERVICE_MEDIA_PROJECTION' out/sources/ out/AndroidManifest.xml
+grep -rnE 'createScreenCaptureIntent|getMediaProjection|createVirtualDisplay|MediaProjection\.Callback|registerCallback|FOREGROUND_SERVICE_MEDIA_PROJECTION' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml
 aapt2 d badging app.apk | grep targetSdkVersion
-adb shell dumpsys media_projection
-adb logcat -d | grep -i 'SecurityException.*MediaProjection'
+adb -s "$SERIAL" shell dumpsys media_projection
+adb -s "$SERIAL" logcat -d | grep -i 'SecurityException.*MediaProjection'
 # is an FGS staying alive between sessions?
-adb shell dumpsys activity services $PKG | grep -iE 'mediaProjection|foreground|started'
+adb -s "$SERIAL" shell dumpsys activity services $PKG | grep -iE 'mediaProjection|foreground|started'
 ```
 - **Proof:** A second capture session starting with **no** new consent dialog — screen-record the absence of
   the prompt — or a `mediaProjection` FGS that persists across sessions, or an accessibility-service fallback
@@ -1561,7 +1656,7 @@ adb shell dumpsys activity services $PKG | grep -iE 'mediaProjection|foreground|
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-02 (the remote viewer in a support-call or casting scam) |
 | **Applies to** | **Android 15+**, all apps |
 | **Requires** | device, api>=35 |
@@ -1573,11 +1668,13 @@ adb shell dumpsys activity services $PKG | grep -iE 'mediaProjection|foreground|
   far end of a screen share — which is the mechanism of the current generation of remote-access support scams.
 - **How:**
 ```bash
-grep -rn 'setContentSensitivity\|CONTENT_SENSITIVITY_SENSITIVE\|FLAG_SECURE\|setPublicVersion' out/sources/
-# reproduce the remote view
-scrcpy --no-control &     # or start a real screen share / cast session
-# testing-only toggle, to confirm the protection is what is (or is not) acting:
-adb shell settings put global disable_screen_share_protections 1
+grep -rn -E 'setContentSensitivity|CONTENT_SENSITIVITY_SENSITIVE|FLAG_SECURE|setPublicVersion' $DEC/jadx/sources/
+# reproduce the remote view with a REAL MediaProjection consumer — the PoC capturer from D20-037, a casting session, or a
+# meeting app's share-screen. Never scrcpy or `adb screenrecord`: shell-level capture does not start a projection, so the
+# protection is not engaged and the field is visible in every run (a built-in false positive)
+# control: the stock password field must appear redacted in the same session before you judge the app's own views
+# testing-only toggle (Android 15 Developer Options key), to confirm the protection is what is (or is not) acting:
+adb -s "$SERIAL" shell settings put global disable_screen_share_protections_for_apps_and_notifications 1   # confirm the key: settings list global | grep screen_share
 ```
 - **Proof:** Side by side — the sensitive field visible in the projected stream, and the same field redacted
   once `FLAG_SECURE` or sensitivity marking is applied in a patched build. State the Android version.
@@ -1601,10 +1698,10 @@ adb shell settings put global disable_screen_share_protections 1
   where you can also show a concrete capture succeeding.
 - **How:**
 ```bash
-grep -n 'DETECT_SCREEN_CAPTURE' out/AndroidManifest.xml
-grep -rnE 'registerScreenCaptureCallback|unregisterScreenCaptureCallback|ScreenCaptureCallback|addScreenRecordingCallback|SCREEN_RECORDING_STATE_VISIBLE' out/sources/
-# capture with the HARDWARE button combination, not adb — adb capture is documented as undetectable
-adb shell input keyevent KEYCODE_SYSRQ   # or press Power+VolDown physically
+grep -n 'DETECT_SCREEN_CAPTURE' $DEC/apktool/AndroidManifest.xml
+grep -rnE 'registerScreenCaptureCallback|unregisterScreenCaptureCallback|ScreenCaptureCallback|addScreenRecordingCallback|SCREEN_RECORDING_STATE_VISIBLE' $DEC/jadx/sources/
+# capture with the HARDWARE button combination, not adb -s "$SERIAL" — adb -s "$SERIAL" capture is documented as undetectable
+adb -s "$SERIAL" shell input keyevent KEYCODE_SYSRQ   # or press Power+VolDown physically
 ```
 - **Proof:** A screenshot of the PIN or transfer-confirmation screen taken by the hardware combination, with
   no app-side reaction — no blur, no warning, no session invalidation — on a screen that also lacks
@@ -1623,30 +1720,39 @@ adb shell input keyevent KEYCODE_SYSRQ   # or press Power+VolDown physically
 | **Attacker** | AM-11 / AM-05 |
 | **Applies to** | all; **D04-042, D04-043 and D04-044 own the mechanics** — this item exists so the D20 pass does not re-derive them and so the privacy framing is recorded |
 | **Requires** | device |
-| **Maps to** | MASTG-TEST-0289 (Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding — names the exact paths `/data/system_ce/0/snapshots` and `/data/system`), MASTG-TEST-0291 (References to Screen Capturing Prevention APIs), MASTG-TEST-0292 (`setRecentsScreenshotEnabled` not used), MASTG-TEST-0293 (`SurfaceView.setSecure` not used), MASTG-TEST-0294 (Compose dialogs `SecureOn` not used) — **0292/0293/0294 are `status: placeholder` with no published procedure, so test them by hand**; MASTG-KNOW-0053; MASTG-BEST-0014; MASWE-0038; semgrep rule `mastg-android-sensitive-data-in-screenshot`; deprecated predecessor MASTG-TEST-0010; AOSP threat [T.P4] "Screen unlocked (shared) devices under control of an authorized but different user" |
+| **Maps to** | MASTG-TEST-0289 (Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding — names the exact paths `/data/system_ce/0/snapshots` and `/data/system`), MASTG-TEST-0291 (References to Screen Capturing Prevention APIs), the three MASTG tests for `setRecentsScreenshotEnabled` not used, `SurfaceView.setSecure` not used and Compose dialogs' `SecureOn` not used (MASWE-0038) — **placeholders upstream with no published procedure, so test them by hand**; MASTG-KNOW-0053; MASTG-BEST-0014; MASWE-0038; semgrep rule `mastg-android-sensitive-data-in-screenshot`; deprecated predecessor MASTG-TEST-0010; AOSP threat [T.P4] "Screen unlocked (shared) devices under control of an authorized but different user" |
 
-- **Test:** Run D04-042/043/044 once, then bring the result here and answer the only question that changes
+- **Test:** (D04-042/043/044 own the FLAG_SECURE mechanics and D11-039 the on-disk snapshot; this item owns only the privacy framing and the second rendering.) Run D04-042/043/044 once, then bring the result here and answer the only question that changes
   the rating: **what data class is on that frame, and who picks up the device?** A balance on a personal
   phone is P5. A patient record on a ward tablet, a PAN on a POS terminal, or a recovery phrase on any device
   is a data-class argument that lifts the write-up out of `screen_caching_enabled`. Also check the three
   gaps that sit *under* a correctly set `FLAG_SECURE`: a `clearFlags()` during a transition, a `SurfaceView`
   (video, camera preview, map, PDF renderer) with its own secure flag, and a Compose `Dialog` whose window is
-  separate from the activity's.
+  separate from the activity's — plus a fourth, **the second rendering**: every other screen, sheet, list row,
+  share preview, widget or notification that renders the same value, and the value's `contentDescription`. A
+  card screen that goes black proves nothing about the transaction-detail or share screen that draws the same PAN.
 - **How:**
 ```bash
-grep -rnE 'FLAG_SECURE|clearFlags\([^)]*FLAG_SECURE|setRecentsScreenshotEnabled|SurfaceView|setSecure\(|DialogProperties|SecureFlagPolicy|excludeFromRecents' out/sources/ out/AndroidManifest.xml
-semgrep -c rules/mastg-android-sensitive-data-in-screenshot.yml out/sources/
-adb shell input keyevent KEYCODE_APP_SWITCH && adb exec-out screencap -p > recents.png
-adb root && adb shell ls -la /data/system_ce/0/snapshots/ && adb pull /data/system_ce/0/snapshots ./snaps/
+grep -rnE 'FLAG_SECURE|clearFlags\([^)]*FLAG_SECURE|setRecentsScreenshotEnabled|SurfaceView|setSecure\(|DialogProperties|SecureFlagPolicy|excludeFromRecents' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml
+# the second rendering: routes that set FLAG_SECURE vs every other binding site of the protected value (adapt the field names to the app's model class)
+grep -rlE 'FLAG_SECURE' $DEC/jadx/sources/ | sort -u > "$E/logs/D20-040-secure-routes.txt"
+grep -rnE 'setText\(|\.text = |contentDescription|Text\(' $DEC/jadx/sources/ | grep -iE 'cardNumber|pan|maskedPan|otp|balance|iban|seed|mnemonic|accountNumber' | grep -vFf "$E/logs/D20-040-secure-routes.txt"
+# then drive each sibling route: adb -s "$SERIAL" exec-out screencap -p > "$E/screenshots/D20-040-<route>.png", and dump it (D20-042) for content-desc
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES/mastg-android-sensitive-data-in-screenshot.yml" $DEC/jadx/sources/ --json -o "$E/logs/D20-040-semgrep.json" && python3 -c "import json;d=json.load(open('$E/logs/D20-040-semgrep.json'));print('scanned',len(d['paths']['scanned']),'findings',len(d['results']))"
+adb -s "$SERIAL" shell input keyevent KEYCODE_APP_SWITCH && adb -s "$SERIAL" exec-out screencap -p > recents.png
+adb -s "$SERIAL" root && adb -s "$SERIAL" shell ls -la /data/system_ce/0/snapshots/ && adb -s "$SERIAL" pull /data/system_ce/0/snapshots ./snaps/
 ```
 - **Proof:** The pulled snapshot or Recents capture showing the value, **named by data class** —
   "a full 16-digit PAN", not "sensitive data" — plus the shared-device or borrowed-device scenario the
-  client actually supports.
+  client actually supports. For the second rendering: two captures of the same value — black on the protected
+  route, readable on the sibling — plus the sibling's node text.
 - **Escalation:** -> D04 for the mechanics and the differential evidence; -> D20-017/D20-018 for the
   in-process capture that `FLAG_SECURE` does not stop; -> D11 because the snapshot is also a file on disk.
 - **Ruled out when:** Every screen carrying a credential, PAN, OTP, seed phrase or health datum produces a
   black `screencap`, `screenrecord` refuses, and no snapshot file exists for the package after backgrounding
-  from those screens. Attach the black frame — it is one of the few visually provable negatives here.
+  from those screens — and every binding site of each protected value is either on a `FLAG_SECURE` route or
+  masks/truncates the value, listed by route. Attach the black frame — it is one of the few visually provable
+  negatives here.
 
 ### D20-041 · Framework single-surface rendering — one missing flag exposes the whole screen
 
@@ -1657,7 +1763,7 @@ adb root && adb shell ls -la /data/system_ce/0/snapshots/ && adb pull /data/syst
 | **Attacker** | AM-04 / AM-11 |
 | **Applies to** | Flutter, Unity, and any engine rendering into a single `SurfaceView`/`TextureView`; also Cordova/Capacitor/RN where the WebView is the whole window |
 | **Requires** | device, flutter, unity, cordova, capacitor, react-native |
-| **Maps to** | MASTG-TEST-0293 (`setSecure` not used to prevent screenshots in `SurfaceView`s); MASWE-0038 |
+| **Maps to** | MASWE-0038 (its MASTG test for `setSecure` not used on `SurfaceView`s is a placeholder upstream) |
 
 - **Test:** Native Android lets you protect a single activity. Flutter and Unity render every screen into one
   surface on one host activity, so the protection decision is **all or nothing**: either the host activity
@@ -1666,12 +1772,12 @@ adb root && adb shell ls -la /data/system_ce/0/snapshots/ && adb pull /data/syst
   flag per route — test the toggle's timing, because a route transition is exactly where it fails.
 - **How:**
 ```bash
-grep -rn 'FLAG_SECURE\|setSecure\|SecureFlagPlugin\|no_screenshot\|flutter_windowmanager\|ScreenProtector' out/sources/ out_dir/pp.txt hbc.strings 2>/dev/null | head
+grep -rn -E 'FLAG_SECURE|setSecure|SecureFlagPlugin|no_screenshot|flutter_windowmanager|ScreenProtector' $DEC/jadx/sources/ "$DEC/blutter/pp.txt" "$E/logs/strings.txt" 2>/dev/null | head   # the D19-034 Dart pool and the D19-009 Hermes string dump, by their canonical names
 # capture at the transition, not at rest
-adb shell am start -n $PKG/.MainActivity
+adb -s "$SERIAL" shell am start -n $PKG/.MainActivity
 # navigate to the PIN route, then immediately:
-adb exec-out screencap -p > t_pin.png
-adb shell input keyevent KEYCODE_APP_SWITCH && adb exec-out screencap -p > t_recents.png
+adb -s "$SERIAL" exec-out screencap -p > t_pin.png
+adb -s "$SERIAL" shell input keyevent KEYCODE_APP_SWITCH && adb -s "$SERIAL" exec-out screencap -p > t_recents.png
 ```
 - **Proof:** A non-black capture of the PIN / card / seed screen in a release build, and — where a per-route
   toggle exists — a non-black capture taken during the route transition into it.
@@ -1685,7 +1791,7 @@ adb shell input keyevent KEYCODE_APP_SWITCH && adb exec-out screencap -p > t_rec
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 (an enabled accessibility service; `uiautomator` itself is AM-11/AM-12 and is only the evidence tool) |
 | **Applies to** | all |
 | **Requires** | device |
@@ -1696,10 +1802,15 @@ adb shell input keyevent KEYCODE_APP_SWITCH && adb exec-out screencap -p > t_rec
   `content-desc=` in the dump is what an accessibility service or autofill consumer sees.
 - **How:**
 ```bash
-adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml
+adb -s "$SERIAL" shell uiautomator dump /sdcard/ui.xml && adb -s "$SERIAL" pull /sdcard/ui.xml
 grep -oE '(text|content-desc)="[^"]*"' ui.xml | grep -inE '[0-9]{6}|[0-9]{12,19}|@|zq4h7m2kx9|balance|iban'
 echo "nodes: $(grep -c '<node' ui.xml)"
 ```
+  If the dump dies on a Compose UI or reports `UiAutomation.connect: another client bound`, stop the other
+  UiAutomation clients (scrcpy, Frida sessions spawned with `-f`, test runners) and retry once; if it still fails,
+  use the PoC accessibility service from D20-050 as the dumper — it *is* the attacker model — walking
+  `getRootInActiveWindow()` recursively and writing `className|text|contentDescription` per node to `poc.log`,
+  and record `nodes:` from that file instead. The non-zero node count below applies to whichever dumper ran.
 - **Proof:** The card number, OTP, balance or personal datum present as readable `text=` in the node dump of a
   sensitive screen, with the node count proving the dump succeeded.
 - **Escalation:** -> D20-050 (the accessibility finding proper); -> D20-048 (the same tree reaches an autofill
@@ -1714,18 +1825,18 @@ echo "nodes: $(grep -c '<node' ui.xml)"
 | | |
 |---|---|
 | **Severity ceiling** | Low standalone (High when the copied value is an OTP or a recovery phrase) |
-| **VRT** | `mobile_security_misconfiguration.clipboard_enabled` (**P5**). The VRT changelog shows the finer-grained children `on_sensitive_content` / `on_non_sensitive_content` were **removed** and the parent set to P5 "due to children removal" — Bugcrowd deliberately flattened this and will not entertain a "but it was sensitive content" argument *on category grounds*. Escalate through the value: `broken_authentication_and_session_management.two_fa_bypass` (P3) for an OTP, `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) otherwise |
+| **VRT** | `mobile_security_misconfiguration.clipboard_enabled` (**P5**). The VRT changelog shows the finer-grained children `on_sensitive_content` / `on_non_sensitive_content` were **removed** and the parent set to P5 "due to children removal" — Bugcrowd deliberately flattened this and will not entertain a "but it was sensitive content" argument *on category grounds*. Escalate through the value: `broken_authentication_and_session_management.two_fa_bypass` (P3) for an OTP, `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) otherwise |
 | **Attacker** | AM-04 (the default IME's clipboard history; a foreground app) |
 | **Applies to** | `ClipDescription.EXTRA_IS_SENSITIVE` exists from **Android 13 (API 33)**; below 33 the literal string `"android.content.extra.IS_SENSITIVE"` is used |
 | **Requires** | device, frida |
 | **Maps to** | MASWE-0030 (Improper Use of the Clipboard, CWE-200/CWE-668 — modes: copying secrets without consent, not flagging with `EXTRA_IS_SENSITIVE`, not clearing, processing pasted data without validation). **There is no Android MASTG-TEST for the clipboard — a documented MASTG gap.** developer.android.com `privacy-and-security/risks/secure-clipboard-handling` and `develop/ui/views/touch-and-input/copy-paste`; T1414 Clipboard Data |
 
-- **Test:** "Copy" buttons on account numbers, IBANs, card numbers, recovery phrases, OTPs and API tokens.
+- **Test:** (Owner of the clipboard-write test; D11-059 is its storage-chapter duplicate — run it here and record one verdict on both ids.) "Copy" buttons on account numbers, IBANs, card numbers, recovery phrases, OTPs and API tokens.
   Without the sensitive flag the value is rendered in the Android 13+ copy-confirmation preview and retained
   in every keyboard's clipboard history — which outlives the app.
 - **How:**
 ```bash
-grep -rnE 'setPrimaryClip|ClipData\.newPlainText|ClipDescription|EXTRA_IS_SENSITIVE|android\.content\.extra\.IS_SENSITIVE|clearPrimaryClip|getPrimaryClip' out/sources/ -A4
+grep -rnE 'setPrimaryClip|ClipData\.newPlainText|ClipDescription|EXTRA_IS_SENSITIVE|android\.content\.extra\.IS_SENSITIVE|clearPrimaryClip|getPrimaryClip' $DEC/jadx/sources/ -A4
 ```
   The correct form (API 33+) is
   `description.extras = PersistableBundle().apply { putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true) }`,
@@ -1763,7 +1874,7 @@ Java.perform(function () {
 | **Attacker** | AM-04 — a **foreground** app, or the default IME. **Background clipboard scraping is dead from Android 10; do not claim it.** |
 | **Applies to** | **CURRENT** Android 10+ behaviour; LEGACY below that |
 | **Requires** | device, frida |
-| **Maps to** | objection `android clipboard monitor`; drozer-modules `metall0id/post/clipboard.py` (`post.capture.clipboard`, `post.perform.setclipboard`) — MASTG-TOOL-0015, MASTG-TOOL-0029; T1414 Clipboard Data (ATT&CK: from Android 10, `ClipboardManager.OnPrimaryClipChangedListener()` *"can only be used if the application is in the foreground, or is set as the device's default input method editor (IME)"*) |
+| **Maps to** | objection `android clipboard monitor`; drozer-modules `metall0id/post/clipboard.py` (`post.capture.clipboard`, `post.perform.setclipboard`) — MASTG-TOOL-0015, MASTG-TOOL-0029; T1414 Clipboard Data (ATT&CK: from Android 10, `ClipboardManager.OnPrimaryClipChangedListener()` *"can only be used if the application is in the foreground, or is set as the device's default input method editor (IME)"*); the drozer module is the historical reference — the PoC activity above is the reproducible path |
 
 - **Test:** The claim that carries weight is "a *different* application read this value", demonstrated from a
   different UID. Everything else is a description of the clipboard.
@@ -1771,21 +1882,28 @@ Java.perform(function () {
 ```
 # objection, in-process (shows what the target writes)
 android clipboard monitor
-
-# drozer, from a DIFFERENT UID — which is the point
-dz> module install metall0id.post.clipboard
-dz> run post.capture.clipboard
-[*] Clipboard value: test123
-dz> run post.perform.setclipboard test123
-dz> permissions
+```
+  The cross-UID read comes from a zero-permission PoC app you build (drozer's `post.capture.clipboard` is a
+  community module installed from a remote index at run time — not reproducible enough for a report): one
+  foreground activity that reads `getPrimaryClip()` in `onWindowFocusChanged(true)` and writes the text to
+  `poc.log`, launched with `am start -S` so it holds input focus (Android 10+ serves the clipboard only to the
+  focused app or the default IME; Android 12+ shows the user a "pasted from your clipboard" toast — say so):
+```java
+@Override public void onWindowFocusChanged(boolean f) {
+  if (!f) return;
+  ClipboardManager cm = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+  ClipData c = cm.getPrimaryClip();
+  poc(this, "clip=" + (c != null && c.getItemCount() > 0 ? c.getItemAt(0).getText() : "null"));   // poc(): logcat + poc.log, as in D20-031
+}
 ```
 ```bash
-adb shell "service call clipboard 1 s16 $PKG" 2>/dev/null
-adb shell dumpsys clipboard 2>/dev/null | head
+adb -s "$SERIAL" shell am start -S -n <poc-pkg>/.ClipRead && adb -s "$SERIAL" pull /sdcard/Android/data/<poc-pkg>/files/poc.log "$E/logs/D20-044-poc.log"
+adb -s "$SERIAL" shell "service call clipboard 1 s16 $PKG" 2>/dev/null
+adb -s "$SERIAL" shell dumpsys clipboard 2>/dev/null | head
 ```
-- **Proof:** `run post.capture.clipboard` printing the target's secret from the drozer agent's own process,
-  screenshotted next to the app's "Copied!" toast — and the agent's `permissions` output, so the reader can
-  judge the precondition. Note in the report that the agent was in the foreground (Android 10+ requirement).
+- **Proof:** The PoC's `poc.log` line holding the target's secret, read from the PoC's own UID, screenshotted
+  next to the app's "Copied!" toast — and the PoC's (empty) permission list from `dumpsys package`, so the reader
+  can judge the precondition. Note in the report that the PoC was in the foreground (Android 10+ requirement).
 - **Escalation:** -> D13 for a captured OTP or recovery phrase.
 - **Ruled out when:** A foreground read from a second UID returns empty because the app cleared the clip, or
   because the value was never placed there. Record the empty read alongside the "Copied!" toast.
@@ -1795,20 +1913,20 @@ adb shell dumpsys clipboard 2>/dev/null | head
 | | |
 |---|---|
 | **Severity ceiling** | High (for an app that reads and exfiltrates the clipboard); Medium for the paste direction |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the read; the paste direction is a business-logic finding rated on the transaction |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the read; the paste direction is a business-logic finding rated on the transaction |
 | **Attacker** | For the read: the app itself as AM-08-shaped behaviour. For the paste: AM-04 (a clipboard-swapping app) |
 | **Applies to** | all; the read direction is constrained to foreground/default-IME from **Android 10** |
 | **Requires** | device, frida |
 | **Maps to** | MASWE-0030; T1414 Clipboard Data; T1641.001 Transmitted Data Manipulation (ATT&CK: *"replacing a copied Bitcoin wallet address with a wallet address that is under adversarial control"*; S.O.V.A. S1062 *"specifically manipulates clipboard data to swap cryptocurrency addresses"*) |
 
-- **Test:** Two directions nobody runs together. (a) Does the app read the clipboard on resume and ship what
+- **Test:** (Owner of the clipboard-read test; D11-060 is its storage-chapter duplicate — run it here and record one verdict on both ids.) Two directions nobody runs together. (a) Does the app read the clipboard on resume and ship what
   it finds — often whatever the user last copied out of a password manager? (b) For a payments or crypto app,
   is an address **pasted into** the app re-validated and shown back in full before the transaction commits?
   Clipboard swapping is only exploitable when the app trusts the pasted value without a confirmation step
   displaying the full string.
 - **How:**
 ```bash
-grep -rnE 'getPrimaryClip|OnPrimaryClipChangedListener|addPrimaryClipChangedListener|hasPrimaryClip' out/sources/ -A6
+grep -rnE 'getPrimaryClip|OnPrimaryClipChangedListener|addPrimaryClipChangedListener|hasPrimaryClip' $DEC/jadx/sources/ -A6
 ```
 ```javascript
 Java.perform(function () {
@@ -1822,7 +1940,7 @@ Java.perform(function () {
 ```
 ```bash
 # (a) canary test
-adb shell am broadcast -a clipper.set --es v zk8v3p1nd6   # or copy the canary manually
+adb -s "$SERIAL" shell am broadcast -a clipper.set --es v zk8v3p1nd6   # or copy the canary manually
 # bring the app to the foreground, then look for zk8v3p1nd6 in the proxy capture
 mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -c zk8v3p1nd6
 # (b) paste-swap test: put a DIFFERENT address on the clipboard than the one the UI shows
@@ -1844,7 +1962,7 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -c zk8v3p1nd6
 | **Attacker** | AM-04 (the IME), AM-05 (a shared device where the suggestion surfaces for the next user) |
 | **Applies to** | all; Jetpack Compose equivalent is `KeyboardOptions(keyboardType = …, autoCorrect = false)` |
 | **Requires** | device |
-| **Maps to** | MASTG-TEST-0258 (References to Keyboard Caching Attributes in UI Elements), MASTG-KNOW-0055 (Keyboard Cache — "Non-Caching Input Types"), MASTG-BEST-0019, MASWE-0036, semgrep rule `mastg-android-keyboard-cache-input-types`; deprecated predecessor MASTG-TEST-0006; AOSP `EditorInfo` javadoc for `IME_FLAG_NO_PERSONALIZED_LEARNING` (value `0x1000000`), verbatim: *"used to request that the IME should not update any personalized data such as typing history and personalized language model based on what the user typed on this text editing object"*; T1533 Data from Local System (ATT&CK names "keyboard cache" as an example of local system data) |
+| **Maps to** | MASTG-TEST-0258 (References to Keyboard Caching Attributes in UI Elements), MASTG-KNOW-0055 (Keyboard Cache — "Non-Caching Input Types"), the MASTG best practice "Use Non-Caching Input Types for Sensitive Fields" (a placeholder upstream), MASWE-0036, semgrep rule `mastg-android-keyboard-cache-input-types`; deprecated predecessor MASTG-TEST-0006; AOSP `EditorInfo` javadoc for `IME_FLAG_NO_PERSONALIZED_LEARNING` (value `0x1000000`), verbatim: *"used to request that the IME should not update any personalized data such as typing history and personalized language model based on what the user typed on this text editing object"*; T1533 Data from Local System (ATT&CK names "keyboard cache" as an example of local system data) |
 
 - **Test:** A field that is not a non-caching input type has its contents learned by the IME dictionary and
   re-offered as a suggestion — including on another app's screen and, for cloud-syncing keyboards, on another
@@ -1852,10 +1970,10 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -c zk8v3p1nd6
   leakage; it does not stop a malicious IME from reading the text (that is D20-047).
 - **How:**
 ```bash
-grep -rn 'android:inputType' out/res/layout/*.xml \
+grep -rn 'android:inputType' $DEC/apktool/res/layout/*.xml \
   | grep -viE 'textPassword|textVisiblePassword|textWebPassword|numberPassword|textNoSuggestions' \
   | grep -iE 'pin|card|cvv|otp|ssn|password|account|iban|seed|mnemonic|passport'
-grep -rnE 'setInputType|KeyboardOptions|keyboardType|autoCorrect|imeOptions|IME_FLAG_NO_PERSONALIZED_LEARNING|flagNoPersonalizedLearning' out/sources/ out/res/layout/
+grep -rnE 'setInputType|KeyboardOptions|keyboardType|autoCorrect|imeOptions|IME_FLAG_NO_PERSONALIZED_LEARNING|flagNoPersonalizedLearning' $DEC/jadx/sources/ $DEC/apktool/res/layout/
 ```
 - **Proof:** Type a unique marker into the field, then open a text field in a **different** app and observe
   the IME suggesting it. Screen-record the suggestion strip.
@@ -1871,7 +1989,7 @@ grep -rnE 'setInputType|KeyboardOptions|keyboardType|autoCorrect|imeOptions|IME_
 | | |
 |---|---|
 | **Severity ceiling** | Medium (High for card data, OTPs, recovery seeds and passwords) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
 | **Attacker** | **AM-04** — being the default IME is one user action (or a keyboard a family member installed, which is AM-05 flavoured) |
 | **Applies to** | all |
 | **Requires** | device |
@@ -1886,15 +2004,17 @@ grep -rnE 'setInputType|KeyboardOptions|keyboardType|autoCorrect|imeOptions|IME_
 ```bash
 # what do the sensitive inputs declare?
 grep -rnE 'inputType|imeOptions|EditText|TextInputEditText|OutlinedTextField|KeyboardOptions' \
-     out/res/layout/*.xml out/sources/ | grep -iE 'card|cvv|pin|otp|password|ssn|account|iban|seed|mnemonic'
+     $DEC/apktool/res/layout/*.xml $DEC/jadx/sources/ | grep -iE 'card|cvv|pin|otp|password|ssn|account|iban|seed|mnemonic'
 # runtime confirmation with a logging IME (AOSP sample soft keyboard is the easiest base)
-adb shell ime list -a
-adb shell ime enable com.attacker/.LoggingIme && adb shell ime set com.attacker/.LoggingIme
-adb logcat -s LOGIME
-adb shell dumpsys input_method | head -40
+adb -s "$SERIAL" shell ime list -a
+adb -s "$SERIAL" shell ime enable com.attacker/.LoggingIme && adb -s "$SERIAL" shell ime set com.attacker/.LoggingIme
+adb -s "$SERIAL" logcat -s LOGIME
+adb -s "$SERIAL" shell dumpsys input_method | head -40
 ```
   In the PoC IME, log `onStartInput`'s `EditorInfo.packageName`, `inputType` and `imeOptions` alongside the
-  committed text, so the evidence names the target field.
+  committed text, so the evidence names the target field — and mirror every line to
+  `getExternalFilesDir(null)/poc.log` (pull it with `adb pull`), because some OEM user builds drop app-level
+  logcat and a logcat-only PoC reads as zero hits. Type into a benign field first as the positive control.
 - **Proof:** `LOGIME` lines containing the card / OTP / seed characters as typed, with the target's package
   name from `EditorInfo`, next to the layout XML showing that field has no password `inputType` and no
   `flagNoPersonalizedLearning`.
@@ -1903,14 +2023,15 @@ adb shell dumpsys input_method | head -40
   for managed fleets.
 - **Ruled out when:** Every secret-bearing field uses a password `inputType` and `IME_FLAG_NO_PERSONALIZED_LEARNING`,
   or the app renders its own keypad for PIN/OTP/CVV entry so no IME is invoked at all — verified by the PoC
-  IME never receiving `onStartInput` for those fields.
+  IME never receiving `onStartInput` for those fields while its `poc.log` holds the positive-control line from
+  the benign field.
 
 ### D20-048 · Autofill `AssistStructure` exposure — `importantForAutofill` and `setDataIsSensitive`
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 — the user enabling a third-party autofill service is a single action |
 | **Applies to** | **API 26+** |
 | **Requires** | device, api>=26 |
@@ -1924,10 +2045,10 @@ adb shell dumpsys input_method | head -40
   documentation explicitly warns against.
 - **How:**
 ```bash
-grep -rnE 'importantForAutofill|setImportantForAutofill|IMPORTANT_FOR_AUTOFILL_NO|setDataIsSensitive|autofillHints|setAutofillHints|AUTOFILL_HINT_' out/sources/ out/res/layout/
-grep -rn 'BIND_AUTOFILL_SERVICE\|android.service.autofill.AutofillService' out/AndroidManifest.xml
+grep -rnE 'importantForAutofill|setImportantForAutofill|IMPORTANT_FOR_AUTOFILL_NO|setDataIsSensitive|autofillHints|setAutofillHints|AUTOFILL_HINT_' $DEC/jadx/sources/ $DEC/apktool/res/layout/
+grep -rn -E 'BIND_AUTOFILL_SERVICE|android.service.autofill.AutofillService' $DEC/apktool/AndroidManifest.xml
 # empirical proxy for what a consumer sees:
-adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml && grep -c '<node' ui.xml
+adb -s "$SERIAL" shell uiautomator dump /sdcard/ui.xml && adb -s "$SERIAL" pull /sdcard/ui.xml && grep -c '<node' ui.xml
 ```
 - **Proof:** The sensitive value present in the dumped hierarchy of a screen that displays it, with no
   `importantForAutofill="no"` on that node; or, for the WebView variant, the autofill picker filling a CVC
@@ -1947,6 +2068,7 @@ adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml && grep -c 
 | **VRT** | `external_behavior.browser_feature.plaintext_password_field` (**P5**) |
 | **Attacker** | AM-11 (shoulder surfing), and it multiplies every capture item above |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0316 (App Exposing User Authentication Data in Text Input Fields), MASWE-0036, semgrep rule `mastg-android-input-field-usage`; deprecated predecessor MASTG-TEST-0008 |
 
 - **Test:** Access codes and verification codes must be masked: in XML `android:inputType="textPassword"`;
@@ -1955,9 +2077,9 @@ adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml && grep -c 
   custom input controls (game engines, custom UI frameworks) produce **expected false negatives**.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-input-field-usage.yml out/sources/
-grep -rnE 'TextField|SecureTextField|TextObfuscationMode|PasswordVisualTransformation|setTransformationMethod|PasswordTransformationMethod' out/sources/
-grep -rn 'android:inputType' out/res/layout/*.xml
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES/mastg-android-input-field-usage.yml" $DEC/jadx/sources/ --json -o "$E/logs/D20-049-semgrep.json" && python3 -c "import json;d=json.load(open('$E/logs/D20-049-semgrep.json'));print('scanned',len(d['paths']['scanned']),'findings',len(d['results']))"
+grep -rnE 'TextField|SecureTextField|TextObfuscationMode|PasswordVisualTransformation|setTransformationMethod|PasswordTransformationMethod' $DEC/jadx/sources/
+grep -rn 'android:inputType' $DEC/apktool/res/layout/*.xml
 ```
 - **Proof:** A password/OTP field rendering characters, or `SecureTextField(textObfuscationMode =
   TextObfuscationMode.Visible)`. Screenshot the unmasked field.
@@ -1972,9 +2094,9 @@ grep -rn 'android:inputType' out/res/layout/*.xml
 | | |
 |---|---|
 | **Severity ceiling** | High (for a full PAN or an OTP in a financial app); Medium generally |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
 | **Attacker** | **AM-04** — an enabled accessibility service, which is precisely what the prevailing Android banking-malware family obtains |
-| **Applies to** | all; `android:accessibilityDataSensitive="accessibilityDataPrivateYes"` is the **API 34+** control, `setAccessibilityDataSensitive()` its runtime form, `importantForAccessibility="no"` the pre-34 fallback |
+| **Applies to** | all; `android:accessibilityDataSensitive="accessibilityDataSensitiveYes"` is the **API 34+** control, `setAccessibilityDataSensitive()` its runtime form, `importantForAccessibility="no"` the pre-34 fallback |
 | **Requires** | device |
 | **Maps to** | MASWE-0040 (Sensitive Data Leaked via Accessibility Services, CWE-200/CWE-359 — modes: secrets in accessibility metadata, sensitive fields not using secure input, high-risk flows fully automatable, system keyboards exposing sensitive input). **There is no Android MASTG-TEST for accessibility — a documented MASTG gap.** developer.android.com `guide/topics/ui/accessibility/service` (`canRetrieveWindowContent`, `canPerformGestures`, `accessibilityEventTypes="typeAllMask"`, node `text`/`contentDescription`, `performAction`, `dispatchGesture`); HackTricks `accessibility-services-abuse.md`; T1453; T1517 |
 
@@ -1985,10 +2107,11 @@ grep -rn 'android:inputType' out/res/layout/*.xml
   the password or OTP character by character as it is typed.
 - **How:**
 ```bash
-adb shell settings get secure enabled_accessibility_services
-adb shell dumpsys accessibility | grep -i 'Accessibility Service'
-grep -rnE 'importantForAccessibility|setImportantForAccessibility|contentDescription|setContentDescription|accessibilityDataSensitive|setAccessibilityDataSensitive|ACCESSIBILITY_DATA_SENSITIVE' out/sources/ out/res/layout/
-adb shell uiautomator dump /sdcard/a.xml && adb pull /sdcard/a.xml && grep -oE 'text="[^"]*"' a.xml | head -40
+adb -s "$SERIAL" shell settings get secure enabled_accessibility_services
+adb -s "$SERIAL" shell dumpsys accessibility | grep -i 'Accessibility Service'
+grep -rnE 'importantForAccessibility|setImportantForAccessibility|contentDescription|setContentDescription|accessibilityDataSensitive(="[a-zA-Z]+")?|setAccessibilityDataSensitive|ACCESSIBILITY_DATA_SENSITIVE' $DEC/jadx/sources/ $DEC/apktool/res/layout/   # value-agnostic; the API 34 enum is auto | accessibilityDataSensitiveYes | accessibilityDataSensitiveNo
+grep -A3 'name="accessibilityDataSensitive"' "$ANDROID_HOME/platforms/android-34/data/res/values/attrs.xml" 2>/dev/null   # verify the enum against the SDK once
+adb -s "$SERIAL" shell uiautomator dump /sdcard/a.xml && adb -s "$SERIAL" pull /sdcard/a.xml && grep -oE 'text="[^"]*"' a.xml | head -40
 ```
   Then build the PoC service and log the events:
 ```xml
@@ -2008,30 +2131,33 @@ adb shell uiautomator dump /sdcard/a.xml && adb pull /sdcard/a.xml && grep -oE '
 ```
 ```java
 @Override public void onAccessibilityEvent(AccessibilityEvent e) {
-  Log.e("POC", e.getPackageName() + " type=" + e.getEventType() + " text=" + e.getText());
+  poc(this, e.getPackageName() + " type=" + e.getEventType() + " text=" + e.getText());   // poc(): logcat + getExternalFilesDir(null)/poc.log, as in D20-031
 }
 ```
+  Pull `poc.log` afterwards (`adb pull /sdcard/Android/data/<poc-pkg>/files/poc.log "$E/logs/D20-050-poc.log"`);
+  type into a benign field first so the file holds a positive-control line.
 - **Proof:** Your PoC service receiving the typed password or OTP from `TYPE_VIEW_TEXT_CHANGED`, or a
   `uiautomator` dump showing the secret in a node's `text` / `content-desc`, with the target's package name
   in the same line and the enabling toggle screenshotted.
 - **Escalation:** -> D13 (harvested credentials); -> D23 (with `canPerformGestures` the service also drives
   the payment flow — see the J21 join); the control whose absence you report is MASWE-0040's mitigation, a
   custom in-app keypad for sensitive entry plus biometric-bound friction on high-risk flows.
-- **Ruled out when:** Every secret-bearing view sets `accessibilityDataSensitive="accessibilityDataPrivateYes"`
-  (API 34+) or `importantForAccessibility="no"`, the sensitive fields use secure input so their text is
-  masked to accessibility, and the PoC service receives no secret across the login and payment flows. State
-  the API-34 availability boundary — the control does not exist on older devices, so give the supported range.
+- **Ruled out when:** Every secret-bearing view sets `accessibilityDataSensitive="accessibilityDataSensitiveYes"`
+  (API 34+; runtime `View.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_YES)`) or
+  `importantForAccessibility="no"`, the sensitive fields use secure input so their text is
+  masked to accessibility, and the PoC service receives no secret across the login and payment flows while
+  its `poc.log` holds the positive-control line. State the API-34 availability boundary — the control does not exist on older devices, so give the supported range.
 
 ### D20-051 · App-side defences against an untrusted accessibility service or an active overlay
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium (a missing control) |
-| **VRT** | no VRT node for the missing control; file the demonstrated capture under `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) and name the missing control as remediation |
+| **VRT** | no VRT node for the missing control; file the demonstrated capture under `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) and name the missing control as remediation |
 | **Attacker** | AM-04 |
 | **Applies to** | banking, wallet, health and any app whose threat model includes on-device malware |
 | **Requires** | device |
-| **Maps to** | HackTricks `accessibility-services-abuse.md` "Hardening recommendations for app developers" — `android:accessibilityDataSensitive="accessibilityDataPrivateYes"` (API 34+), `setFilterTouchesWhenObscured(true)` + `FLAG_SECURE`, overlay detection, refusing to operate when `Settings.canDrawOverlays()` or a non-trusted service is active; MDM/EMM can enforce `ACCESSIBILITY_ENFORCEMENT_DEFAULT_DENY` (**Android 13+**) to block sideloaded services; MASTG-TEST-0340 (References to Overlay Attack Protections); MASWE-0025 |
+| **Maps to** | HackTricks `accessibility-services-abuse.md` "Hardening recommendations for app developers" — `android:accessibilityDataSensitive="accessibilityDataSensitiveYes"` (API 34+), `setFilterTouchesWhenObscured(true)` + `FLAG_SECURE`, overlay detection, refusing to operate when `Settings.canDrawOverlays()` or a non-trusted service is active; MDM/EMM can enforce `ACCESSIBILITY_ENFORCEMENT_DEFAULT_DENY` (**Android 13+**) to block sideloaded services; MASTG-TEST-0340 (References to Overlay Attack Protections); MASWE-0025 |
 
 - **Test:** The platform-level abuse of accessibility is a device-compromise scenario, not an app bug. The
   *app-side* finding is that a high-value app performs an irreversible action while an untrusted service or
@@ -2039,9 +2165,9 @@ adb shell uiautomator dump /sdcard/a.xml && adb pull /sdcard/a.xml && grep -oE '
   with the capture from D20-050 as the demonstrated impact.
 - **How:**
 ```bash
-grep -rnE 'canDrawOverlays|AccessibilityManager|getEnabledAccessibilityServiceList|setFilterTouchesWhenObscured|filterTouchesWhenObscured|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSCURED|isAccessibilityToolPresent' out/sources/ out/res/layout/
-adb shell settings put secure enabled_accessibility_services com.poc/.A11y
-adb shell settings put secure accessibility_enabled 1
+grep -rnE 'canDrawOverlays|AccessibilityManager|getEnabledAccessibilityServiceList|setFilterTouchesWhenObscured|filterTouchesWhenObscured|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSCURED|isAccessibilityToolPresent' $DEC/jadx/sources/ $DEC/apktool/res/layout/
+adb -s "$SERIAL" shell settings put secure enabled_accessibility_services com.poc/.A11y
+adb -s "$SERIAL" shell settings put secure accessibility_enabled 1
 # then drive a transfer/approval and see whether the app reacts at all
 ```
 - **Proof:** The transfer or approval completing with the PoC accessibility service enabled and an overlay
@@ -2056,7 +2182,7 @@ adb shell settings put secure accessibility_enabled 1
 | | |
 |---|---|
 | **Severity ceiling** | Medium (High on an OEM engagement, where a platform restriction is bypassed) |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null); if it becomes an auth factor, see D20-057 |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); if it becomes an auth factor, see D20-057 |
 | **Attacker** | AM-08 (the recipient); AM-03 on an OEM build where a non-privileged app obtains a restricted value |
 | **Applies to** | **Android 10+**: the restriction applies to **all devices regardless of target API level**. Apps targeting 10+ get a `SecurityException`; apps targeting 9 or earlier holding `READ_PHONE_STATE` get "`null` or placeholder data". **LEGACY:** below 10, `READ_PHONE_STATE` alone returned the real IMEI |
 | **Requires** | device, mitm |
@@ -2068,12 +2194,12 @@ adb shell settings put secure accessibility_enabled 1
   of the restriction.
 - **How:**
 ```bash
-grep -rnE 'getDeviceId\(|getImei\(|getMeid\(|getSubscriberId\(|getSimSerialNumber\(|getSimOperator\(|getLine1Number\(|Build\.getSerial\(|Build\.SERIAL' out/sources/ -B4 -A4
-grep -nE 'READ_PRIVILEGED_PHONE_STATE|READ_PHONE_STATE|READ_PHONE_NUMBERS' out/AndroidManifest.xml
-adb shell dumpsys package $PKG | grep -i READ_PRIVILEGED_PHONE_STATE
-adb shell service call iphonesubinfo 1 2>/dev/null | head
+grep -rnE 'getDeviceId\(|getImei\(|getMeid\(|getSubscriberId\(|getSimSerialNumber\(|getSimOperator\(|getLine1Number\(|Build\.getSerial\(|Build\.SERIAL' $DEC/jadx/sources/ -B4 -A4
+grep -nE 'READ_PRIVILEGED_PHONE_STATE|READ_PHONE_STATE|READ_PHONE_NUMBERS' $DEC/apktool/AndroidManifest.xml
+adb -s "$SERIAL" shell dumpsys package $PKG | grep -i READ_PRIVILEGED_PHONE_STATE
+adb -s "$SERIAL" shell service call iphonesubinfo 1 2>/dev/null | head
 # and where does it go?
-IMEI=$(adb shell service call iphonesubinfo 1 2>/dev/null | tr -d '\r')
+IMEI=$(adb -s "$SERIAL" shell service call iphonesubinfo 1 2>/dev/null | tr -d '\r')
 mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -cE '[0-9]{15}'
 ```
 - **Proof:** A proxy capture containing a real IMEI / serial alongside an account identifier; or, on an OEM
@@ -2089,9 +2215,9 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -cE '[0-9]{15}'
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null); a resettable advertising ID on its own is not a finding |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); a resettable advertising ID on its own is not a finding |
 | **Attacker** | AM-08 |
-| **Applies to** | all; `ANDROID_ID` before **Android 8.0 (API 26)** was a non-resettable, first-boot random value, while in recent versions it is unique per app-signing-key + user + device |
+| **Applies to** | all; `ANDROID_ID` before **Android 8.0 (API 26)** was a non-resettable, first-boot random value, while in recent versions it is unique per app-signing-key + user + device; an app targeting Android 13+ must declare `com.google.android.gms.permission.AD_ID` or it reads a zeroed advertising ID |
 | **Requires** | mitm |
 | **Maps to** | MASWE-0068 (Incorrect Use of Identifiers for User Tracking, CWE-359), MASWE-0067 (Lack of Anonymisation or Pseudonymisation Measures), MASWE-0074 (Inadequate Tracking Domains Declarations); MASVS-PRIVACY-2 — requires *"technical barriers when employing complex 'fingerprint-like' signals… a fingerprint used for fraud detection should be isolated and not repurposed for audience measurement in an analytics SDK"*; MobSF `api_get_advertising`; H1 **#803941** (NordVPN, Low, **$0**) |
 
@@ -2102,17 +2228,19 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -cE '[0-9]{15}'
   fingerprint reused for analytics, which MASVS-PRIVACY-2 calls out by name.
 - **How:**
 ```bash
-grep -rnE 'ANDROID_ID|Settings\.Secure\.getString|getAndroidId|AdvertisingIdClient|getAdvertisingIdInfo|isLimitAdTrackingEnabled|AppSetIdClient' out/sources/ -A6
-grep -nE 'com\.google\.android\.gms\.permission\.AD_ID' out/AndroidManifest.xml
-AID=$(adb shell settings get secure android_id | tr -d '\r')
+grep -rnE 'ANDROID_ID|Settings\.Secure\.getString|getAndroidId|AdvertisingIdClient|getAdvertisingIdInfo|isLimitAdTrackingEnabled|AppSetIdClient' $DEC/jadx/sources/ -A6
+# a class-name grep is confirmatory only: R8 renames library classes — the manifest provider/meta-data, string-literal and META-INF checks in D20-016 are the presence test
+grep -nE 'com\.google\.android\.gms\.permission\.AD_ID' $DEC/apktool/AndroidManifest.xml
+AID=$(adb -s "$SERIAL" shell settings get secure android_id | tr -d '\r')
 mitmdump -nr run.mitm -s /dev/stdin <<PY
 AID = b'$AID'
 def request(f):
     b = (f.request.content or b'') + f.request.pretty_url.encode()
     if AID in b: print('ANDROID_ID ->', f.request.pretty_host, f.request.path[:70])
 PY
-# opt-out test
-adb shell settings put secure limit_ad_tracking 1
+# opt-out test: ad-personalisation opt-out / advertising-ID deletion is a Google Play services setting, not an AOSP secure setting (there is no limit_ad_tracking key)
+adb -s "$SERIAL" shell am start -a com.google.android.gms.settings.ADS_PRIVACY      # Settings > Google > Ads: toggle 'Delete advertising ID' / opt out in the UI
+# then verify the state the app sees before re-running the capture: hook AdvertisingIdClient.getAdvertisingIdInfo and expect isLimitAdTrackingEnabled()==true or id 00000000-0000-0000-0000-000000000000
 ```
 - **Proof:** One request containing **both** the advertising ID and a persistent identifier (Android ID,
   account id, email hash), or the same ID reaching two distinct third-party destinations, or transmission
@@ -2120,15 +2248,15 @@ adb shell settings put secure limit_ad_tracking 1
 - **Escalation:** -> D20-025 (declaration); -> D20-020 (consent). Expect a Low rating unless the programme
   scopes privacy explicitly — H1 #803941 paid $0 — so lead with the linkage, not the collection.
 - **Ruled out when:** The advertising ID is sent alone, never joined to a persistent identifier in the same
-  payload or across correlated requests, and transmission stops when limit-ad-tracking is set. Attach the
-  before/after host and field lists.
+  payload or across correlated requests, and transmission of the previous non-zero id stops after the Play
+  services opt-out (verified through the hook). Attach the before/after host and field lists.
 
 ### D20-054 · Hardware MAC recovery through `/sys`, native code, or an OEM hook
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium (High on an OEM build) |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | AM-08; AM-03 on an OEM build |
 | **Applies to** | **Android 10+** for default MAC randomisation; **11–13** for the progressive tightening |
 | **Requires** | mitm |
@@ -2138,9 +2266,9 @@ adb shell settings put secure limit_ad_tracking 1
   MAC — through a native path, a `/sys` read, a privileged API or an OEM hook — has re-created it.
 - **How:**
 ```bash
-grep -rnE 'getMacAddress\(|NetworkInterface\.getHardwareAddress|/sys/class/net|wlan0|getConnectionInfo\(' out/sources/
-for so in out/lib/*/*.so; do strings -n 6 "$so" | grep -aE '/sys/class/net|wlan0|hw_addr' && echo "  ^ $so"; done
-adb shell cat /sys/class/net/wlan0/address 2>&1     # expect permission denied from an app context
+grep -rnE 'getMacAddress\(|NetworkInterface\.getHardwareAddress|/sys/class/net|wlan0|getConnectionInfo\(' $DEC/jadx/sources/
+for so in $DEC/apktool/lib/*/*.so; do strings -n 6 "$so" | grep -aE '/sys/class/net|wlan0|hw_addr' && echo "  ^ $so"; done
+adb -s "$SERIAL" shell cat /sys/class/net/wlan0/address 2>&1     # expect permission denied from an app context
 ```
   Compare the transmitted value against the real hardware MAC and against the per-network randomised one.
 - **Proof:** The app transmitting a MAC that matches the device's hardware MAC rather than the randomised
@@ -2155,19 +2283,19 @@ adb shell cat /sys/class/net/wlan0/address 2>&1     # expect permission denied f
 | | |
 |---|---|
 | **Severity ceiling** | High (undisclosed high-resolution motion telemetry is a documented keystroke and speech inference channel) |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | **targetSdk 31+** — Android 12 rate-limits motion sensors "to protect sensitive user information"; `HIGH_SAMPLING_RATE_SENSORS` lifts the limit |
 | **Requires** | mitm |
-| **Maps to** | developer.android.com `about/versions/12/behavior-changes-12` (motion sensors rate-limited for targetSdk 31+); `develop/background-work/services/fgs/service-types` (`HIGH_SAMPLING_RATE_SENSORS` as a manifest prerequisite for the `health` FGS type); MASTG-TEST-0255 (Permission Requests Not Minimized); MASWE-0073 |
+| **Maps to** | developer.android.com `about/versions/12/behavior-changes-12` (motion sensors rate-limited for targetSdk 31+); `develop/background-work/services/fgs/service-types` (`HIGH_SAMPLING_RATE_SENSORS` as a manifest prerequisite for the `health` FGS type); MASWE-0066 (Inadequate Permission Management — its MASTG test "Permission Requests Not Minimized" is a placeholder upstream); MASWE-0073 |
 
 - **Test:** An app holding `HIGH_SAMPLING_RATE_SENSORS` without a stated high-rate use case (fitness tracking,
   a game controller, a medical sensor) is collecting a high-resolution side channel. The finding is the
   permission plus a `SENSOR_DELAY_FASTEST` registration plus the sample stream leaving the device.
 - **How:**
 ```bash
-grep -n 'HIGH_SAMPLING_RATE_SENSORS' out/AndroidManifest.xml
-grep -rnE 'registerListener\(.*SENSOR_DELAY_(FASTEST|GAME)|SensorManager\.SENSOR_DELAY|TYPE_ACCELEROMETER|TYPE_GYROSCOPE|TYPE_LINEAR_ACCELERATION' out/sources/
+grep -n 'HIGH_SAMPLING_RATE_SENSORS' $DEC/apktool/AndroidManifest.xml
+grep -rnE 'registerListener\(.*SENSOR_DELAY_(FASTEST|GAME)|SensorManager\.SENSOR_DELAY|TYPE_ACCELEROMETER|TYPE_GYROSCOPE|TYPE_LINEAR_ACCELERATION' $DEC/jadx/sources/
 mitmdump -nr run.mitm -s /dev/stdin <<'PY'
 import re
 ARR = re.compile(rb'\[\s*-?\d+\.\d+\s*,\s*-?\d+\.\d+\s*,\s*-?\d+\.\d+')
@@ -2187,28 +2315,28 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | Low |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null) — and see the Graveyard: enumeration *as such* is documented intended behaviour |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) — and see the Graveyard: enumeration *as such* is documented intended behaviour |
 | **Attacker** | AM-08 |
 | **Applies to** | **LEGACY:** free package visibility is `targetSdk < 30`; from targetSdk 30 `<queries>` or `QUERY_ALL_PACKAGES` is required |
 | **Requires** | mitm |
-| **Maps to** | Google Mobile VRP Invalid Reports, Intended Behavior: *"the ability of an application to tell which versions of which apps are installed is intended functionality of the Android platform which we do not consider a vulnerability"*; MobSF `api_installed`; MASTG-TEST-0255; MASWE-0068 |
+| **Maps to** | Google Mobile VRP Invalid Reports, Intended Behavior: *"the ability of an application to tell which versions of which apps are installed is intended functionality of the Android platform which we do not consider a vulnerability"*; MobSF `api_installed`; MASWE-0066; MASWE-0068 |
 
-- **Test:** The installed-app list is a high-entropy, stable fingerprint. The finding is not "the app can
+- **Test:** (This item owns only the 'list transmitted to a third party' proof; D03-046 owns the manifest/justification half and D01-043 restates it — record one verdict per half.) The installed-app list is a high-entropy, stable fingerprint. The finding is not "the app can
   enumerate packages" — Google says that is intended — it is that the app **transmits** the list (or a hash
   of it) to a third party as a tracking signal, while declaring `QUERY_ALL_PACKAGES` with no stated need.
   Note the second use of the same list: it is usually the app's root/Frida/competitor-detection blocklist,
   which belongs to D21.
 - **How:**
 ```bash
-grep -nE 'QUERY_ALL_PACKAGES|<queries>' out/AndroidManifest.xml
+grep -nE 'QUERY_ALL_PACKAGES|<queries>' $DEC/apktool/AndroidManifest.xml
 python3 - <<'PY'
 import re
-m = open('out/AndroidManifest.xml').read()
+m = open('$DEC/apktool/AndroidManifest.xml').read()
 q = re.findall(r'<queries>(.*?)</queries>', m, re.S)
 print('queries blocks:', len(q))
 for b in q: print(b[:400])
 PY
-grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|getPackageInfo\(' out/sources/ -A4
+grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|getPackageInfo\(' $DEC/jadx/sources/ -A4
 mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -cE 'com\.[a-z]+\.[a-z]+.*com\.[a-z]+\.[a-z]+'
 ```
 - **Proof:** A captured request containing a list (or a hash-set) of installed package names sent to a
@@ -2235,7 +2363,7 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -cE 'com\.[a-z]+\.[
   settable by code on the device and several are visible to other apps.
 - **How:**
 ```bash
-grep -rnE 'ANDROID_ID|AdvertisingIdClient|Build\.SERIAL|getMacAddress|installationId|deviceId' out/sources/ -A8 \
+grep -rnE 'ANDROID_ID|AdvertisingIdClient|Build\.SERIAL|getMacAddress|installationId|deviceId' $DEC/jadx/sources/ -A8 \
   | grep -inE 'login|auth|session|token|register|bind|trust|deviceLogin|silentLogin'
 # then replay the identifier from a second device / a fresh install
 curl -s -X POST https://api.target.example/v1/auth/device \
@@ -2273,7 +2401,7 @@ Java.perform(function () {
   qualifier in the VRT node is what you must satisfy: tie the coordinates to an identifiable person.
 - **How:**
 ```bash
-grep -rnE 'ExifInterface|TAG_GPS|setAttribute\("GPS|stripExif|removeExif|Bitmap\.compress|MediaStore\.Images' out/sources/
+grep -rnE 'ExifInterface|TAG_GPS|setAttribute\("GPS|stripExif|removeExif|Bitmap\.compress|MediaStore\.Images' $DEC/jadx/sources/
 # 1. make a photo with known GPS and upload it as account A
 exiftool -GPSLatitude -GPSLongitude -Model -DateTimeOriginal test.jpg
 # 2. fetch it as a DIFFERENT account
@@ -2297,22 +2425,22 @@ curl -s "https://cdn.target.example/listings/<id>/original.jpg" -o anon.jpg && e
 | | |
 |---|---|
 | **Severity ceiling** | High (Critical if EXIF GPS for unselected images is shipped) |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | API 29+ apps with a media-import feature; the photo picker and `READ_MEDIA_VISUAL_USER_SELECTED` are the modern alternative to a full `READ_MEDIA_IMAGES` grant |
 | **Requires** | device, mitm, api>=29 |
-| **Maps to** | MASTG-TEST-0254 (Dangerous App Permissions), MASTG-TEST-0255 (Permission Requests Not Minimized); MASWE-0073; T1636.004 Protected User Data: Photos |
+| **Maps to** | MASTG-TEST-0254 (Dangerous App Permissions), MASWE-0066 (Inadequate Permission Management — its MASTG test "Permission Requests Not Minimized" is a placeholder upstream); MASWE-0073; T1636.004 Protected User Data: Photos |
 
 - **Test:** An app that asks for the full media permission when the photo picker would do gains read access
   to the whole gallery — and several do enumerate it, sending filenames, timestamps and EXIF for images the
   user never selected. The finding is the enumeration of unselected media, not the permission alone.
 - **How:**
 ```bash
-grep -nE 'READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_VISUAL_USER_SELECTED|READ_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE' out/AndroidManifest.xml
-grep -rnE 'ACTION_PICK_IMAGES|PickVisualMedia|MediaStore\.Images\.Media\.(query|EXTERNAL_CONTENT_URI)|ContentResolver\(\)\.query' out/sources/
+grep -nE 'READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_VISUAL_USER_SELECTED|READ_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE' $DEC/apktool/AndroidManifest.xml
+grep -rnE 'ACTION_PICK_IMAGES|PickVisualMedia|MediaStore\.Images\.Media\.(query|EXTERNAL_CONTENT_URI)|ContentResolver\(\)\.query' $DEC/jadx/sources/
 # plant a canary image the user will NOT select, then open the picker and cancel
-adb push canary_zk8v3p1nd6.jpg /sdcard/Pictures/
-adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/canary_zk8v3p1nd6.jpg
+adb -s "$SERIAL" push canary_zk8v3p1nd6.jpg /sdcard/Pictures/
+adb -s "$SERIAL" shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/canary_zk8v3p1nd6.jpg
 mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -c zk8v3p1nd6
 ```
 - **Proof:** The canary filename (or its EXIF) appearing in an outbound request although it was never
@@ -2327,25 +2455,25 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -c zk8v3p1nd6
 | | |
 |---|---|
 | **Severity ceiling** | Medium (High when the surviving artefact is an authenticator) |
-| **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null, CWE-459); `cryptographic_weakness.incomplete_cleanup_of_keying_material` (**P5**, CWE-459); `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (**P4**) |
-| **Attacker** | **AM-05** — another user of the same device, which the vendor supports for kiosks, POS terminals, ward tablets and family devices ([T.P4]) |
+| **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies, CWE-459); `cryptographic_weakness.incomplete_cleanup_of_keying_material` (**P5**, CWE-459); `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (**P4**) |
+| **Attacker** | **AM-05** — another user of the same device, which the vendor supports for kiosks, POS terminals, ward tablets and family devices ([T.P4]) — AM-12 to observe (the root read of the sandbox is evidence, never the precondition) |
 | **Applies to** | all |
 | **Requires** | device, root, backend-api |
 | **Maps to** | H1 **#23913** (Twitter iOS — DMs surviving logout in the application-state file); H1 **#377582** (VK, Low 3.0 — cache DB obtainable by a third-party app); hackwithsingh sec-14-25 #54 "recent apps list", #55 "screenshot file residue" |
 
-- **Test:** Log out, then diff. The question is not "is anything left" (something always is) but "is what is
+- **Test:** (Owner of the logout-residue test; D11-033 is its storage-chapter duplicate — run it here and record one verdict on both ids.) Log out, then diff. The question is not "is anything left" (something always is) but "is what is
   left either an authenticator or content belonging to the previous user".
 - **How:**
 ```bash
-adb shell run-as $PKG ls -laR /data/data/$PKG/ > before.txt
+AS 'ls -laR .' > before.txt                      # AS(): root read of the sandbox (## Items); run-as prints 'package not debuggable' on a release build
 # ... log out ...
-adb shell run-as $PKG ls -laR /data/data/$PKG/ > after.txt && diff before.txt after.txt
-adb shell run-as $PKG sh -c 'grep -rlEi "zq4h7m2kx9|token|bearer|@|[0-9]{12,19}" . 2>/dev/null' | head -30
-adb shell run-as $PKG find . -newermt '-1 day' -type f | wc -l
+AS 'ls -laR .' > after.txt && diff before.txt after.txt
+AS 'grep -rlEi "zq4h7m2kx9|token|bearer|@|[0-9]{12,19}" . 2>/dev/null' | head -30
+AS 'find . -mtime -1 -type f' | wc -l            # -mtime, not GNU -newermt: toybox find has no date grammar
 # server side
 curl -i -H "Authorization: Bearer $OLD" https://api.target.example/v1/me
 # and the screen artefacts
-adb shell ls /data/system_ce/0/snapshots/ 2>/dev/null
+adb -s "$SERIAL" shell ls /data/system_ce/0/snapshots/ 2>/dev/null
 ```
 - **Proof:** Message content, documents, cached PII or a token still present and readable after an explicit
   logout — and, for the token, a 200 from the API with it.
@@ -2361,11 +2489,11 @@ adb shell ls /data/system_ce/0/snapshots/ 2>/dev/null
 | | |
 |---|---|
 | **Severity ceiling** | Medium as a privacy finding (High when deletion leaves a working authenticator) |
-| **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
-| **Attacker** | AM-05 / AM-11 for the device side; the server side is a data-subject-rights failure |
+| **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
+| **Attacker** | AM-05 / AM-11 for the device side; the server side is a data-subject-rights failure — AM-12 to observe (the root read of the sandbox is evidence, never the precondition) |
 | **Applies to** | all apps offering in-app account deletion — a Play requirement for apps with accounts |
 | **Requires** | backend-api, two-accounts |
-| **Maps to** | VRT `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (CWE-459); MASVS-PRIVACY-4-flavoured data-deletion expectations; riya78 §7 "Analyze any cloud synchronization or backup mechanisms for data exposure" |
+| **Maps to** | VRT `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (CWE-459); MASVS-PRIVACY-4-flavoured data-deletion expectations; MASWE-0076 (Lack of Proper Data Management Controls); riya78 §7 "Analyze any cloud synchronization or backup mechanisms for data exposure" |
 
 - **Test:** Delete the account, then check both ends. Server side: does `GET /me` 404, does the user still
   appear in search, does the profile URL still render, do their messages still show in other users'
@@ -2385,8 +2513,8 @@ for E in /v1/me /v1/orders /v1/messages; do
 curl -s -o /dev/null -w "%{http_code} public profile\n" "https://target.example/u/<deleted-handle>"
 curl -s "https://api.target.example/v1/search?q=zq4h7m2kx9" -H "Authorization: Bearer $B" | jq '.'
 # device side
-adb shell run-as $PKG sh -c 'grep -rlEi "zq4h7m2kx9" . 2>/dev/null'
-adb shell ls -laR /sdcard/Android/data/$PKG /sdcard/Download 2>/dev/null
+AS 'grep -rlEi "zq4h7m2kx9" . 2>/dev/null'       # AS(): root read of the sandbox (## Items)
+adb -s "$SERIAL" shell ls -laR /sdcard/Android/data/$PKG /sdcard/Download 2>/dev/null
 ```
 - **Proof:** The deleted user's marker still returned by search under a second account, or the public profile
   still rendering, or the cached PII still on the device — with the deletion confirmation screenshotted and
@@ -2415,7 +2543,7 @@ adb shell ls -laR /sdcard/Android/data/$PKG /sdcard/Download 2>/dev/null
 - **How:**
 ```bash
 # capture every credential BEFORE deleting
-ACCESS=$A; REFRESH=$(jq -r .refresh_token login.json); FCM=$(adb logcat -d | grep -oE 'token: [A-Za-z0-9:_-]{100,}' | tail -1)
+ACCESS=$A; REFRESH=$(jq -r .refresh_token login.json); FCM=$(adb -s "$SERIAL" logcat -d | grep -oE 'token: [A-Za-z0-9:_-]{100,}' | tail -1)
 # delete, then:
 curl -i -X POST https://api.target.example/v1/auth/refresh -d "{\"refresh_token\":\"$REFRESH\"}" -H 'Content-Type: application/json'
 curl -i -H "Authorization: Bearer $ACCESS" https://api.target.example/v1/orders
@@ -2435,28 +2563,37 @@ curl -i "https://target.example/s/<share-token-created-before-deletion>"
 |---|---|
 | **Severity ceiling** | High (when a session token survives uninstall — device resale or handover becomes ATO) |
 | **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**); the escalation is `broken_authentication_and_session_management.authentication_bypass` (**P1**) via the restored token |
-| **Attacker** | AM-11 / AM-05 |
+| **Attacker** | AM-11 / AM-05 — AM-12 to observe (the root read of the sandbox is evidence, never the precondition) |
 | **Applies to** | all. **`adb backup` is LEGACY** — from Android 12 (API 31) it no longer includes app data unless the app is debuggable, so report through the **Auto Backup / device-transfer** path and `<data-extraction-rules>` (which replaced `fullBackupContent` at API 31), or the report closes as non-reproducible |
 | **Requires** | device, root |
 | **Maps to** | hackwithsingh sec-14-25 #1 "data recovery after application uninstall", #17 "cloud backup (Google Drive)", #18 "auto-backup mechanism", #19 "device transfer mechanism", #20 "smart switch migration", sec-14-17 #49 "backup data is bound to device identity preventing cross-device restore abuse"; **D11-051 to D11-058 own the backup rig** — reuse it |
 
 - **Test:** Uninstall and reinstall, then see what returns and what was left behind. Two distinct findings:
   data that **returns** (Auto Backup restore of a token, so the app is logged in with no credentials
-  entered), and data **left behind** on shared storage that uninstall does not touch.
+  entered), and data **left behind** on shared storage that uninstall does not touch — including a third
+  shape: artefacts the app itself writes to shared media (MediaStore Images/Downloads) for a share, export,
+  print or receipt action, which uninstall does not remove and any `READ_MEDIA_IMAGES` /
+  `MANAGE_EXTERNAL_STORAGE` holder reads (AM-04).
 - **How:**
 ```bash
-adb uninstall $PKG
-adb shell ls -laR /sdcard/Android/data/$PKG /sdcard/Android/media/$PKG /sdcard/Download 2>/dev/null
-adb install target.apk && adb shell monkey -p $PKG 1
-adb shell run-as $PKG ls -la shared_prefs/ databases/ files/
+adb -s "$SERIAL" uninstall $PKG
+adb -s "$SERIAL" shell ls -laR /sdcard/Android/data/$PKG /sdcard/Android/media/$PKG /sdcard/Download 2>/dev/null
+adb -s "$SERIAL" install-multiple --no-incremental "$E"/apk/*.apk && adb -s "$SERIAL" shell monkey -p $PKG 1
+AS 'ls -la shared_prefs/ databases/ files/'      # AS(): root read of the sandbox (## Items)
 # the modern backup path (see D11 for the full rig)
-grep -oE 'allowBackup="[^"]*"|fullBackupContent="[^"]*"|dataExtractionRules="[^"]*"|backupAgent="[^"]*"' out/AndroidManifest.xml
-cat out/res/xml/backup_rules.xml out/res/xml/data_extraction_rules.xml 2>/dev/null
-adb shell bmgr enabled; adb shell bmgr list transports; adb shell bmgr backupnow $PKG
+grep -oE 'allowBackup="[^"]*"|fullBackupContent="[^"]*"|dataExtractionRules="[^"]*"|backupAgent="[^"]*"' $DEC/apktool/AndroidManifest.xml
+cat $DEC/apktool/res/xml/backup_rules.xml $DEC/apktool/res/xml/data_extraction_rules.xml 2>/dev/null
+adb -s "$SERIAL" shell bmgr enabled; adb -s "$SERIAL" shell bmgr list transports; adb -s "$SERIAL" shell bmgr backupnow $PKG
+# shared-media artefacts (share / export / receipt): find the writers, perform ONE such action, then query MediaStore by owner
+grep -rnE 'MediaStore\.(Images|Downloads|Files)|RELATIVE_PATH|createWriteRequest|Environment\.DIRECTORY_(PICTURES|DOWNLOADS)|ACTION_SEND' $DEC/jadx/sources/ -A4 | head -60
+adb -s "$SERIAL" shell "content query --uri content://media/external/images/media --projection _display_name:relative_path:owner_package_name:date_added --where \"owner_package_name='$PKG'\""
+adb -s "$SERIAL" shell "content query --uri content://media/external/downloads --projection _display_name:owner_package_name --where \"owner_package_name='$PKG'\""   # the device sh re-parses: the where-clause needs its own quotes there
 ```
+  D11-041 and D07-072 own the storage and provider mechanics — cross-reference them, do not re-derive.
 - **Proof:** The app opening straight into an authenticated session after a clean reinstall with no
   credentials entered — record the whole sequence — or PII files still on `/sdcard` after uninstall, read
-  from a zero-permission PoC app.
+  from a zero-permission PoC app; or a share/export artefact listed with `owner_package_name=$PKG`, read from
+  the probe app holding only `READ_MEDIA_IMAGES` (state the permission) and still present after `adb uninstall`.
 - **Escalation:** -> D11 for the backup mechanics and the restore-write direction; -> D13 for the restored
   token; -> D02 if the build is debuggable and `adb backup` still works.
 - **Ruled out when:** `dataExtractionRules` excludes every credential- and PII-bearing path for **both**
@@ -2468,7 +2605,7 @@ adb shell bmgr enabled; adb shell bmgr list transports; adb shell bmgr backupnow
 | | |
 |---|---|
 | **Severity ceiling** | Critical (covert recording); High for access that is disclosed but broader than necessary |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null); the recorded artefact files as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); the recorded artefact files as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 / the app itself |
 | **Applies to** | Background sensor restriction is **Android 9+**; the status-bar indicator and global mic/camera toggles are **Android 12+** |
 | **Requires** | device, frida |
@@ -2480,11 +2617,11 @@ adb shell bmgr enabled; adb shell bmgr list transports; adb shell bmgr backupnow
   short bursts, or starting while the screen is off, so the indicator is never meaningfully visible.
 - **How:**
 ```bash
-adb shell appops get $PKG | grep -iE 'CAMERA|RECORD_AUDIO|PHONE_CALL_MICROPHONE|time='
-adb shell dumpsys media.camera | grep -iB2 -A6 "$PKG"
-adb shell dumpsys audio | grep -iB2 -A6 "$PKG|RECORD"
-adb logcat -d | grep -iE 'AudioRecord|startRecording|CameraDevice|openCamera'
-adb shell cmd sensor_privacy enable microphone     # exercise the Android 12 global toggle
+adb -s "$SERIAL" shell appops get $PKG | grep -iE 'CAMERA|RECORD_AUDIO|PHONE_CALL_MICROPHONE|time='
+adb -s "$SERIAL" shell dumpsys media.camera | grep -iB2 -A6 "$PKG"
+adb -s "$SERIAL" shell dumpsys audio | grep -iEB2 -A6 "$PKG|RECORD"      # -E: in basic grep the | is literal and matches nothing
+adb -s "$SERIAL" logcat -d | grep -iE 'AudioRecord|startRecording|CameraDevice|openCamera'
+adb -s "$SERIAL" shell cmd sensor_privacy enable 0 microphone     # exercise the Android 12 global toggle (USER_ID is mandatory; `cmd sensor_privacy` alone prints the grammar); restore with `disable 0 microphone`
 ```
 ```javascript
 Java.perform(function () {
@@ -2509,7 +2646,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | High — deliberate concealment is a consent-integrity finding, not only a technical one |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | the app / an SDK inside it (AM-08) |
 | **Applies to** | all |
 | **Requires** | device, frida |
@@ -2521,9 +2658,9 @@ Java.perform(function () {
   feature, so trace it to the SDK before writing it up as malice.
 - **How:**
 ```bash
-grep -rnE 'setStreamVolume|ADJUST_MUTE|setAlpha\(0|alpha="0|TYPE_APPLICATION_OVERLAY|setScreenBrightness|FLAG_KEEP_SCREEN_ON|isInteractive|isScreenOn|PowerManager|SensorManager|setVisibility\(View\.INVISIBLE' out/sources/
-adb shell dumpsys power | grep -iE 'mWakefulness|Display Power'
-adb shell dumpsys window | grep -iE 'TYPE_APPLICATION_OVERLAY|alpha='
+grep -rnE 'setStreamVolume|ADJUST_MUTE|setAlpha\(0|alpha="0|TYPE_APPLICATION_OVERLAY|setScreenBrightness|FLAG_KEEP_SCREEN_ON|isInteractive|isScreenOn|PowerManager|SensorManager|setVisibility\(View\.INVISIBLE' $DEC/jadx/sources/
+adb -s "$SERIAL" shell dumpsys power | grep -iE 'mWakefulness|Display Power'
+adb -s "$SERIAL" shell dumpsys window | grep -iE 'TYPE_APPLICATION_OVERLAY|alpha='
 ```
   Record the screen while `dumpsys` shows the app active and the proxy shows uploads.
 - **Proof:** A recording in which the screen appears off or idle while `dumpsys` shows the app running and
@@ -2537,7 +2674,7 @@ adb shell dumpsys window | grep -iE 'TYPE_APPLICATION_OVERLAY|alpha='
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | AM-08 (the app itself, or an SDK inside it) |
 | **Applies to** | targetSdk 34+ apps must declare an FGS type; `mediaProjection`, `microphone`, `camera` and `health` are the relevant ones |
 | **Requires** | device, frida |
@@ -2549,11 +2686,11 @@ adb shell dumpsys window | grep -iE 'TYPE_APPLICATION_OVERLAY|alpha='
   This is exactly ATT&CK's T1541 pattern.
 - **How:**
 ```bash
-grep -nE 'foregroundServiceType|FOREGROUND_SERVICE(_[A-Z_]+)?' out/AndroidManifest.xml
-grep -rnE 'startForeground\(|ServiceInfo\.FOREGROUND_SERVICE_TYPE_' out/sources/ -A6
-adb shell dumpsys activity services $PKG | grep -iE 'foreground|type=|started|isForeground'
+grep -nE 'foregroundServiceType|FOREGROUND_SERVICE(_[A-Z_]+)?' $DEC/apktool/AndroidManifest.xml
+grep -rnE 'startForeground\(|ServiceInfo\.FOREGROUND_SERVICE_TYPE_' $DEC/jadx/sources/ -A6
+adb -s "$SERIAL" shell dumpsys activity services $PKG | grep -iE 'foreground|type=|started|isForeground'
 # does the sensor stay open across the service's lifetime?
-adb shell appops get $PKG | grep -iE 'RECORD_AUDIO|CAMERA|time='
+adb -s "$SERIAL" shell appops get $PKG | grep -iE 'RECORD_AUDIO|CAMERA|time='
 ```
 - **Proof:** The FGS running with a `microphone` / `camera` / `mediaProjection` type across a window in which
   the user performed no related action, with the `appops` timestamps showing continuous access and the
@@ -2572,6 +2709,7 @@ adb shell appops get $PKG | grep -iE 'RECORD_AUDIO|CAMERA|time='
 | **VRT** | n/a — governance |
 | **Attacker** | n/a |
 | **Applies to** | every Critical or High claim in this chapter |
+| **Requires** | — |
 | **Maps to** | `triage-validation` PRE-SEVERITY GATE; the 7-Question Gate; the "never write *could potentially*" rule |
 
 - **Test:** Write the draft Critical title first, then substitute the **Critical claim** — not the bug — into
@@ -2595,7 +2733,7 @@ adb shell appops get $PKG | grep -iE 'RECORD_AUDIO|CAMERA|time='
   chosen VRT and its default, state the priority you are requesting, and give three grounded impact axes —
   one of which should cite the programme's own focus areas by name. Route within the system; never pick an
   inaccurate VRT node to get a higher default.
-- **Ruled out when:** n/a — governance.
+- **Ruled out when:** n/a — governance: complete when each Critical claim names the gate it passed, or carries the lower rating it fell to.
 
 ### D20-068 · Retraction discipline, and the finding you must **not** retract
 
@@ -2605,6 +2743,7 @@ adb shell appops get $PKG | grep -iE 'RECORD_AUDIO|CAMERA|time='
 | **VRT** | n/a — governance |
 | **Attacker** | n/a |
 | **Applies to** | every engagement |
+| **Requires** | — |
 | **Maps to** | `triage-validation` RETRACTION DISCIPLINE; `mid-engagement-ir-detection` |
 
 - **Test:** Privacy findings are unusually prone to mid-engagement change: an SDK is remotely reconfigured, a
@@ -2627,7 +2766,7 @@ adb shell appops get $PKG | grep -iE 'RECORD_AUDIO|CAMERA|time='
 - **Proof:** The appendix entry, or the timestamped pre-change capture.
 - **Escalation:** Retract pre-emptively if a submitted finding stops reproducing within 24 hours —
   self-retraction does not hit the same platform-tracked metric a triager retraction does.
-- **Ruled out when:** n/a — governance.
+- **Ruled out when:** n/a — governance: complete when every retraction names the mechanism that refuted the claim.
 
 ### D20-069 · Chain-filing order for privacy primitives — file the primitive, then the consumer
 
@@ -2637,6 +2776,7 @@ adb shell appops get $PKG | grep -iE 'RECORD_AUDIO|CAMERA|time='
 | **VRT** | n/a — submission mechanics |
 | **Attacker** | n/a |
 | **Applies to** | every multi-finding engagement; D20 produces primitives more often than consumers |
+| **Requires** | — |
 | **Maps to** | `bugcrowd-reporting` §5 (chain filing) and §8 (submission-order strategy) |
 
 - **Test:** Almost everything in this chapter is a primitive whose severity comes from a consumer in another
@@ -2659,7 +2799,7 @@ These primitives have independent fix surfaces and are filed separately per the 
   file everything within minutes of each other: triagers read a simultaneous batch as low-effort spam.
 - **Proof:** Cross-referenced IDs in both directions.
 - **Escalation:** n/a.
-- **Ruled out when:** n/a — mechanics.
+- **Ruled out when:** n/a — mechanics: complete when each primitive is filed before its consumer and every consumer report cites it.
 
 ### D20-070 · The five-screenshot pattern adapted to a data-leak PoC
 
@@ -2669,6 +2809,7 @@ These primitives have independent fix surfaces and are filed separately per the 
 | **VRT** | n/a — evidence |
 | **Attacker** | n/a |
 | **Applies to** | every D20 finding with a demonstrated consumer |
+| **Requires** | — |
 | **Maps to** | `evidence-hygiene` §7 (the five-screenshot state-change pattern); MHL's quantified-exfiltration reporting standard |
 
 - **Test:** A leak PoC needs the same five-shot discipline as a state change, remapped: (1) **pre-state** —
@@ -2690,13 +2831,181 @@ These primitives have independent fix surfaces and are filed separately per the 
 - **Escalation:** Pair with D20-006 (the PII mask/leave-visible split) before attaching anything, and with
   D20-005 (redact at capture time). For a Critical or High claim, reproduce with a second tool as well: the
   same leak shown through both a Frida hook and an independent capture is much harder to argue with.
-- **Ruled out when:** n/a — evidence.
+- **Ruled out when:** n/a — evidence: complete when each data-leak finding carries the five screenshots this item lists.
+
+### D20-071 · Shortcut and conversation donations put account data on launcher, share-sheet and widget surfaces — and keep it after logout
+
+| | |
+|---|---|
+| **Severity ceiling** | Low standalone (labels on the device holder's own surfaces); Medium when the previous account's contacts, numbers or messages survive logout or account switch on a shared-device-supported app, or a third-party launcher reads them |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
+| **Attacker** | AM-05 / AM-11 (the next user of a shared device after logout); AM-04 for a third-party launcher the user made the default HOME app |
+| **Applies to** | apps publishing dynamic, pinned or long-lived sharing/conversation shortcuts (`ShortcutManager` API 25+; sharing shortcuts API 29+; `pushDynamicShortcut` and `removeLongLivedShortcuts` API 30+); AppSearch donations are D11-075 |
+| **Requires** | device |
+| **Maps to** | MASWE-0036 (Unnecessary Exposure of Sensitive Data via the User Interface), MASWE-0077 (Inadequate Data Visibility Controls); CWE-359; developer.android.com `develop/ui/views/launch/shortcuts` (dynamic, pinned, `pushDynamicShortcut`), `training/sharing/direct-share-targets` (sharing shortcuts, `setLongLived`), `reference/android/content/pm/LauncherApps` (`getShortcuts`, served to the default launcher only), `reference/android/content/pm/ShortcutManager` (`removeAllDynamicShortcuts`, `removeLongLivedShortcuts`); D11-075 (AppSearch cross-app read); D04-071 (widget and lock-screen rendering) |
+| **Record** | `logs/D20-071.txt` (the grep and the `dumpsys shortcut` block before and after logout); `screenshots/D20-071-<n>.png` (launcher long-press, share sheet, widget) |
+
+- **Skip when:** `grep -rlE 'ShortcutManager|ShortcutInfo' "$DEC/jadx/sources" | wc -l` prints 0 and
+  `grep -c 'android.app.shortcuts' "$DEC/apktool/AndroidManifest.xml"` prints 0 (framework class names survive
+  R8) — write `n/a — D20-071: 0 ShortcutManager/ShortcutInfo references in $DEC/jadx/sources, no android.app.shortcuts meta-data`.
+- **Test:** Shortcuts are copies of app data the system stores and renders outside the app: dynamic and pinned
+  shortcuts on the launcher's long-press menu and home screen, long-lived sharing/conversation shortcuts in the
+  system share sheet's Direct Share row, the Conversations section and the conversation widget, and — through
+  `LauncherApps.getShortcuts` — in whatever third-party launcher the user set as HOME. The finding is a label or
+  person carrying account data (contact names, account, booking or card numbers, balances) that survives logout
+  or account switch because the app never calls `removeAllDynamicShortcuts()` / `removeLongLivedShortcuts()`, or
+  that a third-party launcher receives.
+- **How:**
+```bash
+grep -rnE 'ShortcutManager|ShortcutInfo|setShortLabel|setLongLabel|setPerson|setLongLived|pushDynamicShortcut|setDynamicShortcuts|addDynamicShortcuts|removeAllDynamicShortcuts|removeLongLivedShortcuts|requestPinShortcut' "$DEC/jadx/sources" | tee "$E/logs/D20-071.txt"
+grep -rlE 'google\.shortcuts|firebase\.appindexing' "$DEC/jadx/sources" | head -3   # a hit: donations also go to an SDK index — attribute it in D20-019
+# logged in as A, after the flows that create shortcuts (chats, recent items, saved payees): the D20-002 canary must appear
+adb -s "$SERIAL" shell dumpsys shortcut > "$E/logs/D20-071-before.txt"; grep -c zq4h7m2kx9 "$E/logs/D20-071-before.txt"   # positive control: > 0
+# log out (then log in as B), and repeat
+adb -s "$SERIAL" shell dumpsys shortcut > "$E/logs/D20-071-after.txt"; grep -c zq4h7m2kx9 "$E/logs/D20-071-after.txt"
+```
+  Then long-press the launcher icon, open any app's share sheet and check the conversation widget picker, and
+  screenshot each. If `before` is 0 while the launcher visibly shows the canary, this image masks labels in
+  `dumpsys`: the screenshots are the evidence. For the third-party-launcher half, a PoC HOME activity (`cmd package set-home-activity
+  <poc-pkg>/.Home`) calls `LauncherApps.getShortcuts()` with `FLAG_MATCH_DYNAMIC | FLAG_MATCH_PINNED |
+  FLAG_MATCH_CACHED` for the target package and writes every field it actually receives to `poc.log` — the
+  platform withholds the launch intent from launchers, so report only what the log shows.
+- **Proof:** The canary (a planted contact or payee name from D20-002) in `dumpsys shortcut` and on a
+  screenshot of the launcher menu, share sheet or widget **after** logout or account switch, next to the
+  `before` count; or the PoC launcher's `poc.log` line holding it.
+- **Escalation:** -> D20-060 (record the same residue there); -> D04-071 (widget and lock-screen surfaces);
+  -> D09-040 (a pinned shortcut whose retired route still resolves); -> D11-075 for AppSearch documents.
+- **Ruled out when:** Labels carry no account data (generic "New chat", "Scan"), or the app clears dynamic and
+  long-lived shortcuts on logout and account switch — the canary count drops from `before` > 0 to `after` = 0 —
+  and the PoC launcher's log holds only generic labels.
+
+### D20-072 · Delegate-process blind spot: egress from the SDK Runtime sandbox or a delegate package is invisible to in-process hooks
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (decides the attribution column of every egress item; rated nowhere on its own) |
+| **VRT** | n/a — method; the attributed flow is rated in D20-019 / D20-025 |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | apps declaring `<uses-sdk-library>` (runtime-enabled SDKs run in the SDK sandbox process on Android 14+ devices) or handing payments, identity, analytics or model inference to another package's service |
+| **Requires** | device |
+| **Maps to** | developer.android.com `design-for-safety/privacy-sandbox/sdk-runtime` (sandbox process with its own UID; `SdkSandboxManager.loadSdk`), `guide/topics/manifest/uses-sdk-library-element`; D01-084 (SDK Runtime declarations), D01-041 (process topology), D11-074 (the delegated store) |
+| **Record** | `logs/D20-072.txt` (process list, bindings, per-UID socket census for each UID) |
+
+- **Skip when:** `grep -c '<uses-sdk-library' "$DEC/apktool/AndroidManifest.xml"` prints 0, no `sdk_sandbox`
+  process exists while the flow runs, and D01-041 names no other package handling a sensitive flow — write
+  `n/a — D20-072: no uses-sdk-library, no sdk_sandbox process during the flow, no delegate package in D01-041`.
+- **Test:** Before an egress table is believed, establish which process opens each socket. A runtime-enabled SDK
+  runs in the SDK sandbox process under its own UID, and some apps hand a sensitive flow to another package's
+  bound service. Frida hooks and stack traces in the app's process (D20-003/009/019/022/024) see none of that
+  traffic: a thin client then reads as "no third-party egress" while the delegate ships the identifiers — and,
+  the other way round, delegate traffic gets filed against the app.
+- **How:**
+```bash
+adb -s "$SERIAL" shell ps -A -o USER,UID,PID,NAME | grep -E "sdk_sandbox|$PKG" | tee "$E/logs/D20-072.txt"     # run while the flow is live
+grep -nE '<uses-sdk-library' "$DEC/apktool/AndroidManifest.xml" | tee -a "$E/logs/D20-072.txt"
+adb -s "$SERIAL" shell dumpsys activity services | grep -nE "ServiceRecord|$PKG" | tee -a "$E/logs/D20-072.txt"   # read which other package's ServiceRecord lists a binding from $PKG
+# then run the D20-019 per-UID socket census once per UID: the app's, the sandbox's (UID column above) and each delegate package's
+```
+  Proxy flows are attributed the same way: the per-UID census and the request's User-Agent or SNI decide the
+  origin process, never the app's in-process hook.
+- **Proof:** The D20-019 host table with an "origin process" column — app UID, sandbox UID or delegate package —
+  each row backed by its census lines.
+- **Escalation:** Delegate in scope -> run D20-019 / D20-025 against its flows; out of scope -> mark the affected
+  D20 rows `blocked` with `needs: scope decision on <delegate package>` (never `n/a`); -> D18-061 (what the SDK
+  could do in-process, which a sandboxed SDK loses); -> D11-074 (where the delegate stores the data).
+- **Ruled out when:** No `sdk_sandbox` process and no binding to another package exist while the flow runs (the
+  `ps` and `dumpsys` lines are the negative), or every established socket in the census during the flow belongs
+  to the app UID — with the app UID's own connections present as the control that the sampling worked.
+
+### D20-073 · Content Capture: PIN, OTP and card views handed to the system content-capture service without an opt-out
+
+| | |
+|---|---|
+| **Severity ceiling** | Low (privacy hardening: the reader is a system service the OEM ships); Medium only where the programme's scope names on-device data minimisation and a credential or OTP view reaches the service |
+| **VRT** | varies — no dedicated node; rate as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) only when the captured secret resurfaces to another reader |
+| **Attacker** | AM-11 (the captured text resurfacing in a user-visible system feature on a shared device); n/a for the system service itself |
+| **Applies to** | Android 10+ (API 29) device images whose OEM configures a content-capture service; apps whose secret views do not set `importantForContentCapture` |
+| **Requires** | device, api>=29 |
+| **Maps to** | MASWE-0036 (Unnecessary Exposure of Sensitive Data via the User Interface); CWE-359; developer.android.com `reference/android/view/contentcapture/ContentCaptureManager` (`setContentCaptureEnabled`), `reference/android/view/View#setImportantForContentCapture(int)` (`IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS`); AOSP `android.service.contentcapture.ContentCaptureService` (the CTS test service is the PoC shape); D28-034 / D28-035 (assistant surfaces that consume screen structure) |
+| **Record** | `logs/D20-073.txt` (the grep, `dumpsys content_capture`, the PoC service's `poc.log`) |
+
+- **Skip when:** the device API is below 29, or `adb -s "$SERIAL" shell dumpsys content_capture` shows no
+  service for user 0 on every device image in scope — write `n/a — D20-073: no content-capture service on
+  <device image> (dumpsys content_capture: <line>)`.
+- **Test:** On Android 10+ the content-capture service the OEM configures receives a structured stream of the
+  view text of every package it allow-lists, unless the app opts views out (`android:importantForContentCapture="no"`
+  / `noExcludeDescendants`, `View.setImportantForContentCapture`) or disables capture with
+  `ContentCaptureManager.setContentCaptureEnabled(false)`. The question is whether PIN, OTP, PAN, balance and
+  message views reach it. Whether password-type fields and `FLAG_SECURE` windows are excluded is decided by the
+  experiment on the device image in scope, not assumed.
+- **How:**
+```bash
+grep -rnE 'importantForContentCapture|setImportantForContentCapture|IMPORTANT_FOR_CONTENT_CAPTURE|setContentCaptureEnabled|ContentCaptureManager' "$DEC/jadx/sources" "$DEC/apktool/res/layout" | tee "$E/logs/D20-073.txt"
+adb -s "$SERIAL" shell dumpsys content_capture | tee -a "$E/logs/D20-073.txt"    # the bound service and its allow-list: is $PKG captured on this image?
+adb -s "$SERIAL" shell cmd content_capture help                                  # print this image's grammar before using it
+# userdebug AVD, for a candidate you will report: bind a PoC service temporarily (the CTS pattern), then type the D20-002 canaries
+adb -s "$SERIAL" shell cmd content_capture set temporary-service 0 <poc-pkg>/.CaptureService 120000
+```
+  The PoC service (declared with `android:permission="android.permission.BIND_CONTENT_CAPTURE_SERVICE"`, built
+  against the system API surface) allow-lists the target in `onConnected()` and writes each
+  `onContentCaptureEvent` view node's text to `poc.log`. Type into a benign field (search) first: that line is
+  the positive control.
+- **Proof:** The PoC service's `poc.log` holding a PIN, OTP or PAN canary from the target's view with the
+  target's package on the session; or, statically, a secret view with no opt-out on a device image whose
+  `dumpsys content_capture` allow-lists the package — reported as static, with that line.
+- **Escalation:** -> D28-034 / D28-035 (assistant and screen-reading surfaces fed the same structure);
+  -> D20-048 (autofill: the parallel `ViewStructure` path that `importantForAutofill` governs separately).
+- **Ruled out when:** Secret-bearing views or their container set `importantForContentCapture="no"` /
+  `noExcludeDescendants`, or the app disables content capture — or the PoC service, holding its positive-control
+  line from the benign field, receives none of the canaries.
+
+### D20-074 · Device-fingerprint signals joined to an account identifier in one payload
+
+| | |
+|---|---|
+| **Severity ceiling** | Low standalone (a signal inventory is not a finding); Medium when five or more stable device signals travel with an account identifier or email to a third-party host, or a fraud fingerprint is reused for analytics or ads |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the joined record reaching a third party; Privacy Concerns › Unnecessary Data Collection (varies) while it stays first-party |
+| **Attacker** | AM-08 (the third-party SDK or host that receives the joined record) |
+| **Applies to** | all; most visible in apps bundling device-intelligence, fraud, analytics or ad SDKs |
+| **Requires** | mitm |
+| **Maps to** | MASVS-PRIVACY-2; MASWE-0068 (Incorrect Use of Identifiers for User Tracking), MASWE-0067 (Lack of Anonymization or Pseudonymisation Measures); CWE-359; D20-053 (identifier linkage), D20-019 (attribution) |
+| **Record** | `logs/D20-074.txt` (collector classes and the matching requests) |
+
+- **Test:** Reading `Build` fields is ordinary; the finding is the join. Many stable device attributes —
+  `Build.FINGERPRINT`/`BOARD`/`HARDWARE`/`BOOTLOADER`, display metrics, the sensor list, fonts, battery, carrier,
+  time zone and locale, `ANDROID_ID` — assembled into one record and sent with an account identifier, email or
+  advertising ID form a re-identification key that outlives an advertising-ID reset. The second shape is a
+  fingerprint collected for fraud prevention and reused by analytics or ad hosts, the isolation MASVS-PRIVACY-2
+  asks for.
+- **How:**
+```bash
+grep -rnoE 'Build\.(FINGERPRINT|BOARD|HARDWARE|BOOTLOADER|HOST|DISPLAY)|getDisplayMetrics|getSensorList|BatteryManager|getNetworkOperatorName|getSimOperator|ANDROID_ID|TimeZone\.getDefault' "$DEC/jadx/sources" | cut -d: -f1 | sort | uniq -c | sort -rn | head -20 | tee "$E/logs/D20-074.txt"   # files reading many signals = the collectors
+mitmdump -nr run.mitm -s /dev/stdin <<'PY'
+import re
+SIG = [rb'(?i)"?(model|manufacturer|brand|board|hardware|bootloader)"?\s*[:=]', rb'(?i)"?fingerprint"?\s*[:=]', rb'(?i)screen|density|dpi',
+       rb'(?i)timezone|"tz"', rb'(?i)carrier|operator|mcc', rb'(?i)battery', rb'(?i)sensor', rb'(?i)font', rb'(?i)android_?id', rb'(?i)locale|language']
+ACCT = [b'zq4h7m2kx9', b'15550137742']          # the D20-002 canary email / phone
+def request(f):
+    b = f.request.content or b''
+    n = sum(1 for s in SIG if re.search(s, b))
+    if n >= 5: print(f.request.pretty_host, f.request.path[:50], 'signals=%d' % n, 'ACCOUNT-ID' if any(a in b for a in ACCT) else '')
+PY
+```
+  Run the D20-024 inflate pass first: device-intelligence payloads are usually compressed or encoded.
+- **Proof:** One request body (inflated) holding five or more device signals together with an account
+  identifier or canary, to a host attributed to its SDK (D20-019), next to the privacy policy / Data safety text
+  that does not disclose device-fingerprint collection or that host.
+- **Escalation:** -> D20-053 (reset the advertising ID and show the record still links the account); -> D20-025
+  (declaration delta); -> D21 when the same fingerprint is the fraud control (the remediation is isolation, not removal).
+- **Ruled out when:** No request joins five or more stable signals with an account identifier, or the joined
+  record goes only to the first-party fraud endpoint the privacy policy names for that purpose and no analytics
+  or ad host receives it — the D20-019 attribution table shows which hosts do.
 
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
-| "The app writes to logcat" / `Log.d` calls present in the release build | `READ_LOGS` has been `signature\|privileged` since API 16 and API 30+ adds a consent dialog; Google's Mobile VRP excludes logging by name ("debugging privileges are required to access logs"). The mechanism has no rated node. | A **sensitive value** in the line, plus a named reader: a shipped package holding `READ_LOGS`, a debuggable build, or an SDK that forwards the buffer off-device (D20-008, D20-016). |
+| "The app writes to logcat" / `Log.d` calls present in the release build | `READ_LOGS` has been `signature\|privileged` since API 16 and Android 13 (API 33)+ adds a log-access consent dialog for most holders; Google's Mobile VRP excludes logging by name ("debugging privileges are required to access logs"). The mechanism has no rated node. | A **sensitive value** in the line, plus a named reader: a shipped package holding `READ_LOGS`, a debuggable build, or an SDK that forwards the buffer off-device (D20-008, D20-016). |
 | Debug stack trace or verbose error in logcat | HackenProof: "Debug Logs / Stack Traces — unless they expose sensitive data like credentials or tokens". `StrictMode` output is a resilience artefact. | The trace containing a credential, an internal endpoint you can then reach, or a framework version with a working exploit (D20-013, D20-014). |
 | Missing `FLAG_SECURE` / Recents thumbnail shows the screen | `insecure_data_storage.screen_caching_enabled` is **P5** outright and Bugcrowd's remediation text calls the fix "a best practice". A root read of `/data/system_ce/0/snapshots` is AM-12, which is not an attack. | A named consumer that captures it (a MediaProjection holder, an in-process SDK capture that `FLAG_SECURE` cannot stop, a remote screen-share viewer), plus a data class worth capturing (D20-017, D20-018, D20-037, D20-038). |
 | "Clipboard is enabled" / a Copy button exists on a sensitive field | `mobile_security_misconfiguration.clipboard_enabled` is **P5**; the finer children `on_sensitive_content` / `on_non_sensitive_content` were **removed** and the parent pinned at P5 "due to children removal" — Bugcrowd will not entertain a sensitivity argument on category grounds. | A cross-app read demonstrated from a different UID in the foreground, of an OTP or recovery phrase, that persists in keyboard clipboard history after the app closes (D20-043, D20-044). |
@@ -2715,6 +3024,12 @@ These primitives have independent fix surfaces and are filed separately per the 
 | A third-party SDK exists in the app | Presence is not collection. | A captured payload from that SDK's host carrying user data, attributed to the SDK by stack trace, and absent from the Data safety declaration (D20-019, D20-025). |
 
 ## Cross-surface joins
+
+- **AI-feature egress × this chapter's egress tests (D20-019 / D20-020 / D20-025 × D28).** User content sent to a
+  model endpoint — screen contents, chat history, attachments, OCR'd images — is owned by D28-047 (undeclared
+  model host and the consent-off differential), D28-049 (identifiers and context added to prompts) and D28-053
+  (screen- and camera-aware modes). Run this chapter's marker sweep (D20-002) and SDK attribution (D20-019) on
+  the same capture and file the result under the D28 id, not as a second D20 row.
 
 - **Notification extras × the deep-link router (D20-031 × D09).** A `NotificationListenerService` reads the
   notification's `contentIntent` and its extras, then **replays the deep link itself** — often carrying a
@@ -2771,7 +3086,7 @@ These primitives have independent fix surfaces and are filed separately per the 
 - **OWASP MASTG / MASVS / MASWE** — MASTG-TEST-0203, -0206, -0231, -0254 to -0258, -0263 to -0265, -0289,
   -0291 to -0294, -0315, -0316, -0318, -0319, -0320 and the deprecated v1 predecessors -0003, -0005, -0006,
   -0008, -0010, -0041; MASTG-TECH-0002/0009/0010/0022/0043/0100/0142; MASTG-KNOW-0009/0049/0053/0054/0055;
-  MASTG-BEST-0002/0014/0019/0027; MASTG-TOOL-0001/0015/0029/0077/0079/0081/0097/0106/0112;
+  MASTG-BEST-0002/0014 (the notification and keyboard-cache best practices are placeholders upstream, cited by title in D20-030 and D20-046); MASTG-TOOL-0001/0015/0029/0077/0079/0081/0097/0106/0112;
   MASWE-0005/0019/0025/0030/0036/0037/0038/0040/0050/0061/0067/0068/0073/0074; the semgrep rules
   `mastg-android-sensitive-data-in-notifications`, `…-manifest`, `mastg-android-sensitive-data-in-screenshot`,
   `mastg-android-input-field-usage`, `mastg-android-keyboard-cache-input-types`, `mastg-android-strictmode`.

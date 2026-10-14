@@ -56,7 +56,7 @@ hardening that would otherwise close it?**
 
 ## Applicability probe
 
-D22 is the gate every other chapter reads, so the domain as a whole is never `n/a`. The probe decides which of its three blocks apply — the modern mandates (D22-011..062), the Play-layer gates (D22-063..069) and the LEGACY block (D22-070..077, plus D22-087) — and seeds `inventory/app.csv` with the integers every version-gated item quotes.
+D22 is the gate every other chapter reads, so the domain as a whole is never `n/a`. The probe decides which of its three blocks apply — the modern mandates (D22-011..062), the Play-layer gates (D22-063..069) and the LEGACY block (D22-070..077, plus D22-086) — and seeds `inventory/app.csv` with the integers every version-gated item quotes.
 
 ```bash
 # 1. the triplet, from the installed package (never the store listing)
@@ -73,7 +73,7 @@ adb -s "$SERIAL" shell pm path "$PKG" | wc -l        # >1 = splits present
 
 Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch` to `inventory/app.csv`, then run the D22-004 emitter. The `n/a` notes a model writes:
 
-- LEGACY block: `D22-070..077, D22-087 n/a — targetSdk=<T> (>=31) and minSdk=<M> (>=24) from aapt2 and dumpsys (inventory/app.csv); D22-004 emitter printed no LEGACY-live row; mechanism = the two integers.`
+- LEGACY block: `D22-070..077, D22-086 n/a — targetSdk=<T> (>=31) and minSdk=<M> (>=24) from aapt2 and dumpsys (inventory/app.csv); D22-004 emitter printed no LEGACY-live row; mechanism = the two integers.`
 - Play layer: `D22-063/064 n/a — pm path returns base.apk plus config splits only (logs/D22-063.txt); D22-065 n/a — no SafetyNet class in the APK (unzip -l count 0).`
 - Device-gated items on a missing image are **blocked**, not n/a: `D22-052..060 blocked — no API>=36 image in the lab (lab.md); re-run when the image exists.`
 - Per-item opt-out greps with count 0 are ruled out, not n/a: `D22-052 ruled out — removeLaunchSecurityProtection grep count 0 on $DEC/jadx/sources (logs/D22-052.txt).`
@@ -82,9 +82,12 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 
 1. **Pin the version triplet from the installed package** (D22-001). Thirty seconds, and it decides the
    applicability of roughly sixty items across the other chapters. Nothing else in this chapter is
-   meaningful without it.
-2. **Grep the six opt-out strings** (D22-052, D22-034, D22-053, D22-017, D22-058, D22-013). These are
-   the only items in the chapter that are findings in their own right, and each is a single grep.
+   meaningful without it. **1b.** Record the programme's OS floor (D22-082) before building any image:
+   under a bounty programme with a latest-OS rule the newest released API image is mandatory and
+   decides eligibility; every other image serves the client-fleet and LEGACY work.
+2. **Grep the seven opt-out strings** (D22-052, D22-034, D22-053, D22-017, D22-058, D22-013, and
+   `allowUntrustedActivityEmbedding`, whose test is D03-077). These are the only items in the chapter
+   that are findings in their own right, and each is a single grep.
 3. **Build the version matrix and install on each image** (D22-003). Everything that follows needs two
    API levels to be defensible; building it after you have a PoC wastes the PoC.
 4. **Run the mechanical LEGACY/CURRENT verdict** (D22-004) over the candidate list from every other
@@ -96,13 +99,20 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
    D22-030, D22-031). On a modern target, an insecure value is something a developer typed.
 7. **The hardening opt-outs the app inherited from an SDK** (D22-039, D22-029, and the merged-manifest
    route in D22-001). The app's effective posture is the merged manifest, not its own.
-8. **Play-layer controls** (D22-063 → D22-069). SafetyNet has been dead since January 2025 and is still
-   shipping; that is the cheapest High in this chapter.
-9. **The LEGACY block** (D22-070 → D22-077) only if the recorded SDK values put the app on the wrong
+8. **Play-layer gates** (D22-063 → D22-069): the split-delivery items are tested here; the SafetyNet,
+   Play Integrity, key-attestation and Credential Manager rows keep only their version/turndown gate and
+   point at D21, D12 and D13. The SafetyNet turndown (D22-065 → D21-021) is still the cheapest High.
+9. **The LEGACY block** (D22-070 → D22-077, D22-086) only if the recorded SDK values put the app on the wrong
    side of a gate. Otherwise these are graveyard entries, not tests.
 10. **Reporting discipline** (D22-078 → D22-082) last, but before you submit anything version-dependent.
 
+Quoting rule for every `adb shell` line in this chapter: adb strips one layer of quotes, so an argument
+containing `; | & $ > #` or a space is written as `"'…'"` (double outside, single inside) so the device
+shell sees one argument.
+
 ## Items
+
+All paths below assume `$E` (the engagement folder) and `$DEC=$E/decompiled` as START.md §6 defines: `$DEC/jadx/sources` for code, `$DEC/apktool/res` for resources, and `$DEC/AndroidManifest.merged.xml` for the merged manifest D22-001 produces; `$SERIAL` is the device from `adb devices -l` recorded in `engagement.json` `lab.*`.
 
 ### D22-001 · Pin the real min/target/compileSdk triplet from the installed package
 
@@ -112,6 +122,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — the gate that decides every other item's applicability |
 | **Attacker** | AM-12 (own device; not an attack) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150 (Analyzing the AndroidManifest), MASWE-0042; `developer.android.com/about/versions/{12,13,14,15,16}/behavior-changes-*` — every change on those pages is keyed to `targetSdkVersion`, not to the device |
 
 - **Test:** Read `minSdkVersion`, `targetSdkVersion` and `compileSdkVersion` from the **installed** APK
@@ -121,13 +132,13 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   ```bash
   PKG=com.target.app
   adb shell pm path $PKG                       # base.apk plus every split
-  for p in $(adb shell pm path $PKG | sed 's/package://' | tr -d '\r'); do adb pull "$p" .; done
-  aapt2 dump badging base.apk | grep -E "sdkVersion:|targetSdkVersion:|compileSdkVersion|package: name"
+  for p in $(adb shell pm path $PKG | sed 's/package://' | tr -d '\r'); do adb pull "$p" "$E/apk/"; done
+  aapt2 dump badging "$E/apk/base.apk" | grep -E "sdkVersion:|targetSdkVersion:|compileSdkVersion|package: name"
   adb shell dumpsys package $PKG | grep -E 'targetSdk|minSdk|versionName|versionCode|flags=|pkgFlags'
   # apktool frequently DROPS <uses-sdk>; cross-check against apktool.yml, never the decoded manifest alone
-  apktool d -f -o out base.apk >/dev/null && grep -E 'minSdkVersion|targetSdkVersion' out/apktool.yml
+  apktool d -f -o "$DEC/apktool" "$E/apk/base.apk" >/dev/null && grep -E 'minSdkVersion|targetSdkVersion' "$DEC/apktool/apktool.yml"
   # the effective posture is the MERGED manifest, not the app's own source manifest
-  apkanalyzer manifest print base.apk > out/AndroidManifest.merged.xml
+  apkanalyzer manifest print "$E/apk/base.apk" > "$DEC/AndroidManifest.merged.xml"
   ```
   Emit the report header block in the shape the paid HackerOne reports use (H1 #2553411 Basecamp,
   #1737358 Shopify both open with it and both were reproduced by the vendor first try):
@@ -157,6 +168,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — evidence metadata |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | ATT&CK T1633.001 (System Checks — build/system-property reads drive behaviour changes), mitigation M1006 (Use Recent OS Version); `developer.android.com/guide/sdk-extensions` (`SdkExtensions.getExtensionVersion()`, `SdkExtensions.AD_SERVICES`, `android:minExtensionVersion`) |
 
 - **Test:** Half the behaviour changes in Android 12-16 are *device-OS* gated rather than targetSdk
@@ -167,6 +179,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **How:**
   ```bash
   adb shell getprop ro.build.version.sdk
+  adb shell getprop ro.build.version.sdk_minor      # minor SDK level since Android 16 QPR2 (API 36.1); empty below
+  adb shell getprop ro.build.version.sdk_full       # where present
   adb shell getprop ro.build.version.release
   adb shell getprop ro.build.version.security_patch
   adb shell getprop ro.vendor.build.security_patch
@@ -174,14 +188,16 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell getprop | grep build.version.extensions
   #   [build.version.extensions.r]: [3]  [build.version.extensions.s]: [3]  [build.version.extensions.t]: [3]
   adb shell ls /apex | sort                    # which Mainline modules are updatable on this build
+  adb shell dumpsys package com.android.art | grep -iE 'versionName|versionCode'
+  adb shell dumpsys package com.android.conscrypt | grep -iE 'versionName|versionCode'
   ```
   In the decompiled app, find the runtime gates that consume these:
   ```bash
-  grep -rnE 'Build\.VERSION\.SDK_INT|Build\.VERSION_CODES\.|SdkExtensions\.getExtensionVersion\(|SdkExtensions\.AD_SERVICES' out/sources/ | head -40
-  grep -n 'minExtensionVersion' out/AndroidManifest.merged.xml
+  grep -rnE 'Build\.VERSION\.SDK_INT(_FULL)?|Build\.VERSION_CODES(_FULL)?\.|getMinorSdkVersion\(|SdkExtensions\.getExtensionVersion\(|SdkExtensions\.AD_SERVICES' "$DEC/jadx/sources/" | head -40
+  grep -n 'minExtensionVersion' "$DEC/AndroidManifest.merged.xml"
   ```
-- **Proof:** A `lab/platform-baseline-API<NN>.txt` file in the evidence tree carrying all seven property
-  values and the extension versions, referenced by every version-dependent claim in the report.
+- **Proof:** A `lab/platform-baseline-API<NN>.txt` file in the evidence tree carrying all nine property
+  values (major and minor SDK level included) and the extension versions, referenced by every version-dependent claim in the report.
   `build.version.extensions.r >= 2` on an Android 11/12 device is positive proof that
   `ACTION_PICK_IMAGES` (Photo Picker) is live there and that the app's "legacy storage fallback" branch
   is reachable on a device the developer believed was modern.
@@ -197,22 +213,29 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — harness |
 | **Attacker** | AM-12 |
 | **Applies to** | all; mandatory whenever the lab's API level changed since the last engagement |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/about/versions/{12,13,14,15,16}/behavior-changes-all`; MASTG-TECH-0128; the YesWeHack Android lab image table (`google_apis` = rootable via `adb root`, no Play Store; `google_apis_playstore` = not rootable, has Play Store; `default`/`aosp` = limited root) |
 
-- **Test:** A single-device test produces false negatives in one direction and unreportable findings in
-  the other. The minimum viable matrix is four images: the app's own `minSdkVersion`, Android 13 (API 33,
+- **Test:** Image one is always the **newest released API** (`sdkmanager --list 2>/dev/null | grep -oE
+  'system-images;android-[0-9]+;google_apis;(x86_64|arm64-v8a)' | sort -t- -k2 -n | tail -1`); under a
+  bounty programme with a latest-OS rule it is the only image that makes a report eligible. A
+  single-device test produces false negatives in one direction and unreportable findings in the other.
+  The minimum viable matrix is the newest API plus four images: the app's own `minSdkVersion`, Android 13 (API 33,
   pre-Conscrypt-trust-split, `RECEIVER_*` still optional), Android 15 (API 35, private space, OTP
   redaction, BAL creator opt-in, force-stop PI cancellation) and Android 16 (API 36, intent-redirection
   hardening, `intentMatchingFlags`, local network permission, predictive back).
+  `RUNNING_LOCKED` in `dumpsys user` means a credential is set and CE storage is locked: unlock through the UI (or, lab image only, `adb shell locksettings clear --old <credential>`) and re-run; `No activity found` / `Activity class {…} does not exist` on a locked user is a harness failure — write it to `lab.md`, never to the ruled-out register.
 - **How:**
   ```bash
+  # x86_64 on an x86 host, arm64-v8a on an Apple-silicon host; google_apis only (see below)
   sdkmanager --install "platform-tools" "emulator" \
-    "system-images;android-33;google_apis;x86_64" \
+    "system-images;android-37;google_apis;x86_64" \
+    "system-images;android-36;google_apis;x86_64" \
     "system-images;android-35;google_apis;x86_64" \
-    "system-images;android-36;google_apis;x86_64"
+    "system-images;android-33;google_apis;x86_64"
   # plus the app's own minSdk, read from D22-001:
   sdkmanager --install "system-images;android-<minSdk>;google_apis;x86_64"
-  for A in 33 35 36 <minSdk>; do
+  for A in 37 36 35 33 <minSdk>; do
     avdmanager create avd -n "a$A" -k "system-images;android-$A;google_apis;x86_64" -d pixel_6 --force
   done
   # google_apis, NOT google_apis_playstore: you need `adb root` to place a CA in the Conscrypt APEX (D22-035)
@@ -222,9 +245,14 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   ate something):
   ```bash
   adb devices -l
+  # pre-flight: the user must be RUNNING_UNLOCKED, or every non-direct-boot component "does not exist"
+  for S in $(adb devices | awk '/device$/{print $1}'); do
+    printf '%s ' "$S"; adb -s "$S" shell dumpsys user | grep -oE 'State: *[A-Z_]+' | head -1
+    adb -s "$S" shell dumpsys lock_settings 2>/dev/null | grep -iE 'CredentialType|hasPassword' | head -2
+  done
   for S in $(adb devices | awk '/device$/{print $1}'); do
     API=$(adb -s "$S" shell getprop ro.build.version.sdk | tr -d '\r')
-    adb -s "$S" install-multiple base.apk split_*.apk >/dev/null 2>&1 || adb -s "$S" install -r base.apk
+    adb -s "$S" install-multiple "$E"/apk/base.apk "$E"/apk/split_*.apk >/dev/null 2>&1 || adb -s "$S" install -r "$E/apk/base.apk"
     printf '%s\tAPI=%s\tinstalled=%s\n' "$S" "$API" \
       "$(adb -s "$S" shell pm path com.target.app | wc -l | tr -d ' ')"
   done | tee lab/version-matrix.txt
@@ -233,10 +261,12 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **Proof:** `lab/version-matrix.txt` with one row per image, each showing a non-zero installed-path
   count and the API level. Any image where the install fails with
   `INSTALL_FAILED_DEPRECATED_SDK_VERSION` is itself a recorded result (see D22-041).
+  The newest-API row must be present in `lab/version-matrix.txt` or the matrix is incomplete.
 - **Escalation:** Every PoC in the engagement is re-run across this matrix before it is written up.
 - **Ruled out when:** The client's supported device population is a single API level and they have
   supplied the distribution data to prove it — in which case you record that data and test the one
   level. "I only had one emulator" is not a ruling-out mechanism.
+  Every row in `lab/version-matrix.txt` was produced with `State: RUNNING_UNLOCKED`.
 
 ### D22-004 · Emit a mechanical LEGACY/CURRENT verdict for every candidate finding
 
@@ -246,6 +276,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — rating qualifier |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0245 (References to Platform Version APIs), MASWE-0041 (Running on a Recent Platform Version Not Ensured — CWE-693, CWE-1104, CWE-1357), MASWE-0042 (Latest Platform Version Not Targeted), rule `mastg-android-sdk-version`, MASVS-CODE-1 |
 
 - **Test:** Take the candidate list produced by D03-D17 and mark each row CURRENT, LEGACY-live (the gate
@@ -255,8 +286,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **How:** Run the gate emitter with the values from D22-001, then attach its output to the candidate
   table:
   ```bash
-  MIN=$(aapt2 dump badging base.apk | grep -oE "sdkVersion:'[0-9]+'" | grep -oE '[0-9]+')
-  TGT=$(aapt2 dump badging base.apk | grep -oE "targetSdkVersion:'[0-9]+'" | grep -oE '[0-9]+')
+  MIN=$(aapt2 dump badging "$E/apk/base.apk" | grep -oE "sdkVersion:'[0-9]+'" | grep -oE '[0-9]+')
+  TGT=$(aapt2 dump badging "$E/apk/base.apk" | grep -oE "targetSdkVersion:'[0-9]+'" | grep -oE '[0-9]+')
   echo "minSdk=$MIN targetSdk=$TGT"
   [ "$MIN" -lt 17 ] && echo "LEGACY-live: addJavascriptInterface reflection RCE (all public methods callable)"
   [ "$MIN" -lt 24 ] && echo "LEGACY-live: user-added CA store trusted by default -> MitM with no root"
@@ -270,6 +301,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   [ "$TGT" -lt 34 ] && echo "LEGACY-live: implicit intents reach internal components; runtime receivers export by default; DCL files may be writable; zip traversal unvalidated"
   [ "$TGT" -lt 35 ] && echo "LEGACY-live: platform does not enforce TLS>=1.2 for this app; BAL creator opt-in absent"
   [ "$TGT" -lt 36 ] && echo "LEGACY-live: predictive back not default; intentMatchingFlags unavailable"
+  [ "$TGT" -lt 37 ] && echo "LEGACY-live: provider strict SQL checks off; System.load() libraries may be writable; CT not default"
   ```
   Then re-derive the SELinux domain, which is the same table wearing a different hat — a lower target
   places the process in a versioned domain with a materially wider policy:
@@ -281,8 +313,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   report line: "the app targets API N and therefore inherits M legacy-permissive defaults", enumerated.
 - **Escalation:** LEGACY-live rows go to their owning domain with the gate stated in the "Applies to"
   line. DEAD rows go to this chapter's Graveyard and are never filed.
-- **Ruled out when:** `targetSdk >= 36` and `minSdk >= 24` — at which point every row above emits
-  nothing and the LEGACY block (D22-070 → D22-077) is closed with the two integers as the mechanism.
+- **Ruled out when:** `targetSdk >= 37` and `minSdk >= 24` — at which point every row above emits
+  nothing and the LEGACY block (D22-070 → D22-077, D22-086) is closed with the two integers as the mechanism.
 
 ### D22-005 · Distinguish a platform block from an app-side check before writing any negative
 
@@ -292,6 +324,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — kill gate that prevents both a false negative and a false positive |
 | **Attacker** | AM-03 |
 | **Applies to** | all; mandatory on every "the app rejected my intent / my payload / my request" observation |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` (the `PackageManager` logcat filter `tag:PackageManager & (message:"Intent does not match component's intent filter:" \| message:"Access blocked:")`); the bug-hunting corpus's LAYER-ORDERING TRAP |
 
 - **Test:** This is the Android edition of the layer-ordering trap. When your crafted intent, broadcast,
@@ -300,6 +333,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   testing. If it was the platform, the same payload will land on any device or targetSdk where that
   platform behaviour is absent — which is exactly the client's minSdk fleet. Treating a platform refusal
   as "the app is safe" is how a real finding gets silently skipped.
+  Sender class matters as much as the device: system, root, same-app and (as observed on API 36) shell-UID senders are exempt from the Android 13/16 filter-matching rules, so an `adb shell am` probe is attribution only — the control that counts comes from the zero-permission attacker app (D22-083).
 - **How:** Capture the refusal source, then re-run with the single variable changed. Three separable
   signals:
   ```bash
@@ -339,6 +373,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — evidence standard for every version-gated claim |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's Body-Diff Rule and its shadow-API rule (*a version difference alone is Informational; the weakened control is the finding*) |
 
 - **Test:** The shadow-API principle transfers exactly from the backend to the platform. An older API
@@ -358,7 +393,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
     adb -s "$S" logcat -d | grep -E "Access blocked:|ZipException|SecurityException|BAL|Exception" | head -20
   }
   for S in $(adb devices | awk '/device$/{print $1}'); do
-    run_on "$S" adb -s "$S" shell am start -n com.target.app/.RedirectActivity --es sub_intent 'intent:#Intent;component=com.target.app/.internal.Secret;end'
+    run_on "$S" adb -s "$S" shell am start -n com.target.app/.RedirectActivity --es sub_intent "'intent:#Intent;component=com.target.app/.internal.Secret;end'"   # adb strips one quote layer
   done | tee /tmp/d22_matrix_diff.txt
   grep -c '^=====' /tmp/d22_matrix_diff.txt      # count: must equal your device count
   ```
@@ -382,6 +417,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — evidence technique |
 | **Attacker** | AM-12 |
 | **Applies to** | Android 10+ for the compat framework; the change ID must exist on the build. Some toggles require a debuggable app or a `userdebug` build |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/guide/app-compatibility/test-debug`; the per-version behaviour-change pages, each of which names its own change; MASTG-TECH-0043 |
 
 - **Test:** The compatibility framework flips an individual behaviour change on or off **per package**
@@ -402,7 +438,16 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   `FGS_INTRODUCE_TIME_LIMITS`, `FGS_BOOT_COMPLETED_RESTRICTIONS`, `FGS_SAW_RESTRICTIONS`,
   `RESTRICT_LOCAL_NETWORK`, `DETECT_UNSAFE_INTENT_LAUNCH`, `STPE_SKIP_MULTIPLE_MISSED_PERIODIC_TASKS`,
   `DISALLOW_INVALID_GROUP_REFERENCE`, `ENABLE_STRICT_VALIDATION`, and the numeric form used by the
-  provider strict-SQL change (`484953293`, `ENFORCE_STRICT_SQL_CHECKS`).
+  provider strict-SQL change (`484953293`, `ENFORCE_STRICT_SQL_CHECKS`). The BAL pair (userdebug /
+  `google_apis` images; a non-debuggable target needs `ro.debuggable=1`): `244637991` =
+  `DEFAULT_RESCIND_BAL_PRIVILEGES_FROM_PENDING_INTENT_SENDER` (the API 34 sender rule) and `296478951`
+  (the API 35 creator rule) — disabling them reproduces API<=33 PendingIntent-sender BAL semantics
+  without downloading an old image:
+  ```bash
+  adb -s "$SERIAL" shell am compat disable 244637991 "$PKG"   # restores API<=33 sender-privilege donation
+  adb -s "$SERIAL" shell am compat disable 296478951 "$PKG"   # restores pre-35 creator semantics
+  adb -s "$SERIAL" shell am compat reset   244637991 "$PKG"
+  ```
   ```bash
   # numeric form, for a change that has no exported name on this build:
   adb shell am compat enable  484953293 com.target.app
@@ -424,11 +469,13 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — evidence capture |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | the behaviour-change pages that publish each string verbatim: `about/versions/12/behavior-changes-12`, `.../14/behavior-changes-14`, `.../15/behavior-changes-15`, `.../16/behavior-changes-16` |
 
 - **Test:** Each platform mitigation emits a distinctive log line. Collect them once per run; they are
   simultaneously your positive proof ("the block fired, so the app relies on it") and your negative
   proof ("the block did not fire and the payload landed").
+  Harvest them from attacker-app runs, not only from `adb shell am`: the shell UID is exempt from the filter-matching rules (D22-083), so its refusal strings — or their absence — say nothing about a cross-app sender.
 - **How:**
   ```bash
   adb logcat -c && adb logcat -v time > /tmp/d22_run.log &
@@ -480,15 +527,23 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   ```bash
   frida -D "$SERIAL" -f com.target.app -l d22_strictmode.js
   adb logcat -c && adb logcat -s StrictMode:* | tee /tmp/d22_strictmode.log
+  # unattended sweep: frida -D "$SERIAL" -f com.target.app -l d22_strictmode.js -q -t 900
+  # drive entry points with -S (kill the task first): a singleTask/standard reuse delivers to the live
+  # instance (result code 2/3) and nothing is re-evaluated
+  adb -s "$SERIAL" shell am start -S -W -n com.target.app/.Entry --es sub_intent "'intent:#Intent;component=com.target.app/.internal.Secret;end'"
+  # positive control: force one known nested launch (your probe app forwarding getIntent().getParcelableExtra("x"),
+  # or the app's own documented forwarder) and confirm a StrictMode line appears BEFORE counting zero
+  grep -c 'UnsafeIntentLaunch' /tmp/d22_strictmode.log
   # platform-side alternative on a debuggable build:
   adb shell am compat enable DETECT_UNSAFE_INTENT_LAUNCH com.target.app
   ```
 - **Proof:** `StrictMode` violation entries with full stack traces naming the offending
   `startActivity`/`sendBroadcast` call site inside the app's own package.
 - **Escalation:** Every violation is a D08 redirection candidate or a D04 background-launch candidate.
-- **Ruled out when:** The detectors are armed (the `[+]` line printed), the app is driven through every
-  entry point in the D01 inventory, and zero violations are logged. Record the driving script and the
-  empty log.
+- **Ruled out when:** The `[+]` line printed, the positive-control launch produced one
+  `UnsafeIntentLaunch` violation in the same session, every D01 entry point was driven with
+  `am start -S`, and no further violations were logged. Record the driving script, the positive-control
+  line and the log.
 
 ### D22-010 · Verify package-visibility filtering has not silently zeroed your own tooling
 
@@ -542,7 +597,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   materially stronger than "the default is insecure".
 - **How:**
   ```bash
-  grep -nB2 -A8 'android:exported="true"' out/AndroidManifest.merged.xml
+  grep -nB2 -A8 'android:exported="true"' "$DEC/AndroidManifest.merged.xml"
   # the ground truth regardless of what the manifest text implies:
   adb shell dumpsys package com.target.app | sed -n '/Activity Resolver Table/,/Permissions:/p'
   adb shell pm dump com.target.app | grep -iE 'exported|permission='
@@ -572,40 +627,51 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the reachable internal component performs a privileged action; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the reachable internal component performs a privileged action; otherwise `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 (holder of the PendingIntent); AM-04 for the notification-listener acquisition path |
 | **Applies to** | targetSdk >= 31 for the mandate; see D22-032 for the targetSdk-34 variant and D22-070 for the pre-31 default |
 | **Requires** | targetsdk>=31 |
 | **Maps to** | MASTG-TEST-0381 (References to Insecure PendingIntent Creation), MASTG-KNOW-0024, rule `mastg-android-pendingintent-mutable`; `about/versions/12/behavior-changes-12` (mutability mandate, lint `UnspecifiedImmutableFlag`); `privacy-and-security/risks/pending-intent`; CWE-927; ATT&CK T1626 |
 
 - **Test:** Android 12 forces an explicit `FLAG_IMMUTABLE` or `FLAG_MUTABLE`. It does not stop a
-  developer choosing `FLAG_MUTABLE`. A mutable PendingIntent whose base intent lacks a component lets
-  the holder call `fillIn()` and direct it at a **non-exported** component, executing with the creator's
-  UID and permissions. The mandate's real effect on a modern app is that `FLAG_MUTABLE` is now a typed
-  decision you can quote.
+  developer choosing `FLAG_MUTABLE` — but `FLAG_MUTABLE` alone does **not** let a holder retarget the
+  intent. `PendingIntent.send(ctx, code, fillIn)` runs `Intent.fillIn(fillIn, creatorFlags)`: the
+  **component** is copied only if the creator set `FILL_IN_COMPONENT` (0x8), the **selector** only with
+  `FILL_IN_SELECTOR` (0x40), the **package** only when the base package is null or `FILL_IN_PACKAGE`
+  (0x10) is set; action, data, categories and clipData are copied when the base lacks them (or the
+  matching `FILL_IN_*` bit 0x1/0x2/0x4/0x80 is set); extras are merged (new keys added) and flags are
+  OR-ed in. So the realistic shape is an implicit or package-only base whose action/data/extras the
+  holder supplies, delivered to whatever the base already resolves to; a component fill-in exists only
+  when the decoded creator flags carry the 0x8 bit. The mandate's real effect on a modern app is that
+  `FLAG_MUTABLE` is now a typed decision you can quote — together with its decoded fill-in bits.
 - **How:**
   ```bash
-  grep -rn 'FLAG_MUTABLE' out/sources/
-  grep -rnE 'PendingIntent\.get(Activity|Broadcast|Service|ForegroundService)\(' out/sources/ -A4
-  grep -rnE 'FLAG_MUTABLE|FLAG_IMMUTABLE|FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT|FLAG_ONE_SHOT' out/sources/
+  grep -rnE 'PendingIntent\.get(Activity|Activities|Broadcast|Service|ForegroundService)\(' "$DEC/jadx/sources/" -A4 | grep -nE 'FLAG_MUTABLE|33554432|0x2000000|FILL_IN_'
+  grep -rnE 'FLAG_MUTABLE|FLAG_IMMUTABLE|FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT|FLAG_ONE_SHOT' "$DEC/jadx/sources/"
+  # decompilers print the OR as one int: decode it. FLAG_MUTABLE=0x02000000 (33554432), FLAG_IMMUTABLE=0x04000000;
+  # flags & 0x8 = FILL_IN_COMPONENT, & 0x10 = FILL_IN_PACKAGE, & 0x40 = FILL_IN_SELECTOR, & 0x1 ACTION, & 0x2 DATA, & 0x80 CLIP_DATA
   ```
-  For each `FLAG_MUTABLE` hit, read the `Intent` construction: does it call `setClassName`,
-  `setComponent` or `setPackage`? If not, the component is fillable. Attacker side, once you hold it
+  For each `FLAG_MUTABLE` hit, read the `Intent` construction (`setClassName`/`setComponent`/`setPackage`
+  or implicit) **and** decode the low byte of the flags; at runtime hook every
+  `android.app.PendingIntent.get*` overload and log `(flags & 0xff).toString(2)` beside the base intent's
+  component, package and action. Attacker side, once you hold it
   (notification action, widget, `EXTRA_RESULT_RECEIVER`-style handoff):
   ```java
   Intent fill = new Intent();
-  fill.setClassName("com.target.app", "com.target.app.internal.AdminActivity");
+  // supply action/data/extras the base lacks; setComponent(...) only when the 0x8 bit was decoded
+  fill.setAction("zzq4hd2k9pq.ACTION"); fill.putExtra("marker", "zzq4hd2k9pq");
   pi.send(ctx, 0, fill);      // executes as the creator
   ```
-- **Proof:** The victim's non-exported activity on top of the stack —
-  `adb shell dumpsys activity activities | grep AdminActivity` — plus the victim's own logs showing the
-  action performed under its UID.
+- **Proof:** The creator-side component running with your action/data/extra (its own log line or state
+  change) with the decoded creator flags quoted; a fill-in landing on a non-exported component
+  (`adb shell dumpsys activity activities | grep <internal activity>`) is a P1 only together with the
+  decoded 0x8 bit.
 - **Escalation:** -> D08 PendingIntent chapter for the full acquisition and fill-in matrix; -> D15 for
   the privileged backend action performed as the victim.
 - **Ruled out when:** Every `PendingIntent.get*` call site uses `FLAG_IMMUTABLE`, or every `FLAG_MUTABLE`
-  site constructs its base intent with an explicit `setComponent`/`setClassName` in the same method from
-  a literal class reference. Enumerate the call sites and record the flag and the base-intent shape for
-  each.
+  site has an explicit component, no `FILL_IN_*` bits in the decoded flags, and a receiving component
+  that ignores action/data/extras arriving through the PI. List each site with its decoded flags and
+  base-intent shape.
 
 ### D22-013 · `adb backup` excluded at targetSdk 31 — and the `android:debuggable` escape hatch
 
@@ -623,10 +689,11 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   is proof the release build shipped debuggable, which additionally hands you `run-as` and JDWP.
 - **How:**
   ```bash
-  aapt2 dump badging base.apk | grep -i debuggable        # 'application-debuggable'
+  aapt2 dump badging "$E/apk/base.apk" | grep -i debuggable        # 'application-debuggable'
   adb shell dumpsys package com.target.app | grep -i DEBUGGABLE
-  adb backup -f /tmp/b.ab -noapk com.target.app && ls -l /tmp/b.ab
-  dd if=/tmp/b.ab bs=24 skip=1 2>/dev/null | zlib-flate -uncompress | tar tvf - | head -40
+  adb backup -f "$E/logs/b.ab" -noapk com.target.app && ls -l "$E/logs/b.ab"
+  dd if="$E/logs/b.ab" bs=24 skip=1 2>/dev/null | python3 -c 'import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read()))' | tar tvf - | head -40
+  # an encrypted .ab (the user set a backup password) needs android-backup-extractor instead
   adb shell run-as com.target.app ls -la /data/data/com.target.app    # succeeds only if debuggable
   ```
 - **Proof:** `application-debuggable` in the badging output, plus a non-trivial `.ab` whose extracted tar
@@ -657,10 +724,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   transfer, which varies by manufacturer.
 - **How:**
   ```bash
-  grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' out/AndroidManifest.merged.xml
-  cat out/res/xml/data_extraction_rules.xml out/res/xml/backup_rules.xml 2>/dev/null
-  grep -nE 'disableIfNoEncryptionCapabilities|requireFlags|clientSideEncryption|deviceToDeviceTransfer' out/res/xml/*.xml
-  grep -rnE 'FLAG_CLIENT_SIDE_ENCRYPTION_ENABLED|FLAG_DEVICE_TO_DEVICE_TRANSFER|onFullBackup|onRestoreFinished|BackupAgent' out/sources/
+  grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' "$DEC/AndroidManifest.merged.xml"
+  cat "$DEC"/apktool/res/xml/data_extraction_rules.xml "$DEC"/apktool/res/xml/backup_rules.xml 2>/dev/null
+  grep -nE 'disableIfNoEncryptionCapabilities|requireFlags|clientSideEncryption|deviceToDeviceTransfer' "$DEC"/apktool/res/xml/*.xml
+  grep -rnE 'FLAG_CLIENT_SIDE_ENCRYPTION_ENABLED|FLAG_DEVICE_TO_DEVICE_TRANSFER|onFullBackup|onRestoreFinished|BackupAgent' "$DEC/jadx/sources/"
   ```
   Then locate the secret in the file the rules claim to protect:
   ```bash
@@ -682,7 +749,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | targetSdk >= 31 |
 | **Requires** | targetsdk>=31, push |
@@ -696,8 +763,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   ```bash
   adb logcat -d | grep -i 'Indirect notification activity start (trampoline) from'
   adb shell am compat enable NOTIFICATION_TRAMPOLINE_BLOCK com.target.app
-  grep -rn 'setContentIntent(' out/sources/ -A4
-  grep -rn 'setContentIntent(' out/sources/ -B6 | grep -n 'FLAG_MUTABLE'
+  grep -rn 'setContentIntent(' "$DEC/jadx/sources/" -A4
+  grep -rn 'setContentIntent(' "$DEC/jadx/sources/" -B6 | grep -n 'FLAG_MUTABLE'
   ```
 - **Proof:** On a low-target build, the trampoline logcat string. On the modern build, a
   `setContentIntent` PendingIntent that is `FLAG_MUTABLE` or whose target activity is a redirector
@@ -714,9 +781,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **Severity ceiling** | Low |
 | **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) — must chain to be reportable |
 | **Attacker** | AM-04 (overlay app holding `SYSTEM_ALERT_WINDOW`) |
-| **Applies to** | device API >= 31 for the block; `setHideOverlayWindows`/`HIDE_OVERLAY_WINDOWS` available API 31+; `android:accessibilityDataSensitive` from Android 16 |
+| **Applies to** | device API >= 31 for the block; `setHideOverlayWindows`/`HIDE_OVERLAY_WINDOWS` available API 31+; `android:accessibilityDataSensitive` / `View.setAccessibilityDataSensitive()` from Android 14 (API 34) |
 | **Requires** | api>=31 |
-| **Maps to** | MASTG-TEST-0340 (References to Overlay Attack Protections); `developer.android.com/.../tapjacking` (background custom toasts blocked at Android 11/API 30; toast-burst mitigated at Android 12/API 31; touches from a non-trusted overlay of another UID blocked for full occlusion at API 31 with the opacity >= 0.8 caveat; `Window.setHideOverlayWindows(true)` API 31+; `android:accessibilityDataSensitive` Android 16) |
+| **Maps to** | MASTG-TEST-0340 (References to Overlay Attack Protections); `developer.android.com/.../tapjacking` (background custom toasts blocked at Android 11/API 30; toast-burst mitigated at Android 12/API 31; touches from a non-trusted overlay of another UID blocked for full occlusion at API 31 with the opacity >= 0.8 caveat; `Window.setHideOverlayWindows(true)` API 31+; `android:accessibilityDataSensitive` (API 34; `ACCESSIBILITY_DATA_SENSITIVE_YES` hides the view from non-accessibility-tool services)) |
 
 - **Test:** Android 12 drops touches that pass through another UID's overlay window above the documented
   opacity threshold, which kills the classic tapjacking PoC on modern devices. Two things remain
@@ -725,7 +792,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   control, the app has to call it.
 - **How:**
   ```bash
-  grep -rnE 'setHideOverlayWindows|HIDE_OVERLAY_WINDOWS|setFilterTouchesWhenObscured|filterTouchesWhenObscured|accessibilityDataSensitive' out/sources/ out/res/ out/AndroidManifest.merged.xml
+  grep -rnE 'setHideOverlayWindows|HIDE_OVERLAY_WINDOWS|setFilterTouchesWhenObscured|filterTouchesWhenObscured|accessibilityDataSensitive' "$DEC/jadx/sources/" "$DEC/apktool/res/" "$DEC/AndroidManifest.merged.xml"
   adb shell am compat enable  BLOCK_UNTRUSTED_TOUCHES com.attacker.overlay
   adb shell am compat disable BLOCK_UNTRUSTED_TOUCHES com.attacker.overlay
   adb logcat -d | grep -E 'Untrusted touch due to occlusion by'
@@ -746,9 +813,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insufficient_entropy.initialization_vector_reuse` (P5) for the GCM-nonce case standalone; `cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive` (P3) where the restored parameters break the primitive |
 | **Attacker** | AM-08 / AM-09 (whoever can obtain two ciphertexts under the reused nonce) |
-| **Applies to** | Android 12+ (API 31); BouncyCastle JCA provider deprecated at API 28 and removed at API 31; `Crypto` provider deprecated API 24, removed API 28; specifying a provider in `getInstance` fails for apps targeting API 28+ |
+| **Applies to** | Android 12+ (API 31); BouncyCastle JCA provider deprecated at API 28 and removed at API 31; `Crypto` provider deprecated API 24 and removed at targetSdk 28 (`getInstance(alg, "Crypto")` throws `NoSuchProviderException`); `getInstance(alg, "BC")` still resolves to whatever BC provider is registered — the platform's residual one below 31, or the app's bundled one at any level |
 | **Requires** | api>=31 |
-| **Maps to** | MASTG-TEST-0312 (References to Explicit Security Provider in Cryptographic APIs), MASWE-0046 (Use of Deprecated APIs or Functionality — CWE-327, CWE-477, CWE-522), MASTG-KNOW-0046 (BouncyCastle KeyStore); `about/versions/12/behavior-changes-all` (BouncyCastle removed in favour of Conscrypt; 512-bit AES unsupported; invalid `KeyGenerator` key sizes rejected; "GCM ciphers initialized with non-12-byte sizes" rejected); `risks/broken-cryptographic-algorithm` |
+| **Maps to** | MASTG-TEST-0312 (References to Explicit Security Provider in Cryptographic APIs), MASWE-0046 (Use of Deprecated APIs or Functionality — CWE-327, CWE-477, CWE-522), MASTG-KNOW-0046 (BouncyCastle KeyStore; deprecated upstream); `about/versions/12/behavior-changes-all` (BouncyCastle removed in favour of Conscrypt; 512-bit AES unsupported; invalid `KeyGenerator` key sizes rejected; "GCM ciphers initialized with non-12-byte sizes" rejected); `risks/broken-cryptographic-algorithm` |
 
 - **Test:** Android 12 removed the BouncyCastle implementations in favour of Conscrypt, which rejected
   three things apps were doing: 512-bit AES keys, invalid `KeyGenerator` key sizes, and GCM ciphers
@@ -758,10 +825,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   deprecation.
 - **How:**
   ```bash
-  unzip -l base.apk | grep -iE 'bcprov|bouncycastle'
-  grep -rnE 'Security\.insertProviderAt|Security\.addProvider|BouncyCastleProvider|getInstance\([^)]*,\s*"BC"\)|"BC"' out/sources/
-  grep -rnE 'GCMParameterSpec|IvParameterSpec' out/sources/ -A2 | grep -nE 'new byte\[(8|16|32)\]'
-  grep -rnE 'KeyStore\.getInstance\("BKS"\)|KeyGenerator\.getInstance\(' out/sources/ -A3
+  unzip -l "$E/apk/base.apk" | grep -iE 'bcprov|bouncycastle'
+  grep -rnE 'Security\.insertProviderAt|Security\.addProvider|BouncyCastleProvider|getInstance\([^)]*,\s*"BC"\)|"BC"' "$DEC/jadx/sources/"
+  grep -rnE 'GCMParameterSpec|IvParameterSpec' "$DEC/jadx/sources/" -A2 | grep -nE 'new byte\[(8|16|32)\]'
+  grep -rnE 'KeyStore\.getInstance\("BKS"\)|KeyGenerator\.getInstance\(' "$DEC/jadx/sources/" -A3
   ```
 - **Proof:** A bundled BC provider inserted at position 1 (`Security.insertProviderAt(new
   BouncyCastleProvider(), 1)`) plus a GCM `init` with a 16-byte IV, or an AES key size the platform
@@ -770,7 +837,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **Escalation:** -> D12 for the ciphertext-integrity consequence; -> D11 if a BKS keystore holds the key
   that protects stored user data (the key is software-protected and extractable from the app's files).
 - **Ruled out when:** No `bcprov` in the APK, no `Security.addProvider`/`insertProviderAt` call site, and
-  every `Cipher.getInstance` uses the two-argument form without a provider name. Record the grep counts.
+  no `getInstance(…, "BC")` / `"Crypto"` call site resolves to a bundled provider — grep the two-argument
+  form and record which provider class answers at runtime (`Security.getProvider("BC").getClass()` in a
+  Frida one-liner). Record the grep counts.
 
 ### D22-018 · App hibernation and permission auto-reset — a security control that decays
 
@@ -790,12 +859,14 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   after revocation rather than caching the earlier grant.
 - **How:**
   ```bash
-  adb shell cmd package set-app-hibernation-state com.target.app true 2>/dev/null
+  adb -s "$SERIAL" shell cmd app_hibernation set-state com.target.app true
+  adb -s "$SERIAL" shell cmd app_hibernation get-state com.target.app          # must print true before the re-arm test
+  adb -s "$SERIAL" shell cmd app_hibernation set-state --global com.target.app true   # all-users variant
   adb shell appops get com.target.app
   adb shell dumpsys package com.target.app | sed -n '/runtime permissions/,/^$/p'
   adb shell pm revoke com.target.app android.permission.CAMERA     # while the app is in the foreground
   # then retry the permission-gated feature without restarting the app
-  grep -rnE 'checkSelfPermission|shouldShowRequestPermissionRationale|onRequestPermissionsResult|isAutoRevokeWhitelisted|REQUEST_IGNORE_BATTERY_OPTIMIZATIONS' out/sources/
+  grep -rnE 'checkSelfPermission|shouldShowRequestPermissionRationale|onRequestPermissionsResult|isAutoRevokeWhitelisted|REQUEST_IGNORE_BATTERY_OPTIMIZATIONS' "$DEC/jadx/sources/"
   ```
 - **Proof:** The app performing the permission-gated action after revocation (it cached the grant), or
   the security function silently absent after hibernation with no re-arm on next launch.
@@ -825,7 +896,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   ```bash
   adb shell pm revoke com.target.app android.permission.POST_NOTIFICATIONS
   adb shell dumpsys package com.target.app | grep -i POST_NOTIFICATIONS
-  grep -rnE 'areNotificationsEnabled|POST_NOTIFICATIONS|NotificationManagerCompat|createNotificationChannel' out/sources/
+  grep -rnE 'areNotificationsEnabled|POST_NOTIFICATIONS|NotificationManagerCompat|createNotificationChannel' "$DEC/jadx/sources/"
   ```
   Then perform each sensitive account action (password change, email change, new-device sign-in, large
   transfer) with the permission denied and check for an in-app inbox entry, an email, or an SMS.
@@ -843,7 +914,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.privilege_escalation` (null) — a permission decision circumvented |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) — a permission decision circumvented |
 | **Attacker** | AM-08 (an SDK that adds the scaffolding) or the app itself against its own user |
 | **Applies to** | Android 13+ for the exemption; Android 14+ for the `CallStyle` exception to the dismissable-ongoing-notification rule |
 | **Requires** | api>=33, push |
@@ -855,8 +926,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   those notifications are also exempt from the Android 14 dismissable rule, so they are persistent.
 - **How:**
   ```bash
-  grep -nE 'MANAGE_OWN_CALLS|ConnectionService|registerPhoneAccount|CallStyle|MediaSession' out/AndroidManifest.merged.xml
-  grep -rnE 'MANAGE_OWN_CALLS|ConnectionService|registerPhoneAccount|Notification\.CallStyle|MediaSessionCompat' out/sources/
+  grep -nE 'MANAGE_OWN_CALLS|ConnectionService|registerPhoneAccount|CallStyle|MediaSession' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'MANAGE_OWN_CALLS|ConnectionService|registerPhoneAccount|Notification\.CallStyle|MediaSessionCompat' "$DEC/jadx/sources/"
   adb shell dumpsys telecom | grep -i 'phone account\|com.target.app'
   adb shell pm revoke com.target.app android.permission.POST_NOTIFICATIONS
   # then trigger the app's notification path and watch the drawer
@@ -885,8 +956,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   default on modern ones.
 - **How:**
   ```bash
-  grep -nE 'READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED|READ_EXTERNAL_STORAGE' out/AndroidManifest.merged.xml
-  grep -rnE 'ACTION_PICK_IMAGES|PickVisualMedia|PickMultipleVisualMedia|isPhotoPickerAvailable' out/sources/
+  grep -nE 'READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED|READ_EXTERNAL_STORAGE' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'ACTION_PICK_IMAGES|PickVisualMedia|PickMultipleVisualMedia|isPhotoPickerAvailable' "$DEC/jadx/sources/"
   adb shell pm revoke com.target.app android.permission.READ_MEDIA_IMAGES
   # then use the gallery feature: does it still work through the picker?
   ```
@@ -913,7 +984,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-05 |
 | **Applies to** | targetSdk >= 34 |
 | **Requires** | targetsdk>=34 |
@@ -925,7 +996,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   therefore every URI is trusted") misbehaves in that mode.
 - **How:**
   ```bash
-  grep -n 'READ_MEDIA_VISUAL_USER_SELECTED' out/AndroidManifest.merged.xml
+  grep -n 'READ_MEDIA_VISUAL_USER_SELECTED' "$DEC/AndroidManifest.merged.xml"
   adb shell pm grant com.target.app android.permission.READ_MEDIA_VISUAL_USER_SELECTED
   # in the app: choose "Select photos" for a subset, then exercise the gallery feature
   adb shell dumpsys activity permissions | grep -A6 com.target.app
@@ -961,7 +1032,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell settings put secure enabled_accessibility_services com.attacker/.A11y
   adb shell settings get secure enabled_accessibility_services
   # and the app-side defence:
-  grep -rnE 'ACCESSIBILITY_ENFORCEMENT_DEFAULT_DENY|accessibilityDataSensitive|AccessibilityManager|getEnabledAccessibilityServiceList' out/sources/ out/res/
+  grep -rnE 'ACCESSIBILITY_ENFORCEMENT_DEFAULT_DENY|accessibilityDataSensitive|AccessibilityManager|getEnabledAccessibilityServiceList' "$DEC/jadx/sources/" "$DEC/apktool/res/"
   ```
   Note that `adb shell settings put secure` succeeds where the Settings UI would refuse — that is a
   shell-UID result, not an attacker result. Reproduce through the UI on a real device for the report.
@@ -978,28 +1049,30 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null); `insecure_os_firmware.shared_credentials_on_storage` (P3) where the pooled data is credential material |
+| **VRT** | `broken_access_control.privilege_escalation` (varies); `insecure_os_firmware.shared_credentials_on_storage` (P3) where the pooled data is credential material |
 | **Attacker** | AM-08 (compromise of the weakest member of the shared UID) |
 | **Applies to** | all devices; the migration attribute only takes effect for installs on API 33+ |
+| **Requires** | — |
 | **Maps to** | `about/versions/13/behavior-changes-all` (shared user ID deprecation, `android:sharedUserMaxSdkVersion="32"`, "Don't remove `android:sharedUserId` — this breaks updates") |
 
-- **Test:** Shared user ID is deprecated and the documented migration is
+- **Skip when:** D03-038 already walked — write `as D03-038`.
+- **Test:** **Cross-reference:** the shared-UID cross-read and its severity are owned by D03-038 (and D02-018 for the signing side) — run them there; this item keeps only the API-33 severance gate. Shared user ID is deprecated and the documented migration is
   `android:sharedUserMaxSdkVersion="32"` — which severs the pooling for installs on API 33+ while
   keeping updates working on older devices. An app family still pooling into one UID on modern devices
   shares `/data/data`, the Keystore namespace, and every granted permission across every member.
 - **How:**
   ```bash
-  grep -nE 'sharedUserId|sharedUserMaxSdkVersion' out/AndroidManifest.merged.xml
+  grep -nE 'sharedUserId|sharedUserMaxSdkVersion' "$DEC/AndroidManifest.merged.xml"
   adb shell dumpsys package com.target.app | grep -E 'userId=|sharedUser'
-  adb shell "ps -A | grep com.target"        # two packages, one uid
-  # on a rooted image, prove the cross-read:
-  adb shell run-as com.target.app ls -la /data/data/com.other.member/shared_prefs/ 2>&1 | head
+  # record whether this install is an API 33+ fresh install (pooling severed) or an upgrade / older
+  # device (pooling live); the cross-read itself is D03-038
   ```
 - **Proof:** `dumpsys package` showing the same `userId=` for two packages, plus a read of the sibling's
   `shared_prefs` from the target's context, plus the identity of the weaker sibling (a companion app, a
   demo build, a third-party-maintained package).
 - **Escalation:** -> D11/D12 — same UID means the same Keystore namespace, so the sibling's
   Keystore-wrapped blobs are decryptable from the weaker member.
+  The cross-read and the weakest-member argument live in D03-038; the update-identity side in D02-018.
 - **Ruled out when:** No `sharedUserId` in the merged manifest, **or** it is present with
   `sharedUserMaxSdkVersion="32"` and `dumpsys package` shows a distinct `userId=` on an API 33+ install.
   Quote both lines.
@@ -1009,9 +1082,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null) when a signature-protected custom permission resolves to the pre-rotation key |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) when a signature-protected custom permission resolves to the pre-rotation key |
 | **Attacker** | AM-03 on a pre-Android-13 device |
 | **Applies to** | Android 13+ signing with v3.1; the split-brain effect lands on Android 12L and lower |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0224 (Usage of Insecure APK Signature Version); `about/versions/13/features` (APK Signature Scheme v3.1, `apksigner --rotation-min-sdk-version`, "backward compatible with Android 12L and lower") |
 
 - **Test:** Android 13 added v3.1, which lets a developer rotate signing keys **only for SDK versions at
@@ -1021,11 +1095,11 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   different devices.
 - **How:**
   ```bash
-  apksigner verify --verbose --print-certs base.apk
-  apksigner verify --min-sdk-version 24 --max-sdk-version 32 --print-certs base.apk
-  apksigner verify --min-sdk-version 33 --print-certs base.apk
-  grep -nE 'protectionLevel="signature|<permission ' out/AndroidManifest.merged.xml
-  grep -rnE 'checkSignatures|getPackageInfo\(.*GET_SIGNING_CERTIFICATES|signingInfo' out/sources/
+  apksigner verify --verbose --print-certs "$E/apk/base.apk"
+  apksigner verify --min-sdk-version 24 --max-sdk-version 32 --print-certs "$E/apk/base.apk"
+  apksigner verify --min-sdk-version 33 --print-certs "$E/apk/base.apk"
+  grep -nE 'protectionLevel="signature|<permission ' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'checkSignatures|getPackageInfo\(.*GET_SIGNING_CERTIFICATES|signingInfo' "$DEC/jadx/sources/"
   ```
 - **Proof:** Two different certificate digests printed for the two SDK ranges, paired with a
   `signature`-level permission or a peer-signature check that the pre-rotation key satisfies on the
@@ -1044,6 +1118,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the resulting file; the chain target is `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the extractable key protects a live token |
 | **Attacker** | AM-11 / AM-12 (recovering the key after the downgrade) |
 | **Applies to** | Android 13+ (API 33) for the structured errors; the anti-pattern exists at every level |
+| **Requires** | — |
 | **Maps to** | `about/versions/13/features` (Keystore/KeyMint error hierarchy under `java.security.ProviderException`; `KeyStoreException` error codes indicating whether errors are retryable); MASTG-TEST-0307; MASVS-CRYPTO |
 
 - **Test:** Android 13 added structured Keystore/KeyMint error reporting, including whether the failure
@@ -1051,8 +1126,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   transient KeyMint error then permanently downgrades the app to a non-hardware-backed, extractable key.
 - **How:**
   ```bash
-  grep -rnE 'KeyStoreException|ProviderException|KeyGenParameterSpec|KeyGenerator\.getInstance' out/sources/ -A10 | grep -nE 'catch|fallback|software|SharedPreferences'
-  grep -rnE 'setIsStrongBoxBacked|setUnlockedDeviceRequired|setUserAuthenticationRequired' out/sources/
+  grep -rnE 'KeyStoreException|ProviderException|KeyGenParameterSpec|KeyGenerator\.getInstance' "$DEC/jadx/sources/" -A10 | grep -nE 'catch|fallback|software|SharedPreferences'
+  grep -rnE 'setIsStrongBoxBacked|setUnlockedDeviceRequired|setUserAuthenticationRequired' "$DEC/jadx/sources/"
   ```
   Force the failure once and observe the branch:
   ```javascript
@@ -1067,8 +1142,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   });
   ```
 - **Proof:** After a single induced failure, a raw key material blob present in `shared_prefs` or the
-  files directory (`adb shell run-as com.target.app grep -rl . shared_prefs files | xargs -I{} sh -c
-  'echo {}; head -c 200 {}'`) and still in use on subsequent launches.
+  files directory (`adb -s "$SERIAL" shell "run-as com.target.app sh -c 'for f in shared_prefs/* files/*; do echo \"== \$f\"; head -c 200 \"\$f\" | xxd | head -5; done'"` — everything after `run-as` runs on the device; `xxd` shows raw key bytes `cat` would hide) and still in use on subsequent launches.
 - **Escalation:** -> D11 key extraction; -> D12 for the crypto consequence; -> D13 if the key protects a
   session token.
 - **Ruled out when:** Every `AndroidKeyStore` call site either propagates the exception to the user or
@@ -1096,7 +1170,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell dumpsys activity services com.target.app | grep -i 'foreground\|fgType'
   # on the device: swipe the FGS notification away; use the Task Manager "Stop" affordance
   adb shell dumpsys activity processes | grep -A2 com.target.app
-  grep -rnE 'onMessageReceived|RemoteMessage|getPriority\(\)|PRIORITY_HIGH' out/sources/ -A6
+  grep -rnE 'onMessageReceived|RemoteMessage|getPriority\(\)|PRIORITY_HIGH' "$DEC/jadx/sources/" -A6
   adb logcat -d | grep -iE 'ForegroundServiceStartNotAllowedException|FirebaseMessaging|priority'
   ```
   Send several high-priority messages that produce no notification, then measure delivery latency of the
@@ -1115,7 +1189,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) when an unprivileged app can start the typed FGS |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) when an unprivileged app can start the typed FGS |
 | **Attacker** | AM-03 |
 | **Applies to** | targetSdk >= 34 (Android 14+) |
 | **Requires** | targetsdk>=34 |
@@ -1127,11 +1201,11 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   while backgrounded. Cross it against the exported/startable service set.
 - **How:**
   ```bash
-  grep -nB4 'foregroundServiceType' out/AndroidManifest.merged.xml
-  grep -nE 'FOREGROUND_SERVICE_(CAMERA|MICROPHONE|LOCATION|HEALTH|MEDIA_PROJECTION|CONNECTED_DEVICE|DATA_SYNC|MEDIA_PROCESSING|REMOTE_MESSAGING|SPECIAL_USE|SYSTEM_EXEMPTED)' out/AndroidManifest.merged.xml
+  grep -nB4 'foregroundServiceType' "$DEC/AndroidManifest.merged.xml"
+  grep -nE 'FOREGROUND_SERVICE_(CAMERA|MICROPHONE|LOCATION|HEALTH|MEDIA_PROJECTION|CONNECTED_DEVICE|DATA_SYNC|MEDIA_PROCESSING|REMOTE_MESSAGING|SPECIAL_USE|SYSTEM_EXEMPTED)' "$DEC/AndroidManifest.merged.xml"
   adb shell dumpsys activity services com.target.app | grep -iE 'foreground|fgType'
   # attribute each type to a component, and flag third-party namespaces:
-  grep -n '<service' out/AndroidManifest.merged.xml | grep -v 'com\.target\.app'
+  grep -n '<service' "$DEC/AndroidManifest.merged.xml" | grep -v 'com\.target\.app'
   # then try to start each from the shell UID:
   adb shell am start-foreground-service -n com.target.app/.TheService
   ```
@@ -1150,7 +1224,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | targetSdk >= 34 |
 | **Requires** | targetsdk>=34 |
@@ -1162,9 +1236,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   background execution outside the typed permission model.
 - **How:**
   ```bash
-  grep -nA6 'foregroundServiceType="specialUse"' out/AndroidManifest.merged.xml
-  grep -n 'PROPERTY_SPECIAL_USE_FGS_SUBTYPE' out/AndroidManifest.merged.xml
-  grep -n 'foregroundServiceType="systemExempted"' out/AndroidManifest.merged.xml
+  grep -nA6 'foregroundServiceType="specialUse"' "$DEC/AndroidManifest.merged.xml"
+  grep -n 'PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$DEC/AndroidManifest.merged.xml"
+  grep -n 'foregroundServiceType="systemExempted"' "$DEC/AndroidManifest.merged.xml"
   adb shell dumpsys activity services com.target.app | grep -iE 'fgType|specialUse|systemExempted'
   ```
   Then read the service class and record what it actually does for the duration it stays foreground.
@@ -1179,7 +1253,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | the flags exist from API 33; declaring one is mandatory for apps targeting API 34+ |
 | **Requires** | targetsdk>=34 |
@@ -1191,7 +1265,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   decision. Enumerate them at runtime, not statically.
 - **How:**
   ```bash
-  grep -rnE 'registerReceiver\(' out/sources/ -A4 | grep -nE 'RECEIVER_EXPORTED|RECEIVER_NOT_EXPORTED'
+  grep -rnE 'registerReceiver\(' "$DEC/jadx/sources/" -A4 | grep -nE 'RECEIVER_EXPORTED|RECEIVER_NOT_EXPORTED'
   adb shell dumpsys activity broadcasts | grep -A8 com.target.app | head -60
   # then fire each action from the shell UID:
   adb shell am broadcast -a com.target.app.ACTION_INTERNAL --es payload x
@@ -1200,12 +1274,14 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   Runtime enumeration is more reliable than the grep:
   ```javascript
   Java.perform(function () {
-    var C = Java.use('android.content.ContextWrapper');
-    C.registerReceiver.overload('android.content.BroadcastReceiver','android.content.IntentFilter','java.lang.String','android.os.Handler','int')
-      .implementation = function (r, f, p, h, flags) {
-        console.log('[recv] ' + r.$className + ' flags=' + flags + ' perm=' + p);
-        return this.registerReceiver(r, f, p, h, flags);
-      };
+    // every registerReceiver overload (and ContextCompat below API 33) funnels into ContextImpl.registerReceiverInternal
+    var CI = Java.use('android.app.ContextImpl');
+    CI.registerReceiverInternal.implementation = function (r, userId, f, perm, h, ctx, flags) {
+      var acts = []; try { var it = f.actionsIterator(); while (it.hasNext()) acts.push(it.next()); } catch (e) {}
+      console.log('[recv] ' + (r ? r.$className : 'null') + ' flags=0x' + flags.toString(16) +
+        ' exported=' + ((flags & 2) ? 'YES' : (flags & 4) ? 'no' : 'UNSET') + ' perm=' + perm + ' actions=' + acts.join(','));
+      return this.registerReceiverInternal(r, userId, f, perm, h, ctx, flags);   // RECEIVER_EXPORTED=0x2, RECEIVER_NOT_EXPORTED=0x4
+    };
   });
   ```
 - **Proof:** A receiver registered with `RECEIVER_EXPORTED` and no `broadcastPermission`, whose
@@ -1220,7 +1296,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | targetSdk >= 34 |
 | **Requires** | targetsdk>=34 |
@@ -1234,9 +1310,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **How:**
   ```bash
   # implicit sends that were never made explicit:
-  grep -rnE 'new Intent\("|Intent\("[a-z]+\.[a-zA-Z._]+"' out/sources/ -A3 | grep -v 'setPackage\|setComponent\|setClassName\|setClass'
+  grep -rnE 'new Intent\("|Intent\("[a-z]+\.[a-zA-Z._]+"' "$DEC/jadx/sources/" -A3 | grep -v 'setPackage\|setComponent\|setClassName\|setClass'
   # and the components newly exported to absorb them:
-  grep -nB3 -A8 'android:exported="true"' out/AndroidManifest.merged.xml | grep -B6 '<action android:name="com\.target'
+  grep -nB3 -A8 'android:exported="true"' "$DEC/AndroidManifest.merged.xml" | grep -B6 '<action android:name="com\.target'
   git log --oneline -S 'android:exported="true"' -- '*AndroidManifest.xml'   # if source is available
   adb logcat -d | grep -i ActivityNotFoundException
   ```
@@ -1253,33 +1329,36 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 via D08 when the reachable internal component performs an authenticated action |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); P1 via D08 when the reachable internal component performs an authenticated action |
 | **Attacker** | AM-03 |
 | **Applies to** | targetSdk >= 34 |
 | **Requires** | targetsdk>=34 |
 | **Maps to** | `about/versions/14/behavior-changes-14` (creating a mutable `PendingIntent` whose intent has no component or package throws; the documented "SUCCEEDS" example is `setPackage(context.packageName)`); `privacy-and-security/risks/pending-intent`; MASTG-TEST-0381 |
 
 - **Test:** Android 14 made a blank-base mutable `PendingIntent` throw, and the check is satisfied by
-  `setPackage(context.packageName)` alone. That narrows the target set to the victim's own components —
-  it does not close the class, because the **component** is still fillable and the victim's non-exported
-  internal components are exactly what you want.
+  `setPackage(context.packageName)` alone. That narrows resolution to the victim's package, but what the
+  holder can still supply is governed by the creator's `FILL_IN` bits (D22-012): action, data, categories
+  and clipData when the base lacks them, merged extras and OR-ed flags. The reachable components are
+  those the package-only implicit base resolves to — the victim's **exported** filtered components —
+  unless the decoded flags carry `FILL_IN_COMPONENT` (0x8).
 - **How:**
   ```bash
-  grep -rn -B4 -A8 'FLAG_MUTABLE' out/sources/ | grep -nE 'setPackage\(' 
-  grep -rnE 'FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' out/sources/     # the explicit opt-out, if present
+  grep -rn -B4 -A8 'FLAG_MUTABLE' "$DEC/jadx/sources/" | grep -nE 'setPackage\(|FILL_IN_|[0-9]{7,}'
+  grep -rnE 'FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' "$DEC/jadx/sources/"     # the explicit opt-out of the 34 check
   ```
-  Then fill in a `ComponentName` **inside the victim package**:
+  Then supply the victim filter's action plus your data/extras, and add a `ComponentName` only when the
+  0x8 bit was decoded:
   ```java
-  Intent fill = new Intent();
-  fill.setComponent(new ComponentName("com.target.app", "com.target.app.internal.SettingsActivity"));
+  Intent fill = new Intent("<victim filter action>").putExtra("marker", "zzq4hd2k9pq");
   pi.send(ctx, 0, fill);
   ```
-- **Proof:** The victim's non-exported internal component on top of the task stack
-  (`adb shell dumpsys activity activities | grep -B2 -A8 com.target.app`), started from an attacker
-  process that has no permission to reach it directly.
+- **Proof:** A victim component executing your action/data/extra under the victim UID
+  (`adb shell dumpsys activity activities | grep -B2 -A8 com.target.app`), with the decoded flag byte
+  quoted; the non-exported case additionally shows the 0x8 bit.
 - **Escalation:** -> D08 for the full acquisition and fill-in work; -> D15 for the backend action.
-- **Ruled out when:** Every mutable `PendingIntent` base intent sets an explicit component, or no
-  `FLAG_MUTABLE` exists in the app. Record the call sites and their base-intent shapes.
+- **Ruled out when:** Every mutable `PendingIntent` base sets an explicit component, or the decoded flags
+  have no `FILL_IN` bits and the package-only base resolves only to components that validate
+  action/data/extras, or no `FLAG_MUTABLE` exists. Record call sites, decoded flags and the resolution set.
 
 ### D22-033 · Dynamic-code-load read-only mandate at targetSdk 34 — and the paths apps moved to
 
@@ -1289,6 +1368,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when you execute code in the app's process; local variant rated on the write primitive |
 | **Attacker** | AM-03 (with a co-writable path) / AM-09 (malicious CDN serving the payload) |
 | **Applies to** | targetSdk >= 34 for the enforcement; the writable-code-path class exists at every level. Android 17 / targetSdk 37 extends read-only enforcement to `System.load()` native libraries |
+| **Requires** | — |
 | **Maps to** | `about/versions/14/behavior-changes-14` ("All dynamically-loaded files must be marked read-only before content is written"; the documented `jar.setReadOnly()`-before-write pattern); `privacy-and-security/risks/dynamic-code-loading`; MASVS-CODE |
 
 - **Test:** Android 14 requires DEX/JAR/APK files to be `setReadOnly()` **before** content is written,
@@ -1297,8 +1377,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   in-memory loader. Audit whatever path they moved to, because the platform check no longer covers it.
 - **How:**
   ```bash
-  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|DelegateLastClassLoader|setReadOnly\(\)|optimizedDirectory' out/sources/ -B6 -A10
-  grep -rnE 'System\.load\(|System\.loadLibrary\(|dlopen' out/sources/
+  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|DelegateLastClassLoader|setReadOnly\(\)|optimizedDirectory' "$DEC/jadx/sources/" -B6 -A10
+  grep -rnE 'System\.load\(|System\.loadLibrary\(|dlopen' "$DEC/jadx/sources/"
   adb shell run-as com.target.app ls -l files/*.jar files/*.dex app_dex/ 2>/dev/null
   adb logcat -d | grep -iE 'is not read-only|dex file.*not.*read-only'
   ```
@@ -1326,6 +1406,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the write lands on a loadable code path; `server_side_injection.file_inclusion.local` (P1) for the read variant; otherwise rated on the file written |
 | **Attacker** | AM-02 (a downloaded archive) / AM-03 |
 | **Applies to** | targetSdk >= 34 for the default protection; the class is universal below it |
+| **Requires** | — |
 | **Maps to** | `about/versions/14/behavior-changes-14` (`ZipFile` and `ZipInputStream.getNextEntry()` throw `ZipException` for entries containing `..` or starting with `/`; opt-out `dalvik.system.ZipPathValidator.clearCallback()`); `privacy-and-security/risks/zip-path-traversal`; `privacy-and-security/risks/path-traversal`; MASVS-STORAGE |
 
 - **Test:** The platform blocks zip-slip by default for targetSdk 34+ apps — and ships a documented
@@ -1333,8 +1414,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   for every archive the process ever opens. Its presence is the finding; the traversal is the proof.
 - **How:**
   ```bash
-  grep -rnE 'ZipPathValidator|clearCallback' out/sources/
-  grep -rnE 'ZipInputStream|ZipFile|getNextEntry|ZipEntry' out/sources/ -A8 | grep -nE 'getName\(\)|new File\(|FileOutputStream'
+  grep -rnE 'ZipPathValidator|clearCallback' "$DEC/jadx/sources/"
+  grep -rnE 'ZipInputStream|ZipFile|getNextEntry|ZipEntry' "$DEC/jadx/sources/" -A8 | grep -nE 'getName\(\)|new File\(|FileOutputStream'
   ```
   Build a traversal archive and feed it through the app's import/update path:
   ```bash
@@ -1381,12 +1462,22 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell ls /system/etc/security/cacerts | wc -l
   adb shell ls /apex/com.android.conscrypt/cacerts | wc -l
   adb shell ls -l /apex/ | grep conscrypt
-  # place the CA in both locations on a rooted google_apis image:
-  adb root && adb remount
-  adb push mitm.0 /system/etc/security/cacerts/
-  adb shell "mount -o rw,remount /apex/com.android.conscrypt && cp /system/etc/security/cacerts/mitm.0 /apex/com.android.conscrypt/cacerts/"
-  # then find which path the app itself reads:
-  frida-trace -U -f com.target.app -j '*!*cacert*' -j '*!*trust*'
+  # the APEX is a read-only dm-verity loop image: `remount` cannot write it. Use the tmpfs overlay plus
+  # per-namespace bind mount from D26-005 (redo after every reboot):
+  adb -s "$SERIAL" root && adb -s "$SERIAL" push mitm.0 /data/local/tmp/mitm.0
+  adb -s "$SERIAL" shell 'set -e
+  mkdir -p -m 700 /data/local/tmp/cacerts && mount -t tmpfs tmpfs /data/local/tmp/cacerts
+  cp /apex/com.android.conscrypt/cacerts/* /data/local/tmp/cacerts/ && cp /data/local/tmp/mitm.0 /data/local/tmp/cacerts/
+  chown root:root /data/local/tmp/cacerts/* && chmod 644 /data/local/tmp/cacerts/* && chcon u:object_r:system_security_cacerts_file:s0 /data/local/tmp/cacerts/*
+  mount --bind /data/local/tmp/cacerts /apex/com.android.conscrypt/cacerts
+  for z in $(pgrep -x zygote64; pgrep -x zygote); do
+    nsenter --mount=/proc/$z/ns/mnt -- mount --bind /data/local/tmp/cacerts /apex/com.android.conscrypt/cacerts
+    for p in $(pgrep -P $z); do nsenter --mount=/proc/$p/ns/mnt -- mount --bind /data/local/tmp/cacerts /apex/com.android.conscrypt/cacerts 2>/dev/null || true; done
+  done; ls /apex/com.android.conscrypt/cacerts | grep -c mitm'
+  # legacy /system copy on API 29+: adb disable-verity && adb reboot && adb root && adb remount (AVD started with -writable-system)
+  # then find which path the app itself reads - trust-store reads are native open/stat calls, so trace those, not Java:
+  frida-trace -D "$SERIAL" -f com.target.app -i 'open' -i 'openat' -i 'stat' -i 'lstat' -i 'access' 2>&1 | grep -E 'cacerts|conscrypt'
+  # or on a rooted image: strace -f -e trace=openat,stat,newfstatat -p <pid> 2>&1 | grep cacerts
   ```
 - **Proof:** For the RASP finding: a Frida/strace trace showing the app stats only
   `/system/etc/security/cacerts` while interception succeeds through the APEX copy — with the
@@ -1415,8 +1506,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   (a full PAN, a recovery phrase, a one-time code).
 - **How:**
   ```bash
-  grep -n 'DETECT_SCREEN_CAPTURE' out/AndroidManifest.merged.xml
-  grep -rnE 'registerScreenCaptureCallback|unregisterScreenCaptureCallback|addScreenRecordingCallback|SCREEN_RECORDING_STATE_VISIBLE|FLAG_SECURE|setContentSensitivity' out/sources/
+  grep -n 'DETECT_SCREEN_CAPTURE' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'registerScreenCaptureCallback|unregisterScreenCaptureCallback|addScreenRecordingCallback|SCREEN_RECORDING_STATE_VISIBLE|FLAG_SECURE|setContentSensitivity' "$DEC/jadx/sources/"
   # capture with the hardware combination on a real device, NOT with adb:
   adb shell input keyevent --longpress KEYCODE_POWER   # or the device's screenshot chord
   adb exec-out screencap -p > /tmp/shot.png            # <- proves nothing about the callback; see below
@@ -1436,7 +1527,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 / the app itself against its own user |
 | **Applies to** | targetSdk >= 34 |
 | **Requires** | targetsdk>=34 |
@@ -1448,9 +1539,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   what the user perceives as separate sessions.
 - **How:**
   ```bash
-  grep -rnE 'createScreenCaptureIntent|getMediaProjection|createVirtualDisplay|MediaProjection\.Callback|registerCallback' out/sources/
-  grep -n 'foregroundServiceType="mediaProjection"' out/AndroidManifest.merged.xml
-  grep -rnE 'AccessibilityService|BIND_ACCESSIBILITY_SERVICE' out/AndroidManifest.merged.xml out/sources/
+  grep -rnE 'createScreenCaptureIntent|getMediaProjection|createVirtualDisplay|MediaProjection\.Callback|registerCallback' "$DEC/jadx/sources/"
+  grep -n 'foregroundServiceType="mediaProjection"' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'AccessibilityService|BIND_ACCESSIBILITY_SERVICE' "$DEC/AndroidManifest.merged.xml" "$DEC/jadx/sources/"
   adb shell dumpsys media_projection
   adb logcat -d | grep -i 'SecurityException.*MediaProjection'
   ```
@@ -1467,7 +1558,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null) — a provenance-based authorisation decision bypassed |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) — a provenance-based authorisation decision bypassed |
 | **Attacker** | AM-03 (an app that places a file into shared media) |
 | **Applies to** | Android 14+, **all apps regardless of targetSdk** |
 | **Requires** | api>=34 |
@@ -1479,8 +1570,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   authorisation bypass introduced by a platform change the developer never noticed.
 - **How:**
   ```bash
-  grep -rnE 'OWNER_PACKAGE_NAME|MediaColumns\.OWNER' out/sources/ -B4 -A10
-  grep -n 'QUERY_ALL_PACKAGES' out/AndroidManifest.merged.xml
+  grep -rnE 'OWNER_PACKAGE_NAME|MediaColumns\.OWNER' "$DEC/jadx/sources/" -B4 -A10
+  grep -n 'QUERY_ALL_PACKAGES' "$DEC/AndroidManifest.merged.xml"
   ```
   Place a file from a third app, then log the column value the target actually reads:
   ```javascript
@@ -1507,7 +1598,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the data hand-off; `broken_access_control.privilege_escalation` (null) for an unpinned SDK identity |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the data hand-off; `broken_access_control.privilege_escalation` (varies) for an unpinned SDK identity |
 | **Attacker** | AM-08 malicious third-party SDK |
 | **Applies to** | Android 14+ for the SDK Runtime environment; Privacy Sandbox incorporated in Android 16 |
 | **Requires** | api>=34, ads-sdk |
@@ -1520,8 +1611,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   a real `certDigest`?
 - **How:**
   ```bash
-  grep -nA4 'uses-sdk-library' out/AndroidManifest.merged.xml      # certDigest present and non-placeholder?
-  grep -rnE 'SdkSandboxManager|loadSdk|SandboxedSdkProvider|SdkSandboxController|SdkSandboxActivityHandler' out/sources/
+  grep -nA4 'uses-sdk-library' "$DEC/AndroidManifest.merged.xml"      # certDigest present and non-placeholder?
+  grep -rnE 'SdkSandboxManager|loadSdk|SandboxedSdkProvider|SdkSandboxController|SdkSandboxActivityHandler' "$DEC/jadx/sources/"
   adb shell ps -A | grep sdk_sandbox
   adb shell dumpsys sdk_sandbox 2>/dev/null
   ```
@@ -1546,7 +1637,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-05 |
 | **Applies to** | Android 13+ (API 33) devices carrying the ad services extension |
 | **Requires** | api>=33, ads-sdk |
@@ -1559,8 +1650,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   live on a newer one.
 - **How:**
   ```bash
-  grep -rnE 'AD_SERVICES|android\.adservices|adservices' out/sources/ out/AndroidManifest.merged.xml
-  grep -n 'minExtensionVersion' out/AndroidManifest.merged.xml
+  grep -rnE 'AD_SERVICES|android\.adservices|adservices' "$DEC/jadx/sources/" "$DEC/AndroidManifest.merged.xml"
+  grep -n 'minExtensionVersion' "$DEC/AndroidManifest.merged.xml"
   adb shell getprop | grep build.version.extensions
   ```
   Force both sides of the branch with a hook that returns a chosen extension version, and drive the app
@@ -1595,9 +1686,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   permissions and every mitigation layered on top?
 - **How:**
   ```bash
-  adb install base.apk
+  adb install "$E/apk/base.apk"
   # INSTALL_FAILED_DEPRECATED_SDK_VERSION: App package must target at least SDK version 24, but found N
-  adb install --bypass-low-target-sdk-block base.apk
+  adb install --bypass-low-target-sdk-block "$E/apk/base.apk"
   adb shell getprop ro.build.version.sdk
   ```
 - **Proof:** The literal `INSTALL_FAILED_DEPRECATED_SDK_VERSION` string with the found target, followed
@@ -1612,7 +1703,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) when the destination is attacker-influenced; the phishing outcome is rated by what it captures |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) when the destination is attacker-influenced; the phishing outcome is rated by what it captures |
 | **Attacker** | AM-02 (push-delivered) / AM-08 |
 | **Applies to** | targetSdk >= 34 for the restriction; the capability check is Android 14+ |
 | **Requires** | api>=34, push |
@@ -1624,8 +1715,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   destination comes from a push payload or a deep link rather than being fixed.
 - **How:**
   ```bash
-  grep -n 'USE_FULL_SCREEN_INTENT' out/AndroidManifest.merged.xml
-  grep -rnE 'setFullScreenIntent|canUseFullScreenIntent|ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT' out/sources/ -A6
+  grep -n 'USE_FULL_SCREEN_INTENT' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'setFullScreenIntent|canUseFullScreenIntent|ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT' "$DEC/jadx/sources/" -A6
   ```
   ```javascript
   Java.perform(function () {
@@ -1659,10 +1750,11 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   the reflection, the handler is almost always a broad `catch` that fails open, silently disabling the
   check. The **technique**: do not conclude a system API is unreachable because it is blocklisted; the
   blocklist is an ART-level check and raw `IBinder.transact()` bypasses it entirely on stock devices.
+  ART, Conscrypt and the other Mainline modules update through Google Play system updates independently of the OS release, so the blocklist and the trust store can change under a shipped app with no OTA — record the module versions (D22-002) so the result is reproducible and D22-080 can tell case (b) from (c).
 - **How:**
   ```bash
   adb logcat -d | grep -iE 'Accessing hidden (method|field)|greylist|blacklist|max-target'
-  grep -rnE 'getDeclaredMethod\(|getDeclaredField\(|setAccessible\(true\)|Class\.forName\("android\.|VMRuntime|dalvik\.system\.VMDebug|Unsafe' out/sources/ -A6 | grep -in 'catch'
+  grep -rnE 'getDeclaredMethod\(|getDeclaredField\(|setAccessible\(true\)|Class\.forName\("android\.|VMRuntime|dalvik\.system\.VMDebug|Unsafe' "$DEC/jadx/sources/" -A6 | grep -in 'catch'
   # compare behaviour with enforcement relaxed, to find which branch the app depends on:
   adb shell settings put global hidden_api_policy 1
   adb shell settings delete global hidden_api_policy
@@ -1693,11 +1785,11 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   restrictions and very often ships a permissive trust manager alongside.
 - **How:**
   ```bash
-  grep -rnE 'SSLContext\.getInstance\("(SSL|SSLv3|TLSv1|TLSv1\.1)"\)|setEnabledProtocols|ConnectionSpec|SSLSocketFactory' out/sources/
-  grep -rnE 'X509TrustManager|HostnameVerifier|checkServerTrusted|ALLOW_ALL_HOSTNAME_VERIFIER' out/sources/ -A8
-  unzip -l base.apk | grep -iE 'conscrypt|openssl|boringssl|libssl|libcrypto'
-  grep -n 'usesCleartextTraffic\|networkSecurityConfig' out/AndroidManifest.merged.xml
-  cat out/res/xml/network_security_config.xml 2>/dev/null
+  grep -rnE 'SSLContext\.getInstance\("(SSL|SSLv3|TLSv1|TLSv1\.1)"\)|setEnabledProtocols|ConnectionSpec|SSLSocketFactory' "$DEC/jadx/sources/"
+  grep -rnE 'X509TrustManager|HostnameVerifier|checkServerTrusted|ALLOW_ALL_HOSTNAME_VERIFIER' "$DEC/jadx/sources/" -A8
+  unzip -l "$E/apk/base.apk" | grep -iE 'conscrypt|openssl|boringssl|libssl|libcrypto'
+  grep -n 'usesCleartextTraffic\|networkSecurityConfig' "$DEC/AndroidManifest.merged.xml"
+  cat "$DEC"/apktool/res/xml/network_security_config.xml 2>/dev/null
   ```
 - **Proof:** A `setEnabledProtocols(new String[]{"TLSv1"})` reachable at runtime, confirmed with a Frida
   hook plus a downgrade-capable MitM completing the handshake — or an empty `checkServerTrusted` body.
@@ -1710,7 +1802,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the phishing outcome is rated by what the raised UI captures |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); the phishing outcome is rated by what the raised UI captures |
 | **Attacker** | AM-03 (the party holding the PendingIntent) |
 | **Applies to** | targetSdk >= 34 for the sender opt-in; >= 35 for the creator opt-in; `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE` is the recommended mode from SDK 36 |
 | **Requires** | api>=34 |
@@ -1724,15 +1816,19 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   choosing.
 - **How:**
   ```bash
-  grep -rnE 'setPendingIntent(Creator)?BackgroundActivityStartMode|MODE_BACKGROUND_ACTIVITY_START_(ALLOWED|DENIED|ALLOW_IF_VISIBLE)|BIND_ALLOW_ACTIVITY_STARTS' out/sources/
-  adb logcat -s ActivityTaskManager | grep -E 'realCallingPackage|callingPackage|BAL'
+  grep -rnE 'setPendingIntent(Creator)?BackgroundActivityStartMode|MODE_BACKGROUND_ACTIVITY_START_(ALLOWED|DENIED|ALLOW_IF_VISIBLE)|BIND_ALLOW_ACTIVITY_STARTS' "$DEC/jadx/sources/"
+  adb -s "$SERIAL" logcat -s ActivityTaskManager | grep -E 'balAllowedByPiSender|resultIfPiSenderAllowsBal|realCallerStartMode|callerStartMode|realCallingPackage|callingPackage'
+  # single-variable control: the D22-007 BAL compat pair (244637991 sender rule, 296478951 creator rule)
+  adb -s "$SERIAL" shell am compat disable 244637991 "$PKG"; adb -s "$SERIAL" shell am compat reset 244637991 "$PKG"
   adb logcat -b all | grep -iE 'Background activity (start|launch)|blocked'
   ```
   Runtime triage with the Android 16 detector from D22-009 (`detectBlockedBackgroundActivityLaunch()`).
 - **Proof:** `ActivityTaskManager` lines naming `realCallingPackage` (sender) and `callingPackage`
   (creator), with the activity actually appearing on screen while the app was backgrounded — recorded on
   video with the home screen visible immediately before.
+  The `ActivityTaskManager` BAL line must show `balAllowedByPiSender=true` (or the creator-side field) on the disabled-compat run and `false` on the default run.
 - **Escalation:** -> D04 UI redress from the background; -> D08 for the PendingIntent that carries it.
+  A receiver that re-sends a caller-supplied `PendingIntent` donates BAL privilege — that is D05-065, not redirection.
 - **Ruled out when:** No opt-in call site exists and the background launch is refused with a logcat BAL
   line on the Android 15/16 images. Show the refusal on both.
 
@@ -1757,7 +1853,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell dumpsys activity intents | grep -A6 com.target.app      # before
   adb shell am force-stop com.target.app
   adb shell dumpsys activity intents | grep -A6 com.target.app      # after: records gone
-  grep -rnE 'wasForceStopped|ApplicationStartInfo|AlarmManager|setExactAndAllowWhileIdle|setInexactRepeating' out/sources/
+  grep -rnE 'wasForceStopped|ApplicationStartInfo|AlarmManager|setExactAndAllowWhileIdle|setInexactRepeating' "$DEC/jadx/sources/"
   ```
 - **Proof:** The PendingIntent records present before and absent after in `dumpsys activity intents`,
   paired with the security function not firing at its scheduled time.
@@ -1785,8 +1881,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   notification title rather than the body, in an accessibility node, or on the clipboard.
 - **How:**
   ```bash
-  grep -nE 'BIND_NOTIFICATION_LISTENER_SERVICE|NotificationListenerService' out/AndroidManifest.merged.xml
-  grep -rnE 'NotificationListenerService|CompanionDeviceManager|REQUEST_COMPANION' out/sources/ out/AndroidManifest.merged.xml
+  grep -nE 'BIND_NOTIFICATION_LISTENER_SERVICE|NotificationListenerService' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'NotificationListenerService|CompanionDeviceManager|REQUEST_COMPANION' "$DEC/jadx/sources/" "$DEC/AndroidManifest.merged.xml"
   adb shell cmd notification allow_listener com.attacker/.Listener
   adb shell dumpsys notification | grep -iE 'listener|redact'
   adb shell dumpsys notification --noredact | grep -iE 'otp|code|[0-9]{6}'
@@ -1805,7 +1901,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-02 (a remote-access support or casting session the user was talked into) |
 | **Applies to** | Android 15+, all apps |
 | **Requires** | api>=35 |
@@ -1817,7 +1913,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   visible to whoever is on the other end of the share.
 - **How:**
   ```bash
-  grep -rnE 'setContentSensitivity|CONTENT_SENSITIVITY_SENSITIVE|FLAG_SECURE|setPublicVersion' out/sources/
+  grep -rnE 'setContentSensitivity|CONTENT_SENSITIVITY_SENSITIVE|FLAG_SECURE|setPublicVersion' "$DEC/jadx/sources/"
   # start a screen share or a MediaProjection test app, then photograph the remote view
   adb shell settings put global disable_screen_share_protections 1   # testing only — record that you did this
   adb shell settings put global disable_screen_share_protections 0
@@ -1851,7 +1947,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell pm list packages --user <privateSpaceUserId> | grep com.target.app
   adb shell am start   --user <privateSpaceUserId> -n com.target.app/.MainActivity
   adb shell content query --user 0 --uri content://<authority>/<path>
-  grep -rnE 'ACCESS_HIDDEN_PROFILES|getLauncherUserInfo|requestQuietModeEnabled|ACTION_PROFILE_(AVAILABLE|UNAVAILABLE)|UserHandle|myUserId' out/sources/ out/AndroidManifest.merged.xml
+  grep -rnE 'ACCESS_HIDDEN_PROFILES|getLauncherUserInfo|requestQuietModeEnabled|ACTION_PROFILE_(AVAILABLE|UNAVAILABLE)|UserHandle|myUserId' "$DEC/jadx/sources/" "$DEC/AndroidManifest.merged.xml"
   ```
 - **Proof:** Data written by the private-space instance readable from the main-profile instance (or the
   reverse) — via a shared external path, a cloud account keyed only by a device id, or a content provider
@@ -1912,8 +2008,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   tested, while the confirm button stays tappable.
 - **How:**
   ```bash
-  grep -rnE 'windowOptOutEdgeToEdgeEnforcement|setDecorFitsSystemWindows|setStatusBarColor|setNavigationBarColor' out/res/ out/sources/
-  grep -nE 'screenOrientation|minAspectRatio|maxAspectRatio|resizeableActivity|PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY' out/AndroidManifest.merged.xml
+  grep -rnE 'windowOptOutEdgeToEdgeEnforcement|setDecorFitsSystemWindows|setStatusBarColor|setNavigationBarColor' "$DEC/apktool/res/" "$DEC/jadx/sources/"
+  grep -nE 'screenOrientation|minAspectRatio|maxAspectRatio|resizeableActivity|PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY' "$DEC/AndroidManifest.merged.xml"
   ```
   Run the sensitive screen on Android 15 and 16, with gesture navigation and with three-button
   navigation, and on an `sw600dp`+ AVD in both orientations. Capture every combination.
@@ -1930,7 +2026,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the re-enabled redirect reaches an authenticated action; the primitive lands at `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the re-enabled redirect reaches an authenticated action; the primitive lands at `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03; AM-02 for the deep-link delivery variant |
 | **Applies to** | Android 16+ (API 36), **all apps regardless of targetSdk** |
 | **Requires** | api>=36 |
@@ -1942,23 +2038,27 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   blocks — and it is the single highest-yield grep in this chapter.
 - **How:**
   ```bash
-  grep -rn 'removeLaunchSecurityProtection' out/sources/
+  grep -rn 'removeLaunchSecurityProtection' "$DEC/jadx/sources/"
   # also check for it reached by reflection, which decompilers render as a string:
-  grep -rn '"removeLaunchSecurityProtection"' out/sources/
+  grep -rn '"removeLaunchSecurityProtection"' "$DEC/jadx/sources/"
   ```
-  Then send the classic nested intent from a stub app (more reliable than the URI form) and confirm
-  delivery on Android 16:
+  Then send the nested intent from `attacker-app/` as a **Parcelable extra** — the Android 16 protection
+  keys on an Intent unparceled inside the victim, so a URI-string extra rebuilt with `Intent.parseUri()`
+  never exercises it (that sink is a plain D08 finding with no version gate; say so if it is the only one):
+  ```java
+  Intent outer = new Intent().setComponent(new ComponentName(PKG, REDIRECTOR));
+  outer.putExtra("<extra key from the D08 census>", new Intent().setComponent(new ComponentName(PKG, INTERNAL_TARGET)));
+  startActivity(outer);
+  ```
   ```bash
-  adb shell am start -n com.target.app/.RedirectActivity \
-    --es dummy x --ei code 1 \
-    -e sub_intent 'intent:#Intent;component=com.target.app/.internal.Secret;end'
   adb shell dumpsys activity activities | grep -B2 -A8 'internal.Secret'
   ```
-- **Proof:** The internal component launching on an Android 16 device where the identical payload is
-  blocked against a build without the call — the two-run pair from D22-006, both captured.
+- **Proof:** The parceled nested intent launching on API 36 with the opt-out present, and refused
+  (`ActivityTaskManager` line) against a build without the call — the two-run pair from D22-006, both
+  captured.
 - **Escalation:** -> D08 for the full redirection matrix; -> D07 non-exported provider access; -> D04
   internal-activity abuse. The consumer report is where the P1 lives.
-- **Ruled out when:** The string does not appear in `out/sources/` (record the grep count) and the nested
+- **Ruled out when:** The string does not appear in `$DEC/jadx/sources/` (record the grep count) and the nested
   payload is refused on the Android 16 image while landing on the Android 13 image — which tells you the
   class is LEGACY-live on the client's older fleet and belongs in D08 with that precondition stated.
 
@@ -1967,7 +2067,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 16 (API 36); settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>` and `<provider>`, with the component value overriding the application value |
 | **Requires** | api>=36 |
@@ -1979,23 +2079,26 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   special matching rules and takes precedence, and `"allowNullAction"`, which re-permits action-less
   intents. The pattern worth finding is an app that sets `enforceIntentFilter` at application level and
   then punches a hole with `"none"` on one component.
+  The rule is opt-in, cross-app only, and system, root and same-app senders are exempt; the shell UID has been observed delivering non-matching and actionless explicit broadcasts on API 36. A shell probe therefore proves nothing about enforcement — both controls must come from the zero-permission attacker app (AM-03).
 - **How:**
   ```bash
-  grep -nB4 -A8 'intentMatchingFlags' out/AndroidManifest.merged.xml
+  grep -nB4 -A8 'intentMatchingFlags' "$DEC/AndroidManifest.merged.xml"
   adb logcat -s PackageManager | grep -E "Intent does not match component's intent filter:|Access blocked:"
-  # action-less and non-matching explicit intents against the flagged component and a sibling:
-  adb shell am broadcast -n com.target.app/.MyReceiver --es payload zzq4hd2k9pq
-  adb shell am start     -n com.target.app/.TheActivity -a bogus.action
   ```
-- **Proof:** The component carrying `intentMatchingFlags="none"` inside an `enforceIntentFilter`
-  application, its `onReceive`/`onCreate` running for a non-matching or action-less intent, and **no**
-  `Access blocked:` line for it in logcat while a sibling component does produce one. Both logcat
-  captures.
+  From `attacker-app/`, against the flagged component and a sibling: an actionless explicit intent
+  (`new Intent().setComponent(cn)`) and a non-matching one (`new Intent("bogus.action").setComponent(cn)`),
+  sent with `sendBroadcast` / `startActivity`, with `adb logcat -s PackageManager ActivityTaskManager`
+  running throughout.
+- **Proof:** Both attacker-app runs captured: the component carrying `intentMatchingFlags="none"` inside
+  an `enforceIntentFilter` application, its `onReceive`/`onCreate` running for a non-matching or
+  action-less intent, and **no** `Access blocked:` / `Intent does not match component's intent filter:`
+  line for it in logcat while a sibling component does produce one.
 - **Escalation:** -> D05 receiver injection; -> D08 redirection; merge the report with the finding the
   relaxation enables.
 - **Ruled out when:** The attribute does not appear in the merged manifest at all (record the grep
   count), or it appears only as `enforceIntentFilter` with no `none`/`allowNullAction` anywhere, and the
   `Access blocked:` line fires for your non-matching intent. Capture the line.
+  The attacker-app non-matching intent must be refused (logcat line) — a shell-UID refusal or delivery is not evidence either way.
 
 ### D22-054 · Ordered-broadcast priority scope no longer global (Android 16)
 
@@ -2014,8 +2117,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   precondition stated, otherwise the triager marks it not reproducible on the first attempt.
 - **How:**
   ```bash
-  grep -nB2 -A6 'android:priority' out/AndroidManifest.merged.xml
-  grep -rnE 'setPriority\(|SYSTEM_HIGH_PRIORITY|SYSTEM_LOW_PRIORITY|abortBroadcast\(' out/sources/
+  grep -nB2 -A6 'android:priority' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'setPriority\(|SYSTEM_HIGH_PRIORITY|SYSTEM_LOW_PRIORITY|abortBroadcast\(' "$DEC/jadx/sources/"
   for S in $(adb devices | awk '/device$/{print $1}'); do
     API=$(adb -s "$S" shell getprop ro.build.version.sdk | tr -d '\r')
     echo "== api=$API"; adb -s "$S" shell am broadcast -a com.target.app.ACTION_X --es payload zzq4hd2k9pq
@@ -2032,7 +2135,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) for the residual-state framing; report through what the retained value is — a PAN or an OTP left in a field is `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) for the residual-state framing; report through what the retained value is — a PAN or an OTP left in a field is `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-11 (whoever next holds the unlocked device) / AM-01 (no actor — the control simply stopped) |
 | **Applies to** | targetSdk >= 36 on Android 16; also verify on Android 15 where the animations are default-on for opted-in apps |
 | **Requires** | targetsdk>=36 |
@@ -2045,8 +2148,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   removed by a platform change, with no code change and no test failure.
 - **How:**
   ```bash
-  grep -rn 'onBackPressed\|KEYCODE_BACK' out/sources/ | grep -v 'OnBackPressedCallback\|OnBackInvokedCallback'
-  grep -n 'enableOnBackInvokedCallback' out/AndroidManifest.merged.xml
+  grep -rn 'onBackPressed\|KEYCODE_BACK' "$DEC/jadx/sources/" | grep -v 'OnBackPressedCallback\|OnBackInvokedCallback'
+  grep -n 'enableOnBackInvokedCallback' "$DEC/AndroidManifest.merged.xml"
   ```
   Then on an Android 16 device with targetSdk 36, drive the sensitive screen and swipe back while hooking
   the clearing method:
@@ -2083,7 +2186,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   user's answer being honoured.
 - **How:**
   ```bash
-  grep -rn 'PRIORITY_SYSTEM_NAVIGATION_OBSERVER' out/sources/ -B6 -A10
+  grep -rn 'PRIORITY_SYSTEM_NAVIGATION_OBSERVER' "$DEC/jadx/sources/" -B6 -A10
   ```
   Then drive the screen that registers it and press back.
 - **Proof:** The confirmation dialog appearing while the activity simultaneously finishes, on video.
@@ -2098,7 +2201,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.privilege_escalation` (null) where the LAN protocol lets you control a device; the discovery half is Support |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) where the LAN protocol lets you control a device; the discovery half is Support |
 | **Attacker** | AM-06 (an attacker on the same LAN) |
 | **Applies to** | device API >= 36 for the gate; the protocol weakness applies at every level |
 | **Requires** | api>=36 |
@@ -2110,10 +2213,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   control channels to LAN devices. The finding is the unauthenticated protocol, not the permission.
 - **How:**
   ```bash
-  grep -n 'NEARBY_WIFI_DEVICES' out/AndroidManifest.merged.xml
+  grep -n 'NEARBY_WIFI_DEVICES' "$DEC/AndroidManifest.merged.xml"
   adb shell am compat enable RESTRICT_LOCAL_NETWORK com.target.app && adb reboot
   adb logcat | grep -E 'sendto failed: (EPERM|ECONNABORTED)'
-  grep -rnE 'NsdManager|MulticastSocket|DatagramSocket|SSDP|mDNS|239\.255\.255\.250|224\.0\.0|255\.255\.255\.255' out/sources/
+  grep -rnE 'NsdManager|MulticastSocket|DatagramSocket|SSDP|mDNS|239\.255\.255\.250|224\.0\.0|255\.255\.255\.255' "$DEC/jadx/sources/"
   ```
   Then capture the traffic on the AP and replay the command from another host:
   ```bash
@@ -2144,7 +2247,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   for it on every Android-16-targeting app.
 - **How:**
   ```bash
-  grep -rnE 'KeyStoreManager|grantKeyAccess|revokeKeyAccess' out/sources/
+  grep -rnE 'KeyStoreManager|grantKeyAccess|revokeKeyAccess' "$DEC/jadx/sources/"
   ```
   ```javascript
   Java.perform(function () {
@@ -2172,7 +2275,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — Critical framing when reproductive or mental-health records leave the device |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) — Critical framing when reproductive or mental-health records leave the device |
 | **Attacker** | AM-05 / AM-09 |
 | **Applies to** | apps integrating Health Connect; Android 14+ ships it as a platform component; at targetSdk 36 the granular `android.permission.health.*` permissions **replace** `BODY_SENSORS`, and `READ_HEALTH_DATA_IN_BACKGROUND` replaces `BODY_SENSORS_BACKGROUND` |
 | **Requires** | targetsdk>=36 |
@@ -2186,10 +2289,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   user was shown.
 - **How:**
   ```bash
-  grep -n 'android.permission.health' out/AndroidManifest.merged.xml | sort
-  grep -nE 'BODY_SENSORS|BODY_SENSORS_BACKGROUND' out/AndroidManifest.merged.xml
-  grep -n 'VIEW_PERMISSION_USAGE\|ACTION_SHOW_PERMISSIONS_RATIONALE\|ViewPermissionUsageActivity' out/AndroidManifest.merged.xml
-  grep -rnE 'HealthConnectClient|readRecords|aggregate\(|TYPE_HEART_RATE|HEART_RATE_BPM|FOREGROUND_SERVICE_TYPE_HEALTH' out/sources/
+  grep -n 'android.permission.health' "$DEC/AndroidManifest.merged.xml" | sort
+  grep -nE 'BODY_SENSORS|BODY_SENSORS_BACKGROUND' "$DEC/AndroidManifest.merged.xml"
+  grep -n 'VIEW_PERMISSION_USAGE\|ACTION_SHOW_PERMISSIONS_RATIONALE\|ViewPermissionUsageActivity' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'HealthConnectClient|readRecords|aggregate\(|TYPE_HEART_RATE|HEART_RATE_BPM|FOREGROUND_SERVICE_TYPE_HEALTH' "$DEC/jadx/sources/"
   adb shell dumpsys package com.target.app | sed -n '/runtime permissions/,/^$/p' | grep health
   ```
 - **Proof:** A declared `android.permission.health.READ_SEXUAL_ACTIVITY` (or another category the app has
@@ -2220,9 +2323,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   either way, and a compromise of that CA is undetectable.
 - **How:**
   ```bash
-  grep -n 'networkSecurityConfig' out/AndroidManifest.merged.xml
-  cat out/res/xml/network_security_config.xml 2>/dev/null
-  grep -nE 'certificateTransparency|<certificates src=|overridePins|<debug-overrides>|<pin-set|domainEncryption' out/res/xml/*.xml
+  grep -n 'networkSecurityConfig' "$DEC/AndroidManifest.merged.xml"
+  cat "$DEC"/apktool/res/xml/network_security_config.xml 2>/dev/null
+  grep -nE 'certificateTransparency|<certificates src=|overridePins|<debug-overrides>|<pin-set|domainEncryption' "$DEC"/apktool/res/xml/*.xml
   ```
 - **Proof:** `<certificateTransparency enabled="false"/>` on the API domain, or a custom trust anchor for
   the API domain (which silently disables CT), combined with the absence of any `<pin-set>` — quote the
@@ -2244,7 +2347,8 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **Requires** | device |
 | **Maps to** | `about/versions/16/behavior-changes-all` (apps relying on internal ART structures or non-SDK interfaces may break on Android 16 and on earlier versions receiving ART updates through Google Play system updates); AOSP ART module `com.android.art`; the Conscrypt APEX (D22-035) is the same mechanism applied to trust |
 
-- **Test:** ART, Conscrypt and several other modules now update through Google Play system updates,
+- **Skip when:** D22-043 already walked — write `as D22-043` and record the module versions under D22-002.
+- **Test:** **Cross-reference:** the reflection grep and the hidden-API logcat are D22-043 (run it there once); this item keeps only the Mainline-update consequence. ART, Conscrypt and several other modules now update through Google Play system updates,
   independently of the OS release. A security control built on a non-SDK interface, on internal ART
   structures, or on a fixed trust-store path can therefore change behaviour — or fail open — on a device
   that never took an OS upgrade. This is also why a PoC can stop reproducing mid-engagement without
@@ -2254,8 +2358,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell ls /apex | sort
   adb shell dumpsys package com.android.art | grep -iE 'versionName|versionCode'
   adb shell dumpsys package com.android.conscrypt | grep -iE 'versionName|versionCode'
-  grep -rnE 'setAccessible\(true\)|getDeclaredMethod\(|Class\.forName\("(android|dalvik|libcore)\.|VMRuntime|VMDebug|hiddenapi|Unsafe' out/sources/
-  adb logcat | grep -iE 'Accessing hidden (method|field)|greylist|blacklist|max-target'
+  # the reflection grep and the hidden-API logcat filter: D22-043
   ```
 - **Proof:** `Accessing hidden method L…` warnings from the app's UID paired with the code path that
   depends on them, plus the APEX version recorded in the evidence baseline so the result is reproducible.
@@ -2265,44 +2368,46 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   controls use public APIs only. Record the module versions in the baseline regardless — it is what makes
   the rest of the report reproducible.
 
-### D22-062 · The API 37 horizon — changes already landing that will invalidate current PoCs
+### D22-062 · API 37 (Android 17) mandates — the rows the targetSdk-37 bump turns on
 
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | none — forward-looking applicability |
+| **VRT** | n/a — applicability gate for the API 37 rows |
 | **Attacker** | n/a |
-| **Applies to** | preview/QPR builds and apps targeting API 37; state it as forward-looking, never as a current finding |
+| **Applies to** | device API >= 37 for the device-gated rows; apps targeting 37 for `ENFORCE_STRICT_SQL_CHECKS` and the native read-only mandate. Android 17 is released — treat these as CURRENT, and keep a forward-looking note only for a change still behind a compat flag; re-check the Android 17 behaviour-changes page for the final list before filing |
 | **Requires** | targetsdk>=37 |
 | **Maps to** | `privacy-and-security/security-config` (`<domainEncryption>` Encrypted Client Hello, API 37+; `<certificateTransparency>` default-on at API 37+); the compat change `ENFORCE_STRICT_SQL_CHECKS` (id `484953293`, Android 17, applying only to callers with targetSdk >= 37); the read-only mandate extended to `System.load()` native libraries at targetSdk 37; `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` documented as not applying at API 37+ |
 
-- **Test:** Three changes on the near horizon each close a class this chapter currently treats as live,
-  and one opens a new question. Record which of them the client's next target bump will hit, so a finding
-  you file today is not closed as "already fixed in our next release".
+- **Test:** Three changes Android 17 (API 37) ships each close a class this chapter treats as live on
+  older levels, and one opens a new question. Record which of them the app's current targetSdk and the
+  device under test already hit, and which only the client's next target bump will, so a finding you file
+  today is not closed as "already fixed in our next release".
 - **How:**
   ```bash
   # provider strict SQL — the compat pair that proves the change is the control:
   adb shell am compat enable  484953293 com.target.app    # patched behaviour
   adb shell am compat disable 484953293 com.target.app    # current behaviour
   # native library read-only mandate (targetSdk 37):
-  grep -rnE 'System\.load\(|System\.loadLibrary\(' out/sources/
+  grep -rnE 'System\.load\(|System\.loadLibrary\(' "$DEC/jadx/sources/"
   adb shell run-as com.target.app ls -l files/*.so lib/ 2>/dev/null
   # ECH and CT defaults:
-  grep -nE 'domainEncryption|certificateTransparency' out/res/xml/*.xml
+  grep -nE 'domainEncryption|certificateTransparency' "$DEC"/apktool/res/xml/*.xml
   ```
 - **Proof:** For the provider case, the paired run producing data on one side and
   `IllegalArgumentException: Invalid token SELECT` on the other. For the rest, the grep results recorded
   against the client's stated next target level.
 - **Escalation:** -> D07 provider SQL; -> D17 native code delivery; -> D14 for ECH and CT.
-- **Ruled out when:** The client's roadmap does not include a targetSdk 37 bump in the reporting window,
-  which you state. This item never produces a finding on its own.
+- **Ruled out when:** targetSdk < 37 and device API < 37 (quote both) — then the rows are LEGACY-live for
+  the app, not n/a, and go to their owning chapter with the gate stated. This item never produces a
+  finding on its own.
 
 ### D22-063 · App Bundle split delivery — the code that is not in `base.apk`
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) when a split exports a component; rated on what the unreviewed code does |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) when a split exports a component; rated on what the unreviewed code does |
 | **Attacker** | AM-03 |
 | **Applies to** | apps distributed as app bundles with `dynamicFeatures` |
 | **Requires** | device |
@@ -2317,12 +2422,12 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   adb shell pm path com.target.app
   #   package:/data/app/.../base.apk
   #   package:/data/app/.../split_feature_payments.apk
-  for p in $(adb shell pm path com.target.app | sed 's/package://' | tr -d '\r'); do adb pull "$p" .; done
+  for p in $(adb shell pm path com.target.app | sed 's/package://' | tr -d '\r'); do adb pull "$p" "$E/apk/"; done
   ls -1 *.apk | wc -l                          # count — compare with the pm path line count
-  for f in split_*.apk; do echo "== $f"; aapt2 dump badging "$f" | head -5; done
-  for f in base.apk split_*.apk; do jadx -d "out_${f%.apk}" "$f" >/dev/null 2>&1; done
-  grep -rn 'android:exported="true"' out_split_*/resources/AndroidManifest.xml 2>/dev/null
-  grep -rn 'isFeatureSplit\|dist:module\|dist:delivery' out_split_*/resources/AndroidManifest.xml 2>/dev/null
+  for f in "$E"/apk/split_*.apk; do echo "== $f"; aapt2 dump badging "$f" | head -5; done
+  for f in "$E"/apk/base.apk "$E"/apk/split_*.apk; do n=$(basename "${f%.apk}"); jadx -d "$DEC/jadx-$n" "$f" >/dev/null 2>&1; done
+  grep -rn 'android:exported="true"' "$DEC"/jadx-split_*/resources/AndroidManifest.xml 2>/dev/null
+  grep -rn 'isFeatureSplit\|dist:module\|dist:delivery' "$DEC"/jadx-split_*/resources/AndroidManifest.xml 2>/dev/null
   ```
 - **Proof:** An `<activity android:exported="true">` (or a service, receiver or provider) present in a
   split manifest and absent from `base.apk`, reachable with `am start -n` once the split is installed.
@@ -2349,13 +2454,13 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **How:**
   ```bash
   adb uninstall com.target.app
-  adb install base.apk                              # base only, no splits
+  adb install "$E/apk/base.apk"                              # base only, no splits
   adb logcat -c; adb shell monkey -p com.target.app 1
   adb logcat -d | grep -iE 'split|SplitCompat|missing|getInstalledModules'
   # compare with the full session install:
-  adb install-multiple base.apk split_*.apk
+  adb install-multiple "$E/apk/base.apk" "$E"/apk/split_*.apk
   # and try supplying a modified split out-of-band:
-  adb install-multiple base.apk attacker_split.apk
+  adb install-multiple "$E/apk/base.apk" attacker_split.apk
   adb shell pm install-create -p com.target.app
   adb logcat -d | grep -iE 'INSTALL_FAILED|signature|split'
   ```
@@ -2376,22 +2481,22 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the dead gate was the only control on an authenticated or paid action; otherwise rated on what it protected |
 | **Attacker** | AM-12 initially, but the gate is open for **every** device unconditionally |
 | **Applies to** | any app still shipping the SafetyNet dependency — still common in older enterprise and white-label builds |
+| **Requires** | — |
 | **Maps to** | `privacy-and-security/safetynet/deprecation-timeline` (deprecated 2022; full turndown January 2025; "The attest API returns a task that always invokes the on failure listener with an ApiException"; status code 7 `NETWORK_ERROR`; migrate to the Play Integrity API) |
 
-- **Test:** SafetyNet Attestation was fully turned down in January 2025. The `attest` API now always
+- **Skip when:** D21-021 already walked — write `as D21-021`.
+- **Test:** **Cross-reference:** the fail-open proof is owned by D21-021 (with D21-003/D21-004 for the control-vs-telemetry fork) — run it there; this item keeps only the turndown gate and the shipped-dependency check. SafetyNet Attestation was fully turned down in January 2025. The `attest` API now always
   invokes the failure listener with an `ApiException` carrying status code 7. An app that still calls it
   and treats a failure as "network problem, allow" has a permanently open integrity gate, on every
   device, today, in production. This is the cheapest High in the chapter.
 - **How:**
   ```bash
-  unzip -l base.apk | grep -i safetynet
-  grep -rnE 'SafetyNet|SafetyNetClient|SafetyNetApi|attest\(' out/sources/ -A10 | grep -inE 'addOnFailureListener|catch|allow|proceed|return true'
+  unzip -l "$E/apk/base.apk" | grep -i safetynet
+  grep -rnE 'SafetyNet|SafetyNetClient|SafetyNetApi|attest\(' "$DEC/jadx/sources/" -A10 | grep -inE 'addOnFailureListener|catch|allow|proceed|return true'
   ```
-  ```javascript
-  Java.perform(function () {
-    var L = Java.use('com.google.android.gms.tasks.OnFailureListener');
-    // or hook the app's own failure handler directly and log which branch follows
-  });
+  ```bash
+  # OnFailureListener is an interface and Task is abstract - trace the callbacks instead of hooking them (D21-021):
+  frida-trace -D "$SERIAL" -n com.target.app -j '*!onFailure' -j '*!attest*'     # ApiException status 7, then which branch follows
   ```
 - **Proof:** The failure branch reached on every launch (Frida log on the failure listener or the app's
   handler), with the app proceeding as if attested — then the protected action completing on a device
@@ -2406,32 +2511,24 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the integrity gate was the auth control; `broken_access_control.privilege_escalation` (null) for the abuse-control bypass |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the integrity gate was the auth control; `broken_access_control.privilege_escalation` (varies) for the abuse-control bypass |
 | **Attacker** | AM-12 for the on-device decryption case; AM-03 for the relay case |
 | **Applies to** | apps using the Play Integrity API (Standard requests need Android 6.0 / API 23+ at library v1.4.0+) |
 | **Requires** | backend-api |
 | **Maps to** | `google/play/integrity/overview` (verdict fields `requestDetails`, `appIntegrity.appRecognitionVerdict` = `PLAY_RECOGNIZED`, `deviceIntegrity` labels `MEETS_BASIC_INTEGRITY`/`MEETS_DEVICE_INTEGRITY`/`MEETS_STRONG_INTEGRITY`, `accountDetails.appLicensingVerdict` = `LICENSED`, `environmentDetails` opt-ins `appAccessRiskVerdict`/`playProtectVerdict`/`recentDeviceActivity`/`deviceRecall`; `requestHash` for standard requests and `nonce` for classic; "No caching: Request verdicts on-demand to prevent replay/proxying attacks"; the warning that data in `nonce`/`requestHash` is visible in cleartext to the app and to Google) |
 
-- **Test:** The documented server-side baseline is four checks in order: `requestDetails` match the
+- **Skip when:** D21-013..D21-017 already walked — write `as D21-013`.
+- **Test:** **Cross-reference:** the four-check procedure (replay, strip, relay, decode) is owned by D21-013 to D21-017 — run it there; this item keeps only the API-23 / library-1.4.0 gate for standard requests and the no-verdict-caching rule. The documented server-side baseline is four checks in order: `requestDetails` match the
   expected values; `requestHash` (standard) or `nonce` (classic) prevents replay;
   `appIntegrity.appRecognitionVerdict == PLAY_RECOGNIZED`; `accountDetails.appLicensingVerdict ==
   LICENSED` — and only then evaluate `deviceIntegrity`. Test each omission, and separately test whether
   the decision is made on the device at all.
 - **How:**
   ```bash
-  grep -rnE 'IntegrityManager|StandardIntegrityManager|requestIntegrityToken|integrityToken|decodeIntegrityToken|IntegrityTokenResponse|setNonce\(|setRequestHash\(' out/sources/ -B4 -A8
+  grep -rnE 'IntegrityManager|StandardIntegrityManager|requestIntegrityToken|integrityToken|decodeIntegrityToken|IntegrityTokenResponse|setNonce\(|setRequestHash\(' "$DEC/jadx/sources/" -B4 -A8
   ```
-  Then, against the live flow in Burp:
-  1. Replay a previously captured token against a second, different request -> tests `requestHash`/`nonce`
-     binding. Capture two requests with different bodies and compare the hash; if identical, binding is
-     absent.
-  2. Strip the integrity header entirely -> tests whether it is enforced or advisory. **Compare response
-     bodies byte for byte**, not status codes: an identical 200 both ways means the header was never
-     checked, which is the finding; a 200 that differs only in a correlation id is not a bypass.
-  3. Obtain a token on a clean device and relay it with a modified request body from an instrumented
-     device -> tests content binding.
-  4. Decode the token client-side; if the app parses verdict fields locally rather than forwarding an
-     opaque token, the decision is on the attacker's device.
+  Then the wire tests — replay (D21-015), strip with the body-diff gate (D21-012/D21-013), relay (D21-016),
+  freshness and local decode (D21-017/D21-014) — recorded once under their owners.
   ```bash
   echo "$NONCE" | base64 -d | strings | head     # check for PII placed in the nonce
   ```
@@ -2449,35 +2546,27 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where attestation gates authentication; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (null) for the verifier defects |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where attestation gates authentication; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies) for the verifier defects |
 | **Attacker** | AM-12 for the on-device case; AM-03 for a forged or stale chain submitted to the backend |
 | **Applies to** | all apps using key attestation; device-side behaviour differs on Android 15 (RKP optional) versus Android 16 (RKP only, factory keys phased out) |
 | **Requires** | backend-api |
 | **Maps to** | `privacy-and-security/security-key-attestation` ("Perform verification on a separate, trusted server (not on the compromised device)"; the requirement list — root signed with the Google attestation root key, `attestationSecurityLevel` of `TrustedEnvironment` or `StrongBox`, all signatures verified, no certificate in the CRL; CRL at `https://android.googleapis.com/attestation/status` with `status` values `REVOKED`/`SUSPENDED` and `reason` values `UNSPECIFIED`/`KEY_COMPROMISE`/`CA_COMPROMISE`/`SUPERSEDED`/`SOFTWARE_FLAW`; root list at `https://android.googleapis.com/attestation/root`; `attestationSecurityLevel` values `SOFTWARE`/`TRUSTED_ENVIRONMENT`/`STRONGBOX`; `verifiedBootState`, `deviceLocked`, `attestationChallenge`; "Don't assume the key attestation extension is in the leaf certificate. Only the first occurrence of the extension can be trusted"; a new EC-based root signing attestation chains from 1 February 2026 alongside the existing root `SERIALNUMBER=f92009e853b6b045` valid 2022-03-20 to 2042-03-15; "Android 15+: RKP support is optional. Android 16+: Only RKP is supported"; RKP certificates have deliberately short validity and "the shorter expiration is part of the threat model"; the official verifier library at `github.com/android/keyattestation`) |
 
-- **Test:** The whole premise of attestation is that the device may be compromised, so verification
+- **Skip when:** D12-063..D12-069 already walked — write `as D12-063`.
+- **Test:** **Cross-reference:** the verifier tests (client-side verification, nonce, wrong certificate, security level/CRL, `RootOfTrust`, [709]) are D12-063 to D12-069, with D12-077 for the lab-image artefacts that must never be reported — run them there; this item keeps only the RKP/root-rotation timeline (Android 15 optional, 16 RKP-only, EC root from 1 Feb 2026). The whole premise of attestation is that the device may be compromised, so verification
   performed **in the app** is decorative. On the server side, the recurring defects are: skipping the
   revocation list; accepting `attestationSecurityLevel = SOFTWARE`; trusting the extension from the wrong
   certificate in the chain; hardcoding the old root; and skipping validity checks on short-lived RKP
   certificates.
 - **How:**
   ```bash
-  grep -rnE 'setAttestationChallenge|getCertificateChain|attestationSecurityLevel|1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' out/sources/
+  grep -rnE 'setAttestationChallenge|getCertificateChain|attestationSecurityLevel|1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' "$DEC/jadx/sources/"
   ```
-  If the chain never leaves the device (no matching outbound request in Burp carrying the certificates),
-  the check is local — prove the bypass:
-  ```javascript
-  Java.perform(function () {
-    var V = Java.use('com.target.app.security.AttestationVerifier');
-    V.isDeviceTrustworthy.implementation = function () { return true; };
-  });
-  ```
-  Server-side tests:
+  The local-verification bypass is D12-063 and the server-side CRL / security-level / expiry tests are
+  D12-064 to D12-069; here record only the device's RKP state and the root the backend pins:
   ```bash
-  curl -s https://android.googleapis.com/attestation/status | jq '.entries | keys | length'
-  curl -s https://android.googleapis.com/attestation/root -o roots.pem
-  openssl x509 -in leaf.pem -text -noout | grep -A20 '1.3.6.1.4.1.11129.2.1.17'
-  openssl crl2pkcs7 -nocrl -certfile chain.pem | openssl pkcs7 -print_certs -text -noout | grep -E 'Not After|Serial'
+  adb -s "$SERIAL" shell getprop ro.build.version.sdk      # 35: RKP optional; 36+: RKP only, short-lived leaves
+  curl -s https://android.googleapis.com/attestation/root | grep -c BEGIN    # the EC root is live from 1 Feb 2026
   ```
 - **Proof:** Attestation-gated functionality unlocked on a rooted or emulated device after a one-line
   hook; or the backend returning "attested/trusted" for a chain whose leaf claims `SOFTWARE`, carries a
@@ -2496,9 +2585,11 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the downgrade completes a sign-in the passkey path would refuse; `broken_authentication_and_session_management.two_fa_bypass` (P3) for the factor-downgrade framing |
 | **Attacker** | AM-02 (phishing origin) / AM-03 |
 | **Applies to** | apps mid-migration to Credential Manager — very common through 2025-2026 |
+| **Requires** | — |
 | **Maps to** | `identity/sign-in/credential-manager` (migration guides from Google Sign-In, Smart Lock and FIDO2; `CredentialManager`, `GetCredentialRequest`, `CreatePublicKeyCredentialRequest`, `GetPublicKeyCredentialOption`, `GetPasswordOption`, `PasswordCredential`, `allowedProviders`, `setPreferImmediatelyAvailableCredentials`; integration with the Restore Credentials API) |
 
-- **Test:** Apps migrating to Credential Manager and passkeys almost always keep the legacy path — Smart
+- **Skip when:** D13-073 already walked — write `as D13-073`.
+- **Test:** **Cross-reference:** the legacy-fallback and origin-binding tests are owned by D13-073 and D13-089 (with D13-072 for assertion replay) — run them there; this item keeps only the mid-migration version gate. Apps migrating to Credential Manager and passkeys almost always keep the legacy path — Smart
   Lock, the FIDO2 API, Google Sign-In — as a fallback. The passkey path is phishing-resistant because it
   binds to an origin; the fallback usually is not. Force the fallback and see what it accepts. Also check
   the origin binding itself: for a passkey to be usable by this app, the site must publish an
@@ -2506,11 +2597,11 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   makes origin verification the entire control.
 - **How:**
   ```bash
-  grep -rn 'androidx.credentials\|CredentialManager\|GetCredentialRequest\|CreatePublicKeyCredentialRequest' out/sources/ | head
-  grep -rnE 'Fido2ApiClient|CredentialsApi|GoogleSignInClient|SmartLock|allowedProviders|setPreferImmediatelyAvailableCredentials' out/sources/
-  grep -rnE 'RestoreCredential|restore_credential' out/sources/ -i
+  grep -rn 'androidx.credentials\|CredentialManager\|GetCredentialRequest\|CreatePublicKeyCredentialRequest' "$DEC/jadx/sources/" | head
+  grep -rnE 'Fido2ApiClient|CredentialsApi|GoogleSignInClient|SmartLock|allowedProviders|setPreferImmediatelyAvailableCredentials' "$DEC/jadx/sources/"
+  grep -rnE 'RestoreCredential|restore_credential' "$DEC/jadx/sources/" -i
   # the origin binding:
-  grep -nE 'android:host|autoVerify' out/AndroidManifest.merged.xml
+  grep -nE 'android:host|autoVerify' "$DEC/AndroidManifest.merged.xml"
   curl -s https://<host>/.well-known/assetlinks.json | jq '.[].target'
   adb shell pm get-app-links com.target.app
   ```
@@ -2533,15 +2624,17 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where a session is re-established on a new device with no user verification |
 | **Attacker** | AM-11 (restoring the victim's backup onto a device they control) |
 | **Applies to** | apps adopting Restore Credentials; ties directly to the D2D transfer surface in D22-014 |
+| **Requires** | — |
 | **Maps to** | `identity/sign-in/credential-manager` ("Integration with Restore Credentials API for seamless sign-in on new devices") |
 
-- **Test:** Credential Manager integrates with a Restore Credentials mechanism for "seamless sign-in on
+- **Skip when:** D13-073 already walked — write `as D13-073`.
+- **Test:** **Cross-reference:** the restored-session test is owned by D13-073 and D13-090 — run it there; this item keeps only the D2D-transfer gate shared with D22-014. Credential Manager integrates with a Restore Credentials mechanism for "seamless sign-in on
   a new device". Any flow that re-establishes an authenticated session on a **different** device without
   a fresh user-verification step is worth probing: what binds the restored credential to the user rather
   than to the backup?
 - **How:**
   ```bash
-  grep -rni 'restorecredential\|RestoreCredential\|restore_credential\|createRestoreCredential' out/sources/
+  grep -rni 'restorecredential\|RestoreCredential\|restore_credential\|createRestoreCredential' "$DEC/jadx/sources/"
   ```
   Perform a device-to-device restore into a second device or emulator, launch the app, and see where it
   lands.
@@ -2558,7 +2651,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk <= 30 only.** At targetSdk 31+ the attribute is mandatory and the app fails to install without it (`INSTALL_FAILED_VERIFICATION_FAILURE`) — see D22-011 for the modern form |
 | **Requires** | targetsdk<31, legacy |
@@ -2570,10 +2663,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   or lower.
 - **How:**
   ```bash
-  T=$(aapt2 dump badging base.apk | grep -oE "targetSdkVersion:'[0-9]+'" | grep -oE '[0-9]+'); echo "targetSdk=$T"
+  T=$(aapt2 dump badging "$E/apk/base.apk" | grep -oE "targetSdkVersion:'[0-9]+'" | grep -oE '[0-9]+'); echo "targetSdk=$T"
   [ "$T" -le 30 ] || echo "NOT APPLICABLE — do not report"
-  grep -c '<intent-filter' out/AndroidManifest.merged.xml
-  grep -c 'android:exported' out/AndroidManifest.merged.xml      # a shortfall is the implicit-export set
+  grep -c '<intent-filter' "$DEC/AndroidManifest.merged.xml"
+  grep -c 'android:exported' "$DEC/AndroidManifest.merged.xml"      # a shortfall is the implicit-export set
   # ground truth regardless of the manifest text:
   adb shell dumpsys package com.target.app | sed -n '/Activity Resolver Table/,/Permissions:/p'
   adb shell am start -n com.target.app/.NoExportedAttributeActivity
@@ -2590,7 +2683,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.sql_injection` (P1) for a provider with a raw query path; `server_side_injection.file_inclusion.local` (P1) via `openFile`; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `server_side_injection.sql_injection` (P1) for a provider with a raw query path; `server_side_injection.file_inclusion.local` (P1) via `openFile`; otherwise `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk <= 16 only.** Deep LEGACY; `android:exported` defaults to `false` from API 17 when no `<intent-filter>` is present |
 | **Requires** | targetsdk<17, legacy |
@@ -2601,9 +2694,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   dead and reporting it is a credibility cost.
 - **How:**
   ```bash
-  T=$(aapt2 dump badging base.apk | grep -oE "targetSdkVersion:'[0-9]+'" | grep -oE '[0-9]+')
+  T=$(aapt2 dump badging "$E/apk/base.apk" | grep -oE "targetSdkVersion:'[0-9]+'" | grep -oE '[0-9]+')
   [ "$T" -le 16 ] || echo "NOT APPLICABLE — do not report the default-driven form"
-  grep -nB2 -A8 '<provider' out/AndroidManifest.merged.xml
+  grep -nB2 -A8 '<provider' "$DEC/AndroidManifest.merged.xml"
   adb shell content query --uri content://<authority>/ 2>&1 | head -5
   ```
 - **Proof:** `content query` from the shell UID returning rows against a provider with no
@@ -2628,10 +2721,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   default — it is an explicit `src="user"` opt-in, or a `<debug-overrides>` block, shipped in release.
 - **How:**
   ```bash
-  aapt2 dump badging base.apk | grep -E "sdkVersion:|targetSdkVersion:"
-  grep -n 'networkSecurityConfig' out/AndroidManifest.merged.xml
-  cat out/res/xml/network_security_config.xml 2>/dev/null
-  grep -nE '<certificates src="user"|<debug-overrides>|overridePins' out/res/xml/*.xml
+  aapt2 dump badging "$E/apk/base.apk" | grep -E "sdkVersion:|targetSdkVersion:"
+  grep -n 'networkSecurityConfig' "$DEC/AndroidManifest.merged.xml"
+  cat "$DEC"/apktool/res/xml/network_security_config.xml 2>/dev/null
+  grep -nE '<certificates src="user"|<debug-overrides>|overridePins' "$DEC"/apktool/res/xml/*.xml
   adb shell ls /data/misc/user/0/cacerts-added
   ```
 - **Proof:** For the LEGACY form, full plaintext in Burp on a stock unrooted device with only a user CA
@@ -2659,9 +2752,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   is weak" — and it names the domain the developer chose to exempt.
 - **How:**
   ```bash
-  grep -nE 'usesCleartextTraffic|networkSecurityConfig' out/AndroidManifest.merged.xml
-  grep -nE 'cleartextTrafficPermitted|<domain ' out/res/xml/network_security_config.xml 2>/dev/null
-  grep -rn 'http://' out/sources/ | grep -viE 'schemas\.android\.com|w3\.org|apache\.org|localhost|127\.0\.0\.1' | head -40
+  grep -nE 'usesCleartextTraffic|networkSecurityConfig' "$DEC/AndroidManifest.merged.xml"
+  grep -nE 'cleartextTrafficPermitted|<domain ' "$DEC"/apktool/res/xml/network_security_config.xml 2>/dev/null
+  grep -rn 'http://' "$DEC/jadx/sources/" | grep -viE 'schemas\.android\.com|w3\.org|apache\.org|localhost|127\.0\.0\.1' | head -40
   adb shell tcpdump -i any -s0 -w /sdcard/p.pcap 'tcp port 80' 2>/dev/null &   # or capture on the AP
   ```
 - **Proof:** A captured HTTP request from the app carrying a token, a session cookie or PII — or the
@@ -2688,10 +2781,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   still worth rating by what they return (that is D10's work, not this item's).
 - **How:**
   ```bash
-  MIN=$(aapt2 dump badging base.apk | grep -oE "sdkVersion:'[0-9]+'" | grep -oE '[0-9]+'); echo "minSdk=$MIN"
+  MIN=$(aapt2 dump badging "$E/apk/base.apk" | grep -oE "sdkVersion:'[0-9]+'" | grep -oE '[0-9]+'); echo "minSdk=$MIN"
   [ "$MIN" -lt 17 ] || echo "NOT APPLICABLE as a reflection RCE — the annotated-method surface is D10's"
-  grep -rn 'addJavascriptInterface' out/sources/ -B4 -A8
-  grep -rn '@JavascriptInterface' out/sources/ | wc -l
+  grep -rn 'addJavascriptInterface' "$DEC/jadx/sources/" -B4 -A8
+  grep -rn '@JavascriptInterface' "$DEC/jadx/sources/" | wc -l
   ```
 - **Proof:** On a minSdk < 17 app, the reflection chain executing a command from injected JavaScript,
   with the command's output observable (a file created under the app's data directory, for example).
@@ -2705,7 +2798,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) when the installed-app inventory is transmitted |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) when the installed-app inventory is transmitted |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk <= 29** for free enumeration; from 30 it requires `<queries>` or `QUERY_ALL_PACKAGES` |
 | **Requires** | targetsdk<30, legacy |
@@ -2719,9 +2812,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   or a `VIEW` intent, with no `<queries>` entry at all.
 - **How:**
   ```bash
-  grep -n 'QUERY_ALL_PACKAGES\|forceQueryable' out/AndroidManifest.merged.xml
-  xmllint --format out/AndroidManifest.merged.xml | sed -n '/<queries>/,/<\/queries>/p'
-  grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|resolveActivity' out/sources/
+  grep -n 'QUERY_ALL_PACKAGES\|forceQueryable' "$DEC/AndroidManifest.merged.xml"
+  xmllint --format "$DEC/AndroidManifest.merged.xml" | sed -n '/<queries>/,/<\/queries>/p'
+  grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|resolveActivity' "$DEC/jadx/sources/"
   # and the delivery control, from a stub app targeting 30+ with no <queries>:
   adb shell am start -n com.victim/.InternalActivity
   ```
@@ -2760,10 +2853,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **How:**
   ```bash
   adb shell getprop ro.build.version.sdk        # must be <= 30 for the LEGACY path
-  grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' out/AndroidManifest.merged.xml
-  adb backup -f /tmp/b.ab -noapk com.target.app && ls -l /tmp/b.ab
-  dd if=/tmp/b.ab bs=24 skip=1 2>/dev/null | zlib-flate -uncompress | tar xvf - -C /tmp/bk
-  grep -rnE 'token|bearer|refresh|session|password|secret' /tmp/bk/ | head -20
+  grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' "$DEC/AndroidManifest.merged.xml"
+  adb backup -f "$E/logs/b.ab" -noapk com.target.app && ls -l "$E/logs/b.ab"
+  mkdir -p "$E/logs/bk" && dd if="$E/logs/b.ab" bs=24 skip=1 2>/dev/null | python3 -c 'import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read()))' | tar xvf - -C "$E/logs/bk"
+  grep -rnE 'token|bearer|refresh|session|password|secret' "$E/logs/bk/" | head -20   # encrypted .ab: android-backup-extractor
   ```
 - **Proof:** The extracted tar containing `shared_prefs/*.xml` or `databases/*.db` with a token in it,
   and that token then used against the API from `curl`. Quote the device API level next to it.
@@ -2778,7 +2871,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null) — it is a platform bug, reported to the OEM/Google, not to the app vendor |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) — it is a platform bug, reported to the OEM/Google, not to the app vendor |
 | **Attacker** | a principal holding `WRITE_SECURE_SETTINGS` — normally ADB or an OEM-privileged app; **not** AM-03 |
 | **Applies to** | **LEGACY** — Android 9 through 14 below the June 2024 patch level. Fixed in the June 2024 Android Security Bulletin (`ZygoteCommandBuffer` hardened) |
 | **Requires** | api<=34, device, legacy |
@@ -2791,7 +2884,9 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **How:**
   ```bash
   adb shell getprop ro.build.version.security_patch     # < 2024-06-01 on Android 9-14 => affected
-  adb shell settings put global hidden_api_blacklist_exemptions "--runtime-flags=0x104|Lcom/example/Fake;->entryPoint:"
+  adb shell "settings put global hidden_api_blacklist_exemptions '--runtime-flags=0x104|Lcom/example/Fake;->entryPoint:'"
+  # this value is illustrative; the working payload is the multi-line string from the public PoC - paste it from the
+  # engagement's pocs/ copy, never retype it
   adb shell monkey -p com.target.app 1
   adb jdwp
   adb forward tcp:8700 jdwp:<pid>
@@ -2817,6 +2912,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — report quality, which directly determines the triager's rating |
 | **Attacker** | n/a |
 | **Applies to** | every finding derived from this chapter or gated by it |
+| **Requires** | — |
 | **Maps to** | the version-gating structure of every behaviour-change page; the HackerOne report shape in D22-001; the Google Mobile VRP non-qualifying clause "Vulnerabilities that do not work on the latest available operating system version" |
 
 - **Test:** Every version-gated report must state three things: the device OS you proved it on; the app's
@@ -2832,7 +2928,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   ```
   Paste the resulting block verbatim into the finding:
   ```
-  Proved on:        Android 16 (API 36), patch 2026-08-01, <ro.build.fingerprint>
+  Proved on:        Android 16 QPR2 (API 36.1 — ro.build.version.sdk_minor=1), patch 2026-08-01, <ro.build.fingerprint>
   App:              com.target.app <versionName> (<versionCode>), minSdk N, targetSdk M
   Behaviour gate:   applies at targetSdk >= M0 / device API >= D0; M >= M0, so the finding is CURRENT
   User interaction: none / one tap on <x> / restricted-settings approval (N taps, see recording)
@@ -2849,6 +2945,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — it is what stops a P5 being filed as a High |
 | **Attacker** | n/a |
 | **Applies to** | every classic finding that a modern platform blocks |
+| **Requires** | — |
 | **Maps to** | `about/versions/12/behavior-changes-all`, `.../14/behavior-changes-14`, `.../16/behavior-changes-16`; `privacy-and-security/risks/intent-redirection` (Android 16 default hardening) |
 
 - **Test:** Several classic Android findings are blocked by default on modern devices: tapjacking
@@ -2877,6 +2974,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — it preserves a real finding that would otherwise be discarded |
 | **Attacker** | n/a |
 | **Applies to** | any engagement running across a Google Play system update, an app update, or a device that took an OTA |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's retraction discipline and its explicit counterpart ("do not retract a confirmed finding just because it stopped reproducing — assume the client patched"); the ART/Conscrypt Mainline update mechanism in D22-061 |
 
 - **Test:** A version-gated PoC can stop reproducing for three different reasons, and they demand three
@@ -2889,7 +2987,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 - **How:** Record the module and build state at first reproduction and again at the failure, then
   compare:
   ```bash
-  adb shell getprop ro.build.fingerprint ro.build.version.security_patch
+  for p in ro.build.fingerprint ro.build.version.security_patch ro.build.version.sdk ro.build.version.sdk_minor; do printf '%s=' "$p"; adb -s "$SERIAL" shell getprop "$p"; done | tee -a "lab/platform-baseline-API$(adb -s "$SERIAL" shell getprop ro.build.version.sdk | tr -d '\r').txt"
   adb shell dumpsys package com.android.conscrypt | grep -iE 'versionCode|versionName'
   adb shell dumpsys package com.android.art       | grep -iE 'versionCode|versionName'
   adb shell dumpsys package com.target.app        | grep -iE 'versionCode|versionName|lastUpdateTime'
@@ -2916,6 +3014,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — submission strategy |
 | **Attacker** | n/a |
 | **Applies to** | every chain in which a D22 opt-out is the precondition for another domain's finding |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's chain-filing order and the "one fix = one bounty" framing |
 
 - **Test:** A hardening opt-out found here (`removeLaunchSecurityProtection()`,
@@ -2949,6 +3048,7 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
 | **VRT** | none — eligibility control |
 | **Attacker** | n/a |
 | **Applies to** | every bug-bounty engagement; less relevant for a pure client assessment, where the client's own fleet is the floor |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP non-qualifying: "Vulnerabilities that do not work on the latest available operating system version"; Xiaomi: "Attacks that are only available in lower versions of Android"; YesWeHack's Gojek programme, which excludes verbatim "Exploits that are only possible on Android version 8 and below", "Exploits that are only possible on IOS version 14 and below", "Exploiting a generic Android or iOS vulnerability" and "Vulnerabilities requiring physical access to a user's smartphone" |
 
 - **Test:** Programmes set an OS-version floor and a physical-access exclusion. A LEGACY-live finding can
@@ -2956,9 +3056,10 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   minSdk image, not after.
 - **How:**
   ```bash
-  adb shell getprop ro.build.version.release ro.build.version.sdk ro.product.model
+  for p in ro.build.version.release ro.build.version.sdk ro.build.version.sdk_minor ro.product.model; do printf '%s=' "$p"; adb -s "$SERIAL" shell getprop "$p"; done
   ```
-  Then read the programme's non-qualifying list and record: the OS-version floor; whether physical access
+  Play policy floor: new apps and updates must target API 35 since 31 Aug 2025 and API 36 from
+  31 Aug 2026 — a store build below that is itself a dated fact for D22-041. Then read the programme's non-qualifying list and record: the OS-version floor; whether physical access
   is excluded; whether "generic Android vulnerability" is excluded (which rules out the platform CVEs in
   D22-077). For a client assessment rather than a bounty, substitute the client's own supported-device
   matrix and ask for the install-base distribution.
@@ -2968,6 +3069,159 @@ Write `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch`
   LEGACY rather than being dropped silently — a client on `minSdk 24` may still care about it even when
   the bounty programme will not pay for it.
 - **Ruled out when:** n/a — it is a scoping step, run once per engagement at Gate 2.
+
+### D22-083 · Explicit intents to a targetSdk-33+ exported component must match its filter — and the senders the rule exempts
+
+| | |
+|---|---|
+| **Severity ceiling** | Support — decides which explicit-intent shape a D04/D05/D06 finding may claim |
+| **VRT** | n/a — applicability gate for D04/D05/D06 explicit-intent findings |
+| **Attacker** | AM-03 |
+| **Applies to** | receiving app targetSdk >= 33 on an Android 13+ device; exported components that declare at least one `<intent-filter>` |
+| **Requires** | targetsdk>=33, api>=33 |
+| **Maps to** | `about/versions/13/behavior-changes-13` ("Intents must match intent-filters": an intent sent to an exported component of an app targeting 13+ is delivered only if it matches one of that component's `<intent-filter>` elements; components with no filter, same-app senders and system/root senders are not filtered); MASWE-0032 |
+| **Record** | `logs/D22-083.txt` (the filter table, both probe-app runs, the logcat lines); the reachable shape in the `notes` column of the component's `inventory/components.csv` row |
+
+- **Skip when:** targetSdk < 33 or device API < 33 — write `n/a — targetSdk=<T> (<33): explicit intents are not filter-matched (inventory/app.csv)`.
+- **Test:** On a targetSdk-33+ app an explicit intent from another app reaches an exported component
+  only if its action/data/category match one of the component's filters; a component with no filter stays
+  reachable by any explicit intent. The rule exempts system, root and same-app senders, and the shell UID
+  has been observed delivering non-matching explicit broadcasts on API 36, so `adb shell am` is not a
+  representative sender. Every explicit-intent PoC in D04/D05/D06 is re-run from the zero-permission
+  probe app twice — with no action and with the filter's action — and the shape that is delivered is the
+  one filed.
+- **How:**
+  ```bash
+  python3 - "$DEC/AndroidManifest.merged.xml" <<'PY' | tee "$E/logs/D22-083.txt"
+  import sys, xml.etree.ElementTree as ET
+  A = '{http://schemas.android.com/apk/res/android}'
+  for c in ET.parse(sys.argv[1]).getroot().iter():
+      if c.tag in ('activity', 'activity-alias', 'service', 'receiver') and c.get(A + 'exported') == 'true':
+          acts = [a.get(A + 'name') for f in c.findall('intent-filter') for a in f.findall('action')]
+          print(c.tag, c.get(A + 'name'), 'filters=%d' % len(c.findall('intent-filter')), acts)
+  PY
+  adb -s "$SERIAL" logcat -c
+  # the same component twice FROM THE PROBE APP (attacker-app/; run=broadcast for a receiver, run=start for an activity)
+  adb -s "$SERIAL" shell "am start -S -n com.sanehunters.probe/.MainActivity --es run start --es victim com.target.app --es component 'com.target.app/.ExportedActivity'"
+  adb -s "$SERIAL" shell "am start -S -n com.sanehunters.probe/.MainActivity --es run start --es victim com.target.app --es component 'com.target.app/.ExportedActivity' --es action 'com.target.app.FILTER_ACTION'"
+  adb -s "$SERIAL" logcat -d | grep -E "PROBE\|start|Intent does not match component's intent filter|Access blocked:" | tee -a "$E/logs/D22-083.txt"
+  ```
+- **Proof:** Both probe-app runs captured: the actionless (non-matching) explicit intent not delivered —
+  the component silent and the `does not match` / `Access blocked:` line present — and the matching one
+  delivered, recorded beside the D04/D05/D06 finding it qualifies.
+- **Escalation:** -> D04/D05/D06 with the reachable intent shape; a filter-less exported component is the
+  unconditional case; feeds D22-053 (strict intent matching on API 36).
+- **Ruled out when:** targetSdk < 33 (the rule does not apply — quote the integer), or the component
+  declares no `<intent-filter>` (any explicit intent reaches it — record that shape); never on the strength
+  of an `adb shell am` run, whose UID the rule does not represent.
+
+### D22-084 · Exact alarms denied by default (Android 14, targetSdk 33+) — the security timer that never fires
+
+| | |
+|---|---|
+| **Severity ceiling** | Low for a local auto-lock that never fires; Medium when the alarm was the only expiry of a session the server still accepts |
+| **VRT** | rated on the control that stops firing (session lifetime or local re-authentication, D13) |
+| **Attacker** | AM-11 / AM-01 — the unlocked handset after the auto-lock should have fired; a captured session replayed past the expiry the alarm was meant to enforce |
+| **Applies to** | targetSdk >= 33 apps installed fresh on Android 14+ (an app updated from an Android 13 install keeps an existing grant); alarm-clock and calendar apps holding `USE_EXACT_ALARM` are exempt |
+| **Requires** | targetsdk>=33, api>=34 |
+| **Maps to** | `about/versions/14/changes/schedule-exact-alarms` (`SCHEDULE_EXACT_ALARM` no longer pre-granted to newly installed apps targeting 13+; `AlarmManager.canScheduleExactAlarms()`; `setExact*` and `setAlarmClock` throw `SecurityException` without it); `REQUIRE_EXACT_ALARM_PERMISSION` is the targetSdk-31 compat gate in D22-007's list; MASWE-0024 |
+| **Record** | `logs/D22-084.txt` (the appop state and `dumpsys alarm` before and after the deny) |
+
+- **Skip when:** `grep -rlE 'setExact(AndAllowWhileIdle)?\(|setAlarmClock\(' "$DEC/jadx/sources" | wc -l` prints 0 — write `n/a — no exact-alarm call site (grep count 0)`.
+- **Test:** A security timer implemented as an exact alarm (auto-lock, session expiry, token rotation,
+  re-attestation heartbeat) never fires on a fresh Android 14+ install of a targetSdk-33+ app unless the
+  user grants the special access; a `catch (SecurityException)` that swallows the failure removes the
+  control silently. Find the alarm, put the appop in its fresh-install state, drive the flow that arms it,
+  and show the control absent and never re-armed.
+- **How:**
+  ```bash
+  grep -nE 'SCHEDULE_EXACT_ALARM|USE_EXACT_ALARM' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'setExact(AndAllowWhileIdle)?\(|setAlarmClock\(|canScheduleExactAlarms\(' "$DEC/jadx/sources" -B3 -A6 | grep -nE 'catch|SecurityException|canScheduleExactAlarms'
+  adb -s "$SERIAL" shell appops get com.target.app SCHEDULE_EXACT_ALARM | tee "$E/logs/D22-084.txt"     # a fresh install on 14+ is already default/deny
+  adb -s "$SERIAL" shell appops set com.target.app SCHEDULE_EXACT_ALARM deny
+  # drive the flow that arms the timer (log in, lock, start the session), then:
+  adb -s "$SERIAL" shell dumpsys alarm | grep -A4 com.target.app | tee -a "$E/logs/D22-084.txt"        # the exact alarm record must be absent
+  ```
+- **Proof:** `dumpsys alarm` with no record for the app after the deny, the guarded state (session,
+  unlocked screen, cached verdict) still valid past its expiry, and the `catch` that swallowed the
+  `SecurityException`.
+- **Escalation:** -> D13 session lifetime and local re-authentication; -> D21 where the alarm drove an
+  attestation heartbeat; pair with D22-046 (force-stop) and D22-050 (foreground-service limits).
+- **Ruled out when:** The control is enforced server-side, or re-armed through `WorkManager` / an inexact
+  `setWindow` fallback (show the re-arm with the appop denied), or the app is a genuine alarm/calendar app
+  holding `USE_EXACT_ALARM`.
+
+### D22-085 · Cached-app freezer (Android 14+) — the probe that stopped listening before the payload arrived
+
+| | |
+|---|---|
+| **Severity ceiling** | Support — a false-negative control for the tester's own tooling |
+| **VRT** | n/a — harness control |
+| **Attacker** | n/a (tester method) |
+| **Applies to** | Android 14+ devices (cached processes frozen and context-registered broadcasts queued by default; some Android 12–13 builds freeze too); any probe or sniffer that leaves the foreground |
+| **Requires** | device, api>=34 |
+| **Maps to** | `source.android.com/docs/core/perf/cached-apps-freezer` (the freezer and its `cached_apps_freezer` setting); `about/versions/14/behavior-changes-all` (context-registered broadcasts are queued while the app is cached) |
+| **Record** | `logs/D22-085.txt` (frozen state, deferred broadcasts, the probe's sniff `done` line); a `lab.md` entry when the freezer is switched off |
+
+- **Skip when:** device API < 34 and no frozen process in `dumpsys activity processes` — write `n/a — device API <34, no frozen process observed (logs/D22-085.txt)`.
+- **Test:** A probe that calls `moveTaskToBack()` or is covered by the target is frozen within seconds;
+  broadcasts to it queue until it thaws, bound services stall, and its sniff window ends with no output.
+  Keep sniffers in the foreground, end every sniff with a positive control, and check the frozen state
+  before trusting a zero.
+- **How:**
+  ```bash
+  adb -s "$SERIAL" shell dumpsys activity processes | grep -iE 'frozen|freezer' | head | tee "$E/logs/D22-085.txt"
+  adb -s "$SERIAL" shell dumpsys activity broadcasts | grep -iE 'deferred|frozen' | head | tee -a "$E/logs/D22-085.txt"
+  # the probe app's sniff step ends with a broadcast to itself: no done line, or control_seen=false, voids the zero
+  adb -s "$SERIAL" logcat -d -s PROBE:V | grep 'PROBE|sniff|done' | tee -a "$E/logs/D22-085.txt"
+  # lab-only, when the sniff must run with the probe in the background: switch the freezer off, reboot, re-check
+  adb -s "$SERIAL" shell settings put global cached_apps_freezer disabled && adb -s "$SERIAL" reboot
+  # afterwards: adb -s "$SERIAL" shell settings put global cached_apps_freezer default && adb -s "$SERIAL" reboot
+  ```
+- **Proof:** Every sniff log in the engagement ends with `PROBE|sniff|done|… (control_seen=true)`; a log
+  without it is void and the sweep is re-run.
+- **Escalation:** Feeds the D05 sniffer runs, the D22-009 StrictMode sweep and D22-010; the freezer state
+  goes in `lab.md`.
+- **Ruled out when:** n/a — harness control; complete when every sniff log carries the positive-control
+  line and the frozen-state check is recorded for the image.
+
+### D22-086 · LEGACY-live: targetSdk < 30 — unscoped shared storage and `requestLegacyExternalStorage`
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium; High when a file holds a live session token that a second app reads |
+| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4) |
+| **Attacker** | AM-04 — an app holding only `READ_EXTERNAL_STORAGE`, on the legacy regime |
+| **Applies to** | **targetSdk <= 29**: at <= 28 shared storage is unscoped with no flag; at 29 `requestLegacyExternalStorage="true"` restores it; a targetSdk-30 update keeps it only through `preserveLegacyExternalStorage` on an upgrade install. At 30+ the class is D11-042 (`MANAGE_EXTERNAL_STORAGE`) |
+| **Requires** | targetsdk<30, legacy |
+| **Maps to** | `about/versions/11/privacy/storage` (scoped storage enforced at targetSdk 30; `requestLegacyExternalStorage` ignored there; `preserveLegacyExternalStorage`); MASTG-TEST-0200, MASTG-TEST-0202, MASWE-0002 |
+| **Record** | `logs/D22-086.txt` (targetSdk, manifest flags, the before/after file diff), `pocs/F-NNN/` |
+
+- **Skip when:** targetSdk >= 30 — write `n/a — targetSdk=<T> (>=30): scoped storage enforced, requestLegacyExternalStorage ignored (inventory/app.csv); MANAGE_EXTERNAL_STORAGE is D11-042`.
+- **Test:** Below targetSdk 30 the app reads and writes all of shared storage, and any file it writes
+  outside `Android/data/<pkg>` is readable by every other app holding `READ_EXTERNAL_STORAGE` on the same
+  legacy regime. Diff shared storage before and after driving the app on an API <= 29 image and read each
+  new file back from a second app.
+- **How:**
+  ```bash
+  T=$(aapt2 dump badging "$E/apk/base.apk" | grep -oE "targetSdkVersion:'[0-9]+'" | grep -oE '[0-9]+'); echo "targetSdk=$T" | tee "$E/logs/D22-086.txt"
+  grep -nE 'requestLegacyExternalStorage|preserveLegacyExternalStorage|WRITE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE' "$DEC/AndroidManifest.merged.xml" | tee -a "$E/logs/D22-086.txt"
+  grep -rnE 'getExternalStorageDirectory\(|getExternalStoragePublicDirectory\(|/sdcard/|/storage/emulated/0' "$DEC/jadx/sources" | head -40
+  # on the API <= 29 image from D22-003: what the app writes OUTSIDE its own Android/data directory
+  adb -s "$SERIAL" shell "find /storage/emulated/0 -path /storage/emulated/0/Android -prune -o -type f -print" | sort > "$E/logs/D22-086-before.txt"
+  # drive every flow that saves, exports, downloads, logs or caches, then:
+  adb -s "$SERIAL" shell "find /storage/emulated/0 -path /storage/emulated/0/Android -prune -o -type f -print" | sort > "$E/logs/D22-086-after.txt"
+  comm -13 "$E/logs/D22-086-before.txt" "$E/logs/D22-086-after.txt" | tee -a "$E/logs/D22-086.txt"
+  ```
+  Read each new file back from a second app holding only `READ_EXTERNAL_STORAGE`, exactly as D11-041
+  proves the cross-app read.
+- **Proof:** A file holding a token or PII that the app wrote outside its own `Android/data` directory on
+  the API <= 29 image (the `comm` line), read back by the second app, with the targetSdk integer quoted.
+- **Escalation:** -> D11-041 (file the storage finding there, with this row's version gate as the
+  precondition); -> D20 when the file is shared media carrying EXIF; -> D13 when it is a session token.
+- **Ruled out when:** targetSdk >= 30 (quote the integer), or the before/after diff on the API <= 29 image
+  shows no file outside `Android/data` after a full drive of the save/export/download flows, or every such
+  file carries nothing sensitive (list them).
 
 ## Graveyard for this domain
 
@@ -3080,15 +3334,15 @@ table when a junior tester or a scanner report proposes one.
 - OWASP MASTG/MASVS: MASTG-TEST-0245, -0285, -0235, -0381, -0315, -0340, -0262, -0312, -0224, -0393,
   -0399, -0217, -0250, -0252, -0253, -0334, -0203, -0222, -0307, -0326, -0328, -0330, -0242;
   MASTG-TECH-0043, -0128, -0141, -0150, -0160, -0161, -0162, -0163, -0174; MASTG-KNOW-0014, -0018,
-  -0024, -0042, -0046, -0117, -0132, -0133, -0134; rules `mastg-android-sdk-version`,
+  -0024, -0042, -0046 (deprecated upstream), -0117, -0132, -0133, -0134; rules `mastg-android-sdk-version`,
   `mastg-android-strictmode`, `mastg-android-pendingintent-mutable`; MASWE-0041, -0042, -0046, -0026,
   -0030, -0032; MASVS-CODE-1, MASVS-CODE-3, MASVS-PLATFORM-1.
 - MITRE ATT&CK Mobile: T1633.001, T1632, T1661, T1407, T1409, T1418, T1420, T1422, T1424, T1426,
   T1414, T1429, T1512, T1626, T1628.001, T1624.001, T1635.001, T1641.001, T1417.002; mitigation M1006
   (Use Recent OS Version), which ATT&CK attaches technique-by-technique.
-- Bugcrowd VRT release 2026-07-08 (`data/bugcrowd-vrt-full.csv`, 581 entries) for every rating in this
+- Bugcrowd VRT release 2026-07-08 (`data/vrt.csv`, 581 entries) for every rating in this
   chapter, including the confirmation that the entire `mobile_security_misconfiguration` branch is P5
-  and that `broken_access_control.exposed_sensitive_android_intent` carries a null priority.
+  and that `broken_access_control.exposed_sensitive_android_intent` carries a `varies` priority (`null` in the VRT json).
 - Programme rules: Google Mobile VRP and the Android & Google Devices programme (non-qualifying
   "vulnerabilities that do not work on the latest available operating system version"; in-scope
   "Multi-User & Private Space" and "Enterprise Bypasses"); Xiaomi ("attacks that are only available in
@@ -3098,16 +3352,17 @@ table when a junior tester or a scanner report proposes one.
   (Basecamp) and #1737358 (Shopify), both of which open with the package/min/target SDK block;
   CVE-2024-31317 (Zygote `--runtime-flags` injection, fixed June 2024); CVE-2020-0096 (StrandHogg 2.0,
   back-ported May 2020); CVE-2024-45240 (the Android 12+ limitation on unverified https deep links).
-- The research corpus assembled for this checklist:
-  `research/frontier/modern-api-surfaces.md` (the primary source for Android 12-16 API surfaces),
-  `research/architecture/{framework-internals,security-model,aosp-core}.md`,
-  `research/local/skill-corpus-{classes,method}.md`, `research/primary/{owasp-mastg,owasp-mobile-top10,
+- The research corpus assembled for this checklist (the maintainers' research notes, not shipped in this
+  public repository; every claim they support is restated in the item that relies on it):
+  research/frontier/modern-api-surfaces.md (the primary source for Android 12-16 API surfaces),
+  research/architecture/{framework-internals,security-model,aosp-core}.md,
+  research/local/skill-corpus-{classes,method}.md, research/primary/{owasp-mastg,owasp-mobile-top10,
   mitre-attack-mobile,bugcrowd-vrt-severity,vrp-program-economics,exploitdb-cve-patterns,
-  mobilehackinglab}.md`, `research/secondary/{claude-bughunter,hrishikesh-hacktricks,
+  mobilehackinglab}.md, research/secondary/{claude-bughunter,hrishikesh-hacktricks,
   indusface-singh-riya,sallam-hetmehta,frida-drozer-tooling,extra-community-sources,sehno-gowthams,
-  writeups-realfinds}.md`, `research/realworld/{h1-disclosed-mobile,bugcrowd-intigriti-writeups,
-  crossplatform-frameworks,sdk-supplychain-cves}.md`, `research/gaps-gap-{adversary,coverage,workflow}.md`.
-- The bug-hunting corpus (`research/secondary/claude-bughunter.md`) for the cross-cutting discipline
+  writeups-realfinds}.md, research/realworld/{h1-disclosed-mobile,bugcrowd-intigriti-writeups,
+  crossplatform-frameworks,sdk-supplychain-cves}.md, research/gaps-gap-{adversary,coverage,workflow}.md.
+- The bug-hunting corpus (research/secondary/claude-bughunter.md) for the cross-cutting discipline
   applied here: the layer-ordering trap (re-cast as platform-block versus app-block in D22-005), the
   Body-Diff Rule and Marker Discipline (D22-006, D22-034, D22-066), the shadow-API behavioural-diff rule
   (D22-006), the Shell-Loop Ban (D22-003), the pre-severity gate and retraction discipline (D22-080),

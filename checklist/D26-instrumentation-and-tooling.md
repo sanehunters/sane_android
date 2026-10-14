@@ -67,7 +67,7 @@ grep -c . "$E"/inventory/components.csv "$E"/inventory/deeplinks.csv "$E"/invent
 
 Decision and the exact n/a note to write:
 
-- **No device at all** (`adb devices` empty): `D26 partial n/a — static-only engagement (adb devices empty, doctor device=false). Dynamic items D26-001..017, D26-028, D26-030..038, D26-041..061, D26-064..066, D26-073..074, D26-077, D26-079 n/a; D26-018..027, D26-029, D26-039..040, D26-062..063, D26-067..072, D26-075..076, D26-078 still apply. Every dynamic negative in other domains is recorded as BLOCKED (B-nn), never as clean.`
+- **No device at all** (`adb devices` empty): `D26 partial n/a — static-only engagement (adb devices empty, doctor device=false). Dynamic items D26-001..017, D26-028, D26-030..038, D26-041..061, D26-064..066, D26-073..074, D26-077, D26-079..085 n/a; D26-018..027, D26-029, D26-039..040, D26-062..063, D26-067..072, D26-075..076, D26-078 still apply. Every dynamic negative in other domains is recorded as BLOCKED (B-nn), never as clean.`
 - **Device but `adb root` refused** (`adbd cannot run as root in production builds`): `D26-004..007, D26-057, D26-083 n/a — no root (image <variant>/<build.type>); D26-008 (NSC repack) and D26-009 (gadget) are mandatory substitutes and the report's Limitations names the cost.`
 - **Device API ≤ 33**: `D26-005..007 n/a — API <sdk> uses the legacy /system trust store; D26-004 applies.` **API ≥ 34**: `D26-004 n/a — API <sdk>: Conscrypt APEX store; D26-005/006 mandatory.`
 - **No `.so` in any split and no packer line**: `D26-058..061 n/a — the APK ships no native libraries (unzip count 0, APKiD: no packer/anti_* entries).`
@@ -115,6 +115,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — the gate that decides whether every other chapter's negative is defensible |
 | **Attacker** | AM-12 (own device; not an attack) |
 | **Applies to** | all dynamic engagements |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0011 (Setting Up an Interception Proxy), MASTG-TECH-0001 (Accessing the Device Shell), MASTG-TOOL-0004 (adb), MASTG-TOOL-0001 (Frida (Android)) |
 
 - **Test:** Prove, with a positive control, that the lab can actually produce the observations you are
@@ -130,18 +131,22 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb -s "$S" shell getprop ro.build.version.sdk | xargs -I{} P "API level" {}
   adb -s "$S" shell settings get global http_proxy | xargs -I{} P "proxy setting" {}
   # CA trust proven from INSIDE an app's mount namespace, not from the adb shell:
+  # mitmdump writes no flows log by itself: run it once per session with an append-mode flow file
+  FL="${E:-.}/lab/harness.flows"
+  pgrep -f 'mitmdump.*harness.flows' >/dev/null || { mitmdump -q -w "+$FL" >/dev/null 2>&1 & sleep 2; }
   adb -s "$S" shell am start -a android.intent.action.VIEW -d https://example.com >/dev/null
-  sleep 4
-  grep -q 'example.com' <(timeout 5 tail -n 50 ~/.mitmproxy/flows.log 2>/dev/null) \
+  sleep 6
+  mitmdump -nr "$FL" --flow-detail 1 2>/dev/null | grep -q 'example.com' \
     && P "control app TLS decrypts (positive control)" PASS || P "control app TLS" FAIL
   adb -s "$S" shell pm list packages | grep -q "$PKG" && P "target installed" PASS || P "target" FAIL
   adb -s "$S" shell pm path "$PKG" | wc -l | xargs -I{} P "splits installed (count)" {}
-  frida-ps -U >/dev/null 2>&1 && P "frida device reachable" PASS || P "frida" FAIL
+  frida-ps -D "$S" >/dev/null 2>&1 && P "frida device reachable" PASS || P "frida" FAIL
   frida --version; adb -s "$S" shell /data/local/tmp/frida-server --version
   adb -s "$S" exec-out screencap -p | wc -c | xargs -I{} P "screencap bytes" {}
   adb -s "$S" shell screenrecord --time-limit 2 /sdcard/_t.mp4 && adb -s "$S" shell rm /sdcard/_t.mp4 \
     && P "screenrecord works" PASS || P "screenrecord" FAIL
   adb -s "$S" shell locksettings get-disabled 2>/dev/null | xargs -I{} P "lockscreen disabled?" {}
+  adb -s "$S" shell dumpsys user | grep -q 'RUNNING_UNLOCKED' && P "user 0 unlocked" PASS || P "user 0 LOCKED (unlock the screen)" FAIL
   ```
   Save as `lab/harness-baseline-YYYYMMDD.txt` in the evidence tree.
 - **Proof:** A saved baseline file where every line reads PASS. The **control-app TLS line** is the one
@@ -161,6 +166,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | `ro.build.fingerprint`, `ro.build.version.security_patch`; MASTG-TOOL-0004 (adb), MASTG-TOOL-0018 (jadx), MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0123 (apksigner) |
 
 - **Test:** Record exactly which binaries, images and patch levels produced the results, so a retest is a
@@ -179,8 +185,13 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
     adb -s $SERIAL shell getprop ro.build.fingerprint
     adb -s $SERIAL shell getprop ro.build.version.security_patch
     adb -s $SERIAL shell /data/local/tmp/frida-server --version
-  } | tee lab/LAB-MANIFEST.txt
+    # host binutils D16 needs, and the timeout binary the wrappers use
+    for t in readelf llvm-readelf objdump llvm-objdump nm llvm-nm checksec timeout gtimeout; do
+      printf '%s=' $t; command -v $t || echo MISSING; done
+  } | tee "$E/lab/LAB-MANIFEST.txt"
   ```
+  On macOS put the LLVM tools first on `PATH` before D16 (`PATH="$(brew --prefix llvm)/bin:$PATH"`; on
+  Linux install the distribution's `llvm`/`binutils` packages).
 - **Proof:** `LAB-MANIFEST.txt` shipped as a report appendix. `ro.build.fingerprint` and
   `ro.build.version.security_patch` are the two fields that settle "was this already patched?" arguments
   about any platform-adjacent claim.
@@ -212,6 +223,9 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb root 2>&1        # "adbd cannot run as root in production builds" => NOT rootable, stop here
   adb shell id         # must print uid=0(root)
   adb shell getprop ro.debuggable; adb shell which su || echo "no su"
+  # the root helper every later item uses: after `adb root` the AVD shell is already uid 0 and has no `su`;
+  # Magisk hardware keeps uid 2000 and needs `su -c`
+  R(){ if adb -s "$SERIAL" shell id | grep -q 'uid=0'; then adb -s "$SERIAL" shell "$@"; else adb -s "$SERIAL" shell su -c "'$*'"; fi; }
   ```
   2. On **Apple Silicon** the image must also be a **`ps16k`** (16 KB page size) variant; a plain
      `arm64-v8a` image boots to `ERROR | detected a hanging thread 'QEMU2 main loop'` and never reaches
@@ -272,6 +286,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-07 (tester convenience, not an attacker) |
 | **Applies to** | **API 34+** (Android 14/15/16), and Conscrypt-Mainline-updated 12/13. Root required |
+| **Requires** | device, root, mitm, api>=34 |
 | **Maps to** | AOSP Zygote fork semantics ("at Zygote fork time, we create a mount namespace for each running app"); AOSP APEX file format (apexd loop + dm-verity mount, versioned path plus bind mount); MASTG-TECH-0011; ATT&CK T1632 |
 
 - **Test:** On API 34+ the system trust store lives in the updatable Conscrypt APEX and
@@ -280,33 +295,31 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   shell's namespace never reaches app processes. Do both halves or you will conclude "the app pins".
 - **How:**
   ```bash
-  # 1. stage a writable copy of the trust store
-  adb shell su -c '
+  # 1. stage a writable copy of the trust store (R = the root helper from D26-003)
+  R '
     mkdir -p /data/local/tmp/cacerts
     cp /apex/com.android.conscrypt/cacerts/* /data/local/tmp/cacerts/ 2>/dev/null
     cp /system/etc/security/cacerts/* /data/local/tmp/cacerts/ 2>/dev/null'
   # 2. add your CA in the hashed-name form Conscrypt expects
   HASH=$(openssl x509 -inform PEM -subject_hash_old -in burp.pem | head -1)
   adb push burp.pem /data/local/tmp/cacerts/${HASH}.0
-  # 3. tmpfs over the legacy dir, populate, label
-  adb shell su -c '
+  # 3. tmpfs over the legacy dir, populate, label — the label MUST be system_security_cacerts_file;
+  #    if chcon fails, stop and fix the policy (a system_file fallback does not work)
+  R '
     mount -t tmpfs tmpfs /system/etc/security/cacerts
     cp /data/local/tmp/cacerts/* /system/etc/security/cacerts/
     chown root:root /system/etc/security/cacerts/*; chmod 644 /system/etc/security/cacerts/*
-    chcon u:object_r:system_security_cacerts_file:s0 /system/etc/security/cacerts/* 2>/dev/null || \
-    chcon u:object_r:system_file:s0 /system/etc/security/cacerts/*'
-  # 4. THE STEP EVERYONE MISSES — inject into the zygote mount namespace
-  adb shell su -c '
-    for Z in $(pidof zygote) $(pidof zygote64); do
+    chcon u:object_r:system_security_cacerts_file:s0 /system/etc/security/cacerts/*'
+  # 4. THE STEP EVERYONE MISSES — inject into the zygote mount namespaces. USAP pool children are forked
+  #    from zygote and inherit the bind; webview_zygote is a separate zygote and must be bound explicitly
+  R '
+    for Z in $(pidof zygote) $(pidof zygote64) $(pidof webview_zygote); do
       nsenter --mount=/proc/$Z/ns/mnt -- /bin/mount --bind \
         /system/etc/security/cacerts /apex/com.android.conscrypt/cacerts
     done'
-  # 5. and into every already-running app process
-  adb shell su -c '
-    for P in $(ls /proc | grep -E "^[0-9]+$"); do
-      nsenter --mount=/proc/$P/ns/mnt -- /bin/mount --bind \
-        /system/etc/security/cacerts /apex/com.android.conscrypt/cacerts 2>/dev/null
-    done'
+  # 5. processes that were already running keep the trust store they initialised — restart them
+  adb -s "$SERIAL" shell am force-stop com.target.app; adb -s "$SERIAL" shell am force-stop "$CTRL"
+  # then re-run the D26-001 acceptance check before any TLS verdict
   ```
   Use `--rbind` instead of `--bind` when `/system/etc/security/cacerts` already carries nested mounts
   (common under Magisk modules). The bind is **runtime only** — re-run after every reboot. An alternative
@@ -314,7 +327,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **Proof:** The symptom of skipping step 4 is
   `Client TLS handshake failed ... does not trust the proxy's certificate` for **every** host — which is
   indistinguishable from pinning by behaviour alone. After the bind, the control app's traffic decrypts
-  (D26-001) and `Settings -> Trusted credentials -> SYSTEM` lists the proxy CA.
+  (D26-001), `Settings -> Trusted credentials -> SYSTEM` lists the proxy CA, and a WebView-rendered page
+  (the control app's Custom Tab or the target's WebView) decrypts too — that is the `webview_zygote` bind.
 - **Escalation:** -> D14, D15, D18, D20, D24. Without it those chapters cannot produce a defensible
   negative at all.
 - **Ruled out when:** The device is API ≤ 33 (D26-004 suffices), or the app declares a
@@ -330,6 +344,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all; decisive on API 34+ |
+| **Requires** | device, root, mitm, api>=34 |
 | **Maps to** | AOSP Zygote / per-app mount-namespace model; AOSP APEX bind-mount model |
 
 - **Test:** The adb shell and the target app live in different mount namespaces. Confirm the app's own
@@ -338,8 +353,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   ```bash
   PKG=com.target.app
   PID=$(adb shell pidof $PKG | tr -d '\r')
-  adb shell su -c "nsenter --mount=/proc/$PID/ns/mnt -- ls /apex/com.android.conscrypt/cacerts | wc -l"
-  adb shell su -c "nsenter --mount=/proc/$PID/ns/mnt -- ls /system/etc/security/cacerts | wc -l"
+  R "nsenter --mount=/proc/$PID/ns/mnt -- ls /apex/com.android.conscrypt/cacerts | wc -l"   # R: D26-003
+  R "nsenter --mount=/proc/$PID/ns/mnt -- ls /system/etc/security/cacerts | wc -l"
   adb shell "cat /proc/$PID/mountinfo" | grep -E 'cacerts|conscrypt'
   adb shell readlink /proc/$PID/ns/mnt ; adb shell readlink /proc/self/ns/mnt   # different inodes
   ```
@@ -395,8 +410,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **Test:** When no rootable image is available, add a debug-friendly NSC and re-sign.
 - **How:**
   ```bash
-  apktool d -o out target.apk
-  cat > out/res/xml/nsc.xml <<'XML'
+  apktool d -f -o "$E/lab/nsc-repack" "$E/apk/base.apk"   # a lab copy; $DEC/apktool stays pristine
+  cat > "$E/lab/nsc-repack/res/xml/nsc.xml" <<'XML'
   <network-security-config>
     <base-config cleartextTrafficPermitted="true">
       <trust-anchors>
@@ -406,11 +421,11 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
     </base-config>
   </network-security-config>
   XML
-  # point android:networkSecurityConfig="@xml/nsc" at it in out/AndroidManifest.xml, then:
-  apktool b -o patched.apk out
+  # point android:networkSecurityConfig="@xml/nsc" at it in $E/lab/nsc-repack/AndroidManifest.xml, then:
+  apktool b -o "$E/lab/patched.apk" "$E/lab/nsc-repack"
   zipalign -p -f 4 patched.apk aligned.apk
   apksigner sign --ks my.keystore aligned.apk
-  adb install-multiple <every split, all signed with the SAME key>
+  adb -s "$SERIAL" install-multiple --no-incremental <every split, all signed with the SAME key>   # rm the apksigner .idsig files first
   ```
 - **Proof:** HTTPS now decrypts with the CA in the **user** store on a stock device.
 - **Escalation:** -> D14, D15. Also a D02 data point: if the app refuses to run after re-signing, it
@@ -429,6 +444,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — but it removes the "requires root" discount, which is worth one to two severity bands on the finding it carries |
 | **Attacker** | AM-12 becoming AM-11 (physical unlocked) |
 | **Applies to** | all; fails against apps that verify their own signature unless `PackageManager.getPackageInfo()` is also spoofed |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0026 (Dynamic Analysis on Non-Rooted Devices), MASTG-TECH-0041 (Library Injection), MASTG-TECH-0038 (Patching), MASTG-TECH-0039; MASTG-TOOL-0029 (objection (Android)), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TOOL-0011 (Apktool) |
 
 - **Test:** Embed the Frida gadget in the APK so instrumentation works with no device compromise, which
@@ -439,10 +455,10 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb install -r target.objection.apk
   objection explore
   # manual equivalent:
-  apktool d -o out target.apk
-  cp frida-gadget-<ver>-android-arm64.so out/lib/arm64-v8a/libgadget.so
+  apktool d -f -o "$E/lab/gadget-repack" "$E/apk/base.apk"
+  cp frida-gadget-<ver>-android-arm64.so "$E/lab/gadget-repack/lib/arm64-v8a/libgadget.so"
   # add  System.loadLibrary("gadget")  to the Application/first-Activity <clinit> smali
-  apktool b -o patched.apk out
+  apktool b -o patched.apk "$E/lab/gadget-repack"
   java -jar uber-apk-signer.jar -a patched.apk --out signed
   adb install signed/patched-aligned-debugSigned.apk
   frida -D "$SERIAL" -n Gadget -l script.js
@@ -464,10 +480,11 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all Frida-based work |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TOOL-0001 (Frida (Android)), MASTG-TOOL-0031 (Frida); ATT&CK T1617 Hooking, T1623.001 Unix Shell |
 
 - **Test:** A version or ABI mismatch fails in ways that look exactly like target hardening — attach
-  hangs, `frida-ps -U` lists nothing, or scripts load and silently never fire. Assert equality, then fire
+  hangs, `frida-ps -D "$SERIAL"` lists nothing, or scripts load and silently never fire. Assert equality, then fire
   a hook that *cannot* be absent in a running app.
 - **How:**
   ```bash
@@ -475,12 +492,12 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   HOST=$(frida --version)
   adb push frida-server-${HOST}-android-arm64 /data/local/tmp/frida-server
   adb shell "chmod 755 /data/local/tmp/frida-server"
-  adb shell "su -c '/data/local/tmp/frida-server &'"
+  R 'nohup /data/local/tmp/frida-server -D >/dev/null 2>&1 &'   # R: D26-003; -D daemonises, nohup survives the shell
   DEV=$(adb shell /data/local/tmp/frida-server --version | tr -d '\r')
   [ "$HOST" = "$DEV" ] || { echo "VERSION MISMATCH host=$HOST device=$DEV — fix before testing"; exit 1; }
-  frida-ps -Uai | head
+  frida-ps -D "$SERIAL" -ai | head
   # positive control: a hook that cannot be absent
-  frida -D "$SERIAL" -n com.target.app -q -e '
+  frida -D "$SERIAL" -n com.target.app -q -t 30 -e '
   Java.perform(function(){
     var L = Java.use("android.util.Log");
     L.i.overload("java.lang.String","java.lang.String").implementation = function(a,b){
@@ -488,6 +505,13 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
     console.log("[CTRL] hook installed");
   });'
   ```
+  `-q` without `-t` exits as soon as the script has loaded, so every hook reports zero hits — that is the
+  harness, not the app: always pair `-q` with `-t <seconds>`. In attach mode (`-p`/`-n`) some frida-tools
+  17.x builds do not honour `-t` and never exit; wrap the call in a host timeout:
+  `${TIMEOUT:-timeout} 90 frida -D "$SERIAL" -p "$PID" -q -t 40 -l ctrl.js` (`TIMEOUT=gtimeout` on macOS
+  with coreutils). Release builds often strip `Log.i` calls at shrink time; if the control stays silent
+  while the app is visibly busy, hook a framework method every foreground app calls instead
+  (`android.app.Activity.onResume`) before declaring the instrument broken.
 - **Proof:** `[CTRL] hook installed` followed by at least one `[CTRL] Log.i` line within seconds of
   touching the app. **No control output means the instrument is broken and every negative from this
   session is void.**
@@ -506,6 +530,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | Frida 17+ for **compiled** agents. The Frida REPL and `frida-trace` are exempt |
+| **Requires** | device, frida |
 | **Maps to** | Frida JavaScript API docs, `Java` section (`Java.available`, `Java.androidVersion`) |
 
 - **Test:** Confirm the `Java` namespace exists in your agent before concluding a Java hook "did not fire".
@@ -559,7 +584,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   # keep the same build on both:
   for p in $(adb -s emulator-5556 shell pm path com.target.app | sed 's/package://' | tr -d '\r'); do
     adb -s emulator-5556 pull "$p" ./apk/; done
-  adb -s emulator-5554 install-multiple ./apk/*.apk
+  rm -f ./apk/*.idsig; adb -s emulator-5554 install-multiple --no-incremental ./apk/*.apk   # .idsig beside an APK forces incremental install
   ```
 - **Proof:** A single take showing the non-rooted device refusing the read and the rooted device
   displaying the contents. All four `getprop` values pasted as **text** in the report — Google's guidance
@@ -615,6 +640,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — its purpose is to stop you filing emulator artefacts as findings |
 | **Attacker** | AM-12 |
 | **Applies to** | all; decisive for fintech, wallet, identity, health and automotive apps |
+| **Requires** | — |
 | **Maps to** | Play Integrity verdict behaviour on rooted/unsupported emulators (empty verdict); AOSP keystore attestation `SecurityLevel` semantics |
 
 - **Test:** State, before testing, which classes the emulator cannot authoritatively answer, so those rows
@@ -655,6 +681,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all engagements; the restoration half applies to any live or shared environment |
+| **Requires** | device |
 | **Maps to** | NIST SP 800-115 Appendix B §5.2 (required actions for files created to facilitate testing), §5.3 (Data Handling) |
 
 - **Test:** Engagement N+1 must not run on a device still carrying engagement N's attacker APKs, hooks, CA
@@ -677,7 +704,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb -s $S uninstall com.target.app
   adb -s $S emu kill        # research AVD is destroyed and rebuilt from LAB-MANIFEST.txt
   ```
-  Alongside it, maintain `engagement/CREATED-STATE.tsv` for everything you created on the **client's**
+  Alongside it, maintain `$E/report/CREATED-STATE.tsv` for everything you created on the **client's**
   systems, one row per artefact — accounts, uploaded files, webhook registrations, FCM device tokens,
   OAuth grants, payment tokens, support tickets:
   ```
@@ -702,6 +729,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all multi-stream evidence; mandatory for anything timing-dependent |
+| **Requires** | device |
 | **Maps to** | `logcat -v year -v UTC -v threadtime`; `settings get global auto_time`; MASTG-TECH-0009 (Monitoring System Logs) |
 
 - **Test:** A finding's proof is usually three streams that must line up — screen recording, `logcat`, and
@@ -709,20 +737,31 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   un-correlatable, and a reviewer cannot distinguish a genuine sequence from a rearranged one.
 - **How:**
   ```bash
-  S=emulator-5554
-  date -u +%FT%T.%3NZ                                # host
-  adb -s $S shell date -u +%FT%T.%3NZ                # device (must be within ~2s of host)
+  S=${SERIAL:-emulator-5554}
+  # host clock in UTC with milliseconds, portably (BSD date has no %3N — it prints a literal N)
+  HOSTNOW(){ python3 -c 'import datetime;print(datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds"))'; }
+  HOSTNOW                                            # host
+  adb -s $S shell date -u +%FT%TZ                    # device (seconds suffice; must be within ~2s of host)
   adb -s $S shell settings get global auto_time      # 1 = network time; 0 = drifting, fix it
-  adb -s $S shell su 0 date -u 010112002026.00 2>/dev/null || true
+  # a drifted research device: set it FROM the host clock (R = the D26-003 root helper), never to a fixed date
+  R "date -u $(date -u +%m%d%H%M%Y.%S)" 2>/dev/null || true
+  # size the ring buffers once per boot — the defaults rotate within minutes on a busy device
+  adb -s $S logcat -G 64M; adb -s $S logcat -g
   # force logcat into a comparable format for the WHOLE engagement:
-  adb -s $S logcat -v year -v UTC -v threadtime > evidence/F-007/logcat.txt
-  printf 'host=%s device=%s\n' "$(date -u +%FT%T.%3NZ)" \
-    "$(adb -s $S shell date -u +%FT%T.%3NZ)" > evidence/F-007/clock.txt
+  adb -s $S logcat -v year -v UTC -v threadtime > "$E/logs/F-007/logcat.txt"
+  printf 'host=%s device=%s\n' "$(HOSTNOW)" \
+    "$(adb -s $S shell date -u +%FT%TZ)" > "$E/logs/F-007/clock.txt"
+  # positive control written INTO the same buffer during the window, then grepped back
+  adb -s $S shell log -t SANE "ctrl-$(date +%s)"; adb -s $S logcat -d -s SANE | tail -1
   ```
   `-v year -v UTC` is the load-bearing part: the default logcat format carries neither a year nor a zone,
-  which is precisely what makes cross-stream correlation arguable months later at retest.
-- **Proof:** `clock.txt` next to each multi-stream capture, and logcat lines with a full UTC timestamp
-  bracketing the corresponding proxy flow.
+  which is precisely what makes cross-stream correlation arguable months later at retest. Every
+  logcat-based negative needs that control line in the same buffer during the window: a `-d` sweep is
+  evidence only while the control line is still present. Some OEM `user` builds drop app-level
+  `Log.i`/`Log.d` entirely, so a probe app mirrors every observation to its own file (D26-082) rather than
+  relying on logcat.
+- **Proof:** `clock.txt` next to each multi-stream capture, logcat lines with a full UTC timestamp
+  bracketing the corresponding proxy flow, and the `SANE ctrl-…` control line still present in the capture.
 - **Escalation:** -> D27. Put the measured offset in the report wherever a finding's argument depends on
   ordering (races, TOCTOU, callback ordering).
 - **Ruled out when:** Not a finding. A single-stream claim (one HTTP request/response pair) does not need
@@ -736,7 +775,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
-| **Maps to** | `INSTALL_FAILED_DEPRECATED_SDK_VERSION` and `--bypass-low-target-sdk-block` (Android 14 behaviour changes); `ERR_PROXY_CONNECTION_FAILED`; `adbd cannot run as root in production builds` |
+| **Requires** | device |
+| **Maps to** | `INSTALL_FAILED_DEPRECATED_SDK_VERSION` and `--bypass-low-target-sdk-block` (Android 14 behaviour changes; minimum raised to targetSdk 24 in Android 15); `ERR_PROXY_CONNECTION_FAILED`; `adbd cannot run as root in production builds` |
 
 - **Test:** Index the traps by **the observable the tester actually sees**, so a junior tester resolves in
   minutes what a senior once lost hours to. Put it in `lab/README.md`.
@@ -745,12 +785,14 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   SYMPTOM (what you see)                                       FIRST CHECK                          LIKELY CAUSE
   "TLS handshake failed ... does not trust" on EVERY host       verify-harness control-app line      CA bind never reached zygote's mount ns (D26-005)
   the same, on ONE host only                                    which host                           that host is pinned -> objection/Frida (D14)
-  frida-ps -U empty / attach hangs                              frida --version vs server --version  version or ABI mismatch (D26-010)
+  frida-ps -D "$SERIAL" empty / attach hangs                    frida --version vs server --version  version or ABI mismatch (D26-010)
   Frida script loads, zero events                               fire the Log.i control hook          abstract class / R8-renamed / init-time path
+  Frida script loads, zero events, client returned at once      was -q used without -t?              the client detached after script load (D26-010)
+  Failed to spawn: need Gadget to attach on jailed Android      frida-ls-devices                     -U selected the stock phone -> -D <serial> (D26-041)
   frida-trace "Started tracing 0 functions"                     retry attached with -p               classes not loaded at spawn (D26-047)
   adb root -> "cannot run as root in production builds"         image variant                        *_playstore image: never rootable (D26-003)
   emulator hangs at "QEMU2 main loop"                           image variant on Apple Silicon       needs a ps16k (16 KB page) image
-  INSTALL_FAILED_DEPRECATED_SDK_VERSION                         target's minSdk                      Android 14 min targetSdk 23 -> --bypass-low-target-sdk-block
+  INSTALL_FAILED_DEPRECATED_SDK_VERSION                         target's targetSdk                   API 34 blocks targetSdk < 23, API 35+ blocks < 24 -> --bypass-low-target-sdk-block
   INSTALL_FAILED_MISSING_SPLIT                                  pm path count                        base only installed; use install-multiple / bundletool
   WebView ERR_PROXY_CONNECTION_FAILED                           settings get global http_proxy       stale proxy -> settings delete global http_proxy
   proxy sees nothing at all                                     proxy setting + route                emulator 10.0.2.2 vs hardware host LAN IP
@@ -758,6 +800,12 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   key generation throws on a fresh emulator                     locksettings set-pin                 setUserAuthenticationRequired needs a credential
   isInsideSecureHardware() == false                             device type                          emulator keystore is software-backed — NOT a finding
   two-device screenrecord short/corrupt                         capture stills instead               simultaneous screenrecord is fragile
+  'Incremental installation not allowed' (install-multiple)     ls apk/*.idsig                       v4 .idsig files beside the APKs -> delete them or --no-incremental
+  "Activity class does not exist" right after boot              dumpsys user | grep State            RUNNING_LOCKED: CE storage locked until first unlock
+  attach times out waiting for stop; target then crashes        dumpsys activity processes | grep -i frozen   cached-app freezer froze it -> foreground it or spawn with -f
+  uiautomator dump killed / UiAutomation.connect fails          other UiAutomation client? Compose?  use screencap + coordinate taps; a11y dump is single-client
+  @webview_devtools_remote_<pid> for EVERY WebView process      getprop ro.build.type                userdebug artefact -> user build + uninstrumented control (D26-064)
+  native crash only on the ps16k image                          zipalign -c -P 16 -v base.apk        4 KB-aligned .so on a 16 KB-page device -> confirm on a 4 KB device
   ```
   Host-side traps worth the same treatment (macOS/Apple Silicon): macOS has **no `timeout`** (use
   `gtimeout`); `UID` is a **readonly** bash variable, so `UID=$(...)` fails silently under `set +e` and
@@ -780,6 +828,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — but missing a split causes false negatives on every P1 in D04–D09 and D16 |
 | **Attacker** | AM-12 |
 | **Applies to** | all AAB-distributed apps; XAPK is an APKPure/APKMirror packaging convention, not an Android standard |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0003 (Obtaining and Extracting Apps), MASTG-TECH-0145 (Working with XAPK Files), MASTG-TECH-0007 (Exploring the App Package), MASTG-TOOL-0004 (adb), MASTG-TOOL-0018 (jadx), MASTG-TOOL-0148 (apkeep) |
 
 - **Test:** Apps shipped as an AAB install as `base.apk` plus `config.*.apk` splits. Manifest entries,
@@ -792,9 +841,9 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   mkdir -p apk && for p in $(adb shell pm path $PKG | sed 's/package://' | tr -d '\r'); do
     adb pull "$p" apk/; done
   ls -1 apk/                                   # base.apk config.arm64_v8a.apk config.xxxhdpi.apk ...
-  unzip app.xapk -d apk_extracted              # XAPK is a plain ZIP
-  jadx -d out apk/*.apk                        # open base + every split together
-  adb install-multiple -r apk/*.apk            # reinstall elsewhere with the same key set
+  unzip app.xapk -d "$E/apk/extracted" # XAPK is a plain ZIP
+  jadx -d "$DEC/jadx" "$E"/apk/*.apk # open base + every split together
+  rm -f apk/*.idsig; adb -s "$SERIAL" install-multiple --no-incremental -r apk/*.apk   # same key set; .idsig files force incremental install and mask the verdict
   ```
 - **Proof:** `pm path` returning more than one line, and jadx over the full set resolving classes or
   manifest entries that are absent from `base.apk` alone.
@@ -811,21 +860,22 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all DEX-bearing apps |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0017 (Decompiling Java Code), MASTG-TECH-0013 (Reverse Engineering Android Apps), MASTG-TECH-0023 (Reviewing Decompiled Java Code), MASTG-TOOL-0018 (jadx), MASTG-TOOL-0014 (Bytecode Viewer), MASTG-TOOL-0012 (apkx) |
 
 - **Test:** Decompile once, keep the output for the whole engagement, and never treat a single tool's
   failure as evidence the code is unreadable.
 - **How:**
   ```bash
-  jadx -d out app.apk                                   # full decompile
-  jadx --no-src -d out app.apk                          # resources + manifest only (fast first pass)
-  jadx -d out --show-bad-code app.apk                   # keep methods jadx could not fully decompile
-  jadx -d out --deobf --deobf-min 3 --deobf-max 64 \
+  jadx -d "$DEC/jadx" app.apk                                   # full decompile
+  jadx --no-src -d "$DEC/jadx-res" app.apk                      # resources + manifest only (fast first pass; NO sources)
+  jadx -d "$DEC/jadx" --show-bad-code app.apk                   # keep methods jadx could not fully decompile
+  jadx -d "$DEC/jadx" --deobf --deobf-min 3 --deobf-max 64 \
        --deobf-parse-kotlin-metadata -j 4 app.apk       # consistent names across an obfuscated build
-  jadx -d out --cfg app.apk                             # control-flow graphs (.dot)
+  jadx -d "$DEC/jadx-cfg" --cfg app.apk                         # control-flow graphs (.dot), kept apart from the sources
   # cross-check when jadx chokes on a class:
-  d2j-dex2jar.sh classes.dex && open classes-dex2jar.jar   # then JD-GUI / CFR / Procyon / Fernflower
-  androguard decompile -o out2 -f png -i app.apk --limit "^Lcom/target/.*"
+  d2j-dex2jar.sh classes.dex     # then open classes-dex2jar.jar in JD-GUI / CFR / Procyon / Fernflower
+  androguard decompile -o "$DEC/androguard" -f png -i app.apk --limit "^Lcom/target/.*"
   androguard cg -o callgraph.gml --classname "^Lcom/target/.*" app.apk
   ```
 - **Proof:** Readable code for the class the first tool failed on, and — where you base a finding on a
@@ -845,21 +895,22 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0016 (Disassembling Code to Smali), MASTG-TECH-0038 (Patching), MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0010 (APKLab) |
 
 - **Test:** Use apktool for the decoded manifest, the resources and the smali patch loop — and know the
   one thing it silently loses.
 - **How:**
   ```bash
-  apktool d -s -f -o out_res app.apk        # -s skips baksmali: fast, for manifest + resources only
-  apktool d -f -o out_smali app.apk         # full smali, for the patch loop
+  apktool d -s -f -o "$DEC/apktool-res" app.apk       # -s skips baksmali: fast, for manifest + resources only
+  apktool d -f -o "$DEC/apktool" app.apk        # full smali, for the patch loop
   apktool d -r app.apk                      # skip resource decoding when broken resources kill the decode
   apktool d -r app.apk --force-manifest     # still decode AndroidManifest.xml in that case
   # THE TRAP: apktool frequently DROPS <uses-sdk> from the decoded manifest.
-  grep -E 'minSdkVersion|targetSdkVersion' out_res/apktool.yml      # authoritative
-  grep -E 'uses-sdk' out_res/AndroidManifest.xml                    # often absent — do not trust it
+  grep -E 'minSdkVersion|targetSdkVersion' "$DEC/apktool-res/apktool.yml"      # authoritative
+  grep -E 'uses-sdk' "$DEC/apktool-res/AndroidManifest.xml"                    # often absent — do not trust it
   # rebuild + sign loop
-  apktool b -o patched.apk out_smali
+  cp -R "$DEC/apktool" "$E/lab/patch" && apktool b -o "$E/lab/patched.apk" "$E/lab/patch"   # patch a copy, never $DEC
   zipalign -p -f 4 patched.apk aligned.apk
   apksigner sign --ks my.keystore aligned.apk
   ```
@@ -878,6 +929,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0124 (aapt2), MASTG-TECH-0117 (Obtaining Information from the AndroidManifest), MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150 (Analyzing the AndroidManifest), MASTG-TECH-0126 (Obtaining App Permissions) |
 
 - **Test:** Read identity, SDK levels, permissions and manifest attributes from the binary manifest rather
@@ -907,6 +959,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none in this chapter; the consumer is D02/D17 |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0123 (apksigner), MASTG-TECH-0039 (Repackaging & Re-Signing) |
 
 - **Test:** Establish who signed the artefact you are analysing, and prove it is the same artefact the
@@ -918,7 +971,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   # compare against the store build, and against the previous release:
   apksigner verify --print-certs store/base.apk | grep -i 'SHA-256'
   apksigner verify --print-certs old/base.apk   | grep -i 'SHA-256'   # MUST match the current cert
-  sha256sum apk/base.apk
+  shasum -a 256 apk/base.apk                   # portable: macOS ships no sha256sum
   ```
 - **Proof:** A signer certificate SHA-256 that matches the store artefact, plus the verbose output naming
   which signature schemes (v1/v2/v3/v4) verified. Record it next to the identity block from D26-021.
@@ -937,6 +990,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — **"the app is not obfuscated" is never reportable** |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0165 (Identifying Compilers, Obfuscators, and Packers in Android Apps), MASTG-TOOL-0009 (APKiD), MASTG-TOOL-0146 (RootBeer); ATT&CK T1406, T1406.002 |
 
 - **Test:** Three seconds of fingerprinting tells you whether the next three days are jadx reading or
@@ -973,6 +1027,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the recovered key is honoured by the remote service; `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` (P5) when it is only a client secret with no privilege |
 | **Attacker** | AM-01 remote no interaction (the APK is public; anyone can extract it) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0125 (Apkleaks), MASTG-TECH-0019 (Retrieving Strings), MASTG-TECH-0022 (Information Gathering - Network Communication), MASTG-TOOL-0144 (gitleaks), MASTG-TOOL-0129 (rabin2) |
 
 - **Test:** Sweep the DEX, native libraries and resources for endpoint and credential-shaped strings,
@@ -984,21 +1039,37 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   apkleaks -f apk/base.apk --json -o apkleaks.json
   apkleaks -f apk/base.apk -p custom-rules.json     # {"Internal API host":"https://[a-z0-9.-]+\\.corp\\.example\\.com"}
   apkurlgrep -a apk/base.apk | sort -u > urlgrep.txt   # URLs *and* bare paths like /v3/checkout
-  # the sweep that catches what the rule files miss:
-  jadx --no-src -d out apk/*.apk
+  # the sweep that catches what the rule files miss — over the FULL decompile (sources AND resources);
+  # `jadx --no-src` writes no sources, so a code-level grep over it finds resource strings only
+  [ -d "$DEC/jadx/sources" ] || jadx -d "$DEC/jadx" "$E"/apk/*.apk
   rg -n -i --no-ignore \
-    "api[_-]?key|secret|passw|token|BEGIN (RSA|EC|PRIVATE)|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}" out
-  rabin2 -zz apk_extracted/lib/arm64-v8a/*.so | grep -iE 'http|api\.|\.com'
+    "api[_-]?key|secret|passw|token|BEGIN (RSA|EC|PRIVATE)|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}" "$DEC/jadx"
+  rabin2 -zz "$E"/apk/extracted/lib/arm64-v8a/*.so | grep -iE 'http|api\.|\.com'
+  # length gate BEFORE any verdict — a truncated key is rejected as malformed and reads as dead
+  rg -o -N 'AIza[0-9A-Za-z_-]{35}' "$DEC/jadx" | sort -u | awk '{print length($0), $0}'   # Google API keys are 39 chars
+  # the Basic-auth pass the key regexes miss (decode and record what it names; never use it beyond identification)
+  rg -n -o 'Basic [A-Za-z0-9+/=]{12,}' "$DEC/jadx/sources" | sort -u
   # THE RULE: every flagged key gets a live request against the vendor's READ api
   curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $KEY" https://vendor.example/v1/me
   ```
   Then diff `urlgrep.txt` against the endpoint list from the Retrofit/OkHttp pass: paths present in one and
   not the other point at a second HTTP stack (Volley, Ktor, a native library, a WebView).
+  Name the verdict the service returns rather than collapsing it to "dead": for Google keys,
+  `API_KEY_INVALID` means malformed, truncated or revoked (re-extract from the resource at file:line before
+  recording anything), `API_KEY_ANDROID_APP_BLOCKED` means live but package- and certificate-restricted
+  (record "restricted" and route to D18), `API_KEY_SERVICE_BLOCKED` means live but API-restricted.
+  Every secret scanner gets a positive control on THIS tree before its zero counts: plant one known
+  dummy key in a scratch copy and confirm the tool reports it. Known misses: some gitleaks key rules
+  require a delimiter after the key and skip a key embedded between XML tags, and a gitleaks run given
+  several paths can scan 0 bytes; apkleaks re-runs jadx internally (slow on a large base) and its JWT and
+  generic-secret buckets are dominated by false positives — pre-filter them. The `rg` sweep is primary;
+  the tools are the second opinion.
 - **Proof:** The JSON report **plus**, for each "secret", a response proving the key is honoured — data
   returned, not a 401. An unusable analytics write key is noise; a key that returns data is the finding.
 - **Escalation:** -> D18 (cloud/SDK privilege of the key), D15 (the endpoints it unlocks), D01 (second HTTP
   stack discovered by the path diff).
-- **Ruled out when:** Every flagged string returns 401/403 from its service *and* you can name what it is
+- **Ruled out when:** Every flagged string, at its documented length, returns a verdict you can name from
+  its service (restricted / service-blocked / rejected) *and* you can name what it is
   (a public Firebase web API key, a Crashlytics ingest token, a Maps key with a package restriction). Record
   the request you sent. "apkleaks found nothing" is not a ruled-out entry; "these eleven strings were tested
   live and all were rejected" is.
@@ -1011,19 +1082,25 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — every hit is a hypothesis routed to another chapter |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0025 (Automated Static Analysis), MASTG-TECH-0014 (Static Analysis on Android), MASTG-TECH-0108 (Taint Analysis), MASTG-TOOL-0110 (semgrep), MASTG-TOOL-0099 (FlowDroid) |
 
 - **Test:** Run the canonical MASTG rules over the decompiled sources. They are the grep patterns the rest
   of this methodology references, and running them is how you prove the static pass was systematic.
 - **How:**
   ```bash
-  jadx -d out apk/*.apk
+  [ -d "$DEC/jadx/sources" ] || jadx -d "$DEC/jadx" "$E"/apk/*.apk
   git clone --depth 1 https://github.com/OWASP/mastg.git
-  semgrep -c mastg/rules/ out/sources/ --json -o mastg.json
-  # single-rule runs against the exact file each rule targets:
-  semgrep -c mastg/rules/mastg-android-network-insecure-trust-anchors.yml out/res/xml/
-  semgrep -c mastg/rules/mastg-android-webview-bridges.yml out/sources/
-  semgrep -c mastg/rules/mastg-android-pendingintent-mutable.yml out/sources/
+  # semgrep silently skips git-ignored files (the decompiled tree usually is), files over 1 MB and
+  # per-file timeouts — switch all three off, or the "systematic" sweep scans a handful of files
+  semgrep --config mastg/rules/ --no-git-ignore --max-target-bytes 0 --timeout 0 --metrics=off \
+          --json -o mastg.json "$DEC/jadx/sources/"
+  # the count that makes the sweep admissible (D26-067): scanned paths must match the .java count
+  jq '.paths.scanned | length' mastg.json; find "$DEC/jadx/sources" -name '*.java' | wc -l
+  # single-rule runs against the exact file each rule targets (jadx writes resources/, apktool writes res/):
+  semgrep --config mastg/rules/mastg-android-network-insecure-trust-anchors.yml --no-git-ignore "$DEC/jadx/resources/res/xml/"
+  semgrep --config mastg/rules/mastg-android-webview-bridges.yml --no-git-ignore "$DEC/jadx/sources/"
+  semgrep --config mastg/rules/mastg-android-pendingintent-mutable.yml --no-git-ignore "$DEC/jadx/sources/"
   jq -r '.results[] | [.check_id, .path, .start.line] | @tsv' mastg.json | sort -u
   ```
   High-value rule names to run explicitly, each routed to its owning chapter:
@@ -1058,7 +1135,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **Ruled out when:** A rule fires and the code read at that `file:line` shows the guard the rule cannot
   see (a permission check inside the provider, an allow-list applied before the bridge call). Record the
   guard. A rule that does **not** fire rules out nothing: R8 renaming, reflection and native code are all
-  invisible to it.
+  invisible to it. A run whose `paths.scanned` count is below the `.java` count is not a sweep.
 
 ### D26-026 · mobsfscan and the mindedsecurity rule set, ranked by impact × confidence
 
@@ -1068,6 +1145,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | mobsfscan (MobSF rules + semgrep + libsast); mindedsecurity `semgrep-rules-android-security` (rules carry `confidence`, `likelihood`, `impact` and `verification-level: L1/L2` metadata); MASTG-TECH-0025 |
 
 - **Test:** These two rule sets together encode several hundred of the checks in this methodology. Use
@@ -1075,10 +1153,17 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   pip install mobsfscan
-  mobsfscan --json -o mobsfscan.json /path/to/decompiled-or-source/
-  jadx -d src apk/*.apk
+  # mobsfscan (semgrep backend) can die with no JSON and an empty stderr on very large trees, and it skips
+  # symlinks: COPY the tree in chunks and prove every chunk produced its JSON
+  (cd "$DEC/jadx/sources" && find . -mindepth 2 -maxdepth 2 -type d | split -l 100 - "$E/lab/chunk.")
+  for c in "$E"/lab/chunk.??; do rm -rf "$E/lab/scan"; (cd "$DEC/jadx/sources" && rsync -aLR --files-from="$c" . "$E/lab/scan/")
+    mobsfscan --json -o "$c.json" "$E/lab/scan" || echo "CHUNK $c FAILED — rerun smaller"; done
+  jq -s 'map(.results) | add' "$E"/lab/chunk.??.json > "$E/lab/mobsfscan.json"
+  ls "$E"/lab/chunk.?? | wc -l; ls "$E"/lab/chunk.??.json | wc -l     # chunk count must equal JSON count
   git clone https://github.com/mindedsecurity/semgrep-rules-android-security
-  semgrep --config semgrep-rules-android-security/rules --json -o mindedsec.json src/
+  semgrep --config semgrep-rules-android-security/rules --no-git-ignore --max-target-bytes 0 \
+          --json -o mindedsec.json "$DEC/jadx/sources/"
+  jq '.paths.scanned | length' mindedsec.json                          # the scanned-file count, as in D26-025
   # rank by the metadata that predicts impact, not by rule count:
   jq -r '.results[] | [.extra.metadata.impact, .extra.metadata.confidence, .check_id,
                        .extra.metadata.cwe, .extra.metadata.masvs, .path] | @tsv' mindedsec.json \
@@ -1104,6 +1189,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none. **Submitting raw scanner output is the fastest route to a duplicate-or-N/A on every platform** |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0002 (MobSF (Android)), MASTG-TECH-0025 (Automated Static Analysis) |
 
 - **Test:** Run the automated pass to catch what your manual review missed, then verify every hit by hand.
@@ -1165,9 +1251,10 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | rated by the SDK behaviour you then prove reachable; the anchoring itself is Support |
+| **VRT** | rated on the SDK behaviour you then prove reachable; the anchoring itself is Support |
 | **Attacker** | AM-12 for the technique; the resulting finding carries its own model |
 | **Applies to** | R8/ProGuard-obfuscated release builds — i.e. most of them |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0019 (Retrieving Strings), MASTG-TECH-0020 (Retrieving Cross References), MASTG-TOOL-0003 (nm); LibScout README (fingerprinting "resilient against common bytecode obfuscation techniques such as identifier renaming"); LibRadar (features "that cannot be obfuscated, such as statistics on Android APIs") |
 
 - **Test:** With R8 renaming, grepping for an SDK's class name fails. Anchor on the three things R8 does
@@ -1176,12 +1263,12 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   # anchor 1: string constants the SDK logs or sends
-  grep -rn '"n_intent_uri"\|"split_id"\|"customOutputUri"\|"mv://"\|"/stlog"' out/sources/
+  grep -rn '"n_intent_uri"\|"split_id"\|"customOutputUri"\|"mv://"\|"/stlog"' "$DEC/jadx/sources/"
   # anchor 2: resource ids (never renamed)
-  grep -rn "R.string\.\|R.layout\." out/sources/ | grep -iE 'crop|zendesk|intercom|engage'
-  apktool d -f apk/base.apk -o out2 && grep -rn "crop_\|zui_\|intercom_" out2/res/values/*.xml | head
+  grep -rn "R.string\.\|R.layout\." "$DEC/jadx/sources/" | grep -iE 'crop|zendesk|intercom|engage'
+  grep -rn "crop_\|zui_\|intercom_" "$DEC"/apktool/res/values/*.xml | head
   # anchor 3: JNI exports
-  nm -D --defined-only apk_extracted/lib/arm64-v8a/*.so | grep ' T Java_'
+  nm -D --defined-only "$E"/apk/extracted/lib/arm64-v8a/*.so | grep ' T Java_'
   # anchor 4: dex symbol presence, per split
   for d in $(unzip -Z1 apk/base.apk 'classes*.dex'); do unzip -p apk/base.apk "$d" > /tmp/$d; done
   dexdump -d /tmp/classes*.dex > /tmp/dump.txt
@@ -1205,6 +1292,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — it is what makes every later drozer negative admissible |
 | **Attacker** | AM-03 zero-permission local app (the agent runs as an ordinary third-party UID, which is exactly the point) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TOOL-0015 (drozer); drozer README-verified console commands: `run`, `list`, `shell`, `cd`, `clean`, `contributors`, `echo`, `exit`, `help` (incl. `help intents`), `load`, `module`, `permissions`, `set`, `unset` |
 
 - **Test:** Stand up the console/agent pair, then immediately record what permissions the **agent** holds.
@@ -1244,6 +1332,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-03 |
 | **Applies to** | all; decisive at **API 30+** and **API 31+** |
+| **Requires** | device |
 | **Maps to** | MASTG-TOOL-0015 (drozer). MASTG positions drozer as a **last resort**, "when manifest and `adb` inspection aren't sufficient" |
 
 - **Test:** Two platform changes make drozer's enumeration output misleading unless you state them.
@@ -1276,6 +1365,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | routed: `broken_access_control.exposed_sensitive_android_intent` (**null — rated on what it exposes**), `server_side_injection.sql_injection` (P1), `broken_access_control.idor.*` (P1–P3) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TOOL-0015 (drozer); module paths read from each class's `path = [...]` attribute in `WithSecureLabs/drozer@develop`; MASTG-TECH-0160/-0161/-0162/-0163 (enumeration), MASTG-TECH-0148 (Interacting with Android ContentProviders), MASTG-TECH-0164 (Sniffing Implicit Intents and Broadcasts) |
 
 - **Test:** Use the module that proves the claim you intend to make, not the one you remember.
@@ -1329,6 +1419,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | `server_side_injection.sql_injection` (P1) or `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) — whatever the scanner missed |
 | **Attacker** | AM-03 |
 | **Applies to** | all; mandatory before any provider is recorded as clean |
+| **Requires** | device |
 | **Maps to** | drozer `scanner/provider/injection.py`, `scanner/provider/traversal.py`, `scanner/misc/*.py`, read directly from `WithSecureLabs/drozer@develop` |
 
 - **Test:** The drozer scanners use single hardcoded probes. Know each one's blind spot, and run the
@@ -1375,6 +1466,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | routed to D07 |
 | **Attacker** | AM-03 |
 | **Applies to** | **Android 12+** providers that expect `FLAG_GRANT_READ_URI_PERMISSION` / `FLAG_GRANT_WRITE_URI_PERMISSION`; Scoped Storage targets |
+| **Requires** | device |
 | **Maps to** | drozer 3.1.0 release notes as recorded in the corpus |
 
 - **Test:** On modern targets the older modules mis-report two classes: providers that are declared but not
@@ -1404,6 +1496,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | routed: `sensitive_data_exposure.*` for the `post.*` capture modules; `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) for the pivot |
 | **Attacker** | AM-04 local app + one common permission — **each `post.*` module declares the permission it needs, and the finding's model is that permission, not "zero permissions"** |
 | **Applies to** | engagements where a permission-justification argument matters |
+| **Requires** | device |
 | **Maps to** | `WithSecureLabs/drozer-modules@master`: `mwrlabs/urls.py`, `kernelerror/tools/misc/installcert.py`, `meatballs1/auxillary/port_forward.py`, `metall0id/post/{clipboard,sms,contacts}.py`, `mwrlabs/develop.py` |
 
 - **Test:** Install the community set with `module install <path>`, and read each module's `permissions =`
@@ -1436,7 +1529,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 |---|---|
 | **Severity ceiling** | **High** |
 | **VRT** | routed to D07: `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) up to `server_side_injection.sql_injection` (P1) |
-| **Attacker** | AM-12 harness (shell UID 2000 for the command); **the finding must be re-proved from a real app UID — AM-03** (D26-065) |
+| **Attacker** | AM-12 harness (shell uid 2000 for the command — uid 0 after `adb root`, which voids the result); **the finding must be re-proved from a real app UID — AM-03** (D26-065) |
 | **Applies to** | all; `cmd content` needs ADB from Android 8.0+ |
 | **Requires** | device, provider |
 | **Maps to** | MASTG-TECH-0148 (Interacting with Android ContentProviders), MASTG-TOOL-0004 (adb); H1 #242727 (Nextcloud, $75), #518669, #534541 |
@@ -1445,6 +1538,9 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   screenshot and removes the "that requires special tooling" objection.
 - **How:**
   ```bash
+  adb -s "$SERIAL" shell id      # MUST print uid=2000(shell). After `adb root` it prints uid=0 and `content query`
+                                 # then reaches exported="false" providers — a root artefact, not reachability
+  adb -s "$SERIAL" unroot        # or run the provider probes from the stock device / the probe app (D26-065)
   adb shell content query  --uri content://org.nextcloud/shares
   adb shell content query  --uri content://org.nextcloud/file --projection "* from ocshares --"
   adb shell content read   --uri content://com.target.app.imageCache.provider/<name> > out.bin
@@ -1472,7 +1568,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   `signature`- or `dangerous`-level permission **and** the same query from an installed unprivileged app
   fails identically. Remember shell is uid 2000 in its own SELinux domain — **more** privileged than a
   third-party app on some paths and less on others, so a shell-only result is never proof of third-party
-  exploitability.
+  exploitability. A `content query` success obtained while `id` printed `uid=0` is void; repeat after
+  `adb unroot` or from the probe app.
 
 ### D26-037 · Use the device as a network pivot into the app's internal network
 
@@ -1552,6 +1649,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — but Google's Mobile VRP prices report quality at a 0.5x / 1x / **1.5x** multiplier, and Samsung's Good Report Bonus can double a High/Critical base reward |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | drozer `load`, `set`, `unset`; objection `commands save`, `commands history`, `import`; Google Mobile VRP "Good Quality" criteria; Samsung: *"Reports based only on static code review, without a working PoC, will be determined as Not Eligible."* |
 
 - **Test:** Package the exploit path so a triager reproduces it in one paste, unattended.
@@ -1600,6 +1698,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | any checklist, report or tooling section that names "dozer" |
+| **Requires** | — |
 | **Maps to** | `github.com/dozermapper/dozer`, verified: *"Dozer is a Java Bean to Java Bean mapper that recursively copies data from one object to another"*. The Android tool is **drozer**, `github.com/WithSecureLabs/drozer`, mirrored at `ReversecLabs/drozer` |
 
 - **Test:** Strike "dozer" from any tooling list. Several circulating community checklists cite
@@ -1630,31 +1729,33 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all Frida work |
-| **Maps to** | MASTG-TOOL-0001 (Frida (Android)), MASTG-TOOL-0031 (Frida); flags verified from frida-tools `application.py` and `ps.py` |
+| **Requires** | device, frida |
+| **Maps to** | MASTG-TOOL-0001 (Frida (Android)), MASTG-TOOL-0031 (Frida); flags as of frida-tools 17 (the old no-pause flag was removed; `--pause` gates), from frida-tools `application.py` and `ps.py` |
 
 - **Test:** Spawning catches `Application.onCreate`-time behaviour — key derivation, pinning setup, root
   checks, anti-tamper — that attaching misses entirely. Attaching is the only way to hook classes loaded
   by a lazily-initialised class loader. Decide, do not default.
 - **How:**
   ```bash
-  frida-ps -Uai                                  # -a applications only, -i include all installed
-  frida-ps -U -j                                 # JSON
-  frida-ps -Ua                                   # running apps
-  frida -D "$SERIAL" -f com.target.app -l hook.js          # spawn, gated (paused until you resume)
-  frida -D "$SERIAL" -f com.target.app -l hook.js
+  export SERIAL=emulator-5554                    # -U picks silently when several devices are attached; every command names the device
+  frida-ps -D "$SERIAL" -ai                      # -a applications only, -i include all installed
+  frida-ps -D "$SERIAL" -j                       # JSON
+  frida-ps -D "$SERIAL" -a                                  # running apps
+  frida -D "$SERIAL" -f com.target.app -l hook.js -t 60    # spawn; resumed automatically once the script has loaded
+  frida -D "$SERIAL" -f com.target.app -l hook.js --pause  # keep the spawn gated until you type %resume
   frida -D "$SERIAL" -N com.target.app -l hook.js          # attach by identifier
   frida -D "$SERIAL" -n "com.target.app:remote" -l hook.js # attach to a separate-process service
   frida -D "$SERIAL" -p 12345 -l hook.js                   # attach by PID
   frida -D "$SERIAL" -W 'com.target.*' -l hook.js          # await a spawn matching PATTERN
   frida -H 127.0.0.1:27042 -N com.target.app     # remote frida-server
   frida -D "$SERIAL" -f com.target.app -l a.js -l b.js --runtime=v8 --debug
-  frida-kill -U <pid>
+  frida-kill -D "$SERIAL" <pid>
   ```
   Other verified `application.py` flags: `-D/--device`, `-R/--remote`, `--certificate`, `--origin`,
   `--token`, `--keepalive-interval`, `--device-option`, `--stun-server`, `--relay`,
   `-F/--attach-frontmost`, `--stdio`, `--aux`, `--realm`, `--exceptor`, `--squelch-crash`,
   `-O/--options-file`.
-- **Proof:** `frida-ps -Uai` listing the target with a PID. **A hook that prints on `-f` but not on `-p`
+- **Proof:** `frida-ps -D "$SERIAL" -ai` listing the target with a PID. **A hook that prints on `-f` but not on `-p`
   proves the sink executes before you can attach** — that delta is itself evidence for an early-boot code
   path worth reviewing, not a failure.
 - **Escalation:** -> D12 (key material captured at `onCreate`), D14 (pinning setup), D21 (RASP
@@ -1675,6 +1776,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | any script that must load on both Android and iOS |
+| **Requires** | device, frida |
 | **Maps to** | thalysonz/frida-checklist-guide README, quoting frida/frida issue 611 |
 
 - **Test:** Use the correct guard, or the script dies on the wrong OS and you spend the morning debugging
@@ -1708,6 +1810,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; the cost is a **false negative** on a D10/D11/D06 finding |
 | **Attacker** | AM-12 |
 | **Applies to** | all Java hooking |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0043 (Method Hooking), MASTG-TECH-0042 (Getting Loaded Classes and Methods Dynamically); `ContentSettingsAdapter extends WebSettings` in the Chromium WebView glue |
 
 - **Test:** Zero events from a hook on a framework base class is a **false negative**, not a result. Print
@@ -1756,6 +1859,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; the cost is a false negative |
 | **Attacker** | AM-12 |
 | **Applies to** | any property whose value may have been set before you attached |
+| **Requires** | device, frida |
 | **Maps to** | Frida JS API: `Java.choose(cls, {onMatch, onComplete})`, `Java.cast(handle, klass)`, `inst.$className`, `Java.retain(this)`; MASTG-TECH-0044 (Process Exploration) |
 
 - **Test:** A setter hook only catches calls made **after** the hook lands. Splash screens,
@@ -1799,6 +1903,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; the cost is the false claim "the app does not call X" |
 | **Attacker** | AM-12 |
 | **Applies to** | ART (Android 5.0+); most impactful on release builds with full AOT |
+| **Requires** | device, frida |
 | **Maps to** | Frida `Java.deoptimizeEverything()`, `Java.deoptimizeBootImage()`; objection `android deoptimize` -> `general.deoptimise` (*"Force the VM to execute everything in the interpreter"*) |
 
 - **Test:** If a method you can see in jadx is provably executing — the app behaves as though it ran — but
@@ -1829,18 +1934,19 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none standalone; it is the enabling step for High/Critical findings in D09, D12, D13 and D15 |
 | **Attacker** | AM-12 |
 | **Applies to** | all Android apps. `-j` requires **frida-tools >= 8.0 / Frida >= 12.10** |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0033 (Method Tracing), MASTG-TECH-0032 (Execution Tracing); flags verified from frida-tools `tracer.py`; SensePost "Using & improving frida-trace" (2025) |
 
 - **Test:** On a large or obfuscated app, locate the handler for a value you control by tracing wide and
   grepping the trace, rather than by reading decompiled code.
 - **How:**
   ```bash
-  frida-trace -U -f com.target.app -j 'javax.crypto.Cipher!$init'
-  frida-trace -U -p 12345 -j '*json*!*' -j '*JSON*!*' -J '*NoisyClass*!*'
-  frida-trace -U -p 12345 -j '*!*certificate*/isu'      # /i case-insensitive /s signatures /u user classes only
-  frida-trace -U -p 12345 -j '*!*token*/iu' -o trace.log
-  frida-trace -U -n com.target.app -j 'com.target.*!*' -o vendor.log
-  frida-trace -U -n com.target.app -i 'open' -i 'openat' -i 'unlinkat'    # native file ops
+  frida-trace -D "$SERIAL" -f com.target.app -j 'javax.crypto.Cipher!$init'
+  frida-trace -D "$SERIAL" -p 12345 -j '*json*!*' -j '*JSON*!*' -J '*NoisyClass*!*'
+  frida-trace -D "$SERIAL" -p 12345 -j '*!*certificate*/isu'      # /i case-insensitive /s signatures /u user classes only
+  frida-trace -D "$SERIAL" -p 12345 -j '*!*token*/iu' -o trace.log
+  frida-trace -D "$SERIAL" -n com.target.app -j 'com.target.*!*' -o vendor.log
+  frida-trace -D "$SERIAL" -n com.target.app -i 'open' -i 'openat' -i 'unlinkat'    # native file ops
   ```
   Verified `tracer.py` flags: `-j/--include-java-method`, `-J/--exclude-java-method`,
   `-i/--include [MODULE!]FUNCTION`, `-x/--exclude`, `-I/--include-module`, `-X/--exclude-module`,
@@ -1864,23 +1970,25 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all; especially app-bundle dynamic feature modules and `DexClassLoader` users |
+| **Requires** | device, frida |
 | **Maps to** | SensePost "Using & improving frida-trace" (2025) — spawn with `-f` may fail because classes have not loaded yet |
 
 - **Test:** When a `-j` pattern matches nothing on spawn, re-run attached to the live PID before
   concluding the class does not exist.
 - **How:**
   ```bash
-  frida-trace -U -f com.target.app -j 'com.target.crypto.*!*'     # -> "Started tracing 0 functions"
+  frida-trace -D "$SERIAL" -f com.target.app -j 'com.target.crypto.*!*'     # -> "Started tracing 0 functions"
   # let the app run, then:
-  frida-ps -Uai | grep com.target.app
-  frida-trace -U -p <pid> -j 'com.target.crypto.*!*'
+  frida-ps -D "$SERIAL" -ai | grep com.target.app
+  frida-trace -D "$SERIAL" -p <pid> -j 'com.target.crypto.*!*'
   ```
 - **Proof:** The same pattern matching **0** on `-f` and **N** on `-p`. That delta is evidence the class
   lives in a secondary dex or a dynamically-installed class loader — a D17 lead in its own right.
 - **Escalation:** -> D26-048 for the loader, -> D17 (dynamic code loading, feature splits, OTA bundles).
 - **Ruled out when:** The pattern matches zero functions under **both** `-f` and `-p` after the feature
   that should load the class has been exercised, **and** `Java.enumerateClassLoaders` shows no loader
-  containing it. Only then is "the class is not present" a statement about the app.
+  containing it, with that enumeration recorded in the item's log. Only then is "the class is not present" a
+  statement about the app.
 
 ### D26-048 · Reach classes in secondary dex and custom class loaders
 
@@ -1889,7 +1997,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **Severity ceiling** | Support |
 | **VRT** | routed to D17 |
 | **Attacker** | AM-12 |
-| **Applies to** | apps using dynamic feature modules, `DexClassLoader`/`PathClassLoader`, plugin frameworks, packers |
+| **Applies to** | apps using dynamic feature modules, `DexClassLoader`/`PathClassLoader`, plugin frameworks, packers; apps that map platform-services modules into their own process (delivered through a `DelegateLastClassLoader` or a `PathClassLoader` whose path is NOT under the app's own `/data/app/…`) |
+| **Requires** | device, frida |
 | **Maps to** | Frida JS API `Java.enumerateClassLoaders`, `Java.ClassFactory.get(loader)`, `Java.openClassFile(path).load()` / `.getClassNames()`; MASTG-TECH-0042 (Getting Loaded Classes and Methods Dynamically) |
 
 - **Test:** `Java.use` resolves against the default class factory only. A class loaded by a different
@@ -1916,7 +2025,14 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
     cf.load();
   });
   ```
-  Pair with `frida-DEXdump` when a packer is present (APKiD `packer` line, D26-023).
+  Pair with `frida-DEXdump` when a packer is present (APKiD `packer` line, D26-023). Inventory every loader
+  and where its dex comes from, and record it — it decides scope:
+  ```javascript
+  Java.enumerateClassLoadersSync().forEach(function (l) { console.log(l.$className + '  ' + l.toString().slice(0, 240)); });
+  ```
+  `Java.use` resolves only against the app's own loader. A class that only exists in a services loader is
+  reachable through `Java.ClassFactory.get(loader)` and belongs to the services package's scope, not the
+  app's — say which.
 - **Proof:** A hook installed via `Java.ClassFactory.get(loader)` firing on a class that `Java.use` could
   not resolve, with the loader's `$className` printed.
 - **Escalation:** -> D17 (dynamic code loading, the loaded dex's origin and integrity), D19 (framework
@@ -1924,7 +2040,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **Ruled out when:** Every enumerated loader was tried and none resolves the class, after the feature was
   exercised. A single `Java.use` failure rules out nothing whatsoever.
 
-### D26-049 · The six Frida corrections that each cost a working day
+### D26-049 · The Frida corrections not covered by D26-041/043
 
 | | |
 |---|---|
@@ -1932,29 +2048,24 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | all Frida work |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0043 (Method Hooking); local senior-researcher corpus, recorded from engagements |
 
-- **Test:** Six specific, recurring corrections. Each one produced a wrong conclusion before it was known.
+- **Test:** Recurring corrections, each of which produced a wrong conclusion before it was known. Four
+  more live where they are canonical and are not repeated here: abstract framework classes record nothing
+  (D26-043), WebView getters must run on the main thread (D26-043), `frida -f` cannot also receive an
+  external Intent, and killing `frida -f` kills the app (both D26-041).
 - **How:**
-  1. **Hooking an abstract framework class silently records nothing** — prefer reading state from live
-     objects (D26-043, D26-044).
-  2. **WebView getters must run on the main thread**, else *"All WebView methods must be called on the
-     same thread"*. Wrap:
-     ```javascript
-     Java.scheduleOnMainThread(function () { Java.perform(function () { /* ... */ }); });
-     ```
-  3. **`frida -f` spawns the app itself**, so you cannot also deliver an external Intent to that launch.
-     Use spawn gating (`device.enable_spawn_gating()` + `on('spawn-added')` -> attach -> resume), or
-     attach with `-p` and invoke the parsing method directly.
-  4. **Killing `frida -f` kills the app.** Attach with `-p <pid>` whenever the app must survive.
-  5. **Module constants are read once at initialisation** — patching a constant after the module has
+  1. **Module constants are read once at initialisation** — patching a constant after the module has
      initialised changes nothing (this bites hardest in cross-platform runtimes, -> D19).
-  6. **Python `subprocess` rejects an embedded NUL**: a `\x00` payload raises
+  2. **Python `subprocess` rejects an embedded NUL**: a `\x00` payload raises
      `ValueError: embedded null byte`. Use the wire form (`%00`) when driving `adb` from Python.
+  3. **`-q` needs `-t`**: a quiet client exits as soon as the script loads and every hook reports zero
+     (D26-010 has the host-timeout wrapper for attach mode).
 - **Proof:** Events appearing where a naive hook produced zero; a payload delivered intact where the
   previous attempt silently truncated.
-- **Escalation:** Each correction unblocks a different chapter: 1 and 2 -> D10, 3 -> D08/D09, 5 -> D19,
-  6 -> D07/D09 payload delivery.
+- **Escalation:** Each correction unblocks a different chapter: 1 -> D19, 2 -> D07/D09 payload delivery,
+  3 -> every dynamic negative (D26-063); the D26-043/041 four -> D10 and D08/D09.
 - **Ruled out when:** Not a finding. Each correction is either applicable to your script or it is not;
   the failure mode is applying none of them and blaming the target.
 
@@ -1966,6 +2077,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none. A pinning bypass is a *technique*; `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` is **P5** |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TOOL-0029 (objection (Android)), MASTG-TOOL-0038 (objection); command tree verified from `objection/console/commands.py` and the agent sources `agent/src/android/{pinning,root,keystore,hooking,heap,clipboard,userinterface,proxy,general}.ts` |
 
 - **Test:** Get instant coverage of the common hooks, then verify you are not stacking conflicting jobs —
@@ -2027,6 +2139,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none. `mobile_security_misconfiguration.*` and `insecure_data_storage.screen_caching_enabled` are **P5** — the presence of `FLAG_SECURE` is the app behaving correctly |
 | **Attacker** | AM-12 (evidence capture only) |
 | **Applies to** | any app that sets `FLAG_SECURE` on the screen your PoC must show |
+| **Requires** | device, frida |
 | **Maps to** | `android.view.WindowManager$LayoutParams.FLAG_SECURE` (0x00002000); objection `android ui FLAG_SECURE false`; MASTG-TOOL-0024 (Scrcpy) |
 
 - **Test:** `FLAG_SECURE` blocks screenshots, remote displays and recents snapshots — including the
@@ -2099,7 +2212,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb logcat -v year -v UTC | grep -iE 'StrictMode|UnsafeIntentLaunch' &
   # drive every exported component
   adb shell dumpsys package com.target.app | grep -oE 'com\.target\.app/[A-Za-z0-9_.$]+' | sort -u \
-    | while read -r c; do adb shell am start -n "$c" --es x 1 2>/dev/null; done
+    | while read -r c; do adb -s "$SERIAL" shell -n am start -n "$c" --es x 1 2>/dev/null; done   # -n: adb must not eat the loop's stdin
   ```
   Other platform-mitigation strings worth grepping in the same run, each of which is a "the platform
   blocked it" negative result you can cite:
@@ -2128,6 +2241,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | routed to D06/D08 |
 | **Attacker** | AM-12 for observation; AM-03 for the resulting finding |
 | **Applies to** | all; indispensable where third-party SDKs never touch the app's own Java classes |
+| **Requires** | device, frida |
 | **Maps to** | AOSP AIDL transaction model; `android.os.Binder.FLAG_ONEWAY`, `Binder.getCallingUid()`; MASTG-TECH-0043 |
 
 - **Test:** Hooking `BinderProxy.transact` and `Binder.execTransact` gives you every IPC the app makes and
@@ -2167,9 +2281,10 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | routed: `cryptographic_weakness.key_reuse.inter_environment` (P2) for captured key material, `broken_access_control.exposed_sensitive_android_intent` (null) for the intent trace, D10's rating for the WebView lines |
+| **VRT** | routed: `cryptographic_weakness.key_reuse.inter_environment` (P2) for captured key material, `broken_access_control.exposed_sensitive_android_intent` (varies) for the intent trace, D10's rating for the WebView lines |
 | **Attacker** | AM-12 for capture; convert before reporting |
 | **Applies to** | all; the point is that R8 renames the app's classes but never `Cipher`, `WebView`, `PendingIntent`, `Binder` or `SecretKeySpec` |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0043 (Method Hooking), MASTG-TECH-0173 (Monitoring Deep Link Handlers at Runtime with Frida), MASTG-TOOL-0032 (Frida CodeShare); CodeShare `@fadeevab/intercept-android-apk-crypto-operations`, `@dzonerzy/aesinfo`, `@owen800q/okhttp3-interceptor`, `@leolashkevych/android-deep-link-observer` |
 
 - **Test:** Instrument the framework APIs every bug class funnels through, so one trace file becomes the
@@ -2194,9 +2309,14 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
       log('SecretKeySpec', a + ' ' + Java.use('android.util.Base64').encodeToString(k, 2));
       return this.$init(k, a); };
 
-    var Ctx = Java.use('android.content.ContextWrapper');
-    Ctx.startActivity.overload('android.content.Intent').implementation = function (i) {
-      log('startActivity', i.toUri(1)); return this.startActivity(i); };
+    // Activity overrides startActivity(Intent), so a ContextWrapper hook misses most launches;
+    // Instrumentation.execStartActivity is the funnel every Context path reaches
+    var Instr = Java.use('android.app.Instrumentation');
+    Instr.execStartActivity.overload('android.content.Context','android.os.IBinder','android.os.IBinder',
+        'android.app.Activity','android.content.Intent','int','android.os.Bundle')
+      .implementation = function (who, th, tok, target, i, rc, opt) {
+        log('startActivity', i.toUri(1)); return this.execStartActivity(who, th, tok, target, i, rc, opt); };
+    var Ctx = Java.use('android.content.ContextWrapper');   // Activity does not override sendBroadcast
     Ctx.sendBroadcast.overload('android.content.Intent').implementation = function (i) {
       log('sendBroadcast', i.toUri(0)); return this.sendBroadcast(i); };
 
@@ -2216,8 +2336,14 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
     CR.openInputStream.implementation = function (u) {
       log('openInputStream', u.toString()); return this.openInputStream(u); };
 
-    var HUC = Java.use('java.net.HttpURLConnection');
-    HUC.connect.implementation = function () { log('HttpURLConnection', this.getURL()); return this.connect(); };
+    // HttpURLConnection.connect is ABSTRACT (D26-043): hook URL.openConnection and the concrete platform classes
+    var URL = Java.use('java.net.URL');
+    URL.openConnection.overload().implementation = function () {
+      log('openConnection', this.toString()); return this.openConnection(); };
+    ['com.android.okhttp.internal.huc.HttpURLConnectionImpl',
+     'com.android.okhttp.internal.huc.HttpsURLConnectionImpl'].forEach(function (n) {
+      try { var K = Java.use(n); K.connect.implementation = function () {
+        log('HUC.connect', this.getURL().toString()); return this.connect(); }; } catch (e) {} });
     try {
       var OK = Java.use('okhttp3.OkHttpClient');
       OK.newCall.implementation = function (req) {
@@ -2244,6 +2370,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; it is what converts "this method is dangerous" into "this method is reachable from an exported component", which is the difference between P5 and a rating |
 | **Attacker** | AM-12 for capture |
 | **Applies to** | all |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0043; MASTG-TECH-0173; Frida `Java.backtrace({limit})`; `Log.getStackTraceString(Exception.$new())` |
 
 - **Test:** When you have a sink — a network call, a crypto method, a file write — but not the path that
@@ -2295,9 +2422,9 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   # make it debuggable if it is not (this is YOUR patch — say so in the report)
-  apktool d -o out target.apk
-  #   set android:debuggable="true" on <application> in out/AndroidManifest.xml
-  apktool b -o patched.apk out && java -jar uber-apk-signer.jar -a patched.apk --out signed
+  apktool d -f -o "$E/lab/debuggable-repack" "$E/apk/base.apk"
+  #   set android:debuggable="true" on <application> in $E/lab/debuggable-repack/AndroidManifest.xml
+  apktool b -o patched.apk "$E/lab/debuggable-repack" && java -jar uber-apk-signer.jar -a patched.apk --out signed
   adb install signed/patched-aligned-debugSigned.apk
   adb shell am set-debug-app -w com.target.app
   adb jdwp
@@ -2337,7 +2464,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   PID=$(adb shell pidof com.target.app | tr -d '\r')
-  adb shell su -c "strace -f -p $PID -e trace=openat,ioctl,mmap,execve,unlinkat -s 200" 2>&1 | tee strace.log
+  R "strace -f -p $PID -e trace=openat,ioctl,mmap,execve,unlinkat -s 200" 2>&1 | tee strace.log
   grep -c 'BINDER_WRITE_READ' strace.log
   grep -E 'openat\(.*(kgsl|mali|dri|binder|apex|dalvik-cache|code_cache)' strace.log | sort -u | head -40
   adb shell lsof -p $PID
@@ -2345,7 +2472,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb shell cat /proc/$PID/maps
   adb shell cat /proc/$PID/net/tcp
   adb shell netstat -p | grep $PID
-  frida-trace -U -n com.target.app -i 'open' -i 'openat' -i 'unlinkat'
+  frida-trace -D "$SERIAL" -n com.target.app -i 'open' -i 'openat' -i 'unlinkat'
   # for startup coverage, attach before the app runs:
   adb shell am set-debug-app -w com.target.app
   # SELinux evidence, captured as a pair around the PoC:
@@ -2372,6 +2499,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | routed to D16/D12 |
 | **Attacker** | AM-12 |
 | **Applies to** | any app shipping `lib*/*.so` with `Java_*` exports |
+| **Requires** | device, frida, native |
 | **Maps to** | MASTG-TECH-0035 (JNI Tracing), MASTG-TOOL-0107 (jnitrace), MASTG-TOOL-0003 (nm), MASTG-TOOL-0129 (rabin2) |
 
 - **Test:** When the Java side hands work to native code, trace the boundary rather than reversing the
@@ -2379,8 +2507,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   pip install jnitrace
-  nm -D --defined-only apk_extracted/lib/arm64-v8a/libnative-lib.so | grep ' T Java_'
-  rabin2 -s apk_extracted/lib/arm64-v8a/libnative-lib.so | grep -i JNI
+  nm -D --defined-only "$E"/apk/extracted/lib/arm64-v8a/libnative-lib.so | grep ' T Java_'
+  rabin2 -s "$E"/apk/extracted/lib/arm64-v8a/libnative-lib.so | grep -i JNI
   jnitrace -l libnative-lib.so com.target.app
   jnitrace -l libnative-lib.so -f com.target.app     # spawn
   jnitrace -l '*' com.target.app                     # every library
@@ -2403,6 +2531,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | routed to D16/D21 |
 | **Attacker** | AM-12 |
 | **Applies to** | all native work; the r2frida URL form is `frida://[action]/[link]/[device]/[target]` |
+| **Requires** | device, frida, native |
 | **Maps to** | MASTG-TECH-0044 (Process Exploration), MASTG-TECH-0045 (Runtime Reverse Engineering), MASTG-TECH-0018 (Disassembling Native Code), MASTG-TECH-0024 (Reviewing Disassembled Native Code), MASTG-TECH-0029 (Listing Loaded Native Libraries), MASTG-TOOL-0036 (r2frida), MASTG-TOOL-0028 (radare2), MASTG-TOOL-0129 (rabin2), MASTG-TOOL-0152 (lldb (Android)), MASTG-TOOL-0033 (Ghidra) |
 
 - **Test:** When static analysis leaves the question "what value does this actually get at runtime?",
@@ -2410,7 +2539,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   r2pm -U && r2pm -ci r2frida
-  r2 frida://spawn/usb//com.target.app          # or frida://attach/usb//AppName
+  r2 frida://spawn/usb/$SERIAL/com.target.app          # or frida://attach/usb/$SERIAL/AppName
   # inside r2:
   #   :i        process info
   #   :dm       memory maps        :dm~com.target   filter     :dm.  map at current offset
@@ -2448,7 +2577,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | routed to D19 |
 | **Attacker** | AM-12 |
 | **Applies to** | React Native, Flutter, Cordova/Capacitor, Unity/IL2CPP, Xamarin/.NET MAUI |
-| **Requires** | device, frida, flutter, react-native, hermes, cordova, capacitor, unity, xamarin |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TOOL-0001 (Frida (Android)), MASTG-TOOL-0029 (objection (Android)), MASTG-TOOL-0032 (Frida CodeShare), MASTG-TOOL-0036 (r2frida), MASTG-TOOL-0116 (blutter), MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0101 (disable-flutter-tls-verification), MASTG-TOOL-0104 (hermes-dec), MASTG-TOOL-0009 (APKiD); MASTG-TECH-0156, MASTG-TECH-0109 (Intercepting Flutter HTTPS Traffic) |
 
 - **Test:** Each framework needs a different instrumentation entry point, and the wrong one produces
@@ -2456,19 +2585,19 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   # common base
-  adb root 2>/dev/null; frida-ps -U | head
+  adb root 2>/dev/null; frida-ps -D "$SERIAL" | head
   # React Native (old bridge) — CatalystInstanceImpl load hook + XHR interceptor
   frida -D "$SERIAL" -f <pkg> -l rn-bridge.js
   # Flutter — TLS and symbol recovery
   frida -D "$SERIAL" -f <pkg> -l disable-flutter-tls.js
-  python3 blutter.py apk_extracted/lib/arm64-v8a out_dir && wc -l out_dir/pp.txt out_dir/objs.txt
-  frida -D "$SERIAL" -f <pkg> -l out_dir/blutter_frida.js
+  python3 blutter.py "$E"/apk/extracted/lib/arm64-v8a "$DEC/blutter" && wc -l "$DEC"/blutter/pp.txt "$DEC"/blutter/objs.txt
+  frida -D "$SERIAL" -f <pkg> -l "$DEC/blutter/blutter_frida.js"
   # Cordova / Capacitor — chrome://inspect (needs webContentsDebuggingEnabled or a debuggable build)
   objection -g <pkg> explore
   # Unity / IL2CPP
   npm exec frida-il2cpp-bridge -- -f <pkg> dump --out-dir dumps
   # Xamarin / .NET
-  frida-trace -U -f <pkg> -i "mono_*"
+  frida-trace -D "$SERIAL" -f <pkg> -i "mono_*"
   ```
   Load your own JS into a running React Native app with no repack:
   ```javascript
@@ -2499,10 +2628,10 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   Keep a running version log so you know before quoting effort which tool will work:
   ```bash
   { echo "pkg=<pkg>"
-    python3 -c "import struct;d=open('apk_extracted/assets/index.android.bundle','rb').read(32);print('hbc',struct.unpack_from('<I',d,8)[0],'srchash',d[12:32].hex())" 2>/dev/null
-    strings apk_extracted/lib/arm64-v8a/libapp.so 2>/dev/null | grep -m1 -E '^[0-9a-f]{32}$' | sed 's/^/dart_snapshot_hash /'
+    python3 -c "import struct;d=open('$E/apk/extracted/assets/index.android.bundle','rb').read(32);print('hbc',struct.unpack_from('<I',d,8)[0],'srchash',d[12:32].hex())" 2>/dev/null
+    strings "$E"/apk/extracted/lib/arm64-v8a/libapp.so 2>/dev/null | grep -m1 -E '^[0-9a-f]{32}$' | sed 's/^/dart_snapshot_hash /'
     unzip -l apk/base.apk | grep -cE 'libassemblies.*blob\.so' | sed 's/^/maui9_layout /'
-  } >> ~/engagements/framework-versions.log
+  } >> "$E/lab/framework-versions.log"
   ```
 - **Proof:** Each harness producing output on a trivial app action, and — for Flutter — a count of what
   Blutter recovered ("N Dart object-pool entries including the API base URL and the AES key material").
@@ -2538,9 +2667,9 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   # AFL's input straight into guest memory — on AArch64 x0 points at the buffer, x1 carries the size.
   # Disable Scudo randomness and reduce its logging for stability.
   # cross-compile an ASan PoC for on-device execution:
-  NDK=$HOME/Library/Android/sdk/ndk/29.0.13599879
-  CC=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android31-clang
-  ASAN_RT=$NDK/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/20/lib/linux/libclang_rt.asan-aarch64-android.so
+  NDK=${ANDROID_NDK_HOME:?set ANDROID_NDK_HOME}; HOSTTAG=$(uname -s | tr A-Z a-z)-x86_64   # darwin-x86_64 / linux-x86_64
+  CC=$NDK/toolchains/llvm/prebuilt/$HOSTTAG/bin/aarch64-linux-android31-clang
+  ASAN_RT=$(find "$NDK/toolchains/llvm/prebuilt/$HOSTTAG/lib" -name libclang_rt.asan-aarch64-android.so | head -1)
   $CC -g -O0 -fsanitize=address -fno-omit-frame-pointer \
       -I../inc poc.c ./lib/libtarget.a -lm -o poc
   adb push poc "$ASAN_RT" /data/local/tmp/
@@ -2572,7 +2701,8 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none — every row exists to stop you filing a P5 or a non-issue |
 | **Attacker** | n/a |
 | **Applies to** | all |
-| **Maps to** | MASTG-TOOL-0008 (Android-SSL-TrustKiller), MASTG-TOOL-0020 (JustTrustMe), MASTG-TOOL-0025 (SSLUnpinning), MASTG-TOOL-0149 (LSPosed) — the first three are the superseded pinning tools, the last is the living Xposed successor |
+| **Requires** | — |
+| **Maps to** | MASTG-TOOL-0008 (Android-SSL-TrustKiller, deprecated upstream), MASTG-TOOL-0020 (JustTrustMe), MASTG-TOOL-0025 (SSLUnpinning), MASTG-TOOL-0149 (LSPosed) — the first three are the superseded pinning tools, the last is the living Xposed successor |
 
 - **Test:** Reach for the right primitive first, and tag anything degraded in the report. Two standing
   rules for every `[DEGRADED]` technique: (1) say so, and name the exact platform version and
@@ -2583,7 +2713,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   | Goal | First choice `[VALID]` | Fallback / legacy |
   |---|---|---|
   | Enumerate exported components | `apktool -s` manifest + `dumpsys package` resolver tables | drozer `app.package.attacksurface` `[DEGRADED]` |
-  | Prove a provider is third-party-reachable | `adb shell content query` (shell UID holds no app permissions) | drozer `scanner.provider.finduris` `[DEGRADED]` |
+  | Prove a provider is third-party-reachable | the zero-permission probe app (D26-065) `[VALID]`; uid-2000 `adb shell content query` on an un-rooted shell `[triage shortcut only]` | drozer `scanner.provider.finduris` `[DEGRADED]` |
   | Read app-private data, no root | `run-as` (debuggable build only) | `adb backup` + abe `[DEGRADED]` |
   | Defeat a client-side gate, no root/Frida | apktool `debuggable=true` repack -> `jdb` `[VALID]` | smali `const/4 v0, 0x1` patch `[VALID]` |
   | MitM an app that ignores the proxy | pcap diff + transparent mode `[VALID]` | — |
@@ -2631,6 +2761,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; it prevents shipping a false clean that leaves an exploitable component in production |
 | **Attacker** | n/a |
 | **Applies to** | all dynamic and automated work |
+| **Requires** | — |
 | **Maps to** | drozer `scanner/provider/{injection,traversal}.py` source; MASTG-TECH-0043; local senior-researcher corpus |
 
 - **Test:** **A zero is only a negative once the instrument is proven able to produce a positive.** Before
@@ -2641,11 +2772,11 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   dz> run scanner.provider.injection -a com.target.app
   dz> run app.provider.query content://<auth>/<known-injectable> --projection "'"
   # 2. against a hook that cannot be absent:
-  frida -D "$SERIAL" -n com.target.app -q -e 'Java.perform(function(){var L=Java.use("android.util.Log");
+  frida -D "$SERIAL" -n com.target.app -q -t 30 -e 'Java.perform(function(){var L=Java.use("android.util.Log");
     L.i.overload("java.lang.String","java.lang.String").implementation=function(a,b){
       console.log("[CTRL] "+a); return this.i(a,b);};});'
   # 3. against a string you know exists:
-  grep -c 'BuildConfig' out/sources/**/BuildConfig.java
+  find "$DEC/jadx/sources" -name BuildConfig.java | head -1 | xargs grep -c BuildConfig   # no ** globstar (bash 3.2)
   # 4. against a lab app with the same bug class (D26-079)
   ```
   The four documented silent-zero sources, each of which must be excluded by name:
@@ -2705,16 +2836,19 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; it is what separates a rated finding from a rejected one |
 | **Attacker** | converts AM-12 -> AM-03 |
 | **Applies to** | every IPC, provider, deep-link and intent finding |
+| **Requires** | device |
 | **Maps to** | AOSP Application Sandbox (adb shell is uid 2000 in its own SELinux domain, not an app domain); AOSP Verified Boot |
 
-- **Test:** `adb shell` runs as uid 2000 in the `shell` SELinux domain — **more** privileged than a
-  third-party app on some paths and less on others. A shell-only result is never proof of third-party
+- **Test:** `adb shell` is uid 2000 in the `shell` SELinux domain on a stock device — and **uid 0** on the
+  research device after `adb root`; in both cases it is exempt from background-activity-launch limits and
+  holds no app permissions, so a shell result proves neither third-party reachability nor an AM-03 launch.
+  Even unrooted it is **more** privileged than a third-party app on some paths and less on others. A shell-only result is never proof of third-party
   exploitability. Neither is it capable of the things a real attacker app can do.
 - **How:**
   ```bash
   adb shell getenforce                          # must stay Enforcing for credible results
-  adb shell getprop ro.boot.verifiedbootstate ro.debuggable ro.build.type
-  adb shell id                                  # uid=2000(shell) — NOT an app uid
+  for p in ro.boot.verifiedbootstate ro.debuggable ro.build.type; do printf '%s=' $p; adb shell getprop $p; done   # getprop takes ONE name
+  adb shell id                                  # uid=2000(shell) — NOT an app uid; uid=0 after adb root
   adb install poc.apk && adb shell am start -n com.poc.att/.MainActivity
   adb shell ps -Z | grep -E 'com.target.app|com.poc.att'
   ```
@@ -2777,6 +2911,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; it decides whether a High is paid or closed |
 | **Attacker** | n/a — it is the *proof* of the attacker model |
 | **Applies to** | every report that names an attacker model |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0126 (Obtaining App Permissions), MASTG-TOOL-0124 (aapt2) |
 
 - **Test:** Reports die on the claim "a malicious app with no permissions can do X" when the PoC APK
@@ -2807,6 +2942,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | every automated sweep, including agent-driven ones |
+| **Requires** | — |
 | **Maps to** | bug-hunting corpus, `bb-methodology` PART 4 "Shell-Loop Ban" |
 
 - **Test:** zsh and bash array expansion fails **silently** on edge cases. `for x in "${arr[@]}"` can
@@ -2853,6 +2989,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; it is the single check that kills most false-positive reflection reports |
 | **Attacker** | n/a |
 | **Applies to** | reflection, cache poisoning, parameter pollution, OOB SSRF, deep-link parameter tracing, WebView injection |
+| **Requires** | — |
 | **Maps to** | bug-hunting corpus, `bb-methodology` PART 4 |
 
 - **Test:** The injected marker must be unique and unmistakable, or your "reflection" is a word collision.
@@ -2890,6 +3027,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none. **Status-code-only claims are the most common rejected-as-N/A category on bug-bounty platforms** |
 | **Attacker** | n/a |
 | **Applies to** | every bypass claim, including client-gate bypasses proved through instrumentation |
+| **Requires** | — |
 | **Maps to** | bug-hunting corpus, `bb-methodology` PART 4 |
 
 - **Test:** A bypass claim requires a response **body** differential, not a status code.
@@ -2921,6 +3059,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | timing oracles, user enumeration, rate-limit absence, races |
+| **Requires** | — |
 | **Maps to** | bug-hunting corpus, `bb-methodology` PART 4; the MFA false-positive trap "No rate limit because the first 6 attempts went through"; RFC 6238 (TOTP truncates an HMAC-SHA1 hash mod 10^6 — the output is uniform, so three "pattern-like" samples prove nothing) |
 
 - **Test:** Single outliers are not signal. Network jitter routinely produces 2x outliers, and a mobile
@@ -2929,11 +3068,12 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   back-to-back. Compute mean, median and sigma per group. A signal requires the suspect group's mean to be
   **>= 2 sigma above** the control's.
   ```bash
+  NOW(){ python3 -c 'import time;print(int(time.time()*1000))'; }   # ms, portable (BSD date has no %N)
   for i in $(seq 1 40); do
     for G in control test; do
-      S=$(date +%s%N)
+      S=$(NOW)
       curl -s -o /dev/null -X POST "$URL" -d "user=$( [ $G = test ] && echo Administrator || echo zzqq7731 )"
-      echo "$G $(( ($(date +%s%N) - S) / 1000000 ))"
+      echo "$G $(( $(NOW) - S ))"
     done
   done | tee timing.txt
   awk '{s[$1]+=$2; ss[$1]+=$2*$2; n[$1]++} END {for (g in s)
@@ -2958,6 +3098,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | every oracle or bypass claim |
+| **Requires** | — |
 | **Maps to** | bug-hunting corpus, `bb-methodology` PART 4; `triage-validation` 7Q cross-link table (Q3) |
 
 - **Test:** A server-side policy that always denies is not a state oracle. Establish whether the
@@ -2989,6 +3130,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none; it governs every Critical/High claim in the report |
 | **Attacker** | n/a |
 | **Applies to** | every Critical and High finding |
+| **Requires** | — |
 | **Maps to** | bug-hunting corpus, `bb-methodology` Phase 5 |
 
 - **Test:** Before labelling anything Critical or High, reproduce it via **two independent tools with
@@ -3024,6 +3166,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | all dynamic findings; mandatory for races, timing and anything involving a cache |
+| **Requires** | device |
 | **Maps to** | `pm clear`, `am force-stop`, `logcat -c`; MASTG-TECH-0009 |
 
 - **Test:** A one-shot observation on a warm app with a populated cache is the commonest source of a
@@ -3058,6 +3201,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | all exported-component sweeps |
+| **Requires** | device |
 | **Maps to** | local senior-researcher corpus |
 
 - **Test:** This is the exact inverse of D26-073 and the distinction matters. `force-stop` routes the next
@@ -3069,10 +3213,13 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb shell monkey -p $PKG -c android.intent.category.LAUNCHER 1     # warm the app ONCE
   sleep 3
   adb shell dumpsys package $PKG | grep -oE "$PKG/[A-Za-z0-9_.\$]+" | sort -u > components.txt
+  # `adb shell -n` (or </dev/null) is mandatory inside any loop that reads a file: adb otherwise reads the
+  # loop's stdin and the sweep stops after the first component with no error
   while read -r c; do
-    adb shell am start -n "$c" --es probe 1 2>&1 | sed "s|^|$c |"
-    adb shell dumpsys activity activities | grep -m1 topResumedActivity
+    adb -s "$SERIAL" shell -n am start -n "$c" --es probe 1 2>&1 | sed "s|^|$c |"
+    adb -s "$SERIAL" shell -n dumpsys activity activities | grep -m1 topResumedActivity
   done < components.txt | tee sweep.log
+  [ "$(wc -l < components.txt)" = "$(grep -c topResumedActivity sweep.log)" ] || echo 'LOOP ATE ROWS — rerun (D26-067)'
   ```
   Cold-start (`pm clear` + `force-stop`) belongs in the *reproduction* of a confirmed finding (D26-073),
   not in the sweep that discovers it.
@@ -3091,6 +3238,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | all differential work — response diffing, replay, retest |
+| **Requires** | — |
 | **Maps to** | field methodology; used by D26-069, D26-072, D26-076 |
 
 - **Test:** Two harnesses with different normalisation will disagree about whether a response changed, and
@@ -3131,16 +3279,17 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 - **How:**
   ```bash
   # one proxy project, both clients
-  mitmdump -w engagement/all.flows &
+  mitmdump -w "+$E/logs/harness/all.flows" &     # +FILE appends; a bare -w FILE truncates it on every restart
   adb shell settings put global http_proxy 10.0.2.2:8080      # the app
   #   and point the desktop browser at the same listener for the web client
   # extract the version prefixes each client uses
-  mitmdump -nr engagement/all.flows -s - <<'PY'
+  cat > "$E/lab/urls.py" <<'PY'
   def response(f):
       print(f.request.method, f.request.pretty_url, f.response.status_code)
   PY
-  grep -ohE '/v[0-9]+(\.[0-9]+)?/' engagement/urls-mobile.txt | sort | uniq -c
-  grep -ohE '/v[0-9]+(\.[0-9]+)?/' engagement/urls-web.txt    | sort | uniq -c
+  mitmdump -nr "$E/logs/harness/all.flows" -s "$E/lab/urls.py"   # -s takes a script FILE, not stdin
+  grep -ohE '/v[0-9]+(\.[0-9]+)?/' "$E/recon/urls-mobile.txt" | sort | uniq -c
+  grep -ohE '/v[0-9]+(\.[0-9]+)?/' "$E/recon/urls-web.txt" | sort | uniq -c
   # then the BEHAVIOURAL diff, one control at a time, same account, same object:
   for V in v1 v2 v3; do
     echo "== $V"
@@ -3190,11 +3339,13 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   adb shell dumpsys package $PKG | grep -oE "$PKG/[A-Za-z0-9_.\$]+" | sort -u > $OUT/activities.txt
   # b) instrumentation on for the whole tour
   frida -D "$SERIAL" -f $PKG -l hooks.js &            # the D26-054 hook pack
-  mitmdump -w $OUT/tour.flows &
+  mitmdump -w "+$OUT/tour.flows" &               # +FILE appends; never reuse a capture file across modes
   # c) drive it, snapshotting state per step
   step(){ adb shell dumpsys activity activities | grep -m1 topResumedActivity >> $OUT/stack.log
           adb exec-out screencap -p > $OUT/$1.png
-          adb shell "run-as $PKG find . -newermt '-90 seconds' -type f" > $OUT/$1.files; }
+          # research device (root): run-as works only on debuggable builds, so on a release target it lists nothing
+          adb -s "$SERIAL" shell "find /data/data/$PKG /data/user_de/0/$PKG /sdcard/Android/data/$PKG -type f -mmin -2 2>/dev/null" > "$OUT/$1.files"; }
+  # positive control: the first step must list the app's own shared_prefs write, or the attribution is not live
   # d) breadth sweep of what manual walking misses
   adb shell monkey -p $PKG --throttle 300 --pct-syskeys 0 -v 3000 > $OUT/monkey.log 2>&1
   # e) coverage check: which activities never became topResumed?
@@ -3217,6 +3368,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | NIST SP 800-115 §8.3 (*"the test team will be able to verify its implementation only if a mirror copy of the original test is performed"*), Appendix B §1.3 (Assumptions and Limitations) |
 
 - **Test:** At retest, or when a developer disputes a step, the tester reconstructs from memory — and that
@@ -3224,24 +3376,26 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   the decompiled artefact.
 - **How:**
   ```
-  <engagement>/<target>/
+  $E/   (BugBountyTarget/<Target>_<DDMMYYYY>, scaffolded by scripts/new-engagement.sh; the full tree is D27-029)
     apk/         base.apk + every split_config.*   (pm path -> pull; needed to reinstall elsewhere)
     lab/         LAB-MANIFEST.txt, harness-baseline-*.txt, third-party-packages-before/after.txt
     recon/       per-surface notes + api-endpoints.tsv
-    findings/F-0NN/finding.md
+    findings/F-0NN.md              written from templates/finding-report.md
     pocs/F-0NN/  attacker-app source, signed APK, repro.sh, poc.dz
-    videos/F-0NN/ screenshots/ logs/ requests/ responses/
+    videos/ screenshots/ logs/ requests/ responses/
     report/report.md               LIVE journal, updated continuously
     report/assessment-status.md    persistent state so a later session resumes, not restarts
     report/BLOCKED.tsv             everything you cannot do alone, with an owner and a date
     final/                         one submission-ready document per finding
   ```
-  Decompiled output lives separately (`.../Target/<App>/decompiled/{jadx,apktool}`).
+  Decompiled output lives in `$E/decompiled/{jadx,apktool}` (= `$DEC`, START.md §6) and is never committed.
+  Every capture target is append-only or per-run: `mitmdump -w +file` or a unique name per run — a capture
+  file is never reused across modes, because a bare `-w file` truncates it on every restart.
   ```bash
-  mkdir -p engagement/journal
-  script -q -a "engagement/journal/$(date -u +%Y%m%dT%H%M%SZ).typescript"
+  mkdir -p "$E/logs/journal"
+  script -q -a "$E/logs/journal/$(date -u +%Y%m%dT%H%M%SZ).typescript"
   # or, for a clean replayable transcript of just the commands:
-  export PROMPT_COMMAND='history -a; tail -n1 ~/.bash_history >> engagement/journal/commands.log'
+  export PROMPT_COMMAND='history -a; tail -n1 ~/.bash_history >> "$E/logs/journal/commands.log"'
   ```
   `BLOCKED.tsv` is the artefact that stops a blocker silently becoming a clean result:
   ```
@@ -3295,6 +3449,240 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   Android 4.3-era apps** and their observed defaults must never be generalised to a modern target (-> the
   DEAD table in D26-062). A lab app proves your *instrument* works; it never proves anything about the
   client's app.
+
+### D26-080 · The adb quoting contract — the device shell re-parses everything you send
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — harness contract; the cost of breaking it is a silent no-op sweep recorded as a negative |
+| **Attacker** | AM-12 (own harness) |
+| **Applies to** | every item whose How passes an argument through `adb shell`, from the host shell or from Python |
+| **Requires** | device |
+| **Maps to** | MASTG-TOOL-0004 (adb); engagement corpus (false negatives from unquoted extras and stdin-eating loops) |
+| **Record** | logs/D26-080.txt; the command as the DEVICE shell parsed it (`set -x` line) next to any negative that depends on an extra |
+
+- **Skip when:** No device in the lab (static-only engagement) — note `D26-080 n/a: static-only, adb devices
+  empty`.
+- **Test:** `adb shell` joins its argv with spaces and hands ONE string to the device's `/system/bin/sh`,
+  which parses it a second time: `;`, `|`, `&`, `$`, `?`, `*`, backticks and spaces inside an extra are
+  re-interpreted there (an unquoted `;` silently truncates `intent:#Intent;component=…;end` to
+  `intent:#Intent`). `adb shell` also reads the host's stdin, so a `while read` loop calling it stops
+  after one row. Python's `['adb','shell','sh','-c',X]` loses the inner quoting the same way. Every one
+  of these prints nothing and reads as "the app ignores that extra".
+- **How:**
+  ```bash
+  # 1. quote for the DEVICE shell: the whole remote command is one double-quoted string,
+  #    every value with ; | & $ ? * or a space single-quoted inside it
+  adb -s "$SERIAL" shell "am start -n '$C' --es ex 'a;b|c'"
+  adb -s "$SERIAL" shell 'am start -a android.intent.action.VIEW -d "myapp://a/b?x=1&y=2"'
+  # 2. never let adb eat a loop's stdin: -n (or </dev/null) inside any loop that reads a file
+  while read -r c; do adb -s "$SERIAL" shell -n am start -n "$c" --es probe 1; done < components.txt
+  # 3. from Python: ONE remote string, never a split argv for the device side
+  python3 -c 'import subprocess,sys; print(subprocess.run(["adb","-s",sys.argv[1],"shell","am start -n %s --es ex %s" % (sys.argv[2], "\x27a;b\x27")],capture_output=True,text=True,timeout=20).stdout)' "$SERIAL" "$C"
+  # 4. prove what arrived: the "+ am start …" line is the form the device parsed
+  adb -s "$SERIAL" shell "set -x; am start -n '$C' --es ex 'a;b'" 2>&1 | grep -m1 '^+'
+  ```
+- **Proof:** The `set -x` line (or the probe's own log, D26-082) shows the complete extra value, and the
+  loop's output row count equals its input row count (D26-067).
+- **Escalation:** -> D04, D05, D07, D08, D09 (every extras-bearing sweep); D26-067 (counting); D27-041
+  (the quoted form in the report's repro steps).
+- **Ruled out when:** Not a finding. A negative obtained from an unquoted extra or from a loop that ran
+  one iteration is void and the sweep is rerun with the quoting and `-n` above.
+
+### D26-081 · Serialise every worker that touches a shared device — instrumentation, process lifecycle and UI alike
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — harness contract; contention produces truncated logs that read as negatives |
+| **Attacker** | AM-12 (own harness) |
+| **Applies to** | any engagement where more than one worker (agent or human) drives one device or emulator |
+| **Requires** | device |
+| **Maps to** | MASTG-TOOL-0004 (adb), MASTG-TOOL-0001 (Frida (Android)); engagement corpus |
+| **Record** | logs/D26-081.txt; lock acquire/release timestamps in every run log; the `Force stopping` / `Start proc` lines inside each run window |
+
+- **Skip when:** A single worker owns the device for the whole session — note `D26-081 n/a: single worker
+  on <serial> for the session (LAB-MANIFEST.txt)`.
+- **Test:** A second worker's `frida -f` spawn kills and replaces the process another worker is attached
+  to; `am force-stop`, `pm clear`, `am crash`, `kill` and reboots end an instrumented run; two UI
+  sequences interleave. Each leaves a partial log with no error, and a lock kept in a per-session
+  scratch directory serialises nothing.
+- **How:**
+  ```bash
+  LOCK=${SANE_DEVLOCK:-$E/lab/devlock.$SERIAL}; OWNER=${SANE_WORKER:?name this worker}   # a SHARED path
+  acquire(){ for i in $(seq 1 600); do mkdir "$LOCK" 2>/dev/null && { echo "$OWNER" > "$LOCK/owner"; return 0; }
+             [ "$(cat "$LOCK/owner" 2>/dev/null)" = "$OWNER" ] && return 0      # re-entrant for the owner
+             sleep 2; done; echo "LOCK HELD BY $(cat "$LOCK/owner") for 20 min" >&2; return 1; }
+  release(){ [ "$(cat "$LOCK/owner" 2>/dev/null)" = "$OWNER" ] && rm -rf "$LOCK"; }   # never another owner's lock
+  # the lock covers: UI sequences; frida -f/-p/-n and objection sessions; am force-stop / pm clear / am crash /
+  # kill against the target; reboots; proxy and CA changes. Hold it for the whole run, not per command.
+  acquire && echo "acquire $OWNER $(date -u +%FT%TZ)" | tee -a "$E/logs/D26-081.txt"
+  # … the instrumented run …
+  adb -s "$SERIAL" logcat -d -v time | grep -E "Force stopping .*$PKG|Start proc .*$PKG" | tee -a "$E/logs/D26-081.txt"
+  release; echo "release $OWNER $(date -u +%FT%TZ)" | tee -a "$E/logs/D26-081.txt"
+  ```
+  With more than four workers, add a second research device or per-package locks — never a shorter hold.
+- **Proof:** Every instrumentation or UI log is bracketed by its acquire/release lines, and no
+  `Force stopping`/`Start proc` line for the target falls inside the window except the worker's own.
+- **Escalation:** -> D26-073 (a run voided by contention is rerun, never counted toward the repeat count);
+  D27-080 (a recorded take carries the same attestation).
+- **Ruled out when:** Not a finding. The contract is met when every run log carries the lock bracket and
+  the lifecycle grep for the window is clean.
+
+### D26-082 · The probe app's run contract — fresh launch, foreground, file-mirrored output, positive control
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — it is the vehicle for AM-03 proofs, not a node |
+| **Attacker** | AM-03 (the probe is the zero-permission app; this item governs how it is run) |
+| **Applies to** | every run of the zero-permission probe app (`attacker-app/`, D26-065) or of a custom PoC app |
+| **Requires** | device |
+| **Maps to** | MASTG-TECH-0005 (Installing Apps), MASTG-TECH-0009 (Monitoring System Logs); `am start -S`; Android 14+ cached-app freezer |
+| **Record** | logs/D26-082.txt; logs/probe/probe-<session>.log pulled per run, with the `ready` banner, the positive-control line and one result line per fire |
+
+- **Skip when:** No device in the lab — note `D26-082 n/a: static-only engagement`.
+- **Test:** An `am start` whose Intent is `filterEquals`-equal to the running instance's is delivered to
+  the top (`Warning: Activity not started, intent has been delivered to currently running top-most
+  instance`) and `onCreate` does not run; a probe that goes to the background is frozen within seconds on
+  Android 14+ and stops receiving broadcasts; some OEM `user` builds drop app-level `Log.i` entirely, and a
+  busy ring buffer rotates within minutes. Each yields an empty result that reads as a negative.
+- **How:**
+  ```bash
+  N=$((N+1))   # -S = fresh process; a distinct action per fire defeats delivery-to-top
+  adb -s "$SERIAL" shell -n "am start -S -a probe.fire.$N -n com.sanehunters.probe/.MainActivity --es run '$STEP'"
+  # the probe mirrors every line to logcat AND to getExternalFilesDir()/probe-<session>.log; it stays in the
+  # foreground for the whole sniff window and runs its positive control before the test
+  adb -s "$SERIAL" pull /sdcard/Android/data/com.sanehunters.probe/files/ "$E/logs/probe/"
+  L=$(find "$E/logs/probe" -name 'probe-*.log' | sort | tail -1)
+  grep -c 'ready' "$L"; grep -c 'PROBE|' "$L"                    # the start banner, then >= one result line per fire
+  adb -s "$SERIAL" logcat -d -s PROBE:V | grep -c 'PROBE|'      # display only; the file is the evidence
+  ```
+  `-S` is for your probe only: never apply it to the TARGET during a discovery sweep (D26-074). A custom,
+  debuggable PoC app may instead keep its mirror in `getFilesDir()` and be read with `run-as`; the rule is
+  the same — a file, a start banner (the probe's `ready` line names the launch path and the mirror),
+  and a positive control inside the run (the `provider` step's `--es control` read comes first).
+- **Proof:** The pulled log holds the `ready` banner, the positive-control result and one result line per
+  fire; fire count equals result count.
+- **Escalation:** -> D04–D09 (every AM-03 proof), D26-065 (why the probe and not the shell), D26-067
+  (counts), D27-031 and D27-042 (the canary and the PoC take read the file, not logcat).
+- **Ruled out when:** Not a finding. A run whose log lacks the `ready` banner or the positive-control line
+  is void and rerun.
+
+### D26-083 · Attribute traffic to a UID, and run a negative TLS test against one app only
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — harness contract; the consumer nodes are D14/D15's |
+| **Attacker** | AM-12 (own research device) |
+| **Applies to** | any claim of the form "this app did / did not connect to X", and every negative TLS test on a shared lab |
+| **Requires** | device, root, mitm |
+| **Maps to** | MASTG-TECH-0010 (Basic Network Monitoring/Sniffing), MASTG-TECH-0011 (Setting Up an Interception Proxy), MASTG-TOOL-0075 (tcpdump (Android)); netfilter `owner` match |
+| **Record** | logs/D26-083.txt; the per-UID counter output before/after the action for the target and a control UID; the alternate listener's flow file |
+
+- **Skip when:** No root on the research device — note `D26-083 n/a: no root (adb root refused); sender
+  attribution done in-process with the D26-054 hook pack only`.
+- **Test:** A blind packet capture cannot say which app opened a connection (the emulator kernel has no
+  `LOG` target to tag it), and a negative TLS test run by changing the global proxy disturbs every other
+  app and worker on the device. Prove which UID produced a flow, and point one UID — not the device — at
+  the test listener.
+- **How:**
+  ```bash
+  U=$(adb -s "$SERIAL" shell dumpsys package com.target.app | grep -m1 -oE 'userId=[0-9]+' | cut -d= -f2)
+  # per-UID counters (R = the D26-003 root helper); make a second chain for a control UID the same way
+  R "iptables -N TGT 2>/dev/null; iptables -I OUTPUT -m owner --uid-owner $U -j TGT; iptables -A TGT -j RETURN"
+  R "iptables -L TGT -v -n -x" | tee -a "$E/logs/D26-083.txt"          # before; exercise the feature; run again
+  # negative TLS test for ONE uid: redirect only its proxy connections to an alternate listener
+  adb -s "$SERIAL" reverse tcp:8083 tcp:8083
+  R "iptables -t nat -I OUTPUT -m owner --uid-owner $U -p tcp --dport 8080 -j REDIRECT --to-ports 8083"
+  mitmdump -p 8083 -w "+$E/logs/harness/tlsneg.flows" &   # run once per mode: untrusted CA / wrong CN / trusted control
+  # teardown — leave the shared device as you found it
+  R "iptables -D OUTPUT -m owner --uid-owner $U -j TGT; iptables -F TGT; iptables -X TGT"
+  R "iptables -t nat -D OUTPUT -m owner --uid-owner $U -p tcp --dport 8080 -j REDIRECT --to-ports 8083"
+  ```
+  Without netfilter, attribute in-process: the D26-054 hook pack logs `URL.openConnection` and the OkHttp
+  calls from inside the target, which names the sender by construction.
+- **Proof:** Counters rising on the target chain and flat on the control chain while the feature is
+  exercised; the alternate listener's handshake outcome (accepted / rejected / pinned) for the target only,
+  with the trusted-control mode accepted.
+- **Escalation:** -> D14 (per-host trust result with the sender proven), D15, D18 (which SDK host the app
+  reached).
+- **Ruled out when:** Not a finding. Counters that do not move for the control UID mean the chain is
+  wrong, not that the device is silent — fix the rule before reading the target's counters.
+
+### D26-084 · Record remote-config and feature-flag state per device before settling any gated item
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — harness contract; a gate settled on the wrong configuration is a false negative |
+| **Attacker** | AM-12 |
+| **Applies to** | apps with a remote-config or experiment client (feature flags fetched at runtime) — most production apps |
+| **Requires** | device |
+| **Maps to** | MASTG-TECH-0043 (Method Hooking), MASTG-TECH-0044 (Process Exploration) |
+| **Record** | logs/D26-084.txt; lab/flags-<serial>.tsv (flag, value, source, read-at) per device; every gated negative cites device + flag value |
+
+- **Skip when:** The APK ships no remote-config client (no remote-config or experiment store in `$DEC`, no
+  config-fetch host in the endpoint inventory) — note `D26-084 n/a: no runtime flag client (grep of $DEC
+  and the endpoint inventory, logs/D26-084.txt)`.
+- **Test:** The same build reads different server-delivered flags on the research emulator, on the stock
+  phone and in its compiled defaults. A route, allow-list or auth path that is OFF where you tested reads as
+  absent, and the item is settled against the wrong configuration.
+- **How:**
+  ```bash
+  # 1. find the stores on the research device: remote-config caches, experiment databases, flag prefs
+  R "find /data/data/com.target.app -type f" | grep -iE 'remote_config|frc_|experiment|flag|config' \
+    | tee "$E/lab/flag-stores-$SERIAL.txt"
+  # 2. read the values the gated code reads, AFTER the config client has initialised (attach, do not spawn):
+  #    Java.choose the client instance (D26-044) and print the getters for the flag names found at file:line in $DEC
+  # 3. stock device (no root, no instrumentation): infer from the gated feature's observable behaviour
+  #    and record the value as 'inferred'
+  # 4. diff against the compiled default and between devices
+  diff "$E/lab/flags-emulator-5554.tsv" "$E/lab/flags-<phone-serial>.tsv"
+  ```
+- **Proof:** The per-device flag table with read timestamps; each gated item's row names the device and the
+  flag value it was settled on; a gate that is open on any in-scope device is tested on that device.
+- **Escalation:** -> D09 (server-delivered allow-lists), D13/D14 (flag-gated auth and trust paths), D17
+  (config-channel integrity), D23; D27-003 (the fingerprint header records the observed flag values).
+- **Ruled out when:** Both devices and the compiled default agree on the flag, or the item was settled on
+  the device where the gate is open.
+
+### D26-085 · Know which Android user the target is installed in — private space and work profile are separate users
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a — harness contract; a wrong user reads as "not installed" or as hardening |
+| **Attacker** | AM-12 |
+| **Applies to** | any physical device, and any emulator with a second user or profile; decisive on Android 15+ (private space) |
+| **Requires** | device |
+| **Maps to** | MASTG-TOOL-0004 (adb); `pm list users`, `--user` on `am`/`pm`/`content`; `INTERACT_ACROSS_USERS` |
+| **Record** | logs/D26-085.txt; the `dumpsys package` user block (`User N: … installed=true`) and the `--user` value used in every command |
+
+- **Skip when:** `pm list users` prints one user and the target is installed in it — note `D26-085 n/a:
+  single user (pm list users), target in user 0`.
+- **Test:** A private space or a work profile is a distinct Android user. Its apps are invisible to
+  user-0 `pm path`, `am start`, `content query` and `frida-ps` defaults, its credential-encrypted storage
+  stays locked until the space is unlocked, and a probe app in user 0 cannot reach components in user 10
+  — a platform block, not app hardening.
+- **How:**
+  ```bash
+  adb -s "$SERIAL" shell pm list users | tee "$E/logs/D26-085.txt"     # UserInfo{0:Owner:…} UserInfo{10:…}
+  for u in $(adb -s "$SERIAL" shell pm list users | grep -oE 'UserInfo\{[0-9]+' | tr -dc '0-9\n'); do
+    printf 'user %s: ' "$u"; adb -s "$SERIAL" shell -n pm path --user "$u" com.target.app | head -1; echo; done
+  adb -s "$SERIAL" shell dumpsys package com.target.app | grep -E '^ +User [0-9]+:'   # installed= / stopped= per user
+  adb -s "$SERIAL" shell am start --user 10 -n com.target.app/.Main
+  adb -s "$SERIAL" shell content query --user 10 --uri 'content://<auth>/<path>'
+  ```
+  Install the probe app into the SAME user (`adb install --user 10 probe.apk`) before any AM-03 proof; a
+  cross-user refusal naming `INTERACT_ACROSS_USERS` is the platform's, and is recorded as such.
+- **Proof:** The user block showing `installed=true` for the user you drove, and every command in the
+  evidence carrying that `--user`.
+- **Escalation:** -> D11 (per-user storage roots `/data/user/<N>/`), D26-065 (the probe in the right user),
+  D26-017 (a locked user reads like a missing component).
+- **Ruled out when:** The device has one user and the target is installed in user 0.
 
 ## Graveyard for this domain
 
@@ -3386,7 +3774,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   class and method enumeration, method hooking, process exploration, runtime reverse engineering) plus
   -0100, -0108, -0109, -0117, -0126, -0127, -0128, -0129, -0130, -0131, -0141, -0142, -0143, -0144,
   -0145, -0148, -0150, -0156, -0160 to -0165, -0172, -0173; the MASTG Android tool register
-  (MASTG-TOOL-0001, -0002, -0003, -0004, -0007, -0008, -0009, -0010, -0011, -0012, -0014, -0015, -0016,
+  (MASTG-TOOL-0001, -0002, -0003, -0004, -0007, -0008 (deprecated upstream), -0009, -0010, -0011, -0012, -0014, -0015, -0016,
   -0017, -0018, -0019, -0020, -0021, -0024, -0025, -0028, -0029, -0030, -0031, -0032, -0033, -0034,
   -0036, -0037, -0038, -0075, -0077, -0078, -0079, -0080, -0081, -0097, -0099, -0100, -0101, -0103,
   -0104, -0106, -0107, -0109, -0110, -0112, -0115, -0116, -0120, -0123, -0124, -0125, -0129, -0130,
@@ -3442,7 +3830,7 @@ Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the 
   ATT&CK's documented observable), T1632 Subvert Trust Controls, T1638 Adversary-in-the-Middle,
   T1521.003 SSL Pinning, T1633.001 System Checks, T1406 / T1406.002 Obfuscated Files or Information /
   Software Packing, T1474.001 Compromise Software Dependencies and Development Tools.
-- **Bugcrowd VRT release 2026-07-08** (`data/bugcrowd-vrt-full.csv`): `lack_of_binary_hardening.*`
+- **Bugcrowd VRT release 2026-07-08** (mirrored in `data/vrt.csv`): `lack_of_binary_hardening.*`
   (all P5, including `runtime_instrumentation_based`), the whole `mobile_security_misconfiguration` and
   `insecure_data_storage` branches, and the P1/P2 categories a mobile finding must reach —
   `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`,

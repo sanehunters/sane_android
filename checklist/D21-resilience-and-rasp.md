@@ -17,7 +17,7 @@
 | **Milestones** | M4 primary; M3 (harness acceptance) and M6 (server-side trust) where the items cross over |
 | **VRT ceiling** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269 — the server honouring a client-asserted integrity verdict, or a replayed/relayed attestation token, is the only shape in this domain that carries real severity); `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (**P2**) for an attacker-triggerable destructive tamper response; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) when the hook that nothing detected yields a shared credential. The domain's own nodes — `lack_of_binary_hardening.lack_of_jailbreak_detection`, `\|lack_of_obfuscation`, `\|runtime_instrumentation_based`, `\|lack_of_exploit_mitigations` — are all **P5** and are never the headline |
 | **Primary attacker model** | **AM-01 remote no interaction** and **AM-05 another user of the same app** — because the only payable shape is a *server* trusting a client claim, which any client can make. **AM-12 (your own rooted device) is not an attacker model**, and a finding whose entire PoC is "on my rooted phone I hooked a boolean" has no attacker. AM-03/AM-04 apply to the tamper-response and cloning items; AM-08 to the RASP-SDK supply-chain item |
-| **Maps to** | MASVS-RESILIENCE-1/-2/-3/-4, MASVS-CODE-4; MASTG-TEST-0324, -0325, -0338, -0341, -0351, -0352, -0353, -0368, -0369, -0263, -0264, -0265 (deprecated: -0045, -0046, -0049, -0051); MASTG-TECH-0008, -0013, -0016, -0017, -0018, -0023, -0024, -0031, -0032, -0040, -0043, -0144, -0157, -0165; MASTG-KNOW-0027, -0028, -0030, -0031, -0032, -0033, -0034, -0035, -0036, -0044, -0118, -0119, -0120; MASTG-BEST-0007, -0029, -0030, -0041, -0046, -0047, -0066; MASTG-TOOL-0001, -0009, -0011, -0018, -0019, -0021, -0029, -0034, -0038, -0100, -0103, -0146, -0147, -0149, -0151, -0152, -0153; MASWE-0006, -0039, -0040, -0051, -0053, -0054, -0056, -0057, -0058, -0059, -0061, -0064; CWE-250, CWE-269, CWE-471, CWE-489, CWE-497, CWE-540, CWE-693, CWE-912, CWE-1295, CWE-1326; ATT&CK T1617, T1629, T1629.002, T1629.003, T1630.002, T1630.003, T1632, T1632.001, T1633, T1633.001, T1642, T1655.001, T1662, T1471, T1418.001, mitigations M1002, M1010, detection DET0687 |
+| **Maps to** | MASVS-RESILIENCE-1/-2/-3/-4, MASVS-CODE-4; MASTG-TEST-0324, -0325, -0338, -0341, -0351, -0352, -0353, -0368, -0369, -0263, -0264, -0265 (deprecated: -0045, -0046, -0049, -0051); MASTG-TECH-0008, -0013, -0016, -0017, -0018, -0023, -0024, -0031, -0032, -0040, -0043, -0144, -0157, -0165; MASTG-KNOW-0027, -0028, -0030, -0031, -0032, -0033, -0034, -0035, -0036, -0044, -0118; MASTG-BEST-0007, -0030, -0041, -0046, -0047, -0066; MASTG-TOOL-0001, -0009, -0011, -0018, -0019, -0021, -0029, -0034, -0038, -0100, -0103, -0146, -0147, -0149, -0151, -0152, -0153; MASWE-0006, -0039, -0040, -0051, -0053, -0054, -0056, -0057, -0058, -0059, -0061, -0064; CWE-250, CWE-269, CWE-471, CWE-489, CWE-497, CWE-540, CWE-693, CWE-912, CWE-1295, CWE-1326; ATT&CK T1617, T1629, T1629.002, T1629.003, T1630.002, T1630.003, T1632, T1632.001, T1633, T1633.001, T1642, T1655.001, T1662, T1471, T1418.001, mitigations M1002, M1010, detection DET0687; MASTG-TEST-0226, -0227; MASWE-0052, -0055, -0063, -0065 |
 
 ## Why this domain pays
 
@@ -88,13 +88,15 @@ grep -rlE 'RootBeer|isRooted|isDeviceRooted|checkRoot|isEmulator|Debug\.isDebugg
 aapt2 dump xmltree "$E/apk/base.apk" --file AndroidManifest.xml | grep -E 'debuggable|testOnly'
 grep -rlE 'setWebContentsDebuggingEnabled|StrictMode\.(setVmPolicy|setThreadPolicy)' "$DEC/jadx/sources" | wc -l
 # 4. Integrity-shaped traffic on the wire (after P6 capture)  -> confirms or overrides probe 1
-mitmdump -nr "$E/requests/traffic.flows" -s /dev/stdin <<'PY' | sort -u | head
+# the addon goes in a file: mitmdump refuses `-s /dev/stdin` when stdin is a pipe (bash >= 5.1 heredocs); -q keeps its own flow lines out of the output
+cat > "$E/scripts/D21-probe4-integrity.py" <<'PY'
 def request(f):
     h = {k.lower() for k in f.request.headers}
     b = (f.request.content or b'').lower()
     if any('integrity' in k or 'attest' in k or 'appcheck' in k for k in h) or any(k in b for k in (b'integrity', b'attest', b'rooted', b'tampered')):
         print(f.request.pretty_host, f.request.path[:60])
 PY
+mitmdump -q -nr "$E/requests/traffic.flows" -s "$E/scripts/D21-probe4-integrity.py" | sort -u | head
 # 5. Backend in scope?  -> every High in the chapter needs it
 jq -r '.authorisation.scope, .app_facts.backend_api' "$E/engagement.json"
 ```
@@ -138,6 +140,8 @@ Write the n/a note in `checklist-status.csv` exactly as:
 
 ## Items
 
+All paths below assume `$E` (the engagement folder) and `$DEC=$E/decompiled` (`$DEC/jadx/sources`, `$DEC/apktool`) as START.md §6 defines; `$SERIAL` is the device from `adb devices -l` recorded in `engagement.json` `lab.*`.
+
 ### D21-001 · Settle the engagement mode before writing a single resilience line
 
 | | |
@@ -146,6 +150,7 @@ Write the n/a note in `checklist-status.csv` exactly as:
 | **VRT** | n/a (governs whether every other item in this chapter is a deliverable or a waste) |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASVS-RESILIENCE (whole group); Bugcrowd VRT `lack_of_binary_hardening\|*` (P5); HackerOne Core Ineligible Findings |
 
 - **Test:** The same observation is a paid contractual finding in a signed-SoW pentest and an
@@ -180,6 +185,7 @@ HackenProof: "Root/Jailbreak Detection Bypass - If the app doesn't promise root/
 | **VRT** | n/a (a filing gate) |
 | **Attacker** | AM-12 on input; the gate's job is to convert it to AM-01/AM-03/AM-05 or kill it |
 | **Applies to** | every finding whose PoC required root, Frida, a patched APK or a debuggable build |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP non-qualifying "Attacks that require a rooted device"; HackerOne Core Ineligible; Bugcrowd `lack_of_binary_hardening.lack_of_jailbreak_detection` (P5) |
 
 - **Test:** A root-required observation is reportable only if you can additionally demonstrate at least
@@ -206,8 +212,9 @@ curl -i -X POST https://api.target/v1/entitlement -H "Authorization: Bearer $TOK
      -H 'Content-Type: application/json' -d '{"tier":"premium","source":"client"}'
 
 # (6) prove the extracted key is not per-device
-adb -s deviceA shell run-as com.target.app cat files/key.bin | xxd | head
-adb -s deviceB shell run-as com.target.app cat files/key.bin | xxd | head   # identical => shared
+adb -s "$A" shell su -c 'cat /data/data/com.target.app/files/key.bin' | xxd | head
+adb -s "$B" shell su -c 'cat /data/data/com.target.app/files/key.bin' | xxd | head   # identical => shared
+# (`run-as` instead of `su -c` only on a debuggable build - D21-047)
 ```
 - **Proof:** The gate artefact itself, pasted into the report *before* the extraction narrative. A report
   that opens with "on a rooted device I extracted X" and never presents one of the six is the report that
@@ -248,14 +255,19 @@ adb logcat -c; adb shell monkey -p com.target.app 1 >/dev/null 2>&1; sleep 15
 adb logcat -d | grep -iE 'integrity|deviceRecognitionVerdict|MEETS_(DEVICE|BASIC|STRONG|VIRTUAL)_INTEGRITY|attest|safetynet|rasp|rooted'
 ```
   A rooted device or an unsupported emulator returns an **empty** device-recognition verdict — an empty
-  field is a result, not a failure to read one.
+  field is a result, not a failure to read one. An in-app diagnostics or "device meets security
+  requirements" row is a UI mapping of **local** state, not the verdict: apps map any non-error local
+  result to READY/OK and display it while the backend is refusing the gated action. The verdict you record
+  is (i) the logged or hook-captured verdict string, or (ii) the backend's response to one gated action
+  replayed with the captured token — never the settings row.
 - **Proof:** Either an integrity-relaxed build installed and running, or the logged verdict string, or a
   documented bypass with its Frida/smali artefact filed in the evidence tree.
 - **Escalation:** If option 3 succeeds *end-to-end* — the server accepts requests that carry no integrity
   verdict at all — that is a separate, reportable server-side finding: the client paid for a control that
   is client-side only. -> D21-013, D21-015.
-- **Ruled out when:** The app is installed and every gated flow completes on the lab device with the gate
-  intact (option 1 or 2 in force), so no finding in the report was demonstrated behind a disabled control.
+- **Ruled out when:** The app is installed and every gated flow completes **server-side** (the ledger or
+  entitlement read-back, not the in-app status row) on the lab device with the gate intact (option 1 or 2
+  in force), so no finding in the report was demonstrated behind a disabled control.
   State that explicitly — option 1/2 findings are cleaner precisely because the control was never in the
   path.
 
@@ -267,24 +279,26 @@ adb logcat -d | grep -iE 'integrity|deviceRecognitionVerdict|MEETS_(DEVICE|BASIC
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0165, MASTG-TOOL-0009 (APKiD `anti_root` / `anti_vm` / `obfuscator` / `packer`), MASTG-TOOL-0146 (RootBeer), MASTG-TOOL-0147 (Android RASP), MASTG-KNOW-0027, MASTG-KNOW-0030 |
+| **Record** | `logs/D21-004.txt` (the vendor fingerprint); the check-site inventory in the notes column |
 
 - **Test:** Checks are scattered across an obfuscated utility class, a vendor SDK **and** a native
   library. Stubbing one of four produces a silent bail-out you will misdiagnose as an app bug and write up
   as "the app is stable under instrumentation".
 - **How:** Build the complete check-site inventory first.
 ```bash
-apkid target.apk                                  # anti_root / anti_vm / obfuscator / packer, per library
-grep -rn '/system/xbin/su\|/system/bin/su\|/sbin/su\|Superuser.apk\|busybox\|magisk\|Magisk' $DEC/jadx/sources
-grep -rn 'Runtime.getRuntime().exec\|ProcessBuilder' $DEC/jadx/sources
-grep -rn 'ro.build.tags\|test-keys\|ro.debuggable\|ro.secure\|SystemProperties.get' $DEC/jadx/sources
-grep -rn 'isDeviceRooted\|checkRootMethod\|RootBeer\|SafetyNet\|IntegrityManager\|attest' $DEC/jadx/sources
-grep -rn 'getInstallerPackageName\|getInstallSourceInfo\|signatures\|GET_SIGNING_CERTIFICATES' $DEC/jadx/sources
-strings out/lib/arm64-v8a/*.so | grep -iE 'busybox|magisk|superuser|/su$|frida|gum-js|xposed|ptrace|TracerPid'
+apkid "$E/apk/base.apk"                                  # anti_root / anti_vm / obfuscator / packer, per library
+grep -rn '/system/xbin/su\|/system/bin/su\|/sbin/su\|Superuser.apk\|busybox\|magisk\|Magisk' "$DEC/jadx/sources"
+grep -rn 'Runtime.getRuntime().exec\|ProcessBuilder' "$DEC/jadx/sources"
+grep -rn 'ro.build.tags\|test-keys\|ro.debuggable\|ro.secure\|SystemProperties.get' "$DEC/jadx/sources"
+grep -rn 'isDeviceRooted\|checkRootMethod\|RootBeer\|SafetyNet\|IntegrityManager\|attest' "$DEC/jadx/sources"
+grep -rn 'getInstallerPackageName\|getInstallSourceInfo\|signatures\|GET_SIGNING_CERTIFICATES' "$DEC/jadx/sources"
+strings "$DEC"/apktool/lib/arm64-v8a/*.so | grep -iE 'busybox|magisk|superuser|/su$|frida|gum-js|xposed|ptrace|TracerPid'
 # vendor fingerprint - which commercial RASP is this?
-for so in out/lib/*/*.so; do strings -a "$so" \
+for so in "$DEC"/apktool/lib/*/*.so; do strings -a "$so" \
   | grep -aoiE 'guardsquare|dexguard|appdome|promon|shield|verimatrix|talsec|freerasp' \
-  | head -1 | sed "s#^#$so: #"; done
+  | head -1 | sed "s#^#$so: #"; done | tee "$E/logs/D21-004.txt"      # D21-043 reuses this fingerprint
 ```
   Rule-based smali triage that requires the suspicious string to sit near the API that consumes it — this
   is what removes the false positives a bare string grep produces:
@@ -359,18 +373,22 @@ outcome C  app runs, no beacon, nothing changes   -> no control at all. Graveyar
 | **Requires** | mitm |
 | **Maps to** | MASTG-KNOW-0035, MASWE-0054, MASWE-0056; Play Integrity documentation ("token verification must occur on your backend server, not on the client app") |
 
-- **Test:** One observation splits this domain in half. Either the app forwards an **opaque token** that
-  the backend decrypts and verifies — in which case no local hook forges it and you should test the
-  *integration* (D21-014 to D21-020) — or the app parses a verdict locally and sends a boolean, in which
-  case the control is client-side and D21-013 is your finding.
+- **Test:** One observation routes the whole payable half of the chapter, and it has **three** shapes, not
+  two: (a) the app requests an **opaque token** and forwards it itself — no local hook forges it, so you
+  test the *integration* (D21-014 to D21-020); (b) the app parses the verdict locally and sends a
+  **boolean** — the control is client-side and D21-013 is your finding; (c) the token is minted **and
+  transmitted by a delegate process** (a platform or vendor service the app calls over IPC), so the
+  integrity-carrying request never originates from the app's UID — then the app-side integration items
+  (D21-014 to D21-031) are n/a, because they would test the delegate's backend, and only the server-trust
+  items on the app's **own** requests (D21-013, D21-015, D21-053, D21-054, D21-058, D21-063) still apply.
 - **How:**
 ```bash
-grep -rnE 'IntegrityManager|StandardIntegrityManager|IntegrityTokenRequest|StandardIntegrityTokenRequest|requestIntegrityToken|setNonce\(|setRequestHash\(|decodeIntegrityToken|integrityToken' sources/
-grep -rnE 'setAttestationChallenge\(|getCertificateChain\(|KeyStore\.getInstance\("AndroidKeyStore"\)' sources/
+grep -rnE 'IntegrityManager|StandardIntegrityManager|IntegrityTokenRequest|StandardIntegrityTokenRequest|requestIntegrityToken|setNonce\(|setRequestHash\(|decodeIntegrityToken|integrityToken' "$DEC/jadx/sources/"
+grep -rnE 'setAttestationChallenge\(|getCertificateChain\(|KeyStore\.getInstance\("AndroidKeyStore"\)' "$DEC/jadx/sources/"
 ```
   Then read the wire. Sweep every request body and header for the two shapes:
 ```bash
-mitmdump -nr traffic.flows -s /dev/stdin <<'PY'
+cat > "$E/scripts/D21-006-sweep.py" <<'PY'
 def request(f):
     b = (f.request.content or b'').lower()
     for k in (b'integrity', b'attestation', b'rooted', b'jailbroken', b'isemulator', b'tampered',
@@ -381,7 +399,24 @@ def request(f):
         if 'integrity' in h.lower() or 'attest' in h.lower():
             print('HDR', h, f.request.headers[h][:40])
 PY
+mitmdump -q -nr "$E/requests/traffic.flows" -s "$E/scripts/D21-006-sweep.py"
 ```
+  Before walking D21-014 to D21-031, attribute every integrity-carrying request to the **sending
+  package** — the delegate shape (c) is invisible in the decompiled sources:
+```bash
+cat > "$E/scripts/D21-006-senders.py" <<'PY'
+def request(f):
+    h = {k.lower(): v for k, v in f.request.headers.items()}
+    body = (f.request.content or b'').lower()
+    if any(('integrity' in k or 'attest' in k) for k in h) or b'integrity' in body or b'attest' in body:
+        print(f.request.pretty_host, f.request.path[:60], '| UA=' + h.get('user-agent', '')[:60],
+              '| ctx=' + next((v[:60] for k, v in h.items() if 'package' in k or 'request-context' in k), ''))
+PY
+mitmdump -q -nr "$E/requests/traffic.flows" -s "$E/scripts/D21-006-senders.py" | sort -u | tee "$E/logs/D21-006-senders.txt"
+```
+  If the `User-Agent` or request-context package names a delegate rather than the app, write
+  `attestation delegated to <process>; D21-014..D21-031 n/a (delegate integration, out of scope)` in
+  `checklist-status.csv` and continue with the app's own requests.
 - **Proof:** Either a long opaque base64 blob (a token, sometimes >2 KB) on sensitive requests, or a short
   JSON field such as `"deviceIntegrity":"OK"` / `"rooted":false` / `"hardwareBacked":true`. The two are
   visually unmistakable and the distinction is the entire finding tree.
@@ -391,6 +426,7 @@ PY
 - **Ruled out when:** No attestation API is referenced anywhere in the app and no integrity-shaped field
   or header appears on any request. The app makes no device-integrity claim; "no attestation implemented"
   is MASWE-0054/-0056 as a hardening gap and is **not** a bounty finding — do not file it.
+  Shape (c) also closes the integration items: the only integrity-carrying requests are sent by a delegate process (record its package from `logs/D21-006-senders.txt`).
 
 ### D21-007 · Distinguish "the app detected you" from "your hook was wrong"
 
@@ -423,8 +459,18 @@ Java.perform(function () {
 ```
   If Java hooks never fire, follow the native trail before concluding anything:
 ```bash
-frida-trace -U -n com.target.app -i "JNI_OnLoad" -i "ptrace" -i "fork"
+frida-trace -D "$SERIAL" -n com.target.app -i "JNI_OnLoad" -i "ptrace" -i "fork"
 adb logcat -d | grep -iE 'SIGSEGV|abort|Fatal signal|tombstone'
+```
+  Two harness-caused process deaths look exactly like RASP and are **not** detection:
+```
+(a) frida prints `unexpectedly timed out while waiting for stop` and the target dies with SIGSEGV at a tiny
+    pc (e.g. pc 0x320) -> a Frida/ART suspend failure on this image. Prove it: attach to the probe app on
+    the same image (works) and re-attach to the target after `adb -s "$SERIAL" shell am force-stop <pkg>`
+    + relaunch.
+(b) logcat `Abort: SuspendAll timeout` right after your script's Java.registerClass(...) of a library
+    listener interface -> a Frida-side crash. Do not implement listener interfaces in the agent; poll the
+    result object (`isComplete()` / `getResult()`) from a setTimeout loop instead.
 ```
 - **Proof:** A stack trace naming the detection class and method at the moment of exit. If no such trace
   appears and the process simply never reaches your hook, you are in the late-attach / abstract-class /
@@ -435,6 +481,7 @@ adb logcat -d | grep -iE 'SIGSEGV|abort|Fatal signal|tombstone'
   third-party analytics SDK rather than a detection routine — the app did not detect you. Record the
   trace; a fabricated "the app has strong RASP" line is a false statement in a report and is worse than no
   statement.
+  Equally closed when the death matches signature (a) or (b) above and the probe-app control attaches cleanly — a harness fault, recorded in `lab.md`, not a detection.
 
 ### D21-008 · Detection that only runs at process spawn
 
@@ -455,7 +502,7 @@ adb logcat -d | grep -iE 'SIGSEGV|abort|Fatal signal|tombstone'
 adb shell monkey -p com.target.app 1 >/dev/null 2>&1; sleep 6
 frida -D "$SERIAL" -n com.target.app -l hooks.js
 # contrast with the spawn path that failed
-frida -D "$SERIAL" -f com.target.app -l hooks.js
+frida -D "$SERIAL" -f com.target.app -l hooks.js -t 900      # spawn resumes automatically on frida-tools 17; -t keeps a scripted session alive
 ```
   If you genuinely need hooks before `onCreate`, use consolidated spawn-mode tooling so each Java method
   and native symbol is hooked exactly once — overlapping hooks are their own crash source.
@@ -476,7 +523,7 @@ frida -D "$SERIAL" -f com.target.app -l hooks.js
 | **Attacker** | AM-12 |
 | **Applies to** | hardened banking, wallet and identity apps |
 | **Requires** | device, frida |
-| **Maps to** | MASTG-KNOW-0030 (Reverse Engineering Tool Detection), MASTG-TOOL-0021 (Magisk + Zygisk/DenyList), MASTG-TOOL-0149 (LSPosed) |
+| **Maps to** | MASWE-0065; MASTG-KNOW-0030 (Reverse Engineering Tool Detection), MASTG-TOOL-0021 (Magisk + Zygisk/DenyList), MASTG-TOOL-0149 (LSPosed) |
 
 - **Test:** Anti-Frida detection is a fixed list of artefacts. Enumerate the list from the binary rather
   than guessing, so the bypass is targeted and you can state precisely which vectors the app does and does
@@ -484,7 +531,7 @@ frida -D "$SERIAL" -f com.target.app -l hooks.js
 - **How:**
 ```bash
 grep -rn -i 'frida\|gum-js-loop\|gmain\|gdbus\|pool-spawner\|linjector\|re\.frida\.server\|27042\|27047\|LIBFRIDA' \
-  $DEC/jadx/sources out/lib/*/*.so
+  "$DEC/jadx/sources" "$DEC"/apktool/lib/*/*.so
 ```
   Vectors a modern detector covers, and which a renamed/stealth server changes: process name
   `frida-server`; the mapped `libfrida-agent.so`; thread names `gmain` / `gdbus` / `pool-spawner`; the
@@ -492,13 +539,16 @@ grep -rn -i 'frida\|gum-js-loop\|gmain\|gdbus\|pool-spawner\|linjector\|re\.frid
   `re.frida.server`; the default listening port; libc `exit`/`signal` hook side-effects; temp paths
   `.frida` / `frida-`. The three cheap countermeasures, in cost order:
 ```bash
-# 1. non-default port
-adb shell "/data/local/tmp/frida-server -l 0.0.0.0:31337 &"
-frida -H 127.0.0.1:31337 -n com.target.app
+# 1. non-default port, bound to loopback, forwarded over adb
+adb -s "$SERIAL" shell '/data/local/tmp/frida-server -l 127.0.0.1:31337 &'
+adb -s "$SERIAL" forward tcp:31337 tcp:31337
+frida -H 127.0.0.1:31337 -n com.target.app -l hooks.js
 # 2. renamed binary (process-name detection)
-adb push frida-server /data/local/tmp/fs && adb shell "chmod 755 /data/local/tmp/fs && /data/local/tmp/fs &"
-# 3. gadget instead of server (memory-scan detection for the server's own strings)
-frida --gadget=libgadget.so -f com.target.app
+adb -s "$SERIAL" push frida-server /data/local/tmp/fs && adb -s "$SERIAL" shell 'chmod 755 /data/local/tmp/fs && /data/local/tmp/fs -l 127.0.0.1:31337 &'
+# 3. gadget instead of server (no frida-server process or strings on the device at all)
+objection patchapk -s "$E/apk/base.apk"       # or inject libfrida-gadget.so by hand (D26-009)
+adb -s "$SERIAL" install -r base.objection.apk
+frida -D "$SERIAL" -n Gadget -l hooks.js
 ```
   Ladder for root-hiding, cheapest first: Magisk Zygisk + DenyList with the package added and a reboot;
   then Shamiko; then KernelSU/APatch (no Zygote injection at all) for apps that heuristically detect
@@ -580,6 +630,7 @@ adb shell settings get global development_settings_enabled
   installed helper apps, and any permission the attacker app holds.
 - **Escalation:** -> D27 severity justification. Conversely, a PoC that needs *none* of these is the
   strongest severity argument you can make, and it should be the first line of the report.
+  The restricted-settings gate itself (the dialog, the Settings path, the tap count) is owned by D22-023 — record it once there and cite it from the precondition block.
 - **Ruled out when:** The chain requires two or more simultaneous user-granted preconditions (for example
   sideload **and** enable an accessibility service **and** clear the restricted-settings gate). Per
   kill-fast discipline, more than two simultaneous preconditions is a kill, not a downgrade.
@@ -615,6 +666,41 @@ curl -s -X POST https://api.target/v1/transfer -H 'Content-Type: application/jso
 
 # 3. SERVER POLICY vs STATE - a 200 both with and without the header means the path
 #    was never gated. a 403 -> 200 flip is meaningful; a constant 200 is not.
+
+# 4. BINARY BODIES (protobuf / gRPC / bearer-fronted RPC) - `curl -d @body.json` does not apply. Replay
+#    FROM THE CAPTURED FLOW and rebuild the request: (a) verbatim replay = control, (b) integrity header
+#    removed, (c) truncated body = layer-ordering control. Diff the DECODED responses, not the bytes.
+cat > "$E/scripts/D21-012-strip.py" <<'PY'
+# mitmdump addon: replays the first captured flow whose path contains $NEEDLE three ways through mitmproxy's
+# own client replay (HTTP/1.1, HTTP/2 and gRPC alike) and prints one JSON line per variant
+import os, json, hashlib
+from mitmproxy import ctx
+NEEDLE, HDR = os.environ['NEEDLE'], os.environ['HDR']
+_fired = False
+def request(f):
+    global _fired
+    if f.is_replay or _fired or NEEDLE not in f.request.path or not f.request.content:
+        return
+    _fired = True
+    variants = []
+    for name in ('verbatim', 'header-stripped', 'truncated'):
+        g = f.copy()
+        g.metadata['variant'] = name
+        if name == 'header-stripped':
+            g.request.headers.pop(HDR, None)                                     # case-insensitive
+        if name == 'truncated':
+            g.request.content = f.request.content[: len(f.request.content) // 2]   # layer-ordering control
+        variants.append(g)
+    ctx.master.commands.call('replay.client', variants)
+def response(f):
+    if f.is_replay == 'request' and 'variant' in f.metadata:
+        d = f.response.raw_content or b''
+        print(json.dumps({'variant': f.metadata['variant'], 'status': f.response.status_code, 'len': len(d),
+                          'sha256': hashlib.sha256(d).hexdigest()[:16], 'head': d[:64].hex()}))
+PY
+NEEDLE='/gated/path' HDR=x-integrity-token mitmdump -q -nr "$E/requests/traffic.flows" -s "$E/scripts/D21-012-strip.py" | tee "$E/logs/D21-012-strip.jsonl"
+# an in-body integrity FIELD: decode with blackboxprotobuf (pip install bbpb), delete field N, re-encode,
+# and send it as a fourth variant; then decode each response the same way before diffing.
 ```
   For any claim about a missing per-device or per-account limit that the RASP was supposed to enforce, use
   n >= 10 interleaved trials per group in randomised order and require the suspect group's mean to sit at
@@ -623,6 +709,7 @@ curl -s -X POST https://api.target/v1/transfer -H 'Content-Type: application/jso
 - **Proof:** The byte-level diff, the two-request layer-ordering pair, and the with/without control — all
   three in the report. The **state change on the server** (the transfer appearing in the ledger, the
   entitlement visible on a fresh GET) is the proof; the 200 is not.
+  For binary bodies the artefact is `logs/D21-012-strip.jsonl` with the three variants side by side (status, decoded length, hash), plus the server-side read-back.
 - **Escalation:** A confirmed differential -> D21-013/-015/-016 at High. A byte-identical 200 -> the
   endpoint was never integrity-gated, which is a different (and usually smaller) finding: it belongs to
   D15 as an authorisation question, not here.
@@ -645,7 +732,7 @@ curl -s -X POST https://api.target/v1/transfer -H 'Content-Type: application/jso
   every request where the client sends a boolean or a score describing its own integrity, and flip it.
 - **How:**
 ```bash
-grep -rnE 'isRooted|rootBeer|RootBeer|SafetyNet|IntegrityManager|requestIntegrityToken|StandardIntegrityManager|isEmulator|isDebuggerConnected|deviceTrusted|deviceSafe|tampered' sources/
+grep -rnE 'isRooted|rootBeer|RootBeer|SafetyNet|IntegrityManager|requestIntegrityToken|StandardIntegrityManager|isEmulator|isDebuggerConnected|deviceTrusted|deviceSafe|tampered' "$DEC/jadx/sources/"
 ```
   Then, in the proxy, one field at a time:
 ```
@@ -664,6 +751,7 @@ curl -i -X POST https://api.target/v1/session -H "Authorization: Bearer $TOK" \
   the ledger entry, the entitlement, the issued token — not the 200. Run D21-012 first.
 - **Escalation:** -> D15 (the whole backend authz surface is now reachable from a client that lies),
   D23 (fraud/entitlement abuse at scale), D13 (if the flag gates step-up authentication).
+  This item is the canonical home of the client-asserted-integrity class: D02-021, D13-017 and D15-084 point here, so record the result once.
 - **Ruled out when:** No integrity-shaped field appears in any request body or header (D21-006 returned
   "opaque token" or "nothing"), **or** flipping the field changes nothing in the response body and the
   server-side state is unchanged on a follow-up read. A field the server ignores is not a control; say so
@@ -685,9 +773,9 @@ curl -i -X POST https://api.target/v1/session -H "Authorization: Bearer $TOK" \
   one line.
 - **How:**
 ```bash
-grep -rn 'decodeIntegrityToken\|IntegrityTokenResponse\|standardIntegrityToken\|token()' sources/ -A6
+grep -rn 'decodeIntegrityToken\|IntegrityTokenResponse\|standardIntegrityToken\|token()' "$DEC/jadx/sources/" -A6
 # look for a LOCAL JSON parse of verdict fields rather than an opaque forward
-grep -rn 'deviceRecognitionVerdict\|MEETS_DEVICE_INTEGRITY\|appRecognitionVerdict\|PLAY_RECOGNIZED\|appLicensingVerdict' sources/ -B4 -A6
+grep -rn 'deviceRecognitionVerdict\|MEETS_DEVICE_INTEGRITY\|appRecognitionVerdict\|PLAY_RECOGNIZED\|appLicensingVerdict' "$DEC/jadx/sources/" -B4 -A6
 ```
   Then hook the comparison and watch the wire:
 ```javascript
@@ -713,15 +801,16 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Play Integrity **classic** requests |
-| **Requires** | backend-api, mitm, two-accounts |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASTG-KNOW-0035 ("Include a NONCE with integrity verification requests"); Play Integrity documentation — the nonce "is used to protect against certain types of attacks, such as replay and tampering attacks"; MASWE-0054 |
 
+- **Skip when:** never n/a on a classic integration; case (c) needs a second account — when `accounts` lists only one, run (a), (b) and (d) and write `blocked: case (c) needs a second account` beside the row rather than n/a.
 - **Test:** The reportable bug is not that a verdict can be spoofed on a rooted device — it is the
   **integration**. A backend that accepts any structurally valid token without matching the nonce it
   issued is replayable, and the attack needs no device bypass at all.
 - **How:**
 ```bash
-grep -rn 'setNonce(\|requestIntegrityToken\|IntegrityTokenRequest' sources/ -B6 -A10
+grep -rn 'setNonce(\|requestIntegrityToken\|IntegrityTokenRequest' "$DEC/jadx/sources/" -B6 -A10
 ```
   Capture one valid token from a clean, stock device, then replay it from an instrumented one:
 ```
@@ -747,7 +836,7 @@ grep -rn 'setNonce(\|requestIntegrityToken\|IntegrityTokenRequest' sources/ -B6 
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Play Integrity **standard** requests |
-| **Requires** | backend-api, mitm, two-accounts |
+| **Requires** | backend-api, mitm |
 | **Maps to** | Play Integrity documentation — `requestHash` is "a digest of all relevant values from your app's request"; standard requests carry Google-managed replay mitigation but the backend must still validate `requestHash` against the protected action |
 
 - **Test:** Standard requests have Google-side replay mitigation, so testers assume binding is handled.
@@ -756,7 +845,7 @@ grep -rn 'setNonce(\|requestIntegrityToken\|IntegrityTokenRequest' sources/ -B6 
   from an instrumented one.
 - **How:**
 ```bash
-grep -rn 'setRequestHash(' sources/ -B6 -A6
+grep -rn 'setRequestHash(' "$DEC/jadx/sources/" -B6 -A6
 ```
   Capture two requests with **different bodies** and compare the `requestHash` they carry:
 ```
@@ -779,7 +868,7 @@ body B {"amount":9999,"to":"attacker"}  requestHash = 9f3c... > identical => bin
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all Play Integrity integrations |
-| **Requires** | backend-api, mitm, two-accounts |
+| **Requires** | backend-api, mitm |
 | **Maps to** | Play Integrity documented server check on `timestampMillis`; the overview's "No caching: Request verdicts on-demand to prevent replay/proxying attacks" and the "Do NOT cache verdicts (replay attack risk)" list entry |
 
 - **Test:** Even a correctly-nonce-bound integration fails if the backend never checks how old the token
@@ -801,7 +890,7 @@ done
 ```
   Client-side caching shows up as the *same* token string on consecutive launches:
 ```bash
-grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putString\|getString'
+grep -rn 'integrityToken\|verdict' "$DEC/jadx/sources/" | grep -i 'cache\|shared_?pref\|putString\|getString'
 ```
 - **Proof:** A token accepted well outside any plausible window (the 24h case is the unambiguous one), or
   the identical token string observed on two launches hours apart.
@@ -821,6 +910,7 @@ grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putS
 | **Requires** | backend-api, physical |
 | **Maps to** | Play Integrity verdicts documentation: `MEETS_DEVICE_INTEGRITY` = "Genuine certified Android device with hardware-backed proof of locked bootloader and certified OS (Android 13+)"; `MEETS_BASIC_INTEGRITY` = "bootloader can be locked/unlocked (less strict)"; `MEETS_VIRTUAL_INTEGRITY` = "Android-powered emulator with Google Play services"; MASTG-KNOW-0035 |
 
+- **Skip when:** no Play-certified device (a `google_apis_playstore` **user** image or a Play-certified phone) is available for case 1, or no bootloader-unlockable physical device for case 2. Write `blocked: needs Play-certified device / unlockable physical device` in `checklist-status.csv` — not `n/a` — and never derive a tier claim from a lab AVD: a non-Play or userdebug image returns an empty `deviceRecognitionVerdict` for every tier by construction (D21-003).
 - **Test:** These labels are not equivalent and the backend's tier logic frequently collapses them into a
   single "passed" boolean. `MEETS_BASIC_INTEGRITY` explicitly permits an unlocked bootloader;
   `MEETS_VIRTUAL_INTEGRITY` **is** an emulator. A policy of "device integrity required" that accepts
@@ -831,9 +921,16 @@ grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putS
 2. bootloader-unlocked physical device             -> expect MEETS_BASIC_INTEGRITY at best
 3. emulator with Google Play services              -> expect MEETS_VIRTUAL_INTEGRITY
 ```
-  Carry the policy note for the report: on **Android 13+**, `MEETS_STRONG_INTEGRITY` requires device
-  integrity **plus** recent security patches on all partitions (OS and vendor); on **Android 12 and
-  lower** it mainly means hardware-backed boot integrity — a materially weaker signal than teams assume.
+  Pre-check for cases 1 and 3 — only a `user` build of a Play image can produce a non-empty verdict:
+```bash
+adb -s "$SERIAL" shell getprop ro.build.type; adb -s "$SERIAL" shell getprop ro.product.name | grep -i playstore
+adb -s "$SERIAL" shell getprop ro.build.version.security_patch     # record it beside the verdict (STRONG needs a recent patch)
+```
+  Carry the policy note for the report: since May 2025, on **Android 13+** `MEETS_DEVICE_INTEGRITY` is
+  hardware-backed (locked bootloader plus certified OS) and `MEETS_STRONG_INTEGRITY` additionally requires
+  a security update within the past 12 months; on **Android 12 and lower** the labels keep the older,
+  weaker semantics — a materially weaker signal than teams assume. Record the device's
+  `ro.build.version.security_patch` beside the verdict.
 - **Proof:** The high-value action completing on case 2 or case 3, alongside the app's or the vendor's
   stated policy that the flow is device-integrity-only.
 - **Escalation:** -> D23 automated abuse at scale (emulator farms, referral and promo fraud, scripted
@@ -858,7 +955,7 @@ grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putS
 - **How:** Server-side review where you have it; empirically, install a re-signed build and drive the
   gated flow:
 ```bash
-apktool d base.apk -o work && apktool b work -o modified.apk
+apktool d "$E/apk/base.apk" -o "$E/work" && apktool b "$E/work" -o "$E/modified.apk"
 java -jar uber-apk-signer.jar --apks modified.apk
 adb install -r modified-aligned-debugSigned.apk
 # then run the gated flow and read the verdict the backend acted on
@@ -883,28 +980,38 @@ adb install -r modified-aligned-debugSigned.apk
 | **Attacker** | AM-01 (anyone can induce the error condition) |
 | **Applies to** | all apps using Play Integrity |
 | **Requires** | backend-api, frida |
-| **Maps to** | MASTG-KNOW-0035 — local errors `APP_NOT_INSTALLED`, `APP_UID_MISMATCH`, default quota 10,000 requests/day; MASWE-0054 |
+| **Maps to** | MASTG-KNOW-0035 — local errors `APP_NOT_INSTALLED`, `APP_UID_MISMATCH`, default quota 10,000 **classic** requests/day; MASWE-0054 |
 
 - **Test:** The API has documented local error conditions and a daily quota. An app whose failure listener
   logs and continues has a control that opens under load, on quota exhaustion, or on demand.
 - **How:**
 ```bash
-grep -rn 'addOnFailureListener\|onFailure\|IntegrityServiceException\|catch' sources/ -A8 \
+grep -rn 'addOnFailureListener\|onFailure\|IntegrityServiceException\|catch' "$DEC/jadx/sources/" -A8 \
   | grep -iE 'integrity|attest' -B4
 ```
   Induce the failure and watch the app:
 ```javascript
+// IntegrityManager is an interface: hook the concrete implementor whatever R8 named it
 Java.perform(function () {
-  var M = Java.use('com.google.android.play.core.integrity.IntegrityManager');
-  // force the request path into its failure branch and observe the app's decision
-  M.requestIntegrityToken.implementation = function (r) { throw Java.use('java.lang.RuntimeException').$new('x'); };
+  Java.enumerateMethods('*!requestIntegrityToken').forEach(function (g) {
+    var F = Java.ClassFactory.get(g.loader);
+    g.classes.forEach(function (c) {
+      var K = F.use(c.name);
+      K.requestIntegrityToken.overloads.forEach(function (o) {
+        o.implementation = function () { console.log('[integrity] induced failure in ' + c.name);
+          throw F.use('java.lang.RuntimeException').$new('induced'); };
+      });
+    });
+  });
 });
 ```
   Offline is the cheapest inducer of all: put the device in flight mode for the token request only.
 - **Proof:** The failure branch reached (logcat or the Frida log) with the app proceeding to the protected
   flow, and the backend accepting the resulting request.
-- **Escalation:** -> D15/D23. Note the availability angle: at 10,000 requests/day default quota, a
-  high-traffic app can exhaust it, so fail-open is not a theoretical branch.
+- **Escalation:** -> D15/D23. Note the availability angle: the 10,000 requests/day default quota applies to
+  **classic** requests, so a high-traffic classic integration can exhaust it and fail-open is not a
+  theoretical branch; standard requests (`StandardIntegrityManager`) are not subject to it, so the
+  quota-exhaustion argument is only valid when D21-006 found a classic integration.
 - **Ruled out when:** The app blocks the protected flow when the integrity request fails, and the server
   independently refuses a request carrying no token. Both halves are needed — a client that blocks but a
   server that accepts is D21-013.
@@ -925,16 +1032,15 @@ Java.perform(function () {
   permanently open integrity gate in production for over a year.
 - **How:**
 ```bash
-unzip -l base.apk | grep -i safetynet
-grep -rn 'SafetyNet\|SafetyNetClient\|attest(' sources/ -A8 | grep -in 'addOnFailureListener\|catch\|allow\|proceed'
-grep -rn 'jwsResult' sources/
+unzip -l "$E/apk/base.apk" | grep -i safetynet
+grep -rn 'SafetyNet\|SafetyNetClient\|attest(' "$DEC/jadx/sources/" -A8 | grep -in 'addOnFailureListener\|catch\|allow\|proceed'
+grep -rn 'jwsResult' "$DEC/jadx/sources/"
 ```
   Then confirm on device:
-```javascript
-Java.perform(function () {
-  var T = Java.use('com.google.android.gms.tasks.Task');
-  // log every failure listener invocation on the attest path, then watch the app continue
-});
+```bash
+# Task is abstract and OnFailureListener is an interface: trace the failure callbacks instead of hooking them
+frida-trace -D "$SERIAL" -n com.target.app -j '*!onFailure' -j '*!attest*'
+# read the status code from the traced ApiException argument (7 = NETWORK_ERROR), then watch the app continue
 ```
 - **Proof:** The failure branch reached on every launch — with status code 7 in the log — and the app
   proceeding as if attested; plus the backend accepting the resulting request.
@@ -961,7 +1067,7 @@ Java.perform(function () {
   declared data flow.
 - **How:**
 ```bash
-grep -rn 'setNonce(\|setRequestHash(' sources/ -B6
+grep -rn 'setNonce(\|setRequestHash(' "$DEC/jadx/sources/" -B6
 ```
   Decode what you see on the wire (it is usually base64, sometimes base64url without padding):
 ```bash
@@ -983,18 +1089,18 @@ echo "$NONCE" | tr '_-' '/+' | base64 -d 2>/dev/null | strings | head
 | **Attacker** | AM-04 (a local app holding one common permission — overlay or accessibility) |
 | **Applies to** | apps with the `environmentDetails` opt-ins enabled; supported form factors only |
 | **Requires** | backend-api, device |
-| **Maps to** | Play Integrity verdicts: `environmentDetails.appAccessRiskVerdict.appsDetected` (`KNOWN_INSTALLED`/`UNKNOWN_INSTALLED`, `KNOWN_CAPTURING`/`UNKNOWN_CAPTURING`, `KNOWN_CONTROLLING`/`UNKNOWN_CONTROLLING`, `KNOWN_OVERLAYS`/`UNKNOWN_OVERLAYS`), `playProtectVerdict` (`NO_ISSUES`, `NO_DATA`, `POSSIBLE_RISK`, `MEDIUM_RISK`, `HIGH_RISK`, `UNEVALUATED`); MASWE-0039, MASWE-0040 |
+| **Maps to** | MASWE-0055; Play Integrity verdicts: `environmentDetails.appAccessRiskVerdict.appsDetected` (`KNOWN_INSTALLED`/`UNKNOWN_INSTALLED`, `KNOWN_CAPTURING`/`UNKNOWN_CAPTURING`, `KNOWN_CONTROLLING`/`UNKNOWN_CONTROLLING`, `KNOWN_OVERLAYS`/`UNKNOWN_OVERLAYS`), `playProtectVerdict` (`NO_ISSUES`, `NO_DATA`, `POSSIBLE_RISK`, `MEDIUM_RISK`, `HIGH_RISK`, `UNEVALUATED`); MASWE-0039, MASWE-0040 |
 
 - **Test:** These opt-in verdicts exist precisely to detect screen-capturing, overlaying and
   device-controlling apps. Teams enable them in the Play Console, log them, and never gate on them. The
   control is then inert against the exact attack it was bought for.
 - **How:**
 ```bash
-grep -rn 'appAccessRiskVerdict\|playProtectVerdict\|environmentDetails' sources/   # often server-side only
+grep -rn 'appAccessRiskVerdict\|playProtectVerdict\|environmentDetails' "$DEC/jadx/sources/"   # often server-side only
 adb shell settings get secure enabled_accessibility_services
 adb shell dumpsys window windows | grep -iE 'TYPE_APPLICATION_OVERLAY|TYPE_ACCESSIBILITY'
 adb shell appops get com.attacker SYSTEM_ALERT_WINDOW
-grep -rnE 'canDrawOverlays|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSCURED|setFilterTouchesWhenObscured|accessibilityDataSensitive|FLAG_SECURE' sources/ res/layout/
+grep -rnE 'canDrawOverlays|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSCURED|setFilterTouchesWhenObscured|accessibilityDataSensitive|FLAG_SECURE' "$DEC/jadx/sources/" "$DEC/apktool/res/layout/"
 ```
   Run the money-moving flow with a capturing/overlay app and a test accessibility service active, and see
   whether the app applies any additional friction.
@@ -1002,8 +1108,11 @@ grep -rnE 'canDrawOverlays|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSC
   and an enabled accessibility service are both present, with the app applying no step-up and the backend
   applying no additional check.
 - **Escalation:** -> D04 UI redress, -> D13 credential capture, -> D23 remote-access-scam fraud. Note
-  `android:accessibilityDataSensitive` is the Android 16+ control for the accessibility half, implicitly
-  enabled by `android:filterTouchesWhenObscured="true"`.
+  `android:accessibilityDataSensitive` (API 34+, Android 14) is the platform control for the
+  accessibility half; `ACCESSIBILITY_DATA_SENSITIVE_AUTO` makes a view sensitive whenever
+  `android:filterTouchesWhenObscured="true"`, and only accessibility services flagged `isAccessibilityTool`
+  see such views. Check the target's `targetSdk` and the device API before rating the accessibility half
+  (the control exists only at api>=34).
 - **Ruled out when:** The app refuses or steps up the sensitive action while an overlay or an untrusted
   accessibility service is present, or `environmentDetails` is not enabled for the integration at all (in
   which case there is no purchased control to report as inert — file the overlay gap under D04 instead).
@@ -1016,6 +1125,7 @@ grep -rnE 'canDrawOverlays|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSC
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) |
 | **Attacker** | n/a (privacy/compliance, not an attacker model) |
 | **Applies to** | apps with the opt-in enabled |
+| **Requires** | — |
 | **Maps to** | Play Integrity overview: "Device Recall: Store custom data per-device on Google servers; survives app reinstall and device reset"; `recentDeviceActivity` |
 
 - **Test:** `deviceRecall` lets a developer store custom per-device data on Google's servers that
@@ -1024,7 +1134,7 @@ grep -rnE 'canDrawOverlays|FLAG_WINDOW_IS_OBSCURED|FLAG_WINDOW_IS_PARTIALLY_OBSC
   it is disclosed.
 - **How:**
 ```bash
-grep -rn -i 'deviceRecall\|device_recall\|recentDeviceActivity' sources/
+grep -rn -i 'deviceRecall\|device_recall\|recentDeviceActivity' "$DEC/jadx/sources/"
 ```
   Then compare against the app's Play Data Safety section and privacy policy.
 - **Proof:** The API in use with no corresponding disclosure — the code reference beside the policy text
@@ -1044,7 +1154,8 @@ grep -rn -i 'deviceRecall\|device_recall\|recentDeviceActivity' sources/
 | **Requires** | firebase, backend-api |
 | **Maps to** | Firebase App Check documentation — Play Integrity is the Android provider; protects Cloud Firestore, Realtime Database, Cloud Storage, callable Cloud Functions, Firebase Authentication (Preview) and custom backends; debug providers are local-development-only |
 
-- **Test:** App Check is the control that makes "only our app may call this backend" true. Without it,
+- **Skip when:** D18-029 already walked — write `as D18-029`; token lifetime and cross-service replay are D21-062.
+- **Test:** **Cross-reference:** App Check is owned by D18-029 (it sits with the Firebase rules it protects) — run it there; this item records only the attestation-side consequence. App Check is the control that makes "only our app may call this backend" true. Without it,
   every Firestore/RTDB/Storage/Callable finding is reachable from `curl`. This is the attestation item
   most often missed, because it lives in a different team's console.
 - **How:**
@@ -1081,9 +1192,9 @@ curl -s -X POST "https://firestore.googleapis.com/v1/projects/$PROJ/databases/(d
   attestation root.
 - **How:**
 ```bash
-grep -rnE 'setAttestationChallenge\(|getCertificateChain\(' sources/
-grep -rn '1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' sources/          # the KeyDescription extension OID
-grep -rn 'android.googleapis.com/attestation' sources/         # root/status endpoints referenced client-side
+grep -rnE 'setAttestationChallenge\(|getCertificateChain\(' "$DEC/jadx/sources/"
+grep -rn '1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' "$DEC/jadx/sources/"          # the KeyDescription extension OID
+grep -rn 'android.googleapis.com/attestation' "$DEC/jadx/sources/"         # root/status endpoints referenced client-side
 ```
   Then intercept the enrolment or step-up request and read what it carries.
 ```
@@ -1096,6 +1207,7 @@ BAD   {"hardwareBacked":true,"securityLevel":"TrustedEnvironment"}   # a client 
   (a client-side reference to `android.googleapis.com/attestation/root` is the tell).
 - **Escalation:** -> D12 (the key-binding claim the app makes for local data is false),
   -> D13 (device-bound step-up auth is not device-bound), -> D15.
+  -> D12-063 to D12-069 own the chain-verification tests (client-side verification, nonce, wrong certificate, security level/CRL, `RootOfTrust`, [709], root rotation); this item only decides chain-or-boolean on the wire.
 - **Ruled out when:** The full DER chain crosses the wire on every attestation-gated action and no
   verification code exists in the client. Then move to D21-027 to -D21-031, which test what the *server*
   does with it.
@@ -1111,7 +1223,8 @@ BAD   {"hardwareBacked":true,"securityLevel":"TrustedEnvironment"}   # a client 
 | **Requires** | backend-api, mitm |
 | **Maps to** | Android security-key-attestation documentation — "**Critical**: Only trust the **first occurrence** of the extension (nearest to root). Extensions in the leaf certificate may have been added by attackers"; `KeyDescription` ASN.1 shape in AOSP keystore attestation docs |
 
-- **Test:** If the server verifies the chain but reads `KeyDescription` from the **leaf**, an attacker who
+- **Skip when:** D12-065 already walked — write `as D12-065` and do not re-test.
+- **Test:** **Cross-reference:** the verification test is owned by D12-065 — run it there and record the result once; this item keeps only the first-occurrence-nearest-the-root rule. If the server verifies the chain but reads `KeyDescription` from the **leaf**, an attacker who
   can mint a leaf injects arbitrary claims — `securityLevel`, `verifiedBootState`, `deviceLocked` — while
   every signature still validates.
 - **How:** Server-side code review where available. Empirically, append an attacker-generated leaf carrying
@@ -1144,12 +1257,13 @@ openssl x509 -in chain_0.pem -text -noout | grep -A40 '1.3.6.1.4.1.11129.2.1.17'
 | **Requires** | backend-api, mitm |
 | **Maps to** | Android security-key-attestation verification checklist — "`attestationChallenge` matches your nonce"; `KeyDescription.attestationChallenge` in AOSP keystore attestation docs; MASTG-KNOW-0034 |
 
-- **Test:** `setAttestationChallenge()` must carry a fresh, server-issued, single-use value. A constant, a
+- **Skip when:** D12-064 already walked — write `as D12-064` and do not re-test.
+- **Test:** **Cross-reference:** the verification test is owned by D12-064 — run it there and record the result once; this item keeps only the Android-side challenge call sites. `setAttestationChallenge()` must carry a fresh, server-issued, single-use value. A constant, a
   client-generated UUID or a timestamp means one genuine attestation replays forever — including from an
   emulator or from a completely different device.
 - **How:**
 ```bash
-grep -rn -B4 -A4 'setAttestationChallenge(' sources/     # is the argument a constant / UUID / timestamp?
+grep -rn -B4 -A4 'setAttestationChallenge(' "$DEC/jadx/sources/"     # is the argument a constant / UUID / timestamp?
 ```
   Capture two enrolments and diff the challenge, then replay the first chain for a third enrolment:
 ```bash
@@ -1174,7 +1288,8 @@ diff <(openssl x509 -in enrol1_leaf.pem -text -noout | grep -A5 'attestationChal
 | **Requires** | backend-api, physical |
 | **Maps to** | AOSP keystore attestation — `RootOfTrust` contains `verifiedBootKey`, `deviceLocked`, `verifiedBootState` (`Verified`, `SelfSigned`, `Unverified`, `Failed`), `verifiedBootHash`; AOSP security-model paper §4.7 (the state "can be verified by apps as well as passed onto backend services to remotely verify boot integrity"; from Android 10 with AVB2 the VBMeta struct digest is included "to support firmware transparency") |
 
-- **Test:** A verified attestation *carries* the boot state. The common defect is a backend that validates
+- **Skip when:** no Play-certified device (a `google_apis_playstore` **user** image or a Play-certified phone) is available for case 1, or no bootloader-unlockable physical device for case 2. Write `blocked: needs Play-certified device / unlockable physical device` in `checklist-status.csv` — not `n/a` — and never derive a tier claim from a lab AVD: a non-Play or userdebug image returns an empty `deviceRecognitionVerdict` for every tier by construction (D21-003).
+- **Test:** **Cross-reference:** the verification test is owned by D12-067 — run it there and record the result once; this item keeps only the device-integrity consequence of an ignored `RootOfTrust`. A verified attestation *carries* the boot state. The common defect is a backend that validates
   the chain correctly and then never reads `deviceLocked` or `verifiedBootState` — an unlocked bootloader
   is exactly the case the app should treat differently and the one it silently accepts.
 - **How:**
@@ -1204,7 +1319,8 @@ adb shell getprop ro.boot.flash.locked
 | **Requires** | backend-api, physical |
 | **Maps to** | Android security-key-attestation documentation — check `attestationSecurityLevel` is `TrustedEnvironment` or `StrongBox`, verify the root "is signed with Google's attestation root key", check the chain against the CRL at `https://android.googleapis.com/attestation/status`, roots listed at `https://android.googleapis.com/attestation/root`, official verifier `github.com/android/keyattestation`; AOSP `SecurityLevel` values `Software` / `TrustedEnvironment` / `StrongBox` |
 
-- **Test:** Two checks are commonly missing: the security level (a *software* attestation chain is
+- **Skip when:** no Play-certified device (a `google_apis_playstore` **user** image or a Play-certified phone) is available for case 1, or no bootloader-unlockable physical device for case 2. Write `blocked: needs Play-certified device / unlockable physical device` in `checklist-status.csv` — not `n/a` — and never derive a tier claim from a lab AVD: a non-Play or userdebug image returns an empty `deviceRecognitionVerdict` for every tier by construction (D21-003).
+- **Test:** **Cross-reference:** the verification test is owned by D12-066 — run it there and record the result once; this item keeps only the Software-root lab-image false positive. Two checks are commonly missing: the security level (a *software* attestation chain is
   generable on any emulator) and revocation (leaked keyboxes are revoked by Google, and a backend that
   never checks the CRL keeps accepting them).
 - **How:**
@@ -1242,7 +1358,8 @@ adb shell pm list features | grep -iE 'strongbox|hardware_keystore'   # absent o
 | **Requires** | backend-api, frida, physical |
 | **Maps to** | MASTG-KNOW-0044; AOSP key/ID attestation docs; the published key-attestation relay research |
 
-- **Test:** OID `1.3.6.1.4.1.11129.2.1.17` proves that *some* acceptable TEE or StrongBox generated the
+- **Skip when:** D12-068 already walked — write `as D12-068` and do not re-test.
+- **Test:** **Cross-reference:** the verification test is owned by D12-068 — run it there and record the result once; this item keeps only the clean-device relay's two operational rules. OID `1.3.6.1.4.1.11129.2.1.17` proves that *some* acceptable TEE or StrongBox generated the
   leaf key for `attestationChallenge`. It does **not** bind that hardware to the process or network
   session presenting the chain. Signature validation, Google-root pinning, freshness, revocation,
   security-level, `deviceLocked=true` and `verifiedBootState=Verified` can all pass on relayed evidence,
@@ -1292,7 +1409,7 @@ adb shell pm list features | grep -iE 'strongbox|hardware_keystore'   # absent o
   inside a server-verified key attestation.
 - **How:**
 ```bash
-grep -rnE 'SystemProperties|getprop|ro\.boot\.|ro\.debuggable|ro\.secure|Build\.TAGS|test-keys' sources/
+grep -rnE 'SystemProperties|getprop|ro\.boot\.|ro\.debuggable|ro\.secure|Build\.TAGS|test-keys' "$DEC/jadx/sources/"
 adb shell getprop ro.boot.verifiedbootstate
 adb shell getprop ro.boot.flash.locked
 ```
@@ -1331,8 +1448,8 @@ Java.perform(function () {
   and you write that sentence.
 - **How:** First, trace the verdict to its decision point — this is the step people skip:
 ```bash
-grep -rnE 'isRooted|isDeviceRooted|isJailBroken|RootTools\.isAccessGiven|checkRoot|RootBeer' sources/ -B6 -A10
-grep -rn 'isRooted()' sources/ -A15 | grep -nE 'finish\(\)|return|unlock|decrypt|allow|skip|setPinning|entitle'
+grep -rnE 'isRooted|isDeviceRooted|isJailBroken|RootTools\.isAccessGiven|checkRoot|RootBeer' "$DEC/jadx/sources/" -B6 -A10
+grep -rn 'isRooted()' "$DEC/jadx/sources/" -A15 | grep -nE 'finish\(\)|return|unlock|decrypt|allow|skip|setPinning|entitle'
 ```
   Then the bypass ladder, cheapest first:
 ```bash
@@ -1400,7 +1517,7 @@ Java.perform(function () {
   fail open on their own — no attacker tooling needed, and it is a defect the vendor can actually fix.
 - **How:**
 ```bash
-grep -rn -A15 'isRooted\|checkRoot\|detectTamper\|verifySignature\|isEmulator' sources/ \
+grep -rn -A15 'isRooted\|checkRoot\|detectTamper\|verifySignature\|isEmulator' "$DEC/jadx/sources/" \
   | grep -nE 'catch \(|return false;|return true;|Thread\(|executor|async'
 ```
   Then make the check *throw* and watch the app's path:
@@ -1432,13 +1549,13 @@ Java.perform(function () {
 | **Requires** | device |
 | **Maps to** | MASWE-0006, MASWE-0051, MASWE-0057 (CWE-471 "Modification of Assumed-Immutable Data") |
 
-- **Test:** A detection result cached in SharedPreferences (`"is_rooted":false`, `"integrity_ok":true`,
+- **Test:** The backup-set variant of D21-036 — run D21-036 first and record the restore path here. A detection result cached in SharedPreferences (`"is_rooted":false`, `"integrity_ok":true`,
   `"tamper_strikes":0`) that is included in backup and read on next launch is defeated by the restore
   primitive — no runtime hooking at all. That is a materially different finding from "the check can be
   hooked", and it is why it is worth its own item.
 - **How:**
 ```bash
-grep -rnE 'is_rooted|rooted|tamper|integrity_ok|jailbreak|emulator|strike|last_verdict' sources/ \
+grep -rnE 'is_rooted|rooted|tamper|integrity_ok|jailbreak|emulator|strike|last_verdict' "$DEC/jadx/sources/" \
   | grep -i 'preference\|putBoolean\|getBoolean\|putString\|edit()'
 # confirm it is in the backup set
 adb shell bmgr transport com.android.localtransport/.LocalTransport
@@ -1471,14 +1588,17 @@ adb shell run-as com.target.app cat shared_prefs/security.xml
 - **How:**
 ```bash
 # 1. find the security-relevant local reads
-grep -rnE 'getSharedPreferences|getBoolean\(|getString\(|getInt\(' sources/ \
+grep -rnE 'getSharedPreferences|getBoolean\(|getString\(|getInt\(' "$DEC/jadx/sources/" \
   | grep -iE 'premium|pro|subscri|entitle|licen|trial|unlock|feature|role|admin|verified|attempts|limit|quota'
 # 2. is any integrity primitive guarding them?
-grep -rnE 'javax\.crypto\.Mac|Mac\.getInstance|java\.security\.Signature|MessageDigest\.getInstance|MessageDigest\.isEqual' sources/
+grep -rnE 'javax\.crypto\.Mac|Mac\.getInstance|java\.security\.Signature|MessageDigest\.getInstance|MessageDigest\.isEqual' "$DEC/jadx/sources/"
 # 3. flip it and relaunch
 adb root
-adb shell "sed -i 's/\"is_premium\" value=\"false\"/\"is_premium\" value=\"true\"/' /data/data/com.target.app/shared_prefs/settings.xml"
-adb shell am force-stop com.target.app; adb shell monkey -p com.target.app 1
+adb shell am force-stop com.target.app          # first: a running app rewrites the file from memory on its next commit
+# edit through a temp copy and write back with cat >, which keeps the file's app-uid owner and SELinux label
+# (an in-place sed replaces the file with a root-owned copy the app can no longer read)
+adb shell "sed 's/\"is_premium\" value=\"false\"/\"is_premium\" value=\"true\"/' /data/data/com.target.app/shared_prefs/settings.xml > /data/local/tmp/settings.xml && cat /data/local/tmp/settings.xml > /data/data/com.target.app/shared_prefs/settings.xml"
+adb shell monkey -p com.target.app 1
 ```
 - **Proof:** The app honouring the modified value — a paid feature unlocked, a trial counter reset, an
   attempt limiter bypassed — and, critically, **the backend also honouring it** where the flag drives a
@@ -1507,10 +1627,10 @@ adb shell am force-stop com.target.app; adb shell monkey -p com.target.app 1
   Demonstrate the gap rather than describing it.
 - **How:**
 ```bash
-grep -RnE 'getPackageInfo\(.*GET_SIGN|hasSigningCertificate|getApkContentsSigners|signingInfo|CRC|checksum|verifyApk|getInstallerPackageName|getInstallSourceInfo' -A8 sources/
+grep -RnE 'getPackageInfo\(.*GET_SIGN|hasSigningCertificate|getApkContentsSigners|signingInfo|CRC|checksum|verifyApk|getInstallerPackageName|getInstallSourceInfo' -A8 "$DEC/jadx/sources/"
 # cross-platform layers, where the check is trivially patchable
-grep -a -nE 'getInstallerPackageName|signatures|signingInfo|PackageManager' hbc.strings 2>/dev/null | head
-grep -nE 'GetInstallerPackageName|signatures|PackageInfo' out/dump.cs 2>/dev/null | head
+grep -a -nE 'getInstallerPackageName|signatures|signingInfo|PackageManager' "$E/logs/hbc.strings" 2>/dev/null | head     # D19's Hermes string dump (D19 writes bare working files under $E/logs/)
+grep -nE 'GetInstallerPackageName|signatures|PackageInfo' "$DEC"/il2cpp/dump.cs 2>/dev/null | head
 ```
 ```javascript
 Java.perform(function () {
@@ -1545,10 +1665,10 @@ Java.perform(function () {
   integrity check runs, the check is already compromised and its verdict is meaningless.
 - **How:**
 ```bash
-frida-trace -U -f com.target.app -j 'java.lang.System!load*' -j 'dalvik.system.*ClassLoader!$init'
+frida-trace -D "$SERIAL" -f com.target.app -j 'java.lang.System!load*' -j 'dalvik.system.*ClassLoader!$init'
 adb shell "cat /proc/$(adb shell pidof com.target.app)/maps" | grep -vE '/system|/apex|/data/app/.*base\.apk'
 # where does the reference hash live, and who can write it?
-grep -rnE 'MessageDigest|sha256|checksum|expectedHash|EXPECTED_' sources/ -A6 | grep -iE 'getExternalFilesDir|getFilesDir|openFileOutput|File\('
+grep -rnE 'MessageDigest|sha256|checksum|expectedHash|EXPECTED_' "$DEC/jadx/sources/" -A6 | grep -iE 'getExternalFilesDir|getFilesDir|openFileOutput|File\('
 ls -l /sdcard/Android/data/com.target.app/files 2>/dev/null
 ```
 - **Proof:** A module in `/proc/<pid>/maps` that comes from neither the APK nor the platform, mapped
@@ -1576,16 +1696,21 @@ ls -l /sdcard/Android/data/com.target.app/files 2>/dev/null
   and can that response be triggered by an attacker or by a plausible false positive?
 - **How:**
 ```bash
-grep -rn -i -B8 'wipeData\|lockNow\|clearApplicationUserData\|System\.exit\|Process\.killProcess\|deleteDatabase\|logout\(\)\|blockAccount\|invalidateSession' sources/ \
+grep -rn -i -B8 'wipeData\|lockNow\|clearApplicationUserData\|System\.exit\|Process\.killProcess\|deleteDatabase\|logout\(\)\|blockAccount\|invalidateSession' "$DEC/jadx/sources/" \
   | grep -n -i 'root\|tamper\|integrity\|hook\|emulator\|debug\|frida\|magisk'
 ```
   Then find the cheapest artificial trigger and use it. The high-value case is a detection that looks for
   a *path* rather than an executable:
 ```bash
-# if the check is File("/sdcard/…/magisk").exists() or similar, any app can plant it
-adb shell run-as com.attacker 'mkdir -p /sdcard/Download && touch /sdcard/Download/magisk'
-adb shell am force-stop com.target.app; adb shell monkey -p com.target.app 1
-adb shell run-as com.target.app ls -la files shared_prefs databases   # before and after
+# if the check is File("/sdcard/…/magisk").exists() or similar, any app can plant it.
+# plant the trigger FROM the zero-permission probe app (attacker-app/: a one-line
+# File("/sdcard/Download/magisk").createNewFile() in its activity) - R3: an adb shell write is not AM-03 proof.
+# quick look only: run-as exec()s its argument, so shell operators must go through sh -c, and run-as
+# works only for a debuggable package
+adb -s "$SERIAL" shell run-as <probe.pkg> sh -c 'mkdir -p /sdcard/Download && touch /sdcard/Download/magisk'
+adb -s "$SERIAL" shell am force-stop com.target.app; adb -s "$SERIAL" shell monkey -p com.target.app 1
+# before/after on the ROOT lane (run-as needs a debuggable package - D21-047)
+adb -s "$SERIAL" shell su -c 'ls -la /data/data/com.target.app/files /data/data/com.target.app/shared_prefs /data/data/com.target.app/databases'
 ```
 - **Proof:** The app wiping user data, locking the account or force-logging-out after a benign file was
   planted by a second app — with a directory listing before and after, and the five-screenshot state-change
@@ -1608,6 +1733,7 @@ adb shell run-as com.target.app ls -la files shared_prefs databases   # before a
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) where it reaches a privileged state; otherwise argue on the platform-protection removed |
 | **Attacker** | AM-02 remote one click (the user is talked through it) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | ATT&CK T1629.003 Disable or Modify Tools, T1629 Impair Defenses (detection DET0687, correlating "application-driven security modifications, degraded defensive telemetry, and continued activity under reduced monitoring"), T1632.001 |
 
 - **Test:** The inverse of the rest of this chapter. Does the app *reduce* a platform protection to make
@@ -1616,7 +1742,7 @@ adb shell run-as com.target.app ls -la files shared_prefs databases   # before a
   setting?
 - **How:**
 ```bash
-grep -rn -i 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS\|ACTION_REQUEST_IGNORE_BATTERY\|setenforce\|SELinux\|disableProtect\|play protect\|verify_apps\|package_verifier_enable\|Settings\.Global\.putInt\|unknown sources\|INSTALL_NON_MARKET' sources/ res/
+grep -rn -i 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS\|ACTION_REQUEST_IGNORE_BATTERY\|setenforce\|SELinux\|disableProtect\|play protect\|verify_apps\|package_verifier_enable\|Settings\.Global\.putInt\|unknown sources\|INSTALL_NON_MARKET' "$DEC/jadx/sources/" res/
 adb shell settings get global package_verifier_enable
 adb shell settings get global install_non_market_apps
 ```
@@ -1637,7 +1763,7 @@ adb shell settings get global install_non_market_apps
 | **Attacker** | AM-02 (the user installs the container), AM-08 (the container is the hostile party) |
 | **Applies to** | banking, wallet and DRM apps; any app whose threat model assumes per-package UID isolation |
 | **Requires** | device |
-| **Maps to** | MASWE-0058; the dex-load primitive `DexFile.openDexFile()` -> `openDexFileNative()` that containers hook and redirect |
+| **Maps to** | MASWE-0052, MASWE-0058; the dex-load primitive `DexFile.openDexFile()` -> `openDexFileNative()` that containers hook and redirect |
 
 - **Test:** Container and cloning frameworks run the target inside a host process. Where the guest executes
   under the host UID, per-package UID isolation is gone and the guest inherits **all host-granted
@@ -1674,13 +1800,14 @@ adb shell dumpsys package com.target.app | grep -i 'userId=\|pkgFlags'
 | **Requires** | api>=34, mitm, frida |
 | **Maps to** | AOSP Conscrypt modular-system documentation (dual location, Android 14+); MASWE-0058 |
 
-- **Test:** RASP implementations commonly detect "MITM in progress" by hashing
+- **Skip when:** D14-033 already walked — write `as D14-033`.
+- **Test:** **Cross-reference:** owned by D14-033 (the trust-store-path detection) — run it there; this item keeps the RASP-claim framing. RASP implementations commonly detect "MITM in progress" by hashing
   `/system/etc/security/cacerts`. On Android 14+ the runtime trust store is also — and in practice
   primarily — in the Conscrypt APEX, so a detector reading only the legacy path is blind to a CA installed
   there, and vice versa.
 - **How:**
 ```bash
-frida-trace -U -f com.target.app -j '*!*cacert*' -j '*!*trust*' -j '*!*TrustManager*'
+frida-trace -D "$SERIAL" -f com.target.app -j '*!*cacert*' -j '*!*trust*' -j '*!*TrustManager*'
 strace -f -e trace=file -p $(adb shell pidof com.target.app) 2>&1 | grep -i cacerts
 adb shell ls /apex/com.android.conscrypt/cacerts | head
 adb shell ls /system/etc/security/cacerts | head
@@ -1709,14 +1836,10 @@ adb shell ls /system/etc/security/cacerts | head
   component.
 - **How:**
 ```bash
-unzip -o target.apk 'lib/*' -d x
-for so in x/lib/*/*.so; do
-  strings -a "$so" | grep -aoiE 'guardsquare|dexguard|appdome|promon|shield|verimatrix|talsec|freerasp' \
-    | head -1 | sed "s#^#$so: #"
-done
-strings -a x/lib/*/*.so | grep -aoE 'OpenSSL 1\.[0-9]\.[0-9][a-z]?|zlib [0-9.]+|curl/[0-9.]+' | sort -u
+# reuse the vendor fingerprint from D21-004 ("$E/logs/D21-004.txt"); then the embedded-library versions:
+strings -a "$DEC"/apktool/lib/*/*.so | grep -aoE 'OpenSSL 1\.[0-9]\.[0-9][a-z]?|zlib [0-9.]+|curl/[0-9.]+' | sort -u
 # does the SDK declare components of its own?
-aapt2 dump xmltree target.apk --file AndroidManifest.xml | grep -iA6 -E 'provider|receiver|service' | grep -i -E 'talsec|promon|appdome|guard'
+aapt2 dump xmltree "$E/apk/base.apk" --file AndroidManifest.xml | grep -iA6 -E 'provider|receiver|service' | grep -i -E 'talsec|promon|appdome|guard'
 ```
 - **Proof:** A vendor-attributable `.so` carrying an outdated embedded library version string, **plus** a
   reachable path into it — a version string on its own is P5 under
@@ -1743,7 +1866,7 @@ aapt2 dump xmltree target.apk --file AndroidManifest.xml | grep -iA6 -E 'provide
   made your entire dynamic result invalid, in the direction of a false negative.
 - **How:**
 ```bash
-grep -rn -i 'getDefaultHost\|http_proxy\|ProxySelector\|VpnService\|NetworkCapabilities.TRANSPORT_VPN\|isDebuggerConnected' sources/
+grep -rn -i 'getDefaultHost\|http_proxy\|ProxySelector\|VpnService\|NetworkCapabilities.TRANSPORT_VPN\|isDebuggerConnected' "$DEC/jadx/sources/"
 adb shell settings list global | grep -i http_proxy
 ```
   Run the same flow twice and diff the request sets:
@@ -1766,9 +1889,10 @@ run B: transparent interception (no proxy settings set; redirect at the gateway/
 | **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (**P5**) for the missing detection — never the headline; file the extracted secret under its own node |
 | **Attacker** | AM-12 for the extraction; the finding only exists once D21-002 condition 2 or 6 converts it to AM-01/AM-05 |
 | **Applies to** | all |
-| **Requires** | frida, two-accounts |
-| **Maps to** | MASTG-TEST-0341 (source of the API list below), MASWE-0058, MASTG-KNOW-0030, MASTG-KNOW-0032, MASTG-KNOW-0118, MASTG-BEST-0041, MASTG-TECH-0043, MASTG-TOOL-0001; ATT&CK T1617 Hooking (M1002, M1010) |
+| **Requires** | frida |
+| **Maps to** | MASWE-0065; MASTG-TEST-0341 (source of the API list below), MASWE-0058, MASTG-KNOW-0030, MASTG-KNOW-0032, MASTG-KNOW-0118, MASTG-BEST-0041, MASTG-TECH-0043, MASTG-TOOL-0001; ATT&CK T1617 Hooking (M1002, M1010) |
 
+- **Skip when:** never for the hooks; the Proof half needs a second account to use the extracted value against — without one, record the extraction as an AM-12 observation and `blocked: off-device half needs a second account`.
 - **Test:** Hook the APIs that handle secrets. If the hooks fire and return data, the app has no runtime
   integrity verification — and, more importantly, you now hold the secrets. The finding is the secret.
 - **How:** MASTG-TEST-0341 names the high-value targets and what each yields:
@@ -1824,12 +1948,12 @@ JS
   shipped build.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-debugger-checks.yml sources/
-semgrep -c rules/mastg-android-native-debugger-checks.yml lib/
-grep -rn 'Debug\.isDebuggerConnected\|waitingForDebugger\|waitForDebugger\|ApplicationInfo\.FLAG_DEBUGGABLE' sources/
-strings lib/arm64-v8a/*.so | grep -E 'ptrace|TracerPid|/proc/self/status'
-adb shell am set-debug-app -w com.target.app
-adb forward tcp:8700 jdwp:$(adb shell pidof com.target.app) && jdb -attach localhost:8700
+semgrep --config "${MASTG_RULES:?clone OWASP/mastg and export MASTG_RULES=<clone>/rules}/mastg-android-debugger-checks.yml" "$DEC/jadx/sources"
+semgrep --config "$MASTG_RULES/mastg-android-native-debugger-checks.yml" "$DEC/apktool/lib"
+# no MASTG clone: run the grep line that follows and write `semgrep: not run (no MASTG_RULES)` in the log
+grep -rn 'Debug\.isDebuggerConnected\|waitingForDebugger\|waitForDebugger\|ApplicationInfo\.FLAG_DEBUGGABLE' "$DEC/jadx/sources/"
+strings "$DEC"/apktool/lib/arm64-v8a/*.so | grep -E 'ptrace|TracerPid|/proc/self/status'
+# attach exactly as in D21-047 (set-debug-app + jdwp forward + jdb)
 adb shell cat /proc/$(adb shell pidof com.target.app)/status | grep TracerPid
 ```
   Neutralise the native side if `ptrace` self-attach is the mechanism:
@@ -1856,14 +1980,15 @@ if (ptrace) Interceptor.replace(ptrace, new NativeCallback(function(){ return -1
 | **Attacker** | AM-11 physical unlocked with USB access; AM-03/AM-06 where adb-over-TCP is enabled |
 | **Applies to** | all |
 | **Requires** | device |
-| **Maps to** | MASTG-TECH-0031 (Debugging); drozer `app.package.debuggable`, `exploit.jdwp.check`; Android's `android-debuggable` risk documentation |
+| **Maps to** | MASTG-TEST-0226, MASWE-0063; MASTG-TECH-0031 (Debugging); drozer `app.package.debuggable`, `exploit.jdwp.check`; Android's `android-debuggable` risk documentation |
 
-- **Test:** If the shipped build is debuggable, every RASP control is bypassable without root, without
+- **Skip when:** D02-029 / D02-030 already recorded the flag — write `as D02-029` and keep only the "every RASP control is bypassable without root" sentence for the report.
+- **Test:** **Cross-reference:** the flag and its JDWP consequence are owned by D02-029/D02-030 — record the fact there; this item keeps the resilience consequence. If the shipped build is debuggable, every RASP control is bypassable without root, without
   Frida and without a custom ROM — and the app's private data is readable via `run-as`. This is the item
   in the chapter that rates on its own.
 - **How:**
 ```bash
-aapt2 dump xmltree base.apk --file AndroidManifest.xml | grep -i debuggable
+aapt2 dump xmltree "$E/apk/base.apk" --file AndroidManifest.xml | grep -i debuggable
 adb shell dumpsys package com.target.app | grep -i 'flags=.*DEBUGGABLE'
 adb shell run-as com.target.app ls -la files shared_prefs databases
 adb shell am set-debug-app -w com.target.app
@@ -1893,14 +2018,15 @@ dz> run exploit.jdwp.check
 | **Attacker** | AM-11 physical unlocked with USB/adb; AM-03 where another app can reach the abstract socket on an affected build |
 | **Applies to** | all apps with WebViews |
 | **Requires** | webview, device |
-| **Maps to** | MASTG-TECH-0031; Android's test/debug-features risk documentation; MASWE-0061 |
+| **Maps to** | MASTG-TEST-0227, MASWE-0063; MASTG-TECH-0031; Android's test/debug-features risk documentation; MASWE-0061 |
 
-- **Test:** This exposes the app's WebViews to Chrome DevTools over the adb socket — full DOM and JS
+- **Skip when:** D10-049 already recorded — write `as D10-049`.
+- **Test:** **Cross-reference:** the setting is owned by D10-049 — record it there; this item keeps the socket proof and its image controls. This exposes the app's WebViews to Chrome DevTools over the adb socket — full DOM and JS
   access to authenticated sessions, on a **non-rooted** device. It is frequently enabled by a third-party
   library rather than by the app team, which is why it survives review.
 - **How:**
 ```bash
-grep -RnE 'setWebContentsDebuggingEnabled' sources/
+grep -RnE 'setWebContentsDebuggingEnabled' "$DEC/jadx/sources/"
 adb forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof com.target.app)
 curl -s http://127.0.0.1:9222/json | jq -r '.[].url'
 curl -s http://127.0.0.1:9222/json/version
@@ -1908,10 +2034,14 @@ curl -s http://127.0.0.1:9222/json/version
 - **Proof:** `curl` listing the app's authenticated WebView URLs, then executing JS in that context via
   the DevTools protocol and returning a session value (`document.cookie`, a bearer token in
   `localStorage`).
+  The socket is evidence only on a **user** build with the store-signed APK: `adb -s "$SERIAL" shell getprop ro.build.type` must print `user`, and `dumpsys package <pkg> | grep -c DEBUGGABLE` must be 0 (a debuggable app enables WebView debugging automatically).
 - **Escalation:** -> D10 (the bridge surface is now fully enumerable), -> D13 (session extracted).
-- **Ruled out when:** The grep is clean and no `webview_devtools_remote_*` abstract socket exists for the
-  app's PID (`adb shell cat /proc/net/unix | grep webview_devtools`). Check every library, not only app
-  code — a library can enable it process-wide.
+- **Ruled out when:** The grep is clean and no `webview_devtools_remote_<pid>` abstract socket exists for
+  the app's PID **on a user build** (`adb -s "$SERIAL" shell cat /proc/net/unix | grep webview_devtools`),
+  or — on a userdebug/AVD image, where the system WebView exposes the socket for every WebView process —
+  an uninstrumented comparison app on the same image shows the same socket (then the socket is an image
+  artefact and the grep result decides). Check every library, not only app code — a library can enable
+  it process-wide.
 
 ### D21-049 · Debug, staging and god-mode surfaces surviving into the release build
 
@@ -1922,17 +2052,17 @@ curl -s http://127.0.0.1:9222/json/version
 | **Attacker** | AM-03 zero-permission local app where the debug component is exported; AM-11 otherwise |
 | **Applies to** | all |
 | **Requires** | device |
-| **Maps to** | Android test/debug-features risk documentation; MASWE-0061 |
+| **Maps to** | MASWE-0063; Android test/debug-features risk documentation; MASWE-0061 |
 
 - **Test:** Debug activities, staging endpoints, feature-flag overrides, "god mode" switches and test
   accounts left in the shipped APK are directly reachable, and they frequently change auth or endpoint
   behaviour rather than merely displaying information.
 - **How:**
 ```bash
-grep -RnoE 'https?://[A-Za-z0-9.-]*(dev|test|stag|qa|uat|sandbox|internal)[A-Za-z0-9.-]*/[A-Za-z0-9._/-]*' sources/ res/ | sort -u
-grep -RnE 'BuildConfig\.DEBUG|isDebug|DEBUG_MODE|ENABLE_LOGGING|FEATURE_OVERRIDE' sources/
-grep -rniE 'debugmenu|devmenu|testmode|godmode|bypass|backdoor|internal_only|is_test|masterpass|supersecret' sources/ | head -60
-grep -rn 'BuildConfig\.[A-Z_]*' sources/ | sort -u | head -40
+grep -RnoE 'https?://[A-Za-z0-9.-]*(dev|test|stag|qa|uat|sandbox|internal)[A-Za-z0-9.-]*/[A-Za-z0-9._/-]*' "$DEC/jadx/sources/" "$DEC/apktool/res/" | sort -u
+grep -RnE 'BuildConfig\.DEBUG|isDebug|DEBUG_MODE|ENABLE_LOGGING|FEATURE_OVERRIDE' "$DEC/jadx/sources/"
+grep -rniE 'debugmenu|devmenu|testmode|godmode|bypass|backdoor|internal_only|is_test|masterpass|supersecret' "$DEC/jadx/sources/" | head -60
+grep -rn 'BuildConfig\.[A-Z_]*' "$DEC/jadx/sources/" | sort -u | head -40
 adb shell dumpsys package com.target.app | grep -iE 'debug|test|dev'
 adb shell am start -n com.target.app/.debug.DebugMenuActivity
 adb shell am start -n com.target.app/.debug.DevToolsActivity
@@ -1958,13 +2088,18 @@ adb shell am start -n com.target.app/.debug.DevToolsActivity
 | **Requires** | device |
 | **Maps to** | MASTG-TEST-0263, MASTG-TEST-0264, MASTG-TEST-0265, MASTG-TECH-0009, MASWE-0061 (CWE-489, CWE-497, CWE-540, CWE-912, CWE-1295), MASVS-RESILIENCE-3, rule `mastg-android-strictmode` |
 
-- **Test:** "Leaving `StrictMode` enabled can expose sensitive implementation details in the logs." The
+- **Skip when:** D20-013 already recorded — write `as D20-013`.
+- **Test:** **Cross-reference:** owned by D20-013 (the violation lines) — this item keeps the bundling rule and the positive-control discipline. "Leaving `StrictMode` enabled can expose sensitive implementation details in the logs." The
   finding, if there is one, is what a specific violation line carries — not the policy's presence.
 - **How:**
 ```bash
-grep -rnE 'StrictMode\.(setVmPolicy|setThreadPolicy)|VmPolicy\.Builder|ThreadPolicy\.Builder|penaltyLog|detectAll' sources/
-semgrep --config rules/mastg-android-strictmode.yml sources/
-adb logcat --pid=$(adb shell pidof -s com.target.app) | grep -i StrictMode
+grep -rnE 'StrictMode\.(setVmPolicy|setThreadPolicy)|VmPolicy\.Builder|ThreadPolicy\.Builder|penaltyLog|detectAll' "$DEC/jadx/sources/"
+semgrep --config "${MASTG_RULES:?clone OWASP/mastg and export MASTG_RULES=<clone>/rules}/mastg-android-strictmode.yml" "$DEC/jadx/sources"   # no clone: the grep above, and log `semgrep: not run`
+adb -s "$SERIAL" logcat -G 16M && adb -s "$SERIAL" logcat -c          # a busy device rotates the ring buffer within minutes
+adb -s "$SERIAL" logcat --pid=$(adb -s "$SERIAL" shell pidof -s com.target.app) -v time > "$E/logs/D21-050.txt" &
+# drive the app's sensitive flows, THEN fire one known violation from the probe app in the same capture
+# (a disk read on the main thread under a penaltyLog policy) so the capture provably contains StrictMode output
+grep -c StrictMode "$E/logs/D21-050.txt"
 ```
 - **Proof:** `StrictMode` policy-violation lines in logcat from a **release-signed** build, showing
   internal file paths, class names or URIs.
@@ -1975,6 +2110,7 @@ adb logcat --pid=$(adb shell pidof -s com.target.app) | grep -i StrictMode
 - **Ruled out when:** No `StrictMode` configuration exists in the release build, or the policy is
   installed only under a `BuildConfig.DEBUG` guard that is false in the shipped `BuildConfig`. Confirm
   from logcat on the store build, not from the source.
+  The capture must contain the probe app's positive-control violation line; a zero-hit capture without that line is not a negative.
 
 ### D21-051 · Insufficient obfuscation — report the recovered business rule, never the absence
 
@@ -1984,27 +2120,27 @@ adb logcat --pid=$(adb shell pidof -s com.target.app) | grep -i StrictMode
 | **VRT** | `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) for the gap; file the recovered rule under `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (**P3**) or the control it defeats |
 | **Attacker** | AM-01 (anyone can download the APK) |
 | **Applies to** | all |
-| **Maps to** | MASTG-TEST-0368 (Java/Kotlin), MASTG-TEST-0369 (native), MASWE-0059 (CWE-693), MASTG-KNOW-0033 (Obfuscation), MASTG-TECH-0013, -0016, -0017, -0018, -0023, -0024, -0157, MASTG-BEST-0029, MASTG-TOOL-0018 (jadx), MASTG-TOOL-0011 (apktool), MASTG-TOOL-0153 (dProtect); deprecated MASTG-TEST-0051 |
+| **Requires** | — |
+| **Maps to** | MASTG-TEST-0368 (Java/Kotlin), MASTG-TEST-0369 (native), MASWE-0059 (CWE-693), MASTG-KNOW-0033 (Obfuscation), MASTG-TECH-0013, -0016, -0017, -0018, -0023, -0024, -0157, MASTG-TOOL-0018 (jadx), MASTG-TOOL-0011 (apktool), MASTG-TOOL-0153 (dProtect); deprecated MASTG-TEST-0051 |
 
 - **Test:** Decompile and determine whether security-relevant logic can be located and understood with
   reasonable effort. The deliverable is the *rule you recovered* — the fraud threshold, the velocity
   limit, the allowlisted account ids, the internal hostname, the exact scope of the root check.
 - **How:** Java/Kotlin layer:
 ```bash
-jadx -d out app.apk
-apkid app.apk | grep obfuscator
-grep -rncE 'class [a-z]{1,3} ' out/sources/ | head            # how much did R8 actually rename?
-grep -rniE 'threshold|risk_?score|fraud|velocity|max_?amount|limit|allowlist|deny|entitle|premium|licen' out/sources/ | head -40
-grep -rn 'BuildConfig' out/sources/ | grep -iE 'secret|key|url|env'
-apktool d app.apk -o smali_out      # fallback when jadx output is unreliable
+apkid "$E/apk/base.apk" | grep obfuscator
+grep -rncE 'class [a-z]{1,3} ' "$DEC/jadx/sources/" | head            # how much did R8 actually rename?
+grep -rniE 'threshold|risk_?score|fraud|velocity|max_?amount|limit|allowlist|deny|entitle|premium|licen' "$DEC/jadx/sources/" | head -40
+grep -rn 'BuildConfig' "$DEC/jadx/sources/" | grep -iE 'secret|key|url|env'
+# smali fallback when jadx output is unreliable: "$DEC"/apktool/smali* (produced in P3)
 ```
   Native layer:
 ```bash
-unzip -o app.apk 'lib/*' -d libs && find libs -name '*.so'
-rabin2 -zz libs/arm64-v8a/libnative-lib.so | grep -iE '/system|magisk|su$|ro\.|frida|token'
-rabin2 -s  libs/arm64-v8a/libnative-lib.so | grep JNI
-nm -D libs/arm64-v8a/*.so | grep ' T Java_'                   # descriptive exported JNI symbols
-r2 -A libs/arm64-v8a/libnative-lib.so
+find "$DEC/apktool/lib" -name '*.so'
+rabin2 -zz "$DEC"/apktool/lib/arm64-v8a/libnative-lib.so | grep -iE '/system|magisk|su$|ro\.|frida|token'
+rabin2 -s  "$DEC"/apktool/lib/arm64-v8a/libnative-lib.so | grep JNI
+nm -D "$DEC"/apktool/lib/arm64-v8a/*.so | grep ' T Java_'                   # descriptive exported JNI symbols
+r2 -A "$DEC"/apktool/lib/arm64-v8a/libnative-lib.so
 ```
   The string -> xref -> function -> confirm loop, which is what turns "the app detects root somehow" into
   a named, patchable function:
@@ -2039,6 +2175,7 @@ r2 ./libnative.so
 | **VRT** | `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-KNOW-0033, MASTG-TECH-0165, MASTG-TOOL-0009 (APKiD) |
 
 - **Test:** "Not obfuscated" is informational. The sharper version is a *partially* obfuscated build where
@@ -2046,10 +2183,9 @@ r2 ./libnative.so
   the app is renamed — which hands an attacker a map straight to them.
 - **How:**
 ```bash
-apkid app.apk                               # which obfuscator, and applied to what
-jadx app.apk -d out-jadx
+apkid "$E/apk/base.apk"                               # which obfuscator, and applied to what
 # compare naming density per package - the readable package is the map
-for p in $(find out-jadx/sources -maxdepth 3 -type d | head -40); do
+for p in $(find "$DEC/jadx/sources" -maxdepth 3 -type d | head -40); do
   tot=$(ls "$p"/*.java 2>/dev/null | wc -l)
   [ "$tot" -eq 0 ] && continue
   short=$(ls "$p" 2>/dev/null | grep -cE '^[a-z]{1,3}\.java$')
@@ -2076,7 +2212,7 @@ done | sort -t/ -k1 -n | head -20
 | **Requires** | backend-api, mitm |
 | **Maps to** | MASVS-RESILIENCE-1; the generalised form of D21-013 |
 
-- **Test:** The generalisation that catches what the integrity items miss: **any** decision the app makes
+- **Test:** Run D21-013 first: this item is its generalisation to every client-computed policy value and shares its gates (D21-012). The generalisation that catches what the integrity items miss: **any** decision the app makes
   locally — transaction limit, geo-restriction, age gate, feature entitlement, KYC status, retry counter,
   attempt limiter — that the server then accepts from the client.
 - **How:** Patch the client value, or simply edit the request:
@@ -2114,19 +2250,13 @@ curl -i -X POST https://api.target/v1/transfer -H "Authorization: Bearer $TOK" \
 | **Requires** | backend-api |
 | **Maps to** | the shadow/zombie-API class from the bug-hunting corpus — "a mobile app whose hardcoded backend calls look older than the current web app's" |
 
-- **Test:** The highest-value mobile-to-backend bridge, and it belongs in this chapter because the
+- **Skip when:** D15-012 already walked — write `as D15-012` with axes 1 and 2 recorded there.
+- **Test:** **Cross-reference:** the enumeration and the route-set diff live in D15-012 and the reporting rule in D27-075 — run D15-012 once and record both integrity axes under its row; this item keeps only the two axes that belong to this chapter. The highest-value mobile-to-backend bridge, and it belongs in this chapter because the
   attestation and rate-limiting controls are exactly what does **not** get backported to old versions. Old
   versions stay reachable without receiving the same fixes; the bug is the delta.
 - **How:**
 ```bash
-for v in v1 v2 v3 v4 beta alpha internal legacy old 2022-01-01 2023-01-01 2024-01-01; do
-  curl -s -o /dev/null -w "%{http_code} /api/$v/\n" "https://$TARGET/api/$v/"
-done
-curl -s -H "X-API-Version: 1" https://$TARGET/api/session
-curl -s -H "Accept: application/vnd.company.v1+json" https://$TARGET/api/session
-for sub in api api-v1 api-v2 apiv1 legacy-api old-api internal-api staging-api; do
-  curl -s -o /dev/null -w "%{http_code} $sub\n" "https://$sub.$TARGET/"
-done
+# the version/host enumeration is D15-012's loop: reuse "$E/logs/D15-012.txt" rather than re-running it
 ```
   Anything but 404 or connection-refused is live. Then diff **behaviourally**, for the same operation,
   across four axes — and for this chapter the first two are the point:
@@ -2162,8 +2292,8 @@ done
   exist.
 - **How:**
 ```bash
-grep -rn 'Build\.FINGERPRINT\|Build\.MODEL\|Build\.MANUFACTURER\|Build\.PRODUCT\|Build\.HARDWARE\|Build\.TAGS\|ro\.kernel\.qemu\|goldfish\|ranchu\|sdk_gphone\|generic_x86' sources/
-apkid app.apk | grep anti_vm
+grep -rn 'Build\.FINGERPRINT\|Build\.MODEL\|Build\.MANUFACTURER\|Build\.PRODUCT\|Build\.HARDWARE\|Build\.TAGS\|ro\.kernel\.qemu\|goldfish\|ranchu\|sdk_gphone\|generic_x86' "$DEC/jadx/sources/"
+apkid "$E/apk/base.apk" | grep anti_vm
 strace -p $(adb shell pidof com.target.app) 2>&1 | grep -E 'qemu|goldfish|ranchu|/proc/tty/drivers'
 frida -D "$SERIAL" -f com.target.app -l emulator_detect_hooks.js
 ```
@@ -2215,6 +2345,13 @@ adb shell device_config put activity_manager data_sync_fgs_timeout_duration 3600
 adb shell device_config get activity_manager data_sync_fgs_timeout_duration
 adb shell device_config list activity_manager | head -40
 ```
+  **LEGACY semantics without an old image.** Every `legacy`-tagged item whose gate is a compat change can
+  be reproduced on the current userdebug image by disabling the change for the victim package:
+  `adb -s "$SERIAL" shell am compat disable <CHANGE_ID> <pkg>` (the ids are printed by
+  `adb -s "$SERIAL" shell dumpsys platform_compat`; e.g. the PendingIntent-sender BAL rescission change
+  `244637991` and the creator-side rule `296478951` restore API<=33 background-activity-launch semantics —
+  the BAL pair is written out in D22-007). Record the change id and `ro.build.type` beside the result; on a
+  `user` build the override is refused for non-debuggable packages, so say which build you used.
 - **Proof:** The app's behaviour changing under a named compat toggle, with before/after logs — this is
   how you demonstrate "the protection you are relying on is per-package switchable on a device the user
   controls", in one command rather than a paragraph.
@@ -2233,6 +2370,7 @@ adb shell device_config list activity_manager | head -40
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter that reaches a report |
+| **Requires** | — |
 | **Maps to** | the pre-severity gate, five-screenshot pattern, HAR sanitising, retraction discipline and chain-filing order from the bug-hunting corpus |
 
 - **Test:** Resilience-adjacent findings arrive at triage with a presumption against them, so the evidence
@@ -2276,6 +2414,206 @@ grep -i 'authorization\|"cookie"\|integrity-token' out.sanitized.har | head -20 
   itself: every "Ruled out when" clause in this chapter that you exercised belongs in the report as a
   coverage statement, because in this domain a defensible negative is frequently the most valuable thing
   you can deliver.
+
+### D21-058 · Integrity-header coverage census — every endpoint that ever carried a token, called without it
+
+| | |
+|---|---|
+| **Severity ceiling** | High (rated per ungated endpoint under D15) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
+| **Attacker** | AM-01 |
+| **Applies to** | any app where D21-006 found an integrity token or header on the wire |
+| **Requires** | backend-api, mitm |
+| **Maps to** | MASWE-0054, MASWE-0056; Play Integrity documentation (verify the verdict on every protected action) |
+| **Record** | `logs/D21-058.txt` (the run), `logs/D21-058-gated.txt`, `logs/D21-058-stripped.txt`, `requests/E-NNN.http` per ungated endpoint |
+
+- **Skip when:** D21-006 found no integrity token or header on any request — write `n/a — no integrity-carrying request (logs/D21-006-senders.txt empty)`.
+- **Test:** The control is only a control on the endpoints that refuse without it. Build the set of
+  (method, host, path) that ever carried the token, replay each with a valid session and the token
+  removed, and keep D21-012's three gates on every row. This is the chapter's highest-yield join, turned
+  into a row you can mark.
+- **How:**
+```bash
+cat > "$E/scripts/D21-058-gated.py" <<'PY'
+def request(f):
+    h = {k.lower(): v for k, v in f.request.headers.items()}
+    if any(('integrity' in k or 'attest' in k or 'appcheck' in k) for k in h) or b'integritytoken' in (f.request.content or b'').lower():
+        print(f.request.method, f.request.pretty_host, f.request.path.split('?')[0])
+PY
+mitmdump -q -nr "$E/requests/traffic.flows" -s "$E/scripts/D21-058-gated.py" | sort -u > "$E/logs/D21-058-gated.txt"
+while read -r m host path; do
+  curl -s -o "$E/logs/D21-058-$(printf '%s' "$host$path" | tr '/' '_').body" -w "%{http_code} $m $host$path\n" \
+    -X "$m" "https://$host$path" -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' -d '{}'
+done < "$E/logs/D21-058-gated.txt" | tee "$E/logs/D21-058-stripped.txt"; wc -l "$E/logs/D21-058-gated.txt" "$E/logs/D21-058-stripped.txt"
+```
+  For binary bodies use the D21-012 strip-replay per row. Then, for every row that did not return the
+  integrity error, re-send the ORIGINAL captured body without the token and read back the server-side
+  effect.
+- **Proof:** The gated list beside the list of endpoints that completed without the token, plus one
+  server-side read-back (ledger or entitlement) for an ungated endpoint.
+- **Escalation:** -> D15 (each ungated endpoint is an authorisation item), D21-013/-015 (why the token
+  was never checked), D21-054 (old versions), D21-063 (only auth endpoints carried it).
+- **Ruled out when:** Every endpoint in the gated set returns the integrity-required error for the
+  stripped request and the well-formed `{}` control proves the gate precedes the parser; paste both
+  counts (`wc -l`).
+
+### D21-059 · Play Integrity remediation-dialog outcome trusted instead of a fresh verdict
+
+| | |
+|---|---|
+| **Severity ceiling** | High where the dialog result reopens a gated flow; Medium otherwise |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
+| **Attacker** | AM-12 for the mechanism; AM-01 once the backend accepts the app's "remediated" message |
+| **Applies to** | apps calling `StandardIntegrityToken.showDialog()` / `IntegrityTokenResponse.showDialog()` |
+| **Requires** | backend-api, frida |
+| **Maps to** | MASTG-KNOW-0035; Play Integrity remediation-dialog documentation (`GET_LICENSED`, `CLOSE_UNKNOWN_ACCESS_RISK`, `CLOSE_ALL_ACCESS_RISK`) |
+| **Record** | `logs/D21-059.txt`, `requests/E-NNN.http` |
+
+- **Skip when:** the grep below is empty — write `n/a — no remediation dialog (grep count 0)`.
+- **Test:** The dialog returns an int (`DIALOG_SUCCESSFUL`, `DIALOG_CANCELLED`, `DIALOG_FAILED`,
+  `DIALOG_UNAVAILABLE`) on the device. An app that proceeds on `DIALOG_SUCCESSFUL`, or a backend that
+  unblocks on the app's "user remediated" call, without requesting a NEW token has moved the decision
+  to the device.
+- **How:**
+```bash
+grep -rnE 'showDialog\(|GET_LICENSED|CLOSE_UNKNOWN_ACCESS_RISK|CLOSE_ALL_ACCESS_RISK|DIALOG_SUCCESSFUL' "$DEC/jadx/sources" -B4 -A8
+```
+```javascript
+Java.perform(function () {
+  Java.enumerateMethods('*!showDialog').forEach(function (g) {
+    var F = Java.ClassFactory.get(g.loader);
+    g.classes.forEach(function (c) { F.use(c.name).showDialog.overloads.forEach(function (o) {
+      o.implementation = function () { console.log('[remediation] forced DIALOG_SUCCESSFUL');
+        return F.use('com.google.android.gms.tasks.Tasks').forResult(F.use('java.lang.Integer').valueOf(1)); }; }); });
+  });
+});
+```
+  Then watch the wire: is a fresh integrity token requested after the dialog, and does the backend gate on
+  it?
+- **Proof:** The gated flow completing after the forced dialog result with no new token on the wire, and
+  the backend accepting the follow-up request.
+- **Escalation:** -> D23 (licensing / entitlement fraud), -> D21-013.
+- **Ruled out when:** A fresh token is requested after the dialog and the backend's decision changes only
+  on that token (strip it: refused). Paste the two requests.
+
+### D21-060 · Detection coverage stops at the Java layer — the cross-platform layer that owns the logic is unprotected
+
+| | |
+|---|---|
+| **Severity ceiling** | Support standalone; rates through the rule it lets you patch (D21-053) or read (D21-051) |
+| **VRT** | `lack_of_binary_hardening.lack_of_obfuscation` (P5) for the gap |
+| **Attacker** | AM-12 for the mechanism |
+| **Applies to** | Flutter, React Native/Hermes, Unity, Xamarin/.NET, Cordova/Capacitor apps that ship a RASP or integrity SDK (`target.framework` is not native Java/Kotlin) |
+| **Requires** | device |
+| **Maps to** | MASWE-0058, MASWE-0059, MASTG-TEST-0369, MASTG-TOOL-0100 |
+| **Record** | `logs/D21-060.txt`, `pocs/F-NNN/` |
+
+- **Skip when:** `jq -r .target.framework "$E/engagement.json"` prints a native Java/Kotlin framework, or D21-004 found no RASP/integrity SDK — write `n/a — no cross-platform layer` or `n/a — no RASP SDK (D21-004)`.
+- **Test:** The SDK hooks Java and JNI; the asset that carries the policy (Dart snapshot,
+  `index.android.bundle`, `global-metadata.dat`, the managed assemblies) is patched without touching
+  anything the SDK measures.
+- **How:** Patch one string or constant in the layer with the D19 tooling (reFlutter, hermes-dec plus
+  hbctool, Il2CppDumper, ILSpy), repackage, install over the original on the rooted lane with the Java
+  RASP intact, and watch the three D21-005 channels (exit, beacon, response):
+```bash
+adb -s "$SERIAL" install -r "$E/pocs/F-NNN/patched.apk" && adb -s "$SERIAL" logcat -c
+adb -s "$SERIAL" shell monkey -p com.target.app 1; sleep 20
+adb -s "$SERIAL" logcat -d | grep -iE 'tamper|integrity|rasp|exit' | tee "$E/logs/D21-060.txt"
+```
+- **Proof:** The patched layer executing (your string visible in the UI or on the wire) while the SDK
+  reports clean — the D21-005 capture with no beacon and no exit.
+- **Escalation:** -> D19 (the layer's own items), D21-053 (the patched policy relayed to the server),
+  D21-051.
+- **Ruled out when:** The integrity check covers the bundle/snapshot hash (a one-byte patch fails closed
+  at load) or the SDK re-verifies the asset at runtime; paste the failure line.
+
+### D21-061 · Native exploit-mitigation table — the mitigating-factor line every D16 finding needs
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (never standalone) |
+| **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (P5) |
+| **Attacker** | n/a |
+| **Applies to** | apps shipping `.so` libraries |
+| **Requires** | native |
+| **Maps to** | MASTG-TEST-0288 (debug symbols); Android NDK hardening (stack protector, RELRO, PIE, `-mbranch-protection=standard` BTI/PAC, `android:memtagMode`, CFI) |
+| **Record** | `logs/D21-061.txt` |
+
+- **Skip when:** `jq -r .app_facts.has_native "$E/engagement.json"` prints `false` — write `n/a — no native libraries`.
+- **Test:** Record, per library and ABI, which mitigations are present; the table is an input to D16
+  severity, not a finding.
+- **How:**
+```bash
+RE=${READELF:-llvm-readelf}        # binutils readelf on Linux works too
+for so in "$DEC"/apktool/lib/arm64-v8a/*.so; do
+  printf '%s ' "$so"
+  "$RE" -h -l -d -n "$so" 2>/dev/null | awk '/Type:/{t=$2} /GNU_RELRO/{r="RELRO"} /BIND_NOW/{b="NOW"} /BTI/{x="BTI"} /PAC/{p="PAC"} END{print t, r, b, x, p}'
+  llvm-nm -D "$so" 2>/dev/null | grep -cE '__stack_chk_fail|__cfi_slowpath' | sed 's/^/ canary_cfi_refs=/'
+done | tee "$E/logs/D21-061.txt"
+aapt2 dump xmltree "$E/apk/base.apk" --file AndroidManifest.xml | grep -i memtagMode
+```
+- **Proof:** The per-library table pasted into the mitigating-factors section of any D16 finding.
+- **Escalation:** -> D16 only.
+- **Ruled out when:** n/a — the table is always recorded; absence of every mitigation is still P5 alone,
+  and the row is complete when `logs/D21-061.txt` lists every library.
+
+### D21-062 · App Check token lifetime and cross-service replay
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium; High where the TTL covers a data-exposing rules gap found in D18 |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
+| **Attacker** | AM-01 (one captured token, replayed from any host) |
+| **Applies to** | apps with App Check enforced (D21-025 / D18-029 ruled out) |
+| **Requires** | firebase, backend-api, mitm |
+| **Maps to** | MASWE-0056; Firebase App Check documentation (token TTL configurable from 30 minutes to 7 days; replay inside the TTL is by design) |
+| **Record** | `logs/D21-062.txt`, `requests/E-NNN.http` |
+
+- **Skip when:** App Check is absent or monitoring-only (then D18-029 is the finding) — write `n/a — App Check not enforced (D18-029)`.
+- **Test:** How long does one captured token live, and which services accept it after the app is gone?
+- **How:**
+```bash
+TOKEN=$(grep -rhim1 'x-firebase-appcheck' "$E/requests"/*.http | awk '{print $2}' | tr -d '\r')
+python3 -I -c "import sys,base64,json;p=sys.argv[1].split('.')[1];d=json.loads(base64.urlsafe_b64decode(p+'='*(-len(p)%4)));print('ttl_s=',d['exp']-d['iat'],'aud=',d.get('aud'))" "$TOKEN" | tee "$E/logs/D21-062.txt"
+adb -s "$SERIAL" shell am force-stop com.target.app
+# hours later, from the host, against each protected service the app used (Firestore, RTDB, Storage, Functions):
+curl -s -i -X POST "https://firestore.googleapis.com/v1/projects/$PROJ/databases/(default)/documents:runQuery" \
+  -H "Authorization: Bearer $ID_TOKEN" -H "X-Firebase-AppCheck: $TOKEN" -H 'Content-Type: application/json' -d '{"structuredQuery":{}}' | head -5 | tee -a "$E/logs/D21-062.txt"
+```
+- **Proof:** A replay succeeding N hours after capture with the decoded TTL >= 24 h, against a service
+  whose rules rely on App Check, with the app process dead.
+- **Escalation:** -> D18 (the rules gap the token now reaches from curl).
+- **Ruled out when:** TTL <= 1 h and the replay after expiry returns 401/403; record the TTL value in the
+  ruled-out entry.
+
+### D21-063 · Integrity verified at session creation only — the protected action is never re-attested
+
+| | |
+|---|---|
+| **Severity ceiling** | High (Critical where the action moves money) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
+| **Attacker** | AM-01 — one clean login, then any client |
+| **Applies to** | any app where D21-006 found a token only on auth/registration endpoints |
+| **Requires** | backend-api, mitm |
+| **Maps to** | MASWE-0054; Play Integrity documentation (standard requests are designed to be made per high-value action) |
+| **Record** | `logs/D21-063.txt`, `requests/E-NNN.http` |
+
+- **Skip when:** D21-058's gated list includes the sensitive action endpoints — write `n/a — actions re-attested (logs/D21-058-gated.txt)`.
+- **Test:** If the only token-carrying requests are `/login`, `/register`, `/session`, the server's
+  integrity decision is bound to the session cookie or bearer, not to the action — a session obtained on
+  a clean device is a permanent integrity pass, usable from any client.
+- **How:**
+```bash
+grep -vE '/(login|auth|session|register|token)' "$E/logs/D21-058-gated.txt" | wc -l     # 0 => session-only attestation
+# obtain a session on the clean device, export the bearer, then drive every sensitive action from curl or the rooted device with no token
+curl -s -i -X POST "https://$HOST/v1/transfer" -H "Authorization: Bearer $CLEAN_TOK" -H 'Content-Type: application/json' -d @"$E/requests/transfer-body.json" | tee "$E/logs/D21-063.txt"
+```
+- **Proof:** A money or entitlement action completing from the token-less client under a session created
+  once on a clean device, with the server-side read-back; plus the gated list showing only auth
+  endpoints carried a token.
+- **Escalation:** -> D13 (session binding), D23 (automation at scale behind one clean login), D21-058.
+- **Ruled out when:** The sensitive actions carry a fresh standard-request token whose `requestHash`
+  binds the body (D21-016) and stripping it is refused.
 
 ## Graveyard for this domain
 
@@ -2361,8 +2699,8 @@ grep -i 'authorization\|"cookie"\|integrity-token' out.sanitized.har | head -20 
   -0023, -0024, -0031, -0032, -0039, -0040, -0043, -0144 (Bypassing Root Detection), -0157, -0165
   (Identifying Compilers, Obfuscators and Packers). MASTG-KNOW-0027, -0028, -0030, -0031, -0032, -0033,
   -0034 (Device Binding), -0035 (Play Integrity verdict values, nonce best practice, `APP_NOT_INSTALLED`
-  / `APP_UID_MISMATCH`, 10,000/day default quota), -0036, -0044 (Key Attestation), -0118 (RASP), -0119,
-  -0120. MASTG-BEST-0007, -0029, -0030, -0041, -0046, -0047, -0066. MASTG-TOOL-0001, -0009 (APKiD),
+  / `APP_UID_MISMATCH`, 10,000/day default quota), -0036, -0044 (Key Attestation), -0118 (RASP) (the Key/Device Attestation
+  knowledge pages are placeholders upstream, so they are not cited). MASTG-BEST-0007, -0030, -0041, -0046, -0047, -0066. MASTG-TOOL-0001, -0009 (APKiD),
   -0011, -0018, -0019, -0021 (Magisk, Zygisk + DenyList, and the caveat that DenyList is not kernel-level
   hiding), -0029/-0038 (objection), -0034 (LIEF), -0100 (reFlutter), -0103 (uber-apk-signer), -0146
   (RootBeer), -0147 (Android RASP), -0149 (LSPosed), -0151, -0152, -0153 (dProtect). MASWE-0006, -0039,
