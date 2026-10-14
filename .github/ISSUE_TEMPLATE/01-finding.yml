@@ -1,9 +1,15 @@
-name: "🐞 Finding — confirmed vulnerability"
-description: "Mirror a confirmed finding from an engagement folder (findings/F-NNN/report.md is the record of truth). Read docs/02 first."
+name: "🐞 [PRIVATE MIRROR ONLY] Finding — confirmed vulnerability"
+description: "Use ONLY on the private evidence repository of an engagement (SANE_EVIDENCE_REMOTE). Never on the public methodology repo. findings/F-NNN/report.md is the record of truth; read docs/02 first."
 title: "[FINDING] <impact-category title, never the Android mechanism>"
 labels: ["type: finding"]
 projects: ["sanehunters/1"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **PRIVATE MIRROR ONLY.** This form carries undisclosed vulnerability details (package, file:line mechanism,
+        reproduction, canary). Open it only on the engagement's private evidence repository, never on the public
+        methodology repository. The record of truth stays `findings/F-NNN/report.md`.
   - type: markdown
     attributes:
       value: |
@@ -18,7 +24,7 @@ body:
     validations: {required: true}
   - type: input
     id: engagement
-    attributes: {label: Engagement folder, placeholder: BugBountyTarget/Nisho_07092026}
+    attributes: {label: Engagement folder, placeholder: BugBountyTarget/<Target>_<DDMMYYYY>}
     validations: {required: true}
   - type: input
     id: checklist_ids
@@ -116,10 +122,10 @@ body:
     attributes:
       label: Evidence checklist (docs/04)
       options:
-        - {label: "Video — one continuous take, portrait, under 60 s, under 5 MB, device identity readable", required: true}
-        - {label: "Ground truth from the legitimate app shown before the attack", required: true}
-        - {label: "Negative control in the SAME take as the exploit", required: true}
-        - {label: "Raw platform API return values printed, not paraphrased", required: true}
+        - {label: "Video — one continuous take, portrait, under 60 s, under 5 MB, device identity readable (untick only for a code-verified finding; say which environment would prove it below)", required: false}
+        - {label: "Ground truth from the legitimate app shown before the attack", required: false}
+        - {label: "Negative control in the SAME take as the exploit", required: false}
+        - {label: "Raw platform API return values printed, not paraphrased", required: false}
         - {label: "Probe-app source committed under pocs/F-NNN/ (never a built APK)", required: true}
         - {label: "Nothing on screen belongs to a real third party", required: true}
         - {label: "Not an emulator artefact (docs/02 §9); root used for evidence only", required: true}
@@ -130,4 +136,5 @@ body:
     validations: {required: true}
   - type: textarea
     id: limitations
-    attributes: {label: Limitations and what was ruled out, description: "Anything the environment could not prove, and which environment would prove it."}
+    attributes: {label: Limitations and what was ruled out, description: "Anything the environment could not prove, and which environment would prove it. If any evidence box above is unticked (static-only / code-verified, docs/04 §8), name the environment that would prove it here."}
+    validations: {required: true}

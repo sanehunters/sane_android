@@ -113,12 +113,17 @@ Each of these is a real observation. None of them is a finding on its own. Recor
 | Sensitive data in `shared_prefs` on internal storage | P5. The UID sandbox already protects it. | Prove a **zero-permission app** can reach it — via a provider grant, a traversal, or a backup. The finding is then the reach primitive, not the storage. |
 | Hardcoded API key in the APK | P5 if intentionally public. Most Google/Maps/Firebase keys are package+signature restricted. | **Verify the restriction with one benign request.** If unrestricted against a public asset, it is P1. If restricted, it is not a finding. Never report an unverified key. |
 | Exported activity / service / receiver | Not a finding. It is an inventory item. | Reach a non-exported component, a privileged action, or user data through it. |
-| Tapjacking / overlay | P5, and largely mitigated on modern `targetSdk`. | Demonstrate a complete credential-capture or transaction-authorisation flow on the target's actual `targetSdk`. |
+| Tapjacking / overlay | P5, and largely mitigated on a modern `targetSdk` (31+ blocks untrusted touches through overlays; see the note under this table). | Demonstrate a complete credential-capture or transaction-authorisation flow on the target's actual `targetSdk`. |
 | App is debuggable | Only a finding on a **release** build from the store. On a debug build it is the expected state. | Confirm the binary came from the production track. |
-| Logcat contains data | P5 since API 30 removed cross-app log reads. | Prove the logged value is sensitive **and** reachable — for example written to a world-readable file, or read by a co-installed SDK. |
+| Logcat contains data | P5. `READ_LOGS` has been `signature|privileged|development` since Android 4.1 (API 16); Android 13 adds a per-session consent dialog even for approved readers. The graveyard exit is a **named reader** (`D20-008`, `D20-016`). | Prove the logged value is sensitive **and** reachable — for example written to a world-readable file, or read by a co-installed SDK. |
 | Missing binary hardening (PIE, canaries, RELRO) | P5. | Only relevant as a multiplier on an actual memory-corruption finding. |
 | Screenshot / Recents caching | P5. | Requires physical device access, which most programs exclude. |
 | Crash from a malformed Intent | P5 (`application_level_denial_of_service_dos.app_crash.malformed_android_intents`). | Only if it becomes memory corruption with a demonstrated primitive. |
+
+**"Modern `targetSdk`", by number.** Play requires new apps and updates to target ≥ 35 since 2025-08-31
+and ≥ 36 from 2026-08-31 (extensions are granted; sideloaded and enterprise builds are exempt). A
+`LEGACY` gate from the version table in docs/01 therefore applies to a store build only through an
+extension, or to a non-store build — say which, with the `targetSdkVersion` you read from the APK.
 
 ---
 
@@ -168,8 +173,11 @@ Conventions this team uses:
 - A **zero-permission local app** is `AV:L` with `PR:N` and `UI:N`. It is local *access*, but it needs no
   privilege and no user interaction beyond installing an unrelated app.
 - A **deep link the victim clicks** is `AV:N` with `UI:R`.
-- **Scope changed (`S:C`)** applies when you cross the UID sandbox — reaching another app's data, or the
-  victim's server-side account, from your own app's context. Mobile reports routinely under-claim this.
+- **Scope changed (`S:C`)** applies only when the impacted component is governed by a **different security
+  authority** from the vulnerable one — another app's sandbox, or the OS, reached from your own app's
+  context. Cross-account IDOR on the same backend is `S:U`, however severe: both accounts sit under one
+  authority. Mobile reports under-claim the first case and over-claim the second.
+- Write the full string with its prefix: `CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:N`.
 - Attach the vector string, but lead with the sentence-form impact. Triagers read the sentence.
 
 ---

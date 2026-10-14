@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""build-standards-data.py — regenerate data/ from primary-source clones so it never goes stale.
+"""standards_builder.py — regenerate data/ from primary-source clones so it never goes stale.
 
-usage: python3 -I build-standards-data.py --mastg DIR --maswe DIR --masvs DIR --vrt DIR --mt10 DIR
-                                           [--attack-stix mobile-attack.json] [--cwe-top25 top25.html|csv]
-                                           [--checklist checklist.csv] --out DIR
-Run interpreters OUTSIDE the clones; every path is an argument. Needs PyYAML only.
-Outputs (all CSV, UTF-8, header row, one source row per record) + versions.json + crosswalk.csv.
+usage: python3 -P scripts/standards_builder.py --mastg DIR --maswe DIR --masvs DIR --vrt DIR --mt10 DIR
+                                           [--attack-stix mobile-attack.json] [--cwe-top25 top25.html|csv] --out DIR
+Normally run by scripts/refresh-data.py (which also writes crosswalk.csv — this file never does).
+Run interpreters OUTSIDE the clones; every path is an argument. Needs PyYAML only (python3 -m pip install pyyaml).
+Outputs (all CSV, UTF-8, header row, one source row per record) + versions.json.
 """
 import argparse, csv, glob, html as htmlmod, json, os, re, subprocess, sys, collections
-import yaml
 
 ap = argparse.ArgumentParser()
 for k in ('mastg', 'maswe', 'masvs', 'vrt', 'mt10', 'out'): ap.add_argument('--' + k, required=True)
-ap.add_argument('--attack-stix'); ap.add_argument('--cwe-top25'); ap.add_argument('--checklist')
+ap.add_argument('--attack-stix'); ap.add_argument('--cwe-top25')
 ap.add_argument('--platforms', default='android,generic,network', help='MASTG platform tags to keep')
 A = ap.parse_args(); os.makedirs(A.out, exist_ok=True)
+try:
+    import yaml
+except ImportError:
+    sys.exit('!! needs PyYAML: python3 -m pip install pyyaml (the user site stays visible under -P; -I hides it)')
 KEEP = set(A.platforms.split(','))
 
 def git_rev(d):
@@ -197,35 +200,6 @@ if A.cwe_top25:
             if m and cells and cells[0].isdigit(): crows.append(dict(rank=int(cells[0]), id='CWE-' + m.group(1), name=cells[2] if len(cells) > 2 else '', year=year, url=f'https://cwe.mitre.org/data/definitions/{m.group(1)}.html'))
     counts['cwe-top25.csv'] = write('cwe-top25.csv', ['rank', 'id', 'name', 'year', 'url'], crows)
 
-# ------------------------------------------------------------------ crosswalk from the checklist (standard id -> item ids)
-if A.checklist:
-    KINDS = 'TEST|TECH|TOOL|KNOW|DEMO|BEST|APP'; G = 'STORAGE|CRYPTO|AUTH|NETWORK|PLATFORM|CODE|RESILIENCE|PRIVACY'
-    titles = {}
-    for coll in (tests, techs, tools, knows, bests, apps, demos): titles.update({r['id']: r['title'] for r in coll})
-    titles.update({r['id']: r['title'] for r in maswe}); titles.update({r['id']: r['statement'] for r in masvs}); titles.update({r['vrt_path']: r['name'] for r in vrows})
-    for r in rules: titles[r['rule_id']] = r['summary']; titles[re.sub(r'\.ya?ml$', '', r['rule_file'])] = r['summary']
-    if A.attack_stix: titles.update({r['id']: r['name'] for r in arows})
-    VRT_ALL = {r['vrt_path'] for r in vrows}; VRT_TOP = {p.split('.')[0] for p in VRT_ALL}
-    cite = collections.defaultdict(set)
-    def expand(text):
-        ids = set()
-        for m in re.finditer(r'(?:MASTG-)?\b(%s)-(\d{4})((?:\s*[,/]\s*-?\d{4}(?!\d))*)((?:\s*[–-]\s*\d{4}(?!\d))?)' % KINDS, text):
-            k, a = m.group(1), int(m.group(2)); ns = [a]
-            if m.group(4):
-                b = int(re.search(r'\d{4}', m.group(4)).group(0))
-                if b > a and b - a <= 40: ns = list(range(a, b + 1))
-            ns += [int(c) for c in re.findall(r'\d{4}', m.group(3) or '')]; ids |= {f'MASTG-{k}-{n:04d}' for n in ns}
-        for m in re.finditer(r'MASWE-(\d{4})((?:\s*/\s*\d{4})*)', text): ids.add(f'MASWE-{m.group(1)}'); ids |= {f'MASWE-{x}' for x in re.findall(r'\d{4}', m.group(2) or '')}
-        for m in re.finditer(r'MASVS-(%s)-(\d)((?:\s*/\s*\d)*)' % G, text): ids.add(f'MASVS-{m.group(1)}-{m.group(2)}'); ids |= {f'MASVS-{m.group(1)}-{d}' for d in re.findall(r'\d', m.group(3) or '')}
-        ids |= {f'CWE-{x}' for x in re.findall(r'CWE-(\d+)', text)} | set(re.findall(r'\bT1\d{3}(?:\.\d{3})?\b', text))
-        ids |= {x for x in re.findall(r'`([a-z_]+(?:\.[a-z0-9_]+)+)`', text) if x.split('.')[0] in VRT_TOP or x in VRT_ALL}  # real VRT paths; shorthand stays unresolved (known=false)
-        ids |= {re.sub(r'\.ya?ml$', '', x) for x in re.findall(r'mastg-android-[a-z0-9-]+(?:\.ya?ml)?', text)}
-        return ids
-    for r in csv.DictReader(open(A.checklist, newline='', encoding='utf-8')):
-        for k in expand((r.get('maps_to') or '') + ' ' + (r.get('vrt_path') or '')): cite[k].add(r['item_id'])
-    def std(k): return 'MASTG-' + k.split('-')[1] if k.startswith('MASTG-') else 'MASWE' if k.startswith('MASWE') else 'MASVS' if k.startswith('MASVS') else 'CWE' if k.startswith('CWE') else 'ATTACK' if re.match(r'T1\d{3}', k) else 'RULE' if k.startswith('mastg-android') else 'VRT'
-    xrows = [dict(standard=std(k), standard_id=k, title=titles.get(k, ''), known='true' if k in titles or std(k) in ('CWE',) else 'false', n_items=len(v), item_ids=' '.join(sorted(v))) for k, v in cite.items()]
-    xrows.sort(key=lambda r: (r['standard'], r['standard_id']))
-    counts['crosswalk.csv'] = write('crosswalk.csv', ['standard', 'standard_id', 'title', 'known', 'n_items', 'item_ids'], xrows)
+# crosswalk.csv (standard id -> checklist items) is written by scripts/refresh-data.py from json/D*.json, never here.
 json.dump({'versions': versions, 'row_counts': counts, 'platforms_kept': sorted(KEEP)}, open(os.path.join(A.out, 'versions.json'), 'w'), indent=1)
 print('versions.json written')

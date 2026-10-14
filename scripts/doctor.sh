@@ -13,7 +13,7 @@ OS="$(uname -s)"; ARCH="$(uname -m)"
 # Android SDK discovery: env first, then conventional locations
 SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
 if [ -z "$SDK" ]; then
-  for c in "$HOME/Android/Sdk" "$HOME/Library/Android/sdk" "/opt/android-sdk" "/usr/lib/android-sdk" "$HOME/android-sdk"; do
+  for c in "${HOME:-}/Android/Sdk" "${HOME:-}/Library/Android/sdk" "/opt/android-sdk" "/usr/lib/android-sdk" "${HOME:-}/android-sdk"; do
     [ -d "$c" ] && SDK="$c" && break
   done
 fi
@@ -25,7 +25,7 @@ fi
 # Java discovery: env, then Android Studio's bundled JBR on either OS
 JAVA_OK=0
 if have java; then JAVA_OK=1; else
-  for c in "$JAVA_HOME" "/Applications/Android Studio.app/Contents/jbr/Contents/Home" "/opt/android-studio/jbr" "/usr/lib/jvm/default-java"; do
+  for c in "${JAVA_HOME:-}" "/Applications/Android Studio.app/Contents/jbr/Contents/Home" "/opt/android-studio/jbr" "/usr/lib/jvm/default-java"; do
     [ -n "$c" ] && [ -x "$c/bin/java" ] && export PATH="$PATH:$c/bin" && JAVA_OK=1 && break
   done
 fi
@@ -44,11 +44,11 @@ T_objection=$(have objection && echo yes || echo no)
 T_mitmproxy=$( (have mitmproxy || have mitmdump) && echo yes || echo no)
 T_burp=$( (have burpsuite || ls /opt/BurpSuite* >/dev/null 2>&1 || ls "/Applications/Burp Suite"* >/dev/null 2>&1) && echo yes || echo no)
 T_emulator=$(have emulator && echo yes || echo no)
-T_bundletool=$( (have bundletool || ls "$HOME"/bundletool*.jar >/dev/null 2>&1) && echo yes || echo no)
+T_bundletool=$( (have bundletool || ls "${HOME:-}"/bundletool*.jar >/dev/null 2>&1) && echo yes || echo no)
 T_semgrep=$(have semgrep && echo yes || echo no)
 T_r2=$( (have r2 || have radare2) && echo yes || echo no)
 T_ghidra=$( (have ghidra || have ghidraRun || ls /opt/ghidra* >/dev/null 2>&1) && echo yes || echo no)
-T_blutter=$( (have blutter || ls "$HOME"/blutter* >/dev/null 2>&1) && echo yes || echo no)
+T_blutter=$( (have blutter || ls "${HOME:-}"/blutter* >/dev/null 2>&1) && echo yes || echo no)
 T_gradle=$( (have gradle || ls ./attacker-app/gradlew >/dev/null 2>&1) && echo yes || echo no)
 T_git=$(have git && echo yes || echo no)
 t() { local v="T_$1"; printf '%s' "${!v}"; }

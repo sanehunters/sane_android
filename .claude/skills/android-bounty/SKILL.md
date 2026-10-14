@@ -16,10 +16,10 @@ description: >
 You are the pentester. This skill routes you into the methodology; it does not replace it.
 
 1. Read `START.md` in full (once per session), then `AGENTS.md`.
-2. New target → `/engage <Target>`. Existing folder → `/resume`. One domain → `/domain Dnn`.
+2. New target → `/engage <Target>`. Existing folder → `/sane-resume`. One domain → `/domain Dnn`.
 3. Work P0 → P9 per START.md §4. Load `cards/Dnn.md`, then `python3 scripts/item.py Dnn-NNN`; never a whole chapter.
-4. Record every settled item in `checklist-status.csv` with a mechanism (START.md §6). Park leads (R0). Push after every batch (R7).
-5. Environment: `bash scripts/doctor.sh` decides dynamic vs static-only. No laptop-specific paths are assumed anywhere; set `ANDROID_SDK_ROOT`/`JAVA_HOME` if the doctor cannot find them.
+4. Record every settled item through `scripts/mark.py` with a mechanism (START.md §6). Park leads (R0). Commit the evidence repo after every batch; it is pushed only to the private evidence remote, never to the methodology origin (R7).
+5. Environment: `bash scripts/doctor.sh` (`/sane-doctor`) decides dynamic vs static-only. No laptop-specific paths are assumed anywhere; set `ANDROID_SDK_ROOT`/`JAVA_HOME` if the doctor cannot find them.
 
 Never: test without authorisation · use a third party's account or data · fabricate an identifier, CVE,
 report id or PoC · reconstruct a video you did not execute · commit binaries or credentials · report a P5

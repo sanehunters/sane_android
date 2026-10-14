@@ -1,5 +1,5 @@
-name: "✅ Ruled out — verified negative result"
-description: "Record a surface tested and found clean, with the mechanism that closes it. Negative results are a deliverable."
+name: "✅ [PRIVATE MIRROR ONLY] Ruled out — verified negative result"
+description: "Use ONLY on the private evidence repository of an engagement; never on the public methodology repo. Record a surface tested and found clean, with the mechanism that closes it."
 title: "[RULED OUT] <Dnn or Dnn-NNN> <surface> — <mechanism in five words>"
 labels: ["type: ruled-out"]
 projects: ["sanehunters/1"]
@@ -7,17 +7,26 @@ body:
   - type: markdown
     attributes:
       value: |
+        **PRIVATE MIRROR ONLY** — this names a target's surfaces and code; open it on the private evidence repository.
         A findings list without a ruled-out register looks like a sample; with one it looks like an audit.
+        `ruled-out` and whole-domain `n/a` are different results (START.md §6): n/a domains are recorded in
+        `engagement.json.domains_na` via `python3 scripts/mark.py <eng> Dnn n/a --note "..."`, not here.
         **A tool's silence is never a negative result.** Only a manifest read, a code read, or a controlled
         experiment with a verified precondition establishes a true negative (rule R4).
 
   - type: input
     id: engagement
-    attributes: {label: Engagement folder, placeholder: BugBountyTarget/Nisho_07092026}
+    attributes: {label: Engagement folder, placeholder: BugBountyTarget/<Target>_<DDMMYYYY>}
     validations: {required: true}
   - type: input
     id: checklist_ids
-    attributes: {label: Checklist item id(s) or whole domain, placeholder: "D07-014, D07-015 (or: D10 — whole domain n/a)"}
+    attributes: {label: Checklist item id(s), placeholder: "D07-014, D07-015"}
+    validations: {required: true}
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options: ["ruled-out (mechanism with file:line, or a controlled experiment)", "n/a — whole domain (recorded via mark.py <eng> Dnn n/a; this issue is informational)"]
     validations: {required: true}
   - type: input
     id: instances

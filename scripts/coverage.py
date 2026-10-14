@@ -18,16 +18,21 @@ DIMENSION 2  the application   inventory/*.csv, one row per instance that exists
              result is n/a. Testing a domain is not testing every instance in it.
 
 --gate p7    the breadth gate (R0). Closed while any row of a breadth domain (every domain in the tracker
-             except D26/D27) is open or invalid, any instance is untested, or inventory/ is missing. Same
-             predicate as `scripts/gate.py <eng> p7`, plus tested_massassign, which gate.py does not yet
-             read (so this tool can be closed while gate.py is open, never the reverse).
+             except D26/D27) is open or invalid, any instance is untested, or inventory/ is missing. The
+             same predicate as `scripts/gate.py <eng> p7` (both read every tested* column of every register).
 --merge      fan-out merge (prompts/05): folds <eng>/checklist-status.Dnn.partial.csv into
              checklist-status.csv by item_id. Only status columns move (completed, result, finding_id,
-             evidence, notes). A partial row must satisfy row_valid or it is REJECTED; a row outside the
-             file's domain is rejected (worker contract); a settled master row is never overwritten silently
-             (CONFLICT, unless --overwrite); one item carried by two partials with different content is a
-             conflict. Clean rows are merged even when others conflict. Partials stay in place (re-merging
-             is idempotent); --archive moves the cleanly merged ones to <eng>/logs/partials/.
+             evidence, notes). A partial row must satisfy row_valid AND mark.py's note contract (the R4
+             silence check) or it is REJECTED — merge == mark; H-Dnn-NN ids are accepted as written by the
+             worker (renumbering is optional, after the merge). A row outside the file's domain is rejected
+             (worker contract); a settled master row is never overwritten silently (CONFLICT, unless
+             --overwrite); one item carried by two partials with different content is a conflict. Clean rows
+             are merged even when others conflict. A domain whose rows are all n/a after the merge is recorded
+             in engagement.json.domains_na. Partials stay in place (re-merging is idempotent); --archive moves
+             the cleanly merged ones to <eng>/logs/partials/.
+             Dimension 2 under fan-out: a worker writes <eng>/inventory/<register>.Dnn.partial.csv (same
+             columns, only the instances it tested); --merge folds every tested* column plus result,
+             finding_id, notes into inventory/<register>.csv by instance_id with the same conflict rules.
 
 Exit codes   0 ran (gate open / merge clean) · 1 gate closed, merge had conflicts or rejections, or
              nothing to merge · 2 usage or environment error (unreadable tracker, bad option).
@@ -42,6 +47,7 @@ sys.path.insert(0, HERE)
 try:
     import gate as _gate  # scripts/gate.py — the single definition of "settled"
     row_valid, truthy, NON_BREADTH = _gate.row_valid, _gate.truthy, _gate.NON_BREADTH
+    tested_cols, instance_open, instance_label = _gate.tested_cols, _gate.instance_open, _gate.instance_label
     SEMANTICS = "scripts/gate.py row_valid (imported)"
 except Exception:  # gate.py absent (script copied out of the repo): verbatim mirror of gate.py
     NON_BREADTH = {"D26", "D27"}
@@ -57,7 +63,7 @@ except Exception:  # gate.py absent (script copied out of the repo): verbatim mi
         if not truthy(r.get("completed")):
             return (False, "open")
         if res == "finding":
-            ok = bool(re.search(r"\b[FH]-\d{2,3}\b", notes + " " + (r.get("finding_id") or "")))
+            ok = bool(re.search(r"\b(?:F-\d{2,3}|H-(?:D\d{2}-)?\d{2,3})\b", notes + " " + (r.get("finding_id") or "")))
             return (ok, "finding without F-/H- id")
         if res == "ruled-out":
             return (len(notes) >= 40, "ruled-out without a mechanism")
@@ -66,7 +72,29 @@ except Exception:  # gate.py absent (script copied out of the repo): verbatim mi
         return (False, f"completed=true but result='{res or ''}' is not in the vocabulary")
     SEMANTICS = "mirror of scripts/gate.py row_valid (gate.py not importable)"
 
+    def tested_cols(fieldnames):
+        return [c for c in (fieldnames or []) if c.strip().lower().startswith("tested")]
+
+    def instance_open(r, cols):
+        if (r.get("result") or "").strip().lower() in ("n/a", "na"):
+            return None
+        for c in cols:
+            if not truthy(r.get(c)):
+                return c
+        return None
+
+    def instance_label(r):
+        return r.get("instance_id") or r.get("uri") or r.get("path") or r.get("name") or r.get("class") or "?"
+try:
+    import mark as _mark                      # scripts/mark.py — the note contract (R4), so merge == mark
+    note_valid = _mark.validate
+except Exception:
+    def note_valid(result, note, fid=""): return None   # mark.py absent: row_valid alone (weaker: no silence check)
+
 INST_NA = ("n/a", "na")                       # instance rows: gate.py instances_open()
+F_H_RE = r"\b(?:F-\d{2,3}|H-(?:D\d{2}-)?\d{2,3})\b"
+INV_CARRY = ("result", "finding_id", "notes")   # inventory partials carry these plus every tested* column
+INV_PARTIAL_RE = re.compile(r"^([a-z]+)\.([^.]+)\.partial\.csv$")
 STATUS_COLS = ["completed", "result", "finding_id", "evidence", "notes"]
 PHASE_RANK = {f"P{i}": i for i in range(10)}
 SEV_RANK = {"critical": 0, "high": 1, "varies": 1, "medium": 2, "low": 3, "support": 4}
@@ -88,16 +116,86 @@ def write_csv(path, cols, rows):
         w.writeheader(); w.writerows(rows)
 
 
-def stamp_engagement(eng):
+def stamp_engagement(eng, na=None):
+    """Stamp `updated`; with na={Dnn: note} also record whole-domain n/a decisions that arrived through partials."""
     ej = os.path.join(eng, "engagement.json")
     if not os.path.exists(ej):
         return
     try:
         e = json.load(open(ej, encoding="utf-8"))
         e["updated"] = datetime.date.today().isoformat()
+        if na:
+            if not isinstance(e.get("domains_na"), dict): e["domains_na"] = {}
+            e["domains_na"].update(na)
         json.dump(e, open(ej, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
     except Exception as ex:
         print(f"!! engagement.json not stamped: {ex}", file=sys.stderr)
+
+
+def na_domains(rows, domains):
+    """{Dnn: common note} for each of `domains` whose rows are now ALL n/a (a whole-domain decision merged from a partial)."""
+    out = {}
+    for d in domains:
+        rr = [r for r in rows if (r.get("item_id") or "").upper().startswith(d + "-")]
+        if rr and all((r.get("result") or "").strip().lower() == "n/a" for r in rr):
+            notes = collections.Counter((r.get("notes") or "").strip() for r in rr)
+            out[d] = notes.most_common(1)[0][0]
+    return out
+
+
+def merge_inventory(eng, dry_run, overwrite, R):
+    """Fold inventory/<register>.<tag>.partial.csv into inventory/<register>.csv by instance_id (dimension 2 under fan-out)."""
+    out = {"merged": [], "unchanged": []}
+    inv = os.path.join(eng, "inventory")
+    for p in sorted(glob.glob(os.path.join(inv, "*.partial.csv"))):
+        base = os.path.basename(p)
+        m = INV_PARTIAL_RE.match(base)
+        if not m:
+            R["rejected"].append({"file": base, "item_id": "*", "why": "name must be <register>.<tag>.partial.csv"}); continue
+        reg = m.group(1) + ".csv"
+        info = {"file": base, "domain": m.group(2).upper() if re.fullmatch(r"D\d\d", m.group(2), re.I) else None,
+                "register": reg, "rows": 0, "carried": 0, "rejected": 0, "conflicts": 0}
+        R["partials"].append(info)
+        master = os.path.join(inv, reg)
+        try:
+            mcols, mrows = load_csv(master); pcols, prows = load_csv(p)
+        except Exception as ex:
+            R["rejected"].append({"file": base, "item_id": "*", "why": f"unreadable ({ex}); the register inventory/{reg} must exist"}); info["rejected"] += 1
+            continue
+        tc = tested_cols(mcols)
+        if "instance_id" not in mcols or not tc:
+            R["rejected"].append({"file": base, "item_id": "*", "why": f"inventory/{reg} is not a register (needs instance_id and a tested* column)"}); info["rejected"] += 1
+            continue
+        carry = [c for c in list(tc) + list(INV_CARRY) if c in mcols]
+        by = {(r.get("instance_id") or "").strip().upper(): r for r in mrows}
+        info["rows"] = len(prows)
+        changed = False
+        for pr in prows:
+            iid = (pr.get("instance_id") or "").strip().upper()
+            if not iid: continue
+            mrow = by.get(iid)
+            if mrow is None:
+                R["rejected"].append({"file": base, "item_id": iid, "why": f"unknown instance_id (not in inventory/{reg}; workers never allocate ids)"}); info["rejected"] += 1
+                continue
+            if instance_open(pr, tc) and (pr.get("result") or "").strip().lower() not in INST_NA:
+                continue                                   # the worker did not finish this instance; nothing to carry
+            if (pr.get("result") or "").strip().lower() == "finding" and not re.search(F_H_RE, (pr.get("notes") or "") + " " + (pr.get("finding_id") or "")):
+                R["rejected"].append({"file": base, "item_id": iid, "why": "finding without F-/H- id"}); info["rejected"] += 1
+                continue
+            payload = {c: (pr.get(c) or "").strip() for c in carry}
+            current = {c: (mrow.get(c) or "").strip() for c in carry}
+            if payload == current:
+                out["unchanged"].append(iid); continue
+            info["carried"] += 1
+            if instance_open(mrow, tc) is None and not overwrite:
+                R["conflicts"].append({"item_id": iid, "files": [base], "why": f"inventory/{reg} already settled ('{current.get('notes', '')[:50]}') — resolve by hand or --overwrite"})
+                info["conflicts"] += 1
+                continue
+            mrow.update(payload); changed = True
+            out["merged"].append({"instance_id": iid, "register": reg, "file": base})
+        if changed and not dry_run:
+            write_csv(master, mcols, mrows)
+    return out
 
 
 # ── dimension 1 ──────────────────────────────────────────────────────────────
@@ -142,30 +240,12 @@ def analyse(rows):
 
 
 # ── dimension 2 ──────────────────────────────────────────────────────────────
-def tested_cols(fieldnames):
-    return [c for c in (fieldnames or []) if c.strip().lower().startswith("tested")]
-
-
-def instance_open(r, cols):
-    """None when settled, else the tested* column that is still false."""
-    if (r.get("result") or "").strip().lower() in INST_NA:
-        return None
-    for c in cols:
-        if not truthy(r.get(c)):
-            return c
-    return None
-
-
-def instance_label(r):
-    return r.get("instance_id") or r.get("uri") or r.get("path") or r.get("name") or r.get("class") or "?"
-
-
 def dim2(comp):
     out = {"evaluated": False, "path": comp, "total": 0, "settled": 0, "files": {}, "open": [], "unverified": []}
     if comp is None:
         return out
     if os.path.isdir(comp):
-        files = sorted(glob.glob(os.path.join(comp, "*.csv")))
+        files = sorted(f for f in glob.glob(os.path.join(comp, "*.csv")) if ".partial." not in os.path.basename(f))
     elif os.path.isfile(comp):
         files = [comp]
     else:
@@ -248,8 +328,8 @@ def report(d, d2, comp_given, gate, reasons, n_list, filt):
         P(f"    {dom:<5} {bar(c['settled'], c['total'])} {c['settled']:>3}/{c['total']:<3}{flag}")
     sev = d["by_severity"]
     order = sorted(sev, key=lambda s: SEV_RANK.get(s, 9))
-    P("\n    open by ceiling: " + " · ".join(f"{s} {sev[s]['open'] + sev[s]['invalid']}" for s in order
-                                             if sev[s]["open"] + sev[s]["invalid"]) or "    open by ceiling: none")
+    line = " · ".join(f"{s} {sev[s]['open'] + sev[s]['invalid']}" for s in order if sev[s]["open"] + sev[s]["invalid"])
+    P("\n    open by ceiling: " + (line or "none"))
 
     if comp_given or gate:
         ipct = 100.0 * d2["settled"] / d2["total"] if d2["total"] else 100.0
@@ -312,11 +392,12 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
     status = [c for c in STATUS_COLS if c in cols]
     by = {(r.get("item_id") or "").strip().upper(): r for r in rows}
     partials = sorted(glob.glob(os.path.join(eng, "checklist-status.*.partial.csv")))
+    inv_partials = sorted(glob.glob(os.path.join(eng, "inventory", "*.partial.csv")))
     R = {"tracker": master_path, "dry_run": dry_run, "overwrite": overwrite, "partials": [],
          "merged": [], "overwritten": [], "unchanged": [], "skipped_open": [], "rejected": [], "conflicts": [],
          "archived": []}
-    if not partials:
-        msg = f"nothing to merge: no {eng}/checklist-status.Dnn.partial.csv (workers write those; see prompts/05)"
+    if not partials and not inv_partials:
+        msg = f"nothing to merge: no {eng}/checklist-status.Dnn.partial.csv or inventory/<register>.Dnn.partial.csv (workers write those; see prompts/05)"
         if as_json:
             R["note"] = msg; R["exit"] = 1; print(json.dumps(R, ensure_ascii=False, indent=1))
         else:
@@ -358,11 +439,11 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
                 R["skipped_open"].append(iid)      # the worker did not settle it; nothing to carry
                 continue
             ok, why = row_valid(pr)
+            if ok:
+                why = note_valid(res, pr.get("notes") or "", pr.get("finding_id") or "")   # R4: merge == mark
+                ok = why is None
             if not ok:
-                hint = ""
-                if re.search(r"\bH-D\d\d-\d+\b", pr.get("notes") or ""):
-                    hint = " — the note cites H-Dnn-NN; renumber to H-0NN (prompts/05 MERGE step) and re-run"
-                R["rejected"].append({"file": base, "item_id": iid, "why": why + hint}); info["rejected"] += 1
+                R["rejected"].append({"file": base, "item_id": iid, "why": why}); info["rejected"] += 1
                 continue
             payload = {c: (pr.get(c) or "").strip() if c != "notes" else (pr.get(c) or "") for c in status}
             info["carried"] += 1
@@ -371,7 +452,8 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
                 poisoned.add(iid)
                 R["conflicts"].append({"item_id": iid, "files": [prev[0], base],
                                        "why": "carried by two partials with different content — decide by hand"})
-                info["conflicts"] += 1
+                for other in R["partials"]:
+                    if other["file"] in (prev[0], base): other["conflicts"] += 1
             elif not prev:
                 candidates[iid] = (base, payload)
 
@@ -397,6 +479,9 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
     changed = R["merged"] or R["overwritten"]
     if changed and not dry_run:
         write_csv(master_path, cols, rows)
+        stamp_engagement(eng, na_domains(rows, {x["item_id"][:3] for x in R["merged"] + R["overwritten"]}))
+    inv = merge_inventory(eng, dry_run, overwrite, R)
+    if inv["merged"] and not changed and not dry_run:
         stamp_engagement(eng)
     if archive and not dry_run:
         bad_files = {x["file"] for x in R["rejected"]} | {f for c in R["conflicts"] for f in c["files"]}
@@ -405,7 +490,8 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
             if info["file"] in bad_files:
                 continue
             os.makedirs(dest, exist_ok=True)
-            shutil.move(os.path.join(eng, info["file"]), os.path.join(dest, info["file"]))
+            src = os.path.join(eng, "inventory", info["file"]) if info.get("register") else os.path.join(eng, info["file"])
+            shutil.move(src, os.path.join(dest, info["file"]))
             R["archived"].append(info["file"])
     rc = 1 if (R["conflicts"] or R["rejected"]) else 0
     R["exit"] = rc
@@ -413,7 +499,8 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
         print(json.dumps(R, ensure_ascii=False, indent=1)); return rc
 
     P = print
-    P(f"\n  MERGE {'(dry run) ' if dry_run else ''}{len(partials)} partial file(s) → {os.path.basename(master_path)}")
+    P(f"\n  MERGE {'(dry run) ' if dry_run else ''}{len(partials) + len(inv_partials)} partial file(s) → {os.path.basename(master_path)}"
+      f"{' + inventory/' if inv_partials else ''}")
     for info in R["partials"]:
         P(f"    {info['file']:<40} rows {info['rows']:>4} · carried {info['carried']:>3} · rejected {info['rejected']:>3} · conflicts {info['conflicts']:>3}")
     P(f"\n  merged {len(R['merged'])} · overwritten {len(R['overwritten'])} · unchanged {len(R['unchanged'])} · "
@@ -428,11 +515,16 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
             P(f"    {x['item_id']:<9} {', '.join(x['files']):<36} {x['why']}")
     if R["archived"]:
         P(f"\n  archived to logs/partials/: {', '.join(R['archived'])}")
-    if changed and dry_run:
+    if inv["merged"] or inv["unchanged"]:
+        P(f"\n  inventory partials: merged {len(inv['merged'])} · unchanged {len(inv['unchanged'])} instance row(s) into "
+          + ", ".join(sorted({x['register'] for x in inv['merged']}) or ["(nothing new)"]))
+    if (changed or inv["merged"]) and dry_run:
         P("\n  dry run: nothing written.")
-    elif changed:
-        P(f"\n  written: {master_path} (engagement.json.updated stamped). Flip the domain's inventory rows per the worker reports,")
-        P("  renumber H-Dnn-NN → H-0NN, update report/assessment-status.md, commit, then:")
+    elif changed or inv["merged"]:
+        P(f"\n  written: {master_path}{' + inventory/' if inv['merged'] else ''} (engagement.json.updated stamped)."
+          + (f" Exit 1 because {len(R['rejected'])} row(s) were rejected / {len(R['conflicts'])} conflict(s) remain." if rc else ""))
+        P("  Instances a worker reported but did not carry in an inventory partial stay tested=false. Optionally renumber")
+        P("  H-Dnn-NN → H-0NN (files AND notes together), update report/assessment-status.md, commit, then:")
         P(f"    python3 scripts/coverage.py {master_path} --components {os.path.join(eng, 'inventory')} --gate p7")
     P()
     return rc

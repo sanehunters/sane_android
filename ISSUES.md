@@ -10,7 +10,7 @@
 |---|---|---|---|
 | **Start here** | `type: methodology` | repository | `START.md` §1–§4 |
 | **Phase playbook** `P0`…`P9` | `type: playbook`, `phase: n …` | phase | `START.md` §4 table row + the phase's gate predicate (`scripts/gate.py`) |
-| **Domain battery** `D01`…`D28` | `type: checklist`, `domain: Dnn`, `phase: …`, `area: …`, `am: …` | domain | `cards/Dnn.md` (crux, applicability probe, triage order, the item table) |
+| **Domain battery** `D01`…`D28` (D24 and D28 in progress; no chapter yet) | `type: checklist`, `domain: Dnn`, `phase: …`, `area: …`, `am: …` | domain | `cards/Dnn.md` (crux, applicability probe, triage order, the item table) |
 | **Doctrine reference** | `type: methodology` | doctrine doc | the first section of each `docs/*.md` |
 
 All standing issues carry `do-not-close`. A GitHub Action reopens any that is closed and comments why.
@@ -26,8 +26,11 @@ Progress is **never** recorded by closing them.
 | 📋 Checklist gap | `04-checklist-gap.yml` | `type: gap`, `domain: …` | the checklist missed or mis-stated something | merged into a chapter |
 | 🔧 Audit finding | — | `type: audit` | a defect in the methodology itself is found | fixed in a commit |
 
-Finding and ruled-out issues are optional mirrors of the engagement folder — the folder is the record of
-truth; the issues exist for people who live in GitHub.
+Per-engagement issues are **optional** mirrors of the engagement folder — the folder (its own private evidence
+repository, see START.md R7) is the record of truth; the issues exist for people who live in GitHub. This tracker
+is public: an engagement, finding or ruled-out issue names the target only if the programme allows it and **never
+carries vulnerability details** (no mechanism, path, payload or evidence) — it links to the private evidence repo
+(`engagement.json.evidence_remote`, `findings/F-NNN/report.md`) instead.
 
 ## 3. Labels
 
@@ -55,5 +58,5 @@ GH_TOKEN=… python3 scripts/gh-sync.py                   # labels, milestones, 
 GH_TOKEN=… python3 scripts/gh-sync.py --audit docs/08-senior-audit-2026-10.md   # one issue per open audit defect
 ```
 
-Without the `gh` CLI the script uses the REST API directly; it needs `repo` scope. Issue bodies are
+The script talks to the REST API with `GH_TOKEN` (`repo` scope); the `gh` CLI is not used. Issue bodies are
 regenerated from the files, so edit the files, never the issues.

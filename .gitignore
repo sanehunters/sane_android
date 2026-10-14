@@ -1,7 +1,9 @@
-# This repository is the methodology AND the engagement archive (BugBountyTarget/<Target>_<date>/).
-# Text evidence, hashes, logs, sanitised captures and small videos are committed. Binaries never are.
+# This repository is the methodology ONLY. It is public. Engagements (BugBountyTarget/<Target>_<DDMMYYYY>/) are
+# each their own git repository — the evidence repo — created by scripts/new-engagement.sh and pushed only to a
+# private remote (SANE_EVIDENCE_REMOTE). Nothing under an engagement folder is ever tracked here.
+BugBountyTarget/[!_]*_*/
 
-# binaries and keys — never, anywhere
+# binaries, keys and raw captures — never, anywhere (the same list as .claude/hooks/_lib.sh FORBIDDEN_RE)
 *.apk
 *.aab
 *.apks
@@ -14,18 +16,25 @@
 *.keystore
 *.p12
 *.pfx
+*.pem
+*.key
+*.crt
+*.der
+*.smali
 
 # raw captures that may hold credentials — commit the sanitised .http / .md extracts instead
 *.har
 *.pcap
 *.pcapng
 
-# engagement scratch that is regenerable or oversized
-BugBountyTarget/*/apk/*
-!BugBountyTarget/*/apk/.gitkeep
-!BugBountyTarget/*/apk/versions.txt
-BugBountyTarget/*/decompiled/*
-!BugBountyTarget/*/decompiled/.gitkeep
+# decompiled trees and tool output with full secret values — wherever they land
+**/jadx_out/
+**/apktool_out/
+**/decompiled/
+**/secrets/
+secrets.csv
+verify-hints.sh
+sensitive/
 state-snapshot.json
 
 # OS / tooling noise

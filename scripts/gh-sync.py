@@ -9,7 +9,10 @@
   --repo owner/name   (default: parsed from `git remote get-url origin`)
 
 Every standing issue carries a hidden marker `<!-- sane:key=<kind>:<id> -->` in its body; the script finds
-it by that marker (title fallback), updates body/labels/milestone when they changed, and never closes it.
+it by that marker, else by title prefix, else by LEGACY_TITLES (issues created before markers existed, whose
+titles differ: "⚖️ DOCTRINE — Severity & reportability …" is docs/02); it updates body/labels/milestone when
+they changed (the marker is added on that update) and never closes it. It never creates a duplicate for a
+key that resolves to an existing issue.
 Bodies are generated from START.md, cards/Dnn.md, json/index.json and docs/*.md — edit the files, not the
 issues. Uses the REST API via urllib (no gh CLI needed); needs `repo` scope.
 """
@@ -31,7 +34,7 @@ LABELS = {
              ("type: audit", "D93F0B", "A defect in the methodology itself")],
     "phase": [(f"phase: {i} {n}", "C5DEF5", f"Phase P{i}") for i, n in enumerate(
         ["scope", "lab", "acquire", "inventory", "static", "ipc", "network", "chain", "evidence", "report"])],
-    "domain": [(f"domain: D{i:02d}", "BFD4F2", f"Domain D{i:02d}") for i in range(1, 29)],
+    "domain": [],   # filled from json/index.json (only domains that have a chapter), see _domain_labels()
     "area": [(f"area: {a}", "D4C5F9", "") for a in ["recon", "manifest-perms", "ipc", "deeplink-webview", "storage-crypto",
              "auth-session", "network-api", "native-supplychain", "cloud-sdk", "cross-platform", "privacy", "resilience",
              "platform", "payments", "push-messaging", "device-oem", "ai-llm", "tooling-reporting"]],
@@ -52,6 +55,25 @@ AREA_BY_DOMAIN = {"D01": "recon", "D02": "recon", "D03": "manifest-perms", "D04"
                   "D14": "network-api", "D15": "network-api", "D16": "native-supplychain", "D17": "native-supplychain", "D18": "cloud-sdk",
                   "D19": "cross-platform", "D20": "privacy", "D21": "resilience", "D22": "platform", "D23": "payments", "D24": "push-messaging",
                   "D25": "device-oem", "D26": "tooling-reporting", "D27": "tooling-reporting", "D28": "ai-llm"}
+# issues #2–#8 of the original tracker: no marker, different prefixes. key -> a phrase that appears in the legacy title.
+LEGACY_TITLES = {"doc:02-severity-and-reportability.md": "severity & reportability",
+                 "doc:03-lab-and-harness.md": "lab & harness",
+                 "doc:04-poc-and-evidence-standard.md": "poc video & evidence",
+                 "doc:05-attacker-models.md": "attacker models",
+                 "doc:06-triage-playbook.md": "triage response",
+                 "doc:07-coverage-crosswalk.md": "coverage crosswalk",
+                 "start": "start here"}
+
+
+def _domain_labels():
+    try:
+        doms = sorted(json.load(open(os.path.join(ROOT, "json", "index.json"), encoding="utf-8"))["domains"])
+    except Exception:
+        doms = [f"D{i:02d}" for i in range(1, 29)]
+    return [(f"domain: {d}", "BFD4F2", f"Domain {d}") for d in doms]
+
+
+LABELS["domain"] = _domain_labels()
 AM_LABEL = {"AM-01": "remote", "AM-02": "one-click", "AM-03": "zero-perm-app", "AM-04": "one-perm-app", "AM-05": "cross-account",
             "AM-06": "network", "AM-07": "network", "AM-08": "sdk", "AM-09": "backend", "AM-10": "physical", "AM-11": "physical"}
 PHASE_NAMES = ["Scope & Authorisation", "Lab & Harness", "Acquisition & Binary Identity", "Attack-Surface Inventory", "Static Deep Review",
@@ -146,8 +168,12 @@ class Sync:
         cur = self.by_key.get(key)
         if not cur:  # title fallback for issues created before markers existed
             pref = title.split(" — ")[0]
-            cands = [i for i in self.issues if (i.get("title") or "").startswith(pref) and "sane:key=" not in (i.get("body") or "")]
-            if len(cands) == 1: cur = cands[0]
+            unmarked = [i for i in self.issues if "sane:key=" not in (i.get("body") or "")]
+            cands = [i for i in unmarked if (i.get("title") or "").startswith(pref)]
+            if len(cands) != 1 and key in LEGACY_TITLES:          # looser: the legacy title phrase (case-insensitive)
+                cands = [i for i in unmarked if LEGACY_TITLES[key] in (i.get("title") or "").lower()]
+            if len(cands) == 1:
+                cur = cands[0]; self.by_key[key] = cur
         payload = {"title": title, "body": body, "labels": sorted(set(labels))}
         if milestone: payload["milestone"] = milestone
         if not cur:
@@ -260,15 +286,18 @@ def main():
             name = os.path.basename(p)
             t = open(p, encoding="utf-8").read()
             title_line = t.splitlines()[0].lstrip("# ").strip()
-            first = re.split(r'\n## ', t, 1)[0][:3000]
+            first = re.split(r'\n## ', t, maxsplit=1)[0][:3000]
             body = f"📄 [`docs/{name}`]({base}/docs/{name})\n\n{first}\n\n---\n> ### ⛔ DO NOT CLOSE\n> Standing doctrine regenerated by `scripts/gh-sync.py`."
             s.upsert(f"doc:{name}", f"📚 DOCTRINE — {title_line}"[:200], body, ["type: methodology", "do-not-close"])
     if "--audit" in a:
         path = a[a.index("--audit") + 1]
         t = read(path)
         n = 0
-        for m in re.finditer(r'^\| (L\d+|C\d+) \| (.*?) \| (.*?) \| (.*?) \| (.*?) \|$', t, re.M):
-            key, defect, why, impact, status = [x.strip() for x in m.groups()] if len(m.groups()) == 5 else (None,) * 5
+        rows5 = [[x.strip() for x in m.groups()] for m in re.finditer(r'^\| (L\d+|C\d+) \| (.*?) \| (.*?) \| (.*?) \| (.*?) \|$', t, re.M)]
+        rows4 = [[x.strip() for x in m.groups()] for m in re.finditer(r'^\| (L\d+|C\d+) \| (.*?) \| (.*?) \| (.*?) \|$', t, re.M)]
+        seen = {r[0] for r in rows5}
+        rows = rows5 + [[k, d, w, w, s] for k, d, w, s in rows4 if k not in seen]   # 4-cell tables: impact = why it matters
+        for key, defect, why, impact, status in rows:
             if not key: continue
             open_ = not status.startswith("✅")
             title = f"[AUDIT {key}] {re.sub(r'[*`]', '', defect)[:110]}"

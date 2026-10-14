@@ -33,13 +33,15 @@
  *    SslErrorHandler.proceed(), PermissionRequest.grant() and the geolocation callback are chromium-side
  *    subclasses: they are hooked lazily on the runtime class of the object the callback receives.
  *
- * Run      frida/run.sh --script 01 --pkg <pkg> --timeout 120            (spawn or attach both work; see README)
- *          raw: frida -U -f <pkg> -l frida/01-webview-settings.js  -> exercise the UI -> REPL: rpc.exports.dump()
+ * Run      spawn:  frida -D $ANDROID_SERIAL -f <pkg> -l frida/01-webview-settings.js -t 120 -q \
+ *                    | tee $E/logs/frida-01-webview-settings-$(date +%s).log
+ *          attach: timeout 120 frida -D $ANDROID_SERIAL -n <pkg> -l frida/01-webview-settings.js  -> REPL: rpc.exports.dump()
+ *          (spawn or attach both work; -D not -U, and -t or the -q session detaches at load; see README)
  *          Exercise every screen that may host a WebView BEFORE reading the result.
  *
  * Output   human lines are prefixed [01]; machine lines go through send() as JSON
  *          {script:"01-webview-settings", ev:<event>, ts, tag:"CANDIDATE"|"", items:[Dnn-NNN...], ...}
- *          and land in $E/logs/frida-01-webview-settings-<ts>.jsonl when started through run.sh.
+ *          and appear as `message:` lines in the tee'd log (grep -o '"ev":.*' $E/logs/frida-01-*.log).
  *          A CANDIDATE line is a candidate, never a finding: it still needs a delivery path (D10-016+) and the
  *          AM-02 proof from a page (docs/05).
  *

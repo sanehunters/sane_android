@@ -2,7 +2,7 @@
 """inventory.py — the per-instance register of ONE application (dimension 2 of coverage).
 
   python3 scripts/inventory.py <base.apk | AndroidManifest.xml | $E/decompiled/apktool> --out $E/inventory/
-          [--target-sdk N] [--all] [--perm-dump perms.txt] [--jadx $E/decompiled/jadx] [--endpoints secrets/endpoints.txt]
+          [--target-sdk N] [--all] [--perm-dump perms.txt] [--jadx $E/decompiled/jadx] [--endpoints secrets/routes.csv]
           [--force] [--json]
 
 Why: "domain D07 tested" is not "all eight provider authorities tested". Only a per-instance register backs
@@ -14,14 +14,16 @@ Writes into --out (ids are stable across re-runs: a row that already exists keep
 tested/result/notes; rows of the old register that this run did not produce are kept and listed):
   components.csv  C-NNN  every component reachable from outside the app — exported=true, implicitly exported,
                          exported unknown (VERIFY), or a non-exported provider with grantUriPermissions — plus
-                         every <permission> this app declares. --all adds the non-exported rest (D08 targets).
+                         every <permission> this app declares. Providers are ALWAYS listed (an exported=false provider still
+                         answers getType()/URI grants: D07/D08); --all adds non-exported activities/services/receivers (D08 redirect targets).
   deeplinks.csv   U-NNN  one row per scheme × authority × path of every VIEW intent-filter. The <data>
                          elements of ONE filter are merged by Android (MASTG-TECH-0172; MASTG-TEST-0028
                          (deprecated; see MASTG-TEST-0393/0394)): `<data scheme=https/><data host=h port=p/>
                          <data pathPattern=/.*/>` is ONE pattern https://h:p/.*, not three rows.
   webviews.csv    W-NNN  header only; --jadx seeds CANDIDATE rows (WebView users, bridge registrations,
                          @JavascriptInterface methods) from the decompiled sources — confirm them in D10.
-  endpoints.csv   E-NNN  header only; --endpoints seeds rows from tools/06 endpoints.txt / routes.txt.
+  endpoints.csv   E-NNN  header only; --endpoints seeds rows from tools/06 routes.csv (method,path,file,line — the
+                         authoritative Retrofit routes) or endpoints.txt (bare URLs → method=URL); raw grep lines are tolerated.
 
 What the rows encode (primary sources: MASTG-KNOW-0133 §Access Control, MASTG-KNOW-0017, hacktricks
 drozer/exploiting-content-providers.md):
@@ -312,7 +314,7 @@ def attacker_for(perm, declared, dump, unverified):
             return "AM-12", f"{perm} is {level} ({src}): grantable only by pm grant from shell/root — own device, not an attack", level
         if perm.startswith(_P + "BIND_"):
             return "AM-08/AM-12", f"{perm} is held by the system only: the OS binds this component, no app reaches it directly — test the data the callback receives instead", level
-        extra = "; the reachable path is the push payload (D24: AM-01/AM-09), not direct IPC" if perm == "com.google.android.c2dm.permission.SEND" else ""
+        extra = "; the reachable path is the push payload (AM-01/AM-09: D18 cloud-SDK items + D05 receiver items; a D24 chapter does not exist yet), not direct IPC" if perm == "com.google.android.c2dm.permission.SEND" else ""
         return "AM-08/AM-12", f"{perm} is {level} ({src}): no third-party app can hold it; only in-process code (AM-08) or the tester's own device (AM-12){extra}", level
     unverified.append(f"protectionLevel of {perm} unresolved — run `adb shell pm list permissions -f > perms.txt` and re-run with --perm-dump perms.txt")
     return "AM-04", f"UNVERIFIED: protectionLevel of {perm} unknown (not declared here, not in the platform table) — assume AM-04 until --perm-dump resolves it; if it is signature-level no third-party app reaches this component", "unknown"
@@ -433,8 +435,8 @@ def build(root, app, pkg, tsdk, declared, dump, include_all):
             grant = (el.get(A + "grantUriPermissions") or "").lower() == "true"
             if exported == "false" and tag == "provider" and grant:
                 reason += "; reachable through a URI grant this app hands out (FLAG_GRANT_*_URI_PERMISSION / <grant-uri-permission>) — D07/D08 confused-deputy target"
-            elif exported == "false" and not include_all:
-                continue
+            elif exported == "false" and tag != "provider" and not include_all:
+                continue      # providers are always listed: getType()/grant paths reach non-exported ones (D07/D08)
             if exported == "unknown":
                 unverified.append(f"{tag} {name}: exported unknown — {reason}")
 
@@ -606,19 +608,27 @@ def seed_endpoints(path):
     rows, skipped = [], 0
     deny = ("schemas.android.com", "www.w3.org", "xmlpull.org", "apache.org/licenses", "opensource.org/licenses", "creativecommons.org")
     src = os.path.basename(path)
-    for line in open(path, encoding="utf-8", errors="replace"):
-        s = line.strip()
-        if not s:
-            continue
-        m = re.match(r'@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\("([^"]*)"', s)
-        if m:
-            method, route = m.group(1), m.group(2)
-        elif re.match(r"https?://", s):
-            if any(d in s for d in deny):
-                skipped += 1; continue
-            method, route = "?", s
-        else:
-            method, route = "?", s
+    lines = [l.rstrip("\n") for l in open(path, encoding="utf-8", errors="replace")]
+    pairs = []
+    if lines and re.match(r"^method,path(,|$)", lines[0].strip(), re.I):          # tools/06 routes.csv (authoritative)
+        for r in csv.DictReader(lines):
+            if (r.get("path") or "").strip():
+                pairs.append(((r.get("method") or "?").strip().upper(), r["path"].strip()))
+    else:
+        for s in (l.strip() for l in lines):
+            if not s:
+                continue
+            s = re.sub(r"^[^\s:]+:\d+:", "", s).strip()                              # grep -rn provenance prefix file:line:
+            m = re.search(r'@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s*\(\s*"([^"]*)"', s)
+            if m:
+                pairs.append((m.group(1), m.group(2)))
+            elif re.match(r"https?://", s):
+                if any(d in s for d in deny):
+                    skipped += 1; continue
+                pairs.append(("URL", s))                                            # same vocabulary as tools/06 --inventory
+            else:
+                pairs.append(("?", s))
+    for method, route in pairs:
         rows.append(dict(instance_id="", method=method, path=route, source=src, auth_required="", tested_idor="false",
                          tested_massassign="false", result="", notes=f"CANDIDATE from {src}: confirm the route is live, then IDOR and mass-assignment (D15)"))
     return rows, skipped
@@ -675,10 +685,10 @@ def main():
     ap.add_argument("target", help="base.apk, a text AndroidManifest.xml, or an apktool output directory ($E/decompiled/apktool)")
     ap.add_argument("--out", default="inventory", metavar="DIR", help="register directory (default ./inventory; use $E/inventory)")
     ap.add_argument("--target-sdk", type=int, metavar="N", help="override/supply targetSdkVersion when no source carries it")
-    ap.add_argument("--all", action="store_true", help="also list non-exported components (intent-redirection targets, D08)")
+    ap.add_argument("--all", action="store_true", help="also list non-exported activities/services/receivers (intent-redirection targets, D08); providers are always listed")
     ap.add_argument("--perm-dump", metavar="FILE", help="output of `adb shell pm list permissions -f`: resolves protection levels from the device")
     ap.add_argument("--jadx", metavar="DIR", help="jadx output (or its sources/): seed webviews.csv with WebView / bridge candidates")
-    ap.add_argument("--endpoints", metavar="FILE", help="tools/06 endpoints.txt or routes.txt: seed endpoints.csv")
+    ap.add_argument("--endpoints", metavar="FILE", help="tools/06 routes.csv (preferred) or endpoints.txt: seed endpoints.csv")
     ap.add_argument("--force", action="store_true", help="ignore existing registers (fresh ids; tester columns are lost)")
     ap.add_argument("--json", action="store_true", help="machine view on stdout (human lines go to stderr)")
     a = ap.parse_args()

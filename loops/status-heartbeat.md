@@ -2,6 +2,7 @@
 
 ```
 /loop 60m Run `python3 scripts/state.py <eng>` and `bash scripts/doctor.sh --brief`. If the device or
-proxy disappeared, add the fact to BLOCKERS rather than continuing with guessed results. Post the one-line
+proxy disappeared, or doctor printed nothing (environment UNVERIFIED), add the fact to BLOCKERS rather than
+continuing with guessed results. Post the one-line
 coverage summary and the next three items.
 ```

@@ -2,9 +2,9 @@
 
 | ID | Title | Status | Severity | VRT path | CWE | Component |
 |----|-------|--------|----------|----------|-----|-----------|
-| F-001 | <impact-category title, not the mechanism> | **VERIFIED** (device) | Medium | `broken_access_control...` | CWE-nnn | `com.target...` |
+| F-001 | <impact-category title, not the mechanism> | **evidence-complete** | Medium | `broken_access_control...` | CWE-nnn | `com.target...` |
 
-**Status vocabulary:** `CANDIDATE` → `CONFIRMED (source)` → `VERIFIED (device)` → `REPORTED` → `ACCEPTED` / `RETRACTED`
+**Status vocabulary (one lifecycle, START.md §6):** `candidate → confirmed → evidence-complete → reported → accepted | declined | retracted`
 
 ## Severity reasoning
 > One line per finding explaining the rating from **demonstrated** capability. Name any unproven link.

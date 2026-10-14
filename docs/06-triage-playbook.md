@@ -33,7 +33,8 @@ Triagers descend this ladder. Answer the rung you are actually on.
 Almost always an environment mismatch. Do not resend the same steps.
 
 Send, in one message:
-- the **prebuilt attacker APK** (they will not build your source)
+- the **prebuilt attacker APK** from `pocs/F-NNN/build/` — attached to the submission, never committed
+  (docs/04 §7); they will not build your source
 - `adb shell getprop ro.build.fingerprint` from your device
 - the target app's `versionName` and `targetSdk` as you tested them
 - `commands.txt`, copy-pasteable, no placeholders
@@ -85,6 +86,16 @@ Be ruthless with yourself here. Ask: does the **attack** need root, or did only 
 
 Conceding fast on Rung 5 costs you one finding. Fighting it costs you the program's trust.
 
+### Rung 6 — "Requires physical access"
+
+Check which model you actually wrote up. Most "physical access" objections come from a PoC that used
+`adb` as the attacker — and `adb` is AM-11 (unlocked handset) at best.
+
+- If the same primitive is reachable from an installed app or a link, re-frame to AM-03 or AM-02,
+  re-record from that position, and resubmit. The finding is now in a model programmes pay for.
+- If it genuinely needs the handset, state AM-10 (locked) or AM-11 (unlocked), quote the programme's
+  scope wording, and concede the downgrade if physical access is excluded. It stays in the client report.
+
 ### Rung 7 — "Duplicate"
 
 Ask precisely: *does the existing report cover the same entry point and the same impact, or only the same
@@ -100,9 +111,20 @@ Argue with the taxonomy, not with adjectives.
 
 > "This maps to `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers`
 > (VRT P1). The video shows read **and** write on account B from account A's session, with sequential
-> integer identifiers. If the program rates on CVSS, the vector is AV:N/AC:L/PR:L/UI:N/S:C/C:H/I:H/A:N."
+> integer identifiers. If the program rates on CVSS, the vector is
+> CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N."
 
-Name the VRT path. Name the demonstrated capability. Never say "this is clearly critical".
+Name the VRT path. Name the demonstrated capability. Never say "this is clearly critical". Note the
+`S:U`: both accounts sit under the one backend's security authority, so scope is unchanged however bad the
+impact (docs/02 §7). Always write the `CVSS:3.1/` prefix — some programmes parse it.
+
+### Rung 9 — "Won't fix / accepted risk"
+
+Not a rating dispute, and not yours to argue. Ask for the decision in writing — who accepted the risk, on
+what date, with which compensating control — and record it in the client report under the finding. If
+the programme pays on validity rather than on a fix, ask politely for the triage status to say
+"accepted" rather than "not applicable". Do not reopen the thread; the documented acceptance is the
+deliverable.
 
 ---
 

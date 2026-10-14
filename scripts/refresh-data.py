@@ -34,7 +34,12 @@ def run(cmd, **kw):
 
 
 def ensure_sources(refs, offline):
-    os.makedirs(refs, exist_ok=True)
+    if offline:   # never create anything; list EVERYTHING that is missing, not just the first clone
+        missing = [name for name in REPOS if not os.path.isdir(os.path.join(refs, name, ".git"))]
+        if missing:
+            sys.exit(f"!! --offline but missing under {refs}: {', '.join(missing)} — clone them (git clone --depth 1 <url> {refs}/<name>) or drop --offline")
+    else:
+        os.makedirs(refs, exist_ok=True)
     for name, url in REPOS.items():
         d = os.path.join(refs, name)
         if os.path.isdir(os.path.join(d, ".git")):
@@ -81,11 +86,28 @@ def build_standards_index():
     return {r["id"]: r for r in rows}
 
 
+def head_ids(text):
+    """(kind, id) pairs in a chapter-head 'Maps to' string, in the same shape build-checklist.py gives item ids."""
+    out = []
+    for m in re.finditer(r"\bMASTG-(TEST|TECH|TOOL|KNOW|DEMO|BEST|APP)-(\d{4})\b", text): out.append(("mastg", f"MASTG-{m.group(1)}-{m.group(2)}"))
+    for m in re.finditer(r"\bMASWE-(\d{4})\b", text): out.append(("maswe", f"MASWE-{m.group(1)}"))
+    for m in re.finditer(r"\bMASVS-([A-Z]+)-(\d)((?:/\d)*)", text):     # MASVS-STORAGE-1/2 is two ids
+        for n in [m.group(2)] + re.findall(r"\d", m.group(3) or ""): out.append(("masvs", f"MASVS-{m.group(1)}-{n}"))
+    for m in re.finditer(r"\bCWE-(\d+)\b", text): out.append(("cwe", f"CWE-{m.group(1)}"))
+    for m in re.finditer(r"\bT1\d{3}(?:\.\d{3})?\b", text): out.append(("attack", m.group(0)))
+    return sorted(set(out))
+
+
 def build_crosswalk(index):
     """standard id -> the checklist items that cite it, from json/D*.json (needs scripts/build-checklist.py)."""
     cites = collections.defaultdict(list); titles = {}
     for p in sorted(glob.glob(os.path.join(ROOT, "json", "D*.json"))):
         d = json.load(open(p, encoding="utf-8"))
+        # chapter-head "Maps to" (json domain_meta) counts as one cite from <Dnn>-HEAD — otherwise ids cited only at
+        # chapter level (MASVS-PLATFORM-2 by D10, MASVS-CRYPTO-1 by D12) show n_items=0 and the crosswalk lies
+        head = (d.get("domain_meta") or {}).get("Maps to") or ""
+        for kind, sid in head_ids(head):
+            cites[(kind, sid)].append(f"{d.get('id') or os.path.basename(p)[:3]}-HEAD")
         for i in d["items"]:
             ids = i.get("ids", {})
             for kind in ("mastg", "maswe", "masvs", "cwe", "attack", "vrt"):
@@ -129,14 +151,20 @@ def main():
     offline = "--offline" in a
     refs = a[a.index("--refs") + 1] if "--refs" in a else os.environ.get("SANE_REFS") or os.path.join(ROOT, ".refs")
     print(f"sources under {refs}")
+    import importlib.util
+    if importlib.util.find_spec("yaml") is None:      # the builder needs PyYAML; say so BEFORE cloning anything
+        sys.exit("!! scripts/standards_builder.py needs PyYAML: python3 -m pip install pyyaml (or --user / a venv), then re-run")
     att, cwe = ensure_sources(refs, offline)
     os.makedirs(DATA, exist_ok=True)
-    cmd = [sys.executable, "-I", BUILDER, "--mastg", os.path.join(refs, "owasp-mastg"), "--maswe", os.path.join(refs, "maswe"),
+    # -P (3.11+) / PYTHONSAFEPATH: keep the clones' directories off sys.path (the isolation that matters for untrusted
+    # checkouts) WITHOUT -I, which also hides user site-packages where pip install --user puts PyYAML
+    env = dict(os.environ, PYTHONSAFEPATH="1")
+    cmd = [sys.executable] + (["-P"] if sys.version_info >= (3, 11) else []) + [BUILDER, "--mastg", os.path.join(refs, "owasp-mastg"), "--maswe", os.path.join(refs, "maswe"),
            "--masvs", os.path.join(refs, "owasp-masvs"), "--vrt", os.path.join(refs, "vulnerability-rating-taxonomy"),
            "--mt10", os.path.join(refs, "www-project-mobile-top-10"), "--out", DATA]
     if att: cmd += ["--attack-stix", att]
     if cwe: cmd += ["--cwe-top25", cwe]
-    r = run(cmd, cwd=ROOT)
+    r = run(cmd, cwd=ROOT, env=env)
     print(r.stdout)
     if r.returncode != 0:
         sys.exit("!! builder failed:\n" + r.stderr[-2000:])

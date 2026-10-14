@@ -8,11 +8,11 @@ body:
     attributes:
       value: |
         Nothing is touched until the authorisation gate below is satisfied and recorded in `engagement.json`.
-        Scoping decision tree: [`templates/scoping-questionnaire.md`](../blob/main/templates/scoping-questionnaire.md) → `templates/scope.yaml`.
+        Scoping decision tree: [`templates/scoping-questionnaire.md`](../blob/main/templates/scoping-questionnaire.md) → `engagement.json.authorisation` (basis, scope, programme_url, excluded; START.md §6). Scope only, no secrets: this form may live on the public repo.
 
   - type: input
     id: folder
-    attributes: {label: Engagement folder, placeholder: BugBountyTarget/Nisho_07092026}
+    attributes: {label: Engagement folder, placeholder: BugBountyTarget/<Target>_<DDMMYYYY>}
     validations: {required: true}
   - type: input
     id: packages
@@ -33,7 +33,7 @@ body:
     attributes: {label: Programme URL / SoW reference, placeholder: "https://hackerone.com/acme"}
   - type: textarea
     id: exclusions
-    attributes: {label: Exclusions and rules that bind, description: "Copy the programme's out-of-scope list verbatim; map each to graveyard rows and attacker models in scope.yaml"}
+    attributes: {label: Exclusions and rules that bind, description: "Copy the programme's out-of-scope list verbatim; map each to graveyard rows and attacker models in `engagement.json.authorisation.excluded`"}
     validations: {required: true}
   - type: checkboxes
     id: gate

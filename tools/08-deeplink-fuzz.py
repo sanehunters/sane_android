@@ -29,7 +29,11 @@ intent:// URIs are passed POSITIONALLY (Intent.parseUri path; honours package= a
 browsers strip component= -- D09-008 matrix). Verified with a local `sh -c` simulator (fake adb); no
 device was attached when this file was written.
 
-Exit: 0 ran and >=1 CANDIDATE; 1 ran, nothing; 2 usage/environment. --list/--dry-run exit 0.
+Exit: 0 ran and >=1 CANDIDATE; 1 ran, nothing; 2 usage/environment, or nothing interpretable (no fireable
+base, no probe fired, or every fired probe UNVERIFIED). --list/--dry-run exit 0. Output dir defaults to
+$E/recon/deeplink-fuzz when $E (or SANE_ENGAGEMENT) is set, else ./deeplink-fuzz/<pkg>; the human output is
+also appended to $E/logs/tools-08.txt. Wildcard hosts (*.example.com) are fired as sub.example.com and the
+declared host is kept in the row; a `wildcard-root` host mutation fires the bare root domain.
 """
 import argparse, csv, json, os, re, shlex, subprocess, sys, time, urllib.parse
 from xml.etree import ElementTree as ET
@@ -49,6 +53,19 @@ PARAMS = ["url", "redirect_uri", "redirect", "next", "link", "u", "callback", "w
 def rq(s):
     """Single-quote s for the REMOTE (device) shell. Inside '...' only the quote itself is special."""
     return "'" + s.replace("'", "'\\''") + "'"
+
+
+def die(msg, rc=2):
+    """Usage/environment error: message on stderr, exit 2 (sys.exit(str) would exit 1 = 'ran, nothing')."""
+    print(msg, file=sys.stderr); sys.exit(rc)
+
+
+class Tee:
+    def __init__(self, *streams): self.streams = streams
+    def write(self, d):
+        for st in self.streams: st.write(d)
+    def flush(self):
+        for st in self.streams: st.flush()
 
 
 # ---------------------------------------------------------------------------------------------- adb
@@ -79,8 +96,8 @@ class Device:
     def preflight(self):
         if self.dry: return
         rc, out = self.run(["get-state"], 10)
-        if rc == 127: sys.exit("UNVERIFIED: adb not on PATH (set ANDROID_SDK_ROOT; see scripts/doctor.sh)  [exit 2]")
-        if out.strip() != "device": sys.exit("UNVERIFIED: no device in state 'device' (adb get-state: %s)  [exit 2]" % (out.strip() or "none"))
+        if rc == 127: die("UNVERIFIED: adb not on PATH (set ANDROID_SDK_ROOT; see scripts/doctor.sh)")
+        if out.strip() != "device": die("UNVERIFIED: no device in state 'device' (adb get-state: %s)" % (out.strip() or "none"))
         self.api = self.shell("getprop ro.build.version.sdk")[1].strip()
 
     def resumed(self):
@@ -105,13 +122,15 @@ def read_bases(path, host_default):
             sch, host, p = m.groups()
         if sch in ("*", ""): skipped.append((bid, r.get("uri", ""), "no scheme in filter: cannot be fired")); continue
         placeholder = host in ("*", "")
+        declared_host, wildcard = host, host.startswith("*.")
+        if wildcard: host = "sub." + host[2:]        # *.example.com matches any subdomain, not the bare root: fire one
         if placeholder:
             if sch in ("http", "https"): skipped.append((bid, r.get("uri", ""), "http(s) filter without host")); continue
             host = host_default                      # custom scheme with no host matches any host
         # pathPattern wildcards -> one concrete path; pathPrefix stays a prefix
         p = re.sub(r"\.\*", "x", p).replace("\\.", ".").replace("*", "")
         if not p.startswith("/"): p = "/" + p if p else "/"
-        bases.append(dict(id=bid, scheme=sch, host=host, path=p, placeholder_host=placeholder,
+        bases.append(dict(id=bid, scheme=sch, host=host, path=p, placeholder_host=placeholder, declared_host=declared_host, wildcard=wildcard,
                           component=r.get("component", ""), autoVerify=r.get("autoVerify", ""), uri="%s://%s%s" % (sch, host, p)))
     seen, out = set(), []
     for b in bases:
@@ -170,6 +189,9 @@ def mutations(b, pkg, att, params, acts, nonexp, auths, classes, max_comp):
         for label, h in [("suffix", "%s.%s" % (T, att)), ("userinfo", "%s@%s" % (T, att)), ("frag-userinfo", "%s%%23@%s" % (att, T)),
                          ("other-host", att), ("port", "%s:8443" % T), ("trailing-dot", "%s." % T), ("wildcard-sub", "zz.%s" % T)]:
             add("host", label, "%s://%s%s" % (sch, h, path))
+        if b.get("wildcard"):
+            add("host", "wildcard-root", "%s://%s%s" % (sch, b["declared_host"][2:], path),
+                "bare root of a *.host filter: the platform does not match it; acceptance means a second filter or app-side host parsing")
     if "traversal" in classes:
         p0 = path.rstrip("/")
         for label, t in [("dotdot", "/../../admin"), ("enc-dotdot", "/..%2F..%2Fadmin"), ("enc-dots", "/%2e%2e/%2e%2e/admin"),
@@ -279,7 +301,7 @@ def fire(dev, pkg, probe, args, outdir, handler_set):
         elif cls == "baseline": tag, why = "INFO baseline", "handled by %s" % who
         elif cls == "intent" and cls_ and fq(cls_, pkg) not in handler_set:
             tag, why = "CANDIDATE deeplink/intent-reaches-%s" % ("non-deeplink-component"), "%s reached via intent:// %s; browser matrix (D09-008) decides" % (who, label)
-        elif cls == "host" and label in ("other-host", "suffix", "userinfo", "frag-userinfo", "wildcard-sub"):
+        elif cls == "host" and label in ("other-host", "suffix", "userinfo", "frag-userinfo", "wildcard-sub", "wildcard-root"):
             tag, why = "CANDIDATE deeplink/filter-accepts-foreign-host", "declared host %s, accepted %s" % (probe["base_uri"], uri)
         elif cls == "case" and label == "host-upper":
             tag, why = "CANDIDATE deeplink/host-case-accepted", "platform matches host case-insensitively; check the app's own host comparison"
@@ -321,12 +343,16 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="print the exact adb commands, fire nothing")
     ap.add_argument("--json", action="store_true", help="print results.json to stdout at the end")
     a = ap.parse_args()
-    if not re.match(r"^[A-Za-z0-9._]+$", a.pkg): sys.exit("usage: package name has unexpected characters  [exit 2]")
+    E = os.environ.get("E") or os.environ.get("SANE_ENGAGEMENT") or ""
+    if E and os.path.isdir(E) and not (a.list or a.dry_run):
+        os.makedirs(os.path.join(E, "logs"), exist_ok=True)
+        sys.stdout = Tee(sys.stdout, open(os.path.join(E, "logs", "tools-08.txt"), "a", encoding="utf-8"))
+    if not re.match(r"^[A-Za-z0-9._]+$", a.pkg): die("usage: package name has unexpected characters")
     classes = [c.strip() for c in a.classes.split(",") if c.strip()]
     bad = [c for c in classes if c not in CLASSES]
-    if bad: sys.exit("usage: unknown class %s (choose from %s)  [exit 2]" % (bad, ",".join(CLASSES)))
+    if bad: die("usage: unknown class %s (choose from %s)" % (bad, ",".join(CLASSES)))
     dl = a.deeplinks or os.path.join(a.inventory, "deeplinks.csv")
-    if not os.path.exists(dl): sys.exit("usage: %s not found (run scripts/inventory.py first)  [exit 2]" % dl)
+    if not os.path.exists(dl): die("usage: %s not found (run scripts/inventory.py first)" % dl)
     bases, skipped = read_bases(dl, a.host_default)
     if a.only_base:
         keep = set(a.only_base.split(",")); bases = [b for b in bases if b["id"] in keep]
@@ -334,7 +360,7 @@ def main():
     nonexp = [n for n, exp in manifest_activities(a.manifest) if exp != "true"] if a.manifest else []
     handler_set = {fq(b["component"], a.pkg) for b in bases if b["component"]}
     params = [p.strip() for p in a.params.split(",") if p.strip()]
-    out = a.out or os.path.join("deeplink-fuzz", a.pkg)
+    out = a.out or (os.path.join(E, "recon", "deeplink-fuzz") if E else os.path.join("deeplink-fuzz", a.pkg))
     probes = []
     for b in bases:
         for i, (cls, label, uri, note) in enumerate(mutations(b, a.pkg, a.attacker_host, params, acts, nonexp, auths, classes, a.max_components), 1):
@@ -342,7 +368,7 @@ def main():
     if a.max: probes = probes[:a.max]
     print("deep links: %d usable, %d skipped; mutations: %d; classes: %s" % (len(bases), len(skipped), len(probes), ",".join(classes)))
     for bid, uri, why in skipped: print("  UNVERIFIED %s %s: %s" % (bid, uri, why))
-    if not bases: print("UNVERIFIED: no fireable deep link in %s" % dl); sys.exit(1)
+    if not bases: die("UNVERIFIED: no fireable deep link in %s (nothing interpretable: exit 2, not a negative)" % dl)
     if a.list:
         for p in probes: print("%s %-10s %-28s %s" % (p["probe_id"], p["class"], p["label"], p["uri"]))
         print(REMINDER); return 0
@@ -375,7 +401,12 @@ def main():
     print("\n[+] %d probes, %d CANDIDATE -> %s/results.csv, results.json, mutations.txt, logs/" % (len(results), ncand, out))
     print(REMINDER)
     if a.dry_run: return 0
-    return 0 if ncand else 1
+    if ncand: return 0
+    fired = [r for r in results if r["tag"] != "skipped"]
+    if not fired or summary["unverified"]:
+        print("UNVERIFIED: no candidate and nothing interpretable (fired=%d unverified=%d) -> exit 2, not a negative; rerun the UNVERIFIED rows" % (len(fired), summary["unverified"]))
+        return 2
+    return 1
 
 
 if __name__ == "__main__":

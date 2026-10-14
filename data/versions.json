@@ -22,7 +22,9 @@
   "vrt-deprecated-nodes.csv": 113,
   "mobile-top10-2024.csv": 10,
   "attack-mobile-android.csv": 122,
-  "cwe-top25.csv": 25
+  "cwe-top25.csv": 25,
+  "standards-index.csv": 671,
+  "crosswalk.csv": 1335
  },
  "platforms_kept": [
   "android",

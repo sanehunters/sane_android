@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- selftest fixture for scripts/inventory.py: one exported activity with a deep link (two hosts x two paths = 4 URIs),
+     one non-exported provider (must still be listed: getType()/grant paths reach it), one exported provider,
+     one FileProvider with grantUriPermissions, one non-exported service (listed only with the all flag). Not a real app. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.example.selftest">
+  <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34"/>
+  <application android:label="Selftest">
+    <activity android:name=".RouterActivity" android:exported="true">
+      <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="https"/>
+        <data android:host="www.example.org"/>
+        <data android:host="example.org"/>
+        <data android:path="/open"/>
+        <data android:pathPrefix="/p/"/>
+      </intent-filter>
+    </activity>
+    <provider android:name=".InitProvider" android:authorities="org.example.selftest.init"/>
+    <provider android:name=".ExportedProvider" android:authorities="org.example.selftest.data" android:exported="true"/>
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="org.example.selftest.files"
+              android:exported="false" android:grantUriPermissions="true"/>
+    <service android:name=".SyncService" android:exported="false"/>
+  </application>
+</manifest>

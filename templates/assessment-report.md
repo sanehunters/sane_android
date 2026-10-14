@@ -1,6 +1,8 @@
 # Assessment Report Template
 
-> The client-facing deliverable. Findings alone are not a report.
+> The client-facing deliverable. Findings alone are not a report. Copy to `final/assessment-report.md` in the
+> engagement; references below name files in the methodology repo in plain text because relative links do not
+> survive the copy. Delete every blockquote before delivery.
 
 ## 1. Executive summary
 > Non-technical. What is the business risk, what should be fixed first, and what is the overall posture.
@@ -9,14 +11,14 @@
 ## 2. Scope & method
 - Package(s), versionName/versionCode, build track, date pulled
 - Build fingerprints and API levels tested
-- Attacker models in scope (see [attacker models](../docs/05-attacker-models.md))
+- Attacker models in scope (docs/05 attacker models, methodology repo)
 - Explicitly out of scope, and why
 - Accounts and test data provided
 - Anything that blocked coverage, and its effect
 
 ## 3. Findings
-> Severity-ordered, Critical first. One section per finding, using
-> [`finding-report.md`](finding-report.md).
+> Severity-ordered, Critical first. One section per finding, using the finding template
+> (templates/finding-report.md in the methodology repo → findings/F-NNN/report.md here).
 
 | ID | Title | Severity | Attacker model | Status |
 |---|---|---|---|---|
@@ -34,7 +36,7 @@
 - Permissions requested, and which are used
 
 ## 5. Ruled out
-> [`ruled-out-table.md`](ruled-out-table.md) in full.
+> The ruled-out register in full (templates/ruled-out-table.md shape; rows from checklist-status.csv `result=ruled-out`).
 
 ## 6. Remediation plan
 > Prioritised, with effort estimates and concrete patches. Group systemic causes rather than listing
@@ -44,7 +46,7 @@
 > What will be retested, when, and against which build.
 
 ## Appendix A — Coverage crosswalk
-> Which MASTG/MASVS/MITRE items were covered — see [`docs/07-coverage-crosswalk.md`](../docs/07-coverage-crosswalk.md).
+> Which MASTG/MASVS/MITRE items were covered — docs/07 coverage crosswalk (methodology repo) plus `scripts/coverage.py` output.
 
 ## Appendix B — Tooling and versions
 ## Appendix C — Evidence index

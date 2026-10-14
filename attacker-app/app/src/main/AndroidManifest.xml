@@ -13,9 +13,11 @@
     -->
 
     <queries>
-        <!-- API 30+ package visibility: name the victim, nothing else. Also settable at runtime via
-             --es victim only for Intent delivery; getPackageInfo needs this entry. -->
-        <package android:name="com.victim.app" />
+        <!-- API 30+ package visibility: name the victim, nothing else. Baked at build time from
+             `build.sh` with the victim option (-Pvictim=); the `victim` extra at runtime only changes Intent delivery,
+             getPackageInfo needs THIS entry. The `ready` line prints the baked value (queries=...).
+             A second app (companion) needs a second <package> line or a second build. -->
+        <package android:name="${victim}" />
     </queries>
 
     <application
@@ -23,9 +25,12 @@
         android:allowBackup="false"
         android:supportsRtl="true">
 
+        <!-- singleTop + onNewIntent: a later `am start` reaches a live probe instead of being silently
+             "delivered to top". Still drive it with `am start -S` so every fire starts from onCreate. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:label="probe">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -33,13 +38,22 @@
             </intent-filter>
         </activity>
 
-        <!-- Receives whatever a victim component forwards to us. -->
+        <!-- Receives whatever a victim component forwards to us (redirect / picanary / forResult), and claims a
+             custom scheme when built with `build.sh` with the hijack-scheme option (D09 scheme hijack). The default
+             placeholder `probe-none` is a scheme no app uses, so the filter is inert in a normal build. -->
         <activity
             android:name=".LootActivity"
             android:exported="true"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.NoDisplay" />
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${hijackScheme}" />
+            </intent-filter>
+        </activity>
 
         <!-- D04 task-affinity test (disabled by default): set taskAffinity to the victim package, then
              confirm with: adb shell dumpsys activity activities | grep -A3 'Task{' -->
@@ -52,7 +66,9 @@
             android:launchMode="singleTask" />
         -->
 
-        <!-- D05 implicit-broadcast test (disabled by default): set the action the victim sends implicitly. -->
+        <!-- D05: implicit broadcasts are sniffed at RUNTIME (run=sniff with an `actions` extra), because since
+             API 26 the system never delivers an implicit broadcast to a manifest-declared receiver. Enable this
+             block ONLY for explicit or ordered broadcasts aimed at us by component name. -->
         <!--
         <receiver android:name=".Sniffer" android:exported="true">
             <intent-filter android:priority="999">

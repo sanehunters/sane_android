@@ -4,8 +4,8 @@
 
 ### An Android bug-bounty methodology built to be **executed by an autonomous AI model**, not read by a human
 
-28 domains · ~2,000 addressable test items · a state machine with mechanical gates · a harness that
-keeps the agent honest and its evidence pushed
+26 chapters · 1,933 addressable test items (D24 and D28 in progress) · a state machine with mechanical gates · a
+harness that keeps the agent honest and its evidence pushed to a private evidence repository
 
 [![Start here](https://img.shields.io/badge/MODEL%3F_START_HERE-START.md-0E8A16?style=for-the-badge)](START.md)
 [![Index](https://img.shields.io/badge/DOMAIN_INDEX-CHECKLIST.md-1D76DB?style=for-the-badge)](CHECKLIST.md)
@@ -25,9 +25,9 @@ one domain, how to record, and what to load (never a whole chapter). Everything 
 
 You supply an APK (or package), a scope and an authorisation basis, and paste
 [`prompts/00-bootstrap.md`](prompts/00-bootstrap.md) into a fresh session of any frontier model (Claude Code,
-Codex, Gemini CLI, Cursor…). The session creates a dated engagement folder, works 28 domains of checkpoints
+Codex, Gemini CLI, Cursor…). The session creates a dated engagement folder (its own git repository), works 26 domains of checkpoints
 tracked as rows, proves primitives from a zero-permission attacker app, chains them into payable impact
-categories in a dedicated phase, records what it ruled out and why, and pushes the evidence as it goes.
+categories in a dedicated phase, records what it ruled out and why, and pushes the evidence to a private remote as it goes — never to this public repository.
 You read `BugBountyTarget/<Target>_<date>/report/assessment-status.md` and the findings.
 
 ---
@@ -63,7 +63,7 @@ flowchart LR
     end
 
     subgraph KB["Knowledge — three loading tiers"]
-        I[CHECKLIST.md<br/>28 domains · crux questions]
+        I[CHECKLIST.md<br/>26 domains · crux questions]
         C[cards/Dnn.md<br/>one line per item]
         IT[scripts/item.py Dnn-NNN<br/>one item in full]
         CH[checklist/Dnn-*.md<br/>source of truth]
@@ -77,7 +77,7 @@ flowchart LR
         DATA -. lint-checklist.py .-> CH
     end
 
-    subgraph ENG["Engagement state — on disk, pushed"]
+    subgraph ENG["Engagement state — on disk, its own private git repo"]
         EJ[engagement.json<br/>phase · gates · identity · blockers]
         CSV[checklist-status.csv<br/>written only by mark.py]
         INV[inventory/*.csv<br/>C · U · W · E instances]
@@ -138,7 +138,7 @@ contract; `completed=true` with no mechanism keeps the gate closed. Details: [`S
 | `scripts/refresh-data.py` | `data/` is regenerated from the OWASP, Bugcrowd and MITRE repositories with provenance |
 | `scripts/mark.py` | `ruled-out` needs a mechanism, `blocked` needs `needs:`, `n/a` needs a reason, a finding needs an id |
 | `scripts/gate.py` | no phase advances on a feeling |
-| `.claude/hooks/` | no destructive git; no APK/DEX/SO/keystore/credential in a commit; auto-push after every commit; a session cannot end with unpushed engagement state; the resume card prints on every start |
+| `.claude/hooks/` | no destructive git; no APK/DEX/SO/keystore/credential in a commit; auto-push of the evidence repo after every commit (when a private remote is set); a session is blocked once from ending with unpushed engagement state; the resume card prints on every start |
 
 ---
 
@@ -152,7 +152,7 @@ contract; `completed=true` with no mechanism keeps the gate closed. Details: [`S
 | [`scripts/`](scripts/) | doctor · new-engagement · state · next · mark · gate · coverage · item · inventory · apply-item-meta · build-checklist · lint-checklist · refresh-data · gh-sync · selftest |
 | [`tools/`](tools/) · [`frida/`](frida/) · [`attacker-app/`](attacker-app/) | sweeps and fuzzers · runtime scripts · the zero-permission probe |
 | [`prompts/`](prompts/) · [`loops/`](loops/) · [`.claude/`](.claude/) | vendor-neutral prompts · recurring self-checks · hooks and skills |
-| [`templates/`](templates/) · [`BugBountyTarget/`](BugBountyTarget/) | report templates · the engagement archive (one dated folder per target) |
+| [`templates/`](templates/) · [`BugBountyTarget/`](BugBountyTarget/) | report templates · the engagement folders (one dated folder per target, each its own private git repo — ignored here; only `README.md` and `_TEMPLATE/` are tracked) |
 | [`data/`](data/) | the standards, regenerated — see [`data/README.md`](data/README.md) |
 | [`ISSUES.md`](ISSUES.md) | how the GitHub issue tracker mirrors the methodology |
 

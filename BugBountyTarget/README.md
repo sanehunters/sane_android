@@ -1,16 +1,19 @@
-# BugBountyTarget — the engagement archive
+# BugBountyTarget — where engagements live
 
-One folder per engagement. Named `<Target>_<DDMMYYYY>`, e.g. `Nisho_07092026`.
+One folder per engagement, named `<Target>_<DDMMYYYY>`, e.g. `Example_01012026`. **This methodology repository
+is public and holds no engagements**: under `BugBountyTarget/` it tracks only this file and `_TEMPLATE/`.
 
-This is the permanent record. A session opened years from now reads these folders to know what was
-tested, what was found, what was ruled out and why — across every target we have ever assessed.
+Each engagement folder is **its own git repository — the evidence repo**. `scripts/new-engagement.sh` creates it
+(`git init`, a `.gitignore` with the forbidden-artefact list, the pre-commit guard, the first commit
+`engage: <Target> P0`). The methodology's `.gitignore` ignores `BugBountyTarget/*_*/` and the PreToolUse hook
+refuses to stage an engagement path here. State still lives on disk and is still committed after every batch (R7);
+"pushed" means pushed to a **private** evidence remote, one per engagement.
 
 ```
 BugBountyTarget/
-├── _TEMPLATE/              copy this to start
-├── Nisho_07092026/
-├── Blinkit_12082026/
-└── Zomato_11092026/
+├── README.md               this file
+├── _TEMPLATE/              copied by new-engagement.sh (includes .github/workflows for the evidence repo)
+└── Example_01012026/       an engagement = a separate git repository, never tracked here
 ```
 
 ---
@@ -18,53 +21,71 @@ BugBountyTarget/
 ## Start an engagement
 
 ```bash
-~/sane_android/scripts/new-engagement.sh Nisho
+bash scripts/doctor.sh                                       # environment: dynamic or static-only
+scripts/new-engagement.sh <Target> [DDMMYYYY] [--remote <private git url>]
+export SANE_ENGAGEMENT="$PWD/BugBountyTarget/<Target>_<DDMMYYYY>"   # or let the hooks pick the newest folder
+E="$SANE_ENGAGEMENT"
 ```
 
-That creates the GitHub-side folder, the local mirror at
-`~/AndroidStudioProjects/lamppentest/<target>/`, and seeds `checklist-status.csv` with every checkpoint
-set to `false`.
+The evidence remote is an operator input: `SANE_EVIDENCE_REMOTE=<git url>` (env) or `--remote <url>` sets
+`origin` of the evidence repo and is recorded as `engagement.json.evidence_remote`. When it is absent,
+`evidence_remote` is `null`, the hooks say "no evidence remote configured: evidence is committed locally only —
+set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>" as a stated blocker, and never push
+anything to the methodology origin. A private remote is the operator's responsibility (START.md §9).
+`SANE_LOCAL_MIRROR=/path` is an opt-in one-shot copy at creation; `SANE_ENGAGEMENT_ROOT=/path` keeps engagement
+folders outside this checkout.
 
-## The dual-write rule
+## Committing and pushing
 
-Every artefact is written to **both** places, continuously, not at the end:
+```bash
+python3 scripts/mark.py "$E" Dnn-NNN <result> --note "..."          # the only writer of checklist-status.csv
+git -C "$E" add -A && git -C "$E" commit -m "<Target> <phase>: <what was settled>"   # after every batch (R7)
+# the PostToolUse hook pushes the evidence repo to its private remote; manually: git -C "$E" push
+bash .claude/hooks/pre-commit-check.sh "$E"                         # the same guard, for runners without hooks
+```
 
-| | Path |
-|---|---|
-| **GitHub** | `~/sane_android/BugBountyTarget/<Target>_<DDMMYYYY>/` — committed and **pushed after every phase** |
-| **Local** | `~/AndroidStudioProjects/lamppentest/<target>/` — the operator's working tree |
+An engagement that exists only in a context window is lost work. Coverage of the evidence repo:
+`python3 scripts/coverage.py "$E/checklist-status.csv" --components "$E/inventory" --brief` — the template ships
+`.github/workflows/coverage.yml` and `hygiene.yml` so the private repo reports the same thing in CI.
 
-An engagement that exists only in a context window is lost work.
+### Migrating an existing local folder
+
+A folder committed in an operator's checkout before this design (never pushed) is left alone until you migrate it:
+`cd BugBountyTarget/<eng> && git init && git add -A && git commit -m "import" && git remote add origin <private url>
+&& git push -u origin HEAD`, then in the methodology checkout `git rm -r --cached BugBountyTarget/<eng>`.
 
 ---
 
-## The folder contract
+## The folder contract (START.md §6 is the authority; `_TEMPLATE/` is the shape)
 
-| Directory | Contents | Committed? |
+| Path | Contents (file pattern · id family) | Committed? |
 |---|---|---|
-| `apk/` | The APK set, hashes, `versions.txt` | ❌ hashes and metadata only |
-| `decompiled/` | jadx / apktool output | ❌ never |
+| `engagement.json` | phase, gates, target, authorisation, accounts, `lab`, `domains_na`, `blockers`, `evidence_remote` | ✅ |
+| `checklist-status.csv` | the coverage tracker, one row per item `Dnn-NNN`; written only through `scripts/mark.py` (`result` ∈ finding · ruled-out · blocked · n/a, `notes` = the mechanism) | ✅ |
+| `apk/` | `versions.txt` — hashes, signer, split list. The binaries themselves | ✅ versions.txt only |
+| `decompiled/` | `jadx/`, `apktool/` (`$DEC`) | ❌ never (regenerable) |
 | `recon/` | `manifest.md` `components.md` `deep-links.md` `webviews.md` `apis.md` `permissions.md` `dependencies.md` `native.md` | ✅ |
-| `inventory/` | Machine-readable surface inventory (CSV/JSON from `tools/`) | ✅ |
-| `hypotheses/` | One file per untested idea, with the experiment that would settle it | ✅ |
-| `findings/F-0NN/` | Working notes per finding | ✅ |
-| `chains/` | Multi-primitive chains, each link with its status | ✅ |
-| `pocs/F-0NN/` | Attacker-app source and prebuilt APK | ✅ source only |
-| `videos/F-0NN/` | PoC recordings | ✅ if under 5 MB |
-| `screenshots/F-0NN/` | Stills. **Redact third-party data before committing.** | ✅ |
-| `logs/F-0NN/` | logcat, tool output | ✅ |
-| `requests/` `responses/` | HTTP captures. **Strip credentials.** | ✅ sanitised |
-| `report/` | `assessment-status.md` `findings-index.md` `api-map.md` | ✅ |
-| `final/` | `hackerone-F-0NN.md` submissions, `verified-findings.md`, `submission-checklist.md`, triage replies | ✅ |
-| `scripts/` | Target-specific scripts you wrote | ✅ |
-| `checklist-status.csv` | **Coverage tracker — every checkpoint `true`/`false`** | ✅ |
+| `inventory/` | `components.csv` (`C-NNN`) · `deeplinks.csv` (`U-NNN`) · `webviews.csv` (`W-NNN`) · `endpoints.csv` (`E-NNN`) from `scripts/inventory.py`; `EMPTY-<register>.md` for a genuinely empty register | ✅ |
+| `hypotheses/` | `H-NNN.md`, one parked lead each (copy `H-000-TEMPLATE.md`) | ✅ |
+| `findings/F-NNN/` | `report.md` (from `templates/finding-report.md`), `device.txt`, `commands.txt`, `notes.md` | ✅ |
+| `chains/` | `X-NNN.md`, one row per link with its status | ✅ |
+| `pocs/F-NNN/` | attacker-app **source** — never a built APK (hashes of a delivered build go in `apk/versions.txt`) | ✅ source only |
+| `videos/` | `F-NNN.mp4`, one continuous take, under 5 MB | ✅ |
+| `screenshots/` | `<item_id>-<n>.png` — **redact third-party data before committing** | ✅ |
+| `logs/` | `<item_id>.txt` raw tool output · `harness/` (lab verification) · `compactions.log` · `loop-*.log` | ✅ |
+| `requests/` `responses/` | `<E-NNN>.http` — credentials stripped | ✅ sanitised |
+| `report/` | `assessment-status.md` (resume point) · `findings-index.md` | ✅ |
+| `final/` | `assessment-report.md` · `submission-checklist.md` · per-finding programme submissions · `triage-F-NNN.md` | ✅ |
+| `scripts/` | target-specific scripts you wrote | ✅ |
+| `state-snapshot.json`, `secrets/`, `jadx_out/`, `apktool_out/`, `sensitive/` | regenerable or secret-bearing scratch | ❌ ignored |
 
 ### Never commit
 
 APKs · decompiled trees · videos over 5 MB · credentials or tokens · any third party's real data ·
-un-redacted screenshots of other people's information.
+un-redacted screenshots of other people's information · **anything under an engagement folder to the
+methodology repository**.
 
-`.gitignore` blocks most of this. **Check before every push.**
+The evidence repo's `.gitignore` and pre-commit hook block most of this. **Check before every push.**
 
 ---
 
@@ -76,14 +97,16 @@ A future session reads this **first**. Sections: `COMPLETED` · `IN PROGRESS` ·
 `CHAINING IDEAS`.
 
 ### `report/findings-index.md` — the finding table
-ID · title · status · severity · CWE · component. Plus severity reasoning and a
-**"Ruled out — do NOT re-walk"** list. That list is what stops the next session wasting a day.
+ID · title · status (`candidate → confirmed → evidence-complete → reported → accepted | declined | retracted`) ·
+severity · CWE · component. Plus severity reasoning and a **"Ruled out — do NOT re-walk"** list. That list is
+what stops the next session wasting a day.
 
 ### `checklist-status.csv` — the coverage contract
-One row per checkpoint. The assessment is **not complete** while any in-scope row is `false`.
+One row per item. The assessment is **not complete** while any in-scope row is open (`completed=false`) or
+settled without a valid `result`/`notes` pair (`scripts/gate.py` and `scripts/coverage.py` reject those rows).
 
 ```bash
-python3 ~/sane_android/scripts/coverage.py Nisho_07092026/checklist-status.csv
+python3 scripts/coverage.py "$E/checklist-status.csv" --components "$E/inventory"
 ```
 
 ---
@@ -94,17 +117,17 @@ python3 ~/sane_android/scripts/coverage.py Nisho_07092026/checklist-status.csv
 the finding is later retracted. A retracted finding stays in the index, struck through, with the
 refutation. That is what makes the surviving findings credible.
 
-## Cross-target queries
+## Cross-engagement queries (over the evidence repos you have checked out locally)
 
 ```bash
 # every finding across every engagement
 grep -h '^| F-' BugBountyTarget/*/report/findings-index.md
 
-# which targets we tested for exported providers
-grep -l 'D07-' BugBountyTarget/*/checklist-status.csv
+# which engagements recorded a D07 finding
+grep -l 'D07-.*,true,finding' BugBountyTarget/*/checklist-status.csv
 
 # portfolio coverage
 for f in BugBountyTarget/*/checklist-status.csv; do
-  echo "$(dirname $f): $(python3 scripts/coverage.py "$f" --brief)"
+  echo "$(dirname "$f"): $(python3 scripts/coverage.py "$f" --brief)"
 done
 ```

@@ -2,7 +2,6 @@ package com.sanehunters.probe;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.util.Log;
 import android.widget.TextView;
 
 /**
@@ -16,6 +15,6 @@ public class HijackActivity extends Activity {
         TextView t = new TextView(this);
         t.setText("probe · HijackActivity (task-affinity test screen)\nIf you see this inside the victim's task, record dumpsys activity activities.");
         setContentView(t);
-        Log.i("PROBE", "PROBE|hijack|resumed=true|task=" + getTaskId());
+        Probe.log(this, "PROBE|hijack|resumed=true|task=" + getTaskId() + "|affinity=" + getApplicationInfo().taskAffinity);
     }
 }

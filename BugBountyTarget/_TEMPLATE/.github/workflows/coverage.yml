@@ -1,0 +1,34 @@
+name: Engagement coverage
+
+# For the PRIVATE evidence repository (this engagement folder is its own git repo). The public methodology repo
+# holds no engagements, so coverage is reported here: on every push and nightly, into the job summary.
+# Locally the equivalent is:  python3 <methodology>/scripts/coverage.py checklist-status.csv --components inventory --brief
+on:
+  push:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+env:
+  METHODOLOGY_REPO: sanehunters/sane_android   # the public methodology; override with a repository variable if forked
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: '${{ vars.SANE_METHODOLOGY_REPO || env.METHODOLOGY_REPO }}', path: methodology }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Coverage summary
+        run: |
+          {
+            echo "## Engagement coverage — $(basename "$GITHUB_REPOSITORY")"
+            echo
+            echo '```'
+            python3 methodology/scripts/coverage.py checklist-status.csv --components inventory --brief || echo "unreadable"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Full detail
+        run: python3 methodology/scripts/coverage.py checklist-status.csv --components inventory || true

@@ -6,17 +6,36 @@
   python3 scripts/gate.py <eng> done          may I call the assessment complete?
   python3 scripts/gate.py <eng> --all         evaluate every gate and print a table
   python3 scripts/gate.py <eng> --pass p3     record gates.P3=true and phase=P4 in engagement.json IF the gate is open
+                                              (the phase never moves backwards: re-passing p0 at P6 leaves P6)
 
 A gate is never a feeling. Each predicate names the file and the row it is waiting for.
 Row validity: a row counts as settled only if completed=true AND result is one of
 finding | ruled-out | blocked | n/a AND the notes satisfy START.md §6 (mechanism for ruled-out, needs: for
 blocked, reason for n/a, F-/H- id for finding). Rows that are "completed" without that are listed as INVALID
 and keep the gate closed — this is what makes the gate mechanical.
+Instance validity (inventory/*.csv): a row is settled when EVERY tested* column is true (tested, tested_idor,
+tested_massassign) or result is n/a. coverage.py and state.py import these predicates; they never re-define them.
+
+engagement.json keys the gates read (seeded by scripts/new-engagement.sh, documented in START.md §6):
+  authorisation.basis   one of own-app | sow | public-programme | vdp | lab          (p0)
+  lab.mode              "dynamic" | "static-only"; with "dynamic" the five booleans tls_intercept, frida, root,
+                        lockscreen, positive_controls must all be true (docs/03 §7); with "static-only" they may
+                        stay false (START.md §3) and p1 is open                                        (p1)
+  domains_na            {} or {"Dnn": "<probe note>"} — null/absent means the applicability probes were not run (p3)
 """
 import csv, glob, json, os, re, sys
 
 PHASES = ["P0", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9"]
 NON_BREADTH = {"D26", "D27"}
+BASES = ("own-app", "sow", "public-programme", "vdp", "lab")
+LAB_KEYS = ("tls_intercept", "frida", "root", "lockscreen", "positive_controls")
+LAB_MODES = ("dynamic", "static-only")
+REGISTERS = ("components.csv", "deeplinks.csv", "webviews.csv", "endpoints.csv")
+# ONE id grammar for the whole repo (mark.py, coverage.py import these): F-NNN findings; H-NNN hypotheses,
+# or H-Dnn-NN — the fan-out form a worker allocates before the coordinator renumbers (prompts/05).
+F_RE = r"\bF-\d{2,3}\b"
+H_RE = r"\bH-(?:D\d{2}-)?\d{2,3}\b"
+INST_NA = ("n/a", "na")
 
 
 def load_csv(p):
@@ -39,13 +58,32 @@ def row_valid(r):
     if not truthy(r.get("completed")):
         return (False, "open")
     if res == "finding":
-        ok = bool(re.search(r"\b(?:F-\d{2,3}|H-(?:D\d{2}-)?\d{2,3})\b", notes + " " + (r.get("finding_id") or "")))
+        ok = bool(re.search(F_RE + "|" + H_RE, notes + " " + (r.get("finding_id") or "")))
         return (ok, "finding without F-/H- id")
     if res == "ruled-out":
         return (len(notes) >= 40, "ruled-out without a mechanism")
     if res == "blocked":
         return ("needs:" in notes.lower(), "blocked without needs:")
     return (False, f"completed=true but result='{res or ''}' is not in the vocabulary")
+
+
+def tested_cols(fieldnames):
+    """Every tested* column of a register (tested, tested_idor, tested_massassign, …)."""
+    return [c for c in (fieldnames or []) if c.strip().lower().startswith("tested")]
+
+
+def instance_open(r, cols):
+    """None when the instance is settled, else the tested* column that is still false."""
+    if (r.get("result") or "").strip().lower() in INST_NA:
+        return None
+    for c in cols:
+        if not truthy(r.get(c)):
+            return c
+    return None
+
+
+def instance_label(r):
+    return r.get("instance_id") or r.get("uri") or r.get("path") or r.get("name") or r.get("class") or "?"
 
 
 def phase_domains(rows):
@@ -67,7 +105,7 @@ def check(eng, gate):
     rows = load_csv(os.path.join(eng, "checklist-status.csv"))
     if not rows: reasons.append("checklist-status.csv missing or empty")
     t = e.get("target", {}) or {}; auth = e.get("authorisation", {}) or {}; lab = e.get("lab", {}) or {}
-    na = e.get("domains_na", {}) or {}
+    na = e.get("domains_na")
 
     def settled_rows(domains):
         bad = []
@@ -80,41 +118,59 @@ def check(eng, gate):
     def instances_open():
         out = []
         for f in sorted(glob.glob(os.path.join(eng, "inventory", "*.csv"))):
+            if ".partial." in os.path.basename(f): continue      # worker slices are merged by coverage.py --merge
             rr = load_csv(f)
             if not rr: continue
-            key = "tested" if "tested" in rr[0] else ("tested_idor" if "tested_idor" in rr[0] else None)
-            if not key: continue
+            tc = tested_cols(rr[0].keys())
+            if not tc: continue
             for r in rr:
-                if not (truthy(r.get(key)) or (r.get("result") or "").lower() in ("n/a", "na")):
-                    out.append((os.path.basename(f), r.get("instance_id") or r.get("uri") or r.get("path") or "?"))
+                why = instance_open(r, tc)
+                if why: out.append((os.path.basename(f), instance_label(r), why))
         return out
 
     g = gate.lower()
     if g == "p0":
         for k in ("basis", "scope"):
             if not (auth.get(k) or "").strip(): reasons.append(f"engagement.json.authorisation.{k} empty")
-        if not (auth.get("basis") or "").strip() in ("own-app", "sow", "public-programme", "vdp", "lab", "") and not auth.get("basis"):
-            pass
+        basis = (auth.get("basis") or "").strip()
+        if basis and basis not in BASES:
+            reasons.append(f"authorisation.basis '{basis}' is not one of {' | '.join(BASES)} (START.md §3)")
         acc = e.get("accounts", {}) or {}
         if not ((acc.get("a") or "").strip()) and not any("account" in b.lower() for b in (e.get("blockers") or [])):
             reasons.append("no account recorded and no blocker says why (accounts.a empty)")
     elif g == "p1":
-        if not lab: reasons.append("engagement.json.lab missing — record tls_intercept / frida / root / lockscreen / positive_controls, or mode: static-only")
-        elif lab.get("mode") != "static-only":
-            for k in ("tls_intercept", "frida", "root", "lockscreen", "positive_controls"):
-                if lab.get(k) is not True: reasons.append(f"lab.{k} is not true (docs/03 verification block)")
+        mode = (lab.get("mode") or "").strip().lower() if isinstance(lab, dict) else ""
+        if not isinstance(lab, dict) or not lab:
+            reasons.append('engagement.json.lab missing — write {"mode": "dynamic"|"static-only", "tls_intercept": bool, "frida": bool, '
+                           '"root": bool, "lockscreen": bool, "positive_controls": bool} (docs/03 §7; static-only: START.md §3)')
+        elif mode not in LAB_MODES:
+            reasons.append(f"lab.mode is '{mode}' — set \"dynamic\" (five checks must pass) or \"static-only\" (no device: START.md §3)")
+        elif mode == "dynamic":
+            for k in LAB_KEYS:
+                if lab.get(k) is not True: reasons.append(f"lab.{k} is not true (docs/03 §7 verification block, logs/harness/)")
+        # static-only: the lab.* booleans may stay false; dynamic items are settled as blocked with doctor.sh's reason
     elif g == "p2":
         for k in ("package", "version", "versionCode", "targetSdk", "minSdk", "framework", "ota"):
             if t.get(k) in (None, "", []): reasons.append(f"engagement.json.target.{k} empty")
-        if not os.path.exists(os.path.join(eng, "apk", "versions.txt")): reasons.append("apk/versions.txt missing (hashes + split list)")
+        vp = os.path.join(eng, "apk", "versions.txt")
+        lines = [l for l in (open(vp, encoding="utf-8", errors="replace").read().splitlines() if os.path.exists(vp) else [])
+                 if l.strip() and not l.lstrip().startswith("#")]
+        if not lines: reasons.append("apk/versions.txt has no sha256 line (the template ships comments only): record hashes + split list")
     elif g == "p3":
         inv = os.path.join(eng, "inventory")
-        for f in ("components.csv", "deeplinks.csv", "webviews.csv", "endpoints.csv"):
-            p = os.path.join(inv, f)
-            if not os.path.exists(p): reasons.append(f"inventory/{f} missing (scripts/inventory.py)")
-            elif f == "components.csv" and len(load_csv(p)) == 0 and not os.path.exists(os.path.join(inv, "EMPTY-components.md")):
-                reasons.append("inventory/components.csv has no rows and no inventory/EMPTY-components.md explaining why")
-        if "domains_na" not in e: reasons.append("engagement.json.domains_na not decided (run every card's applicability probe; {} is a valid answer)")
+        for f in REGISTERS:
+            p = os.path.join(inv, f); stem = f[:-4]
+            empty_md = os.path.join(inv, f"EMPTY-{stem}.md")
+            if not os.path.exists(p) and not os.path.exists(empty_md):
+                reasons.append(f"inventory/{f} missing (scripts/inventory.py), and no inventory/EMPTY-{stem}.md says why the register is empty")
+            elif os.path.exists(p) and len(load_csv(p)) == 0 and not os.path.exists(empty_md):
+                reasons.append(f"inventory/{f} has no rows and no inventory/EMPTY-{stem}.md explaining why (manifest or code evidence)")
+        if not isinstance(na, dict):
+            reasons.append("engagement.json.domains_na not decided (run every card's applicability probe; {} is a valid answer, null is not)")
+        decided = e.get("domains_decided")
+        if isinstance(decided, list):
+            undecided = sorted({(r.get("domain") or "").strip() for r in rows} - set(decided) - set(na or {}))
+            if undecided: reasons.append(f"domains_decided lacks {', '.join(undecided)} — run each card's applicability probe and settle or mark n/a")
         for iid, why in settled_rows({"D01", "D03"}): reasons.append(f"{iid}: {why}")
     elif g in ("p4", "p5", "p6"):
         pd = phase_domains(rows).get(g.upper(), set())
@@ -122,7 +178,7 @@ def check(eng, gate):
     elif g == "p7":
         breadth = {(r.get("domain") or "").strip() for r in rows} - NON_BREADTH
         for iid, why in settled_rows(breadth): reasons.append(f"{iid}: {why}")
-        for f, inst in instances_open(): reasons.append(f"inventory/{f} {inst}: tested=false")
+        for f, inst, why in instances_open(): reasons.append(f"inventory/{f} {inst}: {why}=false")
         if not os.path.isdir(os.path.join(eng, "inventory")): reasons.append("inventory/ missing — dimension 2 cannot be claimed")
     elif g == "p8":
         for fd in sorted(glob.glob(os.path.join(eng, "findings", "F-*"))):
@@ -134,7 +190,7 @@ def check(eng, gate):
             reasons.append("no findings/F-* folders; if the assessment genuinely produced none, record it in assessment-status.md FINDINGS and continue")
     elif g in ("p9", "done"):
         for iid, why in settled_rows({(r.get("domain") or "").strip() for r in rows}): reasons.append(f"{iid}: {why}")
-        for f, inst in instances_open(): reasons.append(f"inventory/{f} {inst}: tested=false")
+        for f, inst, why in instances_open(): reasons.append(f"inventory/{f} {inst}: {why}=false")
         for f in ("report/assessment-status.md", "report/findings-index.md", "final/submission-checklist.md"):
             if not os.path.exists(os.path.join(eng, f)): reasons.append(f"{f} missing")
         gates = e.get("gates", {}) or {}
@@ -155,16 +211,22 @@ def main():
             print(f"  {g:<5} {'OPEN  ' if not rs else 'CLOSED'} {('' if not rs else '· ' + str(len(rs)) + ' reason(s): ' + rs[0][:70])}")
         return
     if a[1] == "--pass":
+        if len(a) < 3 or a[2].lower() not in [p.lower() for p in PHASES[:9]] + ["done"]:
+            print("!! usage: gate.py <eng> --pass p0..p8|done"); sys.exit(2)
         g = a[2].lower(); rs = check(eng, g)
         if rs:
             print(f"⛔ gate {g} is CLOSED; cannot record it:"); [print("   -", r) for r in rs[:40]]; sys.exit(1)
         ej = os.path.join(eng, "engagement.json"); e = json.load(open(ej, encoding="utf-8"))
         e.setdefault("gates", {})[g.upper()] = True
         nxt = PHASES[min(PHASES.index(g.upper()) + 1, 9)] if g != "done" else "P9"
-        e["phase"] = nxt
+        cur = e.get("phase") if e.get("phase") in PHASES else "P0"
+        if PHASES.index(nxt) > PHASES.index(cur):
+            e["phase"] = nxt; msg = f"phase is now {nxt}"
+        else:
+            msg = f"phase unchanged (already {cur})"
         import datetime; e["updated"] = datetime.date.today().isoformat()
         json.dump(e, open(ej, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
-        print(f"✅ gate {g} recorded; phase is now {nxt}. Commit and push."); return
+        print(f"✅ gate {g} recorded; {msg}. Commit (and push to the evidence remote when one is configured)."); return
     rs = check(eng, a[1])
     if rs:
         print(f"⛔ gate {a[1]} CLOSED — {len(rs)} reason(s):")

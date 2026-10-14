@@ -117,8 +117,12 @@ and 5 WebViews in version 18.15.0 were individually tested. Here is the result f
 
 ### R7 — State lives on disk, pushed
 Context dies; disk does not. `engagement.json`, `checklist-status.csv`, `report/assessment-status.md`,
-`hypotheses/`, `findings/` — updated as you go, committed and pushed after every batch of items. The
-`.claude/hooks` enforce this under Claude Code; elsewhere, you enforce it (START.md §10).
+`hypotheses/`, `findings/` — updated as you go, committed and pushed after every batch of items. "Pushed" means
+to the engagement's **private evidence repository**: each `BugBountyTarget/<Target>_<DDMMYYYY>/` is its own git
+repo (created by `scripts/new-engagement.sh`), its remote is `engagement.json.evidence_remote`
+(`SANE_EVIDENCE_REMOTE` or `--remote`, an operator input), and the public methodology repository ignores every
+engagement folder. No remote configured → commit locally, state the blocker, never push elsewhere. The
+`.claude/hooks` enforce this under Claude Code; elsewhere, you enforce it with `git -C <eng>` (START.md §10).
 
 ---
 
@@ -158,8 +162,11 @@ DEX/JS updaters)? What are `minSdkVersion` and `targetSdkVersion`, from two sour
 
 If you can spawn sub-agents, split by **domain**, never by item, and never let two agents write the same
 row. The protocol in `prompts/05-fanout-multi-agent.md`: the coordinator owns `engagement.json` and
-`assessment-status.md`; each worker gets one domain card, its own `logs/`, and writes its rows to
-`checklist-status.Dnn.partial.csv`; the coordinator merges with `scripts/coverage.py --merge` and commits.
+`assessment-status.md`; each worker gets one domain card, writes only `<eng>/logs/Dnn-NNN.txt` files for its own
+domain, settles its rows with `python3 scripts/mark.py <eng> Dnn-NNN <result> --note … --tracker
+checklist-status.Dnn.partial.csv`, records the instances it tested in `inventory/<register>.Dnn.partial.csv`
+and parks leads as `hypotheses/H-Dnn-NN.md` (valid ids; nothing is renumbered); the coordinator merges both
+kinds of partial with `scripts/coverage.py --merge` and commits.
 Escalation (P7) is always single-agent — chains need every primitive in one context.
 
 ---

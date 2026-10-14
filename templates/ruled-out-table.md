@@ -7,7 +7,7 @@
 
 | Checklist ID | Surface tested | Attacker model | What was tried | Observed result | Why this is a true negative | Date |
 |---|---|---|---|---|---|---|
-| SANE-D07-004 | `content://com.target.files` `openFile()` | AM-03 | `..%2f`, `../`, double-encoded, absolute paths, symlink | `SecurityException` on all | `openFile` calls `getCanonicalFile()` and asserts `startsWith(base)` at `FileProv.java:61` — traversal is structurally closed, not merely filtered | |
+| D07-004 | `content://com.target.files` `openFile()` | AM-03 | `..%2f`, `../`, double-encoded, absolute paths, symlink | `SecurityException` on all | `openFile` calls `getCanonicalFile()` and asserts `startsWith(base)` at `FileProv.java:61` — traversal is structurally closed, not merely filtered | |
 | | | | | | | |
 
 ## Rules for this table

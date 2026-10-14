@@ -24,7 +24,7 @@
 - P0 scope and authorisation
 
 ## FINDINGS
-<!-- F-NNN · impact title · ceiling · VRT path · attacker model · status (candidate | confirmed | evidence-complete | reported | accepted | retracted) -->
+<!-- F-NNN · impact title · ceiling · VRT path · attacker model · status: candidate → confirmed → evidence-complete → reported → accepted | declined | retracted (START.md §6) -->
 | ID | Title (impact, not mechanism) | Ceiling | VRT | AM | Status |
 |---|---|---|---|---|---|
 

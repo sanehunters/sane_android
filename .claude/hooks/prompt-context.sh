@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
-# UserPromptSubmit: one cheap line of state so every turn knows the phase and coverage.
+# UserPromptSubmit: one cheap line of state so every turn knows the phase, the coverage and where evidence goes.
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 HOOK_INPUT="$(cat 2>/dev/null || true)"
 cd "$REPO" || exit 0
 E="$(active_engagement)"; [ -z "$E" ] && exit 0
-python3 - "$E" <<'PY' 2>/dev/null
-import csv,json,os,sys
-e=sys.argv[1]; ph="?"; bl=0
-try:
-    j=json.load(open(os.path.join(e,"engagement.json"))); ph=j.get("phase","?"); bl=len(j.get("blockers") or [])
-except Exception: pass
-rows=[]; 
-try: rows=list(csv.DictReader(open(os.path.join(e,"checklist-status.csv"),encoding="utf-8")))
-except Exception: pass
-done=sum(1 for r in rows if (r.get("completed") or "").lower()=="true" or (r.get("result") or "").lower() in ("n/a","na"))
-print(f"[engagement {os.path.basename(e)} · phase {ph} · coverage {done}/{len(rows)} · blockers {bl} · R0: no escalation before P7 · push after every batch]")
-PY
+ph="$(python3 -c 'import json,sys; j=json.load(open(sys.argv[1])); print(j.get("phase","?"), len(j.get("blockers") or []))' "$E/engagement.json" 2>/dev/null || echo '? 0')"
+cov="$(python3 scripts/coverage.py "$E/checklist-status.csv" --components "$E/inventory" --brief 2>/dev/null || echo 'coverage unreadable')"
+if is_evidence_repo "$E"; then r="$(evidence_remote "$E")"; ev="evidence repo → ${r:-no remote (local-only: $NO_REMOTE_MSG)}"; else ev="evidence folder is NOT a git repo — migrate (BugBountyTarget/README.md)"; fi
+echo "[engagement $(basename "$E") · phase ${ph% *} · $cov · blockers ${ph#* } · $ev · R0: no escalation before P7 · commit after every batch]"
 exit 0

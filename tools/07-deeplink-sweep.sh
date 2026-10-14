@@ -16,13 +16,19 @@
 # honours package= AND component=. Most browsers strip component= first (see D09-008 matrix), so a hit
 # through component= is a CANDIDATE that still needs the browser proof.
 #
-# Exit: 0 ran and >=1 CANDIDATE; 1 ran, nothing (every URI closed/other app); 2 usage/environment.
+# stdin (why fd 3): every foreground adb call inherits the loop's stdin, and `adb shell` drains it -- a
+# `while read ... done < uris.txt` fires ONE URI. The corpus is read on fd 3 and every adb call in the
+# loop gets </dev/null, so the sweep always reports `fired N of M`.
+#
+# Exit: 0 ran and >=1 CANDIDATE; 1 ran, nothing (every URI closed/other app); 2 usage/environment, or
+#       nothing interpretable (no URI fired, fewer fired than given, or every fired URI UNVERIFIED).
 set -uo pipefail
 
 usage() {
   sed -n '2,3p' "$0" | sed 's/^# //'
   cat <<'EOF'
-  --out DIR     evidence dir (default deeplink-sweep/<pkg>): results.csv results.json logs/<n>.txt
+  --out DIR     evidence dir (default $E/recon/deeplink-sweep, else ./deeplink-sweep/<pkg>): results.csv
+                results.json logs/<n>.txt; the human output is appended to $E/logs/tools-07.txt when $E is set
   --user N      am start --user N (work profile / private space)
   --serial S    adb -s S (or export ANDROID_SERIAL)
   --pin         append the package to `am start` so only the target may resolve (second pass; default
@@ -47,18 +53,28 @@ done
 [ -z "$PKG" ] || [ -z "$FILE" ] && usage
 [ -f "$FILE" ] || { echo "ERROR: no such file: $FILE" >&2; exit 2; }
 case "$PKG" in *[!A-Za-z0-9._]*) echo "ERROR: package name has unexpected characters" >&2; exit 2 ;; esac
-[ -z "$OUT" ] && OUT="deeplink-sweep/$PKG"
+E="${E:-${SANE_ENGAGEMENT:-}}"
+if [ -z "$OUT" ]; then if [ -n "$E" ]; then OUT="$E/recon/deeplink-sweep"; else OUT="deeplink-sweep/$PKG"; fi; fi
 ADB=(adb); [ -n "$SERIAL" ] && ADB=(adb -s "$SERIAL")
 rq() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }   # single-quote for the REMOTE shell
 cr() { tr -d '\r'; }
 USERARG=""; [ -n "$USERN" ] && USERARG="--user $USERN "
 PINARG=""; [ "$PIN" = 1 ] && PINARG=" $PKG"
 mkdir -p "$OUT/logs" || { echo "ERROR: cannot create $OUT" >&2; exit 2; }
+if [ -n "$E" ] && [ -d "$E" ] && [ "$DRY" = 0 ]; then mkdir -p "$E/logs" && exec > >(tee -a "$E/logs/tools-07.txt"); fi
 CSV="$OUT/results.csv"; echo "n,uri,am_status,am_activity,resumed,start_cmp,handled_by,crash,tag,reason,log" > "$CSV"
 
 if [ "$DRY" = 0 ]; then
   command -v adb >/dev/null 2>&1 || { echo "UNVERIFIED: adb not on PATH (see scripts/doctor.sh)"; exit 2; }
-  [ "$("${ADB[@]}" get-state 2>/dev/null | cr)" = "device" ] || { echo "UNVERIFIED: no device in state 'device'"; exit 2; }
+  STATE="$("${ADB[@]}" get-state 2>&1 </dev/null | cr)"
+  case "$STATE" in
+    device) ;;
+    *"more than one"*) echo "UNVERIFIED: more than one device attached: pass --serial S (or export ANDROID_SERIAL)"; exit 2 ;;
+    *) echo "UNVERIFIED: no device in state 'device' (adb get-state: ${STATE:-none})"; exit 2 ;;
+  esac
+  if "${ADB[@]}" shell id </dev/null 2>/dev/null | cr | grep -q 'uid=0('; then
+    echo "INFO adb shell is uid 0 (rooted adbd): export gates do not apply to root; re-run as shell (adb unroot) before recording any closed row"
+  fi
 fi
 
 # run_to <secs> <cmd...>: portable timeout (macOS has no `timeout`). Output in $TMPOUT; 124 on expiry.
@@ -71,7 +87,7 @@ run_to() {
   wait "$p"
 }
 resumed() {  # topResumedActivity (10+), mResumedActivity (older stacks), ResumedActivity (display dump)
-  "${ADB[@]}" shell dumpsys activity activities 2>/dev/null | cr \
+  "${ADB[@]}" shell dumpsys activity activities </dev/null 2>/dev/null | cr \
     | grep -oE '(topResumedActivity|mResumedActivity|ResumedActivity)[=:] ?ActivityRecord\{[^ ]+ u[0-9]+ [^ }]+' \
     | head -1 | sed 's/.* u[0-9]* //'
 }
@@ -79,8 +95,9 @@ BROWSERS='^(com\.android\.chrome|com\.chrome\.|org\.chromium\.|org\.mozilla\.|co
 
 printf '%-3s %-56s %-34s %-10s %s\n' "n" "URI" "START cmp= / resumed" "handled" "tag"
 printf '%.0s-' $(seq 1 130); echo
-N=0; NCAND=0
-while IFS= read -r U || [ -n "$U" ]; do
+M="$(grep -cvE '^(#|[[:space:]]*$)' "$FILE" | tr -d ' ')"
+N=0; NCAND=0; NUNV=0
+while IFS= read -r U <&3 || [ -n "$U" ]; do
   U="${U%$'\r'}"; [ -z "$U" ] && continue; case "$U" in \#*) continue ;; esac
   N=$((N + 1))
   case "$U" in
@@ -95,10 +112,10 @@ while IFS= read -r U || [ -n "$U" ]; do
     echo "${ADB[*]} logcat -d -v threadtime             # START u0 ... cmp=, FATAL EXCEPTION"
     continue
   fi
-  [ "$WARM" = 0 ] && "${ADB[@]}" shell "am force-stop $(rq "$PKG")" >/dev/null 2>&1
-  "${ADB[@]}" logcat -c >/dev/null 2>&1
+  [ "$WARM" = 0 ] && "${ADB[@]}" shell "am force-stop $(rq "$PKG")" </dev/null >/dev/null 2>&1
+  "${ADB[@]}" logcat -c </dev/null >/dev/null 2>&1
   BEFORE="$(resumed)"
-  run_to 20 "${ADB[@]}" shell "$REMOTE"; RC=$?
+  run_to 20 "${ADB[@]}" shell "$REMOTE" </dev/null; RC=$?
   AMOUT="$(cr < "$TMPOUT")"
   STATUS="$(printf '%s\n' "$AMOUT" | grep -oE '^Status: [a-z]+' | head -1 | cut -d' ' -f2)"
   ACT="$(printf '%s\n' "$AMOUT" | grep -oE '^Activity: [^ ]+' | head -1 | cut -d' ' -f2)"
@@ -112,7 +129,7 @@ while IFS= read -r U || [ -n "$U" ]; do
     R="$(resumed)"; [ -n "$R" ] && [ "$R" = "$LAST" ] && break; LAST="$R"; sleep 0.5; i=$((i + 1))
   done
   LOG="$OUT/logs/$N.txt"
-  { printf '### %s\n### %s\n%s\n### dumpsys before=%s after=%s\n' "$U" "$REMOTE" "$AMOUT" "$BEFORE" "$R"; "${ADB[@]}" logcat -d -v threadtime 2>/dev/null | cr; } > "$LOG"
+  { printf '### %s\n### %s\n%s\n### dumpsys before=%s after=%s\n' "$U" "$REMOTE" "$AMOUT" "$BEFORE" "$R"; "${ADB[@]}" logcat -d -v threadtime </dev/null 2>/dev/null | cr; } > "$LOG"
   CMP="$(grep -E '(ActivityTaskManager|ActivityManager) *: START u[0-9]+ ' "$LOG" | head -1 | grep -oE 'cmp=[^ }]+' | head -1 | cut -d= -f2)"
   CRASH="$(grep -E 'FATAL EXCEPTION|ANR in |Process [^ ]+ \(pid [0-9]+\) has died' "$LOG" | head -1 | sed 's/^.*AndroidRuntime: //;s/^.*ActivityManager: //' | cut -c1-80)"
   WHO="${CMP:-${ACT:-$R}}"; WPKG="${WHO%%/*}"
@@ -140,25 +157,26 @@ while IFS= read -r U || [ -n "$U" ]; do
       *)       TAG="UNVERIFIED"; WHY="could not read START/resumed activity (dumpsys keys unknown on this build?)" ;;
     esac
   fi
-  case "$TAG" in CANDIDATE*) NCAND=$((NCAND + 1)) ;; esac
+  case "$TAG" in CANDIDATE*) NCAND=$((NCAND + 1)) ;; UNVERIFIED*) NUNV=$((NUNV + 1)) ;; esac
   printf '%-3s %-56s %-34s %-10s %s\n' "$N" "$(printf '%s' "$U" | cut -c1-56)" "$(printf '%s' "${CMP:-$R}" | cut -c1-34)" "$HB" "$TAG"
   [ -n "$WHY" ] && printf '    %s\n' "$WHY"
   printf '%s,"%s",%s,%s,%s,%s,%s,"%s","%s","%s",%s\n' "$N" "$(printf '%s' "$U" | sed 's/"/""/g')" "$STATUS" "$ACT" "$R" "$CMP" "$HB" \
     "$(printf '%s' "$CRASH" | sed 's/"/""/g')" "$TAG" "$(printf '%s' "$WHY" | sed 's/"/""/g')" "$LOG" >> "$CSV"
-done < "$FILE"
+done 3< "$FILE"
 
-[ "$DRY" = 1 ] && { echo; echo "(dry run: nothing fired. $N URIs)"; exit 0; }
-python3 - "$CSV" "$OUT/results.json" "$PKG" "$JSON" <<'PY' 2>/dev/null || true
+[ "$DRY" = 1 ] && { echo; echo "(dry run: nothing fired. $N of $M URIs listed)"; exit 0; }
+python3 -I - "$CSV" "$OUT/results.json" "$PKG" "$JSON" "$M" <<'PY' 2>/dev/null || true
 import csv, json, sys
 rows = list(csv.DictReader(open(sys.argv[1], newline="", encoding="utf-8")))
-s = {"tool": "07-deeplink-sweep", "package": sys.argv[3], "probes": len(rows),
+s = {"tool": "07-deeplink-sweep", "package": sys.argv[3], "probes": len(rows), "uris_given": int(sys.argv[5]),
      "candidates": sum(r["tag"].startswith("CANDIDATE") for r in rows), "unverified": sum(r["tag"] == "UNVERIFIED" for r in rows),
      "rows": rows, "note": "adb (shell UID) establishes discovery only; re-prove from an HTML page (AM-02) or attacker-app/ (AM-03)"}
 json.dump(s, open(sys.argv[2], "w"), indent=1)
 if sys.argv[4] == "1": print(json.dumps(s, indent=1))
 PY
 echo
-echo "[+] $N URIs, $NCAND CANDIDATE -> $OUT/results.csv  (per-URI logcat in $OUT/logs/)"
+echo "[+] fired $N of $M URIs, $NCAND CANDIDATE, $NUNV UNVERIFIED -> $OUT/results.csv  (per-URI logcat in $OUT/logs/)"
+[ "$N" -lt "$M" ] && echo "UNVERIFIED: only $N of $M URIs were fired -- the sweep is incomplete, do not record negatives from it"
 cat <<'NOTE'
 
 MUTATE NEXT: python3 tools/08-deeplink-fuzz.py --inventory <eng>/inventory --pkg <pkg> builds the full set
@@ -168,4 +186,9 @@ REMINDER: adb runs as the shell UID. "target-accepted" is DISCOVERY: the deep li
   that the app misused it. A deep link is AM-02 (remote, one click): prove it from a real HTML page in a
   real browser (D09-008 matrix for intent://), and from attacker-app/ for AM-03, before it becomes a finding.
 NOTE
-[ "$NCAND" -gt 0 ] && exit 0 || exit 1
+if [ "$NCAND" -gt 0 ]; then exit 0; fi
+if [ "$N" -eq 0 ] || [ "$N" -lt "$M" ] || [ "$NUNV" -gt 0 ]; then
+  echo "UNVERIFIED: no candidate and nothing interpretable (fired=$N/$M unverified=$NUNV) -> exit 2, not a negative; rerun the UNVERIFIED rows"
+  exit 2
+fi
+exit 1

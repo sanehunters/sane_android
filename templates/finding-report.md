@@ -1,11 +1,12 @@
 # Finding Template
 
-> One file per finding. Copy, fill, delete the guidance in blockquotes.
-> Rules that decide acceptance live in [severity doctrine](../docs/02-severity-and-reportability.md).
+> One file per finding: copy to `findings/F-NNN/report.md` in the engagement (evidence repo), fill, delete every
+> blockquote before delivery. Rules that decide acceptance live in docs/02 (severity doctrine) in the methodology repo.
+> Ids and paths follow START.md §6: finding `F-NNN`, checklist item `Dnn-NNN` (never a legacy `SANE-` id).
 
 ---
 
-## `SANE-<Dnn>-<NNN>` — <Impact-category title, not the Android mechanism>
+## F-NNN — <Impact-category title, not the Android mechanism>
 
 > Good: `Account takeover via OAuth code interception in the exported callback activity`
 > Bad:  `Activity com.target.AuthCallbackActivity is exported`
@@ -18,9 +19,10 @@
 | **CWE** | CWE-nnn |
 | **MASTG / MASVS** | MASTG-TEST-nnnn, MASVS-<GROUP> |
 | **MITRE ATT&CK Mobile** | Tnnnn |
-| **Attacker model** | AM-nn (see [attacker models](../docs/05-attacker-models.md)) |
+| **Checklist items** | `Dnn-NNN`, … (the rows whose `finding_id` is this F-NNN) |
+| **Attacker model** | AM-nn (docs/05 attacker models, methodology repo) |
 | **Affected** | package, versionName, versionCode, targetSdk, build fingerprint tested |
-| **Status** | Confirmed / Candidate / Ruled out |
+| **Status** | `candidate → confirmed → evidence-complete → reported → accepted \| declined \| retracted` (START.md §6, one lifecycle) |
 
 ### Precondition
 > One sentence. As weak as you can honestly make it. This drives the rating more than anything else.
@@ -50,9 +52,14 @@ Any application installed on the device, declaring no permissions, can ...
 ```
 
 ### Evidence
-- `evidence/SANE-<Dnn>-<NNN>/poc.mp4` — conforms to the [PoC standard](../docs/04-poc-and-evidence-standard.md)
-- `evidence/SANE-<Dnn>-<NNN>/attacker-app.apk` — prebuilt, zero permissions
-- `evidence/SANE-<Dnn>-<NNN>/device.txt` — build fingerprint, SDK, target version
+> Paths are relative to the engagement root (START.md §6). A built APK is never committed: the probe-app SOURCE
+> is, and the sha256 of any build delivered to the programme goes in `apk/versions.txt`.
+
+- `videos/F-NNN.mp4` — one continuous take, under 5 MB, conforming to the PoC standard (docs/04)
+- `pocs/F-NNN/` — attacker-app source only (zero permissions), never a built APK
+- `logs/Dnn-NNN.txt` — raw tool output of the item(s) that produced the finding
+- `screenshots/Dnn-NNN-<n>.png` — stills, third-party data redacted
+- `findings/F-NNN/device.txt` — build fingerprint, SDK, target version · `commands.txt` — exact commands run · `notes.md`
 - Canary value used: `...` — shown in ground truth and again in exploit output
 
 ### Impact

@@ -21,7 +21,7 @@ body:
     id: domain
     attributes:
       label: Domain
-      options: ["D01 Recon & Attack-Surface Mapping", "D02 APK/AAB, Signing & Build Integrity", "D03 Manifest & Permission Model", "D04 Exported Activities, Task & UI Redress", "D05 Broadcast Receivers & Implicit Intents", "D06 Services, AIDL & Bound IPC", "D07 ContentProviders & FileProvider", "D08 Intent Redirection, PendingIntent & URI Grants", "D09 Deep Links, App Links & URI Schemes", "D10 WebView & JavaScript Bridges", "D11 Local Data Storage", "D12 Cryptography & Key Management", "D13 Auth, Session, OTP & Biometrics", "D14 Network Security, TLS & Pinning", "D15 Backend API, IDOR/BOLA & Business Logic", "D16 Native Code, JNI & Memory Safety", "D17 Dynamic Code Loading, Deserialization & Supply Chain", "D18 Cloud Backend & Third-Party SDK Config", "D19 Cross-Platform Frameworks", "D20 Privacy, PII & Data Leakage", "D21 Anti-Tampering, RASP & Resilience", "D22 Platform & OS Version Behaviour", "D23 Payments, Entitlements & Fraud", "D24 Push, Notifications & Messaging", "D25 Device, OEM & Privileged Surfaces", "D26 Runtime Instrumentation & Tooling", "D27 Reporting, Severity & Evidence", "D28 AI / LLM Features in Apps", "New domain (explain)"]
+      options: ["D01 Recon & Attack-Surface Mapping", "D02 APK/AAB, Signing & Build Integrity", "D03 Manifest & Permission Model", "D04 Exported Activities, Task & UI Redress", "D05 Broadcast Receivers & Implicit Intents", "D06 Services, AIDL & Bound IPC", "D07 ContentProviders & FileProvider", "D08 Intent Redirection, PendingIntent & URI Grants", "D09 Deep Links, App Links & URI Schemes", "D10 WebView & JavaScript Bridges", "D11 Local Data Storage", "D12 Cryptography & Key Management", "D13 Auth, Session, OTP & Biometrics", "D14 Network Security, TLS & Pinning", "D15 Backend API, IDOR/BOLA & Business Logic", "D16 Native Code, JNI & Memory Safety", "D17 Dynamic Code Loading, Deserialization & Supply Chain", "D18 Cloud Backend & Third-Party SDK Config", "D19 Cross-Platform Frameworks", "D20 Privacy, PII & Data Leakage", "D21 Anti-Tampering, RASP & Resilience", "D22 Platform & OS Version Behaviour", "D23 Payments, Entitlements & Fraud", "D24 Push, Notifications & Messaging (chapter pending — attach to the nearest existing domain)", "D25 Device, OEM & Privileged Surfaces", "D26 Runtime Instrumentation & Tooling", "D27 Reporting, Severity & Evidence", "D28 AI / LLM Features in Apps (chapter pending — attach to the nearest existing domain)", "New domain (explain)"]
     validations: {required: true}
   - type: input
     id: existing
@@ -40,14 +40,14 @@ body:
     validations: {required: true}
   - type: input
     id: requires
-    attributes: {label: Requires tags (docs/11 §4), placeholder: "exported-receiver, targetsdk>=31"}
+    attributes: {label: "Requires tags (docs/11 §4 — target schema, not yet enforced by the generator)", placeholder: "exported-receiver, targetsdk>=31"}
   - type: textarea
     id: test
     attributes: {label: "Test — what to check, mechanism-first"}
     validations: {required: true}
   - type: textarea
     id: how
-    attributes: {label: "How — exact, portable, copy-pasteable commands ($DEC for decompiled output)", render: shell}
+    attributes: {label: "How — exact, portable, copy-pasteable commands ($DEC = $E/decompiled, docs/11 target schema; chapters still write jadx_out/ until migrated)", render: shell}
     validations: {required: true}
   - type: textarea
     id: proof

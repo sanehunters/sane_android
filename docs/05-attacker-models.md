@@ -1,7 +1,8 @@
 # Attacker Models
 
-> Every checklist item in this repository is tagged with the attacker model it assumes. Before you test an
-> item, know which attacker you are playing. Before you report one, know that your attacker is weak enough
+> Every checklist item in this repository is tagged with the attacker model it assumes — or `n/a (tester
+> method)` for method and discipline items, which are recorded in the ruled-out register with the model of
+> the finding they support. Before you test an item, know which attacker you are playing. Before you report one, know that your attacker is weak enough
 > to be credible.
 
 The rating of a mobile finding is dominated by **who has to do what** before the attack works. Two testers
@@ -39,6 +40,30 @@ And the corollary that saves the most wasted days:
 > boundary. Root is an *evidence tool* — legitimate for showing that the token you stole over IPC is the
 > same token in the sandbox. It is not a *precondition*. Say which one you are doing, every time.
 
+### How the tag is written in a chapter
+
+The `Attacker` cell of an item names the model of the **finding** the item can produce, never the model of
+the observation that confirms it:
+
+- A cell that is `AM-12` alone belongs only to an item whose `Severity ceiling` is `support` (root-only
+  observation, no boundary crossed). A non-support ceiling under a bare `AM-12` is a tagging error.
+- An item that needs root to *observe* writes the finding's model first and the evidence model in
+  brackets: `AM-01 (AM-12 to observe)`, `AM-05 (AM-12 for capture; convert before reporting)`.
+- Method and discipline items write `n/a (tester method)`; the ruled-out register carries the model of
+  the finding they support.
+
+### The AOSP adversary classes, mapped
+
+docs/01 recommends stating preconditions in the published AOSP adversary taxonomy. Its classes map onto
+the twelve models by group:
+
+| AOSP class group | Models |
+|---|---|
+| Physical `[T.P1]`–`[T.P4]` | `[T.P1]` locked handset → **AM-10**; `[T.P2]` unlocked handset → **AM-11**; `[T.P3]` hardware access to the internals and `[T.P4]` untrusted peripherals are not rated by programmes — write them as preconditions only |
+| Network `[T.N1]`–`[T.N3]` | Passive and on-path attackers → **AM-06** without a trusted CA, **AM-07** with one; a server or CDN the attacker controls → **AM-09** |
+| Application `[T.A1]`–`[T.A8]` | Co-installed code → **AM-03** (no permissions) or **AM-04** (one common permission); code inside the process → **AM-08**; a link into the app → **AM-02** |
+| Data `[T.D1]`–`[T.D2]` | Another user's data through the backend → **AM-05**; data the backend serves to the app → **AM-09** |
+
 ---
 
 ## 2. What each model can actually reach
@@ -48,7 +73,8 @@ The rarest and most valuable. On mobile this is almost always the **backend**, n
 unauthenticated API endpoint, an IDOR reachable without a session, a push-notification handler that acts
 on unauthenticated content, or an OTA/update channel with no signature check.
 
-Test surfaces: `D15` backend API, `D24` push/FCM, `D17` OTA and dynamic code loading.
+Test surfaces: `D15` backend API, `D24` push/FCM (chapter in progress — until it lands, the push handlers
+are covered from `D05` receivers and `D15`), `D17` OTA and dynamic code loading.
 
 ### AM-02 — Remote, one click
 The highest-yield *mobile-native* model. The victim taps a link; the link is a deep link or App Link the

@@ -6,6 +6,9 @@
 >
 > Read it before your first engagement, and again the first time a target does something the checklist
 > has no row for.
+>
+> Command paths: every `grep` below assumes `DEC=$E/decompiled` (START.md §6) — jadx output in
+> `$DEC/jadx/sources/`, apktool output in `$DEC/apktool/` (`AndroidManifest.xml`, `res/`, `smali*/`, `lib/`).
 
 ---
 
@@ -174,10 +177,10 @@ now varies by device image) or a file the app wrote at runtime (a dynamic-code-l
 
 **What you probe.**
 ```bash
-grep -RnE 'System\.load\(|System\.loadLibrary\(|dlopen' out/sources/ | grep -vE 'loadLibrary\("(c|m|log|android|jnigraphics)"'
+grep -RnE 'System\.load\(|System\.loadLibrary\(|dlopen' $DEC/jadx/sources/ | grep -vE 'loadLibrary\("(c|m|log|android|jnigraphics)"'
 adb logcat | grep -iE 'dlopen failed|is not accessible for the namespace'
 adb shell cat /system/etc/public.libraries.txt
-grep -n 'uses-native-library' out/AndroidManifest.xml
+grep -n 'uses-native-library' $DEC/apktool/AndroidManifest.xml
 ```
 The interesting output is a loaded path plus `ls -lZ` showing it is writable by anything other than the app's
 own UID. That is not a storage finding; that is native code execution in the app's UID.
@@ -276,10 +279,10 @@ the app's UID, the app's granted permissions, the app's Keystore aliases and the
 
 **What is reachable, and by whom.** This is the inventory the rest of the engagement consumes:
 ```bash
-apktool d -f -o out app.apk
+apktool d -f -o "$DEC/apktool" app.apk && jadx -d "$DEC/jadx" app.apk
 adb shell dumpsys package com.target.app | sed -n '/Activity Resolver Table/,/Permissions:/p'
 adb shell ps -A -o PID,USER,NAME | grep com.target.app       # process topology
-grep -Rn 'android:process' out/AndroidManifest.xml
+grep -Rn 'android:process' $DEC/apktool/AndroidManifest.xml
 ```
 Two traps here. First, read the **merged** manifest from the APK, never the source manifest: build-time
 manifest merging pulls in components from libraries that the app's own source never declares, and those are
@@ -380,7 +383,7 @@ the target hold many or large transactions can cause *unrelated, legitimate* tra
 fail. On its own that is a Medium availability issue. The finding is in the catch block:
 
 ```bash
-grep -RnE 'TransactionTooLargeException|catch \(RemoteException|DeadObjectException' -A8 out/sources/
+grep -RnE 'TransactionTooLargeException|catch \(RemoteException|DeadObjectException' -A8 $DEC/jadx/sources/
 ```
 
 An entitlement check, a permission check or a "is this device trusted" query whose `catch (RemoteException)`
@@ -505,7 +508,7 @@ There is a per-process alternative that avoids namespace surgery entirely. Consc
 reads `$ANDROID_ROOT/etc/security/cacerts` instead of the APEX path:
 
 ```javascript
-// frida -U -f com.target.app -l this.js --no-pause   (must run BEFORE the first TLS use)
+// frida -D "$SERIAL" -f com.target.app -l this.js   (spawn mode: must run BEFORE the first TLS use; frida-tools ≥ 17 resumes by itself; the old no-pause flag no longer exists)
 Java.perform(function () {
   var S = Java.use("java.lang.System");
   S.setProperty("system.certs.enabled", "true");
@@ -516,7 +519,7 @@ Use it with steps 1–3 above. It requires spawn mode, because the property must
 TLS handshake.
 
 **Why this sits in a conceptual document rather than only in the lab guide:** a harness error here does not
-produce a wrong finding, it produces a *silently absent domain*. `D14`, `D15`, `D17`, `D18` and `D24` all
+produce a wrong finding, it produces a *silently absent domain*. `D14`, `D15`, `D17`, `D18` and `D24` (chapter in progress) all
 depend on seeing the wire. If you get this wrong you will hand the client a report whose network section is
 blank and whose stated reason is false.
 
@@ -574,7 +577,7 @@ not a search: enumerate the *loaded* set and the *writable* set separately, then
 
 ```bash
 # the loaded set
-grep -RnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|DelegateLastClassLoader|BaseDexClassLoader|System\.load\(' -A4 out/sources/
+grep -RnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|DelegateLastClassLoader|BaseDexClassLoader|System\.load\(' -A4 $DEC/jadx/sources/
 frida-trace -U -n com.target.app -j 'dalvik.system.DexClassLoader!$init' -j 'dalvik.system.BaseDexClassLoader!$init'
 
 # the writable set
@@ -658,7 +661,7 @@ model or marketing claims "we detect proxy CAs", that control is disproved with 
 attack the TLS path at all. Grep for it:
 
 ```bash
-grep -RnE '/system/etc/security/cacerts|/apex/com\.android\.conscrypt|ANDROID_ROOT|system\.certs\.enabled' out/sources/ out/smali*/
+grep -RnE '/system/etc/security/cacerts|/apex/com\.android\.conscrypt|ANDROID_ROOT|system\.certs\.enabled' $DEC/jadx/sources/ $DEC/apktool/smali*/
 ```
 
 ### Consequence 3: the crypto provider is replaceable, and replacing it opts out of Mainline
@@ -670,9 +673,9 @@ calls `Security.insertProviderAt(new BouncyCastleProvider(), 1)`, or that ships 
 process out of Mainline security updates — and out of the platform TLS floor.
 
 ```bash
-grep -RnE 'Security\.insertProviderAt|Security\.addProvider|BouncyCastleProvider|org\.spongycastle|removeProvider' out/sources/
+grep -RnE 'Security\.insertProviderAt|Security\.addProvider|BouncyCastleProvider|org\.spongycastle|removeProvider' $DEC/jadx/sources/
 unzip -l app.apk | grep -iE 'bcprov|spongycastle|conscrypt'
-strings out/lib/arm64-v8a/*.so | grep -iE 'TLSv1|OpenSSL [0-9]|BoringSSL' | sort -u
+strings $DEC/apktool/lib/arm64-v8a/*.so | grep -iE 'TLSv1|OpenSSL [0-9]|BoringSSL' | sort -u
 ```
 
 A bundled provider pinned at an old release is a concrete, versioned exposure, not a style objection.
@@ -806,10 +809,10 @@ attacker simply defines it and is granted it. No race, no user interaction, no w
 
 ```bash
 # every permission string the app ENFORCES
-grep -oE 'android:(permission|readPermission|writePermission)="[^"]+"' out/AndroidManifest.xml \
+grep -oE 'android:(permission|readPermission|writePermission)="[^"]+"' $DEC/apktool/AndroidManifest.xml \
   | cut -d'"' -f2 | sort -u > used.txt
 # every permission string the app DEFINES
-grep -oE '<permission[^>]+android:name="[^"]+"' out/AndroidManifest.xml \
+grep -oE '<permission[^>]+android:name="[^"]+"' $DEC/apktool/AndroidManifest.xml \
   | grep -oE 'android:name="[^"]+"' | cut -d'"' -f2 | sort -u > defined.txt
 comm -23 used.txt defined.txt            # minus genuine android.permission.* names
 adb shell pm list permissions -f | grep -c 'com.target.permission.ORPHAN'   # expect 0
@@ -839,7 +842,7 @@ attack surface is the union of all siblings' exported components, and the effect
 union of all siblings' permissions.
 
 ```bash
-grep -n 'sharedUserId\|sharedUserMaxSdkVersion' out/AndroidManifest.xml
+grep -n 'sharedUserId\|sharedUserMaxSdkVersion' $DEC/apktool/AndroidManifest.xml
 adb shell dumpsys package com.target.app | grep -E 'sharedUser|userId='
 adb shell pm list packages -U | awk -F: '{print $3}' | sort | uniq -d   # UIDs owning >1 package
 adb shell run-as com.sibling.app ls -l /data/data/com.target.app/shared_prefs/
@@ -870,11 +873,11 @@ Stated plainly, because it is the single highest-value code review in Android:
 
 ```bash
 # the bug patterns
-grep -RnE 'checkSelfPermission\(|checkCallingOrSelfPermission\(|enforceCallingOrSelfPermission\(' out/sources/
+grep -RnE 'checkSelfPermission\(|checkCallingOrSelfPermission\(|enforceCallingOrSelfPermission\(' $DEC/jadx/sources/
 # the correct patterns — and whether they appear at all
-grep -RnE 'checkCallingPermission\(|enforceCallingPermission\(|Binder\.getCallingUid\(\)|Binder\.getCallingPid\(\)' out/sources/
+grep -RnE 'checkCallingPermission\(|enforceCallingPermission\(|Binder\.getCallingUid\(\)|Binder\.getCallingPid\(\)' $DEC/jadx/sources/
 # identity laundering
-grep -Rn -A20 'clearCallingIdentity()' out/sources/ | grep -nE 'getCallingUid|checkCalling|restoreCallingIdentity'
+grep -Rn -A20 'clearCallingIdentity()' $DEC/jadx/sources/ | grep -nE 'getCallingUid|checkCalling|restoreCallingIdentity'
 ```
 
 Then prove it dynamically from a zero-permission attacker APK, because a static pattern is a candidate and a
@@ -975,7 +978,7 @@ adb shell getprop | grep -E 'ro\.boot\.(verifiedbootstate|flash\.locked|veritymo
 
 Lastly, use the published adversary taxonomy to make preconditions explicit rather than arguable — physical
 classes `[T.P1]`–`[T.P4]`, network `[T.N1]`–`[T.N3]`, application `[T.A1]`–`[T.A8]`, data `[T.D1]`–`[T.D2]`.
-`docs/05-attacker-models.md` maps those onto the twelve attacker models this repository rates against.
+`docs/05-attacker-models.md` §1 maps those classes onto the twelve attacker models this repository rates against.
 
 ---
 
@@ -1053,7 +1056,7 @@ application* finding, not a platform observation. Find every path that performs 
 caller-supplied input:
 
 ```bash
-grep -Rn -B10 'Cipher.getInstance\|Signature.getInstance' out/sources/ \
+grep -Rn -B10 'Cipher.getInstance\|Signature.getInstance' $DEC/jadx/sources/ \
   | grep -nE 'onReceive|onBind|onStartCommand|@JavascriptInterface|onCreate\(Bundle'
 ```
 
@@ -1132,8 +1135,8 @@ DE — usually so a `android:directBootAware="true"` component can work during D
 outside the FBE guarantee that a screen-locked stolen device yields no app data.
 
 ```bash
-grep -RnE 'createDeviceProtectedStorageContext\(|isDeviceProtectedStorage\(' out/sources/
-grep -n 'android:directBootAware' out/AndroidManifest.xml
+grep -RnE 'createDeviceProtectedStorageContext\(|isDeviceProtectedStorage\(' $DEC/jadx/sources/
+grep -n 'android:directBootAware' $DEC/apktool/AndroidManifest.xml
 adb shell run-as com.target.app ls -la /data/user_de/0/com.target.app/    # DE
 adb shell run-as com.target.app ls -la /data/user/0/com.target.app/       # CE
 ```
@@ -1189,7 +1192,7 @@ reboot.
 
 ```bash
 adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'
-grep -RnE 'ACTION_OPEN_DOCUMENT_TREE|takePersistableUriPermission|PickVisualMedia' out/sources/
+grep -RnE 'ACTION_OPEN_DOCUMENT_TREE|takePersistableUriPermission|PickVisualMedia' $DEC/jadx/sources/
 ```
 
 ---
@@ -1316,7 +1319,7 @@ hole-punch: `enforceIntentFilter` on `<application>` and `intentMatchingFlags="n
 component.
 
 ```bash
-grep -nE 'intentMatchingFlags' out/AndroidManifest.xml
+grep -nE 'intentMatchingFlags' $DEC/apktool/AndroidManifest.xml
 adb logcat | grep -E "Intent does not match component's intent filter:|Access blocked:"
 ```
 
@@ -1343,7 +1346,9 @@ Three attributes routinely undo the developer's intent:
 Two modern activity attributes belong in the same audit: `android:allowEmbedded` (default `false`) with
 `android:knownActivityEmbeddingCerts` pinning permitted hosts, and
 **`android:requireContentUriPermissionFromCaller`** — values `none` (default), `read`, `write`, `readOrWrite`,
-`readAndWrite` — enforced over `Intent.getData()`, `Intent.EXTRA_STREAM` and `Intent.getClipData()`. An
+`readAndWrite` — enforced over `Intent.getData()`, `Intent.EXTRA_STREAM` and `Intent.getClipData()`
+(API 35+; ignored on 34 and below, where the check must be done in code with
+`checkCallingUriPermission()`). An
 activity that opens a caller-supplied `content://` URI without it accepts URIs the caller never had rights to,
 which is the confused-deputy content read in its purest form.
 
@@ -1393,9 +1398,11 @@ API ≤ 35 compatibility.
 ### Tasks and the back stack
 
 - **`taskAffinity`** defaults to the package name. An activity declaring another package's affinity, with
-  `allowTaskReparenting="true"`, can be reparented into that task — StrandHogg. StrandHogg 2.0 is not
-  preventable by app configuration alone; it needed the Android 11 platform patch, so on API 30+ report only
-  residual hygiene (a missing `taskAffinity=""` on credential screens) unless you can demonstrate impact.
+  `allowTaskReparenting="true"`, can be reparented into that task — StrandHogg. StrandHogg 2.0
+  (CVE-2020-0096) is a platform bug, not a configuration: it affected Android 8.0–9 and was fixed in the
+  2020-05-05 security patch; Android 10+ was never affected. Gate on `ro.build.version.security_patch`, not
+  the API level, and on a patched image report only residual hygiene (a missing `taskAffinity=""` on
+  credential screens) unless you can demonstrate impact.
 - **`launchMode="singleTask"` / `singleTop` / `singleInstance` / `singleInstancePerTask`** reuse an existing
   instance and deliver the new intent to `onNewIntent()`. If security state was established in `onCreate()`
   and `onNewIntent()` re-reads attacker-controlled extras, you can re-drive an already-authenticated screen
@@ -1431,27 +1438,29 @@ real finding becomes a retraction.
 
 | API | Gate | What changed | Opens (+) / closes (−) |
 |---|---|---|---|
+| — | policy | Play: new apps and updates must target ≥ 35 since 2025-08-31 and ≥ 36 from 2026-08-31 (extensions granted); sideloaded and enterprise builds exempt | the `LEGACY` lines below reach a store build only through an extension, or a non-store build — say which (`docs/02` §4) |
 | ≤ 16 | target | `<provider>` exported by default | **+** provider reachable with no intent filter (`D07`) |
-| < 17 | min | `addJavascriptInterface` exposes **all** public methods reflectively | **+** generic reflection RCE in WebView (`D10`) |
+| < 17 | target (or device < 17) | `addJavascriptInterface` exposes **all** public methods reflectively | **+** generic reflection RCE in WebView (`D10`) |
 | 17 | target | Provider default export becomes `false` | **−** the above (`D07`) |
-| 18 | target | `FileUriExposedException` when sharing `file://` | **−** partly; the **sender** can disable it with `StrictMode.VmPolicy.LAX` (`D07`) |
 | 23 | device | Runtime permission model; `signatureOrSystem` deprecated | **+** app-op/foreground bug classes (`D03`) |
 | 23 | device | App Links `autoVerify` available | **−** deep-link hijack where verification succeeds (`D09`) |
 | < 24 | target | User-installed CAs trusted by default | **+** MitM with no root, on a stock device (`D14`) |
-| 24 | target | App home dir `0751` → `0700`; `dlopen()` restricted to the public-library allowlist | **−** cross-app traversal (`D11`), unrestricted native loads (`D16`) |
+| 24 | target | App home dir `0751` → `0700`; `dlopen()` restricted to the public-library allowlist; `FileUriExposedException` (StrictMode VmPolicy) when sharing `file://` | **−** cross-app traversal (`D11`), unrestricted native loads (`D16`); **−** partly for `file://` — the **sender** can disable it with `StrictMode.VmPolicy.LAX` (`D07`) |
 | 24 | device | File-Based Encryption with the CE/DE split; key attestation (Keymaster 2) | **+** DE-storage placement class (`D11`), attestation class (`D12`) |
 | 24 | device | `setInvalidatedByBiometricEnrollment` | **+** enrolled-finger escalation when set `false` (`D12`) |
-| 26 | device | seccomp-bpf for all apps; WebView renderer isolated; multiple binder contexts (Treble); manifest receivers stop getting most implicit broadcasts | **−** silent manifest-receiver surface (`D05`); **+** vendor-binder scoping questions (`D25`) |
+| 26 | device | seccomp-bpf for all apps; WebView renderer isolated; multiple binder contexts (Treble) | **+** vendor-binder scoping questions (`D25`) |
+| 26 | target | Manifest receivers stop getting most implicit broadcasts | **−** silent manifest-receiver surface (`D05`) |
 | < 28 | target | Cleartext HTTP allowed by default; `MODE_WORLD_*` permitted | **+** cleartext exfil (`D14`), world-readable files (`D11`) |
 | 28 | target | Per-app SELinux sandbox mandatory (on Android 9+) | **−** generic cross-app file claims (`D11`) |
 | 28 | device | APK Signature Scheme v3 key rotation; `setUnlockedDeviceRequired`; E2E-encrypted cloud backup; privapp-permission violations block boot | **+** rotation-lineage signature checks (`D02`); **−** locked-device key use (`D12`) |
 | 28 | device | StrongBox | **+** silent software fallback class (`D12`) |
+| ≤ 28 | device | CVE-2020-0096 (StrandHogg 2.0): Android 8.0–9 below security patch 2020-05-05; Android 10+ never affected — gate on `ro.build.version.security_patch`, not the API level | **+** task-affinity hijack on an unpatched 8.0–9 image only (`D04`) |
 | 29 | device | Scoped storage; location tri-state; clipboard limited to the focused app / IME; activity starts need a visible window; APEX; `com.android.resolv`; `ObjectInputFilter`; `sharedUserId` deprecated | **−** background clipboard read, background activity pop (`D04`, `D11`, `D20`) |
+| 29 | device | `RoleManager` roles; `ACCESS_BACKGROUND_LOCATION` introduced | **+** role-protected permission acquisition (`D03`) |
 | 29 | target | `requestLegacyExternalStorage` honoured — **only** at 29 | **+** legacy shared-storage access (`D11`) |
 | 29 | device | CVE-2019-2200: custom-permission uninstall variant fixed | **−** that variant only; **orphans remain exploitable on every release** (`D03`) |
 | 30 | target | Package-visibility filtering; `setAllowFileAccess` default `false` | **−** free installed-app enumeration (`D01`), `file://` WebView reads (`D10`) |
-| 30 | device | Legacy external-storage opt-out ignored; cross-app `Android/data` and `Android/obb` blocked (incl. SAF); one-time permissions; camera/mic foreground-only; StrandHogg 2.0 patched | **−** cross-app app-data reads (`D11`), StrandHogg v2 (`D04`) |
-| 30 | device | `RoleManager` roles (Android 10+), `ACCESS_BACKGROUND_LOCATION` semantics | **+** role-protected permission acquisition (`D03`) |
+| 30 | device | Legacy external-storage opt-out ignored; cross-app `Android/data` and `Android/obb` blocked (incl. SAF); one-time permissions; camera/mic foreground-only; `ACCESS_BACKGROUND_LOCATION` becomes a separate, settings-only grant | **−** cross-app app-data reads (`D11`) |
 | 31 | target | `android:exported` **mandatory** with an intent filter; PendingIntent mutability mandate; `<uses-native-library>` required; `dataExtractionRules` | **−** accidental export (`D04`–`D07`); **+** deliberate export is now a stronger finding |
 | 31 | device | `knownSigner` protection level; `PROTECTION_INTERNAL`; untrusted-touch blocking (≥ 0.8 opacity only); notification trampolines blocked; `detectUnsafeIntentLaunch()`; `setHideOverlayWindows`; ART becomes a Mainline APEX | **+** `knownCerts` allowlist abuse (`D02`), sub-0.8 tapjacking (`D04`), trampoline-fix-introduced mutable PIs (`D08`) |
 | 33 | device | Typed `getParcelableExtra(String, Class<T>)` / `readParcelable(ClassLoader, Class<T>)`; `ClipDescription.EXTRA_IS_SENSITIVE`; APK signature scheme v3.1 default for rotation; `sharedUserMaxSdkVersion` | **−** Parcelable type confusion where the typed API is used (`D17`) |
@@ -1459,9 +1468,11 @@ real finding becomes a retraction.
 | 34 | target | Implicit intents reach only exported components; `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` mandatory; DCL files read-only **before** write; `ZipPathValidator`; mutable PendingIntent without component/package throws; MediaProjection per-session consent; BAL opt-in modes; foreground-service type mandate | **−** implicit-to-internal dispatch (`D08`), default-exported runtime receivers (`D05`), zip traversal (`D17`); **+** the `setReadOnly()`-ordering race becomes the specific finding |
 | 34 | device | Conscrypt APEX holds the live trust store; `READ_MEDIA_VISUAL_USER_SELECTED`; `OWNER_PACKAGE_NAME` redaction; `BroadcastReceiver.getSentFromUid()`/`getSentFromPackage()`; minimum installable targetSdk 23 | **−** `/system` cacerts inspection as a control (`D14`); **+** provenance checks failing open (`D07`) |
 | 35 | target | TLS 1.0/1.1 disallowed **via Conscrypt**; PendingIntent creators block BAL by default | **−** obsolete TLS for platform-stack apps; **+** bundled-TLS-stack apps unaffected (`D14`, `D19`) |
+| 35 | device | `android:requireContentUriPermissionFromCaller` honoured (ignored on 34 and below) | **−** confused-deputy content reads where it is set, on 35+ handsets only; below, look for `checkCallingUriPermission()` in code (`D07`) |
 | 35 | device | Force-stop cancels all PendingIntents; OTP redaction from untrusted `NotificationListenerService`; screenshare protections; signature-permission allowlist for platform-signed non-system apps; Private Space; periodic App Links re-verification; minimum installable targetSdk 24 (`--bypass-low-target-sdk-block`) | **−** OTP siphoning via listeners (`D13`), widget/alarm persistence assumptions (`D08`) |
-| 36 | device | Intent-redirection hardening **on by default**, opt-out `Intent.removeLaunchSecurityProtection()`; ordered-broadcast priority confined to one process and clamped; local network permission (`NEARBY_WIFI_DEVICES`); `MediaStore.getVersion()` per-app; ART updated via Play system updates | **−** default redirection (`D08`), cross-process abort-on-receive (`D05`); **+** the opt-out call is itself a finding |
+| 36 | device | Intent-redirection hardening **on by default**, opt-out `Intent.removeLaunchSecurityProtection()`; ordered-broadcast priority confined to one process and clamped; `MediaStore.getVersion()` per-app; ART updated via Play system updates | **−** default redirection (`D08`), cross-process abort-on-receive (`D05`); **+** the opt-out call is itself a finding |
 | 36 | target | `android:intentMatchingFlags` (`none` / `enforceIntentFilter` / `allowNullAction`); orientation and aspect-ratio locks ignored on large screens | **−** action-less explicit intents where `enforceIntentFilter` is set; **+** the per-component `"none"` hole-punch (`D04`–`D06`) |
+| 36 (opt-in) | device | Local Network Protection is **opt-in** on Android 16 (a manifest property for testing; not enforced) — treat local-network reachability as ungated until enforcement ships | **+** LAN listeners, mDNS and UPnP endpoints stay reachable from any app (`D14`) |
 | — | device | 16 KB page-size devices reject 4 KB-aligned `.so` files; `android:pageSizeCompat` | **+** runtime download of a "corrected" library as a DCL path (`D17`) |
 
 A quick gate script, because the `LEGACY` lines are what decide half the report:

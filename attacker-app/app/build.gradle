@@ -1,14 +1,24 @@
 plugins { id 'com.android.application' }
+
+// Build-time inputs (no manifest edit per target):
+//   ./build.sh --victim com.target.app            -> -Pvictim=      (API 30+ <queries> visibility + BuildConfig.VICTIM)
+//   ./build.sh --hijack-scheme targetapp          -> -PhijackScheme= (LootActivity claims the scheme, D09)
+def victimPkg   = (project.findProperty('victim')       ?: 'com.victim.app').toString()
+def hijackScheme = (project.findProperty('hijackScheme') ?: 'probe-none').toString()
+
 android {
     namespace 'com.sanehunters.probe'
     compileSdk 35
     defaultConfig {
         applicationId "com.sanehunters.probe"
         minSdk 21
-        targetSdk 35            // raise to match the victim when testing export defaults
+        targetSdk 35            // SENDER-side gates depend on this (see README); build a second variant when a delivery differs
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders = [victim: victimPkg, hijackScheme: hijackScheme]
+        buildConfigField "String", "VICTIM", "\"${victimPkg}\""
     }
+    buildFeatures { buildConfig true }
     buildTypes { release { minifyEnabled false } }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

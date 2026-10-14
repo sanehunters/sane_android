@@ -1,0 +1,31 @@
+name: Evidence hygiene
+
+# For the PRIVATE evidence repository. Same rules as the methodology's hygiene workflow and the pre-commit guard:
+# no binaries, keys, decompiled trees or secret dumps; nothing that looks like a live credential; nothing over 5 MB.
+# The patterns come from the methodology's .claude/hooks/_lib.sh so the three places never disagree.
+on: [push, pull_request, workflow_dispatch]
+
+env:
+  METHODOLOGY_REPO: sanehunters/sane_android
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: { repository: '${{ vars.SANE_METHODOLOGY_REPO || env.METHODOLOGY_REPO }}', path: .methodology }
+      - name: No binaries, keys, decompiled trees or secret dumps
+        run: |
+          . .methodology/.claude/hooks/_lib.sh
+          bad=$(git ls-files | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" || true)
+          if [ -n "$bad" ]; then echo "::error::forbidden artefacts committed:"; echo "$bad"; exit 1; fi
+          big=$(git ls-files -z | while IFS= read -r -d '' f; do s=$(wc -c <"$f" 2>/dev/null || echo 0); [ "$s" -gt 5242880 ] && echo "$s $f"; done; true)
+          if [ -n "$big" ]; then echo "::error::files over 5 MB committed:"; echo "$big"; exit 1; fi
+          echo "clean"
+      - name: No live-looking credentials
+        run: |
+          . .methodology/.claude/hooks/_lib.sh
+          hits=$(git ls-files -z | grep -zv '^\.methodology/' | xargs -0 grep -nE "$CRED_RE" 2>/dev/null | grep -Ev "$CRED_ALLOW_RE" | cut -d: -f1 | sort -u || true)
+          if [ -n "$hits" ]; then echo "::error::possible live credential committed in:"; echo "$hits"; exit 1; fi
+          echo "clean"

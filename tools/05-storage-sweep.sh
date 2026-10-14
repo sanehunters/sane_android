@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 05-storage-sweep.sh <pkg> [--user N|all] [--out DIR] [--pull] [--backup] [--manifest FILE]
-#                           [--serial S] [--json] [--help]
+#                           [--serial S] [--full-values] [--json] [--help]
 # Post-login storage sweep: file inventory (path,size,mode,owner,label,sha256), credential-shaped
 # CANDIDATE lines, data stores found by EXTENSION, external/shared storage, WebView storage, and the
 # backup-set reachability test done for real (bmgr + LocalTransport, MASTG-TECH-0128 / MASTG-TEST-0216).
@@ -20,24 +20,33 @@
 # internal storage is VRT P5 until a weaker attacker can REACH it; the escalation path is printed at
 # the end. adb runs as the shell UID: everything below is DISCOVERY. Re-prove reach from attacker-app/.
 #
-# Exit: 0 ran and printed >=1 CANDIDATE; 1 ran, nothing credential-shaped found; 2 usage/environment.
+# stdin: every adb call inside rsh()/rsh_bin() and in the loops gets </dev/null -- `adb shell` drains the
+# stdin it inherits, which turns a `find | while read` loop into a one-iteration loop (and blocks when the
+# caller's stdin is an open pipe). Secrets: candidates.csv carries MASKED values + sha256 by default;
+# --full-values writes the full match (then point --out at $E/sensitive/). --pull trees go to
+# $E/sensitive/pulled/<pkg>/ when $E is set (never committed), else DIR/pulled/.
+#
+# Exit: 0 ran and printed >=1 CANDIDATE (any kind); 1 ran, nothing found; 2 usage/environment, or nothing
+#       interpretable (a directory unreadable, zero files listed, backup probe failed) with no candidate.
 set -uo pipefail
 
 usage() {
   sed -n '2,4p' "$0" | sed 's/^# //'
   cat <<'EOF'
   --user N|all   sweep /data/user/N (default 0). `all` iterates `pm list users` (work profile, private space)
-  --out DIR      evidence dir (default storage-sweep/<pkg>): inventory.csv candidates.csv stores.csv summary.json
+  --out DIR      evidence dir (default $E/recon/storage, else ./storage-sweep/<pkg>): inventory.csv candidates.csv
+                 stores.csv summary.json; the human output is appended to $E/logs/tools-05.txt when $E is set
   --pull         copy the data dirs into DIR/pulled/ (tar stream under su/run-as) and dump sqlite schemas
   --backup       materialise the backup set with bmgr+LocalTransport (root/su only; switches transport, restores it)
   --manifest F   decoded AndroidManifest.xml (apktool) for allowBackup/fullBackupContent/dataExtractionRules
   --serial S     adb -s S (or export ANDROID_SERIAL)
+  --full-values  write full credential matches to candidates.csv (default: masked + sha256)
   --json         print summary.json to stdout at the end
 EOF
   exit "${1:-2}"
 }
 
-PKG=""; USER_SEL="0"; OUT=""; PULL=0; BACKUP=0; MANIFEST=""; SERIAL="${ANDROID_SERIAL:-}"; JSON=0
+PKG=""; USER_SEL="0"; OUT=""; PULL=0; BACKUP=0; MANIFEST=""; SERIAL="${ANDROID_SERIAL:-}"; JSON=0; FULL=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --user)     USER_SEL="${2:-}"; shift ;;
@@ -47,6 +56,7 @@ while [ $# -gt 0 ]; do
     --manifest) MANIFEST="${2:-}"; shift ;;
     --serial)   SERIAL="${2:-}"; shift ;;
     --json)     JSON=1 ;;
+    --full-values) FULL=1 ;;
     -h|--help)  usage 0 ;;
     -*)         echo "unknown option: $1" >&2; usage ;;
     *)          [ -z "$PKG" ] && PKG="$1" || { echo "unexpected argument: $1" >&2; usage; } ;;
@@ -55,7 +65,8 @@ while [ $# -gt 0 ]; do
 done
 [ -z "$PKG" ] && usage
 case "$PKG" in *[!A-Za-z0-9._]*) echo "ERROR: package name has unexpected characters" >&2; exit 2 ;; esac
-[ -z "$OUT" ] && OUT="storage-sweep/$PKG"
+E="${E:-${SANE_ENGAGEMENT:-}}"
+if [ -z "$OUT" ]; then if [ -n "$E" ]; then OUT="$E/recon/storage"; else OUT="storage-sweep/$PKG"; fi; fi
 
 have() { command -v "$1" >/dev/null 2>&1; }
 have adb || { echo "UNVERIFIED: adb not on PATH (set ANDROID_SDK_ROOT, see scripts/doctor.sh)"; exit 2; }
@@ -65,8 +76,12 @@ ADB=(adb); [ -n "$SERIAL" ] && ADB=(adb -s "$SERIAL")
 rq() { printf "'%s'" "$(printf %s "$1" | sed "s/'/'\\\\''/g")"; }
 cr() { tr -d '\r'; }
 
-STATE="$("${ADB[@]}" get-state 2>/dev/null | cr)"
-[ "$STATE" = "device" ] || { echo "UNVERIFIED: no device in state 'device' (adb get-state: ${STATE:-none})"; exit 2; }
+STATE="$("${ADB[@]}" get-state 2>&1 </dev/null | cr)"
+case "$STATE" in
+  device) ;;
+  *"more than one"*) echo "UNVERIFIED: more than one device attached: pass --serial S (or export ANDROID_SERIAL)"; exit 2 ;;
+  *) echo "UNVERIFIED: no device in state 'device' (adb get-state: ${STATE:-none})"; exit 2 ;;
+esac
 API="$("${ADB[@]}" shell getprop ro.build.version.sdk 2>/dev/null | cr)"
 BUILD_TYPE="$("${ADB[@]}" shell getprop ro.build.type 2>/dev/null | cr)"
 
@@ -85,27 +100,34 @@ if [ -z "$MODE" ]; then
   echo "            Use a rooted AVD/userdebug device. Do NOT record a negative for D11 from this run."
   exit 2
 fi
-# rsh <cmd>: run one remote command string under the discovered mode. RUNAS_USER set per user below.
+# rsh <cmd>: run one remote command string under the discovered mode. RUNAS_USER set per user below;
+# run-as takes --user only AFTER the package name (run-as <pkg> [--user N] <cmd>). </dev/null: never
+# inherit a loop's stdin (adb drains it).
 RUNAS_USER=""
 rsh() {
   case "$MODE" in
-    root)   "${ADB[@]}" shell "$1" 2>/dev/null ;;
-    su)     "${ADB[@]}" shell "su -c $(rq "$1")" 2>/dev/null ;;
-    run-as) "${ADB[@]}" shell "run-as $RUNAS_USER$(rq "$PKG") sh -c $(rq "$1")" 2>/dev/null ;;
+    root)   "${ADB[@]}" shell "$1" </dev/null 2>/dev/null ;;
+    su)     "${ADB[@]}" shell "su -c $(rq "$1")" </dev/null 2>/dev/null ;;
+    run-as) "${ADB[@]}" shell "run-as $(rq "$PKG") ${RUNAS_USER}sh -c $(rq "$1")" </dev/null 2>/dev/null ;;
   esac | cr
 }
 rsh_bin() {   # binary-safe (tar streams): exec-out, no CR stripping
   case "$MODE" in
-    root)   "${ADB[@]}" exec-out "$1" 2>/dev/null ;;
-    su)     "${ADB[@]}" exec-out "su -c $(rq "$1")" 2>/dev/null ;;
-    run-as) "${ADB[@]}" exec-out "run-as $RUNAS_USER$(rq "$PKG") sh -c $(rq "$1")" 2>/dev/null ;;
+    root)   "${ADB[@]}" exec-out "$1" </dev/null 2>/dev/null ;;
+    su)     "${ADB[@]}" exec-out "su -c $(rq "$1")" </dev/null 2>/dev/null ;;
+    run-as) "${ADB[@]}" exec-out "run-as $(rq "$PKG") ${RUNAS_USER}sh -c $(rq "$1")" </dev/null 2>/dev/null ;;
   esac
 }
+NUNV=0
+unv() { echo "   UNVERIFIED: $*"; NUNV=$((NUNV + 1)); }
 
 mkdir -p "$OUT/logs" || { echo "ERROR: cannot create $OUT" >&2; exit 2; }
+if [ -n "$E" ] && [ -d "$E" ]; then mkdir -p "$E/logs" && exec > >(tee -a "$E/logs/tools-05.txt"); fi
 INV="$OUT/inventory.csv"; CAND="$OUT/candidates.csv"; STORES="$OUT/stores.csv"
+CANDF="$OUT/logs/candidates-all.txt"; : > "$CANDF"     # every CANDIDATE line of any kind is tee'd here and counted at the end
+if [ -n "$E" ]; then PULLROOT="$E/sensitive/pulled/$PKG"; else PULLROOT="$OUT/pulled"; fi
 echo "user,path,size,mode,owner,label,sha256" > "$INV"
-echo "user,shape,path,line,match" > "$CAND"
+echo "user,shape,path,line,match,sha256" > "$CAND"
 echo "user,kind,path,size" > "$STORES"
 
 echo "== target: $PKG   device api=$API build=$BUILD_TYPE   read mode=$MODE"
@@ -136,14 +158,14 @@ for U in $USERS; do
     echo
     echo "== [$U] $D"
     if ! rsh "test -d $(rq "$D") && echo present" | grep -q present; then
-      echo "   UNVERIFIED: directory absent or unreadable under mode=$MODE (app never run for this user, or locked CE storage)"
+      unv "directory absent or unreadable under mode=$MODE (app never run for this user, or locked CE storage)"
       continue
     fi
     # Inventory: ls -lZ gives mode/owner/SELinux label; sha256sum pairs by path. Both are toybox on
     # API 24+. Paths may contain spaces: the python join scans for the first field starting with '/'.
     rsh "find $(rq "$D") -type f -exec ls -lZ {} +" > "$OUT/logs/ls-$U-$(basename "$D").txt"
     rsh "find $(rq "$D") -type f -exec sha256sum {} +" > "$OUT/logs/sha-$U-$(basename "$D").txt"
-    N=$(python3 - "$U" "$OUT/logs/ls-$U-$(basename "$D").txt" "$OUT/logs/sha-$U-$(basename "$D").txt" "$INV" <<'PY'
+    N=$(python3 -I - "$U" "$OUT/logs/ls-$U-$(basename "$D").txt" "$OUT/logs/sha-$U-$(basename "$D").txt" "$INV" <<'PY'
 import csv, sys
 user, lsf, shaf, inv = sys.argv[1:5]
 sha = {}
@@ -169,9 +191,9 @@ PY
 )
     NFILES=$((NFILES + N))
     echo "   files: $N  (inventory.csv)"
-    [ "$N" = "0" ] && echo "   UNVERIFIED: zero files listed -- a sandbox never has zero files; treat as a read failure, not as empty"
+    [ "$N" = "0" ] && unv "zero files listed -- a sandbox never has zero files; treat as a read failure, not as empty"
     # World-readable or group-readable files are a reach primitive on their own (targetSdk<24 only).
-    rsh "find $(rq "$D") -type f -perm -o+r" | sed 's/^/   CANDIDATE storage\/world-readable  /' | head -20
+    rsh "find $(rq "$D") -type f -perm -o+r" | sed 's/^/   CANDIDATE storage\/world-readable  /' | head -20 | tee -a "$CANDF"
     echo "   -- data stores by extension (Realm, MMKV, DataStore, LevelDB, Couchbase live OUTSIDE databases/):"
     rsh "find $(rq "$D") -type f" | grep -E "$STORE_RE" | grep -vE '/code_cache/|/cache/' | while IFS= read -r p; do
       case "$p" in
@@ -182,10 +204,11 @@ PY
       echo "      [$k] $p"
     done
     echo "   -- credential-shaped material (CANDIDATE lines; full match in candidates.csv):"
-    rsh "grep -rnoaE $(rq "$CRED_RE") $(rq "$D")" | cut -c1-400 > "$OUT/logs/cred-$U-$(basename "$D").txt"
-    C=$(python3 - "$U" "$OUT/logs/cred-$U-$(basename "$D").txt" "$CAND" <<'PY'
-import csv, re, sys
-user, src, out = sys.argv[1:4]
+    rsh "grep -rnoaE $(rq "$CRED_RE") $(rq "$D")" | LC_ALL=C cut -c1-400 > "$OUT/logs/cred-$U-$(basename "$D").txt"
+    B=$(grep -c 'CANDIDATE storage/credential-shape' "$CANDF" || true)
+    python3 -I - "$U" "$OUT/logs/cred-$U-$(basename "$D").txt" "$CAND" "$FULL" <<'PY' | tee -a "$CANDF"
+import csv, hashlib, re, sys
+user, src, out, full = sys.argv[1:5]
 n = 0
 with open(out, "a", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
@@ -197,29 +220,30 @@ with open(out, "a", newline="", encoding="utf-8") as f:
                  "google-api-key" if val.startswith("AIza") else "aws-access-key" if val.startswith("AKIA") else
                  "stripe-live" if val.startswith("sk_live_") else "private-key" if "PRIVATE KEY" in val else "named-secret")
         masked = val if len(val) <= 14 else val[:8] + "..." + val[-4:]
-        w.writerow([user, shape, path, ln, val]); n += 1
+        w.writerow([user, shape, path, ln, val if full == "1" else masked, hashlib.sha256(val.encode()).hexdigest()]); n += 1
         print(f"   CANDIDATE storage/credential-shape {shape:15s} {path}:{ln}  {masked}")
-print(n)
 PY
-)
-    NCAND=$((NCAND + C))
+    C=$(( $(grep -c 'CANDIDATE storage/credential-shape' "$CANDF" || true) - B ))
     [ "$C" = "0" ] && echo "      (none matched; absence of a pattern is not absence of a secret -- read the stores)"
     # shared_prefs: key names and value lengths, never the values, on stdout (the file is pulled below).
     rsh "find $(rq "$D/shared_prefs") -type f -name '*.xml' 2>/dev/null" | while IFS= read -r f; do
       [ -z "$f" ] && continue
       echo "   -- $(basename "$f")"
-      rsh "cat $(rq "$f")" | python3 -c '
+      rsh "cat $(rq "$f")" | python3 -I -c '
 import sys, re
 for k, t, v in re.findall(r"<(string|int|long|boolean|float|set)[^>]*name=\"([^\"]*)\"[^>]*(?:>([^<]*)<|/>)", sys.stdin.read()):
     print(f"      {t:7s} {k}  ({len(v)} chars)")' | head -40
     done
     if [ "$PULL" = 1 ]; then
-      P="$OUT/pulled/$U/$(basename "$D")"; mkdir -p "$P"
-      if [ "$MODE" = root ]; then "${ADB[@]}" pull "$D" "$P" >/dev/null 2>&1
-      else rsh_bin "tar -cf - -C $(rq "$(dirname "$D")") $(rq "$(basename "$D")")" | tar -xf - -C "$P" 2>/dev/null; fi
-      echo "   pulled -> $P"
+      P="$PULLROOT/$U/$(basename "$D")"; mkdir -p "$P"
+      if [ "$MODE" = root ]; then "${ADB[@]}" pull "$D" "$P" </dev/null >/dev/null 2>&1
+      elif rsh "command -v tar >/dev/null 2>&1 && echo tar-ok" | grep -q tar-ok; then
+        rsh_bin "tar -cf - -C $(rq "$(dirname "$D")") $(rq "$(basename "$D")")" | tar -xf - -C "$P" 2>/dev/null
+      else unv "no tar on the device (toybox tar is API 29+): --pull needs root (adb pull) on this build"; fi
+      NP="$(find "$P" -type f 2>/dev/null | wc -l | tr -d ' ')"
+      if [ "$NP" = 0 ]; then unv "pull produced 0 files in $P (stream failed or unreadable under mode=$MODE)"; else echo "   pulled $NP files -> $P  (sensitive: never commit)"; fi
       find "$P" -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.sqlite3' \) | while IFS= read -r db; do
-        python3 - "$db" <<'PY' >> "$OUT/schema.txt" 2>/dev/null
+        python3 -I - "$db" <<'PY' >> "$OUT/schema.txt" 2>/dev/null
 import sqlite3, sys
 p = sys.argv[1]; print("==", p)
 try:
@@ -237,20 +261,26 @@ PY
 
   echo
   echo "== [$U] external / shared storage (app-specific dirs are readable by the shell UID without root)"
-  for E in "/storage/emulated/$U/Android/data/$PKG" "/storage/emulated/$U/Android/media/$PKG" "/storage/emulated/$U/Android/obb/$PKG"; do
-    "${ADB[@]}" shell "find $(rq "$E") -type f 2>/dev/null | head -40" | cr | sed "s|^|   CANDIDATE storage/external  |"
+  for X in "/storage/emulated/$U/Android/data/$PKG" "/storage/emulated/$U/Android/media/$PKG" "/storage/emulated/$U/Android/obb/$PKG"; do
+    ST="$("${ADB[@]}" shell "if [ -d $(rq "$X") ]; then if [ -r $(rq "$X") ]; then echo readable; else echo unreadable; fi; else echo absent; fi" </dev/null 2>/dev/null | cr)"
+    case "$ST" in
+      readable)   "${ADB[@]}" shell "find $(rq "$X") -type f 2>/dev/null | head -40" </dev/null | cr | sed "s|^|   CANDIDATE storage/external  |" | tee -a "$CANDF" ;;
+      unreadable) unv "$X exists but is unreadable to the shell UID (scoped storage on Android 11+, or a locked profile)" ;;
+      absent)     echo "   absent: $X" ;;
+      *)          unv "could not stat $X (adb returned '${ST:-nothing}')" ;;
+    esac
   done
   echo "   -- heuristic name match outside the app dirs (Android/data excluded above; misses renamed files):"
-  "${ADB[@]}" shell "find $(rq "/storage/emulated/$U") -path '*/Android/*' -prune -o -type f -iname $(rq "*${PKG##*.}*") -print 2>/dev/null | head -20" | cr | sed 's/^/   CANDIDATE storage\/shared-heuristic  /'
+  "${ADB[@]}" shell "find $(rq "/storage/emulated/$U") -path '*/Android/*' -prune -o -type f -iname $(rq "*${PKG##*.}*") -print 2>/dev/null | head -20" </dev/null | cr | sed 's/^/   CANDIDATE storage\/shared-heuristic  /' | tee -a "$CANDF"
   echo
   echo "== [$U] WebView storage (cookies, localStorage, service workers)"
-  rsh "find $(rq "$CE/app_webview") -type f 2>/dev/null | head -30" | sed 's/^/   /'
+  rsh "if [ -d $(rq "$CE/app_webview") ]; then if [ -r $(rq "$CE/app_webview") ]; then find $(rq "$CE/app_webview") -type f 2>/dev/null | head -30; else echo 'UNVERIFIED: app_webview exists but is unreadable under this mode'; fi; else echo '(absent: no WebView storage for this user)'; fi" | sed 's/^/   /'
 done
 
 # ---- backup reachability ------------------------------------------------------------------------
 echo
 echo "== backup reachability -- THIS is what turns storage into a finding (MASTG-TEST-0216 / -0262, D11)"
-DUMP="$("${ADB[@]}" shell dumpsys package "$PKG" 2>/dev/null | cr)"
+DUMP="$("${ADB[@]}" shell dumpsys package "$PKG" </dev/null 2>/dev/null | cr)"
 echo "$DUMP" > "$OUT/logs/dumpsys-package.txt"
 FLAGS="$(printf '%s\n' "$DUMP" | grep -oE '(pkgFlags|flags)=\[[^]]*\]' | head -1)"
 TSDK="$(printf '%s\n' "$DUMP" | grep -oE 'targetSdk=[0-9]+' | head -1 | cut -d= -f2)"
@@ -270,17 +300,17 @@ else
   echo "   manifest: not given (--manifest \$DEC/apktool/AndroidManifest.xml); using dumpsys flags"
 fi
 echo "   dumpsys: allowBackup=$AB debuggable=$DBG targetSdk=${TSDK:-?}"
-[ "$AB" = unverified ] && echo "   UNVERIFIED: no pkgFlags line in dumpsys package output"
+[ "$AB" = unverified ] && unv "no pkgFlags line in dumpsys package output"
 if [ "$DBG" = true ]; then echo "   adb backup: applicable (debuggable build; Android 12+ requires it) -- but a shipped debuggable build is D02 first"
 else echo "   adb backup: not applicable on Android 12+ (not debuggable); the realistic paths are bmgr/cloud and D2D transfer"; fi
 if [ "$BACKUP" = 1 ] && [ "$MODE" != run-as ]; then
   echo "   -- materialising the backup set via bmgr + LocalTransport (switches transport; restored afterwards)"
-  PREV="$("${ADB[@]}" shell bmgr list transports 2>/dev/null | cr | grep -E '^\s*\*' | sed 's/^[* ]*//')"
-  "${ADB[@]}" shell bmgr enable true >/dev/null 2>&1
-  "${ADB[@]}" shell "bmgr transport com.android.localtransport/.LocalTransport" | cr | grep -q 'Selected transport' \
-    || echo "   UNVERIFIED: LocalTransport could not be selected"
-  "${ADB[@]}" shell "settings put secure backup_local_transport_parameters 'is_encrypted=true'" >/dev/null 2>&1   # so rules needing an encrypted transport still run
-  BN="$("${ADB[@]}" shell "bmgr backupnow $(rq "$PKG")" 2>/dev/null | cr)"
+  PREV="$("${ADB[@]}" shell bmgr list transports </dev/null 2>/dev/null | cr | grep -E '^[[:space:]]*\*' | sed 's/^[* ]*//')"
+  "${ADB[@]}" shell bmgr enable true </dev/null >/dev/null 2>&1
+  "${ADB[@]}" shell "bmgr transport com.android.localtransport/.LocalTransport" </dev/null | cr | grep -q 'Selected transport' \
+    || unv "LocalTransport could not be selected"
+  "${ADB[@]}" shell "settings put secure backup_local_transport_parameters 'is_encrypted=true'" </dev/null >/dev/null 2>&1   # so rules needing an encrypted transport still run
+  BN="$("${ADB[@]}" shell "bmgr backupnow $(rq "$PKG")" </dev/null 2>/dev/null | cr)"
   printf '%s\n' "$BN" > "$OUT/logs/bmgr.txt"
   if printf '%s\n' "$BN" | grep -q 'with result: Success'; then
     mkdir -p "$OUT/backup"
@@ -288,7 +318,7 @@ if [ "$BACKUP" = 1 ] && [ "$MODE" != run-as ]; then
       [ -z "$f" ] && continue
       rsh_bin "cat $(rq "$f")" > "$OUT/backup/$(basename "$f").ab"
     done
-    python3 - "$OUT/backup" "$OUT/backup-set.txt" <<'PY'
+    python3 -I - "$OUT/backup" "$OUT/backup-set.txt" <<'PY' | tee -a "$CANDF"
 import glob, io, os, sys, tarfile, zlib
 d, out = sys.argv[1:3]; names = []
 for ab in glob.glob(os.path.join(d, "*.ab")):
@@ -303,22 +333,26 @@ print(f"   backup set: {len(set(names))} files -> {out}" if names else "   UNVER
 for n in sorted(set(names))[:40]: print("   CANDIDATE storage/in-backup-set", n)
 PY
   else
-    echo "   UNVERIFIED: bmgr backupnow did not report Success (see logs/bmgr.txt): backup disabled for the app, transport refused, or API<24"
+    unv "bmgr backupnow did not report Success (see logs/bmgr.txt): backup disabled for the app, transport refused, or API<24"
   fi
-  [ -n "$PREV" ] && "${ADB[@]}" shell "bmgr transport $(rq "$PREV")" >/dev/null 2>&1
-  "${ADB[@]}" shell "settings delete secure backup_local_transport_parameters" >/dev/null 2>&1
+  [ -n "$PREV" ] && "${ADB[@]}" shell "bmgr transport $(rq "$PREV")" </dev/null >/dev/null 2>&1
+  "${ADB[@]}" shell "settings delete secure backup_local_transport_parameters" </dev/null >/dev/null 2>&1
 else
   echo "   UNVERIFIED: backup set not materialised (rerun with --backup under root/su on a lab device)."
   echo "   The restore guard matters as much as the set: an android_id equality check is a heuristic, not authentication."
 fi
 
 # ---- summary -------------------------------------------------------------------------------------
-python3 - "$OUT" "$PKG" "$MODE" "$API" "$NFILES" "$NCAND" "$AB" "$DBG" "${TSDK:-}" "$USERS" "$JSON" <<'PY'
-import csv, json, os, sys
-out, pkg, mode, api, nfiles, ncand, ab, dbg, tsdk, users, js = sys.argv[1:12]
+NCAND=$(grep -c 'CANDIDATE' "$CANDF" || true)
+python3 -I - "$OUT" "$PKG" "$MODE" "$API" "$NFILES" "$NCAND" "$AB" "$DBG" "${TSDK:-}" "$USERS" "$JSON" "$NUNV" "$FULL" <<'PY'
+import collections, csv, json, os, re, sys
+out, pkg, mode, api, nfiles, ncand, ab, dbg, tsdk, users, js, nunv, full = sys.argv[1:14]
 rows = lambda p: list(csv.DictReader(open(p, newline="", encoding="utf-8"))) if os.path.exists(p) else []
+kinds = collections.Counter(m.group(1) for l in open(os.path.join(out, "logs", "candidates-all.txt"), errors="replace")
+                            for m in [re.search(r"CANDIDATE (storage/[^ ]+)", l)] if m)
 s = {"tool": "05-storage-sweep", "package": pkg, "read_mode": mode, "device_api": api, "users": users.split(),
-     "files_inventoried": int(nfiles), "candidates": int(ncand), "stores": len(rows(os.path.join(out, "stores.csv"))),
+     "files_inventoried": int(nfiles), "candidates": int(ncand), "candidates_by_kind": dict(kinds), "unverified": int(nunv),
+     "values": "full" if full == "1" else "masked+sha256", "stores": len(rows(os.path.join(out, "stores.csv"))),
      "backup": {"allowBackup": ab, "debuggable": dbg, "targetSdk": tsdk or None,
                 "backup_set_file": os.path.join(out, "backup-set.txt") if os.path.exists(os.path.join(out, "backup-set.txt")) else None},
      "files": {k: os.path.join(out, k) for k in ("inventory.csv", "candidates.csv", "stores.csv", "schema.txt", "backup-set.txt") if os.path.exists(os.path.join(out, k))},
@@ -327,7 +361,9 @@ json.dump(s, open(os.path.join(out, "summary.json"), "w"), indent=1)
 if js == "1": print(json.dumps(s, indent=1))
 PY
 echo
-echo "[+] evidence: $OUT  (inventory.csv candidates.csv stores.csv summary.json$([ "$PULL" = 1 ] && printf ' pulled/'))"
+echo "[+] $NCAND CANDIDATE ($(sed -n 's/.*CANDIDATE \(storage\/[^ ]*\).*/\1/p' "$CANDF" | sort | uniq -c | awk '{printf "%s%s=%s", (NR>1?", ":""), $2, $1}')), $NUNV UNVERIFIED"
+echo "[+] evidence: $OUT  (inventory.csv candidates.csv stores.csv summary.json$([ "$PULL" = 1 ] && printf ' pulled -> %s' "$PULLROOT"))"
+[ "$FULL" = 1 ] && echo "    candidates.csv holds FULL values (--full-values): keep it under \$E/sensitive/, never commit it"
 cat <<'NOTE'
 
 ESCALATION PATH (do not stop at "data is unencrypted" -- that is P5)
@@ -341,4 +377,8 @@ ESCALATION PATH (do not stop at "data is unencrypted" -- that is P5)
 REMINDER: adb here ran as shell/root. Everything above is DISCOVERY; nothing is proved for AM-03
           until the zero-permission probe app (attacker-app/) reaches it.
 NOTE
-[ "$NCAND" -gt 0 ] && exit 0 || exit 1
+if [ "$NCAND" -gt 0 ]; then exit 0; fi
+if [ "$NUNV" -gt 0 ] || [ "$NFILES" = 0 ]; then
+  echo "UNVERIFIED: no candidate and $NUNV probe(s) could not run (files=$NFILES) -> exit 2, not a negative"; exit 2
+fi
+exit 1

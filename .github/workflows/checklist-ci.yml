@@ -1,15 +1,22 @@
 name: Checklist integrity
 
-# The chapters are the source of truth; everything else is generated and verified here.
+# The chapters are the source of truth; everything else is generated and verified here — on Linux AND macOS,
+# because the harness must run on bash 3.2 (macOS /bin/bash) as well as bash 5.
 on:
   push:
-    paths: [ 'checklist/**', 'docs/**', 'scripts/**', 'data/**', 'cards/**', 'json/**', 'checklist.csv', 'CHECKLIST.md', 'MASTER-CHECKLIST.md', 'START.md', 'AGENTS.md', 'CLAUDE.md', '.claude/**', 'tools/**', 'frida/**', '.github/workflows/checklist-ci.yml' ]
+    paths: [ 'checklist/**', 'docs/**', 'scripts/**', 'data/**', 'cards/**', 'json/**', 'checklist.csv', 'CHECKLIST.md', 'MASTER-CHECKLIST.md', 'START.md', 'AGENTS.md', 'CLAUDE.md', '.claude/**', 'tools/**', 'frida/**', 'loops/**', 'templates/**', 'attacker-app/**', 'BugBountyTarget/_TEMPLATE/**', '.gitignore', '.github/workflows/checklist-ci.yml' ]
   pull_request:
   workflow_dispatch:
 
 jobs:
   lint-and-build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      SH: /bin/bash   # bash 5 on ubuntu, bash 3.2 on macOS — the harness must pass on both
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,14 +28,77 @@ jobs:
       - name: Python compiles
         run: python3 -m py_compile scripts/*.py
       - name: Shell scripts parse
-        run: for f in scripts/*.sh tools/*.sh .claude/hooks/*.sh; do bash -n "$f" || exit 1; done
-      - name: Hooks dry-run
+        run: for f in scripts/*.sh tools/*.sh .claude/hooks/*.sh attacker-app/*.sh; do [ -f "$f" ] || continue; $SH -n "$f" || exit 1; done
+      - name: No bash-4-only constructs (the harness runs on macOS bash 3.2)
+        run: |
+          # (a construct named inside a quoted message, e.g. a selftest diagnostic, is not a use of it)
+          if grep -nE 'declare -A|mapfile|readarray|\$\{[A-Za-z_]+(,,|\^\^)\}|&>>' scripts/*.sh tools/*.sh .claude/hooks/*.sh attacker-app/*.sh 2>/dev/null | grep -vE '"[^"]*(declare -A|mapfile|readarray)[^"]*"'; then
+            echo "::error::bash>=4 construct found"; exit 1
+          fi
+      - name: Hooks dry-run — must block / must not false-block
         run: |
           export CLAUDE_PROJECT_DIR="$PWD"
-          echo '{"tool_input":{"command":"git push --force origin main"}}' | bash .claude/hooks/pre-bash.sh && { echo "destructive git was not blocked"; exit 1; } || true
-          echo '{}' | bash .claude/hooks/session-start.sh >/dev/null
-          echo '{"stop_hook_active":true}' | bash .claude/hooks/stop-guard.sh
+          hook() { printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1")" | $SH .claude/hooks/pre-bash.sh >/dev/null 2>&1; }
+          while IFS= read -r c; do hook "$c" && { echo "::error::not blocked: $c"; exit 1; }; done <<'BLOCK'
+          git push --force origin main
+          git push -f origin main
+          git push origin main --force-with-lease
+          git reset --hard HEAD~1
+          git -C BugBountyTarget/X_01012026 push -f origin main
+          rm -rf checklist/
+          rm -rf ./docs
+          rm -rf "$E"
+          rm -r BugBountyTarget/X_01012026/logs
+          git add BugBountyTarget/X_01012026
+          git add "$E"
+          BLOCK
+          while IFS= read -r c; do hook "$c" || { echo "::error::false block: $c"; exit 1; }; done <<'PASS'
+          ls
+          git commit -m "revert the earlier git push --force"
+          git push origin feature-f
+          git push origin hotfix-f
+          rm -rf /tmp/scratch/docs/
+          adb shell rm -rf /data/local/tmp/docs/
+          adb -s emulator-5554 shell rm -rf /sdcard/docs/
+          rm -rf "$S/json/"
+          rm -rf BugBountyTarget/X_01012026/decompiled/jadx
+          rm -rf $E/decompiled/jadx
+          git add .gitignore
+          git add ./README.md
+          git -C "$E" add -A && git -C "$E" commit -m "X P3: settled D07"
+          PASS
+          echo '{}' | $SH .claude/hooks/session-start.sh >/dev/null
+      - name: Hooks dry-run — evidence repo lifecycle (commit, stop-guard, pre-commit guard, push to a private remote)
+        run: |
+          export CLAUDE_PROJECT_DIR="$PWD"
+          hook() { printf '{"tool_input":{"command":%s}}' "$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1")"; }
+          $SH scripts/new-engagement.sh CiScratch 01012026 >/dev/null
+          export SANE_ENGAGEMENT="$PWD/BugBountyTarget/CiScratch_01012026"
+          [ -d "$SANE_ENGAGEMENT/.git" ] || { echo "::error::engagement is not its own git repo"; exit 1; }
+          git status --porcelain | grep -q 'BugBountyTarget/CiScratch' && { echo "::error::the methodology repo sees the engagement"; exit 1; }
+          echo '{"stop_hook_active":true}' | $SH .claude/hooks/stop-guard.sh || { echo "::error::stop-guard must yield on the second attempt"; exit 1; }
+          echo '{}' | $SH .claude/hooks/stop-guard.sh || { echo "::error::clean local-only evidence repo must not block the stop"; exit 1; }
+          echo x > "$SANE_ENGAGEMENT/logs/D01-001.txt"
+          echo '{}' | $SH .claude/hooks/stop-guard.sh 2>/dev/null && { echo "::error::stop-guard did not block uncommitted evidence"; exit 1; }
+          git -C "$SANE_ENGAGEMENT" add -A && git -C "$SANE_ENGAGEMENT" commit -qm "ci: evidence"
+          out=$(hook 'git -C "$E" commit -m x' | $SH .claude/hooks/post-bash.sh); echo "$out" | grep -q 'no evidence remote configured' || { echo "::error::post-bash must state the missing evidence remote: $out"; exit 1; }
+          echo '{}' | $SH .claude/hooks/stop-guard.sh || { echo "::error::committed local-only evidence must not block the stop"; exit 1; }
+          # a forbidden artefact cannot be committed to the evidence repo: pre-bash refuses, and so does the repo's own pre-commit hook
+          printf 'x' > "$SANE_ENGAGEMENT/logs/leak.pem"; git -C "$SANE_ENGAGEMENT" add -f logs/leak.pem
+          hook 'git -C "$E" commit -m "evidence"' | $SH .claude/hooks/pre-bash.sh 2>/dev/null && { echo "::error::staged .pem not blocked by pre-bash"; exit 1; }
+          git -C "$SANE_ENGAGEMENT" commit -qm leak 2>/dev/null && { echo "::error::evidence repo pre-commit hook did not refuse a .pem"; exit 1; }
+          git -C "$SANE_ENGAGEMENT" reset -q -- logs/leak.pem; rm -f "$SANE_ENGAGEMENT/logs/leak.pem"
+          # a credential whose line mentions docs/ is still caught (exclusion is by path, not content)
+          printf 'docs/ see token=AIzaSyA1234567890123456789012345678901234\n' > "$SANE_ENGAGEMENT/logs/D18-002.txt"; git -C "$SANE_ENGAGEMENT" add -A
+          hook 'git -C "$E" commit -m "evidence"' | $SH .claude/hooks/pre-bash.sh 2>/dev/null && { echo "::error::credential not blocked"; exit 1; }
+          git -C "$SANE_ENGAGEMENT" reset -q -- logs/D18-002.txt; rm -f "$SANE_ENGAGEMENT/logs/D18-002.txt"
+          # with a private remote the hook pushes there — and only there
+          git init -q --bare "$RUNNER_TEMP/evidence.git"; git -C "$SANE_ENGAGEMENT" remote add origin "$RUNNER_TEMP/evidence.git"
+          out=$(hook 'git -C "$E" commit -m x' | $SH .claude/hooks/post-bash.sh); echo "$out" | grep -q 'auto-pushed' || { echo "::error::post-bash did not push to the evidence remote: $out"; exit 1; }
+          [ "$(git -C "$RUNNER_TEMP/evidence.git" rev-list --count HEAD)" -ge 2 ] || { echo "::error::evidence remote is empty"; exit 1; }
+          echo '{}' | $SH .claude/hooks/stop-guard.sh || { echo "::error::pushed evidence repo must not block the stop"; exit 1; }
+          rm -rf "$SANE_ENGAGEMENT"
       - name: Item lookup works
         run: python3 scripts/item.py D10-004 >/dev/null && python3 scripts/item.py --grep JavascriptInterface | head -3
       - name: End-to-end self-test on a scratch engagement
-        run: bash scripts/selftest.sh
+        run: $SH scripts/selftest.sh

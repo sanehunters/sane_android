@@ -1,8 +1,11 @@
 name: Evidence hygiene
 
-# Blocks the two mistakes that would genuinely hurt: committing an APK or a decompiled tree,
-# and committing something that looks like a live credential.
+# Blocks the mistakes that would genuinely hurt in a PUBLIC repository: committing a binary, a key, a decompiled
+# tree or a secret dump; committing something that looks like a live credential; committing an engagement folder.
+# The patterns are the ones in .claude/hooks/_lib.sh (single source: .gitignore, the hooks and this workflow agree).
 on: [push, pull_request, workflow_dispatch]
+
+permissions: { contents: read }
 
 jobs:
   hygiene:
@@ -10,13 +13,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: No binaries or decompiled trees
+      - name: No binaries, keys, decompiled trees, secret dumps or engagement folders
         run: |
-          bad=$(git ls-files | grep -Ei '\.(apk|aab|dex|so|jks|keystore|har)$' || true)
+          . .claude/hooks/_lib.sh
+          bad=$(git ls-files | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" || true)
           if [ -n "$bad" ]; then
             echo "::error::binary or evidence artefacts committed:"; echo "$bad"; exit 1
           fi
-          big=$(git ls-files -z | xargs -0 -I{} sh -c 'f="{}"; s=$(wc -c <"$f" 2>/dev/null || echo 0); [ "$s" -gt 5242880 ] && echo "$s $f"' || true)
+          # the methodology never tracks an engagement: only README.md and _TEMPLATE/ live under BugBountyTarget/
+          eng=$(git ls-files 'BugBountyTarget/*' | grep -Ev '^BugBountyTarget/(README\.md|_TEMPLATE/)' || true)
+          if [ -n "$eng" ]; then
+            echo "::error::engagement evidence committed to the public methodology repo (it belongs in the private evidence repo):"; echo "$eng"; exit 1
+          fi
+          # size check: no shell string is built from a filename (a quote in a name must not execute anything)
+          big=$(git ls-files -z | while IFS= read -r -d '' f; do s=$(wc -c <"$f" 2>/dev/null || echo 0); [ "$s" -gt 5242880 ] && echo "$s $f"; done; true)
           if [ -n "$big" ]; then
             echo "::error::files over 5 MB committed:"; echo "$big"; exit 1
           fi
@@ -24,23 +34,12 @@ jobs:
 
       - name: No live-looking credentials
         run: |
-          pat='AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|sk_live_[0-9a-zA-Z]{24}|xox[baprs]-[0-9A-Za-z-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|Authorization: Bearer [A-Za-z0-9._-]{30,}'
+          . .claude/hooks/_lib.sh
           # The methodology (docs/, checklist/, cards/, json/, MASTER) legitimately contains these SHAPES as
-          # detection patterns. Only engagement output, templates, tooling and the attacker app are scanned.
-          hits=$(git ls-files 'BugBountyTarget/**' 'templates/**' 'attacker-app/**' 'scripts/**' 'prompts/**' '.claude/**' \
-                 | xargs -r grep -nE "$pat" 2>/dev/null | grep -v 'hygiene:allow' | cut -d: -f1 | sort -u || true)
+          # detection patterns. Only templates, tooling, prompts, the harness and the attacker app are scanned.
+          hits=$(git ls-files -z 'BugBountyTarget/**' 'templates/**' 'attacker-app/**' 'scripts/**' 'prompts/**' 'loops/**' '.claude/**' '.github/**' \
+                 | xargs -0 grep -nE "$CRED_RE" 2>/dev/null | grep -Ev "$CRED_ALLOW_RE" | grep -v '_lib.sh' | cut -d: -f1 | sort -u || true)
           if [ -n "$hits" ]; then
             echo "::error::possible live credential committed in:"; echo "$hits"; exit 1
           fi
           echo "clean"
-
-      - name: Methodology issues must stay open
-        if: github.event_name == 'push'
-        env: { GH_TOKEN: '${{ github.token }}' }
-        run: |
-          closed=$(gh issue list --repo "$GITHUB_REPOSITORY" --state closed \
-                     --label "do-not-close" --json number,title --jq '.[] | "#\(.number) \(.title)"' || true)
-          if [ -n "$closed" ]; then
-            echo "::warning::methodology issues were closed — they are standing reference and should be reopened:"
-            echo "$closed"
-          fi

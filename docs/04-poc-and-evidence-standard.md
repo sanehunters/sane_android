@@ -174,6 +174,10 @@ the order without reading anything. Any PoC app with more than one action number
 
 ## 6. Recording mechanics
 
+Paths follow START.md §6: `$E` is the engagement folder, `F-NNN` the finding id (assigned at discovery,
+never reused) and `Dnn-NNN` the checklist item that produced it. The worked example is finding `F-001`
+from item `D07-014`.
+
 ```bash
 # Clean state first — this is part of the evidence, not preparation for it
 adb shell pm clear com.attacker.poc
@@ -181,16 +185,16 @@ adb shell am force-stop com.victim.app
 
 # Record. 25-60s. Stop with Ctrl-C.
 adb shell screenrecord --bit-rate 4000000 --size 720x1600 /sdcard/poc.mp4
-adb pull /sdcard/poc.mp4 evidence/SANE-D07-014/poc.mp4
+adb pull /sdcard/poc.mp4 "$E/pocs/F-001/build/raw.mp4"      # scratch: pocs/*/build/ is gitignored
 
-# Shrink for the report. Target well under 5 MB; the reference is 478 KB.
-ffmpeg -i poc.mp4 -vcodec libx264 -crf 30 -preset veryslow -an poc-small.mp4
+# Shrink for the report. Target well under 5 MB; the reference is 478 KB. This is the file git sees.
+ffmpeg -i "$E/pocs/F-001/build/raw.mp4" -vcodec libx264 -crf 30 -preset veryslow -an "$E/videos/F-001.mp4"
 
-# Environment provenance, stored next to the video
-adb shell getprop ro.build.fingerprint  > evidence/SANE-D07-014/device.txt
-adb shell getprop ro.build.version.sdk >> evidence/SANE-D07-014/device.txt
+# Environment provenance, stored with the finding
+adb shell getprop ro.build.fingerprint  > "$E/findings/F-001/device.txt"
+adb shell getprop ro.build.version.sdk >> "$E/findings/F-001/device.txt"
 adb shell dumpsys package com.victim.app | grep -E 'versionName|targetSdk|firstInstallTime' \
-  >> evidence/SANE-D07-014/device.txt
+  >> "$E/findings/F-001/device.txt"
 ```
 
 Constraints:
@@ -205,23 +209,32 @@ Constraints:
 
 ## 7. Evidence tree
 
-One directory per finding ID, delivered with the report:
+One finding, one id, spread over the engagement layout of START.md §6 (the hooks and `scripts/state.py`
+read these paths; there is no separate `evidence/` tree):
 
 ```
-evidence/
-└── SANE-D07-014/
-    ├── poc.mp4                 # the video, this standard
-    ├── device.txt              # fingerprint, SDK, target versionName/targetSdk
-    ├── attacker-app/           # full source of the PoC app — buildable
-    │   ├── AndroidManifest.xml
-    │   └── src/...
-    ├── attacker-app.apk        # prebuilt, so triage can install in one command
-    ├── commands.txt            # every adb/curl line, in order, copy-pasteable
-    ├── log.txt                 # the log-pane text, as text
-    ├── baseline/               # Beat 2 screenshots
-    ├── negative-control/       # Beat 4 evidence
-    └── notes.md                # what was ruled out, what is unproven
+$E/
+├── findings/F-001/
+│   ├── report.md               # from templates/finding-report.md
+│   ├── device.txt              # fingerprint, SDK, target versionName/targetSdk
+│   ├── commands.txt            # every adb/curl line, in order, copy-pasteable
+│   ├── log.txt                 # the log-pane text, as text
+│   └── notes.md                # what was ruled out, what is unproven
+├── pocs/F-001/
+│   ├── attacker-app/           # full source of the PoC app — buildable
+│   │   ├── AndroidManifest.xml # declares no permissions: the Rung-4 argument, committed as evidence
+│   │   └── src/...
+│   └── build/                  # gitignored: the signed APK and every other build output
+├── videos/F-001.mp4            # the video, this standard, under 5 MB
+├── screenshots/D07-014-1.png   # Beat 2 baseline and Beat 4 negative control, named by item id
+└── logs/D07-014.txt            # raw tool output for the item that produced the finding
 ```
+
+**Where the APK lives.** The built attacker APK never enters git — `.gitignore` and the pre-commit hook
+block `*.apk`, and START.md §6 says `pocs/F-NNN/` is source only. Build it from `pocs/F-001/attacker-app/`
+into `pocs/F-001/build/` and attach it to the submission together with the video; a triager will not
+build your source (docs/06, Rung 1), and a reviewer who clones the evidence repo rebuilds it from the
+committed source.
 
 `notes.md` is not optional. It carries the honest caveats — the link you did not prove, the environment
 you could not test. That section is what makes a triager believe the rest.

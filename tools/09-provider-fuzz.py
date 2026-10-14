@@ -28,7 +28,11 @@ Quoting (why): `adb shell` hands ONE joined string to the device's /system/bin/s
 and the whole remote command is a single argument. Verified with a local `sh -c` simulator (fake adb);
 no device was attached when this file was written.
 
-Exit: 0 ran and >=1 CANDIDATE; 1 ran, nothing; 2 usage/environment. --list/--dry-run exit 0.
+Exit: 0 ran and >=1 CANDIDATE; 1 ran, nothing; 2 usage/environment, or nothing interpretable (no authority,
+no probe fired, or every fired probe UNVERIFIED). --list/--dry-run exit 0. Output dir defaults to
+$E/recon/provider-fuzz when $E (or SANE_ENGAGEMENT) is set, else ./provider-fuzz/<pkg>; the human output is
+also appended to $E/logs/tools-09.txt. The default matrix WRITES (insert of a canary row, update/delete with
+0 rows targeted): pass --no-write on a real account.
 """
 import argparse, csv, glob, hashlib, json, os, re, shlex, subprocess, sys, time
 
@@ -48,6 +52,19 @@ SORT = ["_id", "(SELECT 1)", "rowid DESC"]
 def rq(s):
     """Single-quote s for the REMOTE (device) shell."""
     return "'" + s.replace("'", "'\\''") + "'"
+
+
+def die(msg, rc=2):
+    """Usage/environment error: message on stderr, exit 2 (sys.exit(str) would exit 1 = 'ran, nothing')."""
+    print(msg, file=sys.stderr); sys.exit(rc)
+
+
+class Tee:
+    def __init__(self, *streams): self.streams = streams
+    def write(self, d):
+        for st in self.streams: st.write(d)
+    def flush(self):
+        for st in self.streams: st.flush()
 
 
 class Device:
@@ -72,11 +89,11 @@ class Device:
     def preflight(self):
         if self.dry: return
         rc, _, out = self.shell("getprop ro.build.version.sdk", 10)
-        if rc == 127: sys.exit("UNVERIFIED: adb not on PATH (set ANDROID_SDK_ROOT; see scripts/doctor.sh)  [exit 2]")
+        if rc == 127: die("UNVERIFIED: adb not on PATH (set ANDROID_SDK_ROOT; see scripts/doctor.sh)")
         try:
             p = subprocess.run(self.adb + ["get-state"], capture_output=True, timeout=10, text=True)
-            if p.stdout.strip() != "device": sys.exit("UNVERIFIED: no device in state 'device'  [exit 2]")
-        except Exception: sys.exit("UNVERIFIED: adb get-state failed  [exit 2]")
+            if p.stdout.strip() != "device": die("UNVERIFIED: no device in state 'device'")
+        except Exception: die("UNVERIFIED: adb get-state failed")
         self.api = out.strip()
 
 
@@ -216,17 +233,21 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="print the exact adb commands, fire nothing")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
-    if not re.match(r"^[A-Za-z0-9._]+$", a.pkg): sys.exit("usage: package name has unexpected characters  [exit 2]")
+    E = os.environ.get("E") or os.environ.get("SANE_ENGAGEMENT") or ""
+    if E and os.path.isdir(E) and not (a.list or a.dry_run):
+        os.makedirs(os.path.join(E, "logs"), exist_ok=True)
+        sys.stdout = Tee(sys.stdout, open(os.path.join(E, "logs", "tools-09.txt"), "a", encoding="utf-8"))
+    if not re.match(r"^[A-Za-z0-9._]+$", a.pkg): die("usage: package name has unexpected characters")
     classes = set(c.strip() for c in a.classes.split(","))
     bad = classes - {"matrix", "urimatcher", "traversal", "sql"}
-    if bad: sys.exit("usage: unknown class %s  [exit 2]" % sorted(bad))
+    if bad: die("usage: unknown class %s" % sorted(bad))
     dev = Device(a.serial, a.dry_run)
     providers = inventory_providers(os.path.join(a.inventory, "components.csv"))
     for x in a.authority: providers.setdefault(x, "")
     if a.dumpsys and not a.dry_run:
         dev.preflight()
         for k, v in dumpsys_authorities(dev, a.pkg).items(): providers.setdefault(k, v)
-    if not providers: print("UNVERIFIED: no provider authority (components.csv has none; try --dumpsys / --authority)"); sys.exit(1)
+    if not providers: die("UNVERIFIED: no provider authority (components.csv has none; try --dumpsys / --authority) -- nothing interpretable: exit 2, not a negative")
     mined_paths, mined_methods = mine_jadx(a.jadx, providers) if a.jadx else ({}, {})
     user_paths = [l.strip() for l in open(a.paths)] if a.paths else []
     methods_cli = [m.strip() for m in (a.methods or "").split(",") if m.strip()]
@@ -282,7 +303,7 @@ def main():
     if a.list:
         for p in probes: print("%s %-12s %-10s %-7s %-40s %s" % (p["probe_id"], p["authority"][:12], p["class"], p["op"], p["uri"][:40], p["label"]))
         print(REMINDER); return 0
-    out = a.out or os.path.join("provider-fuzz", a.pkg)
+    out = a.out or (os.path.join(E, "recon", "provider-fuzz") if E else os.path.join("provider-fuzz", a.pkg))
     os.makedirs(os.path.join(out, "logs"), exist_ok=True)
     if a.dry_run:
         for p in probes: print("# %s %s %s %s\n  %s" % (p["probe_id"], p["class"], p["op"], p["label"], dev.show("shell", p["remote"])))
@@ -347,7 +368,11 @@ def main():
     print("\n[+] %d probes, %d CANDIDATE -> %s/results.csv, results.json, logs/" % (len(results), ncand, out))
     print(REMINDER)
     if a.dry_run: return 0
-    return 0 if ncand else 1
+    if ncand: return 0
+    if not results or summary["unverified"]:
+        print("UNVERIFIED: no candidate and nothing interpretable (fired=%d unverified=%d) -> exit 2, not a negative; rerun the UNVERIFIED rows" % (len(results), summary["unverified"]))
+        return 2
+    return 1
 
 
 if __name__ == "__main__":

@@ -5,6 +5,12 @@ Lets a maintainer (human or model) change dozens of items without rewriting a 20
 
   python3 scripts/apply-item-meta.py changes.json            apply
   python3 scripts/apply-item-meta.py changes.json --dry-run  report what would change
+  python3 scripts/apply-item-meta.py changes.json --build    apply, then run lint-checklist.py and build-checklist.py
+
+The chapter is the source; the generated views (cards/, json/, checklist.csv, CHECKLIST.md, MASTER-CHECKLIST.md)
+lag it until rebuilt. After a write ALWAYS run
+    python3 scripts/lint-checklist.py && python3 scripts/build-checklist.py
+(or pass --build) and commit the chapter and the views together. Schema: docs/11-item-schema.md.
 
 changes.json:
 {
@@ -62,7 +68,7 @@ def split_blocks(text):
 def set_cell(block, name, value):
     pat = re.compile(r'^(\|\s*\*\*%s\*\*\s*\|\s*)(.*?)(\s*\|\s*)$' % re.escape(name), re.M)
     if pat.search(block):
-        return pat.sub(lambda m: m.group(1) + value.replace("\\", "\\\\") + " |", block, count=1), "set"
+        return pat.sub(lambda m: m.group(1) + value + " |", block, count=1), "set"   # a function replacement is inserted literally: no escaping
     anchor = INSERT_AFTER.get(name)
     apat = re.compile(r'^\|\s*\*\*%s\*\*\s*\|.*$' % re.escape(anchor), re.M) if anchor else None
     if apat and apat.search(block):
@@ -88,6 +94,7 @@ def set_skip_when(block, value):
 def main():
     a = sys.argv[1:]
     if not a: print(__doc__); sys.exit(1)
+    if a[0] in ("-h", "--help"): print(__doc__); sys.exit(0)
     dry = "--dry-run" in a
     spec = json.load(open(a[0], encoding="utf-8"))
     path = chapter_path(spec["domain"])
@@ -142,6 +149,12 @@ def main():
     print(f"{path}: {len(log)} operations applied");
     for l in log[:15]: print("  ", l)
     if len(log) > 15: print(f"   … {len(log) - 15} more")
+    if "--build" in a:
+        import subprocess
+        for script in ("lint-checklist.py", "build-checklist.py"):
+            rc = subprocess.call([sys.executable, os.path.join(ROOT, "scripts", script)])
+            if rc != 0:
+                sys.exit(f"!! {script} exited {rc}: the chapter is written but the views are not regenerated")
 
 
 if __name__ == "__main__":

@@ -12,17 +12,23 @@ issue. Corrections to existing items outrank new items.
 
 ## Standard every item must meet
 
-An item is not accepted until it has all seven fields:
+The format is `docs/11-item-schema.md`; validate with `python3 scripts/build-checklist.py && python3 scripts/lint-checklist.py`.
+An item is not accepted until it has the ten required fields:
 
 | Field | Requirement |
 |---|---|
+| **Severity ceiling** | Critical/High/Medium/Low — the most the item can reach on its own. A P5-only item needs an escalation |
+| **VRT** | The Bugcrowd VRT path it reaches (`data/vrt.csv`), never a P5 mobile leaf as the final rating |
+| **Attacker** | The weakest attacker model that still works (AM-01…AM-12, `docs/05`) |
+| **Applies to** | API level, framework or app-type preconditions, or "all" |
+| **Maps to** | Only identifiers you actually verified. Never invent a MASTG or ATT&CK ID |
 | **Test** | What to check, in one or two sentences |
 | **How** | The exact command, grep, manifest attribute or tool step. Not "look for X" |
 | **Proof** | The specific observable that confirms it — a log line, returned bytes, a status delta |
-| **Severity** | Critical/High/Medium/Low **and the VRT path it reaches**. A P5-only item needs an escalation |
-| **Maps to** | Only identifiers you actually verified. Never invent a MASTG or ATT&CK ID |
 | **Escalation** | What this primitive chains into |
-| **Applies to** | API level, framework or app-type preconditions, or "all" |
+| **Ruled out when** | The mechanism that closes the item, as the `notes` of a `ruled-out` row would state it |
+
+Strongly recommended: **Requires** (device/root/MitM/accounts), **Record** (what goes to `logs/`), **Skip when**.
 
 ## House rules
 
@@ -42,5 +48,8 @@ An item is not accepted until it has all seven fields:
 ## Never commit
 
 APKs, decompiled trees, keystores, raw HAR/PCAP captures, videos over 5 MB, credentials, or any third
-party's data. Engagement folders under `BugBountyTarget/` are committed — hashes, logs, sanitised captures,
-notes, small videos — because the archive is the point. See `.gitignore` and `BugBountyTarget/README.md`.
+party's data. **Never an engagement folder to this repository**: it is public, `.gitignore` ignores
+`BugBountyTarget/*_*/` and only `BugBountyTarget/README.md` and `_TEMPLATE/` are tracked. Each engagement folder is
+its own git repository (created by `scripts/new-engagement.sh`) whose hashes, logs, sanitised captures, notes and
+small videos are committed there and pushed to a private remote (`engagement.json.evidence_remote`). See
+`.gitignore` and `BugBountyTarget/README.md`.

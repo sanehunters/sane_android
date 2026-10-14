@@ -6,7 +6,7 @@ identifier in a chapter either exists here or the linter rejects it. **Never inv
 
 | File | Rows | What | Key columns |
 |---|---|---|---|
-| `standards-index.csv` | ~1,100 | every MASTG (TEST/TECH/TOOL/KNOW/BEST/APP/DEMO), MASWE and MASVS id the linter accepts | `id, kind, status, platform, title, url` |
+| `standards-index.csv` | 671 | every MASTG (TEST/TECH/TOOL/KNOW/BEST/APP/DEMO), MASWE and MASVS id the linter accepts | `id, kind, status, platform, title, url` |
 | `mastg-tests.csv` | 163 | MASTG Android tests, **with status**: `current` (v2), `deprecated` (v1, superseded — see `covered_by`), `placeholder` (no content yet). Cite v2 ids; if you cite a deprecated one, say so | `id, version, status, masvs_v2_ids, maswe_ids, covered_by, knowledge_ids, apis` |
 | `mastg-techniques.csv` · `mastg-tools.csv` · `mastg-knowledge.csv` · `mastg-best-practices.csv` · `mastg-apps.csv` · `mastg-demos.csv` | 91 · 81 · 75 · 44 · 22 · 94 | the other MASTG object types, Android + generic + network, with `status` (three tools are deprecated upstream) | `id, status, platform, title, url` (+ `test_id, rule_files` for demos) |
 | `mastg-rules.csv` | 71 | the MASTG semgrep rules and the tests they implement | `rule_id, rule_file, severity, test_ids` |
@@ -16,8 +16,8 @@ identifier in a chapter either exists here or the linter rejects it. **Never inv
 | `vrt-deprecated-nodes.csv` | 113 | old VRT paths → their current replacement | `old_path, vrt_version, new_path` |
 | `attack-mobile-android.csv` | 122 | MITRE ATT&CK Mobile techniques whose platforms include Android, with the ATT&CK version | `id, name, tactics, platforms, attack_version` |
 | `mobile-top10-2024.csv` · `cwe-top25.csv` | 10 · 25 | OWASP Mobile Top 10 2024 and the CWE Top 25 | `id, title` / `rank, id, name` |
-| `crosswalk.csv` | ~800 | **standard id → checklist item ids** that cite it, for every standard entry (cited or not). This is how `docs/07` is proven rather than asserted: an uncited MASWE weakness is a coverage gap | `standard, standard_id, title, known, n_items, item_ids` |
-| `versions.json` | — | provenance: commit + date of each source, row counts, platforms kept | |
+| `crosswalk.csv` | 1,335 | **standard id → checklist item ids** that cite it, for every standard entry (cited or not). This is how `docs/07` is proven rather than asserted: an uncited MASWE weakness is a coverage gap | `standard, standard_id, title, known, n_items, item_ids` |
+| `versions.json` | — | provenance: commit + date of each source, row counts of every file above (the two derived files included), platforms kept | |
 
 ## How a model should use this
 
@@ -25,16 +25,22 @@ identifier in a chapter either exists here or the linter rejects it. **Never inv
 - Rating a finding → `vrt.csv`: the `priority` column is authoritative; `varies` means "rated on demonstrated
   impact" and the finding must argue the impact; parents (empty priority) are never cited as the node.
 - Citing a MASTG test → prefer `status=current`; a `deprecated` id must be written as
-  `MASTG-TEST-0017 (deprecated; see MASTG-TEST-0327)`; never cite a `placeholder`.
+  `MASTG-TEST-0017 (deprecated; see MASTG-TEST-0327)`; never cite a `placeholder`. When `covered_by` names only
+  placeholders (today: MASTG-TEST-0001 → 0304–0306, 0013 → 0309/0310, 0019 → 0237–0239), keep the deprecated id,
+  marked deprecated, and cite the weakness from its `maswe_ids` instead.
 - Proving coverage to a client → `crosswalk.csv` filtered to `n_items > 0` per standard; the rows with
-  `n_items = 0` are the honest gap list.
+  `n_items = 0` are the honest gap list; `docs/07` §1–§4 and its "Known gaps" are generated from this file (rebuild
+  with the heredoc in `docs/07` §6), so the two never disagree.
 
 ## Regenerate
 
 ```bash
-python3 scripts/build-checklist.py          # json/ must exist for the crosswalk
-python3 scripts/refresh-data.py             # clones/updates sources into .refs/ (gitignored), rebuilds data/
+python3 scripts/refresh-data.py             # clones/updates sources into .refs/ (gitignored), rebuilds data/ incl. vrt.csv
+python3 scripts/build-checklist.py          # views (cards/, json/, checklist.csv): VRT priorities come from the fresh vrt.csv
+python3 scripts/refresh-data.py --offline   # rebuilds crosswalk.csv from the fresh json/ (no network; .refs/ already present)
+python3 scripts/build-checklist.py --check  # must report current — a refresh that changed a priority is now in the views
 python3 scripts/lint-checklist.py           # every cited id must still resolve
+# then rebuild docs/07 §1–§4 with the heredoc in docs/07 §6
 ```
 
 `.refs/` holds the clones and two downloaded files (ATT&CK STIX, CWE Top 25 HTML) under `_untrusted_*`;

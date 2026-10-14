@@ -47,7 +47,9 @@ When you find the arbitrary file read in P5, the correct behaviour is:
 
 1. Confirm the primitive exists — minimum proof only, five minutes.
 2. Write a stub to the parking lot with what you know and what the next experiment is.
-3. Set the checklist row to `true`, `result=finding`.
+3. Settle the row through `scripts/mark.py`, never by hand:
+   `python3 scripts/mark.py $E D07-014 finding --note "H-004: <the primitive in one sentence>" --evidence logs/D07-014.txt`.
+   The `H-` id ties the row to the stub; the `F-` id is assigned in P7, when the primitive becomes a finding.
 4. **Go to the next component.**
 
 The file read is not going anywhere. The forty components you have not looked at are where the other
@@ -84,7 +86,8 @@ A concrete, checkable heuristic for "am I in a rabbit hole?":
 > **If you have spent more than ~15 tool calls on a single checklist item without either confirming it
 > or ruling it out, STOP.**
 >
-> Write what you know to the parking lot, mark the row `blocked` with the open question, and move to the
+> Write what you know to the parking lot, mark the row `blocked` with the open question in the note
+> (`python3 scripts/mark.py $E Dnn-NNN blocked --note "needs: <what would settle it>"`), and move to the
 > next item. If it is genuinely worth more time, P7 is where that time is spent.
 
 Three strikes, concretely:
@@ -99,8 +102,10 @@ Any one strike means: park it, move on.
 
 Coverage is not a feeling. It is two CSV files in the engagement folder.
 
-**Dimension 1 — the methodology.** `checklist-status.csv`, one row per checklist item across all 27
-domains. Every row is `true` or `false`.
+**Dimension 1 — the methodology.** `checklist-status.csv`, one row per checklist item across all 26
+domains (D24 and D28 are chapters in progress). Every row carries `completed` (`true`/`false`) and, once
+settled, a `result` of `finding`, `ruled-out`, `blocked` or `n/a` with the note START.md §6 requires.
+Only `scripts/mark.py` writes it.
 
 **Dimension 2 — the application.** `inventory/components.csv`, one row per component **that actually
 exists in this app** — every exported activity, every provider authority, every deep-link host, every
@@ -117,13 +122,13 @@ register proves the latter, and only the latter is an audit.
 Build it once, in P3:
 
 ```bash
-python3 ~/sane_android/scripts/inventory.py base.apk --out inventory/
+python3 scripts/inventory.py "$E/apk/base.apk" --out "$E/inventory/"      # from the methodology repo root
 ```
 
 Then the gate:
 
 ```bash
-python3 ~/sane_android/scripts/coverage.py checklist-status.csv --components inventory/components.csv --gate p7
+python3 scripts/coverage.py "$E/checklist-status.csv" --components "$E/inventory/" --gate p7
 ```
 
 `--gate p7` **exits non-zero** while any in-scope P3–P6 row or any component instance is still untested.
@@ -136,16 +141,18 @@ Context does not survive. Disk does. So every session starts and ends the same w
 **On start, before anything else:**
 
 ```bash
-cat BugBountyTarget/<Target>_<date>/report/assessment-status.md      # where am I
-python3 ~/sane_android/scripts/coverage.py .../checklist-status.csv  # what is still false
-cat BugBountyTarget/<Target>_<date>/hypotheses/*.md                  # what did I park
+python3 scripts/state.py "$E"                                   # where am I: phase, gates, coverage, blockers
+python3 scripts/next.py "$E"                                    # what next, in card triage order, plus the parked leads
+python3 scripts/coverage.py "$E/checklist-status.csv" --open 10  # the first open rows
+sed -n '1,80p' "$E/report/assessment-status.md"               # the human resume point; never re-walk RULED OUT
 ```
 
 **On end, and after every phase:**
 
 - update `assessment-status.md` — `COMPLETED`, `IN PROGRESS`, `NEXT TARGET`, `BLOCKERS`
 - flip the rows you settled
-- commit and push both copies
+- commit the evidence repo — `git -C "$E" add -A && git -C "$E" commit -m "<phase>: <what settled>"`;
+  the hooks push it when an evidence remote is configured (START.md §6)
 
 A session that ends without doing this has destroyed its own state, and the next session restarts
 rather than resumes.
@@ -194,7 +201,8 @@ You will catch yourself mid-chase. The recovery is fixed:
 
 1. **Stop where you are.** Do not finish the thought.
 2. **Park it.** One stub in `hypotheses/`: what you know, why it is juicy, the next experiment.
-3. **Find your place.** `coverage.py` — the first `false` row is where you were.
+3. **Find your place.** `python3 scripts/state.py $E` prints the resume card and `python3 scripts/next.py $E`
+   the first open rows of the current phase — that is where you were.
 4. **Resume the sweep.**
 5. **Do not feel bad about it.** The parking lot means nothing was lost. That is what it is for.
 
@@ -203,11 +211,11 @@ You will catch yourself mid-chase. The recovery is fixed:
 ## 6. Checklist for this document
 
 - [ ] `inventory/components.csv` built in P3, before any deep review
-- [ ] `checklist-status.csv` seeded with every row `false`
+- [ ] `checklist-status.csv` seeded with every row `completed=false`
 - [ ] No escalation attempted during P3–P6; every juicy finding parked instead
 - [ ] Three-strike rule applied — nothing consumed more than ~15 tool calls unsettled
 - [ ] `coverage.py --gate p7` exits zero before P7 begins
-- [ ] `assessment-status.md` updated after every phase, and pushed
+- [ ] `assessment-status.md` updated after every phase, and committed to the evidence repo
 - [ ] Every parked hypothesis either escalated in P7 or moved to the ruled-out register with a reason
 
 ---
