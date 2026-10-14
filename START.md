@@ -48,7 +48,7 @@ production without written permission, never exfiltrate a third party's data (pl
 
 ```bash
 # 0. Where am I, what do I have                              (30 s)
-python3 scripts/doctor.sh                 # OS, adb/devices, apktool, jadx, frida, mitm, java — and which phases are blocked without what
+bash scripts/doctor.sh                    # OS, adb/devices, apktool, jadx, frida, mitm, java — and which phases are blocked without what
 # 1. Create the engagement on disk                            (10 s)
 scripts/new-engagement.sh <TargetName>    # BugBountyTarget/<Target>_<DDMMYYYY>/ + checklist-status.csv (all false) + engagement.json (P0)
 E=BugBountyTarget/<Target>_<DDMMYYYY>
@@ -191,7 +191,7 @@ mechanism; every finding still needs its full evidence tree. The rules:
 |---|---|
 | Raw output goes to files; you read digests | every tool writes `$E/logs/<tool>.txt` and prints counts + candidates; `--full` only when you need it; never `cat` a decompiled file — `grep -n`, `sed -n 'a,bp'` |
 | One card per domain, one item at a time | `cards/Dnn.md` once; `python3 scripts/item.py Dnn-NNN --brief` (Test + How + Proof) for the item you are on; `--field how` when you only need the commands |
-| Never re-derive state | `scripts/state.py` and `scripts/next.py` answer "where am I / what next" in one screen; do not re-read the tracker |
+| Never re-derive state | `python3 scripts/state.py <eng>` ("where am I") and `python3 scripts/next.py <eng>` ("what next", in card triage order) answer it in one screen; do not re-read the tracker |
 | Think in writing, briefly | before a domain: answer its crux question for *this* app in three lines in `hypotheses/_notes-Dnn.md`; after it: three cross-surface hypotheses. Thirty seconds of thinking saves an hour of probing |
 | Batch what batches | run every `grep` of a domain's static items in one pass over `$DEC`, then settle rows from the log |
 | Park, do not chase | a parked hypothesis costs 100 tokens; a rabbit hole costs the engagement |
@@ -205,6 +205,7 @@ mechanism; every finding still needs its full evidence tree. The rules:
 | `scripts/doctor.sh` | environment and device detection; which phases are blocked |
 | `scripts/new-engagement.sh <Target>` | create the engagement folder, tracker and state file |
 | `scripts/state.py <eng> [--json]` | the resume card from disk (hooks print it at session start) |
+| `scripts/next.py <eng> [--domain Dnn] [-n N] [--json]` | the next open items of the current phase in card triage order, the gate status and the parked leads |
 | `scripts/item.py Dnn-NNN` · `--domain Dnn` · `--grep <re>` · `--xrefs` · `--field how` | per-item access |
 | `scripts/inventory.py base.apk --out <eng>/inventory/` | per-instance registers (components, deep links, WebViews, endpoints) |
 | `scripts/mark.py <eng> Dnn-NNN <result> --note …` | the only writer of `checklist-status.csv` (validates the vocabulary) |

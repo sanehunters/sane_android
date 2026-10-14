@@ -92,7 +92,7 @@ flowchart LR
         ST[state.py · next.py]
         MK[mark.py · gate.py · coverage.py]
         TL[tools/01–09 sweeps + fuzzers]
-        FR[frida/01–10 + run.sh]
+        FR[frida/01–06]
         PA[attacker-app<br/>zero-permission probe]
     end
 
@@ -148,8 +148,8 @@ contract; `completed=true` with no mechanism keeps the gate closed. Details: [`S
 |---|---|
 | [`START.md`](START.md) · [`AGENTS.md`](AGENTS.md) · [`CLAUDE.md`](CLAUDE.md) · [`GEMINI.md`](GEMINI.md) | entry point, SOP, vendor files |
 | [`CHECKLIST.md`](CHECKLIST.md) · [`cards/`](cards/) · [`checklist/`](checklist/) · [`json/`](json/) · [`checklist.csv`](checklist.csv) · [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md) | the checklist in its tiers |
-| [`docs/`](docs/) | 01 architecture as attack surface · 02 severity doctrine · 03 lab · 04 evidence standard · 05 attacker models · 06 triage ladder · 07 coverage crosswalk · 08 senior audit · 09 coverage discipline · 10 agent operations · 11 item schema |
-| [`scripts/`](scripts/) | doctor · new-engagement · state · next · mark · gate · coverage · item · inventory · scope · scaffold-evidence · build-checklist · lint-checklist · refresh-data · gh-sync · selftest |
+| [`docs/`](docs/) | 01 architecture as attack surface · 02 severity doctrine · 03 lab · 04 evidence standard · 05 attacker models · 06 triage ladder · 07 coverage crosswalk · 08 senior audit · 09 coverage discipline · 11 item schema |
+| [`scripts/`](scripts/) | doctor · new-engagement · state · next · mark · gate · coverage · item · inventory · apply-item-meta · build-checklist · lint-checklist · refresh-data · gh-sync · selftest |
 | [`tools/`](tools/) · [`frida/`](frida/) · [`attacker-app/`](attacker-app/) | sweeps and fuzzers · runtime scripts · the zero-permission probe |
 | [`prompts/`](prompts/) · [`loops/`](loops/) · [`.claude/`](.claude/) | vendor-neutral prompts · recurring self-checks · hooks and skills |
 | [`templates/`](templates/) · [`BugBountyTarget/`](BugBountyTarget/) | report templates · the engagement archive (one dated folder per target) |
