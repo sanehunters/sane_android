@@ -8,14 +8,14 @@
  "triage": "1. **Provenance and completeness of the artefact set** (D02-001 → D02-005). Testing `base.apk` when the device runs base plus four splits produces false negatives across D03–D19, and a static review of the wrong binary is worse than no review. This is cheap and it gates everything.\n2. **Secret sweep with a liveness proof** (D02-047). The only reliable P1 in the domain. Do it before anything signing-related, because it often ends the engagement's D02 work with a finding in hand.\n3. **The three debug flags in one pass** (D02-029, -032, -033). One `aapt2 badging` and one `run-as` decide whether you have a no-root extraction path. Highest impact-per-second in the chapter.\n4. **The app's own install / update / plugin path** (D02-025 → D02-028). If it exists, this is where Critical lives. If it does not exist, skip the whole group and say so.\n5. **Does anything trust the signature** (D02-019 → D02-022). This single answer decides whether the entire signature-scheme group is a finding or hygiene, and whether repacking is even available to you as a tool.\n6. **Split / feature-delivery fail-open** (D02-038, -039). Control removal by omission, with the base signature intact — the cleanest \"High\" shape the domain offers on a modern app.\n7. **Repack-and-resign as a lever** (D02-022, -023, -045). Never a finding; often the only way to reach the flow under test on a non-rooted device.\n8. **Signature scheme and certificate inventory** (D02-011 → D02-018). Cheap, mostly hygiene, but the signer SHA-256 you capture here is an input to D09 App Links and D03/D06 signature permissions — capture it once, reuse it.\n9. **Build-system integrity** (D02-052 → D02-062). Source-access only. High ceiling, zero applicability black-box.\n10. **Version rollback and platform install gates** (D02-063 → D02-068). Last because they need multiple builds or an OEM image, but D02-063 is genuinely under-tested and costs ten minutes.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"The APK can be decompiled / is not obfuscated\" | `lack_of_binary_hardening.lack_of_obfuscation` = **P5**. Google Invalid Reports: \"Most applications (including Android apps) can be reverse engineered... in itself, being able to determine internal information about how an application works is not a vulnerability.\" HackenProof, Grab, Spotify, Starbucks and Xiaomi all list it out of scope verbatim. | Recover a *specific* secret or algorithm from behind the obfuscation — call the app's own string-decryptor with Frida and print the HMAC key or API base — then report the crypto/authz finding underneath (D02-047, -> D12, -> D15). |\n| \"The app can be repackaged and re-signed\" | P5. The repack is a tool, not a bug. Ask whether the impact sentence survives deleting the words \"an attacker can decompile the APK\"; if not, it is not a finding. | The repack unlocks a server-honoured entitlement, auth bypass or price change — and the **server** accepts the request the stock client could never send (D02-045, D02-022). |\n| \"Missing binary hardening: no PIE, no stack canaries, no ARC\" | `lack_of_binary_hardening.lack_of_exploit_mitigations` = **P5**, CWE-693, with the all-zeros impact vector `AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N` — the taxonomy scores it at no impact. | Nothing in this domain. Fold into a hardening appendix in a client report; never a bounty submission. |\n| \"No root / emulator / tamper detection\" | `lack_of_binary_hardening.lack_of_jailbreak_detection` = **P5**. Your own rooted device is AM-12 and is not an attacker. | Only as the enabling sentence of a finding whose impact is demonstrated elsewhere (D21), never as the finding. |\n| \"v1 signature present alongside v2/v3\" | Not a finding at all. v1 co-presence is normal for backward compatibility; only **v1-only** is the Janus precondition, and only with a `minSdkVersion` reaching an affected platform. | `apksigner verify --verbose` showing v2 **and** v3 false, plus a successful `adb install -r` of a modified build on an in-scope OS version (D02-012). |\n| \"No v4 signature / no `.idsig` file\" | v4 (Android 11+) supports ADB incremental install; its absence is a delivery-performance characteristic, not a security control. | Nothing. Record the scheme set (D02-011) and move on. |\n| \"1024-bit RSA signing key\" | MASTG-TEST-0225 fails it, but forging a 1024-bit RSA signature is not practical today, so programs rate it Low at best. | Fold it into a single combined \"app integrity is not cryptographically assured\" item with D02-012 and D02-015 rather than filing a standalone Low. |\n| \"`android:allowBackup=\"true\"`\" | `mobile_security_misconfiguration.auto_backup_allowed_by_default` = **P5**. H1 #1225158 (Zivver), \"ADB Backup is enabled within AndroidManifest\", paid **$0** — the flag was the whole report. | A live session token or credential recovered from the unpacked `.ab` tarball and replayed successfully against the production API (D02-031, -> D11, -> D13). |\n| \"`android:debuggable=\"true\"`\" with nothing extracted | The flag alone. MASTG links Android's own note that it \"is not considered a direct vulnerability\". | `run-as` output on a **stock, non-rooted, `ro.build.type=user`** device containing an actual token or credential, plus the replayed 200 (D02-029). |\n| \"OAuth `client_secret` found in the APK\" | `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` = **P5**, and it is on the never-submit list: a mobile app is a *public* client and is not supposed to hold a confidential secret. | The inversion: the reportable finding is **PKCE non-enforcement** at the authorisation server — show that an authorisation code obtained without a `code_verifier` still exchanges for a token (-> D13). |\n| \"Firebase web API key / Maps key in `strings.xml`\" | `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` = **P5**; a billable-but-not-sensitive key is `...pay_per_use_abuse` = **P4**, not P1. | The key has no package+SHA-1 restriction and reaches a *sensitive* asset — verified by calling the API from an unrestricted host and getting data back (D02-047, -> D18). |\n| \"Library X is at an outdated version\" with no reachability | `using_components_with_known_vulnerabilities.outdated_software_version` = **P5**. R8/LLVM dead-code elimination routinely strips the vulnerable method entirely. | The symbol survives into `classes*.dex`, a caller chain reaches it from an exported entry point, and a Frida hook proves the frame is entered with attacker-supplied data (D02-060). |\n| \"The app crashes when a split is missing\" | Fail-closed is the **correct** behaviour. Crash-only DoS via intents is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5** (H1 #3399016 scored 0.0). | The opposite observation: the app launches base-only and a module-gated control is skipped (D02-038). |\n| \"`adb install` failed with `INSTALL_FAILED_DEPRECATED_SDK_VERSION`\" | A harness artefact of the test device's Android version, not a property of the app. | The client's own distribution channel (enterprise MDM, sideload updater) ships a sub-minimum-target APK that the platform would otherwise refuse (D02-064). |\n| \"A Frida gadget can be injected / the app can be instrumented\" | `lack_of_binary_hardening.runtime_instrumentation_based` = **P5**. This is your tooling. | Nothing in this domain. Report what the instrumentation revealed, in whichever domain owns it. |\n| \"Testing on my own rooted device showed X\" | AM-12 is not an attacker model. A root-only observation is at most P5 storage. | Demonstrate the same read via a no-root path — `run-as` on a debuggable build, `adb backup`, a backup transport, or a same-UID sibling (D02-029, D02-031). |\n| \"Duplicate `classes.dex` / Master Key reproduces\" (claimed, untested) | Long fixed on every supported Android; the class is LEGACY. | A successful `adb install -r` **on an in-scope OS version**, with the injected DEX executing (D02-013). Verify very carefully before reporting. |",
  "joins": "- **D02 split set × D03 manifest model.** Reviewers decode `base.apk` and enumerate components from its manifest. A `config.*` or feature split ships its **own** manifest fragment, so an exported provider or receiver that exists only in a split is invisible to a base-only review and to every drozer scan run against the base package's declared components. Join: run the `aapt2 d xmltree` component sweep over **every** split (D02-040), then feed the delta into D03/D05/D06/D07 as a second pass. The delta is where the unreviewed components live.\n- **D02 Play App Signing key × D09 Digital Asset Links.** The `assetlinks.json` fingerprint must match the **app signing key** Google re-signs with, not the upload key that signed the artefact you were handed. A team that rotates the upload key, or that publishes the upload fingerprint, ships App Links that never verify — and a malicious app registering the same host filter then wins link traffic. Nobody checks these two surfaces together because one lives in Play Console and the other on a web server (D02-006).\n- **D02 `android:debuggable` × D12 Android Keystore.** A \"the key never leaves Keystore, so extraction is impossible\" design is defeated without extracting anything: JDWP-attach the debuggable process and **call the app's own decrypt routine in-process**. The Keystore review concludes \"hardware-backed, not extractable\" and the D02 review concludes \"debuggable, P5 hardening note\" — the join is arbitrary decryption of every locally stored ciphertext (D02-030).\n- **D02 missing-split fail-open × D21 RASP/attestation.** The RASP review tests whether the root check can be hooked. The feature-delivery review tests whether the app runs without its modules. Nobody asks whether the **attestation code lives in a split** — if it does, a base-only install removes the control entirely, with `base.apk`'s signature untouched and no instrumentation for RASP to detect (D02-038).\n- **D02 version history × D15 shadow API.** The endpoints hardcoded in build N-3 are an *older API version* than the current web app uses, with weaker auth, weaker rate limits, weaker validation and more field exposure. The mobile reviewer looks at the current APK; the API reviewer looks at the current web traffic; neither looks at the artefact that documents the version the vendor forgot to retire. Diff **behaviourally**, per operation — a version difference alone is Informational (D02-009).\n- **D02 `knownSigner` allowlist × D06 bound services.** The IPC reviewer sees `protectionLevel=\"signature\"` and marks the service protected. The signing reviewer sees a certificate digest array and marks it inventory. Joined on Android 12+, `knownSigner` means *any* party holding *any* key in that array — including a rotated-away key or a low-trust partner's — takes the permission automatically and with no user notification (D02-017).\n- **D02 merged-manifest creep × D14 network security config.** The network reviewer confirms `cleartextTrafficPermitted=\"false\"` from the app's source manifest and concedes the cleartext finding as mitigated. The **merged** manifest is the one that ships, and an SDK can re-add `usesCleartextTraffic=\"true\"` or replace the `networkSecurityConfig` reference through ordinary merger rules. The join re-opens a finding both reviewers had closed (D02-044).\n- **D02 `lib-*/` drop zone × D07 FileProvider path traversal.** The provider reviewer finds a traversal write and rates it \"arbitrary file write into the app sandbox\" — Medium. The package-layout reviewer knows `/data/data/<pkg>/lib-*/` is loaded at process start. Joined, the write primitive lands a `.so` under the name of a library the app loads and becomes persistent code execution in the app's UID on next launch (D02-042; the Evernote and Mattermost shape).\n- **D02 resource flag flip × D23 entitlements × D15 backend.** Three reviewers each see a third of this: a `is_premium` string in `res/values`, a paywall in the payments flow, an entitlement field in an API response. The join is one test — flip the resource, rebuild, and check whether the **server** honours the premium-only call. If it does, a P5 \"app can be repackaged\" becomes a payments finding (D02-045).\n- **D02 custom verifier × D07 path traversal × D02 deterministic cache.** The Samsung Galaxy Store chain is exactly this join: a verifier that checks the signature over a digest without recomputing it, a deterministic cache path, and a write primitive to reach that path. Each alone is a Medium-at-best observation; together they are arbitrary app installation under a trusted signer allowlist (D02-025, D02-026).",
- "sources": "- **OWASP MASTG / MASVS / MASWE**: MASTG-TEST-0212, -0224, -0225, -0226, -0227, -0272, -0274; MASTG-TECH-0003, -0007, -0031, -0040, -0116, -0117, -0130, -0131, -0141, -0142, -0145, -0150; MASTG-TOOL-0004, -0007, -0011, -0019, -0100, -0103, -0123, -0125, -0130, -0131, -0132, -0134, -0144; MASWE-0003, -0004, -0011, -0044, -0048, -0049, -0056, -0063; MASTG-KNOW-0003, -0004, -0007, -0028.\n- **Bugcrowd VRT release 2026-07-08** (581 entries), read from `data/bugcrowd-vrt-full.csv` for every priority and path quoted in this chapter.\n- **AOSP / Android developer documentation**: `source.android.com/docs/security/features/apksigning` (schemes v2, v3, v3.1, v3.2, v4); the AOSP security-model paper §4.7.1 item (5) and rule ④ with its FRP/Widevine exceptions; `source.android.com/docs/core/permissions/perms-allowlist`; `source.android.com/docs/core/permissions/signature-permission-allowlist` (Android 15); Android 12 behaviour changes (`adb backup`, `dataExtractionRules`, D2D transfer); Android 13 features (v3.1, `--rotation-min-sdk-version`); Android 14/15 behaviour changes (minimum installable target, `--bypass-low-target-sdk-block`); `guide/app-bundle/play-feature-delivery`; `guide/app-bundle/app-bundle-format`; risk articles `android-debuggable`, `test-debug`, `create-package-context`; `tools/bundletool`, `tools/apkanalyzer`; the Conscrypt module trust-store note for API 34+.\n- **MITRE ATT&CK Mobile**: T1406, T1406.002, T1407, T1409, T1474.001, T1474.003, T1533, T1544, T1577, T1623.001, T1632, T1632.001, T1645, T1661; analytic AN1730; mitigations M1001, M1002, M1004, M1006, M1011, M1012, M1013; procedure examples Agent Smith S0440, BOULDSPY S1079, SharkBot S1055, Triada S0424, XcodeGhost S0297.\n- **CVEs and advisories**: CVE-2017-13156 (Janus, EDB 47601), CVE-2013-4787 (EDB 38627), CVE-2013-6792 (EDB 38821), CVE-2021-0341, CVE-2020-8913, CVE-2021-29427 / GHSA-jvmj-rh6q-x395, GHSA-j6wc-xfg8-jx2j, CVE-2026-28576 / GHSA-ph86-9mcx-3p6r, CVE-2022-2294 (Project Zero RCA, cited for the reachability argument).\n- **Disclosed reports**: H1 #1377748 (Evernote, High), #1115864 (Mattermost, High 7.8), #1362313 (Evernote sibling), #1225158 (Zivver, $0), #3829030 (Yelp Business, Low 3.3), #3399016 (Nextcloud, 0.0).\n- **Vendor and program policy**: Google Mobile VRP arbitrary-code-execution examples and payout tiers; Google Invalid Reports (\"Decompiling/reverse engineering an app\"); HackenProof mobile out-of-scope list; HackerOne Platform Standards, \"Bounty Awards for Discovered Leaked Credentials\"; Grab, Spotify, Starbucks and Xiaomi out-of-scope language.\n- **Research and tooling**: Oversecured \"Introducing MavenGate\" (3,710/26,163 domains, 18.18% of dependencies); the Samsung Galaxy Store / S25 verifier-confusion chain (bugscale); Gradle \"Protecting Project Integrity\" and the dependency-verification userguide; the Gradle Dependency Analysis Plugin (DAGP 3.5.0+) Maven-Hijack post; LibScout; osv-scanner; cdxgen / Syft / CycloneDX Gradle plugin; APKiD; clsdumper; apk-mitm; uber-apk-signer; objection `patchapk`; drozer (`app.package.debuggable`, `exploit.jdwp.check`, `tools.file.*`, `scanner.misc.*`); MobSF rule `android_aar_jar_debug_enabled`; Mobile Hacking Lab (`jadx-mcp-plugin`, the `@ChangeId` audit technique); reFlutter; hbctool; Payatu's Hermes modification workflow.\n- **Community checklists and write-ups**: HackTricks (`android-applications-basics.md`, `smali-changes.md`, superpacked applications); sec-88 (Janus page, checklist §5/§7/§17, InsecureBankv2 walkthrough); Het Mehta Phase 2; Hrishikesh C07/C17; Nerdwell's Bugcrowd LevelUp \"Finding Sensitive Data in Android Apps\"; the Bugcrowd \"Ultimate beginner's guide to Android hacking\"; COFFSec's 10-methods write-up; sh4hin MobileApp-Pentest-Cheatsheet; YesWeHack's Android recon guide; hackwithsingh sec-14-5 / sec-14-18; riya78 §5/§6; Gowthams `approach.md` (BFAC); sehno's configuration-management checklist.\n- **Claude-BugHunter corpus (elementalsouls)**: `apk-redteam-pipeline` (Stages 0–3 and its anti-patterns), `hunt-shadow-api` (the mobile-to-backend version-diff bridge and its severity table), `bb-methodology` PART 4 (Shell-Loop Ban, Body-Diff Rule, Marker Discipline, Multi-Tool Reproduction Bar), `triage-validation` (7-Question Gate, Pre-Severity Gate, retraction discipline and its inverse), `evidence-hygiene` (the five-screenshot state-change pattern and the mask/leave-visible split), `bugcrowd-reporting` §5 and §8 (chain-filing order and submission sequencing), `recon-scope-triage` (the soft-404 control).\n- **Local senior-researcher corpus**: refs 00, 03, 05, 06, 08, 18 (§D, §D.1–D.3, §E, §L, §M), 20, 23 (the graveyard), 24 (§A4.7) — repack-as-a-lever table, the three-way `debuggable` detection, split-set re-signing, and the re-signing cost list.",
- "intro": "> This domain is about the shipped artefact itself: what is inside it, who signed it, whether the splits you tested are the splits users run, and whether anything anywhere actually trusts those bytes. Its honest severity ceiling is **P1 — but only through one door**: a live credential recovered from the package (`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`). Every signing-scheme, repackaging and obfuscation observation in this domain is pinned at **P5** and must be escalated or graveyarded.\n\n| | |\n|---|---|\n| **Phases** | P2 acquisition & artefact inventory, P3 static analysis |\n| **Milestones** | M2 (complete, provenance-proved artefact set), M3 (build-integrity verdict + secret liveness verdict) |\n| **VRT ceiling** | **P1** — `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`; sibling P1 route `insecure_os_firmware.hardcoded_password.privileged_user`. Integrity/update-channel work tops out at `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) unless you demonstrate code execution, and every \"can be repackaged / decompiled / not obfuscated\" observation is `lack_of_binary_hardening.*` (P5). |\n| **Primary attacker model** | AM-03 zero-permission local app (debuggable, `run-as`, lib-drop, installer-cache substitution). AM-09 malicious backend/CDN for the update-channel items. AM-08 for the build-system items. AM-12 is *not* an attacker — a rooted device of your own never carries a D02 finding on its own. |\n| **Maps to** | MASVS-RESILIENCE-2, MASVS-RESILIENCE-4, MASVS-CODE-3, MASVS-STORAGE-1, MASVS-PLATFORM; MASTG-TEST-0224, -0225, -0226, -0227, -0212, -0272, -0274; MASTG-TECH-0003, -0007, -0116, -0117, -0130, -0131, -0141, -0142, -0145, -0150, -0031, -0040; MASWE-0003, -0004, -0011, -0044, -0048, -0049, -0056, -0063; CWE-347, CWE-353, CWE-354, CWE-489, CWE-494, CWE-312, CWE-321, CWE-540, CWE-798, CWE-829, CWE-1357, CWE-1395, CWE-693; ATT&CK T1577, T1661, T1645, T1474.001, T1474.003, T1407, T1406, T1406.002, T1409, T1533, T1544, T1632, T1632.001, T1623.001 (analytic AN1730; mitigations M1001, M1002, M1004, M1006, M1011, M1012, M1013) |",
+ "sources": "- **OWASP MASTG / MASVS / MASWE**: MASTG-TEST-0212, -0224, -0225, -0226, -0227, -0272, -0274; MASTG-TECH-0003, -0007, -0031, -0040, -0116, -0117, -0130, -0131, -0141, -0142, -0145, -0150; MASTG-TOOL-0004, -0007, -0011, -0019, -0100, -0103, -0123, -0125, -0130, -0131, -0132, -0134, -0144; MASWE-0003, -0004, -0011, -0044, -0048, -0049, -0056, -0061, -0063; MASTG-KNOW-0003, -0004, -0007, -0028.\n- **Bugcrowd VRT release 2026-07-08** (581 entries), read from `data/vrt.csv` for every priority and path quoted in this chapter.\n- **AOSP / Android developer documentation**: `source.android.com/docs/security/features/apksigning` (schemes v2, v3, v3.1, v3.2, v4); the AOSP security-model paper §4.7.1 item (5) and rule ④ with its FRP/Widevine exceptions; `source.android.com/docs/core/permissions/perms-allowlist`; `source.android.com/docs/core/permissions/signature-permission-allowlist` (Android 15); Android 12 behaviour changes (`adb backup`, `dataExtractionRules`, D2D transfer); Android 13 features (v3.1, `--rotation-min-sdk-version`); Android 14/15 behaviour changes (minimum installable target, `--bypass-low-target-sdk-block`); `guide/app-bundle/play-feature-delivery`; `guide/app-bundle/app-bundle-format`; risk articles `android-debuggable`, `test-debug`, `create-package-context`; `tools/bundletool`, `tools/apkanalyzer`; the Conscrypt module trust-store note for API 34+.\n- **MITRE ATT&CK Mobile**: T1406, T1406.002, T1407, T1409, T1474.001, T1474.003, T1533, T1544, T1577, T1623.001, T1632, T1632.001, T1645, T1661; analytic AN1730; mitigations M1001, M1002, M1004, M1006, M1011, M1012, M1013; procedure examples Agent Smith S0440, BOULDSPY S1079, SharkBot S1055, Triada S0424, XcodeGhost S0297.\n- **CVEs and advisories**: CVE-2017-13156 (Janus, EDB 47601), CVE-2013-4787 (EDB 38627), CVE-2013-6792 (EDB 38821), CVE-2021-0341, CVE-2020-8913, CVE-2021-29427 / GHSA-jvmj-rh6q-x395, GHSA-j6wc-xfg8-jx2j, CVE-2026-28576 / GHSA-ph86-9mcx-3p6r, CVE-2022-2294 (Project Zero RCA, cited for the reachability argument).\n- **Disclosed reports**: H1 #1377748 (Evernote, High), #1115864 (Mattermost, High 7.8), #1362313 (Evernote sibling), #1225158 (Zivver, $0), #3829030 (Yelp Business, Low 3.3), #3399016 (Nextcloud, 0.0).\n- **Vendor and program policy**: Google Mobile VRP arbitrary-code-execution examples and payout tiers; Google Invalid Reports (\"Decompiling/reverse engineering an app\"); HackenProof mobile out-of-scope list; HackerOne Platform Standards, \"Bounty Awards for Discovered Leaked Credentials\"; Grab, Spotify, Starbucks and Xiaomi out-of-scope language.\n- **Research and tooling**: Oversecured \"Introducing MavenGate\" (3,710/26,163 domains, 18.18% of dependencies); the Samsung Galaxy Store / S25 verifier-confusion chain (bugscale); Gradle \"Protecting Project Integrity\" and the dependency-verification userguide; the Gradle Dependency Analysis Plugin (DAGP 3.5.0+) Maven-Hijack post; LibScout; osv-scanner; cdxgen / Syft / CycloneDX Gradle plugin; APKiD; clsdumper; apk-mitm; uber-apk-signer; objection `patchapk`; drozer (`app.package.debuggable`, `exploit.jdwp.check`, `tools.file.*`, `scanner.misc.*`); MobSF rule `android_aar_jar_debug_enabled`; Mobile Hacking Lab (`jadx-mcp-plugin`, the `@ChangeId` audit technique); reFlutter; hbctool; Payatu's Hermes modification workflow.\n- **Community checklists and write-ups**: HackTricks (`android-applications-basics.md`, `smali-changes.md`, superpacked applications); sec-88 (Janus page, checklist §5/§7/§17, InsecureBankv2 walkthrough); Het Mehta Phase 2; Hrishikesh C07/C17; Nerdwell's Bugcrowd LevelUp \"Finding Sensitive Data in Android Apps\"; the Bugcrowd \"Ultimate beginner's guide to Android hacking\"; COFFSec's 10-methods write-up; sh4hin MobileApp-Pentest-Cheatsheet; YesWeHack's Android recon guide; hackwithsingh sec-14-5 / sec-14-18; riya78 §5/§6; Gowthams `approach.md` (BFAC); sehno's configuration-management checklist.\n- **Claude-BugHunter corpus (elementalsouls)**: `apk-redteam-pipeline` (Stages 0–3 and its anti-patterns), `hunt-shadow-api` (the mobile-to-backend version-diff bridge and its severity table), `bb-methodology` PART 4 (Shell-Loop Ban, Body-Diff Rule, Marker Discipline, Multi-Tool Reproduction Bar), `triage-validation` (7-Question Gate, Pre-Severity Gate, retraction discipline and its inverse), `evidence-hygiene` (the five-screenshot state-change pattern and the mask/leave-visible split), `bugcrowd-reporting` §5 and §8 (chain-filing order and submission sequencing), `recon-scope-triage` (the soft-404 control).\n- **Local senior-researcher corpus**: refs 00, 03, 05, 06, 08, 18 (§D, §D.1–D.3, §E, §L, §M), 20, 23 (the graveyard), 24 (§A4.7) — repack-as-a-lever table, the three-way `debuggable` detection, split-set re-signing, and the re-signing cost list.",
+ "intro": "> This domain is about the shipped artefact itself: what is inside it, who signed it, whether the splits you tested are the splits users run, and whether anything anywhere actually trusts those bytes. Its honest severity ceiling is **P1 — but only through one door**: a live credential recovered from the package (`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`). Every signing-scheme, repackaging and obfuscation observation in this domain is pinned at **P5** and must be escalated or graveyarded.\n\n| | |\n|---|---|\n| **Phases** | P2 acquisition & artefact inventory, P3 static analysis |\n| **Milestones** | M2 (complete, provenance-proved artefact set), M3 (build-integrity verdict + secret liveness verdict) |\n| **VRT ceiling** | **P1** — `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`; sibling P1 route `insecure_os_firmware.hardcoded_password.privileged_user`. Integrity/update-channel work tops out at `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) unless you demonstrate code execution, and every \"can be repackaged / decompiled / not obfuscated\" observation is `lack_of_binary_hardening.*` (P5). |\n| **Primary attacker model** | AM-03 zero-permission local app (debuggable, `run-as`, lib-drop, installer-cache substitution). AM-09 malicious backend/CDN for the update-channel items. AM-08 for the build-system items. AM-12 is *not* an attacker — a rooted device of your own never carries a D02 finding on its own. |\n| **Maps to** | MASVS-RESILIENCE-2, MASVS-RESILIENCE-4, MASVS-CODE-3, MASVS-STORAGE-1, MASVS-PLATFORM; MASTG-TEST-0224, -0225, -0226, -0227, -0212, -0272, -0274; MASTG-TECH-0003, -0007, -0116, -0117, -0130, -0131, -0141, -0142, -0145, -0150, -0031, -0040; MASWE-0003, -0004, -0011, -0044, -0048, -0049, -0056, -0061, -0063; CWE-347, CWE-353, CWE-354, CWE-489, CWE-494, CWE-312, CWE-321, CWE-540, CWE-798, CWE-829, CWE-1357, CWE-1395, CWE-693; ATT&CK T1577, T1661, T1645, T1474.001, T1474.003, T1407, T1406, T1406.002, T1409, T1533, T1544, T1632, T1632.001, T1623.001 (analytic AN1730; mitigations M1001, M1002, M1004, M1006, M1011, M1012, M1013) |",
  "domain_meta": {
   "Phases": "P2 acquisition & artefact inventory, P3 static analysis",
   "Milestones": "M2 (complete, provenance-proved artefact set), M3 (build-integrity verdict + secret liveness verdict)",
   "VRT ceiling": "**P1** — `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`; sibling P1 route `insecure_os_firmware.hardcoded_password.privileged_user`. Integrity/update-channel work tops out at `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) unless you demonstrate code execution, and every \"can be repackaged / decompiled / not obfuscated\" observation is `lack_of_binary_hardening.*` (P5).",
   "Primary attacker model": "AM-03 zero-permission local app (debuggable, `run-as`, lib-drop, installer-cache substitution). AM-09 malicious backend/CDN for the update-channel items. AM-08 for the build-system items. AM-12 is *not* an attacker — a rooted device of your own never carries a D02 finding on its own.",
-  "Maps to": "MASVS-RESILIENCE-2, MASVS-RESILIENCE-4, MASVS-CODE-3, MASVS-STORAGE-1, MASVS-PLATFORM; MASTG-TEST-0224, -0225, -0226, -0227, -0212, -0272, -0274; MASTG-TECH-0003, -0007, -0116, -0117, -0130, -0131, -0141, -0142, -0145, -0150, -0031, -0040; MASWE-0003, -0004, -0011, -0044, -0048, -0049, -0056, -0063; CWE-347, CWE-353, CWE-354, CWE-489, CWE-494, CWE-312, CWE-321, CWE-540, CWE-798, CWE-829, CWE-1357, CWE-1395, CWE-693; ATT&CK T1577, T1661, T1645, T1474.001, T1474.003, T1407, T1406, T1406.002, T1409, T1533, T1544, T1632, T1632.001, T1623.001 (analytic AN1730; mitigations M1001, M1002, M1004, M1006, M1011, M1012, M1013)"
+  "Maps to": "MASVS-RESILIENCE-2, MASVS-RESILIENCE-4, MASVS-CODE-3, MASVS-STORAGE-1, MASVS-PLATFORM; MASTG-TEST-0224, -0225, -0226, -0227, -0212, -0272, -0274; MASTG-TECH-0003, -0007, -0116, -0117, -0130, -0131, -0141, -0142, -0145, -0150, -0031, -0040; MASWE-0003, -0004, -0011, -0044, -0048, -0049, -0056, -0061, -0063; CWE-347, CWE-353, CWE-354, CWE-489, CWE-494, CWE-312, CWE-321, CWE-540, CWE-798, CWE-829, CWE-1357, CWE-1395, CWE-693; ATT&CK T1577, T1661, T1645, T1474.001, T1474.003, T1407, T1406, T1406.002, T1409, T1533, T1544, T1632, T1632.001, T1623.001 (analytic AN1730; mitigations M1001, M1002, M1004, M1006, M1011, M1012, M1013)"
  },
  "items": [
   {
@@ -48,17 +48,21 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
+   "xrefs": [
+    "D01-003",
+    "D02-003"
+   ],
    "domain_refs": [
+    "D01",
     "D03",
     "D06",
     "D09"
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "Record, for every input byte, where it came from and what it hashes to. A client-supplied APK, a Play-downloaded APK and an APKMirror download of \"the same version\" routinely differ in signer, split set or content.",
-   "how": "```bash\nfor f in apk/*.apk; do\n  printf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(wc -c < \"$f\" | tr -d \" \")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\napksigner verify --print-certs --verbose apk/base.apk | \\\n  grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme|key (algorithm|size)'\naapt2 dump badging apk/base.apk | grep -E 'package:|sdkVersion|targetSdkVersion'\n```\nRecord in the report: acquisition source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), SHA-256 of each split, signer SHA-256, and which schemes verified.",
-   "proof": "An appendix table from which the client's own build engineer can re-derive every hash, alongside `versionName`/`versionCode`.",
+   "test": "If `logs/D01-003.txt` exists, reuse it and verify only the count and the hashes — do not re-run the pull (D01 owns P2 acquisition; this item owns the verdict). Record, for every input byte, where it came from and what it hashes to. A client-supplied APK, a Play-downloaded APK and an APKMirror download of \"the same version\" routinely differ in signer, split set or content.",
+   "how": "```bash\nfor f in apk/*.apk; do\n  printf '%s\\t%s\\t%s\\n' \"$(shasum -a 256 \"$f\" | cut -d' ' -f1)\" \"$(wc -c < \"$f\" | tr -d \" \")\" \"$f\"\ndone | tee evidence/ARTEFACT-MANIFEST.txt\napksigner verify --print-certs --verbose apk/base.apk | \\\n  grep -E 'Signer #1 certificate (SHA-256|DN)|Verified using v[1234] scheme|key (algorithm|size)'\naapt2 dump badging apk/base.apk | grep -E 'package:|sdkVersion|targetSdkVersion'\n# SourceStamp (v2 block 0x6dff800d): the cheapest device-free tell between a store build and a mirror repack\nunzip -p apk/base.apk META-INF/stamp-cert-sha256 2>/dev/null | xxd -p | tr -d '\\n'; echo    # stamp signer digest; present on store-generated APKs\napksigner verify -v --print-certs apk/base.apk | grep -i 'source stamp'                      # 'Source Stamp Signer certificate ...' when the block is present\n```\nRecord in the report: acquisition source (`client SFTP 2026-09-02` / `adb pull from a Play-installed build` / `Play Console internal app sharing link`), SHA-256 of each split, signer SHA-256, and which schemes verified.",
+   "proof": "An appendix table from which the client's own build engineer can re-derive every hash, alongside `versionName`/`versionCode`, with a `stamp` column: the SourceStamp signer digest or `none`. A store-delivered build carries the store's stamp signer; a stamp whose signer is not the store's, or a build that lost its stamp while claiming to be the store build, is a repack — route to D02-003 and do not treat it as the vendor's artefact. Absence alone proves nothing (not every pipeline stamps).",
    "escalation": "The signer SHA-256 is the input to the Digital Asset Links check (-> D09) and to every `checkSignatures`/signature-permission analysis (-> D03, -> D06). Capture once, reuse everywhere.",
    "ruled_out_when": "Never ruled out — this is not a test, it is the record that makes a disputed finding pinnable to an artefact. Its absence is itself a deliverable defect."
   },
@@ -75,8 +79,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "All; mandatory for AAB / split-APK / Play-Feature-Delivery apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "drozer `tools.file.md5sum`, `tools.file.size`, `tools.file.download`; MASTG-TECH-0003, MASTG-TECH-0007",
    "record": "",
    "legacy_meta": {},
@@ -92,12 +98,17 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
-   "domain_refs": [],
+   "xrefs": [
+    "D01-003",
+    "D01-013"
+   ],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
    "skip_when": "",
-   "test": "Hash the APK actually installed on the device and compare with the artefact you were given. Divergence invalidates the static half of the engagement until resolved.",
-   "how": "```bash\nadb shell pm path com.target.app          # prints base.apk AND every split\nfor p in $(adb shell pm path com.target.app | tr -d '\\r' | sed 's/package://'); do adb pull \"$p\" device/; done\nshasum -a 256 device/*.apk apk/*.apk\n```\ndrozer equivalent (path from `app.package.info -a <pkg>`, `APK path:` line):\n```\ndz> run tools.file.md5sum /data/app/com.target.app-1/base.apk\ndz> run tools.file.size   /data/app/com.target.app-1/base.apk\ndz> run tools.file.download /data/app/com.target.app-1/base.apk ./base_from_device.apk\n```",
+   "test": "If `logs/D01-013.txt` or `logs/D01-003.txt` already holds the device hashes, reuse them. Hash the APK actually installed on the device and compare with the artefact you were given. Divergence invalidates the static half of the engagement until resolved.",
+   "how": "```bash\nadb shell pm path com.target.app          # prints base.apk AND every split\nfor p in $(adb shell pm path com.target.app | tr -d '\\r' | sed 's/package://'); do adb pull \"$p\" device/; done\nshasum -a 256 device/*.apk apk/*.apk\n```\ndrozer equivalent (drozer 3, the Python 3 line; take the path from `run app.package.info -a <pkg>`, `APK path:` — on Android 8+ it has the form `/data/app/~~<random>==/<pkg>-<random>==/base.apk`):\n```\ndz> run tools.file.md5sum <that path>\ndz> run tools.file.size   <that path>\ndz> run tools.file.download <that path> ./base_from_device.apk\n```",
    "proof": "A SHA-256 mismatch between the device APK and the supplied artefact, or a `split_config.*.apk` present on the device that was never handed over.",
    "escalation": "Re-run all static analysis against the merged device set before touching any other domain.",
    "ruled_out_when": "Every hash in `device/` matches the corresponding hash in `apk/`, and `pm path` returns exactly the file set you were given (count them — a missing split is the usual failure)."
@@ -157,8 +168,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "All AAB-delivered apps (every Play-distributed app since August 2021)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0145 (Working with XAPK Files), MASTG-TECH-0003; `bb-methodology` PART 4 \"Shell-Loop Ban\"",
    "record": "",
    "legacy_meta": {},
@@ -174,14 +187,17 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
+   "xrefs": [
+    "D01-001"
+   ],
    "domain_refs": [
+    "D01",
     "D03",
     "D16"
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "Native libraries, some resources and config-specific manifest fragments live only in splits. Pulling only `base.apk` silently removes the entire native surface and produces a false \"no native code\" verdict that suppresses all of D16.",
+   "test": "If `logs/D01-001.txt` exists, reuse it and verify only the split count — do not re-pull. Native libraries, some resources and config-specific manifest fragments live only in splits. Pulling only `base.apk` silently removes the entire native surface and produces a false \"no native code\" verdict that suppresses all of D16.",
    "how": "```bash\nadb shell pm path com.target.app | tr -d '\\r' | sed 's/package://' > /tmp/paths.txt\nwc -l /tmp/paths.txt                       # EXPECTED COUNT — write it down\nmkdir -p splits && while read -r p; do adb pull \"$p\" splits/ || echo \"FAILED: $p\"; done < /tmp/paths.txt\nls -1 splits/*.apk | wc -l                 # MUST equal the expected count\nfor f in splits/*.apk; do echo \"== $f\"; unzip -l \"$f\" | grep -E '\\.so$|classes.*\\.dex'; done\n```",
    "proof": "A `.so` or `classes*.dex` present in a config split and absent from `base.apk`, plus a pull count that matches the `pm path` line count.",
    "escalation": "Each split-only `.so` -> D16 JNI reachability; each split-only manifest fragment -> D03.",
@@ -215,14 +231,17 @@
     "vrt": []
    },
    "xrefs": [
+    "D01-002",
     "D02-002",
     "D02-006",
     "D02-007"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D01"
+   ],
    "has_code": true,
-   "skip_when": "",
-   "test": "The universal APK is not what users run. `--mode=universal` merges code that is never co-resident on a real device, and density/ABI/language splits differ per device. Build the set the *target device* would actually be served.",
+   "skip_when": "`ls \"$E\"/apk/*.aab 2>/dev/null | wc -l` prints 0 — write `n/a — handover is signed APKs, not an AAB (D02-002 hash-match recorded)`.",
+   "test": "If `logs/D01-002.txt` exists, reuse its split set and verify only the hash match. The universal APK is not what users run. `--mode=universal` merges code that is never co-resident on a real device, and density/ABI/language splits differ per device. Build the set the *target device* would actually be served.",
    "how": "```bash\nbundletool get-device-spec --output=lab/device-spec.json\nbundletool build-apks --bundle=app.aab --output=lab/app.apks \\\n  --device-spec=lab/device-spec.json \\\n  --ks=lab/test.jks --ks-key-alias=test --ks-pass=file:lab/ks.pwd --key-pass=file:lab/key.pwd\nbundletool extract-apks --apks=lab/app.apks --device-spec=lab/device-spec.json --output-dir=lab/splits\nbundletool install-apks --apks=lab/app.apks --device-id=$SERIAL\nunzip -l app.aab | grep -i 'BUNDLE-METADATA'      # ProGuard mappings ride here, unpackaged into APKs\n```",
    "proof": "`lab/splits/` containing `base-master.apk` plus the config splits, and an installed app whose `pm path` output matches that set.",
    "escalation": "The `BUNDLE-METADATA/` tree carries the R8 mapping for free (-> D02-007). But note you signed this build with a *test* key: every signature-dependent conclusion must be re-verified against the store artefact (-> D02-006).",
@@ -258,9 +277,12 @@
     "vrt": []
    },
    "xrefs": [
-    "D02-002"
+    "D01-005",
+    "D02-002",
+    "D09-016"
    ],
    "domain_refs": [
+    "D01",
     "D09",
     "D18"
    ],
@@ -270,7 +292,7 @@
    "how": "```bash\napksigner verify --print-certs apk/base.apk       | grep -i 'SHA-256'   # what you were given\napksigner verify --print-certs device/base.apk    | grep -i 'SHA-256'   # what users run (per D02-002)\ncurl -s https://target.example/.well-known/assetlinks.json | python3 -m json.tool\n```\nAsk the client for the app signing key SHA-256: Play Console -> Protected with Play -> Play Store distribution -> Play app signing -> App signing key. Put it in the scoping sheet.",
    "proof": "Three fingerprints side by side. A mismatch between the `assetlinks.json` fingerprint and the **app signing key** is a verifiable App Links break; a mismatch between your test artefact and the store artefact invalidates every signature-dependent conclusion you drew.",
    "escalation": "-> D09 (unverified App Links fall back to the disambiguation dialog and a malicious app can register the same host filter). -> D18 (a Maps/Firebase key restricted to the *upload* key fingerprint is effectively unrestricted for the shipped app).",
-   "ruled_out_when": "The store artefact's signer SHA-256 equals the handover artefact's signer SHA-256 *and* equals the `assetlinks.json` fingerprint. All three, not two."
+   "ruled_out_when": "The store artefact's signer SHA-256 equals the handover artefact's signer SHA-256, **and** that digest — or a member of the app's v3 lineage, since verification walks the lineage — appears in the `sha256_cert_fingerprints` array of every declared host. `assetlinks.json` legitimately lists several historical fingerprints and several statements per host: an array that *contains* the current on-device signer is a pass. The finding is the inverse — the current signer and its lineage appear in no statement, or the only listed key is one the client does not control. Twin rows: D01-005 and D09-016 — if `logs/D01-005.txt` exists, reuse it and verify only the digests; do not re-run."
   },
   {
    "id": "D02-007",
@@ -306,7 +328,7 @@
     "D17"
    ],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "\"Full APK review\" engagements routinely run against obfuscated DEX because nobody asked for the mapping file. With it, every finding cites real class and method names — the difference between a developer fixing it in an hour and arguing for a week.",
    "how": "Request the archived copy for the exact `versionCode` in scope (AGP overwrites it on every build); it is also carried inside the AAB under `BUNDLE-METADATA/`. Then:\n```bash\njadx --mappings-path mapping.txt --mappings-mode read \\\n     -Prename-mappings.format=PROGUARD_FILE -d $DEC/jadx base.apk\n\"$ANDROID_HOME/cmdline-tools/latest/bin/retrace\" mapping.txt trace.txt\n```",
    "proof": "`$DEC/jadx/sources` containing original package and class names; a retraced stack trace naming real frames.",
@@ -348,7 +370,7 @@
     "D18"
    ],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "If the repo checkout and the APK diverge — a different branch, a patched dependency, a post-build script, a release-only ProGuard rule, an injected SDK — then every source-derived finding is about code that does not ship, and every shipped behaviour you did not see is uncovered.",
    "how": "```bash\ngit -C repo rev-parse HEAD | tee recon/reviewed-commit.txt\ngrep -rnE 'versionCode|versionName' repo/app/build.gradle*\napkanalyzer dex packages apk/base.apk | awk '$1==\"P\"{print $4}' | sort -u > recon/apk-packages.txt\ngrep -rhoE '^package [a-z][a-zA-Z0-9_.]+' repo --include='*.java' --include='*.kt' \\\n  | sed 's/^package //' | sort -u > recon/repo-packages.txt\ncomm -23 recon/apk-packages.txt recon/repo-packages.txt | tee recon/apk-only-packages.txt | wc -l\napkanalyzer manifest print apk/base.apk > recon/apk-manifest.xml\ndiff <(grep -oE '<(activity|service|receiver|provider)[^>]*android:name=\"[^\"]+\"' recon/apk-manifest.xml \\\n      | grep -oE 'android:name=\"[^\"]+\"' | sort -u) \\\n     <(grep -rhoE 'android:name=\"[^\"]+\"' repo/app/src/main/AndroidManifest.xml | sort -u)\n```",
    "proof": "A correspondence note giving the reviewed commit, the artefact hash, the count of APK-only packages, and a disposition for each (in scope with source / in scope black-box / explicitly excluded).",
@@ -388,15 +410,19 @@
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D01-010",
+    "D02-001"
+   ],
    "domain_refs": [
+    "D01",
     "D15",
     "D18"
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "Two distinct payloads live in old builds. (a) A credential removed from the current build is frequently still live server-side — the old APK is the only place the value survives. (b) A mobile app's hardcoded backend calls are frequently an **older API version** than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Build N-3 is that version, preserved.",
-   "how": "Pull older releases from the mirror's version-history pages, then re-run the secret sweep and the endpoint sweep against each:\n```bash\nfor v in 7.4.1 7.2.0 6.9.3; do\n  jadx -d \"out_$v\" \"hist/com.target.app_$v.apk\"\n  grep -rEn '(AIza[0-9A-Za-z_\\-]{35}|AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24,}|xox[baprs]-)' \"out_$v\" \\\n    | tee \"loot/secrets_$v.txt\"\n  grep -rhoE 'https?://[a-zA-Z0-9._~:/?#@!$&()*+,;=%-]+' \"out_$v/sources\" | sort -u > \"loot/hosts_$v.txt\"\ndone\ncomm -23 loot/hosts_6.9.3.txt loot/hosts_7.4.1.txt     # endpoints only the old build knew about\n```\nThen diff **behaviourally** across the versions for the same operation — auth strength (does the old path accept no token / an expired token / a lower-privilege token the current one rejects?), rate limiting (burst both; a missing 429 on the old path means throttling was never backported), input validation (same oversized/injection payload to both), field exposure (does the old path return internal IDs or PII the current version redacted?).",
+   "test": "Twin row: D01-010 pulls the same history — reuse its `history/` set and mark it from this item's log. Two distinct payloads live in old builds. (a) A credential removed from the current build is frequently still live server-side — the old APK is the only place the value survives. (b) A mobile app's hardcoded backend calls are frequently an **older API version** than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Build N-3 is that version, preserved.",
+   "how": "Acquire old builds with a tool that speaks the store/mirror protocol, not curl — the large mirrors answer plain HTTP clients with a challenge page, and a model that stops there records a false \"no history\". Routes in order: (1) `apkeep -a \"$PKG@<versionCode>\" -d google-play -o hist/` with a throwaway store account token, or `apkeep -a \"$PKG@<version>\" -d apk-pure -o hist/` (list versions first with `apkeep -l -a \"$PKG\" -d apk-pure`); (2) the vendor's own release archive or enterprise channel when in scope; (3) a browser session (the in-session browser tool, or the operator via `engagement.json.blockers`) on the mirror's version page. Hash every file into the D02-001 manifest, signer-check it against the current build (a mirror-sourced build with a different signer is a repack, not the vendor's history) and record the route in `logs/D02-009.txt`. If D01-010 already pulled `history/`, reuse that set. Then re-run the secret sweep and the endpoint sweep against each:\n```bash\nfor v in 7.4.1 7.2.0 6.9.3; do\n  jadx -d \"$E/work/D02-009/jadx_$v\" \"hist/${PKG}_$v.apk\"\n  grep -rEn '(AIza[0-9A-Za-z_\\-]{35}|AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24,}|xox[baprs]-)' \"$E/work/D02-009/jadx_$v\" \\\n    | tee \"loot/secrets_$v.txt\"\n  grep -rhoE 'https?://[a-zA-Z0-9._~:/?#@!$&()*+,;=%-]+' \"$E/work/D02-009/jadx_$v/sources\" | sort -u > \"loot/hosts_$v.txt\"\ndone\ncomm -23 loot/hosts_6.9.3.txt loot/hosts_7.4.1.txt     # endpoints only the old build knew about\n```\nThen diff **behaviourally** across the versions for the same operation — auth strength (does the old path accept no token / an expired token / a lower-privilege token the current one rejects?), rate limiting (burst both; a missing 429 on the old path means throttling was never backported), input validation (same oversized/injection payload to both), field exposure (does the old path return internal IDs or PII the current version redacted?).",
    "proof": "For (a): the HTTP 200 (or `aws sts get-caller-identity` ARN) returned by the third party using the extracted key, alongside the file and line in the *old* build where it was found and its absence from the current build. For (b): the same request against both versions side by side, with the security regression visible.",
    "escalation": "-> D18 for a live cloud key; -> D15 for the shadow-API regression. **A version difference alone is Informational** — the weakened control is the finding, and the shape of the response is not the diff you are looking for.",
    "ruled_out_when": "Every endpoint reachable from an older build returns 404/connection-refused, *or* the same request to old and current paths produces identical auth enforcement, identical throttling behaviour over n≥10 interleaved samples, and identical field sets. Extracted credentials must be shown dead by an authentication attempt that fails, not by assumption that rotation happened."
@@ -430,7 +456,9 @@
    },
    "xrefs": [
     "D02-012",
+    "D02-027",
     "D02-031",
+    "D02-042",
     "D02-046"
    ],
    "domain_refs": [
@@ -446,7 +474,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A large fraction of Android \"the platform fixed that\" claims are gated on the app's declared SDK levels. These two numbers turn several checks in this checklist from Informational into High, and the attacker chooses the target's `targetSdk` only in the sense that the developer already did.",
-   "how": "```bash\naapt2 dump badging base.apk | grep -E 'sdkVersion|targetSdkVersion|package:'\ngrep -oE 'android:(min|target)SdkVersion=\"[0-9]*\"' out/AndroidManifest.xml\n```\n| Declared value | What it re-enables |\n|---|---|\n| `minSdk < 17` | `addJavascriptInterface` reflection-to-`Runtime.exec` RCE (-> D10) — **LEGACY** |\n| `minSdk < 24` | v1-only signing is verifiable by the install target (-> D02-012) — **LEGACY** |\n| `targetSdk < 17` | `<provider>` defaults to `exported=\"true\"` (-> D07) — **LEGACY** |\n| `targetSdk < 24` | user-installed CA certs trusted by default (-> D14) |\n| `targetSdk < 28` | cleartext HTTP allowed by default (-> D14) |\n| `targetSdk < 29` | native code may be executed from the app's internal data storage (ATT&CK M1006) (-> D17) |\n| `targetSdk < 30` | unrestricted package visibility / `queryIntentActivities` enumeration (-> D01, -> D09) |\n| `targetSdk < 31` | components with an `<intent-filter>` default to exported; `PendingIntent` mutability unenforced (-> D04, -> D08); `adb backup` still includes app data (-> D02-031) |\n| `targetSdk < 33` | non-type-safe `getParcelableExtra(String)` is the default idiom (-> D17) |\n| `targetSdk ≤ 36` on Android 17 | `ENFORCE_STRICT_SQL_CHECKS` (change id `484953293`) is **off** -> CVE-2026-28576-class provider SQLi (-> D07) |\n| API 34+ device | trust store moved to the Conscrypt APEX; `/system/etc/security/cacerts` is ignored at runtime (-> D02-046, -> D14) |",
+   "how": "```bash\naapt2 dump badging base.apk | grep -E 'sdkVersion|targetSdkVersion|package:'\ngrep -oE 'android:(min|target)SdkVersion=\"[0-9]*\"' $DEC/apktool/AndroidManifest.xml\n```\n| Declared value | What it re-enables |\n|---|---|\n| `minSdk < 17` | `addJavascriptInterface` reflection-to-`Runtime.exec` RCE (-> D10) — **LEGACY** |\n| `minSdk <= 26` **and** v1-only | the Janus-affected platforms (5.0–8.0, pre-2017-12-05 patch) are inside the support window (-> D02-012) — **LEGACY** |\n| `targetSdk < 17` | `<provider>` defaults to `exported=\"true\"` (-> D07) — **LEGACY** |\n| `targetSdk < 24` | user-installed CA certs trusted by default (-> D14) |\n| `targetSdk < 28` | cleartext HTTP allowed by default (-> D14) |\n| `targetSdk < 29` | `exec()` of a file in the app's internal data storage still works (ATT&CK M1006) (-> D17); at 29+ only `exec()` is blocked — `System.load`/`dlopen`/`DexClassLoader` from writable paths remain (-> D02-042) |\n| `targetSdk < 30` | unrestricted package visibility / `queryIntentActivities` enumeration (-> D01, -> D09); v1-only APKs still install on Android 11+ (-> D02-012) |\n| `targetSdk < 31` | components with an `<intent-filter>` default to exported; `PendingIntent` mutability unenforced (-> D04, -> D08); `adb backup` still includes app data (-> D02-031) |\n| `targetSdk < 33` | non-type-safe `getParcelableExtra(String)` is the default idiom (-> D17) |\n| `targetSdk < 34` | files handed to `DexClassLoader`/`PathClassLoader` need not be read-only — a writable DEX/JAR/APK in the data dir loads without the Android 14 exception (-> D02-042 DEX variant, -> D02-027) |\n| `targetSdk ≤ 36` on Android 17 | `ENFORCE_STRICT_SQL_CHECKS` (change id `484953293`) is **off** -> CVE-2026-28576-class provider SQLi (-> D07) |\n| API 34+ device | trust store moved to the Conscrypt APEX; `/system/etc/security/cacerts` is ignored at runtime (-> D02-046, -> D14) |",
    "proof": "The `aapt2 badging` line itself, quoted in the report as the precondition for each dependent finding.",
    "escalation": "Everything. This is the single most reused fact in the engagement.",
    "ruled_out_when": "Never — record it or your dependent findings are unratable."
@@ -466,11 +494,12 @@
    "applies_to": "All. v2 from Android 7.0; v3 (key rotation) from Android 9.0; v3.1 from Android 13; v4 from Android 11",
    "requires": "",
    "requires_tags": [],
-   "maps_to": "MASTG-TECH-0116, MASTG-TOOL-0123 (apksigner); source.android.com/docs/security/features/apksigning",
+   "maps_to": "MASTG-TECH-0116, MASTG-TOOL-0123 (apksigner), MASTG-BEST-0006 (Use Up-to-Date APK Signing Schemes); source.android.com/docs/security/features/apksigning",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [
+     "MASTG-BEST-0006",
      "MASTG-TECH-0116",
      "MASTG-TOOL-0123"
     ],
@@ -481,15 +510,18 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
+   "xrefs": [
+    "D01-004"
+   ],
    "domain_refs": [
+    "D01",
     "D03",
     "D06",
     "D09"
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "The signing certificate is what binds the app's UID, its signature-level permissions, its `sharedUserId` group and its update identity. Establish which schemes verify and capture the signer digest before anything else in this group.",
+   "test": "If `logs/D01-004.txt` exists, reuse the scheme booleans and the digest — do not re-run. The signing certificate is what binds the app's UID, its signature-level permissions, its `sharedUserId` group and its update identity. Establish which schemes verify and capture the signer digest before anything else in this group.",
    "how": "```bash\napksigner verify -v --print-certs base.apk\n# Verified using v1 scheme (JAR signing): true|false\n# Verified using v2 scheme (APK Signature Scheme v2): true|false\n# Verified using v3 scheme (APK Signature Scheme v3): true|false\n# Verified using v3.1 scheme ... / v4 scheme ...\n# Signer #1 certificate DN / SHA-256 digest / key algorithm / key size (bits)\nunzip -l base.apk | grep -E 'META-INF/.*\\.(RSA|DSA|EC|SF)|META-INF/MANIFEST.MF'\nkeytool -printcert -jarfile base.apk\n```",
    "proof": "The verbatim scheme booleans plus `Signer #1 certificate SHA-256 digest`. v2/v3 store the signature-algorithm ID list *inside* signed data specifically to defeat signature stripping — note which schemes are present, not just that \"it is signed\".",
    "escalation": "The SHA-256 digest feeds D09 (`assetlinks.json`), D03 (`knownSigner` / custom permissions) and D06 (peer `checkSignatures`).",
@@ -510,7 +542,7 @@
     "AM-02",
     "AM-03"
    ],
-   "applies_to": "**LEGACY.** v1-only APKs whose `minSdkVersion` reaches Android 5.0–8.0. Janus was fixed at the 2017-12-01 patch level and not backported until 8.1; v1 was removed and v4 introduced in Android 11. MASTG-TEST-0224 fails the app when `minSdkVersion >= 24` and only v1 verifies.",
+   "applies_to": "**LEGACY.** v1-only APKs whose `minSdkVersion` reaches Android 5.0–8.0 (API 21–26). Fixed in the 2017-12-05 security patch level for 5.1.1–8.0 (devices below that patch level remain affected; 8.1+ shipped fixed). Android 11 introduced v4 and refuses v1-only APKs only for apps with `targetSdkVersion >= 30`; v1-only remains installable everywhere for lower targets, which is why the platform range, not the scheme set, decides Janus. MASTG-TEST-0224 fails the app when `minSdkVersion >= 24` and only v1 verifies.",
    "requires": "legacy, minsdk<27",
    "requires_tags": [
     "legacy",
@@ -552,10 +584,10 @@
    "has_code": true,
    "skip_when": "",
    "test": "The v1 (JAR) scheme does not cover the whole APK file. On an affected platform, a DEX prepended to the archive is executed by the runtime while the JAR verifier reads the central directory and still validates — code substitution under the legitimate package identity.",
-   "how": "```bash\napksigner verify --verbose h5.apk            # v1=true, v2=false, v3=false\napktool -s d h5.apk && grep -i minSdk h5/apktool.yml\napktool -s d donor.apk && mv donor/classes.dex .\npython janus.py classes.dex h5.apk kal-h5.apk    # V-E-O/PoC CVE-2017-13156\n# or: go run main.go -apk ../apps/InjuredAndroid.apk   (h0tak88r/j88nx)\nadb install h5.apk\nadb install -r kal-h5.apk                    # THE TEST: update, not fresh install\n```",
+   "how": "```bash\napksigner verify --verbose h5.apk            # v1=true, v2=false, v3=false\napktool -s d h5.apk && grep -i minSdk h5/apktool.yml\napktool -s d donor.apk && mv donor/classes.dex .\npython3 janus.py classes.dex h5.apk kal-h5.apk   # V-E-O/PoC CVE-2017-13156 (`python` is absent on macOS)\n# or: go run main.go -apk ../apps/InjuredAndroid.apk   (h0tak88r/j88nx)\nadb -s \"$SERIAL\" install --no-incremental h5.apk\nadb -s \"$SERIAL\" install --no-incremental -r kal-h5.apk     # THE TEST: update, not fresh install (an .idsig beside the APK would hide the verdict)\n```",
    "proof": "`adb install -r kal-h5.apk` **succeeds** — the package manager accepts the modified APK as a legitimate update of the original signature — and the injected DEX then runs with the victim package's UID, data directory and granted permissions. The successful `-r` install *is* the finding; the scheme booleans alone are not.",
    "escalation": "Full app impersonation -> D11 (token theft from the victim's own `shared_prefs`) -> D13. The repackaged build is also the delivery vehicle for injected pinning removal (-> D14), added permissions (-> D03) and an injected JS bridge (-> D10) — ship one PoC APK demonstrating the chain, not four reports.",
-   "ruled_out_when": "`apksigner verify --verbose` shows v2 **or** v3 `true` (both schemes cover the whole archive), **or** `minSdkVersion >= 24` with the platform enforcing v2 at install, **or** the test device's `ro.build.version.security_patch` is at or after 2017-12-01 and `adb install -r` returns `INSTALL_PARSE_FAILED_NO_CERTIFICATES` / a signature mismatch. Note that an app signed v1 **plus** v2/v3 is still exposed when run on 5.x/6.x — state the platform range, not just the scheme set."
+   "ruled_out_when": "`apksigner verify --verbose` shows v2 **or** v3 `true` (both schemes cover the whole archive), **or** `minSdkVersion >= 27` (no affected platform is in the support window), **or** the test device's `ro.build.version.security_patch` is at or after 2017-12-05 and `adb install --no-incremental -r` returns `INSTALL_PARSE_FAILED_NO_CERTIFICATES` / a signature mismatch. `targetSdkVersion >= 30` rules out install on Android 11+ only — 5.x–8.0 devices still accept the build, so state the platform range. Note that an app signed v1 **plus** v2/v3 is still exposed when run on 5.x/6.x — state the platform range, not just the scheme set."
   },
   {
    "id": "D02-013",
@@ -700,7 +732,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A production APK signed with the Android debug key (`CN=Android Debug, O=Android, C=US`) is signed with a *publicly available private key* — anyone can re-sign and ship updates to that package, and any app they build satisfies `protectionLevel=\"signature\"` against it. A `SHA1withRSA` or `MD5withRSA` signature algorithm is the weaker, separate observation.",
-   "how": "```bash\napksigner verify --print-certs --verbose base.apk\n# inspect: \"Signer #1 certificate DN:\", \"Signer #1 key algorithm:\", the signature algorithm line\nkeytool -printcert -jarfile base.apk\ngrep -nE 'protectionLevel=\"[^\"]*signature' out/AndroidManifest.xml\n```\nFor the debug-cert case, prove impact: re-sign a modified APK with the standard debug keystore (`~/.android/debug.keystore`, password `android`) and install it with `-r` over the original.",
+   "how": "```bash\napksigner verify --print-certs --verbose base.apk\n# inspect: \"Signer #1 certificate DN:\", \"Signer #1 key algorithm:\", the signature algorithm line\nkeytool -printcert -jarfile base.apk\ngrep -nE 'protectionLevel=\"[^\"]*signature' $DEC/apktool/AndroidManifest.xml\n```\nFor the debug-cert case, prove impact: re-sign a modified APK with the standard debug keystore (`~/.android/debug.keystore`, password `android`) and install it with `-r` over the original.",
    "proof": "`CN=Android Debug` in the DN line, plus a successful `adb install -r` of a build you signed with the stock debug keystore, plus a second stub app signed the same way being granted a `signature`-protected custom permission declared by the target.",
    "escalation": "-> D03 (the custom-permission model collapses: every `signature` permission is effectively public) -> D06 (drive the target's protected AIDL interface from your stub).",
    "ruled_out_when": "The signer DN is the client's own organisation (cross-check against the Play Console app signing key per D02-006), and the signature algorithm is SHA-256 or stronger. Note that a debug-*signed* build handed to you as \"release\" may simply be the wrong artefact — check D02-033 (`testOnly`) before writing this up as a production finding."
@@ -738,18 +770,21 @@
      "broken_access_control.privilege_escalation"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D02-073"
+   ],
    "domain_refs": [
     "D03",
-    "D06"
+    "D06",
+    "D09"
    ],
    "has_code": true,
    "skip_when": "",
    "test": "v3.1 lets a developer rotate signing keys **only for SDK versions at or above `--rotation-min-sdk-version`**, keeping the old key authoritative below it. Establish which key actually authorises updates and sibling-app trust on the OS version you are testing.",
-   "how": "```bash\napksigner verify --verbose --print-certs base.apk\napksigner verify --min-sdk-version 24 --max-sdk-version 32 --print-certs base.apk\napksigner verify --min-sdk-version 33 --print-certs base.apk      # may show the rotated cert\n```",
-   "proof": "Two different certificate digests printed for the two SDK ranges — proof that the app's signature-level permissions and `checkSignatures()` peers resolve to *different* keys depending on OS version. Then show a stub app signed with the pre-rotation key being granted a signature permission on a pre-13 device.",
+   "how": "```bash\napksigner verify --verbose --print-certs base.apk\napksigner verify --min-sdk-version 24 --max-sdk-version 32 --print-certs base.apk\napksigner verify --min-sdk-version 33 --print-certs base.apk      # may show the rotated cert\n# App Links verification walks the v3 lineage: a statement naming only a PAST key still verifies (not a D09 break) — but it is\n# one more key an attacker needs only ONE of. Dump every lineage certificate and its retained capabilities (D02-073 rates them):\napksigner lineage -v --print-certs --in apk/base.apk | tee logs/D02-016-lineage.txt | grep -E 'certificate SHA-256|Has (installed data|shared UID|permission|rollback|auth) capability'\ncurl -s \"https://$HOST/.well-known/assetlinks.json\" | grep -oE '[0-9A-F]{2}(:[0-9A-F]{2}){31}' | sort -u   # compare against EVERY lineage digest\n```",
+   "proof": "Two different certificate digests printed for the two SDK ranges — proof that the app's signature-level permissions and `checkSignatures()` peers resolve to *different* keys depending on OS version. Then show a stub app signed with the pre-rotation key being granted a signature permission on a pre-13 device. A lineage entry with `Has rollback capability: true` names an older key whose builds may still install as an update; `Has permission capability: true` keeps satisfying this app's `signature` permissions — either, for a key the client no longer controls, is the finding (D02-073).",
    "escalation": "-> D03 custom-permission spoofing by a co-signed attacker app on pre-13 devices; -> D06 if the permission gates a bound service.",
-   "ruled_out_when": "Both SDK-range invocations of `apksigner verify --print-certs` return the same certificate digest (no rotation in force), **or** the app's `minSdkVersion` is 33 or above so no device ever resolves to the pre-rotation key, **or** the pre-rotation key is still exclusively controlled by the client and is used by no other party."
+   "ruled_out_when": "Both SDK-range invocations of `apksigner verify --print-certs` return the same certificate digest (no rotation in force), **or** the app's `minSdkVersion` is 33 or above so no device ever resolves to the pre-rotation key, **or** the pre-rotation key is still exclusively controlled by the client and is used by no other party, **or** every `assetlinks.json` fingerprint that is not the current signer is a lineage member the client still controls."
   },
   {
    "id": "D02-017",
@@ -793,7 +828,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`knownSigner` grants a permission to any app whose signing certificate appears in a hard-coded allowlist, *not* only to apps with the same current signature. Enumerate the allowlist — any party holding one of those keys, including a deprecated partner or a rotated-away old key, takes the permission automatically and silently.",
-   "how": "```bash\ngrep -nE 'knownSigner|knownCerts' out/AndroidManifest.xml\ngrep -rn 'knownCerts' out/res/values/*.xml          # the digest list is usually a string-array resource\nadb shell pm list permissions -f | grep -B2 -A3 -i knownSigner\n```\nIn jadx also look for hand-rolled lineage checks: `PackageManager.hasSigningCertificate(`, `GET_SIGNING_CERTIFICATES`, `SigningInfo.getSigningCertificateHistory(`.",
+   "how": "```bash\ngrep -nE 'knownSigner|knownCerts' $DEC/apktool/AndroidManifest.xml\ngrep -rn 'knownCerts' $DEC/apktool/res/values/*.xml          # the digest list is usually a string-array resource\nadb shell pm list permissions -f | grep -B2 -A3 -i knownSigner\n```\nIn jadx also look for hand-rolled lineage checks: `PackageManager.hasSigningCertificate(`, `GET_SIGNING_CERTIFICATES`, `SigningInfo.getSigningCertificateHistory(`.",
    "proof": "A `protectionLevel` string containing `knownSigner` plus a resolvable `android:knownCerts` array of SHA-256 digests. The finding is demonstrating that an APK signed with a *historical* (rotated-out) or third-party key in that array is granted the permission — install such a stub and show the permission granted in `dumpsys package <stub> | sed -n '/install permissions/,/runtime permissions/p'`.",
    "escalation": "Grants whatever the `knownSigner` permission guards — commonly an internal provider (-> D07) or an AIDL admin interface (-> D06).",
    "ruled_out_when": "No `knownSigner` protection level appears in the merged manifest, **or** every digest in `android:knownCerts` corresponds to a key the client currently controls and can account for (ask; a digest nobody can name is a finding in itself)."
@@ -814,8 +849,10 @@
     "AM-09"
    ],
    "applies_to": "All. On `targetSdk >= 26` the in-app installer requires `REQUEST_INSTALL_PACKAGES` — note whether the target declares it.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "AOSP security-model §4.7.1 item (5): \"an update can only be installed if the new APK is signed with the same identity or by an identity that was delegated by the original signer\"; `REQUEST_INSTALL_PACKAGES` as a special permission",
    "record": "",
    "legacy_meta": {},
@@ -840,10 +877,10 @@
    "has_code": true,
    "skip_when": "",
    "test": "Confirm the platform boundary holds, then confirm no side channel goes around it — an in-app updater, an OEM installer hook, a `PackageInstaller.Session` flow.",
-   "how": "```bash\ngrep -n 'REQUEST_INSTALL_PACKAGES' out/AndroidManifest.xml\ngrep -rnE 'PackageInstaller|ACTION_INSTALL_PACKAGE|application/vnd\\.android\\.package-archive|setInstallerPackageName' out/sources/\nadb install -r resigned.apk      # MUST fail: INSTALL_FAILED_UPDATE_INCOMPATIBLE\n```",
+   "how": "```bash\ngrep -n 'REQUEST_INSTALL_PACKAGES' $DEC/apktool/AndroidManifest.xml\n# side channels (in-app installer, PackageInstaller.Session) are enumerated ONCE in D02-027 — reuse logs/D02-027.txt, do not re-grep\n# apksigner sign emits a v4 .idsig beside every output; with .idsig files present adb switches to incremental install and fails with\n# 'Incremental installation not allowed', hiding the verdict. Sign with --v4-signing-enabled false, or delete *.idsig, or:\nadb -s \"$SERIAL\" install --no-incremental -r resigned.apk      # MUST fail: INSTALL_FAILED_UPDATE_INCOMPATIBLE\n```",
    "proof": "`adb install -r` returning `INSTALL_FAILED_UPDATE_INCOMPATIBLE: ... signatures do not match previously installed version` proves the platform boundary holds. A *successful* install proves either that the package was uninstalled first (not a finding) or that the app's own updater accepts an unpinned artefact (a finding — go to D02-027).",
    "escalation": "A successful side-channel install is remote code execution as the app; on a `sharedUserId` app it compromises every sibling too (-> D03).",
-   "ruled_out_when": "`adb install -r` with a differently-signed build fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` **and** no `PackageInstaller` / `ACTION_INSTALL_PACKAGE` / `vnd.android.package-archive` call site exists in the decompiled tree **and** `REQUEST_INSTALL_PACKAGES` is absent from the merged manifest. Check all three — the manifest permission is the cheapest tell and is often present because an SDK added it (-> D02-044)."
+   "ruled_out_when": "`adb install --no-incremental -r` with a differently-signed build fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — not `Incremental installation not allowed`, which is a harness artefact (rerun with `--no-incremental`) — **and** `logs/D02-027.txt` shows no `PackageInstaller` / `ACTION_INSTALL_PACKAGE` / `vnd.android.package-archive` call site in the decompiled tree **and** `REQUEST_INSTALL_PACKAGES` is absent from the merged manifest. Check all three — the manifest permission is the cheapest tell and is often present because an SDK added it (-> D02-044)."
   },
   {
    "id": "D02-019",
@@ -889,7 +926,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Apps that gate a privileged IPC path on \"is the caller signed by us\" frequently read the legacy `PackageInfo.signatures` array. Under v3 key rotation the historical certificate is still presented, so a rotated-away key satisfies a naive check. Determine which API the app uses and whether it compares the full chain or only `signatures[0]`.",
-   "how": "```bash\ngrep -rnE 'GET_SIGNATURES|GET_SIGNING_CERTIFICATES|signingInfo|hasSigningCertificate|getApkContentsSigners|getSigningCertificateHistory|checkSignatures' out/sources/\n```\nIn jadx, follow the comparison. Weak forms: `pi.signatures[0].hashCode()`, a hardcoded SHA-1 of a cert, `getSigningCertificateHistory()` treated as a trust set. Correct form: `PackageManager.hasSigningCertificate(pkg, cert, PackageManager.CERT_INPUT_SHA256)`.",
+   "how": "```bash\ngrep -rnE 'GET_SIGNATURES|GET_SIGNING_CERTIFICATES|signingInfo|hasSigningCertificate|getApkContentsSigners|getSigningCertificateHistory|checkSignatures' $DEC/jadx/sources/\n```\nIn jadx, follow the comparison. Weak forms: `pi.signatures[0].hashCode()`, a hardcoded SHA-1 of a cert, `getSigningCertificateHistory()` treated as a trust set. Correct form: `PackageManager.hasSigningCertificate(pkg, cert, PackageManager.CERT_INPUT_SHA256)`.",
    "proof": "Decompiled code comparing only `pi.signatures[0]` (or trusting the history array), alongside `apksigner verify -v --print-certs base.apk` showing the app's own block carries a v3 rotation lineage. Then install a stub signed with the historical key and show the privileged IPC path answering it.",
    "escalation": "-> D06 (bound-service authorisation) -> D03 (`sharedUserId` and signature permissions). Also a hard prerequisite break for the `createPackageContext` mitigation in D02-050.",
    "ruled_out_when": "Every call site uses `hasSigningCertificate(..., CERT_INPUT_SHA256)` against a pinned current certificate, **or** the app has never rotated (single cert in `--print-certs`, no lineage) so `signatures[0]` and the current signer are the same value, **or** the check is not the only gate — a server-side authorisation on the same path makes the client check decorative rather than load-bearing."
@@ -927,16 +964,17 @@
    },
    "xrefs": [
     "D02-021",
-    "D02-022"
+    "D02-022",
+    "D02-023"
    ],
    "domain_refs": [],
    "has_code": true,
    "skip_when": "",
-   "test": "Apps that only trust `com.android.vending` as the installer can be defeated by installing via a spoofed installer package, without touching the signature-check code at all. Find whether this gate exists before you burn time on the signature routine.",
-   "how": "```bash\ngrep -rnE 'getInstallerPackageName|getInstallSourceInfo|com\\.android\\.vending' out/sources/\n# spoof the installer at install time:\nadb install -i com.android.vending -r patched.apk\nadb shell pm list packages -i | grep com.target.app     # shows the recorded installer\n```",
+   "test": "Apps that only trust `com.android.vending` as the installer can be defeated by installing via a spoofed installer package, without touching the signature-check code at all. Find whether this gate exists before you burn time on the signature routine. Distinguish the two APIs: `getInstallerPackageName()` is spoofable with `-i`; `getInstallSourceInfo().getInitiatingPackageName()` is set by the platform to the package that drove the `PackageInstaller` session and cannot be set from adb — an app reading it is closed to the local spoof, patch the check instead (D02-023). A real AM-03 attacker can only be the initiator by installing from its own app, which records the attacker's package.",
+   "how": "```bash\ngrep -rnE 'getInstallerPackageName|getInstallSourceInfo|com\\.android\\.vending' $DEC/jadx/sources/\n# spoof the installer at install time:\nadb -s \"$SERIAL\" install --no-incremental -i com.android.vending -r patched.apk\nadb -s \"$SERIAL\" shell pm list packages -i | grep \"$PKG\"     # shows the recorded installer\nadb -s \"$SERIAL\" shell dumpsys package \"$PKG\" | grep -E 'installerPackageName|installInitiator|installOriginator'   # -i sets installerPackageName only; the initiator stays com.android.shell on API 30+\n```",
    "proof": "`pm list packages -i` reporting `installer=com.android.vending` for a package you sideloaded, and the app's tamper path not firing.",
    "escalation": "Removes a gate that would otherwise block D02-022; on its own it is P5 and never reportable.",
-   "ruled_out_when": "No installer-identity call site exists, **or** the value is sent to the server and the server actually acts on it (then test it per D02-021, which is the reportable variant)."
+   "ruled_out_when": "No installer-identity call site exists, **or** the gate compares `getInitiatingPackageName()` to the store package (not spoofable from `adb install`), **or** the value is sent to the server and the server actually acts on it (then test it per D02-021, which is the reportable variant)."
   },
   {
    "id": "D02-021",
@@ -1002,13 +1040,16 @@
     "AM-12"
    ],
    "applies_to": "All; requires that the app does not enforce server-verified attestation (D02-024)",
-   "requires": "",
-   "requires_tags": [],
-   "maps_to": "Hrishikesh C17 \"Missing Integrity Checks\"; sec-88 checklist §17; HackTricks smali-changes.md; MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0103 (uber-apk-signer)",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "Hrishikesh C17 \"Missing Integrity Checks\"; sec-88 checklist §17; HackTricks smali-changes.md; MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0103 (uber-apk-signer); MASTG-TECH-0039 (Repackaging & Re-Signing)",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [
+     "MASTG-TECH-0039",
      "MASTG-TOOL-0011",
      "MASTG-TOOL-0103"
     ],
@@ -1036,7 +1077,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Decompile, alter a security-relevant branch, rebuild, sign with your own key, install. If the app runs normally, every client-side control (pinning, root detection, entitlement gates, licence checks) is a bypassable constant. **The finding is not the patch — it is that the backend has no equivalent check.**",
-   "how": "```bash\napktool d -f -o out target.apk            # add -r if resource decoding fails\n# ...edit smali / AndroidManifest.xml / res...\napktool b out -o dist/app-unsigned.apk\nzipalign -P 16 -f -v 4 dist/app-unsigned.apk dist/app-aligned.apk\nkeytool -genkey -v -keystore key.jks -alias t -keyalg RSA -keysize 2048 -validity 10000 -dname \"CN=t\"\napksigner sign --ks key.jks --out dist/app-signed.apk dist/app-aligned.apk\napksigner verify --verbose --print-certs dist/app-signed.apk\nadb install -r dist/app-signed.apk\n```\nSign **once**: `jarsigner` before `zipalign`, or `apksigner` after — never both. Use `-P 16` when `lib/*.so` is present so native libs align for both 16 KiB and 4 KiB page-size devices. `jarsigner` alone produces v1-only signatures and will not install on API 24+/28+ targets — use `apksigner`.\nSplit-APK apps: **every** split must be rebuilt and re-signed with the **same** key and installed together (see D02-041).",
+   "how": "```bash\ncp -r \"$DEC/apktool\" \"$E/work/D02-022/\"     # work on a copy; the canonical P2 tree stays pristine (re-run apktool with -r only if resource decoding failed in P2)\n# ...edit smali / AndroidManifest.xml / res under $E/work/D02-022/ ...\napktool b \"$E/work/D02-022\" -o dist/app-unsigned.apk\nzipalign -P 16 -f -v 4 dist/app-unsigned.apk dist/app-aligned.apk\nkeytool -genkey -v -keystore key.jks -alias t -keyalg RSA -keysize 2048 -validity 10000 -dname \"CN=t\"\napksigner sign --ks key.jks --v4-signing-enabled false --out dist/app-signed.apk dist/app-aligned.apk   # no .idsig: with one beside the APK, adb switches to incremental install and the error hides the verdict\napksigner verify --verbose --print-certs dist/app-signed.apk\nadb -s \"$SERIAL\" install --no-incremental -r dist/app-signed.apk\n```\nSign **once**: `jarsigner` before `zipalign`, or `apksigner` after — never both. Use `-P 16` when `lib/*.so` is present so native libs align for both 16 KiB and 4 KiB page-size devices. `jarsigner` alone produces v1-only signatures and will not install on API 24+/28+ targets — use `apksigner`.\nSplit-APK apps: **every** split must be rebuilt and re-signed with the **same** key and installed together (see D02-041).",
    "proof": "The patched app launches, authenticates, and reaches the protected feature — no tamper dialog, no `finish()`/`System.exit()`, no telemetry-driven lockout — **and** the server returns a success response for the request the unpatched client could never send.",
    "escalation": "-> D23 (entitlement/price flag flips) -> D13 (auth gate removal) -> D21 (RASP removal) -> D14 (pinning removed, tokens captured). A repackagable app can also be redistributed as a trojanised clone that keeps the original package name and thereby inherits its deep links, App Links and any `<queries>`-based trust from other installed apps.",
    "ruled_out_when": "The rebuilt app refuses to run, loses its session on first launch, or is rejected server-side — **and** you identified the mechanism (D02-019 signer check, D02-024 attestation). \"It crashed\" is not a ruled-out: verify the rebuild is not simply broken per D02-023's `.locals` and `move-result` gotchas before concluding the app has a working integrity control."
@@ -1056,13 +1097,17 @@
     "AM-12"
    ],
    "applies_to": "All apps whose rebuild fails at launch",
-   "requires": "",
-   "requires_tags": [],
-   "maps_to": "HackTricks smali-changes.md; sec-88 \"Signing the APK\"",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "HackTricks smali-changes.md; sec-88 \"Signing the APK\"; MASTG-TECH-0039 (Repackaging & Re-Signing)",
    "record": "",
    "legacy_meta": {},
    "ids": {
-    "mastg": [],
+    "mastg": [
+     "MASTG-TECH-0039"
+    ],
     "maswe": [],
     "masvs": [],
     "rules": [],
@@ -1081,7 +1126,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "When repackaging breaks the app, find the signer-verification routine and patch the **final branch**, not the whole routine.",
-   "how": "Grep the smali tree and jadx output for the recognisable ingredients, then patch the last comparison before the error dialog / `finish()` / `System.exit()` / telemetry call:\n```bash\ngrep -rnE 'GET_SIGNATURES|GET_SIGNING_CERTIFICATES|apkContentsSigners|MessageDigest|\"SHA-256\"|Base64|getInstallerPackageName|com\\.android\\.vending' out/smali*/ out/sources/\n```\n```smali\n# force valid\nconst/4 v0, 0x1\n# or invert the branch into the tamper handler\nif-eqz v0, :tamper_detected   # original\nif-nez v0, :tamper_detected   # patched\n```\nSmali gotchas that break rebuilds: raise `.locals`, **not** `.registers` (parameter registers `p0..pN` map to the highest registers); `move-result*` must immediately follow its `invoke-*`; `long`/`double` consume a register pair; use `invoke-*/range` for many or high-numbered registers. Forgetting a `.locals` increment produces a verifier crash at launch — the usual failure mode.",
+   "how": "Grep the smali tree and jadx output for the recognisable ingredients, then patch the last comparison before the error dialog / `finish()` / `System.exit()` / telemetry call:\n```bash\ngrep -rnE 'GET_SIGNATURES|GET_SIGNING_CERTIFICATES|apkContentsSigners|MessageDigest|\"SHA-256\"|Base64|getInstallerPackageName|com\\.android\\.vending' $DEC/apktool/smali*/ $DEC/jadx/sources/\n```\n```smali\n# force valid\nconst/4 v0, 0x1\n# or invert the branch into the tamper handler\nif-eqz v0, :tamper_detected   # original\nif-nez v0, :tamper_detected   # patched\n```\nSmali gotchas that break rebuilds: raise `.locals`, **not** `.registers` (parameter registers `p0..pN` map to the highest registers); `move-result*` must immediately follow its `invoke-*`; `long`/`double` consume a register pair; use `invoke-*/range` for many or high-numbered registers. Forgetting a `.locals` increment produces a verifier crash at launch — the usual failure mode.",
    "proof": "The rebuilt APK survives launch and reaches the gated feature; logcat no longer shows the tamper path.",
    "escalation": "Unblocks D02-022; also worth checking the `getInstallerPackageName` gate (D02-020) first, which is often the cheaper patch.",
    "ruled_out_when": "No signer-check ingredients appear in the decompiled tree, or the check is server-side (D02-024), in which case local patching cannot help and you must re-scope."
@@ -1126,7 +1171,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Before repacking, establish whether the integrity gate is local (hookable, patchable) or a **server-verified attestation** (not defeatable by any local hook). Getting this wrong costs hours.",
-   "how": "```bash\ngrep -rnE 'SafetyNet|IntegrityManager|IntegrityTokenRequest|attest|StandardIntegrityManager' out/sources/\ngrep -rnE 'getInstallerPackageName|getInstallSourceInfo|GET_SIGNING_CERTIFICATES' out/sources/\nadb logcat -d | grep -iE 'integrity|deviceRecognitionVerdict|MEETS_(DEVICE|BASIC|STRONG|VIRTUAL)_INTEGRITY|attest|rasp|rooted'\n```\nThen look at the wire: does a token go to the client's own backend, and does the response differ when the device is rooted/emulated?",
+   "how": "```bash\ngrep -rnE 'SafetyNet|IntegrityManager|IntegrityTokenRequest|attest|StandardIntegrityManager' $DEC/jadx/sources/\ngrep -rnE 'getInstallerPackageName|getInstallSourceInfo|GET_SIGNING_CERTIFICATES' $DEC/jadx/sources/\nadb logcat -d | grep -iE 'integrity|deviceRecognitionVerdict|MEETS_(DEVICE|BASIC|STRONG|VIRTUAL)_INTEGRITY|attest|rasp|rooted'\n```\nThen look at the wire: does a token go to the client's own backend, and does the response differ when the device is rooted/emulated?",
    "proof": "The network request carrying the attestation token, and a materially different server response on an uncertified device. That is the attestation being *enforced*; if the response is identical, the attestation is decorative and belongs in D02-021.",
    "escalation": "If enforced, the D21 RASP surface is closed to instrumentation — re-scope to server-side testing (D15) rather than burning hours on Frida. If decorative, file per D02-021 and proceed with D02-022.",
    "ruled_out_when": "No attestation SDK is present, **or** the verdict is evaluated client-side only (you can see the branch in jadx and hook it), **or** the server response is byte-identical with and without a valid token."
@@ -1176,7 +1221,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Stores, updaters, plugin managers and enterprise installers that run their own signature check frequently disagree with the platform. Two classic errors: (a) falling back to v2 when a present v3 block fails signer validation; (b) verifying that the signature *over the embedded digest* is valid without recomputing the digest from the APK contents. The Samsung chain had both — \"it checks that the signature over the digest present in the signature block is valid, but it does not check that the APK data hashes to the same digest.\"",
-   "how": "```bash\njadx -d src target.apk\ngrep -rnE 'ApkSignatureSchemeV2Verifier|ApkSigningBlock|APK Sig Block 42|GET_SIGNATURES|GET_SIGNING_CERTIFICATES|verifySignature|MessageDigest' src/ | grep -v android/support\n# build a payload with the expected package name, sign v3-only with your key\napksigner sign --ks key.jks --out payload-v3.apk \\\n  --v1-signing-enabled false --v2-signing-enabled false --v3-signing-enabled true payload.apk\napksigner verify --verbose --print-certs payload-v3.apk\n# transplant a trusted APK's v2 signing block onto the payload (graft_sig.py-style)\n```\nRed flags in the verifier code: a v2 fallback on v3 signer-validation failure; a v2 check that never recomputes the content digest; package-name or metadata checks not bound to the file body.",
+   "how": "```bash\ngrep -rnE 'ApkSignatureSchemeV2Verifier|ApkSigningBlock|APK Sig Block 42|GET_SIGNATURES|GET_SIGNING_CERTIFICATES|verifySignature|MessageDigest' \"$DEC/jadx/sources\" | grep -v android/support\n# build a payload with the expected package name, sign v3-only with your key\napksigner sign --ks key.jks --out payload-v3.apk \\\n  --v1-signing-enabled false --v2-signing-enabled false --v3-signing-enabled true payload.apk\napksigner verify --verbose --print-certs payload-v3.apk\n# transplant a trusted APK's v2 signing block onto the payload (graft_sig.py-style)\n```\nRed flags in the verifier code: a v2 fallback on v3 signer-validation failure; a v2 check that never recomputes the content digest; package-name or metadata checks not bound to the file body.",
    "proof": "The target's own verifier accepts the grafted APK — its \"valid signature\" log line or dialog fires and the install proceeds — while `apksigner verify --print-certs` on the *same file* shows **your** v3 certificate.",
    "escalation": "Pair with D02-026 to land the file where the updater picks it up without user confirmation, and with a D07 path-traversal write to place it (the bugscale chain wrote to `/data/data/com.sec.android.app.samsungapps/files/samsungapps-<productID>-<fileSize>-<versionCode>`).",
    "ruled_out_when": "The app hands the file straight to `PackageInstaller` with no verification of its own (then the platform's verifier is authoritative and this item does not apply — go to D02-027), **or** the verifier recomputes the content digest from the APK bytes and compares it to the signed digest, **or** it rejects on any v3 signer-validation failure without falling back."
@@ -1197,8 +1242,10 @@
     "AM-04"
    ],
    "applies_to": "Apps with a self-update, plugin, or \"shell APK\" install path",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "HackTricks android-applications-basics.md (\"Deterministic installer cache / artifact substitution\")",
    "record": "",
    "legacy_meta": {},
@@ -1242,7 +1289,7 @@
     "AM-06",
     "AM-09"
    ],
-   "applies_to": "All apps with an out-of-Play update path (enterprise, regional, OEM). On `targetSdk >= 26` the installer requires `REQUEST_INSTALL_PACKAGES`. ATT&CK M1006: apps targeting **API 29+** cannot execute *native* code from internal data storage — DEX and JS second stages are **not** blocked and remain fully current.",
+   "applies_to": "All apps with an out-of-Play update path (enterprise, regional, OEM). On `targetSdk >= 26` the installer requires `REQUEST_INSTALL_PACKAGES`. ATT&CK M1006 covers `exec()` only: the API 29+ W^X change stops executing a *file* from internal data storage, not `System.load()`/`dlopen()` of a `.so` nor a `DexClassLoader` on a DEX/JAR — every second stage (native, DEX, JS) remains fully current (D02-042).",
    "requires": "",
    "requires_tags": [],
    "maps_to": "ATT&CK T1407 Download New Code at Runtime, T1661 Application Versioning (\"An adversary may push an update to a previously benign application to add malicious code\"; SharkBot S1055), T1544 Ingress Tool Transfer, mitigation M1006; MASWE-0049 (CWE-494); MASVS-CODE-3",
@@ -1270,7 +1317,9 @@
      "insecure_os_firmware.weakness_in_firmware_updates.firmware_does_not_validate_update_integrity"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D02-042"
+   ],
    "domain_refs": [
     "D09",
     "D11",
@@ -1282,7 +1331,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Can the app fetch and run code after install — a DEX/JAR/SO/AAB fragment, a JS bundle, a plugin, a full APK? Then: is the artefact signature-verified against a **pinned** key, and is the fetch over pinned TLS?",
-   "how": "```bash\ngrep -rnE 'PackageInstaller|ACTION_INSTALL_PACKAGE|application/vnd\\.android\\.package-archive|\\.apk\"' out/smali/ out/sources/ | head -50\ngrep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|System\\.load\\(|System\\.loadLibrary\\(|dlopen' out/sources/\ngrep -rnE 'CodePush|expo-updates|EXUpdates|hot.?update|patch\\.jar|bundleUrl' out/sources/\nadb shell \"ls -la /data/data/com.target.app/files /data/data/com.target.app/code_cache 2>/dev/null\"\n```\n```javascript\n// prove the loader path and capture the file it consumes\nJava.perform(function () {\n  var DCL = Java.use('dalvik.system.DexClassLoader');\n  DCL.$init.overload('java.lang.String','java.lang.String','java.lang.String','java.lang.ClassLoader')\n    .implementation = function (p,o,l,c) { console.log('[T1407] DexClassLoader <- ' + p); return this.$init(p,o,l,c); };\n  var Rt = Java.use('java.lang.Runtime');\n  Rt.load.overload('java.lang.String').implementation = function (p) { console.log('[T1407] System.load <- ' + p); return this.load(p); };\n});\n```\nThen serve a re-signed APK (or a substituted DEX/SO) from the same URL through the proxy and confirm the app hands it to the installer or the loader.",
+   "how": "```bash\ngrep -rnE 'PackageInstaller|ACTION_INSTALL_PACKAGE|application/vnd\\.android\\.package-archive|\\.apk\"' $DEC/apktool/smali/ $DEC/jadx/sources/ | head -50\ngrep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|System\\.load\\(|System\\.loadLibrary\\(|dlopen' $DEC/jadx/sources/\ngrep -rnE 'CodePush|expo-updates|EXUpdates|hot.?update|patch\\.jar|bundleUrl' $DEC/jadx/sources/\nadb shell \"ls -la /data/data/com.target.app/files /data/data/com.target.app/code_cache 2>/dev/null\"\n```\n```javascript\n// prove the loader path and capture the file it consumes\nJava.perform(function () {\n  var DCL = Java.use('dalvik.system.DexClassLoader');\n  DCL.$init.overload('java.lang.String','java.lang.String','java.lang.String','java.lang.ClassLoader')\n    .implementation = function (p,o,l,c) { console.log('[T1407] DexClassLoader <- ' + p); return this.$init(p,o,l,c); };\n  var Rt = Java.use('java.lang.Runtime');\n  Rt.load.overload('java.lang.String').implementation = function (p) { console.log('[T1407] System.load <- ' + p); return this.load(p); };\n});\n```\nThen serve a re-signed APK (or a substituted DEX/SO) from the same URL through the proxy and confirm the app hands it to the installer or the loader.",
    "proof": "A packet capture showing the artefact fetched over a channel you control, plus the on-screen installer prompt for **your** package (screen recording of the client's own UI offering your APK is the deliverable), **or** for the loader variant a marker file written from inside the app's UID by your payload's static initialiser — use an 8+ character random marker (`/data/data/<pkg>/files/zq7k4mx2`), never `PWNED` or `test`, and confirm the marker string does not already occur anywhere in the baseline app.",
    "escalation": "RCE in the app UID gives you every local-storage, Keystore and session primitive at once — chain into D11, D12 and D13 and report as one Critical. -> D14 if the fetch is cleartext or MitM-able, which changes the attacker from a supply-chain insider to any hostile network. -> D24 if the URL arrives in a push payload; -> D09 if it arrives in a deep link.",
    "ruled_out_when": "No dynamic-load or install call site exists in the shipped code, **or** the downloaded artefact's signature is verified against a key pinned in the app (show the verification code and that it fails closed on a substituted file), **or** the fetch is certificate-pinned *and* the artefact is signed *and* the load path is a read-only app-private file. Absence of a `REQUEST_INSTALL_PACKAGES` permission rules out the APK-install variant but **not** the DEX/JS variant."
@@ -1334,7 +1383,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Does the app hold `REQUEST_INSTALL_PACKAGES`, drive the user to the unknown-sources settings screen, or call `PackageInstaller`? An app that can install other APKs is a distribution channel; if the APK URL is attacker-influenceable it is a malware-delivery vector wearing the client's brand.",
-   "how": "```bash\naapt2 dump permissions base.apk | grep -E 'REQUEST_INSTALL_PACKAGES|INSTALL_PACKAGES|DELETE_PACKAGES'\ngrep -rnE 'PackageInstaller|ACTION_INSTALL_PACKAGE|ACTION_MANAGE_UNKNOWN_APP_SOURCES|Settings\\.ACTION_SECURITY_SETTINGS|setInstallerPackageName' out/sources/\n# where does the URL come from?\ngrep -rn -B4 -A4 '\\.apk' out/sources/ | grep -nE 'getString|Uri\\.parse|intent\\.getData|remoteConfig|fcm|payload'\n```",
+   "how": "```bash\naapt2 dump permissions base.apk | grep -E 'REQUEST_INSTALL_PACKAGES|INSTALL_PACKAGES|DELETE_PACKAGES'\ngrep -rnE 'PackageInstaller|ACTION_INSTALL_PACKAGE|ACTION_MANAGE_UNKNOWN_APP_SOURCES|Settings\\.ACTION_SECURITY_SETTINGS|setInstallerPackageName' $DEC/jadx/sources/\n# where does the URL come from?\ngrep -rn -B4 -A4 '\\.apk' $DEC/jadx/sources/ | grep -nE 'getString|Uri\\.parse|intent\\.getData|remoteConfig|fcm|payload'\n```",
    "proof": "MitM the config or push that supplies the APK URL, substitute your own signed test APK, and record the client app launching the install prompt for **your** package.",
    "escalation": "-> D09 (a deep link that supplies the URL gives a one-click, no-permission-prompt chain from a web page to an install prompt); -> D24 (push-delivered URL); -> D18 (remote-config-delivered URL).",
    "ruled_out_when": "The permission is absent and no `PackageInstaller` call site exists, **or** the APK URL is a compile-time constant pointing at a pinned, certificate-verified host and the artefact's signature is checked before the install intent is raised. An SDK-contributed `REQUEST_INSTALL_PACKAGES` (see D02-043) still counts — attribute it, do not dismiss it."
@@ -1355,8 +1404,10 @@
     "AM-11"
    ],
    "applies_to": "All. Release builds default to `false`, so any `true` is an explicit build mistake.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0226 (Debuggable Flag Enabled in the AndroidManifest), MASWE-0063 (CWE-489), MASVS-RESILIENCE-4, MASTG-KNOW-0007, MASTG-TECH-0150, MASTG-TECH-0117; ATT&CK T1409 Stored Application Data, T1533, T1623.001; developer.android.com/privacy-and-security/risks/android-debuggable",
    "record": "",
    "legacy_meta": {},
@@ -1390,9 +1441,11 @@
    },
    "xrefs": [
     "D02-030",
-    "D02-031"
+    "D02-031",
+    "D03-071"
    ],
    "domain_refs": [
+    "D03",
     "D11",
     "D12",
     "D13",
@@ -1401,9 +1454,9 @@
    "has_code": true,
    "skip_when": "",
    "test": "Detect the flag three independent ways (a repacked or SDK-injected build can differ from what you expect), then **use it** — the flag is not the finding, the extracted credential is. MASTG itself links Android's note that the flag \"is not considered a direct vulnerability\"; do not hand a triager the flag.",
-   "how": "```bash\naapt2 dump badging base.apk | grep -i debuggable            # prints \"application-debuggable\"\nadb shell dumpsys package com.target.app | grep -Ei 'flags=.*DEBUGGABLE|pkgFlags='\nadb shell getprop ro.debuggable                             # 0 on a production device image\nadb shell getprop ro.build.type                             # must read \"user\" for the claim to hold\n# then actually use it, as a normal non-root shell:\nadb shell run-as com.target.app id\nadb shell run-as com.target.app ls -la /data/data/com.target.app/{shared_prefs,databases,files}\nadb shell run-as com.target.app cat /data/data/com.target.app/shared_prefs/*.xml\n```\ndrozer equivalent: `run app.package.debuggable -f com.target`.",
+   "how": "```bash\naapt2 dump badging base.apk | grep -i debuggable            # prints \"application-debuggable\"\nadb shell dumpsys package com.target.app | grep -Ei 'flags=.*DEBUGGABLE|pkgFlags='\nadb shell getprop ro.debuggable                             # 0 on a production device image\nadb shell getprop ro.build.type                             # must read \"user\" for the claim to hold\n# then actually use it, as a normal non-root shell:\nadb shell run-as com.target.app id\nadb shell run-as com.target.app ls -la /data/data/com.target.app/{shared_prefs,databases,files}\nadb -s \"$SERIAL\" shell \"run-as $PKG sh -c 'cat shared_prefs/*.xml'\"      # the glob must expand INSIDE run-as; an unquoted host-side glob aborts zsh with 'no matches found'\n```\ndrozer equivalent: `run app.package.debuggable -f com.target`.",
    "proof": "`run-as` returning `uid=10xxx(u0_aXXX)` and a directory listing of the private data dir on a **stock, non-rooted, production (`ro.build.type=user`)** device, with an actual bearer token / refresh token / PAN / password in the output. Then replay that token against the production API from your own machine and screenshot the 200 with victim data. `run-as` succeeding is the *operational* proof; the manifest flag and `dumpsys` line are only declarations.",
-   "escalation": "The extracted token is the input to every D15 IDOR/BOLA test; a static credential becomes P1 if it authenticates to an internet-facing service. Also -> D02-030 (JDWP code execution), -> D02-031 (`adb backup` re-enabled), -> D11, -> D12, -> D13.",
+   "escalation": "The extracted token is the input to every D15 IDOR/BOLA test; a static credential becomes P1 if it authenticates to an internet-facing service. Also -> D02-030 (JDWP code execution), -> D02-031 (`adb backup` re-enabled), -> D11, -> D12, -> D13. Twin row: D03-071 — mark it from `logs/D02-029.txt`; do not re-run.",
    "ruled_out_when": "`aapt2 dump badging` prints no `application-debuggable` line **and** `adb shell run-as com.target.app id` fails with `run-as: package not debuggable` on a `ro.build.type=user` device. Both — a userdebug test image makes `run-as` succeed regardless of the app, which is a harness artefact, not a finding. Check every flavour and variant the client ships, not just the Play build."
   },
   {
@@ -1422,8 +1475,10 @@
     "AM-11"
    ],
    "applies_to": "All debuggable builds, all API levels — this legacy check is fully alive",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0031 (Debugging), MASTG-TECH-0040 (Waiting for the Debugger), MASTG-TOOL-0019 (jdb); drozer `app.package.debuggable`, `exploit.jdwp.check`",
    "record": "",
    "legacy_meta": {},
@@ -1472,8 +1527,10 @@
     "AM-11"
    ],
    "applies_to": "`targetSdk >= 31` for the backup gate; `debuggable` matters on all versions. `allowBackup` defaults to **true** below targetSdk 31 where no `dataExtractionRules` is supplied — flag the default, not just an explicit `true`.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "developer.android.com/about/versions/12/behavior-changes-12 (\"`adb backup` excludes app data for apps targeting Android 12; opt-in by setting `android:debuggable=\"true\"`... Must set to false before release\"); ATT&CK T1409, T1533",
    "record": "",
    "legacy_meta": {},
@@ -1491,17 +1548,21 @@
      "mobile_security_misconfiguration.auto_backup_allowed_by_default"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D03-068",
+    "D11-051"
+   ],
    "domain_refs": [
+    "D03",
     "D11",
     "D13"
    ],
    "has_code": true,
    "skip_when": "",
    "test": "For `targetSdk >= 31`, `adb backup` excludes app data **unless** `android:debuggable=\"true\"`. A release build carrying `debuggable=\"true\"` therefore hands you a full data extraction with no root, on top of the usual debuggability impact.",
-   "how": "```bash\ngrep -oE 'android:(debuggable|allowBackup|fullBackupContent|dataExtractionRules)=\"[^\"]*\"' out/AndroidManifest.xml\nadb backup -f out.ab -noapk com.target.app && ls -l out.ab\ndd if=out.ab bs=1 skip=24 | zlib-flate -uncompress > out.tar && tar tf out.tar\ngrep -rniE 'token|session|bearer|password|refresh' apps/com.target.app/sp/ apps/com.target.app/db/\n```",
+   "how": "```bash\ngrep -oE 'android:(debuggable|allowBackup|fullBackupContent|dataExtractionRules)=\"[^\"]*\"' $DEC/apktool/AndroidManifest.xml\nadb -s \"$SERIAL\" backup -f out.ab -noapk \"$PKG\" && ls -l out.ab            # accept the on-device prompt; a header-only file is ~1 KiB\nhead -c 24 out.ab | head -4                                                 # ANDROID BACKUP / 5 / 1=compressed / none=unencrypted\ntail -c +25 out.ab | python3 -c 'import sys,zlib; sys.stdout.buffer.write(zlib.decompress(sys.stdin.buffer.read()))' > out.tar   # line 3 == 0: skip decompress; line 4 != none: AES — use `abe unpack out.ab out.tar <password>`\nmkdir -p ab && tar -xf out.tar -C ab && find ab -type f | wc -l\ngrep -rniE 'token|session|bearer|password|refresh' \"ab/apps/$PKG/sp\" \"ab/apps/$PKG/db\" \"ab/apps/$PKG/f\" 2>/dev/null\n```",
    "proof": "`application-debuggable` in badging output plus a non-trivially-sized `.ab` whose unpacked tar contains `shared_prefs/*.xml` with a live session token. Grep the extracted tar for a token you just captured in the proxy — **matching bytes is the proof**.",
-   "escalation": "-> D11 (what is stored) -> D13 (replay the token). Note the framing that does **not** pay: H1 #1225158 (Zivver), \"ADB Backup is enabled within AndroidManifest\", awarded **$0** — the manifest flag alone was the entire report.",
+   "escalation": "-> D11 (what is stored) -> D13 (replay the token). Twin rows: D03-068 and D11-051 — mark them from `logs/D02-031.txt`; do not re-run. Note the framing that does **not** pay: H1 #1225158 (Zivver), \"ADB Backup is enabled within AndroidManifest\", awarded **$0** — the manifest flag alone was the entire report.",
    "ruled_out_when": "`adb backup` produces a `.ab` of trivial size (header only) or fails outright, **and** `targetSdk >= 31` with `debuggable` absent, **and** `dataExtractionRules` excludes the sensitive paths. Verify empirically — `adb backup` support varies by OEM and OS version; do not assume from the manifest in either direction."
   },
   {
@@ -1555,7 +1616,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If called unconditionally, a connected host attaches Chrome DevTools to **every** WebView in the app, reads the DOM and `localStorage`, and executes JS in the page's origin.",
-   "how": "```bash\ngrep -rn 'setWebContentsDebuggingEnabled' out/sources/\ngrep -rn -B3 -A3 'setWebContentsDebuggingEnabled' out/sources/ | grep -n 'FLAG_DEBUGGABLE\\|BuildConfig.DEBUG'\nadb shell cat /proc/net/unix | grep -i webview_devtools_remote\n# then open chrome://inspect/#devices on the host\n```",
+   "how": "```bash\ngrep -rn 'setWebContentsDebuggingEnabled' $DEC/jadx/sources/\ngrep -rn -B3 -A3 'setWebContentsDebuggingEnabled' $DEC/jadx/sources/ | grep -n 'FLAG_DEBUGGABLE\\|BuildConfig.DEBUG'\nadb shell cat /proc/net/unix | grep -i webview_devtools_remote\n# then open chrome://inspect/#devices on the host\n```",
    "proof": "A `@webview_devtools_remote_<pid>` abstract socket for the target PID in `/proc/net/unix`, and the app's WebView appearing under `chrome://inspect/#devices`. Then read `document.cookie` / `localStorage` from the DevTools console and replay the value against the API.",
    "escalation": "-> D15 session replay; -> D10 (the DevTools console lets you call any `@JavascriptInterface` bridge method directly, turning a bridge audit into a live one).",
    "ruled_out_when": "The call site is absent, **or** it is guarded by `(getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0` / `BuildConfig.DEBUG` **and** `/proc/net/unix` shows no `webview_devtools_remote` socket for the app's PID on a release build. Grep-only negatives are insufficient — check the socket at runtime, because a bundled SDK can enable it (-> D02-034)."
@@ -1591,15 +1652,18 @@
     "D02-001",
     "D02-002",
     "D02-006",
-    "D02-029"
+    "D02-029",
+    "D03-071"
    ],
-   "domain_refs": [],
+   "domain_refs": [
+    "D03"
+   ],
    "has_code": true,
    "skip_when": "",
    "test": "`android:testOnly` marks the app installable only via `adb` and unpublishable to Play. Its presence in a build handed to you as \"production\" means you are not testing the shipping artefact — every finding you write is about a binary no user has.",
    "how": "```bash\naapt2 dump xmltree base.apk --file AndroidManifest.xml | grep -iE 'testOnly|allowClearUserData|debuggable'\n```",
    "proof": "`android:testOnly(0x01010272)=(type 0x12)0xffffffff` in the xmltree dump.",
-   "escalation": "Stop and request the real release artefact. Then re-run D02-001 and D02-002 on it. A `testOnly` build is also typically debuggable, which is why testers mistake it for a D02-029 finding.",
+   "escalation": "Stop and request the real release artefact. Then re-run D02-001 and D02-002 on it. A `testOnly` build is also typically debuggable, which is why testers mistake it for a D02-029 finding. Twin row: D03-071 — mark it from `logs/D02-033.txt`; do not re-run.",
    "ruled_out_when": "`testOnly` is absent from the xmltree dump **and** the artefact's signer matches the store artefact (D02-006). `android:allowClearUserData` (default `true`) is documented as applying to system apps — do not report its presence on a normal app."
   },
   {
@@ -1644,7 +1708,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Find every `BuildConfig` class in the decompiled tree — not just the app's — and then find what the flag actually gates.",
-   "how": "```bash\njadx -d src base.apk\ngrep -rn --include='*.java' -E 'class BuildConfig' src/\ngrep -rn --include='*.java' -E 'DEBUG *= *true' src/\ngrep -rn --include='*.java' -E 'BuildConfig\\.DEBUG' src/ | head -50\n```",
+   "how": "```bash\ngrep -rn --include='*.java' -E 'class BuildConfig' \"$DEC/jadx/sources\"\ngrep -rn --include='*.java' -E 'DEBUG *= *true' \"$DEC/jadx/sources\"\ngrep -rn --include='*.java' -E 'BuildConfig\\.DEBUG' \"$DEC/jadx/sources\" | head -50\n```",
    "proof": "A decompiled `BuildConfig` with `public static final boolean DEBUG = true` in a package that is **not** the app's own, plus a reachable branch guarded by it that changes security behaviour (e.g. `if (BuildConfig.DEBUG) trustAllCerts()`), plus the behaviour observed at runtime.",
    "escalation": "-> D14 (pinning or validation bypass baked into the shipped build — and note the SDK did this, the developer did not) -> D20 (credential logging) -> D18 (the SDK responsible).",
    "ruled_out_when": "Every `BuildConfig.DEBUG` in the tree is `false`, **or** the `true` ones gate only logging that you confirmed produces no sensitive output at runtime (`adb logcat` while driving the auth flow), **or** R8 has already stripped the guarded branch — verify with `dexdump`/jadx that the branch body survived, not just that the constant exists."
@@ -1664,14 +1728,17 @@
     "AM-03"
    ],
    "applies_to": "All. `targetSdk < 31`: components with an `<intent-filter>` default to exported. `android:exported=\"false\"` is explicitly **insufficient** protection for a debug component — documented guidance is that on a rooted device, or when debuggable is enabled, ADB can still reach it.",
-   "requires": "",
-   "requires_tags": [],
-   "maps_to": "developer.android.com risk article `test-debug` (MASVS-CODE: Code Quality); MASWE-0063",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "developer.android.com risk article `test-debug` (MASVS-CODE: Code Quality); MASWE-0063, MASWE-0061 (Debug Artifacts Not Removed)",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [],
     "maswe": [
+     "MASWE-0061",
      "MASWE-0063"
     ],
     "masvs": [],
@@ -1694,9 +1761,9 @@
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "Hunt build-variant leakage: staging endpoints, auth-bypass toggles, payment-skip switches, \"developer options\" activities.",
-   "how": "```bash\ngrep -niE 'debug|test|qa|staging|internal|dev|mock|sandbox|bypass' out/AndroidManifest.xml\ngrep -rn 'BuildConfig\\.\\(DEBUG\\|FLAVOR\\|BUILD_TYPE\\)' out/sources/\ngrep -rniE '(skipAuth|bypassLogin|forceEntitled|isTestUser|mockPayment|debugMenu|enableStaging)' out/sources/\nadb shell am start -n com.target.app/.DebugSettingsActivity\nadb shell dumpsys activity activities | grep topResumedActivity\n```",
-   "proof": "The debug activity renders (screenshot with `topResumedActivity` confirming it is yours), or a `BuildConfig.DEBUG`-guarded branch is reachable because the release build still contains the staging base URL — prove it by pointing the app at that host through the proxy and getting a 200 from staging.",
+   "test": "Hunt build-variant leakage: staging endpoints, auth-bypass toggles, payment-skip switches, \"developer options\" activities — and the library debug components whose names contain no 'debug' at all.",
+   "how": "```bash\ngrep -niE 'debug|test|qa|staging|internal|dev|mock|sandbox|bypass' $DEC/apktool/AndroidManifest.xml\ngrep -rn 'BuildConfig\\.\\(DEBUG\\|FLAVOR\\|BUILD_TYPE\\)' $DEC/jadx/sources/\ngrep -rniE '(skipAuth|bypassLogin|forceEntitled|isTestUser|mockPayment|debugMenu|enableStaging)' $DEC/jadx/sources/\nadb shell am start -n com.target.app/.DebugSettingsActivity\nadb shell dumpsys activity activities | grep topResumedActivity\n# library debug components that leak into release builds (the names do not contain 'debug'):\ngrep -nE 'androidx\\.compose\\.ui\\.tooling\\.PreviewActivity|leakcanary|\\.stetho\\.|DebugActivity|TestActivity|flipper' \"$DEC/apktool/AndroidManifest.xml\"\n# PreviewActivity invokes any @Composable named in its `composable` extra; recent ui-tooling versions guard it with a runtime\n# FLAG_DEBUGGABLE check, older ones do not — read the guard, do not assume it\ngrep -rn -A8 'class PreviewActivity' \"$DEC/jadx/sources/androidx/compose/ui/tooling/\" | grep -nE 'FLAG_DEBUGGABLE|isDebuggable|ApplicationInfo'\nadb -s \"$SERIAL\" shell am start -n \"$PKG/androidx.compose.ui.tooling.PreviewActivity\" --es composable '<fqcn>Kt.<PreviewFn>'\n```",
+   "proof": "The debug activity renders (screenshot with `topResumedActivity` confirming it is yours); an exported `PreviewActivity` with no `FLAG_DEBUGGABLE` guard (or on a debuggable build, D02-029) rendering a composable you named from an unprivileged app; or a `BuildConfig.DEBUG`-guarded branch is reachable because the release build still contains the staging base URL — prove it by pointing the app at that host through the proxy and getting a 200 from staging.",
    "escalation": "Auth-bypass menus chain directly into D15 (account takeover) and D23 (entitlement fraud). A staging host reached from a release build is a D15 shadow-API entry point with weaker controls.",
    "ruled_out_when": "`am start` against every candidate component returns `SecurityException: Permission Denial: ... not exported` from a non-root shell, **and** the staging base URL is absent from the release strings/assets, **and** each `BuildConfig.DEBUG` branch body was stripped by R8. Bundle this with `android:debuggable` (D02-029), `setWebContentsDebuggingEnabled` (D02-032) and native debug symbols (D16) into **one** \"debug artefacts shipped to production\" item rather than four Lows."
   },
@@ -1721,12 +1788,14 @@
     "deeplink",
     "device"
    ],
-   "maps_to": "H1 #3829030 (Yelp Business, Low 3.3 — `yelp-biz:///debug_navigation` crashed the app *and* invalidated the session); H1 #3399016 (Nextcloud, None 0.0 — crash-only DoS scored zero)",
+   "maps_to": "MASWE-0061 (Debug Artifacts Not Removed); H1 #3829030 (Yelp Business, Low 3.3 — `yelp-biz:///debug_navigation` crashed the app *and* invalidated the session); H1 #3399016 (Nextcloud, None 0.0 — crash-only DoS scored zero)",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [],
-    "maswe": [],
+    "maswe": [
+     "MASWE-0061"
+    ],
     "masvs": [],
     "rules": [],
     "cwe": [],
@@ -1744,7 +1813,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Debug routes left reachable from an exported filter. The severity hinges entirely on whether the session survives the crash — a pure crash scores near zero.",
-   "how": "```bash\ngrep -rniE 'debug|staging|internal|qa[_-]|dev[_-]|test[_-]' out/AndroidManifest.xml | grep -iE 'scheme|host|path|name='\nadb logcat -c && adb shell am start -a android.intent.action.VIEW -d \"<scheme>:///<debugroute>\" \\\n  && adb logcat -d | grep -iE 'FATAL|AndroidRuntime'\n# then reopen the app and check whether you are still signed in\n```",
+   "how": "```bash\ngrep -rniE 'debug|staging|internal|qa[_-]|dev[_-]|test[_-]' $DEC/apktool/AndroidManifest.xml | grep -iE 'scheme|host|path|name='\nadb logcat -c && adb shell am start -a android.intent.action.VIEW -d \"<scheme>:///<debugroute>\" \\\n  && adb logcat -d | grep -iE 'FATAL|AndroidRuntime'\n# then reopen the app and check whether you are still signed in\n```",
    "proof": "`adb logcat` showing a fatal exception, and reopening the app presenting the login screen. Yelp's report evidenced the persistent-logout loop by re-running `am start` in a `while true` shell loop.",
    "escalation": "-> D09 (the deep-link surface itself) -> D13 if the crash drops session state.",
    "ruled_out_when": "No debug-named scheme/host/path appears in the merged manifest, **or** firing every candidate route produces no fatal exception **and** the session survives (check by making an authenticated API call from the app after the attempt). Always test the session effect — the difference between Low 3.3 and None 0.0 in the corpus is exactly that."
@@ -1766,14 +1835,18 @@
    "applies_to": "All",
    "requires": "",
    "requires_tags": [],
-   "maps_to": "hackwithsingh sec-14-5 #6, sec-14-18 #10; MASTG-TECH-0007 (Exploring the App Package)",
+   "maps_to": "hackwithsingh sec-14-5 #6, sec-14-18 #10; MASTG-TECH-0007 (Exploring the App Package); MASTG-TEST-0288 (Debugging Symbols in Native Binaries), MASWE-0061 (Debug Artifacts Not Removed), MASTG-KNOW-0008",
    "record": "",
    "legacy_meta": {},
    "ids": {
     "mastg": [
-     "MASTG-TECH-0007"
+     "MASTG-KNOW-0008",
+     "MASTG-TECH-0007",
+     "MASTG-TEST-0288"
     ],
-    "maswe": [],
+    "maswe": [
+     "MASWE-0061"
+    ],
     "masvs": [],
     "rules": [],
     "cwe": [],
@@ -1783,7 +1856,10 @@
     ]
    },
    "xrefs": [
-    "D02-007"
+    "D02-001",
+    "D02-007",
+    "D02-008",
+    "D02-062"
    ],
    "domain_refs": [
     "D16",
@@ -1792,10 +1868,10 @@
    "has_code": true,
    "skip_when": "",
    "test": "Look inside the APK/AAB for shipped build residue that hands you the source model — ProGuard mapping, unstripped `.so` symbols, JS source maps, `BuildConfig` debug constants, `.properties` version markers.",
-   "how": "```bash\nunzip -l base.apk | grep -Ei 'mapping|\\.map$|\\.properties$|\\.json$|source|BUNDLE-METADATA'\nfor so in $(find out/lib -name '*.so'); do file \"$so\"; nm -D \"$so\" 2>/dev/null | head -3; done\ngrep -rn 'BuildConfig' out/smali*/ | head\njadx -d jadx-out base.apk && grep -rn 'DEBUG = true\\|STAGING\\|API_KEY' jadx-out/sources | head\n```",
-   "proof": "`file` reporting \"not stripped\" on a shipped `.so`, a `.map` file in `assets/`, or a `mapping.txt` inside the package.",
+   "how": "```bash\nunzip -l base.apk | grep -Ei 'mapping|\\.map$|\\.properties$|\\.json$|source|BUNDLE-METADATA'\n# the two AGP-generated metadata files every 2024+ release carries — neither matches the patterns above\nunzip -p apk/base.apk META-INF/version-control-info.textproto 2>/dev/null   # AGP 8.3+ default (android.vcsInfo.include): repository system, local_root_path, revision <git sha>\nunzip -p apk/base.apk META-INF/com/android/build/gradle/app-metadata.properties 2>/dev/null   # androidGradlePluginVersion -> toolchain date\nunzip -Z1 apk/base.apk | grep -E 'META-INF/(version-control-info|.*\\.kotlin_module|.*\\.version$)|assets/dexopt/baseline\\.prof'\nfor so in $(find \"$DEC/apktool/lib\" -name '*.so'); do file \"$so\"; llvm-nm -D \"$so\" 2>/dev/null | head -3; done   # llvm-nm: macOS has no GNU nm\ngrep -rn 'BuildConfig' \"$DEC\"/apktool/smali*/ | head\ngrep -rn 'DEBUG = true\\|STAGING\\|API_KEY' \"$DEC/jadx/sources\" | head\n```",
+   "proof": "`file` reporting \"not stripped\" on a shipped `.so`, a `.map` file in `assets/`, or a `mapping.txt` inside the package. `revision: \"<40-hex>\"` in `version-control-info.textproto` pins the shipped build to a commit — record it in D02-001's manifest and D02-008's correspondence note; alone it is `sensitive_data_hardcoded.file_paths` (P5), reportable only through what the commit unlocks (a leaked or public repository, D02-062).",
    "escalation": "Symbols -> D16 native analysis; a source map -> D19 (the un-minified JS bundle); a shipped mapping file also satisfies D02-007 for free.",
-   "ruled_out_when": "No `.map`/`mapping.txt` in the archive, every `lib/*.so` reports \"stripped\", and `.properties` files carry no version or endpoint data. Note that `BUNDLE-METADATA/` inside an `.aab` is **not** packaged into APKs — finding a mapping there is expected and is not a finding against the shipped app."
+   "ruled_out_when": "No `.map`/`mapping.txt` in the archive, every `lib/*.so` reports \"stripped\", `.properties` files carry no version or endpoint data, and `version-control-info.textproto` is absent (or the build set `vcsInfo.include=false`). Note that `BUNDLE-METADATA/` inside an `.aab` is **not** packaged into APKs — finding a mapping there is expected and is not a finding against the shipped app."
   },
   {
    "id": "D02-038",
@@ -1813,8 +1889,10 @@
     "AM-11"
    ],
    "applies_to": "Apps shipped as AAB with dynamic feature modules or config splits (`android:isSplitRequired`)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "developer.android.com/guide/app-bundle/play-feature-delivery (\"Apps must verify module installation before accessing code/resources via `SplitInstallManager.getInstalledModules()`\")",
    "record": "",
    "legacy_meta": {},
@@ -1838,7 +1916,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Bundled apps normally refuse to run without their required splits. Check whether the app degrades **open** rather than failing closed when a split is absent — you have then removed a control by omission, without touching the signature of `base.apk`.",
-   "how": "```bash\ngrep -i 'isSplitRequired' out/AndroidManifest.xml\nadb uninstall com.target.app\nadb install base.apk                                  # base only, no splits\nadb logcat -c; adb shell monkey -p com.target.app 1; adb logcat -d | grep -iE 'split|SplitCompat|missing'\n# compare with the full set:\nadb install-multiple -r base.apk split_config.*.apk\n```",
+   "how": "```bash\ngrep -i 'isSplitRequired' $DEC/apktool/AndroidManifest.xml\nadb -s \"$SERIAL\" uninstall \"$PKG\"\nadb -s \"$SERIAL\" install --no-incremental base.apk            # base only, no splits\nadb logcat -c; adb shell monkey -p com.target.app 1; adb logcat -d | grep -iE 'split|SplitCompat|missing'\n# compare with the full set:\nadb -s \"$SERIAL\" install-multiple --no-incremental -r base.apk split_config.*.apk\n```",
    "proof": "The app launches base-only and a feature guarded by `SplitInstallManager.getInstalledModules()` is reachable anyway (the module check returns false but the code path proceeds), or the integrity/licensing module is simply absent and its checks never run. Screenshot both the base-only launch and the reached feature.",
    "escalation": "-> D21 (RASP/attestation removal with `base.apk`'s signature intact — a far cleaner story than patching smali) -> D23 if the removed module held licensing.",
    "ruled_out_when": "`adb install base.apk` fails with a missing-split error, **or** the app launches and immediately terminates with a documented missing-module message, **or** every module-gated code path is preceded by a `getInstalledModules()` check that actually blocks (prove by reaching the code path, not by reading the source). A crash on missing split is **correct** behaviour — do not file it as a DoS (`application_level_denial_of_service_dos.app_crash` is P5)."
@@ -1858,8 +1936,10 @@
     "AM-03"
    ],
    "applies_to": "Play Feature Delivery apps (on-demand, conditional and instant modules)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "developer.android.com/guide/app-bundle/play-feature-delivery",
    "record": "",
    "legacy_meta": {},
@@ -1873,6 +1953,7 @@
     "vrt": []
    },
    "xrefs": [
+    "D02-005",
     "D02-038"
    ],
    "domain_refs": [
@@ -1881,7 +1962,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Find every entry point into a dynamic feature module and check whether the installation state is verified first. Dynamic feature modules are also delivered *at runtime*, which makes them a dynamic-code-loading surface in their own right.",
-   "how": "```bash\ngrep -rnE 'SplitInstallManager|SplitInstallRequest|getInstalledModules|SplitCompat\\.install|SplitInstallHelper' out/sources/\ngrep -rn 'dist:module\\|dist:onDemand\\|dist:instant' out/AndroidManifest.xml out/base/manifest/* 2>/dev/null\n```\nThen drive each entry point with the module absent (per D02-038) and observe.",
+   "how": "```bash\ngrep -rnE 'SplitInstallManager|SplitInstallRequest|getInstalledModules|SplitCompat\\.install|SplitInstallHelper' $DEC/jadx/sources/\ngrep -rn 'dist:module\\|dist:onDemand\\|dist:instant' $DEC/apktool/AndroidManifest.xml \"$E\"/work/aab/base/manifest/* 2>/dev/null   # the second path is the unzipped .aab (D02-005)\n```\nThen drive each entry point with the module absent (per D02-038) and observe.",
    "proof": "A call into module code with no preceding `getInstalledModules().contains(...)` guard, and the resulting behaviour on a base-only install.",
    "escalation": "-> D02-038 for the severity; -> D17 because the module itself is code delivered after install and its delivery channel is in scope.",
    "ruled_out_when": "Every module entry point is guarded, and the guard blocks (verified by reaching it on a base-only install), **or** the app has no dynamic feature modules — `grep 'dist:module'` empty and `isSplitRequired` absent."
@@ -1932,7 +2013,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`config.arm64_v8a` and `config.<lang>` splits sometimes carry different code paths, different strings, and the native libraries the base APK does not contain. Testing only `base.apk` produces false \"not present\" conclusions and a silently incomplete assessment.",
-   "how": "```bash\nfor inner in splits/*.apk; do jadx -d \"decompiled_$(basename \"$inner\" .apk)/\" \"$inner\"; done\nunzip -l splits/split_config.arm64_v8a.apk | grep -E 'libapp|libflutter|libil2cpp|libassemblies|\\.so$'\nfor f in splits/*.apk; do echo \"== $f\"; aapt2 d xmltree \"$f\" --file AndroidManifest.xml \\\n  | grep -E 'E: (activity|service|receiver|provider|uses-permission)'; done\n```\nFast fallback when jadx is slow or fails on obfuscated DEX:\n```bash\nfind splits -name 'classes*.dex' -exec strings -8 {} \\; > strings_all.txt\n```",
+   "how": "```bash\nls -d \"$DEC\"/apktool/*/ \"$DEC\"/jadx/sources >/dev/null    # every split is decompiled in P2: per-split apktool trees at $DEC/apktool/<split-basename>/, one jadx tree over base + splits\nunzip -l splits/split_config.arm64_v8a.apk | grep -E 'libapp|libflutter|libil2cpp|libassemblies|\\.so$'\nfor f in splits/*.apk; do echo \"== $f\"; aapt2 d xmltree \"$f\" --file AndroidManifest.xml \\\n  | grep -E 'E: (activity|service|receiver|provider|uses-permission)'; done\n```\nFast fallback when jadx is slow or fails on obfuscated DEX:\n```bash\nfind splits -name 'classes*.dex' -exec strings -8 {} \\; > strings_all.txt\n```",
    "proof": "A component, permission, native library or hardcoded string present in a split and absent from `base.apk`, with its own exported/permission attributes quoted from the split's own manifest.",
    "escalation": "Split-only `.so` -> D16; split-only component -> D03/D04/D06/D07; split-only string -> D18.",
    "ruled_out_when": "Every split's manifest declares no components or permissions beyond the base's, every split's DEX (if any) contains only resource stubs, and `unzip -l` on each split shows no `.so`. Confirm you have the *complete* split set first (D02-004) — this item cannot be ruled out on an incomplete set."
@@ -1952,8 +2033,10 @@
     "AM-12"
    ],
    "applies_to": "All split/AAB-delivered apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TOOL-0103 (uber-apk-signer); HN Security multi-APK `pm install-create` / `install-write` / `install-commit` flow",
    "record": "",
    "legacy_meta": {},
@@ -1977,7 +2060,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A repack of `base.apk` alone will not install over a split-delivered app. Every split must be rebuilt and re-signed with the **same** key and installed in one session.",
-   "how": "```bash\nfor f in splits/*.apk; do\n  zipalign -P 16 -f 4 \"$f\" \"aligned_$(basename \"$f\")\"\n  apksigner sign --ks key.jks --ks-pass pass:android \"aligned_$(basename \"$f\")\"\ndone\nadb install-multiple -r aligned_base.apk aligned_split_config.*.apk\n# session form, when install-multiple is unavailable:\nadb shell pm install-create -r\nadb shell pm install-write -S <size> <session> 0 /data/local/tmp/base.apk\nadb shell pm install-commit <session>\n```",
+   "how": "```bash\nfor f in splits/*.apk; do\n  zipalign -P 16 -f 4 \"$f\" \"aligned_$(basename \"$f\")\"\n  apksigner sign --ks key.jks --ks-pass pass:android --v4-signing-enabled false \"aligned_$(basename \"$f\")\"   # no .idsig beside the output\ndone\nadb -s \"$SERIAL\" install-multiple --no-incremental -r aligned_base.apk aligned_split_config.*.apk   # .idsig files beside the APKs otherwise force incremental mode: 'Incremental installation not allowed' hides the verdict\n# session form, when install-multiple is unavailable:\nadb shell pm install-create -r\nadb shell pm install-write -S <size> <session> 0 /data/local/tmp/base.apk\nadb shell pm install-commit <session>\n```",
    "proof": "The reinstalled modified split set launches, and `adb shell dumpsys activity activities | grep topResumedActivity` shows the screen under test reached — a silently broken rebuild is indistinguishable from a fixed bug.",
    "escalation": "Enables D02-022 on bundled apps; mandatory before D02-038's comparison arm.",
    "ruled_out_when": "n/a — this is the procedure. If it fails, the cause is either mixed signing keys across splits or a `.locals` verifier crash (D02-023), not an app-side integrity control; distinguish before you claim one."
@@ -1996,9 +2079,11 @@
    "attacker_ids": [
     "AM-03"
    ],
-   "applies_to": "All. **targetSdk >= 29**: native code may not be executed from the app's internal data storage (ATT&CK M1006) — state which side of that gate the target is on. Android 14 (targetSdk 34) additionally requires dynamically-loaded files to be **read-only** before load.",
-   "requires": "",
-   "requires_tags": [],
+   "applies_to": "All. The Android 10 (targetSdk 29) W^X change removes `exec()` of files in the app home directory (SELinux `execute_no_trans` on `app_data_file`); it does **not** stop `System.load()`/`dlopen()` of a `.so` from a writable app path, nor `DexClassLoader` on a writable DEX — the `lib-*/`/extraction drop zone is unaffected. Android 14 (targetSdk 34) requires files handed to a class loader (DEX/JAR/APK) to be read-only or the loader throws; it does not cover `.so` loaded via `System.load`.",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "H1 #1377748 (Evernote, High), #1115864 (Mattermost, High 7.8), #1362313 (Evernote, sibling report); ATT&CK T1407; developer.android.com \"Dynamic code loading\" storage guidance",
    "record": "",
    "legacy_meta": {},
@@ -2025,11 +2110,11 @@
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "`/data/data/<pkg>/lib-*/` is loaded at process start. Any primitive that writes an attacker-chosen filename into the app's data directory becomes persistent arbitrary code execution. Separately, some apps extract `.so`/`.dex`/`.apk` payloads out of `assets/` at runtime — each extraction step is an attacker-writable code path, and the **file mode** decides the severity.",
-   "how": "```bash\nunzip -l base.apk | grep -E 'assets/.*\\.(so|apk|jar|dex|zip|bin)$'\ngrep -i 'extractNativeLibs' out/AndroidManifest.xml\nadb shell run-as com.target.app ls -la /data/data/com.target.app/      # lib-1, lib-main, files, cache\nadb shell 'ls -lRZ /data/data/com.target.app/ | grep -E \"\\.so|\\.apk|\\.jar|\\.dex\"'\nfrida-trace -U -n com.target.app -j 'java.util.zip.ZipInputStream!getNextEntry' -j 'java.io.FileOutputStream!$init'\n# after triggering a write primitive, confirm the drop landed:\nadb shell run-as com.target.app ls -la /data/data/com.target.app/lib-1/\n```",
+   "test": "`/data/data/<pkg>/lib-*/` is loaded at process start. Any primitive that writes an attacker-chosen filename into the app's data directory becomes persistent arbitrary code execution. Separately, some apps extract `.so`/`.dex`/`.apk` payloads out of `assets/` at runtime — each extraction step is an attacker-writable code path, and the **file mode** decides the severity. Also `<dataDir>/cache/oat_primary/<isa>/base.art` — an ART runtime app image generated into the app's own cache (Android 14+) and mapped at startup. Evaluate, do not assume: ART validates image headers and checksums against the APK's oat/vdex; a substituted image that fails validation is discarded (a Support note for D07), one that is accepted is persistent execution in the app's UID.",
+   "how": "```bash\nunzip -l base.apk | grep -E 'assets/.*\\.(so|apk|jar|dex|zip|bin)$'\ngrep -i 'extractNativeLibs' $DEC/apktool/AndroidManifest.xml\nadb shell run-as com.target.app ls -la /data/data/com.target.app/      # lib-1, lib-main, files, cache\nadb shell 'ls -lRZ /data/data/com.target.app/ | grep -E \"\\.so|\\.apk|\\.jar|\\.dex\"'\nfrida-trace -D \"$SERIAL\" -n \"$PKG\" -j 'java.util.zip.ZipInputStream!getNextEntry' -j 'java.io.FileOutputStream!$init'\n# Android 14+ ART writes a runtime app image into the APP-WRITABLE cache and maps it on the next start\nadb -s \"$SERIAL\" shell \"run-as $PKG ls -l cache/oat_primary/*/\"                      # base.art (sometimes base.odex/.vdex), owned by the app, rw\nadb -s \"$SERIAL\" shell \"run-as $PKG sh -c 'grep -E \\\"oat_primary|base\\\\.art\\\" /proc/\\$(pidof -s $PKG)/maps'\"\n# after triggering a write primitive, confirm the drop landed:\nadb shell run-as com.target.app ls -la /data/data/com.target.app/lib-1/\n```",
    "proof": "Your `.so`, built for the device's actual ABI, sitting in `lib-1/` (or `lib-main/`) under the name of a library the app loads (`libjnigraphics.so`, `libyoga.so`), plus a callback on next app launch — Evernote #1377748 proved it with `nc 127.0.0.1 6666` from an adb shell after restart. For the extraction variant, a `.so`/`.dex` written into `files/` or `code_cache/` whose mode from `ls -lZ` is anything other than `-r--------`.",
    "escalation": "-> D16 (the native surface you just entered) -> D17 (the loader) -> D07 (a FileProvider path traversal is the usual delivery of the write primitive) -> D11.",
-   "ruled_out_when": "No file-write primitive reaches the app's data directory from a zero-permission app (test it, do not assume), **and** `targetSdk >= 29` blocks native execution from internal storage for the native variant, **and** every runtime-extracted file is written read-only before load. A writable drop zone with no reachable write primitive is a Support observation for D07, not a finding here."
+   "ruled_out_when": "No file-write primitive reaches the app's data directory from a zero-permission app (test it, do not assume), **and** every native load reads only from `nativeLibraryDir` (`/data/app/.../lib/<abi>`, not app-writable) — no `System.load(<path under /data/data or /data/user>)`, no SoLoader/ReLinker-style extraction directory — **and**, for the DEX variant, `targetSdk >= 34` with the loaded file set read-only before load (`ls -lZ` shows `-r--------`). `targetSdk >= 29` rules out nothing here: it blocks `exec()`, not loaders. A writable drop zone with no reachable write primitive is a Support observation for D07, not a finding here."
   },
   {
    "id": "D02-043",
@@ -2087,9 +2172,9 @@
    "domain": "D02",
    "title": "Manifest-merger creep: an SDK re-opened cleartext or replaced the network security config",
    "severity": "high",
-   "severity_floor": "medium",
-   "severity_note": "High when the merged value is `usesCleartextTraffic=\"true\"` or a permissive `networkSecurityConfig` that re-opens a network finding you would otherwise concede as mitigated; Medium for a permission over-grant",
-   "vrt": "Routes to the network finding it re-enables; the permission over-grant alone is a Play data-safety mismatch, not a VRT-payable item",
+   "severity_floor": "high",
+   "severity_note": "High when the merged value is `usesCleartextTraffic=\"true\"` or a permissive `networkSecurityConfig` that re-opens a network finding you would otherwise concede as mitigated (permission over-grant is D02-043's test)",
+   "vrt": "Routes to the network finding it re-enables",
    "vrt_priority": "inherit",
    "vrt_best": "inherit",
    "attacker": "AM-06 network attacker (cleartext), AM-08 (the SDK that did it)",
@@ -2112,7 +2197,9 @@
     "attack": [],
     "vrt": []
    },
-   "xrefs": [],
+   "xrefs": [
+    "D02-043"
+   ],
    "domain_refs": [
     "D14",
     "D18",
@@ -2121,7 +2208,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A dependency can add a dangerous permission, re-enable `usesCleartextTraffic`, or replace the `networkSecurityConfig` reference through ordinary merger rules — and neither the developer nor a source-only reviewer will see it. Nobody diffs the developer's source manifest against the merged manifest.",
-   "how": "With source:\n```bash\ncat app/src/main/AndroidManifest.xml\ngrep -nE 'ADDED from|MERGED from|IMPLIED|usesCleartextTraffic|uses-permission|provider|receiver|networkSecurityConfig' \\\n  app/build/outputs/logs/manifest-merger-release-report.txt\n```\nWithout source:\n```bash\naapt2 dump permissions base.apk\ngrep -nE 'usesCleartextTraffic|networkSecurityConfig' out/AndroidManifest.xml\ncat out/res/xml/network_security_config.xml 2>/dev/null\ngrep -rnE 'android:name=\"(com|io|net|org)\\.' out/AndroidManifest.xml | grep -viE 'com\\.target\\.'\n```",
+   "how": "With source:\n```bash\ncat app/src/main/AndroidManifest.xml\ngrep -nE 'ADDED from|MERGED from|IMPLIED|usesCleartextTraffic|uses-permission|provider|receiver|networkSecurityConfig' \\\n  app/build/outputs/logs/manifest-merger-release-report.txt\n```\nWithout source (permission over-grant is enumerated once in D02-043 — do not repeat `aapt2 dump permissions` here):\n```bash\ngrep -nE 'usesCleartextTraffic|networkSecurityConfig' $DEC/apktool/AndroidManifest.xml\ncat $DEC/apktool/res/xml/network_security_config.xml 2>/dev/null\ngrep -rnE 'android:name=\"(com|io|net|org)\\.' $DEC/apktool/AndroidManifest.xml | grep -viE 'com\\.target\\.'\n```",
    "proof": "A merger-report line reading `ADDED from [com.vendor:sdk:x.y.z] AndroidManifest.xml:NN` next to a dangerous permission or `android:usesCleartextTraffic=\"true\"`, alongside the developer's own manifest that does not contain it. Black-box: the attribute present in the shipped manifest with no first-party justification, plus the SDK namespace that owns it.",
    "escalation": "-> D14 (cleartext re-enabled, or an `overridePins=\"true\"` anchor you did not expect) -> D18 (the SDK) -> D20 (undisclosed data collection under the added permission).",
    "ruled_out_when": "The merger report shows no `ADDED from` line for any security-relevant attribute, **or** black-box, `usesCleartextTraffic` is absent/false, the NSC is first-party, and every permission maps to first-party code. Note that `overridePins=\"true\"` outside a debug-only `<debug-overrides>` block is a finding in its own right (-> D14)."
@@ -2174,7 +2261,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Search resources for booleans and strings that **gate functionality** rather than merely style it. If the server does not re-check the role, flipping the resource unlocks the feature.",
-   "how": "```bash\napktool d -f -o out base.apk\ngrep -rniE '(is_admin|is_premium|isDebug|enable_[a-z_]+|feature_flag|show_[a-z_]+)' out/res/values/\n# in jadx, locate getString(R.string.is_admin) / getBoolean(R.bool.*) in the gating Activity\nsed -i '' 's|<string name=\"is_admin\">no</string>|<string name=\"is_admin\">yes</string>|' out/res/values/strings.xml\napktool b out -o patched.apk\nzipalign -P 16 -f 4 patched.apk aligned.apk\napksigner sign --ks key.jks --ks-pass pass:android aligned.apk\nadb install -r aligned.apk\n```",
+   "how": "```bash\ncp -r \"$DEC/apktool\" \"$E/work/D02-045/\"     # work on a copy; the canonical P2 tree stays pristine\ngrep -rniE '(is_admin|is_premium|isDebug|enable_[a-z_]+|feature_flag|show_[a-z_]+)' \"$E/work/D02-045/res/values/\"\n# in jadx, locate getString(R.string.is_admin) / getBoolean(R.bool.*) in the gating Activity\nperl -pi -e 's|<string name=\"is_admin\">no</string>|<string name=\"is_admin\">yes</string>|' \"$E/work/D02-045/res/values/strings.xml\"   # perl -pi is identical on GNU and BSD; sed in-place editing has no portable form\ngrep -c 'is_admin\">yes' \"$E/work/D02-045/res/values/strings.xml\"     # must print 1 before apktool b\napktool b \"$E/work/D02-045\" -o patched.apk\nzipalign -P 16 -f 4 patched.apk aligned.apk\napksigner sign --ks key.jks --ks-pass pass:android --v4-signing-enabled false aligned.apk\nadb -s \"$SERIAL\" install --no-incremental -r aligned.apk      # an .idsig beside the APK otherwise forces incremental mode and hides the install verdict\n```",
    "proof": "After reinstall, previously hidden functionality is present and usable — **and** the corresponding server action succeeds. Capture the authenticated request/response in the proxy. The UI appearing is not the finding; the 200 is.",
    "escalation": "-> D15 (does the backend enforce the role?) -> D23 (entitlements). Combine with a D13 Match-and-Replace on the entitlement response and then call the premium-only API directly — if that also works, the client-side gate was never a control.",
    "ruled_out_when": "The unlocked UI produces a server-side `403`/`401` on the privileged call, **with a body diff** proving the rejection is real and not a cosmetic status code, over at least two distinct privileged operations. A single 403 on one endpoint does not rule out the class."
@@ -2213,8 +2300,11 @@
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D01-022"
+   ],
    "domain_refs": [
+    "D01",
     "D12",
     "D14",
     "D15"
@@ -2222,10 +2312,10 @@
    "has_code": true,
    "skip_when": "",
    "test": "Search the package for keystore and private-key blobs. A private key that authenticates the app to a backend (mTLS client cert, request-signing key) lets you impersonate the app and defeats any client-attestation scheme.",
-   "how": "```bash\nunzip -o -d x base.apk >/dev/null\nfind x -type f \\( -name '*.jks' -o -name '*.keystore' -o -name '*.bks' -o -name '*.p12' -o -name '*.pfx' -o -name '*.pem' -o -name '*.key' \\) -print\ngrep -ral -- '-----BEGIN \\(RSA \\|EC \\|DSA \\|\\)PRIVATE KEY-----' x/\ngrep -ral 'PGP PRIVATE KEY BLOCK' x/\nkeytool -list -v -keystore x/res/raw/foo.bks -storetype BKS -storepass '' 2>&1 | head\nopenssl pkey -in x/assets/client.pem -noout -text | head\napkleaks -f base.apk\n```",
+   "how": "```bash\n# raw unzip trees from D01-022 live under $E/work/raw/<split-basename>/ (one archive per unzip call)\nfind \"$E\"/work/raw -type f \\( -name '*.jks' -o -name '*.keystore' -o -name '*.bks' -o -name '*.p12' -o -name '*.pfx' -o -name '*.pem' -o -name '*.key' \\) -print\ngrep -ral -- '-----BEGIN \\(RSA \\|EC \\|DSA \\|\\)PRIVATE KEY-----' \"$E\"/work/raw/\ngrep -ral 'PGP PRIVATE KEY BLOCK' \"$E\"/work/raw/\n# BKS is a BouncyCastle format: stock keytool answers \"BKS not found\" without the provider jar\nkeytool -list -v -keystore \"$DEC/apktool/res/raw/foo.bks\" -storetype BKS -storepass '' \\\n  -providerclass org.bouncycastle.jce.provider.BouncyCastleProvider -providerpath \"$BCPROV\" 2>&1 | head   # BCPROV=/path/to/bcprov-jdk18on-<ver>.jar\nkeytool -list -v -keystore \"$DEC/apktool/assets/client.p12\" -storetype PKCS12 -storepass '' 2>&1 | head   # PKCS12/JKS need no provider\nopenssl pkey -in \"$E/work/raw/base/assets/client.pem\" -noout -text | head\napkleaks -f base.apk\n```",
    "proof": "`keytool -list` enumerating a `PrivateKeyEntry`, or `openssl` parsing the PEM — i.e. you hold the private half of a key the app uses for signing, mTLS or pinning. Then perform **one** authenticated request with it and stop: HackerOne Platform Standards state that hackers \"should NOT test their validity beyond authenticating and then immediately deauthenticating\".",
    "escalation": "-> D15 (impersonate the app to the API, defeating client attestation) -> D14 (forge a pinned chain if the bundled key is a CA) -> D12 (if it is a content-signing key, forge receipts and licence responses).",
-   "ruled_out_when": "The only key material in the package is a **public** certificate or public key (pinning anchors, a `base64EncodedPublicKey` for licence verification) — confirmed by `openssl x509`/`openssl pkey -pubin` parsing it and `openssl pkey` failing. A password-protected keystore is **not** ruled out until you have tried the empty password, `android`, and any password string found in the package."
+   "ruled_out_when": "The only key material in the package is a **public** certificate or public key (pinning anchors, a `base64EncodedPublicKey` for licence verification) — confirmed by `openssl x509`/`openssl pkey -pubin` parsing it and `openssl pkey` failing. A password-protected keystore is **not** ruled out until you have tried the empty password, `android`, and any password string found in the package. `BKS not found` is a tooling error (missing BouncyCastle provider), not an empty keystore."
   },
   {
    "id": "D02-047",
@@ -2245,7 +2335,7 @@
    "requires": "",
    "requires_tags": [],
    "maps_to": "MASTG-TEST-0212 (hardcoded symmetric keys), MASWE-0004 (CWE-312, 321, 540, 798), MASVS-STORAGE-1, Mobile Top 10 2024 M1; MASTG-TOOL-0144 (gitleaks), MASTG-TOOL-0125 (apkleaks); HackerOne Platform Standards \"Bounty Awards for Discovered Leaked Credentials\"",
-   "record": "",
+   "record": "`logs/D02-047.txt` (every probe's raw response), `logs/D02-047-grep.txt` (the regex sweep with the control line count), `logs/D02-047-gitleaks.json`",
    "legacy_meta": {},
    "ids": {
     "mastg": [
@@ -2270,22 +2360,31 @@
     ]
    },
    "xrefs": [
-    "D02-001"
+    "D01-064",
+    "D02-001",
+    "D02-004",
+    "D02-011",
+    "D02-040",
+    "D11-027",
+    "D18-009",
+    "D26-024"
    ],
    "domain_refs": [
+    "D01",
     "D11",
     "D12",
     "D13",
     "D15",
-    "D18"
+    "D18",
+    "D26"
    ],
    "has_code": true,
    "skip_when": "",
    "test": "Extract every credential-looking string from the artefact, then **prove liveness** against the real service. A hardcoded string with no proven access is a P5. This is the single item in D02 that reliably reaches P1.",
-   "how": "```bash\napktool d -f -o out base.apk\ngitleaks detect --no-git --source out -v\napkleaks -f base.apk\ngrep -rEn '(AIza[0-9A-Za-z_\\-]{35}|AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-)' out/ ./base.apk 2>/dev/null\nstrings -n 12 out/lib/*/*.so out/assets/* out/res/raw/* 2>/dev/null \\\n  | grep -Ei 'secret|token|api[_-]?key|password|bearer' | sort -u\ngrep -rEn 'new SecretKeySpec\\(|SecretKeySpec\\(.*getBytes' out/sources/\ngrep -rEn 'https?://[a-z0-9.\\-]+' out/res/values/strings.xml | sort -u\n```\nThen exercise it, once: `aws sts get-caller-identity`; the relevant Google API endpoint for an `AIza` key; `auth.test` for a Slack token. **Stop immediately after proving identity — do not enumerate data.**",
+   "how": "```bash\n# sweep EVERY split (split-only strings exist: D02-040); the decompiled trees already live in $DEC (base at $DEC/apktool, per-split trees at $DEC/apktool/<split-basename>/)\nls \"$DEC\"/apktool/*/AndroidManifest.xml | wc -l          # must equal the split count from D02-004\n# 1. the regex sweep is PRIMARY; gitleaks and apkleaks are secondary (both have false-negatived on res/values/strings.xml in practice)\ngrep -rEn '(AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|sk_live_[0-9a-zA-Z]{24,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-|ghp_[0-9A-Za-z]{36}|SG\\.[0-9A-Za-z_-]{22}\\.[0-9A-Za-z_-]{43})' \"$DEC/apktool\" | tee logs/D02-047-grep.txt | wc -l\n# 2. positive control — plant one synthetic key and prove the sweep sees it; a sweep that misses the control is broken, the app is not clean\nmkdir -p \"$DEC/apktool/res/raw\"; printf 'AIzaSyA%032d\\n' 0 > \"$DEC/apktool/res/raw/_d02047_control.txt\"; grep -rEl 'AIzaSyA0{32}' \"$DEC/apktool\" | grep -c _d02047_control; rm \"$DEC/apktool/res/raw/_d02047_control.txt\"\n# 3. gitleaks >= 8.19: `dir` takes ONE path (several paths silently scan 0 bytes); `detect --no-git` is the deprecated spelling\ngitleaks dir \"$DEC/apktool\" --report-path logs/D02-047-gitleaks.json -v; grep -c '\"RuleID\"' logs/D02-047-gitleaks.json\n# 4. apkleaks re-runs jadx internally (15–20 min on a large base): run it once per split in the background and pre-filter the\n#    JSON_Web_Token bucket (bundled public-suffix lists) and Facebook_Secret_Key bucket (any 32-hex string) before reading it (D01-064 has the jq filter)\nfor a in apk/*.apk; do apkleaks -f \"$a\" --json -o \"logs/D02-047-apkleaks-$(basename \"$a\" .apk).json\" & done; wait\nunzip -p apk/base.apk 'lib/*/*.so' 'assets/*' 'res/raw/*' 2>/dev/null | strings -n 12 | grep -Ei 'secret|token|api[_-]?key|password|bearer' | sort -u\ngrep -rEn 'new SecretKeySpec\\(|SecretKeySpec\\(.*getBytes' \"$DEC/jadx/sources\"\ngrep -rEn 'https?://[a-z0-9.\\-]+' \"$DEC\"/apktool/*/res/values/strings.xml | sort -u\n```\nThen exercise it, once — and record the raw response in `logs/D02-047.txt`; if the engagement already holds a restriction probe for the same key (D01-064, D18-009, D26-024), reuse it: every probe creates state on the vendor's project. For a Google `AIza` key use the full 39-character value (`AIza` + 35): a truncated key answers `API_KEY_INVALID` and reads as dead when it is live. Decode the probe: HTTP 200 = live, unrestricted; 403 with `API_KEY_ANDROID_APP_BLOCKED` / `API_KEY_HTTP_REFERRER_BLOCKED` = live, restricted to an app or referrer identity; 400 `API_KEY_INVALID` = dead. An Android-app restriction is not a security boundary — it is enforced from request headers any client can set; re-send once with `-H \"X-Android-Package: $PKG\" -H \"X-Android-Cert: <signer SHA-1, hex, no colons>\"` (both values are public: the package name and the D02-011 digest). A 200 on that retry means the restriction is decorative; rate by what the enabled APIs return — billing-only data = `pay_per_use_abuse` (P4), user/tenant data = `for_publicly_accessible_asset` (P1). `aws sts get-caller-identity`; the relevant Google API endpoint for an `AIza` key; `auth.test` for a Slack token. **Stop immediately after proving identity — do not enumerate data.**",
    "proof": "The HTTP 200 (or the `GetCallerIdentity` ARN) returned by the third party using the extracted key, side by side with the file and line where it was found, and the artefact hash from D02-001. For a cross-tenant case, a request from your own laptop, authenticating only with the extracted credential, returning data belonging to another tenant.",
    "escalation": "-> D18 (a live cloud key is the entry point to the whole cloud surface) -> D12 (a hardcoded *crypto* key decrypts the app's local ciphertext) -> D11 (the plaintext token behind it) -> D15.",
-   "ruled_out_when": "Every candidate string is provably a public-by-design value (a Firebase web API key, a Maps key with correct package+SHA-1 restrictions — verify the restriction, do not assume it), **or** authentication with it fails from a clean host. Two routing traps: a Firebase/Maps key is `intentionally_public_sample_or_invalid` (P5) or `pay_per_use_abuse` (P4), not P1; and an **OAuth `client_secret` found in a mobile app is `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` (P5) and sits on the never-submit list** — a public client is not supposed to hold a confidential secret, so the reportable finding is **PKCE non-enforcement** on the authorisation server (-> D13), not the secret's presence."
+   "ruled_out_when": "Every candidate string is provably a public-by-design value (a Firebase web API key), **or** authentication with it fails from a clean host with the full-length key, **or** the key is restricted *and* every API enabled on it returns only public or billable data (checked with the header retry above — a package+SHA-1 restriction alone is never the boundary). The regex sweep showed the planted control, or nothing was ruled out. Twin rows: D01-064 and D11-027 — mark them from `logs/D02-047.txt`; do not re-run. Two routing traps: a Firebase/Maps key is `intentionally_public_sample_or_invalid` (P5) or `pay_per_use_abuse` (P4), not P1; and an **OAuth `client_secret` found in a mobile app is `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` (P5) and sits on the never-submit list** — a public client is not supposed to hold a confidential secret, so the reportable finding is **PKCE non-enforcement** on the authorisation server (-> D13), not the secret's presence."
   },
   {
    "id": "D02-048",
@@ -2330,7 +2429,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Walk the unpacked structure and flag every file that is not part of a release: test fixtures, `.sql` dumps, service-account JSON, staging configs, document templates, a second `google-services.json`, a `.git` directory.",
-   "how": "```bash\nunzip -l base.apk | grep -vE '\\.(png|webp|xml|arsc|dex)$' | sort -k1 -n -r | head -40\nfind out/assets out/res/raw -type f | xargs file | grep -viE 'image|xml|data'\ngrep -rl 'BEGIN RSA PRIVATE KEY\\|BEGIN PRIVATE KEY\\|-----BEGIN CERTIFICATE' out/\nfind out -name 'google-services.json' -o -name '*.sql' -o -name '.git' -o -name '*.bak' -o -name '*.orig'\npython3 -c \"import json,sys;d=json.load(open('out/assets/sa.json'));print(d.get('type'),d.get('client_email'))\" 2>/dev/null\n```",
+   "how": "```bash\nunzip -l base.apk | grep -vE '\\.(png|webp|xml|arsc|dex)$' | sort -k1 -n -r | head -40\nfind $DEC/apktool/assets $DEC/apktool/res/raw -type f | xargs file | grep -viE 'image|xml|data'\ngrep -rl 'BEGIN RSA PRIVATE KEY\\|BEGIN PRIVATE KEY\\|-----BEGIN CERTIFICATE' \"$DEC/apktool/\"\nfind \"$DEC/apktool\" -name 'google-services.json' -o -name '*.sql' -o -name '.git' -o -name '*.bak' -o -name '*.orig'\npython3 -c \"import json,sys;d=json.load(open('$DEC/apktool/assets/sa.json'));print(d.get('type'),d.get('client_email'))\" 2>/dev/null\n```",
    "proof": "A shipped `.p12`/`.jks`/`.pem`, a service-account JSON with `\"type\": \"service_account\"`, a `.sql` dump, or a staging config in `assets/` — with the credential proven live per D02-047's liveness standard.",
    "escalation": "-> D18 (cloud backend) -> D15 (staging API with weaker auth) -> D11.",
    "ruled_out_when": "Every non-code file in the archive is accounted for as a shipping resource, and any config file present contains only values that are public by design (verified, not assumed). Size-sorting the archive listing is the cheapest way to find the outlier — a single unexpectedly large `assets/` entry is the usual tell."
@@ -2371,8 +2470,11 @@
      "lack_of_binary_hardening.lack_of_obfuscation"
     ]
    },
-   "xrefs": [],
+   "xrefs": [
+    "D01-023"
+   ],
    "domain_refs": [
+    "D01",
     "D11",
     "D12",
     "D14",
@@ -2381,8 +2483,8 @@
    ],
    "has_code": true,
    "skip_when": "",
-   "test": "If the APK's code is compressed into a single opaque file or a packer is in use, a static-only report is incomplete. Run the app and collect the decompressed files, or dump DEX from memory. **Packing alone is informational** — escalate only when the unpacked stage does something the store listing and privacy policy do not describe.",
-   "how": "```bash\napkid base.apk                       # identify compiler / packer / obfuscator\n# entropy sweep for an encrypted blob\nfor f in $(unzip -Z1 base.apk 'assets/*' 'lib/*' 'res/raw/*'); do\n  unzip -p base.apk \"$f\" | ent 2>/dev/null | awk -v n=\"$f\" '/Entropy/ {print n, $0}'\ndone\npip install clsdumper\nclsdumper com.target.app --spawn\nclsdumper com.target.app --strategies fart_dump,oat_extract --extract-classes\n```\n`clsdumper` phase 0 also blocks anti-instrumentation: it hooks `sigaction`/`signal` to stop crash and anti-debug handler registration, serves a filtered `/proc/self/maps` via `memfd_create`, and neutralises `pthread_create` watchdogs.",
+   "test": "D01-023 already ran `apkid` — reuse `logs/D01-023.txt` for the first step. If the APK's code is compressed into a single opaque file or a packer is in use, a static-only report is incomplete. Run the app and collect the decompressed files, or dump DEX from memory. **Packing alone is informational** — escalate only when the unpacked stage does something the store listing and privacy policy do not describe.",
+   "how": "```bash\napkid base.apk                       # identify compiler / packer / obfuscator\n# entropy sweep for an encrypted blob\nfor f in $(unzip -Z1 base.apk 'assets/*' 'lib/*' 'res/raw/*'); do\n  unzip -p base.apk \"$f\" | ent 2>/dev/null | awk -v n=\"$f\" '/Entropy/ {print n, $0}'\ndone\n# maintained route first: memory-scan every mapped DEX header after the packer has decrypted it, then diff the class lists\npip install frida-dexdump && frida-dexdump -D \"$SERIAL\" -f \"$PKG\" -o dumps/\napkid dumps/*.dex && jadx -d \"$E/work/D02-049/jadx-runtime\" dumps/*.dex\ndiff <(cd \"$DEC/jadx/sources\" && find . -name '*.java' | sort -u) <(cd \"$E/work/D02-049/jadx-runtime/sources\" && find . -name '*.java' | sort -u) | grep '^>' | head\n# clsdumper only where it is installed in the harness (record the version; availability is not guaranteed):\nclsdumper \"$PKG\" --spawn\nclsdumper \"$PKG\" --strategies fart_dump,oat_extract --extract-classes\n```\n`clsdumper` phase 0 also blocks anti-instrumentation: it hooks `sigaction`/`signal` to stop crash and anti-debug handler registration, serves a filtered `/proc/self/maps` via `memfd_create`, and neutralises `pthread_create` watchdogs.",
    "proof": "Dumped DEX files containing classes absent from the static decompile, with `metadata.json` recording which strategy (`art_walk`, `DexFile::OpenCommon` hook, `memory_scan`, `oat_extract`, `fart_dump`, `mCookie`, `InMemoryDexClassLoader` hook) recovered each. Then diff the static and runtime class lists and show the recovered classes referencing a host or permission absent from static analysis.",
    "escalation": "The recovered DEX usually contains the D17 dynamic-loading logic and the D12 hardcoded keys. Re-run D11/D14/D20 against the recovered stage.",
    "ruled_out_when": "`apkid` reports no packer, `classes*.dex` decompiles cleanly in jadx, and the runtime class list matches the static one. **Never report \"the app is packed\" or \"the app is not obfuscated\"** — `lack_of_binary_hardening.lack_of_obfuscation` is P5 and Grab, Spotify, Starbucks and Xiaomi all list it out of scope verbatim."
@@ -2429,10 +2531,10 @@
    "has_code": true,
    "skip_when": "",
    "test": "A malicious app that claims a package name a victim passes to `createPackageContext()` and exports `android:appComponentFactory` achieves arbitrary code execution inside the victim. Audit **both** sides: does the target declare an `appComponentFactory`, and does it ever call `createPackageContext`?",
-   "how": "```bash\ngrep -n 'appComponentFactory' out/AndroidManifest.xml\ngrep -rn 'createPackageContext' out/sources/\ngrep -rn 'CONTEXT_INCLUDE_CODE\\|CONTEXT_IGNORE_SECURITY' out/sources/\n```",
+   "how": "```bash\ngrep -n 'appComponentFactory' $DEC/apktool/AndroidManifest.xml\ngrep -rn 'createPackageContext' $DEC/jadx/sources/\ngrep -rn 'CONTEXT_INCLUDE_CODE\\|CONTEXT_IGNORE_SECURITY' $DEC/jadx/sources/\n```",
    "proof": "A call site matching `createPackageContext(pkg, Context.CONTEXT_IGNORE_SECURITY | Context.CONTEXT_INCLUDE_CODE)` followed by `getClassLoader()`, where `pkg` is a package not present on a clean device. Install a stub with that package name and an exported `appComponentFactory`, then prove execution with a file write from inside the victim's UID — a marker file under the victim's `files/`, visible via `run-as`, named with an 8+ character random string you confirmed is absent from the baseline app.",
    "escalation": "From inside the victim's UID everything in D11/D12/D13 is readable. Note that this mitigation depends on a correct signer check (D02-019) — a `signatures[0]` comparison does not save it.",
-   "ruled_out_when": "No `createPackageContext` call site exists, **or** every call site passes a package name that is a compile-time constant *and* is signature-verified with `hasSigningCertificate(..., CERT_INPUT_SHA256)` before the context is created, **or** the flags omit `CONTEXT_INCLUDE_CODE` (resources-only contexts do not load code)."
+   "ruled_out_when": "No `createPackageContext` call site exists, **or** every call site passes a package name that is a compile-time constant *and* is signature-verified with `hasSigningCertificate(..., CERT_INPUT_SHA256)` before the context is created, **or** the flags omit `CONTEXT_INCLUDE_CODE` (resources-only contexts do not load code). Name, do not re-derive, the standard negative: platform-vendor services SDKs load their dynamic modules with `createPackageContext(\"<vendor services package>\", CONTEXT_INCLUDE_CODE | CONTEXT_IGNORE_SECURITY)` (flags = 3) followed by a `DelegateLastClassLoader` over that package's module directory; the package name is a compile-time constant that cannot be claimed where the vendor package is preinstalled, and the SDK verifies the vendor package's signing certificate against a pinned set before creating the context. Record it as ruled out with the verifier class named (`logs/D02-050.txt`); the item applies to call sites whose package name is attacker-influenced or whose verifier is absent or `signatures[0]`-weak (D02-019)."
   },
   {
    "id": "D02-051",
@@ -2519,7 +2621,7 @@
     "D17"
    ],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "Absence of `gradle/verification-metadata.xml` means every dependency and every plugin is accepted on trust from whichever repository answered first.",
    "how": "```bash\nls -l gradle/verification-metadata.xml gradle/verification-keyring.keys 2>/dev/null || echo \"NO VERIFICATION\"\n./gradlew --write-verification-metadata pgp,sha256 --export-keys help\ngrep -c '<ignored-key' gradle/verification-metadata.xml     # keys not found on keyservers\ngrep -n '<trust ' gradle/verification-metadata.xml          # blanket trust entries\ngrep -c '<pgp ' gradle/verification-metadata.xml            # how much is actually signed\n```",
    "proof": "Either the file is absent, or it contains blanket `<trust group=\"...\"/>` entries or a large `<ignored-key>` count — quote the exact lines. A broad `<trust group=\"com.mycompany\"/>` \"automatically trusts all artifacts in that group without validation — disabling verification entirely for matched components.\"",
@@ -2564,7 +2666,7 @@
    ],
    "domain_refs": [],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "On the affected Gradle range, an entry with a `gpg` element but no `checksum` element is accepted without validation whenever signature verification cannot be completed (signatures disabled, or no `.asc` on the remote).",
    "how": "```bash\n./gradlew --version | grep -i '^Gradle'\ngrep -n '<pgp\\|<gpg' gradle/verification-metadata.xml | head\npython3 - <<'PY'\nimport re\nx = open('gradle/verification-metadata.xml').read()\nfor m in re.finditer(r'<artifact name=\"([^\"]+)\">(.*?)</artifact>', x, re.S):\n    body = m.group(2)\n    if ('pgp' in body or 'gpg' in body) and 'sha' not in body:\n        print(\"UNVERIFIED-ON-FALLBACK:\", m.group(1))\nPY\n```",
    "proof": "A Gradle version in `6.2–7.4.2` **and** at least one `UNVERIFIED-ON-FALLBACK` artefact printed.",
@@ -2605,7 +2707,7 @@
    "xrefs": [],
    "domain_refs": [],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "On the affected range, `content { includeGroup ... }` and `exclusiveContent` filters inside a `settings.gradle` `pluginManagement {}` block are ignored, so internal plugin coordinates leak to public repositories and a squatted public plugin can be resolved instead of the internal one.",
    "how": "```bash\n./gradlew --version\ngrep -n -A15 'pluginManagement' settings.gradle settings.gradle.kts 2>/dev/null | grep -nE 'content|includeGroup|exclusiveContent'\n./gradlew --refresh-dependencies help -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=8080\n```",
    "proof": "A proxy log showing a request for an internal plugin coordinate (`com.client.internal.*`) hitting `plugins.gradle.org` or `repo.maven.apache.org` despite an `includeGroup` filter meant to confine it.",
@@ -2653,7 +2755,7 @@
     "D17"
    ],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "Maven `groupId` ownership is proved by DNS control of the reversed domain. If that domain has lapsed, an attacker registers it, claims the `groupId`, and publishes a new higher version of the library. Oversecured measured **3,710 of 26,163** mavenCentral domains (14.18%) as vulnerable and **18.18%** of dependencies interceptable across repositories.",
    "how": "```bash\n./gradlew :app:dependencies --configuration releaseRuntimeClasspath > deps.txt\n```\n```python\n# reverse each groupId into a domain and check registrability — Python, not a shell loop\nimport re, subprocess, sys\ngroups = set()\nfor line in open('deps.txt'):\n    m = re.search(r'([a-z0-9][a-z0-9.]+):([A-Za-z0-9._-]+):', line)\n    if m: groups.add(m.group(1))\nprint(f\"groupIds: {len(groups)}\", file=sys.stderr)\nchecked = 0\nfor g in sorted(groups):\n    dom = '.'.join(reversed(g.split('.')[:2])) if g.count('.') >= 1 else g\n    try:\n        out = subprocess.run(['whois', dom], capture_output=True, text=True, timeout=20).stdout\n        if re.search(r'No match|NOT FOUND|Status:\\s*free|No Data Found', out, re.I):\n            print(\"UNREGISTERED:\", dom, \"<-\", g)\n    except Exception as e:\n        print(\"ERROR:\", dom, e, file=sys.stderr)\n    checked += 1\nprint(f\"checked {checked}/{len(groups)}\", file=sys.stderr)   # counts must match\n```\n```bash\nls gradle/verification-metadata.xml 2>/dev/null || echo \"NO dependency verification configured\"\ngpg --keyserver keyserver.ubuntu.com --recv-keys <KEYID> && gpg --verify artifact.jar.asc\n```",
    "proof": "A `groupId` in the **release runtime classpath** whose reversed domain is unregistered, expired or for sale, combined with the absence of `gradle/verification-metadata.xml` or with that artefact carrying no PGP signature. Oversecured's own finding that the default configuration does not validate dependencies in any way — and that even Google's artifacts are unsigned — is what makes this exploitable rather than theoretical.",
@@ -2696,7 +2798,7 @@
    ],
    "domain_refs": [],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "Two dependencies both provide the same fully-qualified class; the classloader takes the first on the classpath. An attacker who controls an *earlier* dependency shadows a class belonging to a *later*, trusted one without touching app code.",
    "how": "```kotlin\n// settings.gradle.kts\nplugins { id(\"com.autonomousapps.build-health\") version \"3.5.1\" }\n// root build.gradle.kts\ndependencyAnalysis { issues { all { onAny { severity(\"fail\") } } } }\n```\n```bash\n./gradlew buildHealth\n./gradlew :app:reason --id :suspect-lib\n```",
    "proof": "A `buildHealth` entry flagging **binary-incompatible** duplicate classes, e.g. `Expected METHOD com/example/trusty/TrustyService.greet(Ljava/lang/String;)Ljava/lang/String;, but was com/example/trusty/TrustyService.greet(Ljava/lang/String;)I`. Identical duplicates are merely redundant; **incompatible duplicates are the attack signal**.",
@@ -2741,7 +2843,7 @@
    ],
    "domain_refs": [],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "`gradle-wrapper.jar` executes on every build with full developer and CI privileges and is committed as a binary blob. A swapped wrapper jar or an unpinned distribution URL is arbitrary code execution in the build.",
    "how": "```bash\nshasum -a 256 gradle/wrapper/gradle-wrapper.jar     # compare against Gradle's published checksums\ngrep -n 'distributionUrl\\|distributionSha256Sum' gradle/wrapper/gradle-wrapper.properties\ngradle wrapper --gradle-version=8.7 --gradle-distribution-sha256-sum=<published-sha256>\n```",
    "proof": "A missing `distributionSha256Sum`, or a `gradle-wrapper.jar` whose SHA-256 matches no published Gradle release checksum. Also flag a `distributionUrl` that is `http://` or points at a non-`services.gradle.org` host.",
@@ -2786,7 +2888,7 @@
     "D17"
    ],
    "has_code": true,
-   "skip_when": "",
+   "skip_when": "`test -d \"$E/repo\" && echo SOURCE=yes || echo SOURCE=no` prints `SOURCE=no` (no source handover; docs/11 §4 has no tag for source access yet) — write `n/a — black-box engagement, no source handover (engagement.json: handover=apk)`.",
    "test": "An `http://` Maven repository means every artefact — including ones that execute during the build — is MitM-able.",
    "how": "```bash\ngrep -rnE \"maven[^\\n]*\\{[^}]*url[^}]*['\\\"]http://\" --include='*.gradle' --include='*.gradle.kts' .\ngrep -rn \"allowInsecureProtocol\\|isAllowInsecureProtocol\" --include='*.gradle*' .\n```",
    "proof": "The literal repository declaration with an `http://` URL, plus — where you can run the build on a network you control — a proxy log showing the `.jar`/`.aar`/`.pom` fetched in cleartext.",
@@ -2895,7 +2997,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Map coordinates to advisories with an ecosystem-native database rather than NVD CPE matching, which has poor coverage for mobile Maven artefacts and produces AndroidX/support-library false positives (Dependency-Check 9.0.0 misflagged legacy support-library CVEs against AndroidX). Then prove reachability, or expect \"Informative\".",
-   "how": "```bash\nosv-scanner scan -r ./android-project/ --format json --output-file osv.json\nosv-scanner scan -L gradle/verification-metadata.xml\nosv-scanner --offline-vulnerabilities --download-offline-databases ./android-project/\n# (a) did the vulnerable symbol survive R8?\nfor d in $(unzip -Z1 base.apk 'classes*.dex'); do unzip -p base.apk \"$d\" > \"/tmp/$d\"; done\ndexdump -d /tmp/classes*.dex | grep -n \"Lokhttp3/internal/tls/OkHostnameVerifier;->verify\"\njadx -d out base.apk && grep -rn \"writeBitmapToUri\\|SplitCompat.install\\|enableDefaultTyping\\|activateDefaultTyping\" out/sources/\n# (b) walk callers in jadx-gui: right-click the method -> Find Usage (Ctrl+Shift+X), up to\n#     onCreate/onNewIntent, onReceive, shouldOverrideUrlLoading/@JavascriptInterface, openFile/query,\n#     or a network response parser.\n# (c) confirm the frame is actually entered\nfrida -D \"$SERIAL\" -f com.target.app -l reach.js\n```\n```javascript\n// reach.js — prove the vulnerable sink executes, dump the argument and the stack that got there\nJava.perform(function () {\n  var C = Java.use('com.canhub.cropper.utils.BitmapUtils');   // swap for your sink\n  var m = C.writeBitmapToUri;\n  m.implementation = function () {\n    console.log('[REACHED] args=' + JSON.stringify(Array.prototype.slice.call(arguments).map(String)));\n    console.log(Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return m.apply(this, arguments);\n  };\n});\n```",
+   "how": "```bash\nosv-scanner scan source -r ./android-project/ --format json --output osv.json          # osv-scanner 2.x; 1.x: osv-scanner -r ./android-project/\nosv-scanner scan source -L gradle/verification-metadata.xml\nosv-scanner scan source --offline-vulnerabilities --download-offline-databases ./android-project/\n# (a) did the vulnerable symbol survive R8?\nfor d in $(unzip -Z1 base.apk 'classes*.dex'); do unzip -p base.apk \"$d\" > \"/tmp/$d\"; done\ndexdump -d /tmp/classes*.dex | grep -n \"Lokhttp3/internal/tls/OkHostnameVerifier;->verify\"\ngrep -rn \"writeBitmapToUri\\|SplitCompat.install\\|enableDefaultTyping\\|activateDefaultTyping\" \"$DEC/jadx/sources\"\n# (b) walk callers in jadx-gui: right-click the method -> Find Usage (Ctrl+Shift+X), up to\n#     onCreate/onNewIntent, onReceive, shouldOverrideUrlLoading/@JavascriptInterface, openFile/query,\n#     or a network response parser.\n# (c) confirm the frame is actually entered\nfrida -D \"$SERIAL\" -f \"$PKG\" -q -t 60 -l reach.js   # frida-tools 17: -U picks silently with >1 device; spawn resumes at once (the old pause flag no longer exists); -t keeps the session alive so the hook can fire\n```\n```javascript\n// reach.js — prove the vulnerable sink executes, dump the argument and the stack that got there\nJava.perform(function () {\n  var C = Java.use('com.canhub.cropper.utils.BitmapUtils');   // swap for your sink\n  var m = C.writeBitmapToUri;\n  m.implementation = function () {\n    console.log('[REACHED] args=' + JSON.stringify(Array.prototype.slice.call(arguments).map(String)));\n    console.log(Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return m.apply(this, arguments);\n  };\n});\n```",
    "proof": "Three artefacts pasted into the report: the `dexdump`/jadx line showing the symbol present after shrinking, the jadx \"Find Usage\" chain from an exported entry point down to the sink, and the Frida `[REACHED]` log with the attacker-supplied value visible in `args`. Keep the `pkg:maven/...@version` PURL string — triagers accept it as the version assertion.",
    "escalation": "Vulnerable crypto libraries -> D12; vulnerable parsers (XML, image, archive) -> D17; vulnerable HTTP stacks -> D14. A worked calibration from the corpus: okhttp 4.9.0 (CVE-2021-0341) with no pinning and system trust = **Low**.",
    "ruled_out_when": "The vulnerable class or method is absent from `classes*.dex` after R8/LLVM dead-code elimination, **or** no caller chain reaches it from an attacker-influenced entry point, **or** the Frida hook never fires while you drive every reachable flow. \"The scanner found a version\" is not a finding and \"the scanner found nothing\" is not a ruled-out."
@@ -2940,7 +3042,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "When `META-INF/*.version` and `BuildConfig` are gone you still must produce a version. Use bytecode-structure fingerprinting, not package names, which R8 renames.",
-   "how": "```bash\n# cheap first pass — version markers that often survive\nunzip -l base.apk | grep -Ei 'META-INF/.*\\.version|kotlin-tooling-metadata\\.json|\\.properties$'\nunzip -p base.apk assets/some.properties | grep -i version\nstrings out/lib/*/libavif_android.so | grep -iE 'dav1d|1\\.'\n# structural fingerprinting\njava -jar LibScout.jar -o profile -a android.jar -x lib.xml okhttp-4.9.1.aar\njava -jar LibScout.jar -o match -p ./profiles -a android.jar -u -j ./json base.apk\n```\nLibScout builds hashtree (Merkle) profiles from original `.jar`/`.aar` SDKs, is resilient to identifier renaming, and narrows to an exact version or 2–3 candidates via similarity scoring.",
+   "how": "```bash\n# maintained, build-independent markers first — these survive R8 in current builds\nfor v in $(unzip -Z1 apk/base.apk | grep -E 'META-INF/.*\\.version$'); do printf '%s=' \"$v\"; unzip -p apk/base.apk \"$v\"; done   # androidx/kotlinx *.version files\nunzip -p apk/base.apk META-INF/com/android/build/gradle/app-metadata.properties                   # androidGradlePluginVersion -> dates the toolchain\nunzip -p apk/base.apk 'classes*.dex' | strings -n 6 | grep -oE 'okhttp/[0-9]+\\.[0-9]+\\.[0-9]+|Retrofit [0-9.]+|Glide v?[0-9.]+|ExoPlayerLib/[0-9.]+|Dalvik/.*' | sort -u   # user-agent constants survive R8\nunzip -p apk/base.apk 'lib/arm64-v8a/*.so' | strings -n 8 | grep -oE '(OpenSSL|BoringSSL|libpng|sqlite|curl|dav1d|libwebp|FreeType)[ /-][0-9][0-9a-z.]+' | sort -u\n# structural fingerprinting — fallback only: LibScout is unmaintained (its shipped vulnerable set stops at OkHttp 3.1) and profiles must be built from the exact .jar/.aar\njava -jar LibScout.jar -o profile -a android.jar -x lib.xml okhttp-4.9.1.aar\njava -jar LibScout.jar -o match -p ./profiles -a android.jar -u -j ./json base.apk\n```\nLibScout builds hashtree (Merkle) profiles from original `.jar`/`.aar` SDKs, is resilient to identifier renaming, and narrows to an exact version or 2–3 candidates via similarity scoring.",
    "proof": "LibScout JSON naming the library and a version (or a small candidate set) with its similarity score — the artefact that answers \"prove it is actually 4.9.1 and not 4.12.0\".",
    "escalation": "A confirmed version unlocks the CVE items in D10/D12/D14/D16/D17 and gives D02-060 a defensible input.",
    "ruled_out_when": "The APK carries intact `META-INF/*.version` or `BuildConfig` version constants for every security-relevant library, in which case fingerprinting is unnecessary — but record the values, do not skip the inventory."
@@ -3030,9 +3132,12 @@
     ]
    },
    "xrefs": [
+    "D01-010",
+    "D02-009",
     "D02-064"
    ],
    "domain_refs": [
+    "D01",
     "D08",
     "D10",
     "D27"
@@ -3040,7 +3145,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An attacker who can uninstall then install plants an **older, legitimately-signed** build whose bug the vendor already fixed. The question is whether the *server* still serves that client.",
-   "how": "```bash\napksigner verify --print-certs old.apk     | grep -i sha-256   # MUST match the current cert\napksigner verify --print-certs current.apk | grep -i sha-256\nadb uninstall com.target.app && adb install old.apk\nadb shell dumpsys package com.target.app | grep -i versionCode\ncurl -s -H 'X-App-Version: 3.1.0' -H 'User-Agent: <old UA>' \"$API/v1/me\" -o /tmp/old -w '%{http_code}\\n'\ngrep -rniE 'minSupportedVersion|force.?update|minimum_version|versionCode *<' out/sources/\n```\nOn Android 14+, an old-target build needs `adb install --bypass-low-target-sdk-block old.apk` (see D02-064).",
+   "how": "```bash\n# old.apk comes from the D02-009 acquisition routes (apkeep / vendor archive / browser session) — the mirrors block curl; reuse D01-010's history/ when it exists\napksigner verify --print-certs old.apk     | grep -i sha-256   # MUST match the current cert\napksigner verify --print-certs current.apk | grep -i sha-256\nadb -s \"$SERIAL\" uninstall \"$PKG\" && adb -s \"$SERIAL\" install --no-incremental old.apk\nadb shell dumpsys package com.target.app | grep -i versionCode\ncurl -s -H 'X-App-Version: 3.1.0' -H 'User-Agent: <old UA>' \"$API/v1/me\" -o /tmp/old -w '%{http_code}\\n'\ngrep -rniE 'minSupportedVersion|force.?update|minimum_version|versionCode *<' $DEC/jadx/sources/\n```\nOn Android 14+, an old-target build needs `adb install --bypass-low-target-sdk-block old.apk` (see D02-064).",
    "proof": "The old client authenticating and transacting successfully — HTTP 200 on a call the current client also makes — with no `426`/`403`/force-upgrade screen, paired with the already-fixed bug reproducing under the old build.",
    "escalation": "Resurrects any previously-patched client-side finding — combine with the D08/D10 items the vendor believes are closed. Also the natural pair for the retest workflow: if the old build still authenticates after the fix shipped, the \"fix\" does not remediate anyone who declines the update, and that is its own finding (-> D27).",
    "ruled_out_when": "The backend returns a force-upgrade response (a distinct status **and** body) to the old client on an authenticated call, over at least two endpoints, **or** the client-side `minSupportedVersion` gate is server-supplied and enforced server-side rather than merely rendered. A client-side-only force-upgrade screen rules out nothing — patch it out and retest."
@@ -3086,7 +3191,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Confirm whether the app under test can even be installed on the target OS — and note that testers can bypass the block, which means an attacker distributing a malicious *companion* app can too.",
-   "how": "```bash\nadb install old.apk\n# INSTALL_FAILED_DEPRECATED_SDK_VERSION: App package must target at least SDK version 23, but found N\nadb install --bypass-low-target-sdk-block old.apk\nadb install -r -d old-release.apk || (adb uninstall com.target.app && adb install old-release.apk)\n```",
+   "how": "```bash\nadb -s \"$SERIAL\" install --no-incremental old.apk\n# INSTALL_FAILED_DEPRECATED_SDK_VERSION: App package must target at least SDK version 23, but found N\nadb -s \"$SERIAL\" install --no-incremental --bypass-low-target-sdk-block old.apk\nadb -s \"$SERIAL\" install --no-incremental -r -d old-release.apk || (adb -s \"$SERIAL\" uninstall \"$PKG\" && adb -s \"$SERIAL\" install --no-incremental old-release.apk)\n```",
    "proof": "The exact `INSTALL_FAILED_DEPRECATED_SDK_VERSION` string followed by a successful install with the bypass flag, and the old `versionCode` visible in `dumpsys package`.",
    "escalation": "Unblocks D02-063 (version rollback) and the version-diff workflow. -> D22 when the app keeps a low target deliberately to retain a blocked primitive.",
    "ruled_out_when": "The in-scope build's `targetSdkVersion` is at or above the platform minimum for every OS version in scope, so no install is ever blocked and no bypass flag is required. A failed install without this flag is a harness artefact, never a finding — do not report the artefact as corrupt."
@@ -3132,7 +3237,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`@ChangeId` / `@EnabledAfter(targetSdkVersion = …)` annotations mark behaviour that is **off** for legacy-target callers. When the gated behaviour is a security control, the control is optional and the exploitable population becomes \"every app that picks an old targetSdk\".",
-   "how": "```bash\njadx -d out/ ContactsProvider.apk          # or the target app, or any system APK you pulled\ngrep -rn \"EnabledAfter\\|@ChangeId\\|CompatChanges.isChangeEnabled\\|enableAfterTargetSdk\" out/\nadb shell dumpsys platform_compat | grep -i -A2 'ENFORCE\\|packageOverrides'\n```",
+   "how": "```bash\njadx -d \"$E/work/D02-065/jadx\" ContactsProvider.apk          # a system APK you pulled; for the target app itself use $DEC/jadx/sources\ngrep -rn \"EnabledAfter\\|@ChangeId\\|CompatChanges.isChangeEnabled\\|enableAfterTargetSdk\" \"$E/work/D02-065/jadx\" \"$DEC/jadx/sources\"\nadb shell dumpsys platform_compat | grep -i -A2 'ENFORCE\\|packageOverrides'\n```",
    "proof": "MHL recovered, from the on-device `ContactsProvider.apk`, both the Java gate and the XML declaration:\n```xml\n<compat-change enableAfterTargetSdk=\"36\" id=\"484953293\" name=\"ENFORCE_STRICT_SQL_CHECKS\"/>\n```\nand the fix was literally the deletion of `@EnabledAfter(targetSdkVersion = Build.VERSION_CODES.BAKLAVA)`. Quote the annotation, the change id, and a working call from an app declaring a target at or below the gate.",
    "escalation": "-> D07 (provider SQLi) -> D22 (version-specific behaviour). For system-app auditing at scale, drive jadx programmatically via the MHL jadx-mcp-plugin rather than reading one class at a time.",
    "ruled_out_when": "No `@ChangeId`/`enableAfterTargetSdk` annotation in the reachable code gates a security check (logging, metrics and layout behaviour do not count), **or** the app's own `targetSdk` is above every relevant gate *and* the bundled/system code it calls does not honour the caller's target. Verify the second half — a compat gate is evaluated against the **calling** app's target, which is the attacker's choice."
@@ -3176,7 +3281,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "On Android 15+, a platform-signed non-system app's platform `signature` permissions must be allowlisted. If not allowlisted, on a non-debuggable build the permission is treated \"as if the app isn't platform signed\" — a security-relevant behaviour delta between debug and production builds.",
-   "how": "```bash\nadb shell ls /etc/permissions/ /system/etc/permissions/ /vendor/etc/permissions/ \\\n             /product/etc/permissions/ /system_ext/etc/permissions/ 2>/dev/null\nadb shell cat /etc/permissions/signature-permissions-*.xml\nadb logcat -b all | grep -i 'not in signature permission allowlist'\nadb shell getprop ro.debuggable\n```",
+   "how": "```bash\nadb shell ls /etc/permissions/ /system/etc/permissions/ /vendor/etc/permissions/ \\\n             /product/etc/permissions/ /system_ext/etc/permissions/ 2>/dev/null\nadb -s \"$SERIAL\" shell 'cat /etc/permissions/signature-permissions-*.xml'     # quote the glob: the device shell expands it, the host shell must not\nadb logcat -b all | grep -i 'not in signature permission allowlist'\nadb shell getprop ro.debuggable\n```",
    "proof": "A logcat line of the documented form `Signature permission {PERMISSION_NAME} for package {PACKAGE_NAME} ({PACKAGE_PATH}) not in signature permission allowlist`, on a build where `ro.debuggable=1` — proving the app only works because enforcement is off.",
    "escalation": "An over-granted platform signature permission is a system-UID-adjacent capability -> D25.",
    "ruled_out_when": "The engagement does not include an OEM/preinstalled variant, **or** the device is Android 14 or lower (the allowlist does not exist), **or** every platform signature permission the app holds appears in an `/etc/permissions/signature-permissions-*.xml` entry on a `ro.debuggable=0` build with no allowlist warnings in logcat."
@@ -3224,7 +3329,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "For apps in `/system/priv-app` or the vendor/product equivalents, every `signature|privileged` permission must be allowlisted in `/etc/permissions/privapp-permissions-*.xml` on the same partition. A permission granted without an entry, or a device booting with `ro.control_privapp_permissions=log`, means enforcement is off on a shipping image.",
-   "how": "```bash\nadb shell getprop ro.control_privapp_permissions        # expect \"enforce\"\nadb shell pm path com.oem.target                        # /system/priv-app/... indicates privileged\nadb shell cat /etc/permissions/privapp-permissions-*.xml | grep -A20 'com.oem.target'\nadb logcat -b all | grep 'not in privapp-permissions allowlist'\nadb shell dumpsys package com.oem.target | sed -n '/install permissions/,/runtime permissions/p'\nadb shell dumpsys package com.oem.target | grep -n 'exported=true'\n```",
+   "how": "```bash\nadb shell getprop ro.control_privapp_permissions        # expect \"enforce\"\nadb shell pm path com.oem.target                        # /system/priv-app/... indicates privileged\nadb -s \"$SERIAL\" shell 'cat /etc/permissions/privapp-permissions-*.xml' | grep -A20 \"$PKG\"     # quote the glob: the device shell expands it\nadb logcat -b all | grep 'not in privapp-permissions allowlist'\nadb shell dumpsys package com.oem.target | sed -n '/install permissions/,/runtime permissions/p'\nadb shell dumpsys package com.oem.target | grep -n 'exported=true'\n```",
    "proof": "`ro.control_privapp_permissions` returning `log` rather than `enforce`, plus logcat lines of the documented form `Privileged permission {PERMISSION_NAME} for package {PACKAGE_NAME} - not in privapp-permissions allowlist`, while `dumpsys package` still shows the permission `granted=true`. Then call the privileged action from a plain unprivileged test app through an `exported=true` component and show it succeeding.",
    "escalation": "Whatever the privileged permission guards — commonly `READ_PRIVILEGED_PHONE_STATE`, secure-settings writes, or carrier billing -> D25. Report to the OEM's VRP as well as the app owner.",
    "ruled_out_when": "The engagement is a store-distributed-only app (`pm path` shows `/data/app`), **or** `ro.control_privapp_permissions=enforce` with no allowlist warnings in logcat and every privileged permission present in the same-partition allowlist file."
@@ -3428,6 +3533,58 @@
    "proof": "The five files, plus the artefact manifest from D02-001 so every screenshot is pinned to a hash.",
    "escalation": "Feeds D27 directly. Note that for a public write-up, mobile-app **package identifiers** belong on the intentionally-absent list alongside client names, hostnames and per-finding payloads.",
    "ruled_out_when": "n/a — procedure. A D02 finding with no server-side shot (step 4) is the most common downgrade in this domain: the UI changed, and nothing was proved."
+  },
+  {
+   "id": "D02-073",
+   "domain": "D02",
+   "title": "Signing-lineage capability audit: which retired keys still update, share a UID or hold permissions",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High",
+   "vrt": "`broken_access_control.privilege_escalation` (varies — rated on what the retained capability guards)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-03 (anyone holding a retired key: a former partner, a leaked CI keystore, a compromised upload key)",
+   "attacker_ids": [
+    "AM-03"
+   ],
+   "applies_to": "Apps whose v3 block carries a lineage (Play App Signing key upgrade, or `apksigner rotate`)",
+   "requires": "",
+   "requires_tags": [],
+   "maps_to": "MASTG-KNOW-0003 (App Signing), MASTG-TECH-0116; AOSP apksigning v3 proof-of-rotation capability flags",
+   "record": "`logs/D02-073.txt` (the lineage dump), `evidence/D02-073-lineage.csv` (digest, capabilities, controlled-by)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-KNOW-0003",
+     "MASTG-TECH-0116"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.privilege_escalation"
+    ]
+   },
+   "xrefs": [
+    "D02-016",
+    "D02-017",
+    "D02-018",
+    "D02-062"
+   ],
+   "domain_refs": [
+    "D03",
+    "D06"
+   ],
+   "has_code": true,
+   "skip_when": "`apksigner lineage -v --print-certs --in apk/base.apk` reports no lineage — write `n/a — never rotated: single signer, no v3 lineage`.",
+   "test": "Each pre-rotation certificate in the lineage keeps capability flags: `rollback` lets a build signed with that OLD key install as an update; `permission` lets an app signed with it satisfy this app's `signature` permissions; `shared UID` lets it join the UID; `auth` lets it pass `checkSignatures`. Rotation grants all but rollback by default, so rotating does not revoke trust unless the developer removed capabilities. Establish which retired keys retain what, and whether the client still controls each.",
+   "how": "```bash\napksigner lineage -v --print-certs --in apk/base.apk | tee logs/D02-073.txt | grep -E 'certificate SHA-256|Has (installed data|shared UID|permission|rollback|auth) capability'\n# for every lineage digest: is it in assetlinks.json (D02-016), a knownCerts array (D02-017), a peer's checkSignatures pin (D06), a leaked keystore (D02-062)?\n```",
+   "proof": "A retired certificate with `Has rollback capability: true` or `Has permission capability: true`, plus evidence the key is outside the client's control (their confirmation, or the key found leaked), plus a stub signed with that key installed over the app with `adb -s \"$SERIAL\" install --no-incremental -r` or granted a `signature` permission in `dumpsys package <stub>`.",
+   "escalation": "rollback + leaked key = D02-018's impact (code execution as the app on the next \"update\"); permission = D03/D06 signature-permission spoofing; shared UID = D03 `sharedUserId` takeover.",
+   "ruled_out_when": "No lineage, **or** every lineage certificate is accounted for and still controlled by the client, **or** every retired certificate has `permission`, `shared UID`, `auth` and `rollback` set to false (`apksigner rotate --set-*-capability false`), shown in `logs/D02-073.txt`."
   }
  ],
  "phase": "P2",

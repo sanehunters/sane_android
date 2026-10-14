@@ -1,37 +1,39 @@
 # CHECKLIST.md — domain index
 
-> 1933 test items across 26 domains, generated from `checklist/` (source digest `dca75901a208`). Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
+> 2107 test items across 28 domains, generated from `checklist/` (source digest `bfded18066fb`). Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
 
 | Domain | Phase | Items | Ceiling mix | Card | Chapter |
 |---|---|---|---|---|---|
-| **D01** Recon & Attack-Surface Mapping | P3 | 80 | 🟥8 🟧22 🟨19 🟩3 ⬜28 | [card](cards/D01.md) | [`D01-recon-and-surface-mapping.md`](checklist/D01-recon-and-surface-mapping.md) |
-| **D02** APK/AAB Structure, Signing & Build Integrity | P2 | 72 | 🟥11 🟧30 🟨4 🟩5 ⬜22 | [card](cards/D02.md) | [`D02-apk-structure-signing.md`](checklist/D02-apk-structure-signing.md) |
-| **D03** AndroidManifest & Permission Model | P3 | 76 | 🟥21 🟧42 🟨4 ⬜9 | [card](cards/D03.md) | [`D03-manifest-and-permissions.md`](checklist/D03-manifest-and-permissions.md) |
-| **D04** Exported Activities, Task & UI-Redress Attacks | P5 | 72 | 🟥4 🟧24 🟨23 🟩6 ⬜15 | [card](cards/D04.md) | [`D04-exported-activities-and-task.md`](checklist/D04-exported-activities-and-task.md) |
-| **D05** Broadcast Receivers & Implicit Intents | P5 | 64 | 🟥11 🟧30 🟨8 🟩1 ⬜14 | [card](cards/D05.md) | [`D05-receivers-and-implicit-intents.md`](checklist/D05-receivers-and-implicit-intents.md) |
-| **D06** Services, AIDL & Bound IPC | P5 | 81 | 🟥22 🟧34 🟨11 ⬜14 | [card](cards/D06.md) | [`D06-services-aidl-bound-ipc.md`](checklist/D06-services-aidl-bound-ipc.md) |
-| **D07** ContentProviders & FileProvider | P5 | 76 | 🟥23 🟧29 🟨1 🟩1 ⬜22 | [card](cards/D07.md) | [`D07-contentproviders-and-fileprovider.md`](checklist/D07-contentproviders-and-fileprovider.md) |
-| **D08** Intent Redirection, PendingIntent & URI Grants | P5 | 66 | 🟥18 🟧29 🟨7 ⬜12 | [card](cards/D08.md) | [`D08-intent-redirection-and-pendingintent.md`](checklist/D08-intent-redirection-and-pendingintent.md) |
-| **D09** Deep Links, App Links & Custom URI Schemes | P5 | 80 | 🟥22 🟧31 🟨9 🟩1 ⬜17 | [card](cards/D09.md) | [`D09-deeplinks-and-applinks.md`](checklist/D09-deeplinks-and-applinks.md) |
-| **D10** WebView & JavaScript Bridges | P5 | 72 | 🟥26 🟧35 🟨5 🟩1 ⬜5 | [card](cards/D10.md) | [`D10-webview-and-js-bridges.md`](checklist/D10-webview-and-js-bridges.md) |
-| **D11** Local Data Storage | P4 | 73 | 🟥17 🟧34 🟨7 🟩2 ⬜13 | [card](cards/D11.md) | [`D11-local-data-storage.md`](checklist/D11-local-data-storage.md) |
-| **D12** Cryptography & Key Management | P4 | 80 | 🟥18 🟧38 🟨13 🟩2 ⬜9 | [card](cards/D12.md) | [`D12-crypto-and-key-management.md`](checklist/D12-crypto-and-key-management.md) |
-| **D13** Authentication, Session, OTP & Biometrics | P6 | 90 | 🟥48 🟧30 🟨2 ⬜10 | [card](cards/D13.md) | [`D13-auth-session-otp-biometrics.md`](checklist/D13-auth-session-otp-biometrics.md) |
-| **D14** Network Security, TLS & Certificate Pinning | P6 | 58 | 🟥14 🟧15 🟨13 🟩4 ⬜12 | [card](cards/D14.md) | [`D14-network-tls-pinning.md`](checklist/D14-network-tls-pinning.md) |
+| **D01** Recon & Attack-Surface Mapping | P3 | 84 | 🟥8 🟧22 🟨19 🟩3 ⬜32 | [card](cards/D01.md) | [`D01-recon-and-surface-mapping.md`](checklist/D01-recon-and-surface-mapping.md) |
+| **D02** APK/AAB Structure, Signing & Build Integrity | P2 | 73 | 🟥11 🟧31 🟨4 🟩5 ⬜22 | [card](cards/D02.md) | [`D02-apk-structure-signing.md`](checklist/D02-apk-structure-signing.md) |
+| **D03** AndroidManifest & Permission Model | P3 | 79 | 🟥23 🟧43 🟨4 ⬜9 | [card](cards/D03.md) | [`D03-manifest-and-permissions.md`](checklist/D03-manifest-and-permissions.md) |
+| **D04** Exported Activities, Task & UI-Redress Attacks | P5 | 73 | 🟥4 🟧24 🟨24 🟩6 ⬜15 | [card](cards/D04.md) | [`D04-exported-activities-and-task.md`](checklist/D04-exported-activities-and-task.md) |
+| **D05** Broadcast Receivers & Implicit Intents | P5 | 66 | 🟥11 🟧32 🟨8 🟩1 ⬜14 | [card](cards/D05.md) | [`D05-receivers-and-implicit-intents.md`](checklist/D05-receivers-and-implicit-intents.md) |
+| **D06** Services, AIDL & Bound IPC | P5 | 87 | 🟥22 🟧38 🟨11 ⬜16 | [card](cards/D06.md) | [`D06-services-aidl-bound-ipc.md`](checklist/D06-services-aidl-bound-ipc.md) |
+| **D07** ContentProviders & FileProvider | P5 | 80 | 🟥24 🟧31 🟨1 🟩1 ⬜23 | [card](cards/D07.md) | [`D07-contentproviders-and-fileprovider.md`](checklist/D07-contentproviders-and-fileprovider.md) |
+| **D08** Intent Redirection, PendingIntent & URI Grants | P5 | 70 | 🟥20 🟧31 🟨6 ⬜13 | [card](cards/D08.md) | [`D08-intent-redirection-and-pendingintent.md`](checklist/D08-intent-redirection-and-pendingintent.md) |
+| **D09** Deep Links, App Links & Custom URI Schemes | P5 | 87 | 🟥23 🟧36 🟨9 🟩1 ⬜18 | [card](cards/D09.md) | [`D09-deeplinks-and-applinks.md`](checklist/D09-deeplinks-and-applinks.md) |
+| **D10** WebView & JavaScript Bridges | P5 | 77 | 🟥30 🟧36 🟨5 🟩1 ⬜5 | [card](cards/D10.md) | [`D10-webview-and-js-bridges.md`](checklist/D10-webview-and-js-bridges.md) |
+| **D11** Local Data Storage | P4 | 76 | 🟥18 🟧35 🟨7 🟩2 ⬜14 | [card](cards/D11.md) | [`D11-local-data-storage.md`](checklist/D11-local-data-storage.md) |
+| **D12** Cryptography & Key Management | P4 | 84 | 🟥19 🟧40 🟨14 🟩2 ⬜9 | [card](cards/D12.md) | [`D12-crypto-and-key-management.md`](checklist/D12-crypto-and-key-management.md) |
+| **D13** Authentication, Session, OTP & Biometrics | P6 | 95 | 🟥52 🟧31 🟨2 ⬜10 | [card](cards/D13.md) | [`D13-auth-session-otp-biometrics.md`](checklist/D13-auth-session-otp-biometrics.md) |
+| **D14** Network Security, TLS & Certificate Pinning | P6 | 63 | 🟥15 🟧16 🟨15 🟩4 ⬜13 | [card](cards/D14.md) | [`D14-network-tls-pinning.md`](checklist/D14-network-tls-pinning.md) |
 | **D15** Backend API, IDOR/BOLA, Mass Assignment & Business Logic | P6 | 90 | 🟥55 🟧14 🟨1 🟩1 ⬜19 | [card](cards/D15.md) | [`D15-backend-api-and-authz.md`](checklist/D15-backend-api-and-authz.md) |
 | **D16** Native Code, JNI & Memory Safety | P4 | 60 | 🟥22 🟧4 🟨6 🟩8 ⬜20 | [card](cards/D16.md) | [`D16-native-code-and-memory.md`](checklist/D16-native-code-and-memory.md) |
-| **D17** Dynamic Code Loading, Deserialization & Supply Chain | P4 | 80 | 🟥44 🟧14 🟨6 🟩2 ⬜11 🔷3 | [card](cards/D17.md) | [`D17-dynamic-loading-and-supplychain.md`](checklist/D17-dynamic-loading-and-supplychain.md) |
-| **D18** Cloud Backend & Third-Party SDK Configuration | P6 | 72 | 🟥37 🟧19 🟨4 🟩2 ⬜10 | [card](cards/D18.md) | [`D18-cloud-and-sdk-config.md`](checklist/D18-cloud-and-sdk-config.md) |
+| **D17** Dynamic Code Loading, Deserialization & Supply Chain | P4 | 86 | 🟥49 🟧14 🟨6 🟩2 ⬜12 🔷3 | [card](cards/D17.md) | [`D17-dynamic-loading-and-supplychain.md`](checklist/D17-dynamic-loading-and-supplychain.md) |
+| **D18** Cloud Backend & Third-Party SDK Configuration | P6 | 77 | 🟥40 🟧21 🟨4 🟩2 ⬜10 | [card](cards/D18.md) | [`D18-cloud-and-sdk-config.md`](checklist/D18-cloud-and-sdk-config.md) |
 | **D19** Cross-Platform Frameworks | P4 | 79 | 🟥36 🟧14 🟨6 🟩2 ⬜21 | [card](cards/D19.md) | [`D19-cross-platform-frameworks.md`](checklist/D19-cross-platform-frameworks.md) |
 | **D20** Privacy, PII, Logging & Data Leakage | P4 | 70 | 🟥6 🟧35 🟨13 🟩3 ⬜13 | [card](cards/D20.md) | [`D20-privacy-and-data-leakage.md`](checklist/D20-privacy-and-data-leakage.md) |
 | **D21** Anti-Tampering, RASP, Root/Emulator Detection & Resilience | P4 | 57 | 🟥11 🟧23 🟨6 🟩2 ⬜15 | [card](cards/D21.md) | [`D21-resilience-and-rasp.md`](checklist/D21-resilience-and-rasp.md) |
 | **D22** Platform & OS Version-Specific Behaviour | P4 | 82 | 🟥8 🟧37 🟨18 🟩1 ⬜18 | [card](cards/D22.md) | [`D22-platform-version-behaviour.md`](checklist/D22-platform-version-behaviour.md) |
 | **D23** Payments, Entitlements, Subscriptions & Fraud | P6 | 66 | 🟥29 🟧29 🟨1 ⬜7 | [card](cards/D23.md) | [`D23-payments-and-entitlements.md`](checklist/D23-payments-and-entitlements.md) |
+| **D24** Push, Notifications & Messaging | P6 | 52 | 🟥11 🟧20 🟨11 ⬜10 | [card](cards/D24.md) | [`D24-push-notifications-messaging.md`](checklist/D24-push-notifications-messaging.md) |
 | **D25** Device, OEM, Firmware & Privileged Surfaces | P5 | 79 | 🟥26 🟧28 🟨2 ⬜23 | [card](cards/D25.md) | [`D25-device-oem-and-privileged.md`](checklist/D25-device-oem-and-privileged.md) |
 | **D26** Runtime Instrumentation, Tooling & Harness | P1 | 79 | 🟥3 🟧7 🟨7 ⬜62 | [card](cards/D26.md) | [`D26-instrumentation-and-tooling.md`](checklist/D26-instrumentation-and-tooling.md) |
 | **D27** Reporting, Severity Rating & Evidence | P9 | 79 | 🟥2 🟧2 ⬜75 | [card](cards/D27.md) | [`D27-reporting-and-evidence.md`](checklist/D27-reporting-and-evidence.md) |
+| **D28** AI/LLM Features in Apps | P4 | 57 | 🟥17 🟧16 🟨15 ⬜9 | [card](cards/D28.md) | [`D28-ai-llm-features.md`](checklist/D28-ai-llm-features.md) |
 
-**Total: 1933 items** — 🟥 542 critical · 🟧 649 high · 🟨 196 medium · 🟩 47 low · ⬜ 496 support · 🔷 3 varies
+**Total: 2107 items** — 🟥 595 critical · 🟧 710 high · 🟨 225 medium · 🟩 47 low · ⬜ 527 support · 🔷 3 varies
 
 ## The crux question for each domain
 
@@ -60,9 +62,11 @@ The single question that decides whether a domain has a bug in this app. Ask it 
 - **D21** — **Does any decision that matters get made off this device on the strength of something this device claimed — and if so, is that claim an opaque, server-verified, freshly-bound attestation, or a boolean the client chose?** If the honest answer is "the check only stops the device's own owner from seeing their own data", you have a P5 hardening observation, and the correct output is a ruled-out entry, not a report.
 - **D22** — **For every candidate finding in this engagement: at which `minSdkVersion`, `targetSdkVersion` and device API level is it actually reachable — and has this app explicitly opted out of the platform hardening that would otherwise close it?**
 - **D23** — **Does any monetary or entitlement decision in this app get made anywhere other than the vendor's own server — and where the server does decide, does it independently re-derive the amount, the payer identity and the uniqueness of the receipt, or does it echo what the client sent?**
+- **D24** — Can a party who is not the victim — a second account, an unauthenticated request, a leaked send credential, or an app with notification access — cause content to be delivered to, rendered by, or acted upon in the victim's client, and does the client or backend treat that content as more trusted than the party who supplied it?
 - **D25** — **Is the device, the OEM image, or a preinstalled build of this app in scope — and if only the app is, which of its own manifest-declared physical, companion and cross-user surfaces hands an attacker a channel that the phone UI and the lock screen never gate?**
 - **D26** — **Before I write "not vulnerable" anywhere in this report: has this exact instrument produced a positive result on this exact device in this session — and if the answer is "the tool printed nothing", what is my positive control?**
 - **D27** — **For this finding, what is the cheapest attacker position from which I have actually observed the boundary being crossed — and does the title, the VRT node, the CVSS vector and the recorded evidence all say exactly that, with the unproven link named rather than hidden?**
+- **D28** — Does any text, image, file or screen the model reads come from someone other than the user — and does anything the model says afterwards get rendered, opened, executed, sent, stored, retrieved for another account or billed without a human confirming it?
 
 ## Phase → domains
 
@@ -71,9 +75,9 @@ The single question that decides whether a domain has a bug in this app. Ask it 
 | P1 | D26 |
 | P2 | D02 |
 | P3 | D01 D03 |
-| P4 | D11 D12 D16 D17 D19 D20 D21 D22 |
+| P4 | D11 D12 D16 D17 D19 D20 D21 D22 D28 |
 | P5 | D04 D05 D06 D07 D08 D09 D10 D25 |
-| P6 | D13 D14 D15 D18 D23 |
+| P6 | D13 D14 D15 D18 D23 D24 |
 | P9 | D27 |
 
 ## Related

