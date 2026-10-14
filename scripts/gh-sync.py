@@ -55,9 +55,10 @@ AREA_BY_DOMAIN = {"D01": "recon", "D02": "recon", "D03": "manifest-perms", "D04"
                   "D14": "network-api", "D15": "network-api", "D16": "native-supplychain", "D17": "native-supplychain", "D18": "cloud-sdk",
                   "D19": "cross-platform", "D20": "privacy", "D21": "resilience", "D22": "platform", "D23": "payments", "D24": "push-messaging",
                   "D25": "device-oem", "D26": "tooling-reporting", "D27": "tooling-reporting", "D28": "ai-llm"}
-# issues #2–#8 of the original tracker: no marker, different prefixes. key -> a phrase that appears in the legacy title.
+# issues #1–#7 of the original tracker: no marker, different prefixes. key -> a phrase that appears in exactly ONE
+# legacy title (lower-cased); #8 (Scoping & rules of engagement) has no docs/ counterpart and is left untouched.
 LEGACY_TITLES = {"doc:02-severity-and-reportability.md": "severity & reportability",
-                 "doc:03-lab-and-harness.md": "lab & harness",
+                 "doc:03-lab-and-harness.md": "lab & harness build",   # "lab & harness" alone also matches the P1 phase issue
                  "doc:04-poc-and-evidence-standard.md": "poc video & evidence",
                  "doc:05-attacker-models.md": "attacker models",
                  "doc:06-triage-playbook.md": "triage response",
@@ -170,10 +171,13 @@ class Sync:
         cur = self.by_key.get(key)
         if not cur:  # title fallback for issues created before markers existed
             pref = title.split(" — ")[0]
-            unmarked = [i for i in self.issues if "sane:key=" not in (i.get("body") or "")]
+            claimed = {i["number"] for i in self.by_key.values()}          # a legacy issue serves one key only
+            unmarked = [i for i in self.issues if "sane:key=" not in (i.get("body") or "") and i["number"] not in claimed]
             cands = [i for i in unmarked if (i.get("title") or "").startswith(pref)]
             if len(cands) != 1 and key in LEGACY_TITLES:          # looser: the legacy title phrase (case-insensitive)
                 cands = [i for i in unmarked if LEGACY_TITLES[key] in (i.get("title") or "").lower()]
+            if len(cands) > 1:                                      # a closed duplicate never wins over the open standing issue
+                cands = [i for i in cands if i.get("state") == "open"] or cands
             if len(cands) == 1:
                 cur = cands[0]; self.by_key[key] = cur
         payload = {"title": title, "body": body, "labels": sorted(set(labels))}

@@ -51,6 +51,8 @@ jobs:
           rm -r BugBountyTarget/X_01012026/logs
           git add BugBountyTarget/X_01012026
           git add "$E"
+          git -C . add BugBountyTarget/X_01012026
+          git -C "$REPO" add "$E"
           BLOCK
           while IFS= read -r c; do hook "$c" || { echo "::error::false block: $c"; exit 1; }; done <<'PASS'
           ls
@@ -89,7 +91,7 @@ jobs:
           git -C "$SANE_ENGAGEMENT" commit -qm leak 2>/dev/null && { echo "::error::evidence repo pre-commit hook did not refuse a .pem"; exit 1; }
           git -C "$SANE_ENGAGEMENT" reset -q -- logs/leak.pem; rm -f "$SANE_ENGAGEMENT/logs/leak.pem"
           # a credential whose line mentions docs/ is still caught (exclusion is by path, not content)
-          printf 'docs/ see token=AIzaSyA1234567890123456789012345678901234\n' > "$SANE_ENGAGEMENT/logs/D18-002.txt"; git -C "$SANE_ENGAGEMENT" add -A
+          printf 'docs/ see token=AIzaSyA1234567890123456789012345678901234\n' > "$SANE_ENGAGEMENT/logs/D18-002.txt"; git -C "$SANE_ENGAGEMENT" add -A   # hygiene:allow (test shape)
           hook 'git -C "$E" commit -m "evidence"' | $SH .claude/hooks/pre-bash.sh 2>/dev/null && { echo "::error::credential not blocked"; exit 1; }
           git -C "$SANE_ENGAGEMENT" reset -q -- logs/D18-002.txt; rm -f "$SANE_ENGAGEMENT/logs/D18-002.txt"
           # with a private remote the hook pushes there — and only there
@@ -98,6 +100,19 @@ jobs:
           [ "$(git -C "$RUNNER_TEMP/evidence.git" rev-list --count HEAD)" -ge 2 ] || { echo "::error::evidence remote is empty"; exit 1; }
           echo '{}' | $SH .claude/hooks/stop-guard.sh || { echo "::error::pushed evidence repo must not block the stop"; exit 1; }
           rm -rf "$SANE_ENGAGEMENT"
+          # a legacy folder (pre-design, tracked by the methodology checkout) is refused at commit time too
+          mkdir -p BugBountyTarget/Legacy_01012026/logs; echo x > BugBountyTarget/Legacy_01012026/logs/D01-001.txt
+          git add -f BugBountyTarget/Legacy_01012026/logs/D01-001.txt
+          hook 'git commit -m "evidence"' | $SH .claude/hooks/pre-bash.sh 2>/dev/null && { echo "::error::legacy engagement path staged in the methodology repo was not refused"; exit 1; }
+          $SH .claude/hooks/pre-commit-check.sh >/dev/null 2>&1 && { echo "::error::pre-commit-check passed a staged engagement path"; exit 1; }
+          git reset -q -- BugBountyTarget/Legacy_01012026; rm -rf BugBountyTarget/Legacy_01012026
+      - name: Skill names must not shadow Claude Code built-ins (a built-in wins; the skill becomes unreachable)
+        run: |
+          builtins='add-dir agents bug clear compact config context cost diff doctor exit export help hooks ide init install-github-app login logout mcp memory model permissions plugin pr-comments release-notes rename resume review security-review status terminal-setup todos upgrade usage vim'
+          for f in .claude/skills/*/SKILL.md; do
+            n=$(sed -nE 's/^name:[[:space:]]*//p' "$f" | head -1)
+            for b in $builtins; do [ "$n" = "$b" ] && { echo "::error::$f: skill name '$n' is a Claude Code built-in — rename it (sane-$n)"; exit 1; }; done
+          done; echo "clean"
       - name: Item lookup works
         run: python3 scripts/item.py D10-004 >/dev/null && python3 scripts/item.py --grep JavascriptInterface | head -3
       - name: End-to-end self-test on a scratch engagement
