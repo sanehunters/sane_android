@@ -93,7 +93,7 @@ blocker is non-fatal.
 | **P0 Scope** | — | authorisation basis known | `templates/scoping-questionnaire.md`; chase two accounts, OTP route, payment sandbox, KYC state now, not on day 9 | authorisation + scope + exclusions recorded in `engagement.json`; accounts recorded or their absence listed as a blocker | `engagement.json`, `report/assessment-status.md` |
 | **P1 Lab** | D26 | P0 | build and *verify* the harness per `docs/03`: TLS intercepted from a non-pinning host, Frida attaches, root works, lockscreen exists; positive control for every instrument | all five harness checks pass, or static-only mode declared | `engagement.json.lab`, `logs/harness/` |
 | **P2 Acquire** | D02 (+D01-001…010) | P1 | full APK set (every split), signature verified, `minSdk`/`targetSdk` from two sources, **framework identified** (Flutter / RN / Hermes / Xamarin / Unity / Cordova / native), **OTA question answered** (expo-updates, CodePush, custom DEX/JS updater → re-base on the on-device bundle) | `target.*` in `engagement.json` filled; hashes in `apk/versions.txt` | `apk/` (hashes only), `recon/` |
-| **P3 Inventory** | D01, D03 | P2 | `tools/01-surface-inventory.sh`, `python3 scripts/inventory.py base.apk --out $E/inventory/`, `tools/06-secrets-endpoints.sh`, `tools/04-applink-verify.sh`; run the **applicability probe** of every domain card (or, where a card has none yet, answer its crux question with the two most decisive greps) and record `domains_na` with reasons | every entry point written down; `inventory/components.csv`, `deeplinks.csv`, `webviews.csv`, `endpoints.csv` exist; `domains_na` decided | `inventory/`, `recon/`, `engagement.json.domains_na` |
+| **P3 Inventory** | D01, D03 | P2 | `tools/01-surface-inventory.sh`, `python3 scripts/inventory.py base.apk --out $E/inventory/` (add `--all` when D08 applies: non-exported activities/services/receivers are the redirect targets; providers are always listed), `tools/06-secrets-endpoints.sh`, `tools/04-applink-verify.sh`; run the **applicability probe** of every domain card (or, where a card has none yet, answer its crux question with the two most decisive greps) and record `domains_na` with reasons | every entry point written down; `inventory/components.csv`, `deeplinks.csv`, `webviews.csv`, `endpoints.csv` exist; `domains_na` decided | `inventory/`, `recon/`, `engagement.json.domains_na` |
 | **P4 Static** | D11 D12 D16 D17 D19 D20 D21 D22 (+ static halves of D03–D10, D13, D14, D18, D23) | P3 | read every inventory item to its sink; grep for the validator, enumerate its call sites, the unguarded sibling is the finding | every inventory row read to its sink or deferred with a reason | rows flipped, `hypotheses/` |
 | **P5 IPC** | D04 D05 D06 D07 D08 D09 D10 D25 | P4 | prove from the **zero-permission attacker app** what static suggested; `tools/02`, `tools/09` (providers; `tools/03` for the quick authority list), `tools/07`, `tools/08`; triage order: intent redirection → deep links → WebView/bridges → providers → implicit-intent interception → task hijack | every exported surface produced a primitive or a ruled-out entry naming the mechanism | rows, `inventory/components.csv.tested`, `pocs/` |
 | **P6 Network/API** | D13 D14 D15 D18 D23 | P5 + MitM + two accounts (else static-only) | exercise the endpoint map; cross-account matrix read **and** write; mass assignment from the body models; business logic; shadow-API (older mobile endpoints with weaker controls); error oracle before injection | endpoint map exercised; `inventory/endpoints.csv` complete | rows, `requests/`, `responses/` |
@@ -146,7 +146,7 @@ for P7).
 ## 6. How to record (the contract hooks and future sessions rely on)
 
 **`checklist-status.csv`** — one row per item. Write it only through `scripts/mark.py`, which validates the
-vocabulary (a fan-out worker writes its partial file the same way: `--tracker checklist-status.Dnn.partial.csv`, see `prompts/05`): `completed` (`true`/`false`), `result` (`finding` | `ruled-out` | `blocked` | `n/a`),
+vocabulary (a fan-out worker writes its partial file the same way with `--partial Dnn`, which seeds `checklist-status.Dnn.partial.csv` on first use; see `prompts/05`): `completed` (`true`/`false`), `result` (`finding` | `ruled-out` | `blocked` | `n/a`),
 `finding_id` (`F-NNN` when result=finding), `evidence` (path relative to the engagement folder), `notes`.
 
 | result | `notes` must contain |
@@ -220,7 +220,7 @@ mechanism; every finding still needs its full evidence tree. The rules:
 | Rule | How |
 |---|---|
 | Raw output goes to files; you read digests | every tool prints counts + candidates to stdout — redirect it (`tools/NN-… … \| tee $E/logs/tools-NN.txt`) and read the counts, open the file only for a candidate; never `cat` a decompiled file — `grep -n`, `sed -n 'a,bp'` |
-| One card per domain, one item at a time | `cards/Dnn.md` once; `python3 scripts/item.py Dnn-NNN --brief` (Test + How + Proof) for the item you are on; `python3 scripts/item.py --field how Dnn-NNN` when you only need the commands (flag first) |
+| One card per domain, one item at a time | `cards/Dnn.md` once; `python3 scripts/item.py Dnn-NNN --brief` (Test + How + Proof + Ruled out when) for the item you are on; `python3 scripts/item.py Dnn-NNN --field how` when you only need the commands |
 | Never re-derive state | `python3 scripts/state.py <eng>` ("where am I") and `python3 scripts/next.py <eng>` ("what next", in card triage order) answer it in one screen; do not re-read the tracker |
 | Think in writing, briefly | before a domain: answer its crux question for *this* app in three lines in `hypotheses/_notes-Dnn.md`; after it: three cross-surface hypotheses. Thirty seconds of thinking saves an hour of probing |
 | Batch what batches | run every `grep` of a domain's static items in one pass over `$DEC`, then settle rows from the log |
@@ -236,9 +236,9 @@ mechanism; every finding still needs its full evidence tree. The rules:
 | `scripts/new-engagement.sh <Target> [--remote <url>]` | create the engagement folder (its own git repo), tracker and state file; `--remote`/`SANE_EVIDENCE_REMOTE` sets the private evidence remote |
 | `scripts/state.py <eng> [--json]` | the resume card from disk (hooks print it at session start) |
 | `scripts/next.py <eng> [--domain Dnn] [-n N] [--json]` | the next open items of the current phase in card triage order, the gate status and the parked leads |
-| `scripts/item.py Dnn-NNN [--brief]` · `--domain Dnn` · `--grep <re>` · `--xrefs Dnn-NNN` · `--field how Dnn-NNN` (flag first) | per-item access |
-| `scripts/inventory.py base.apk --out <eng>/inventory/` | per-instance registers (components, deep links, WebViews, endpoints) |
-| `scripts/mark.py <eng> Dnn-NNN <result> --note … [--tracker <partial>]` | the only writer of `checklist-status.csv` and of a fan-out partial (validates the vocabulary) |
+| `scripts/item.py Dnn-NNN [--brief]` · `--domain Dnn` · `--grep <re>` · `Dnn-NNN --xrefs` · `Dnn-NNN --field how` | per-item access |
+| `scripts/inventory.py base.apk --out <eng>/inventory/ [--all]` | per-instance registers (components, deep links, WebViews, endpoints); `--all` adds non-exported components (D08 redirect targets) |
+| `scripts/mark.py <eng> Dnn-NNN <result> --note … [--partial Dnn]` | the only writer of `checklist-status.csv` and of a fan-out partial (`--partial Dnn` seeds it; validates the vocabulary) |
 | `scripts/gate.py <eng> p0…p8\|done\|--all\|--pass pN` | phase gates as file predicates; records a passed gate |
 | `scripts/coverage.py <eng>/checklist-status.csv --components <eng>/inventory/ [--gate p7] [--brief]` | two-dimensional coverage report |
 | `scripts/build-checklist.py` · `scripts/lint-checklist.py` · `scripts/refresh-data.py` | maintainers only |

@@ -133,7 +133,7 @@ contract; `completed=true` with no mechanism keeps the gate closed. Details: [`S
 
 | Mechanism | Guarantee |
 |---|---|
-| `scripts/lint-checklist.py` (CI) | every item has its five fields; every MASTG/MASWE/VRT id exists; cross-references resolve; no phantom domains; no vendor/laptop strings in operator docs |
+| `scripts/lint-checklist.py` (CI) | every item has its required fields (`docs/11`); every MASTG/MASWE/VRT id exists; cross-references resolve; no phantom domains; no vendor/laptop strings in operator docs |
 | `scripts/build-checklist.py --check` (CI) | the cards, JSON, CSV and index are never stale relative to the chapters |
 | `scripts/refresh-data.py` | `data/` is regenerated from the OWASP, Bugcrowd and MITRE repositories with provenance |
 | `scripts/mark.py` | `ruled-out` needs a mechanism, `blocked` needs `needs:`, `n/a` needs a reason, a finding needs an id |

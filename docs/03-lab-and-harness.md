@@ -104,7 +104,7 @@ On **API 34 and later** the CA store lives in the updatable **Conscrypt APEX**, 
 The push and the `chmod` in Step 1 both **succeed**, and nothing is trusted. Operators then see TLS
 failures on every host and conclude the app is pinned. It is not.
 
-This is the one canonical recipe (D26-005 is the same text; docs/01 points here). Three details are load-bearing:
+This is the one canonical recipe (D26-005 carries the same steps; docs/01 links here). Three details are load-bearing:
 every remote glob is **quoted** (an unquoted `/apex/.../cacerts/*` is expanded by *your* shell — under zsh it
 aborts with `no matches found` and the overlay is built empty); the files are **relabelled** (a file pushed under
 `/data/local/tmp` carries `shell_data_file`, which app domains cannot read under enforcing SELinux — the bind
@@ -194,8 +194,8 @@ Failure to intercept has at least six causes, and only one of them is pinning:
    adb shell 'iptables -t nat -A OUTPUT -p tcp --dport 443 -j DNAT --to-destination '"$HOST"':8080; iptables -A OUTPUT -p udp --dport 443 -j DROP'
    mitmproxy --mode transparent --listen-port 8080          # or --mode wireguard with the official WireGuard app
    # "did it try at all": a per-UID byte counter with another UID as the positive control
-   UID=$(adb shell dumpsys package com.target.app | grep -m1 -o 'userId=[0-9]*' | cut -d= -f2)
-   adb shell "iptables -N PROBE_$UID; iptables -I OUTPUT -m owner --uid-owner $UID -j PROBE_$UID"; adb shell "iptables -L PROBE_$UID -v -n"
+   APPUID=$(adb shell dumpsys package com.target.app | grep -m1 -o 'userId=[0-9]*' | cut -d= -f2)   # not UID: a read-only variable in bash and zsh
+   adb shell "iptables -N PROBE_$APPUID; iptables -I OUTPUT -m owner --uid-owner $APPUID -j PROBE_$APPUID"; adb shell "iptables -L PROBE_$APPUID -v -n"
    # or a Frida libc hook: Interceptor.attach(Module.getExportByName('libc.so','connect'), ...) printing the sockaddr
    ```
 
@@ -306,7 +306,8 @@ driven entirely from adb, so a model can run and read it:
 
 ```bash
 cd attacker-app && ./build.sh --victim com.target.app --install
-adb shell am start -S -n com.sanehunters.probe/.MainActivity --es run baseline,enumerate,provider --es victim com.target.app --es authority com.target.app.provider
+# whole command in double quotes, values in single quotes: the device shell re-parses the line (an unquoted `;`, `&`, `?` or `->` breaks it)
+adb shell "am start -S -n com.sanehunters.probe/.MainActivity --es run baseline,enumerate,provider --es victim com.target.app --es authority com.target.app.provider"
 adb logcat -s PROBE:V
 adb pull /sdcard/Android/data/com.sanehunters.probe/files/ "$E/logs/probe/"     # some builds drop app Log output
 ```
@@ -316,7 +317,7 @@ Steps: `baseline enumerate provider read redirect deeplink start broadcast bind 
 the manifest — and the `ready` line measures it (`requestedPermissions=[]`) together with the targetSdk, API
 level and `deviceSecure`. Acceptance list for any extension: the self-narrating monospace log pane from the
 [PoC standard](04-poc-and-evidence-standard.md), numbered action buttons, raw platform return values with their
-meaning in parentheses, a positive control before any zero, and every fact mirrored to the file
+meaning in parentheses, a positive control before any zero, and every fact mirrored to the file (`Probe.java`).
 
 ---
 
@@ -340,9 +341,11 @@ adb root && adb shell id                 # expect uid=0(root)
 # 3) TLS interception works FROM AN APP UID  (lab.tls_intercept)
 #    Never `adb shell curl`: it runs in the shell's mount namespace, passes without Step 3, and stock images ship no curl.
 curl -sx 127.0.0.1:8080 -o /dev/null -w '%{http_code}\n' https://example.com      # host side: proxy reachable at all
-adb shell am start -a android.intent.action.VIEW -d https://example.com           # an app UID (any browser) through the device store
+adb shell "am start -a android.intent.action.VIEW -d 'https://example.com'"       # an app UID (any browser) through the device store
 #    expect the flow in mitmproxy with a 200, NOT "Client TLS handshake failed"; then the D26-006 listing from the TARGET's PID:
-PID=$(adb shell pidof com.target.app | tr -d '\r'); adb shell "nsenter --mount=/proc/$PID/ns/mnt -- ls /apex/com.android.conscrypt/cacerts" | grep -c "$HASH"   # 1
+HASH=$(openssl x509 -inform PEM -subject_hash_old -in ~/.mitmproxy/mitmproxy-ca-cert.pem | head -1)
+adb shell am start -W com.target.app/.MainActivity >/dev/null; PID=$(adb shell pidof com.target.app | tr -d '\r')
+adb shell "nsenter --mount=/proc/$PID/ns/mnt -- ls /apex/com.android.conscrypt/cacerts" | grep -c "$HASH"   # expect 1
 
 # 4) Frida attaches on THIS device  (lab.frida)
 frida-ps -D "$ANDROID_SERIAL" | head
@@ -354,7 +357,7 @@ adb shell dumpsys lock_settings | grep -iE 'credential|quality'
 
 # 6) Positive controls: the instruments can produce a positive BEFORE any zero is read  (lab.positive_controls)
 frida -D "$ANDROID_SERIAL" -n com.target.app -q -t 30 -e "Java.perform(function(){Java.use('android.util.Log').i.overload('java.lang.String','java.lang.String').implementation=function(t,m){console.log('[ctl] Log.i '+t);return this.i(t,m);};});"   # D26-010: at least one [ctl] line
-adb shell am start -S -n com.sanehunters.probe/.MainActivity --es run baseline,provider --es authority settings   # probe app: control=content://settings/secure returns rows
+adb shell "am start -S -n com.sanehunters.probe/.MainActivity --es run baseline,provider --es authority settings"   # probe app: control=content://settings/secure returns rows
 ```
 
 That last one matters more than it looks. A first attempt at proving a Keystore auth window once produced
@@ -363,23 +366,30 @@ control, with the precondition verified, **in the same take**.
 
 ### Record it — the exact object `scripts/gate.py p1` checks
 
-Write the result into `engagement.json` (`scripts/new-engagement.sh` seeds `"lab": {}`); every key is one of the
-six checks above, `true` only when that check passed **today** on **that serial**:
+Write the result into `engagement.json` (`scripts/new-engagement.sh` seeds `lab` with every key `null`, which the gate
+reads as a blocker); each boolean is one of the six checks above, `true` only when that check passed **today** on
+**that serial**. The object is valid JSON — paste it as is:
 
 ```json
 "lab": {
-  "mode": "dynamic",                 // or "static-only": then the five booleans are not required and P1 passes with a stated reason
-  "serial": "emulator-5554",         // check 1
-  "root": true,                      // check 2
-  "tls_intercept": true,             // check 3 (app-UID flow seen + D26-006 listing)
-  "frida": true,                     // check 4
-  "lockscreen": true,                // check 5 (locksettings get-disabled = false)
-  "positive_controls": true,         // check 6 (control hook fired + probe control query returned rows)
+  "mode": "dynamic",
+  "serial": "emulator-5554",
+  "root": true,
+  "tls_intercept": true,
+  "frida": true,
+  "lockscreen": true,
+  "positive_controls": true,
   "pin": "1234",
   "verified": "YYYY-MM-DD",
   "log": "logs/harness/verify-YYYY-MM-DD.txt"
 }
 ```
+
+Key → check: `serial` 1 · `root` 2 · `tls_intercept` 3 (app-UID flow seen **and** the D26-006 listing) · `frida` 4 ·
+`lockscreen` 5 (`locksettings get-disabled` = `false`) · `positive_controls` 6 (control hook printed **and** the probe's
+control query returned rows). `mode` is `"dynamic"` or `"static-only"` (then the five booleans are not required and P1
+passes with the stated reason). `scripts/gate.py p1` reads exactly `mode` and the five booleans `tls_intercept`, `frida`,
+`root`, `lockscreen`, `positive_controls`; `serial`, `pin`, `verified` and `log` are for the next session.
 
 A `false` or missing key is a stated blocker, not a value to guess; `mode: "static-only"` is the honest answer when
 no device passes, and the report then says so.

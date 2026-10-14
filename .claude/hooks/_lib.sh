@@ -44,11 +44,19 @@ FORBIDDEN_RE='\.(apk|aab|apks|xapk|dex|odex|oat|so|jks|keystore|p12|pfx|pem|key|
 FORBIDDEN_DIR_RE='(^|/)(jadx_out|apktool_out|decompiled|secrets|sensitive)/|(^|/)secrets\.csv$'
 CRED_RE='AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|sk_live_[0-9a-zA-Z]{24}|xox[baprs]-[0-9A-Za-z-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|Authorization: Bearer [A-Za-z0-9._-]{30,}'
 CRED_ALLOW_RE='<redacted>|EXAMPLE|hygiene:allow'
+# a path under BugBountyTarget/ that is neither the README nor the template = engagement evidence (never tracked here)
+ENG_PATH_RE='^BugBountyTarget/[^/]+/'
+ENG_PATH_ALLOW_RE='^BugBountyTarget/_TEMPLATE/'
 # staged forbidden artefacts / live-looking credentials in one repo; prints the problem, returns 1 when dirty
 staged_problems() { # staged_problems <repo-dir> [methodology]
-  local r="$1" kind="${2:-}" bad hits
+  local r="$1" kind="${2:-}" bad hits eng
   bad="$(git -C "$r" diff --cached --name-only -z 2>/dev/null | tr '\0' '\n' | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" | grep -v '/\.gitkeep$' || true)"
   if [ "$kind" = methodology ]; then
+    # evidence never enters the public methodology index: only README.md and _TEMPLATE/ live under BugBountyTarget/
+    eng="$(git -C "$r" diff --cached --name-only -z 2>/dev/null | tr '\0' '\n' | grep -E "$ENG_PATH_RE" | grep -Ev "$ENG_PATH_ALLOW_RE" || true)"
+    [ -n "$eng" ] && bad="${bad:+$bad
+}engagement evidence (belongs in the engagement's own evidence repo, BugBountyTarget/README.md):
+$eng"
     # the methodology legitimately contains credential SHAPES as detection patterns: exclude by path, never by content
     hits="$(git -C "$r" diff --cached -U0 -- . ':(exclude)docs' ':(exclude)checklist' ':(exclude)cards' ':(exclude)json' ':(exclude)CHECKLIST.md' ':(exclude)MASTER-CHECKLIST.md' ':(exclude)checklist.csv' 2>/dev/null | grep -E '^\+' | grep -v '^+++' | grep -E "$CRED_RE" | grep -Ev "$CRED_ALLOW_RE" | head -3 || true)"
   else

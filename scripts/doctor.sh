@@ -63,7 +63,7 @@ if have adb; then
   fi
 fi
 FRIDA_SERVER="no"
-[ "$DEV_COUNT" -gt 0 ] && adb shell "ps -A 2>/dev/null | grep -q frida-server" 2>/dev/null && FRIDA_SERVER="running"
+[ "$DEV_COUNT" -gt 0 ] && adb shell "ps -A 2>/dev/null | grep -q [f]rida-server" 2>/dev/null && FRIDA_SERVER="running"   # [f] idiom: the grep line itself never matches on a legacy ps
 
 blocked=()
 [ "$(t apktool)" = no ] && [ "$(t jadx)" = no ] && blocked+=("P2-P4 static analysis: install apktool and jadx")

@@ -14,12 +14,16 @@ Checks (the parser is scripts/build-checklist.py, imported here, so the gate and
               fields; ids are Dnn-NNN, sequential, unique; every item heading parses; severity in the allowed set
   attacker    every Attacker field resolves to AM-01..AM-12 or n/a
   vrt         every backticked VRT path exists in data/vrt.csv (categories come from the data, not a list);
-              a cell outside the docs/11 §1 grammar (the build classifies it '?') is a warning
+              warnings: a cell outside the docs/11 §1 grammar (the build classifies it '?'); a parent node
+              (no priority) cited as the node; a dotted path that is not a category (a relative path); the
+              chapter head's 'VRT ceiling' naming a path not in the taxonomy; '(null)'/'(VARIES)' for '(varies)'
   requires    every Requires tag is in the docs/11 §4 vocabulary; Record names logs/Dnn-NNN.txt (warning)
   standards   every MASTG-*/MASWE-*/MASVS-* id (shorthand lists expanded) exists in data/standards-index.csv;
               every mastg-android-* rule id exists in data/mastg-rules.csv; placeholder/deprecated pages warn
   xrefs       every Dnn-NNN reference points at an item that exists; every Dnn reference is a real domain
   links       every relative markdown link in the repo resolves (hidden dirs and templates included)
+  paths       (warning) a backticked data/<file>.csv|json or source-note path (primary/, secondary/, local/,
+              architecture/, research/) names a file that does not exist in the repository
   phantoms    no 'SANE-' prefixes, no references to domains that have no chapter
   portability (warnings, aggregated per file) jadx_out/apktool_out instead of $DEC; `frida -U`; `--no-pause`;
               `sed -i`; duplicate item titles across chapters
@@ -73,7 +77,8 @@ STYLE_ERR = [(re.compile(r'lamppentest|AndroidStudioProjects|ultracode'), "opera
 STYLE_WARN = [(re.compile(r'\b(Opus|Sonnet|Haiku) ?\d|GPT-?[45]|Gemini \d'), "names a vendor model"),
               (re.compile(r'~/Library/Android|/Applications/Android Studio'), "macOS path (fine only next to the Linux form)"),
               (re.compile(r'your Mac\b'), "operator-specific"),
-              (re.compile(r'\bbrew install\b'), "host-specific installer (give the Linux form too)")]
+              (re.compile(r'\bbrew install\b'), "host-specific installer (give the Linux form too)"),
+              (re.compile(r'~/sane_android\b'), "assumes the checkout lives at ~/sane_android (say 'the methodology checkout')")]
 TARGET_NAMES = [x.strip() for x in os.environ.get("SANE_LINT_TARGET_NAMES", "").split(",") if x.strip()]
 STYLE_EXEMPT = {"docs/08-senior-audit-2026-10.md"}     # the audit record quotes the defects it reports
 
@@ -117,6 +122,20 @@ def style(f, t):
         m = pat.search(t)
         if m:
             warn(f, f"{why} at line {line_of(t, m.start())}: {m.group(0)}")
+
+
+# a backticked path under data/ or the source-note corpus must name a file that exists (data/README; DATA-04/DATA-19).
+# Warnings until the chapters and prompts are migrated, then promote to err.
+PATH_RE = re.compile(r'`(?:\./)?((?:data|primary|secondary|local|architecture|research)/[A-Za-z0-9_./-]+\.(?:csv|json|md))`')
+
+
+def phantom_paths(f, t):
+    if f in STYLE_EXEMPT:
+        return
+    missing = sorted(set(x for x in PATH_RE.findall(t) if not os.path.exists(os.path.join(ROOT, x))))
+    if missing:
+        warn(f, f"names {len(missing)} file(s) that do not exist in the repository: {' '.join(missing[:6])}"
+                + (" …" if len(missing) > 6 else ""))
 
 
 vrt = load_set(os.path.join(DATA, "vrt.csv"), "vrt_path")
@@ -211,6 +230,7 @@ for p in chapters:
     blocks = re.split(r'\n(?=###\s+(?:SANE-)?D\d\d-)', t)
     nums = []
     outside = []      # chapter text that belongs to no item: intro, Graveyard, Cross-surface joins, Sources
+    spelled = collections.Counter()   # '(null)' / '(VARIES)' in VRT cells: the build reads them, the canonical spelling is '(varies)'
     for b in blocks:
         h = re.match(r'###\s+((?:SANE-)?(D\d\d)-(\d+))\s*[·\-]\s*(.+)', b)
         if not h:
@@ -270,7 +290,10 @@ for p in chapters:
                 if path.split(".")[0] in VRT_PREFIXES and path not in vrt:
                     err(f, f"{iid}: VRT path not in taxonomy: {path}")
                 elif path.split(".")[0] not in VRT_PREFIXES:
-                    warn(f, f"{iid}: VRT cell names a dotted path that is not a VRT category: {path}")
+                    warn(f, f"{iid}: VRT cell names a dotted path that is not a VRT category (a relative path? write the full one): {path}")
+                elif bc.VRT.get(path, "x") == "":
+                    warn(f, f"{iid}: VRT path is a parent node (no priority in data/vrt.csv; data/README: cite a leaf): {path}")
+            spelled.update(re.findall(r'\((null|VARIES)\)', vf))
             if bc.vrt_priority(vf)[0] == "?":
                 warn(f, f"{iid}: VRT cell is outside the docs/11 §1 grammar (no path, n/a, varies or inherits/as Dnn-NNN): '{vf[:60]}'")
         check_standards(f, iid, body)
@@ -293,6 +316,15 @@ for p in chapters:
             err(f, f"item numbering not contiguous 001..{max(nums):03d}: missing {sorted(set(exp) - set(nums))[:10]}")
     check_standards(f, "outside items (intro/Graveyard/joins/Sources)", "\n".join(outside), aggregate=True)
     portability(f, t)
+    phantom_paths(f, t)
+    if spelled:
+        warn(f, "VRT priority spelled " + ", ".join(f"'({k})' x{v}" for k, v in sorted(spelled.items()))
+                + " in VRT cells: data/vrt.csv and docs/11 §1 write '(varies)'")
+    head_vrt = bc.meta_field(t.split("\n## ")[0], "VRT ceiling")
+    bad_head = [x for x in re.findall(r'`([a-z_]+(?:\.[a-z0-9_]+)+)`', head_vrt) if vrt and x not in vrt]
+    if bad_head:
+        warn(f, f"chapter head 'VRT ceiling' names {len(bad_head)} path(s) not in data/vrt.csv (relative? write the full path): {' '.join(bad_head[:4])}"
+                + (" …" if len(bad_head) > 4 else ""))
 
 for t_, ids in sorted(by_title.items()):
     if len(ids) > 1:
@@ -348,6 +380,7 @@ for p in sorted(md_files):
             err(f, f"dead link {link}")
     if not f.startswith(("checklist/", "cards/", "MASTER-CHECKLIST")):
         style(f, t)
+        phantom_paths(f, t)
     if f.startswith(("docs/", "frida/")):
         portability(f, t)
 for p in extra:

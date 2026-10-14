@@ -54,6 +54,12 @@ expect_ok   python3 scripts/mark.py "$E" D10 blocked --note "needs: rooted devic
 python3 scripts/mark.py "$E" --show D10-005 | grep -q '"result": "finding"' && ok "whole-domain blocked left the finding row alone" || bad "whole-domain blocked overwrote a finding row"
 expect_ok   python3 scripts/mark.py "$E" D19 reopen
 [ "$(jq_ "$E/engagement.json" "'D19' in e['domains_na']")" = False ] && ok "reopen removed domains_na.D19" || bad "domains_na.D19 survived reopen"
+[ "$(jq_ "$E/engagement.json" "'D19' in e.get('domains_decided', [])")" = False ] && ok "reopen removed D19 from domains_decided" || bad "D19 still decided after reopen"
+expect_fail python3 scripts/mark.py "$E" D11 applies --note "yes"                                                   # the probe's evidence is required
+expect_fail python3 scripts/mark.py "$E" D11-001 applies --note "SharedPreferences + Room database in the APK (jadx: 14 call sites)"   # whole domain only
+expect_ok   python3 scripts/mark.py "$E" D11 applies --note "SharedPreferences + Room database in the APK (jadx: 14 getSharedPreferences call sites)"
+[ "$(jq_ "$E/engagement.json" "'D11' in e['domains_decided'] and 'D11' in e['domains_applicable']")" = True ] && ok "applies recorded the P3 decision without touching rows" || bad "applies not recorded"
+out="$(python3 scripts/gate.py "$E" p3 2>/dev/null)"; printf '%s' "$out" | grep -q 'applicability undecided for D01' && ok "gate p3 lists undecided domains" || bad "gate p3 applicability predicate vacuous"   # capture first: grep -q + pipefail would SIGPIPE a long printer
 expect_fail python3 scripts/mark.py "$E" --show
 expect_fail python3 scripts/gate.py "$E" p0
 expect_fail python3 scripts/gate.py "$E" --pass
@@ -79,6 +85,7 @@ expect_ok   python3 scripts/state.py "$E" --json
 python3 scripts/state.py "$E" --json | grep -q '"settled_predicate": "scripts/gate.py row_valid"' && ok "state.py counts with gate.row_valid" || bad "state.py predicate"
 expect_ok   python3 scripts/coverage.py "$E/checklist-status.csv" --brief
 expect_ok   python3 scripts/next.py "$E"
+out="$(python3 scripts/next.py "$E" --domain D10 2>/dev/null)"; printf '%s' "$out" | grep -q 'D10-005' && bad "next.py offers a settled finding row" || ok "next.py skips settled rows (gate.row_valid)"
 
 step "inventory + fan-out merge"
 expect_ok   python3 scripts/inventory.py scripts/selftest-fixtures/AndroidManifest.xml --out "$E/inventory"

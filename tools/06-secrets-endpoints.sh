@@ -193,7 +193,7 @@ SHAPES = [  # (name, regex, confidence, probe template, restricted/unrestricted 
   'curl -s "https://api.mapbox.com/tokens/v2?access_token={v}" | head -c 300',
   'pk. = public by design (P5) unless scopes exceed styles:read/fonts:read; sk. = secret token'),
  ("jwt", r"eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}", "medium",
-  "python3 -c 'import base64,sys; [print(base64.urlsafe_b64decode(p+\"=\"*(-len(p)%4)).decode(errors=\"replace\")) for p in sys.argv[1].split(\".\")[:2]]' '{v}'",
+  "python3 -I -c 'import base64,sys; [print(base64.urlsafe_b64decode(p+\"=\"*(-len(p)%4)).decode(errors=\"replace\")) for p in sys.argv[1].split(\".\")[:2]]' '{v}'",
   'read alg/role/exp: a Supabase anon key ("role":"anon") is public by design; anything else is replayed against its issuer'),
  ("private-key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "high",
   '# openssl pkey -in <file> -noout -text | head -3 ; is it a client-cert key (D14 mTLS) or a signing key?', 'rate on what it signs or authenticates, never on presence'),
@@ -247,6 +247,7 @@ w("cloud.csv", ["host", "kind", "file", "line", "probe"], cloud)
 # -- report ----------------------------------------------------------------------------------------
 print(f"    unique URLs: {len(urls)}   retrofit routes: {len(routes)}   base URLs: {len(bases)}   graphql ops: {len(gql)}   serialized fields: {len(fields)}")
 print(f"    endpoints.csv: {len(new)} new rows -> {target}")
+if not inv: print(f"    register them: python3 scripts/inventory.py <apk> --out $E/inventory --endpoints {out}/routes.csv   (or rerun with --inventory $E/inventory)")
 print("[*] secret-shaped CANDIDATES (%s in secrets.csv; probe template in the verify column%s):" % (
       "FULL values" if full else "masked values + sha256", "" if full else " -- rerun with --full-values --out $E/sensitive/secrets for verify-hints.sh"))
 for r in rows: print(f"    CANDIDATE secret/{r[0]:20s} {r[3]}:{r[4]}  {mask(r[1].split('  ')[0])}  [{r[5]}]")

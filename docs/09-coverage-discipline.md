@@ -123,6 +123,8 @@ Build it once, in P3:
 
 ```bash
 python3 scripts/inventory.py "$E/apk/base.apk" --out "$E/inventory/"      # from the methodology repo root
+# add --all when D08 is in scope: it also lists non-exported activities/services/receivers, the targets an
+# intent-redirection or grant primitive reaches; providers are listed either way
 ```
 
 Then the gate:

@@ -95,6 +95,10 @@ def main():
     a = sys.argv[1:]
     if not a: print(__doc__); sys.exit(1)
     if a[0] in ("-h", "--help"): print(__doc__); sys.exit(0)
+    unknown = [x for x in a if x.startswith("-") and x not in ("--dry-run", "--build")]
+    if unknown or a[0].startswith("-"):      # a mistyped flag must not fall through to a write
+        print(f"!! usage: apply-item-meta.py changes.json [--dry-run] [--build] — unknown argument: {' '.join(unknown) or a[0]}", file=sys.stderr)
+        sys.exit(2)
     dry = "--dry-run" in a
     spec = json.load(open(a[0], encoding="utf-8"))
     path = chapter_path(spec["domain"])

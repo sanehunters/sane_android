@@ -31,8 +31,9 @@
 Required: the five metadata rows `Severity ceiling / VRT / Attacker / Applies to / Maps to` and the five
 body fields `Test / How / Proof / Escalation / Ruled out when`. Strongly recommended (the linter counts them
 and warns on the migration gap): `Requires`, `Record`, `Skip when`. The heading separator is `·` (or `-`);
-any other character makes the item invisible to the build. Items are numbered contiguously `001…` within a
-chapter; ids are never reused or renumbered. Every metadata row is closed with a trailing `|` and non-empty.
+any other character is an error in both the build and the linter (the item would otherwise vanish from every
+view silently). Items are numbered contiguously `001…` within a chapter; ids are never reused or renumbered.
+Every metadata row is closed with a trailing `|` and non-empty.
 
 **The item separator and the heading.** A row with a title but no parseable id is an error, not a silently
 dropped item: the build and the linter use the same regex.
@@ -53,7 +54,12 @@ Each of these is a linter warning today.
 
 Anything else is classified `?` by the build and warned by the linter. The priority suffix is optional; the
 taxonomy's own priority is used when it is omitted, so `(Pn)` is worth writing only when the chapter argues a
-different level than the node's default.
+different level than the node's default. Write `(varies)`: `(null)` and `(VARIES)` are read as the same value
+but the linter warns (data/vrt.csv knows only `varies`). Paths are always written in full from the top-level
+category (`application_level_denial_of_service_dos.app_crash.malformed_android_intents`, never
+`app_crash.malformed_android_intents`), and the node cited is a leaf: a parent node has no priority, a
+platform re-rates it, and the linter warns (data/README). `...suffix` is the shorthand for a sibling leaf under
+the same parent as the previous path.
 
 ## 2. Chapter shape
 
@@ -117,28 +123,35 @@ The tracker row's `evidence` column points at the first of these.
 
 Errors (exit 1):
 
-- a missing required section (§2, except the Applicability probe) · a missing required metadata row or
-  body field · a metadata row that is empty or not closed with `|` · an item heading that does not parse ·
-  a chapter with no parseable item · non-contiguous or duplicate ids · `SANE-` prefixes
-- a severity cell with no recognisable level · an `Attacker` cell with no `AM-xx` (unless `n/a`) · a
-  backticked VRT path whose category exists in `data/vrt.csv` but the path does not · a `Requires` tag
-  outside §4
+- a chapter without a `# Dnn · Name` title · a missing required section (§2, except the Applicability probe)
+  · a missing required metadata row or body field · a metadata row that is empty or not closed with `|` ·
+  an item heading that does not parse · a chapter with no parseable item · an id that is not three digits,
+  not in the chapter's domain, non-contiguous or duplicate · `SANE-` prefixes
+- a severity cell with no recognisable level · an `Attacker` cell with no `AM-xx` (unless `n/a`) or with an
+  `AM-xx` outside 01–12 · a backticked VRT path whose category exists in `data/vrt.csv` but the path does
+  not · a `Requires` tag outside §4
 - a MASTG/MASWE/MASVS id (shorthand lists such as `MASTG-TEST-0224, -0225` and `MASVS-AUTH-1/2` are
   expanded first) not in `data/standards-index.csv`, in items and in the chapter's intro/Graveyard/joins/Sources
-- a reference to an item or domain that does not exist (`--strict`: also a domain declared in the registry
-  without a chapter) · a dead relative link in any markdown file, hidden directories and templates included
+- a reference to an item or domain that does not exist, in items and in the operator-facing files (docs,
+  prompts, templates, skills, hooks; `--strict`: also a domain declared in the registry without a chapter) ·
+  a dead relative link in any markdown file, hidden directories and templates included
 - an operator or laptop path (the `STYLE_ERR` patterns in `scripts/lint-checklist.py`: the known operator
   folder names and `/Users/<name>/`) in any operator-facing file, and a real target name listed in
   `SANE_LINT_TARGET_NAMES` (a comma-separated env var; keep the list outside the repo)
 
 Warnings (reported, do not fail): a chapter without `## Applicability probe` · the count of items without
 `Requires` / `Record` / `Skip when` · a deprecated row (§7) · a VRT cell outside the §1 grammar · a dotted
-path in the VRT cell that is not a VRT category · a `Record` row that does not name `logs/Dnn-NNN.txt` · a
+path in the VRT cell that is not a VRT category (a relative path) · a parent node cited as the VRT node · a
+chapter-head `VRT ceiling` path not in the taxonomy · `(null)` / `(VARIES)` instead of `(varies)` (counted
+per chapter) · a backticked `data/<file>` or source-note path (`primary/`, `secondary/`, `local/`,
+`architecture/`, `research/`) that names a file the repository does not contain (per file) · a `Record`
+row that does not name `logs/Dnn-NNN.txt` · a
 citation of a placeholder or deprecated MASTG page without saying so (tests: the `covered_by` replacement;
 tools/knowledge: cite a current page) · an unknown `mastg-android-*` rule id · a `Ruled out when` shorter
 than a mechanism · duplicate item titles across chapters · `jadx_out`/`apktool_out`, `frida -U`,
 `--no-pause`, `sed -i` (per file, with the first line numbers) · a vendor model name, `your Mac`,
-`brew install` without the Linux form, or a macOS SDK path.
+`brew install` without the Linux form, a macOS SDK path, or `~/sane_android` as the assumed checkout path.
+Each warning class is promoted to an error once the corpus is clean of it.
 
 Reviewed by hand (no lint rule): whether `Test` states a mechanism, whether `Proof` is an observable,
 whether `Escalation` names real partners, whether `$DEC` is used consistently inside a command.

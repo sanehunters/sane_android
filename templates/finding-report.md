@@ -2,7 +2,7 @@
 
 > One file per finding: copy to `findings/F-NNN/report.md` in the engagement (evidence repo), fill, delete every
 > blockquote before delivery. Rules that decide acceptance live in docs/02 (severity doctrine) in the methodology repo.
-> Ids and paths follow START.md §6: finding `F-NNN`, checklist item `Dnn-NNN` (never a legacy `SANE-` id).
+> Ids and paths follow START.md §6: finding `F-NNN`, checklist item `Dnn-NNN` (never a legacy prefixed id).
 
 ---
 

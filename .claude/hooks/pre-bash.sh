@@ -38,8 +38,9 @@ if echo "$CMD_NQ" | grep -Eq "(^|[;&| ])git${GIT_OPTS}[[:space:]]+(commit|add)([
   echo "$CMD_NQ" | grep -Eq "(^|[;&| ])git${GIT_OPTS}[[:space:]]+add([[:space:]]|$)" && is_add=1
   echo "$CMD_NQ" | grep -Eq "(^|[;&| ])git${GIT_OPTS}[[:space:]]+commit([[:space:]]|$)" && is_commit=1
   # defence in depth over .gitignore: evidence is never staged in the (public) methodology repository
-  if [ "$is_add" = 1 ] && ! echo "$CMD_NQ" | grep -Eq '(^|[;&| ])git[[:space:]]+-C' \
-     && echo "$CMD" | grep -Eq 'git[[:space:]]+add[^;&|]*(BugBountyTarget/[^_[:space:]/"]+_[0-9]|\$\{?E\}?|\$\{?SANE_ENGAGEMENT\}?)'; then
+  # (git -C "$E" add … runs inside the evidence repo and is the documented form; any other -C is not exempt)
+  if [ "$is_add" = 1 ] && ! echo "$CMD" | grep -Eq '(^|[;&| ])git[[:space:]]+-C[[:space:]]*("?\$\{?(E|SANE_ENGAGEMENT)\}?"?|"?[^[:space:]"]*BugBountyTarget/[^_[:space:]/"]+_[0-9]+/?"?)([[:space:]]|$)' \
+     && echo "$CMD" | grep -Eq 'git[^;&|]*[[:space:]]add[^;&|]*(BugBountyTarget/[^_[:space:]/"]+_[0-9]|\$\{?E\}?|\$\{?SANE_ENGAGEMENT\}?)'; then
     deny "evidence is never staged in the methodology repository (it is public). The engagement folder is its own git repository: git -C \"\$E\" add -A && git -C \"\$E\" commit -m '<Target> <phase>: <what was settled>'  (BugBountyTarget/README.md)"
   fi
   repos="$REPO"

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Stop: refuse to end the session while evidence is uncommitted, or unpushed when an evidence remote exists (R7).
-# Exit 2 blocks the stop once. Also usable manually: bash .claude/hooks/stop-guard.sh --manual
+# Exit 2 blocks the stop once. Also usable manually: bash .claude/hooks/stop-guard.sh --manual [<engagement>]
 set -uo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 if [ "${1:-}" = "--manual" ]; then HOOK_INPUT='{}'; ACTIVE=false; else HOOK_INPUT="$(cat 2>/dev/null || true)"; ACTIVE="$(json_get stop_hook_active)"; fi
 cd "$REPO" || exit 0
 [ "$ACTIVE" = "true" ] || [ "$ACTIVE" = "True" ] && exit 0      # second attempt: let the session end
-E="$(active_engagement)"; [ -z "$E" ] && exit 0
+E="${2:-}"; [ -n "$E" ] && [ -d "$E" ] || E="$(active_engagement)"; [ -z "$E" ] && exit 0
 rel="${E#$REPO/}"
 msgs=(); remote=""; ahead=0
 if is_evidence_repo "$E"; then

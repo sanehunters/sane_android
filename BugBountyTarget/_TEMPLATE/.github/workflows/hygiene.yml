@@ -18,7 +18,7 @@ jobs:
       - name: No binaries, keys, decompiled trees or secret dumps
         run: |
           . .methodology/.claude/hooks/_lib.sh
-          bad=$(git ls-files | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" || true)
+          bad=$(git ls-files | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" | grep -v '/\.gitkeep$' || true)
           if [ -n "$bad" ]; then echo "::error::forbidden artefacts committed:"; echo "$bad"; exit 1; fi
           big=$(git ls-files -z | while IFS= read -r -d '' f; do s=$(wc -c <"$f" 2>/dev/null || echo 0); [ "$s" -gt 5242880 ] && echo "$s $f"; done; true)
           if [ -n "$big" ]; then echo "::error::files over 5 MB committed:"; echo "$big"; exit 1; fi

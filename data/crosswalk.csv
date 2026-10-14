@@ -21,28 +21,28 @@ mastg,MASTG-APP-0029,BugBazaar,true,0,
 mastg,MASTG-APP-0031,VulnForum,true,0,
 mastg,MASTG-APP-0032,RootBeer Sample,true,0,
 mastg,MASTG-APP-0033,Android RASP Sample,true,0,
-mastg,MASTG-BEST-0001,Use Secure Random Number Generator APIs,true,1,D12-033
-mastg,MASTG-BEST-0002,Remove Logging Code,true,1,D20-007
+mastg,MASTG-BEST-0001,Use Secure Random Number Generator APIs,true,2,D12-033;D12-HEAD
+mastg,MASTG-BEST-0002,Remove Logging Code,true,2,D20-007;D20-HEAD
 mastg,MASTG-BEST-0003,Comply with Privacy Regulations and Best Practices,true,0,
-mastg,MASTG-BEST-0004,Exclude Sensitive Data from Backups,true,1,D11-051
+mastg,MASTG-BEST-0004,Exclude Sensitive Data from Backups,true,2,D11-051;D11-HEAD
 mastg,MASTG-BEST-0005,Use Secure Encryption Modes,true,1,D12-014
 mastg,MASTG-BEST-0006,Use Up-to-Date APK Signing Schemes,true,0,
-mastg,MASTG-BEST-0007,Debuggable Flag Disabled in the AndroidManifest,true,1,D21-046
+mastg,MASTG-BEST-0007,Debuggable Flag Disabled in the AndroidManifest,true,2,D21-046;D21-HEAD
 mastg,MASTG-BEST-0008,Debugging Disabled for WebViews,true,0,
 mastg,MASTG-BEST-0009,Use Secure Encryption Algorithms,true,1,D12-015
 mastg,MASTG-BEST-0010,Use Up-to-Date minSdkVersion,true,0,
 mastg,MASTG-BEST-0011,Securely Load File Content in a WebView,true,0,
 mastg,MASTG-BEST-0012,Disable JavaScript in WebViews,true,0,
 mastg,MASTG-BEST-0013,Disable Content Provider Access in WebViews,true,0,
-mastg,MASTG-BEST-0014,Preventing Screenshots and Screen Recording,true,1,D20-040
+mastg,MASTG-BEST-0014,Preventing Screenshots and Screen Recording,true,2,D20-040;D20-HEAD
 mastg,MASTG-BEST-0015,Use `setRecentsScreenshotEnabled` to Prevent Screenshots When Backgrounded,true,0,
 mastg,MASTG-BEST-0016,Use `SECURE_FLAG` to Prevent Screenshots and Screen Recording,true,0,
 mastg,MASTG-BEST-0017,Use `setSecure` to Prevent Screenshots in SurfaceViews,true,0,
 mastg,MASTG-BEST-0018,Use `SecureFlagPolicy.SecureOn` to Prevent Screenshots in Compose Components,true,0,
-mastg,MASTG-BEST-0019,Use Non-Caching Input Types for Sensitive Fields,true,2,D11-061;D20-046
-mastg,MASTG-BEST-0020,Update the GMS Security Provider,true,2,D12-070;D14-044
+mastg,MASTG-BEST-0019,Use Non-Caching Input Types for Sensitive Fields,true,4,D11-061;D11-HEAD;D20-046;D20-HEAD
+mastg,MASTG-BEST-0020,Update the GMS Security Provider,true,3,D12-070;D14-044;D14-HEAD
 mastg,MASTG-BEST-0021,Ensure Proper Error and Exception Handling,true,1,D14-007
-mastg,MASTG-BEST-0027,Preventing Sensitive Data Exposure in Notifications,true,1,D20-030
+mastg,MASTG-BEST-0027,Preventing Sensitive Data Exposure in Notifications,true,2,D20-030;D20-HEAD
 mastg,MASTG-BEST-0028,WebViews Cache Cleanup,true,0,
 mastg,MASTG-BEST-0029,Implementing Resilience and RASP Signals,true,1,D21-051
 mastg,MASTG-BEST-0030,Implementing Root Detection,true,0,
@@ -57,16 +57,16 @@ mastg,MASTG-BEST-0041,Hardening Against Runtime Hooking,true,1,D21-045
 mastg,MASTG-BEST-0046,Hardening Against Emulation,true,1,D21-055
 mastg,MASTG-BEST-0047,Continuous Anti-Debugging Checks,true,0,
 mastg,MASTG-BEST-0049,Restrict and Validate Access to Exported Content Providers,true,0,
-mastg,MASTG-BEST-0050,Store Data Encrypted in App Sandbox Directory,true,1,D11-005
-mastg,MASTG-BEST-0052,Restrict Access to Android App Components,true,1,D06-008
-mastg,MASTG-BEST-0056,Use Explicit Intents for Internal IPC,true,2,D05-030;D05-040
+mastg,MASTG-BEST-0050,Store Data Encrypted in App Sandbox Directory,true,2,D11-005;D11-HEAD
+mastg,MASTG-BEST-0052,Restrict Access to Android App Components,true,2,D06-008;D06-HEAD
+mastg,MASTG-BEST-0056,Use Explicit Intents for Internal IPC,true,3,D05-030;D05-040;D05-HEAD
 mastg,MASTG-BEST-0057,Sanitize Data Coming from External Components,true,1,D08-035
-mastg,MASTG-BEST-0063,Use Immutable PendingIntents with Explicit Intents,true,1,D08-037
-mastg,MASTG-BEST-0066,Implementing Storage Integrity Checks on Android,true,2,D21-036;D23-003
-mastg,MASTG-BEST-0070,Verify Android App Links with autoVerify and Digital Asset Links,true,0,
-mastg,MASTG-BEST-0071,Validate Input Parameters in Deep Link and Custom URL Scheme Handlers,true,0,
+mastg,MASTG-BEST-0063,Use Immutable PendingIntents with Explicit Intents,true,2,D08-037;D08-HEAD
+mastg,MASTG-BEST-0066,Implementing Storage Integrity Checks on Android,true,4,D15-HEAD;D21-036;D23-003;D23-HEAD
+mastg,MASTG-BEST-0070,Verify Android App Links with autoVerify and Digital Asset Links,true,1,D09-HEAD
+mastg,MASTG-BEST-0071,Validate Input Parameters in Deep Link and Custom URL Scheme Handlers,true,1,D09-HEAD
 mastg,MASTG-DEMO-0001,File System Snapshots from External Storage,true,0,
-mastg,MASTG-DEMO-0002,External Storage APIs Tracing with Frida,true,1,D11-041
+mastg,MASTG-DEMO-0002,External Storage APIs Tracing with Frida,true,2,D11-041;D11-HEAD
 mastg,MASTG-DEMO-0003,App Writing to External Storage without Scoped Storage Restrictions,true,0,
 mastg,MASTG-DEMO-0004,App Writing to External Storage with Scoped Storage Restrictions,true,0,
 mastg,MASTG-DEMO-0005,App Writing to External Storage via the MediaStore API,true,0,
@@ -84,7 +84,7 @@ mastg,MASTG-DEMO-0025,Uses of Build.VERSION.SDK_INT with semgrep,true,0,
 mastg,MASTG-DEMO-0027,Runtime Use of KeyguardManager.isDeviceSecure and BiometricManager.canAuthenticate APIs with Frida,true,0,
 mastg,MASTG-DEMO-0028,Uses of KeyguardManager.isDeviceSecure and BiometricManager.canAuthenticate with semgrep,true,0,
 mastg,MASTG-DEMO-0029,Uses of WebViews Allowing Content Access with semgrep,true,0,
-mastg,MASTG-DEMO-0030,Uses of WebViews Allowing Content Access with Frida,true,1,D10-001
+mastg,MASTG-DEMO-0030,Uses of WebViews Allowing Content Access with Frida,true,2,D10-001;D10-HEAD
 mastg,MASTG-DEMO-0031,Uses of WebViews Allowing Local File Access with Frida,true,0,
 mastg,MASTG-DEMO-0032,Uses of WebViews Allowing Local File Access with semgrep,true,0,
 mastg,MASTG-DEMO-0033,Dangerous Permissions in the AndroidManifest with semgrep,true,0,
@@ -155,37 +155,37 @@ mastg,MASTG-DEMO-0140,Attacker App Registering for Internal Implicit Intent,true
 mastg,MASTG-DEMO-0141,Attacker App Returning Malicious ContentProvider Filename,true,0,
 mastg,MASTG-DEMO-0147,Uses of Insecure PendingIntent,true,0,
 mastg,MASTG-DEMO-0151,Deep Link Intent Filter Missing android:autoVerify with semgrep,true,0,
-mastg,MASTG-DEMO-0152,Custom URL Scheme Handler Without Input Validation with semgrep,true,1,D09-012
+mastg,MASTG-DEMO-0152,Custom URL Scheme Handler Without Input Validation with semgrep,true,2,D09-012;D09-HEAD
 mastg,MASTG-DEMO-0156,SafeBrowsing Disabled Detection with semgrep,true,0,
 mastg,MASTG-DEMO-0157,Uses of WebViewClient URL Loading Handlers with semgrep,true,0,
 mastg,MASTG-DEMO-0158,Runtime Use of WebViewClient URL Loading Handlers with Frida,true,0,
 mastg,MASTG-KNOW-0001,Biometric Authentication,true,2,D13-074;D13-076
 mastg,MASTG-KNOW-0002,FingerprintManager,true,0,
 mastg,MASTG-KNOW-0003,App Signing,true,0,
-mastg,MASTG-KNOW-0004,Third-Party Libraries,true,2,D02-043;D17-061
-mastg,MASTG-KNOW-0005,Memory Corruption Bugs,true,15,D16-005;D16-018;D16-020;D16-024;D16-025;D16-026;D16-027;D16-028;D16-029;D16-030;D16-031;D16-033;D16-035;D16-037;D16-045
-mastg,MASTG-KNOW-0006,Binary Protection Mechanisms,true,6,D16-008;D16-009;D16-012;D16-013;D16-034;D16-053
+mastg,MASTG-KNOW-0004,Third-Party Libraries,true,3,D02-043;D17-061;D17-HEAD
+mastg,MASTG-KNOW-0005,Memory Corruption Bugs,true,16,D16-005;D16-018;D16-020;D16-024;D16-025;D16-026;D16-027;D16-028;D16-029;D16-030;D16-031;D16-033;D16-035;D16-037;D16-045;D16-HEAD
+mastg,MASTG-KNOW-0006,Binary Protection Mechanisms,true,7,D16-008;D16-009;D16-012;D16-013;D16-034;D16-053;D16-HEAD
 mastg,MASTG-KNOW-0007,Debuggable Apps,true,2,D02-029;D21-046
-mastg,MASTG-KNOW-0008,Debugging Information and Debug Symbols,true,1,D16-015
-mastg,MASTG-KNOW-0009,StrictMode,true,1,D20-013
-mastg,MASTG-KNOW-0010,Exception Handling,true,3,D14-007;D14-008;D14-044
-mastg,MASTG-KNOW-0011,Security Provider,true,3,D12-001;D12-070;D14-044
-mastg,MASTG-KNOW-0012,Key Generation,true,4,D12-001;D12-005;D12-025;D12-029
+mastg,MASTG-KNOW-0008,Debugging Information and Debug Symbols,true,2,D16-015;D16-HEAD
+mastg,MASTG-KNOW-0009,StrictMode,true,2,D20-013;D20-HEAD
+mastg,MASTG-KNOW-0010,Exception Handling,true,4,D14-007;D14-008;D14-044;D14-HEAD
+mastg,MASTG-KNOW-0011,Security Provider,true,4,D12-001;D12-070;D12-HEAD;D14-044
+mastg,MASTG-KNOW-0012,Key Generation,true,5,D12-001;D12-005;D12-025;D12-029;D13-074
 mastg,MASTG-KNOW-0013,Random Number Generation,true,3,D12-001;D12-033;D12-034
 mastg,MASTG-KNOW-0014,Android Network Security Configuration,true,7,D14-001;D14-016;D14-026;D14-027;D14-035;D22-072;D22-073
-mastg,MASTG-KNOW-0015,Certificate Pinning,true,5,D14-003;D14-034;D14-035;D19-039;D19-075
+mastg,MASTG-KNOW-0015,Certificate Pinning,true,6,D14-003;D14-034;D14-035;D19-039;D19-075;D19-HEAD
 mastg,MASTG-KNOW-0016,TBD,true,0,
-mastg,MASTG-KNOW-0017,App Permissions,true,9,D01-039;D03-005;D03-009;D03-010;D03-019;D03-066;D25-008;D25-009;D25-015
-mastg,MASTG-KNOW-0018,WebViews,true,3,D10-032;D10-033;D22-074
-mastg,MASTG-KNOW-0019,Deep Links,true,5,D09-002;D09-006;D09-021;D09-022;D09-026
-mastg,MASTG-KNOW-0020,Inter-Process Communication (IPC) Mechanisms,true,4,D01-037;D06-007;D25-005;D25-022
-mastg,MASTG-KNOW-0021,Object Serialization,true,2,D17-043;D17-054
+mastg,MASTG-KNOW-0017,App Permissions,true,12,D01-039;D01-HEAD;D03-005;D03-009;D03-010;D03-019;D03-066;D03-HEAD;D25-008;D25-009;D25-015;D25-HEAD
+mastg,MASTG-KNOW-0018,WebViews,true,5,D10-032;D10-033;D10-HEAD;D19-HEAD;D22-074
+mastg,MASTG-KNOW-0019,Deep Links,true,6,D09-002;D09-006;D09-021;D09-022;D09-026;D09-HEAD
+mastg,MASTG-KNOW-0020,Inter-Process Communication (IPC) Mechanisms,true,6,D01-037;D06-007;D06-HEAD;D25-005;D25-022;D25-HEAD
+mastg,MASTG-KNOW-0021,Object Serialization,true,3,D17-043;D17-054;D17-HEAD
 mastg,MASTG-KNOW-0022,Overlay Attacks,true,1,D04-047
-mastg,MASTG-KNOW-0023,Enforced Updating,true,1,D15-083
-mastg,MASTG-KNOW-0024,Pending Intents,true,3,D08-037;D08-040;D22-012
-mastg,MASTG-KNOW-0025,Explicit vs Implicit Intents,true,5,D05-030;D05-040;D05-042;D05-044;D08-035
-mastg,MASTG-KNOW-0026,Third-party Services Embedded in the App,true,2,D18-006;D18-056
-mastg,MASTG-KNOW-0027,Root Detection,true,2,D21-004;D21-033
+mastg,MASTG-KNOW-0023,Enforced Updating,true,2,D15-083;D15-HEAD
+mastg,MASTG-KNOW-0024,Pending Intents,true,4,D08-037;D08-040;D08-HEAD;D22-012
+mastg,MASTG-KNOW-0025,Explicit vs Implicit Intents,true,7,D05-030;D05-040;D05-042;D05-044;D05-HEAD;D08-035;D17-HEAD
+mastg,MASTG-KNOW-0026,Third-party Services Embedded in the App,true,3,D18-006;D18-056;D18-HEAD
+mastg,MASTG-KNOW-0027,Root Detection,true,3,D21-004;D21-033;D21-HEAD
 mastg,MASTG-KNOW-0028,Anti-Debugging,true,2,D02-032;D21-046
 mastg,MASTG-KNOW-0029,File Integrity Checks,true,0,
 mastg,MASTG-KNOW-0030,Reverse Engineering Tool Detection,true,4,D21-004;D21-008;D21-009;D21-045
@@ -194,26 +194,26 @@ mastg,MASTG-KNOW-0032,Runtime Integrity Verification,true,2,D21-037;D21-045
 mastg,MASTG-KNOW-0033,Obfuscation,true,2,D21-051;D21-052
 mastg,MASTG-KNOW-0034,Device Binding,true,2,D21-026;D21-028
 mastg,MASTG-KNOW-0035,Google Play Integrity API,true,6,D21-006;D21-014;D21-015;D21-018;D21-019;D21-020
-mastg,MASTG-KNOW-0036,Shared Preferences,true,4,D11-011;D11-012;D21-036;D23-003
-mastg,MASTG-KNOW-0037,SQLite Database,true,1,D11-022
-mastg,MASTG-KNOW-0038,SQLCipher Database,true,1,D11-023
-mastg,MASTG-KNOW-0039,Firebase Real-time Databases,true,3,D11-032;D18-001;D18-014
-mastg,MASTG-KNOW-0040,Realm Databases,true,2,D11-004;D11-016
-mastg,MASTG-KNOW-0041,Internal Storage,true,1,D11-005
-mastg,MASTG-KNOW-0042,External Storage,true,7,D07-058;D07-072;D11-026;D11-041;D11-046;D17-011;D22-021
-mastg,MASTG-KNOW-0043,Android KeyStore,true,2,D12-004;D12-048
+mastg,MASTG-KNOW-0036,Shared Preferences,true,7,D11-011;D11-012;D11-HEAD;D15-HEAD;D21-036;D23-003;D23-HEAD
+mastg,MASTG-KNOW-0037,SQLite Database,true,2,D11-022;D11-HEAD
+mastg,MASTG-KNOW-0038,SQLCipher Database,true,2,D11-023;D11-HEAD
+mastg,MASTG-KNOW-0039,Firebase Real-time Databases,true,5,D11-032;D11-HEAD;D18-001;D18-014;D18-HEAD
+mastg,MASTG-KNOW-0040,Realm Databases,true,3,D11-004;D11-016;D11-HEAD
+mastg,MASTG-KNOW-0041,Internal Storage,true,2,D11-005;D11-HEAD
+mastg,MASTG-KNOW-0042,External Storage,true,9,D07-058;D07-072;D11-026;D11-041;D11-046;D11-HEAD;D17-011;D17-HEAD;D22-021
+mastg,MASTG-KNOW-0043,Android KeyStore,true,3,D12-004;D12-048;D13-074
 mastg,MASTG-KNOW-0044,Key Attestation,true,2,D21-026;D21-031
 mastg,MASTG-KNOW-0045,Secure Key Import into Keystore,true,0,
 mastg,MASTG-KNOW-0046,BouncyCastle KeyStore,true,1,D22-017
-mastg,MASTG-KNOW-0047,Cryptographic Key Storage,true,1,D12-004
+mastg,MASTG-KNOW-0047,Cryptographic Key Storage,true,2,D12-004;D13-074
 mastg,MASTG-KNOW-0048,KeyChain,true,0,
-mastg,MASTG-KNOW-0049,Logs,true,2,D20-007;D25-015
-mastg,MASTG-KNOW-0050,Backups,true,1,D11-051
-mastg,MASTG-KNOW-0051,Process Memory,true,2,D11-066;D11-067
+mastg,MASTG-KNOW-0049,Logs,true,4,D20-007;D20-HEAD;D25-015;D25-HEAD
+mastg,MASTG-KNOW-0050,Backups,true,2,D11-051;D11-HEAD
+mastg,MASTG-KNOW-0051,Process Memory,true,3,D11-066;D11-067;D11-HEAD
 mastg,MASTG-KNOW-0052,User Interface Components,true,0,
-mastg,MASTG-KNOW-0053,Screenshots,true,1,D20-040
-mastg,MASTG-KNOW-0054,App Notifications,true,1,D20-030
-mastg,MASTG-KNOW-0055,Keyboard Cache,true,2,D11-061;D20-046
+mastg,MASTG-KNOW-0053,Screenshots,true,2,D20-040;D20-HEAD
+mastg,MASTG-KNOW-0054,App Notifications,true,2,D20-030;D20-HEAD
+mastg,MASTG-KNOW-0055,Keyboard Cache,true,4,D11-061;D11-HEAD;D20-046;D20-HEAD
 mastg,MASTG-KNOW-0105,User-Initiated Screenshots and Screen Recording,true,0,
 mastg,MASTG-KNOW-0106,App-Initiated Screenshots and Screen Recording,true,0,
 mastg,MASTG-KNOW-0107,Screenshots and Screen Recording Detection,true,0,
@@ -225,59 +225,59 @@ mastg,MASTG-KNOW-0113,Using Disassemblers and Decompilers,true,0,
 mastg,MASTG-KNOW-0114,Debugging and Tracing,true,0,
 mastg,MASTG-KNOW-0115,Dynamic Binary Instrumentation,true,0,
 mastg,MASTG-KNOW-0116,Symbolic Execution,true,0,
-mastg,MASTG-KNOW-0117,Android ContentProvider,true,11,D07-038;D07-041;D08-006;D08-010;D08-011;D08-033;D08-052;D08-053;D08-055;D08-058;D22-071
+mastg,MASTG-KNOW-0117,Android ContentProvider,true,12,D07-038;D07-041;D08-006;D08-010;D08-011;D08-033;D08-052;D08-053;D08-055;D08-058;D08-HEAD;D22-071
 mastg,MASTG-KNOW-0118,Runtime Application Self-Protection (RASP),true,2,D21-005;D21-045
 mastg,MASTG-KNOW-0119,Key Attestation,true,0,
 mastg,MASTG-KNOW-0120,Device Attestation,true,0,
 mastg,MASTG-KNOW-0132,Android Activities,true,2,D04-003;D22-070
-mastg,MASTG-KNOW-0133,Android Services,true,3,D06-002;D06-003;D06-004
-mastg,MASTG-KNOW-0134,Android Broadcast Receivers,true,6,D05-002;D05-003;D05-033;D05-034;D22-030;D22-031
-mastg,MASTG-KNOW-0138,URI Schemes in Android Intent Results,true,3,D07-059;D08-035;D08-036
-mastg,MASTG-KNOW-0142,Android DataStore,true,2,D11-004;D11-014
-mastg,MASTG-TECH-0001,Accessing the Device Shell,true,1,D26-001
-mastg,MASTG-TECH-0002,Host-Device Data Transfer,true,2,D04-043;D11-005
-mastg,MASTG-TECH-0003,Obtaining and Extracting Apps,true,8,D01-001;D01-013;D01-032;D02-001;D02-002;D02-004;D02-040;D26-018
+mastg,MASTG-KNOW-0133,Android Services,true,5,D06-002;D06-003;D06-004;D06-HEAD;D22-070
+mastg,MASTG-KNOW-0134,Android Broadcast Receivers,true,8,D05-002;D05-003;D05-033;D05-034;D05-HEAD;D22-030;D22-031;D22-070
+mastg,MASTG-KNOW-0138,URI Schemes in Android Intent Results,true,4,D07-059;D08-035;D08-036;D08-HEAD
+mastg,MASTG-KNOW-0142,Android DataStore,true,3,D11-004;D11-014;D11-HEAD
+mastg,MASTG-TECH-0001,Accessing the Device Shell,true,2,D26-001;D26-HEAD
+mastg,MASTG-TECH-0002,Host-Device Data Transfer,true,4,D04-043;D11-005;D11-HEAD;D20-HEAD
+mastg,MASTG-TECH-0003,Obtaining and Extracting Apps,true,10,D01-001;D01-013;D01-032;D01-HEAD;D02-001;D02-002;D02-004;D02-040;D02-HEAD;D26-018
 mastg,MASTG-TECH-0004,Repackaging Apps,true,1,D26-008
 mastg,MASTG-TECH-0005,Installing Apps,true,0,
 mastg,MASTG-TECH-0006,Listing Installed Apps,true,0,
-mastg,MASTG-TECH-0007,Exploring the App Package,true,7,D02-002;D02-037;D02-051;D18-001;D18-002;D18-005;D26-018
-mastg,MASTG-TECH-0008,Accessing App Data Directories,true,11,D11-002;D11-003;D11-004;D11-005;D11-032;D21-036;D23-003;D23-004;D23-014;D23-015;D23-058
-mastg,MASTG-TECH-0009,Monitoring System Logs,true,8,D20-007;D20-014;D21-050;D23-058;D23-064;D26-016;D26-073;D27-032
-mastg,MASTG-TECH-0010,Basic Network Monitoring/Sniffing,true,5,D14-004;D14-005;D14-018;D14-042;D26-004
+mastg,MASTG-TECH-0007,Exploring the App Package,true,8,D02-002;D02-037;D02-051;D18-001;D18-002;D18-005;D18-HEAD;D26-018
+mastg,MASTG-TECH-0008,Accessing App Data Directories,true,14,D11-002;D11-003;D11-004;D11-005;D11-032;D11-HEAD;D21-036;D21-HEAD;D23-003;D23-004;D23-014;D23-015;D23-058;D23-HEAD
+mastg,MASTG-TECH-0009,Monitoring System Logs,true,10,D20-007;D20-014;D20-HEAD;D21-050;D23-058;D23-064;D26-016;D26-073;D27-032;D27-HEAD
+mastg,MASTG-TECH-0010,Basic Network Monitoring/Sniffing,true,7,D14-004;D14-005;D14-018;D14-042;D14-HEAD;D20-HEAD;D26-004
 mastg,MASTG-TECH-0011,Setting Up an Interception Proxy,true,8,D14-002;D14-006;D14-018;D14-028;D26-001;D26-004;D26-005;D26-008
-mastg,MASTG-TECH-0012,Bypassing Certificate Pinning,true,1,D14-038
+mastg,MASTG-TECH-0012,Bypassing Certificate Pinning,true,2,D14-038;D17-HEAD
 mastg,MASTG-TECH-0013,Reverse Engineering Android Apps,true,2,D21-051;D26-019
 mastg,MASTG-TECH-0014,Static Analysis on Android,true,1,D26-025
 mastg,MASTG-TECH-0015,Dynamic Analysis on Android,true,0,
-mastg,MASTG-TECH-0016,Disassembling Code to Smali,true,1,D26-020
-mastg,MASTG-TECH-0017,Decompiling Java Code,true,1,D26-019
-mastg,MASTG-TECH-0018,Disassembling Native Code,true,5,D16-018;D16-020;D16-032;D21-046;D26-059
-mastg,MASTG-TECH-0019,Retrieving Strings,true,11,D01-034;D01-058;D01-063;D14-019;D18-001;D18-003;D18-005;D19-012;D19-013;D26-024;D26-029
+mastg,MASTG-TECH-0016,Disassembling Code to Smali,true,2,D21-051;D26-020
+mastg,MASTG-TECH-0017,Decompiling Java Code,true,2,D21-051;D26-019
+mastg,MASTG-TECH-0018,Disassembling Native Code,true,7,D16-018;D16-020;D16-032;D16-HEAD;D21-046;D21-051;D26-059
+mastg,MASTG-TECH-0019,Retrieving Strings,true,13,D01-034;D01-058;D01-063;D14-019;D18-001;D18-003;D18-005;D18-HEAD;D19-012;D19-013;D19-HEAD;D26-024;D26-029
 mastg,MASTG-TECH-0020,Retrieving Cross References,true,3,D01-034;D01-063;D26-029
 mastg,MASTG-TECH-0021,Information Gathering - API Usage,true,0,
-mastg,MASTG-TECH-0022,Information Gathering - Network Communication,true,4,D01-058;D01-063;D15-001;D26-024
-mastg,MASTG-TECH-0023,Reviewing Decompiled Java Code,true,5,D06-007;D06-009;D26-019;D27-008;D27-047
-mastg,MASTG-TECH-0024,Reviewing Disassembled Native Code,true,5,D16-018;D16-020;D16-032;D16-051;D26-059
+mastg,MASTG-TECH-0022,Information Gathering - Network Communication,true,6,D01-058;D01-063;D15-001;D15-HEAD;D20-HEAD;D26-024
+mastg,MASTG-TECH-0023,Reviewing Decompiled Java Code,true,8,D06-007;D06-009;D06-HEAD;D21-051;D26-019;D27-008;D27-047;D27-HEAD
+mastg,MASTG-TECH-0024,Reviewing Disassembled Native Code,true,6,D16-018;D16-020;D16-032;D16-051;D21-051;D26-059
 mastg,MASTG-TECH-0025,Automated Static Analysis,true,3,D26-025;D26-026;D26-027
 mastg,MASTG-TECH-0026,Dynamic Analysis on Non-Rooted Devices,true,1,D26-009
 mastg,MASTG-TECH-0027,Get Open Files,true,1,D26-057
-mastg,MASTG-TECH-0028,Get Open Connections,true,3,D06-070;D14-018;D26-057
-mastg,MASTG-TECH-0029,Listing Loaded Native Libraries,true,3,D16-002;D17-001;D26-059
+mastg,MASTG-TECH-0028,Get Open Connections,true,4,D06-070;D06-HEAD;D14-018;D26-057
+mastg,MASTG-TECH-0029,Listing Loaded Native Libraries,true,4,D16-002;D17-001;D17-HEAD;D26-059
 mastg,MASTG-TECH-0030,Sandbox Inspection,true,1,D26-057
 mastg,MASTG-TECH-0031,Debugging,true,6,D02-030;D21-046;D21-047;D21-048;D26-038;D26-056
 mastg,MASTG-TECH-0032,Execution Tracing,true,3,D21-055;D26-046;D26-057
-mastg,MASTG-TECH-0033,Method Tracing,true,4,D12-002;D16-017;D18-057;D26-046
+mastg,MASTG-TECH-0033,Method Tracing,true,7,D12-002;D12-HEAD;D16-017;D18-057;D18-HEAD;D26-046;D27-HEAD
 mastg,MASTG-TECH-0034,Native Code Tracing,true,4,D16-004;D16-007;D16-017;D16-023
-mastg,MASTG-TECH-0035,JNI Tracing,true,4,D16-004;D16-017;D16-022;D26-058
+mastg,MASTG-TECH-0035,JNI Tracing,true,5,D16-004;D16-017;D16-022;D26-058;D27-HEAD
 mastg,MASTG-TECH-0036,Emulation-based Analysis,true,0,
 mastg,MASTG-TECH-0037,Symbolic Execution,true,1,D16-044
 mastg,MASTG-TECH-0038,Patching,true,3,D26-009;D26-020;D26-056
 mastg,MASTG-TECH-0039,Repackaging & Re-Signing,true,5,D14-038;D21-037;D26-008;D26-009;D26-022
 mastg,MASTG-TECH-0040,Waiting for the Debugger,true,4,D02-030;D21-046;D26-038;D26-056
-mastg,MASTG-TECH-0041,Library Injection,true,4,D17-002;D17-013;D19-020;D26-009
-mastg,MASTG-TECH-0042,Getting Loaded Classes and Methods Dynamically,true,6,D06-010;D17-002;D17-003;D26-028;D26-043;D26-048
-mastg,MASTG-TECH-0043,Method Hooking,true,26,D05-002;D05-046;D05-047;D06-004;D06-010;D08-002;D08-003;D08-035;D10-001;D10-003;D12-002;D15-084;D18-057;D21-008;D21-045;D22-007;D22-009;D23-002;D26-028;D26-043;D26-049;D26-052;D26-053;D26-054;D26-055;D26-063
-mastg,MASTG-TECH-0044,Process Exploration,true,8,D11-066;D16-013;D16-014;D16-035;D16-042;D16-049;D26-044;D26-059
+mastg,MASTG-TECH-0041,Library Injection,true,5,D17-002;D17-013;D17-HEAD;D19-020;D26-009
+mastg,MASTG-TECH-0042,Getting Loaded Classes and Methods Dynamically,true,8,D06-010;D06-HEAD;D17-002;D17-003;D17-HEAD;D26-028;D26-043;D26-048
+mastg,MASTG-TECH-0043,Method Hooking,true,35,D05-002;D05-046;D05-047;D05-HEAD;D06-004;D06-010;D06-HEAD;D08-002;D08-003;D08-035;D10-001;D10-003;D10-HEAD;D11-HEAD;D12-002;D13-HEAD;D15-084;D18-057;D18-HEAD;D20-HEAD;D21-008;D21-045;D22-007;D22-009;D22-HEAD;D23-002;D26-028;D26-043;D26-049;D26-052;D26-053;D26-054;D26-055;D26-063;D27-HEAD
+mastg,MASTG-TECH-0044,Process Exploration,true,9,D11-066;D11-HEAD;D16-013;D16-014;D16-035;D16-042;D16-049;D26-044;D26-059
 mastg,MASTG-TECH-0045,Runtime Reverse Engineering,true,1,D26-059
 mastg,MASTG-TECH-0047,Reverse Engineering,true,0,
 mastg,MASTG-TECH-0048,Static Analysis,true,0,
@@ -285,7 +285,7 @@ mastg,MASTG-TECH-0049,Dynamic Analysis,true,0,
 mastg,MASTG-TECH-0050,Binary Analysis,true,0,
 mastg,MASTG-TECH-0051,Tampering and Runtime Instrumentation,true,0,
 mastg,MASTG-TECH-0071,Retrieving Strings,true,0,
-mastg,MASTG-TECH-0100,Logging Sensitive Data from Network Traffic,true,5,D18-057;D18-060;D20-002;D20-024;D20-025
+mastg,MASTG-TECH-0100,Logging Sensitive Data from Network Traffic,true,7,D18-057;D18-060;D18-HEAD;D20-002;D20-024;D20-025;D20-HEAD
 mastg,MASTG-TECH-0108,Taint Analysis,true,1,D26-025
 mastg,MASTG-TECH-0109,Intercepting Flutter HTTPS Traffic,true,2,D19-039;D26-060
 mastg,MASTG-TECH-0115,Obtaining Compiler-Provided Security Features,true,4,D16-008;D16-010;D16-011;D16-012
@@ -298,50 +298,50 @@ mastg,MASTG-TECH-0122,Passive Eavesdropping,true,0,
 mastg,MASTG-TECH-0123,Achieving a MITM Position via ARP Spoofing,true,0,
 mastg,MASTG-TECH-0124,Achieving a MITM Position Using a Rogue Access Point,true,0,
 mastg,MASTG-TECH-0125,Intercepting Xamarin Traffic,true,0,
-mastg,MASTG-TECH-0126,Obtaining App Permissions,true,5,D01-039;D03-054;D03-055;D26-021;D26-066
-mastg,MASTG-TECH-0127,Inspecting an App's Backup Data,true,3,D03-068;D03-070;D11-051
-mastg,MASTG-TECH-0128,Performing a Backup and Restore of App Data,true,7,D03-068;D03-070;D11-051;D11-053;D22-003;D22-013;D22-076
-mastg,MASTG-TECH-0129,Verifying Android Dependencies at Runtime,true,1,D17-060
-mastg,MASTG-TECH-0130,Software Composition Analysis (SCA) of Android Dependencies by Creating a SBOM,true,2,D02-059;D17-059
-mastg,MASTG-TECH-0131,Software Composition Analysis (SCA) of Android Dependencies at Build Time,true,2,D02-060;D17-059
+mastg,MASTG-TECH-0126,Obtaining App Permissions,true,6,D01-039;D03-054;D03-055;D03-HEAD;D26-021;D26-066
+mastg,MASTG-TECH-0127,Inspecting an App's Backup Data,true,4,D03-068;D03-070;D11-051;D11-HEAD
+mastg,MASTG-TECH-0128,Performing a Backup and Restore of App Data,true,9,D03-068;D03-070;D11-051;D11-053;D11-HEAD;D22-003;D22-013;D22-076;D22-HEAD
+mastg,MASTG-TECH-0129,Verifying Android Dependencies at Runtime,true,2,D17-060;D17-HEAD
+mastg,MASTG-TECH-0130,Software Composition Analysis (SCA) of Android Dependencies by Creating a SBOM,true,3,D02-059;D17-059;D17-HEAD
+mastg,MASTG-TECH-0131,Software Composition Analysis (SCA) of Android Dependencies at Build Time,true,3,D02-060;D17-059;D17-HEAD
 mastg,MASTG-TECH-0140,Obtaining Debugging Information and Symbols,true,3,D16-003;D16-015;D16-041
-mastg,MASTG-TECH-0141,Inspecting the Merged AndroidManifest,true,8,D01-035;D02-043;D03-001;D03-073;D19-001;D19-004;D22-001;D26-021
-mastg,MASTG-TECH-0142,Inspecting WebView Storage,true,5,D02-032;D10-046;D11-018;D11-031;D19-024
+mastg,MASTG-TECH-0141,Inspecting the Merged AndroidManifest,true,9,D01-035;D02-043;D03-001;D03-073;D19-001;D19-004;D22-001;D22-HEAD;D26-021
+mastg,MASTG-TECH-0142,Inspecting WebView Storage,true,7,D02-032;D10-046;D11-018;D11-031;D11-HEAD;D19-024;D20-HEAD
 mastg,MASTG-TECH-0143,Monitor File System Operations in WebViews,true,1,D26-057
 mastg,MASTG-TECH-0144,Bypassing Root Detection,true,1,D21-033
 mastg,MASTG-TECH-0145,Working with XAPK Files,true,6,D01-001;D01-002;D02-004;D02-040;D19-002;D26-018
-mastg,MASTG-TECH-0148,Interacting with Android ContentProviders,true,9,D07-005;D07-007;D07-008;D07-017;D07-018;D07-019;D07-036;D26-032;D26-036
-mastg,MASTG-TECH-0150,Analyzing the AndroidManifest,true,12,D01-035;D02-029;D03-001;D03-002;D03-073;D14-001;D14-016;D14-027;D19-001;D19-004;D22-001;D26-021
+mastg,MASTG-TECH-0148,Interacting with Android ContentProviders,true,10,D07-005;D07-007;D07-008;D07-017;D07-018;D07-019;D07-036;D07-HEAD;D26-032;D26-036
+mastg,MASTG-TECH-0150,Analyzing the AndroidManifest,true,13,D01-035;D02-029;D03-001;D03-002;D03-073;D14-001;D14-016;D14-027;D19-001;D19-004;D22-001;D22-HEAD;D26-021
 mastg,MASTG-TECH-0151,Analyzing the Network Security Configuration,true,4,D14-016;D14-017;D14-022;D19-075
 mastg,MASTG-TECH-0156,Reverse Engineering Flutter Applications,true,8,D01-028;D19-032;D19-033;D19-034;D19-035;D19-036;D19-040;D26-060
-mastg,MASTG-TECH-0157,Extracting Bundled Native Libraries,true,3,D16-001;D16-003;D16-011
-mastg,MASTG-TECH-0159,Verify Usage of File-Based Content Providers,true,3,D07-028;D07-057;D07-059
-mastg,MASTG-TECH-0160,Enumerating Activities,true,16,D01-035;D01-037;D03-003;D03-004;D03-033;D04-001;D04-003;D04-004;D04-018;D04-070;D19-017;D19-042;D19-065;D22-011;D22-070;D26-032
-mastg,MASTG-TECH-0161,Enumerating Services,true,6,D01-035;D06-001;D06-002;D06-007;D06-027;D06-032
-mastg,MASTG-TECH-0162,Enumerating Broadcast Receivers,true,7,D01-035;D03-040;D05-001;D05-002;D05-004;D05-009;D22-030
-mastg,MASTG-TECH-0163,Enumerating Content Providers,true,6,D01-035;D07-001;D07-003;D07-004;D07-022;D22-071
-mastg,MASTG-TECH-0164,Sniffing Implicit Intents and Broadcasts,true,6,D04-024;D05-030;D05-036;D05-038;D05-041;D26-032
-mastg,MASTG-TECH-0165,"Identifying Compilers, Obfuscators, and Packers in Android Apps",true,11,D01-022;D01-023;D17-076;D19-001;D19-005;D19-061;D19-078;D21-004;D21-052;D26-023;D27-004
-mastg,MASTG-TECH-0172,Listing Deep Links,true,12,D01-005;D01-047;D01-048;D04-058;D09-001;D09-002;D09-004;D09-009;D09-010;D09-047;D19-010;D19-041
-mastg,MASTG-TECH-0173,Monitoring Deep Link Handlers at Runtime with Frida,true,10,D09-007;D09-010;D09-012;D09-013;D09-041;D09-047;D19-010;D19-041;D26-054;D26-055
-mastg,MASTG-TECH-0174,Verifying App Link Website Association,true,8,D09-014;D09-015;D09-016;D09-017;D09-019;D09-022;D09-055;D19-041
+mastg,MASTG-TECH-0157,Extracting Bundled Native Libraries,true,4,D16-001;D16-003;D16-011;D21-051
+mastg,MASTG-TECH-0159,Verify Usage of File-Based Content Providers,true,4,D07-028;D07-057;D07-059;D07-HEAD
+mastg,MASTG-TECH-0160,Enumerating Activities,true,18,D01-035;D01-037;D03-003;D03-004;D03-033;D04-001;D04-003;D04-004;D04-018;D04-070;D04-HEAD;D19-017;D19-042;D19-065;D22-011;D22-070;D22-HEAD;D26-032
+mastg,MASTG-TECH-0161,Enumerating Services,true,12,D01-035;D01-037;D03-003;D06-001;D06-002;D06-007;D06-027;D06-032;D06-HEAD;D22-011;D22-070;D22-HEAD
+mastg,MASTG-TECH-0162,Enumerating Broadcast Receivers,true,13,D01-035;D01-037;D03-003;D03-040;D05-001;D05-002;D05-004;D05-009;D05-HEAD;D22-011;D22-030;D22-070;D22-HEAD
+mastg,MASTG-TECH-0163,Enumerating Content Providers,true,11,D01-035;D01-037;D03-003;D07-001;D07-003;D07-004;D07-022;D07-HEAD;D22-011;D22-071;D22-HEAD
+mastg,MASTG-TECH-0164,Sniffing Implicit Intents and Broadcasts,true,8,D04-024;D04-HEAD;D05-030;D05-036;D05-038;D05-041;D05-HEAD;D26-032
+mastg,MASTG-TECH-0165,"Identifying Compilers, Obfuscators, and Packers in Android Apps",true,13,D01-022;D01-023;D17-076;D17-HEAD;D19-001;D19-005;D19-061;D19-078;D21-004;D21-052;D26-023;D27-004;D27-HEAD
+mastg,MASTG-TECH-0172,Listing Deep Links,true,13,D01-005;D01-047;D01-048;D04-058;D09-001;D09-002;D09-004;D09-009;D09-010;D09-047;D09-HEAD;D19-010;D19-041
+mastg,MASTG-TECH-0173,Monitoring Deep Link Handlers at Runtime with Frida,true,12,D09-007;D09-010;D09-012;D09-013;D09-041;D09-047;D09-HEAD;D19-010;D19-041;D26-054;D26-055;D27-HEAD
+mastg,MASTG-TECH-0174,Verifying App Link Website Association,true,10,D09-014;D09-015;D09-016;D09-017;D09-019;D09-022;D09-055;D09-HEAD;D19-041;D22-HEAD
 mastg,MASTG-TEST-0001,Testing Local Storage for Sensitive Data,true,0,
 mastg,MASTG-TEST-0002,Testing Local Storage for Input Validation,true,0,
-mastg,MASTG-TEST-0003,Testing Logs for Sensitive Data,true,1,D20-007
+mastg,MASTG-TEST-0003,Testing Logs for Sensitive Data,true,3,D20-007;D20-HEAD;D27-HEAD
 mastg,MASTG-TEST-0004,Determining Whether Sensitive Data Is Shared with Third Parties via Embedded Services,true,1,D18-056
-mastg,MASTG-TEST-0005,Determining Whether Sensitive Data Is Shared with Third Parties via Notifications,true,3,D06-048;D13-048;D20-030
-mastg,MASTG-TEST-0006,Determining Whether the Keyboard Cache Is Disabled for Text Input Fields,true,2,D11-061;D20-046
-mastg,MASTG-TEST-0007,Determining Whether Sensitive Stored Data Has Been Exposed via IPC Mechanisms,true,2,D06-059;D06-065
-mastg,MASTG-TEST-0008,Checking for Sensitive Data Disclosure Through the User Interface,true,1,D20-049
-mastg,MASTG-TEST-0009,Testing Backups for Sensitive Data,true,2,D11-051;D11-052
-mastg,MASTG-TEST-0010,Finding Sensitive Information in Auto-Generated Screenshots,true,2,D13-048;D20-040
-mastg,MASTG-TEST-0011,Testing Memory for Sensitive Data,true,1,D11-066
+mastg,MASTG-TEST-0005,Determining Whether Sensitive Data Is Shared with Third Parties via Notifications,true,5,D06-048;D13-048;D13-HEAD;D20-030;D20-HEAD
+mastg,MASTG-TEST-0006,Determining Whether the Keyboard Cache Is Disabled for Text Input Fields,true,4,D11-061;D11-HEAD;D20-046;D20-HEAD
+mastg,MASTG-TEST-0007,Determining Whether Sensitive Stored Data Has Been Exposed via IPC Mechanisms,true,3,D06-059;D06-065;D06-HEAD
+mastg,MASTG-TEST-0008,Checking for Sensitive Data Disclosure Through the User Interface,true,2,D20-049;D20-HEAD
+mastg,MASTG-TEST-0009,Testing Backups for Sensitive Data,true,3,D11-051;D11-052;D11-HEAD
+mastg,MASTG-TEST-0010,Finding Sensitive Information in Auto-Generated Screenshots,true,4,D13-048;D13-HEAD;D20-040;D20-HEAD
+mastg,MASTG-TEST-0011,Testing Memory for Sensitive Data,true,2,D11-066;D11-HEAD
 mastg,MASTG-TEST-0012,Testing the Device-Access-Security Policy,true,1,D13-079
 mastg,MASTG-TEST-0013,Testing Symmetric Cryptography,true,0,
 mastg,MASTG-TEST-0014,Testing the Configuration of Cryptographic Standard Algorithms,true,0,
 mastg,MASTG-TEST-0015,Testing the Purposes of Keys,true,0,
 mastg,MASTG-TEST-0016,Testing Random Number Generation,true,0,
-mastg,MASTG-TEST-0017,Testing Confirm Credentials,true,1,D13-074
+mastg,MASTG-TEST-0017,Testing Confirm Credentials,true,2,D13-074;D13-HEAD
 mastg,MASTG-TEST-0018,Testing Biometric Authentication,true,2,D12-048;D13-074
 mastg,MASTG-TEST-0019,Testing Data Encryption on the Network,true,0,
 mastg,MASTG-TEST-0020,Testing the TLS Settings,true,0,
@@ -349,25 +349,25 @@ mastg,MASTG-TEST-0021,Testing Endpoint Identify Verification,true,0,
 mastg,MASTG-TEST-0022,Testing Custom Certificate Stores and Certificate Pinning,true,1,D14-003
 mastg,MASTG-TEST-0023,Testing the Security Provider,true,0,
 mastg,MASTG-TEST-0024,Testing for App Permissions,true,0,
-mastg,MASTG-TEST-0025,Testing for Injection Flaws,true,1,D07-038
+mastg,MASTG-TEST-0025,Testing for Injection Flaws,true,2,D07-038;D07-HEAD
 mastg,MASTG-TEST-0026,Testing Implicit Intents,true,0,
 mastg,MASTG-TEST-0027,Testing for URL Loading in WebViews,true,0,
-mastg,MASTG-TEST-0028,Testing Deep Links,true,1,D09-001
-mastg,MASTG-TEST-0029,Testing for Sensitive Functionality Exposure Through IPC,true,3,D04-007;D05-013;D06-032
+mastg,MASTG-TEST-0028,Testing Deep Links,true,3,D09-001;D09-HEAD;D27-HEAD
+mastg,MASTG-TEST-0029,Testing for Sensitive Functionality Exposure Through IPC,true,5,D04-007;D05-013;D05-HEAD;D06-032;D06-HEAD
 mastg,MASTG-TEST-0030,Testing for Vulnerable Implementation of PendingIntent,true,2,D08-003;D08-037
 mastg,MASTG-TEST-0031,Testing JavaScript Execution in WebViews,true,0,
 mastg,MASTG-TEST-0032,Testing WebView Protocol Handlers,true,0,
 mastg,MASTG-TEST-0033,Testing for Java Objects Exposed Through WebViews,true,0,
-mastg,MASTG-TEST-0034,Testing Object Persistence,true,1,D17-043
+mastg,MASTG-TEST-0034,Testing Object Persistence,true,2,D17-043;D17-HEAD
 mastg,MASTG-TEST-0035,Testing for Overlay Attacks,true,0,
 mastg,MASTG-TEST-0036,Testing Enforced Updating,true,0,
 mastg,MASTG-TEST-0037,Testing WebViews Cleanup,true,0,
 mastg,MASTG-TEST-0038,Making Sure that the App is Properly Signed,true,0,
 mastg,MASTG-TEST-0039,Testing whether the App is Debuggable,true,0,
 mastg,MASTG-TEST-0040,Testing for Debugging Symbols,true,0,
-mastg,MASTG-TEST-0041,Testing for Debugging Code and Verbose Error Logging,true,1,D20-013
+mastg,MASTG-TEST-0041,Testing for Debugging Code and Verbose Error Logging,true,2,D20-013;D20-HEAD
 mastg,MASTG-TEST-0042,Checking for Weaknesses in Third Party Libraries,true,0,
-mastg,MASTG-TEST-0043,Memory Corruption Bugs,true,0,
+mastg,MASTG-TEST-0043,Memory Corruption Bugs,true,1,D16-HEAD
 mastg,MASTG-TEST-0044,Make Sure That Free Security Features Are Activated,true,0,
 mastg,MASTG-TEST-0045,Testing Root Detection,true,0,
 mastg,MASTG-TEST-0046,Testing Anti-Debugging Detection,true,1,D21-046
@@ -376,191 +376,191 @@ mastg,MASTG-TEST-0048,Testing Reverse Engineering Tools Detection,true,0,
 mastg,MASTG-TEST-0049,Testing Emulator Detection,true,1,D21-055
 mastg,MASTG-TEST-0050,Testing Runtime Integrity Checks,true,0,
 mastg,MASTG-TEST-0051,Testing Obfuscation,true,1,D21-051
-mastg,MASTG-TEST-0200,Files Written to External Storage,true,1,D11-041
-mastg,MASTG-TEST-0201,Runtime Use of APIs to Access External Storage,true,1,D11-041
-mastg,MASTG-TEST-0202,References to APIs and Permissions for Accessing External Storage,true,2,D07-072;D11-041
-mastg,MASTG-TEST-0203,Runtime Use of Logging APIs,true,4,D11-062;D20-007;D20-009;D25-015
-mastg,MASTG-TEST-0204,Insecure Random API Usage,true,2,D12-033;D27-059
+mastg,MASTG-TEST-0200,Files Written to External Storage,true,2,D11-041;D11-HEAD
+mastg,MASTG-TEST-0201,Runtime Use of APIs to Access External Storage,true,2,D11-041;D11-HEAD
+mastg,MASTG-TEST-0202,References to APIs and Permissions for Accessing External Storage,true,3,D07-072;D11-041;D11-HEAD
+mastg,MASTG-TEST-0203,Runtime Use of Logging APIs,true,8,D11-062;D11-HEAD;D20-007;D20-009;D20-HEAD;D22-HEAD;D25-015;D25-HEAD
+mastg,MASTG-TEST-0204,Insecure Random API Usage,true,4,D12-033;D12-HEAD;D27-059;D27-HEAD
 mastg,MASTG-TEST-0205,Non-random Sources Usage,true,1,D12-034
-mastg,MASTG-TEST-0206,Undeclared PII in Network Traffic Capture,true,3,D20-002;D20-019;D20-025
-mastg,MASTG-TEST-0207,Runtime Storage of Unencrypted Data in the App Sandbox,true,1,D11-005
+mastg,MASTG-TEST-0206,Undeclared PII in Network Traffic Capture,true,5,D18-HEAD;D20-002;D20-019;D20-025;D20-HEAD
+mastg,MASTG-TEST-0207,Runtime Storage of Unencrypted Data in the App Sandbox,true,2,D11-005;D11-HEAD
 mastg,MASTG-TEST-0208,Insufficient Key Sizes,true,1,D12-025
 mastg,MASTG-TEST-0212,Use of Hardcoded Cryptographic Keys in Code,true,2,D02-047;D12-005
-mastg,MASTG-TEST-0216,Sensitive Data Not Excluded From Backup,true,3,D03-068;D03-070;D11-051
-mastg,MASTG-TEST-0217,Insecure TLS Protocols Explicitly Allowed in Code,true,4,D01-061;D14-041;D15-005;D22-044
+mastg,MASTG-TEST-0216,Sensitive Data Not Excluded From Backup,true,4,D03-068;D03-070;D11-051;D11-HEAD
+mastg,MASTG-TEST-0217,Insecure TLS Protocols Explicitly Allowed in Code,true,7,D01-061;D01-HEAD;D14-041;D14-HEAD;D15-005;D22-044;D22-HEAD
 mastg,MASTG-TEST-0218,Insecure TLS Protocols in Network Traffic,true,1,D14-042
 mastg,MASTG-TEST-0221,Broken Symmetric Encryption Algorithms,true,1,D12-015
-mastg,MASTG-TEST-0222,Position Independent Code (PIC) Not Enabled,true,2,D16-008;D16-010
-mastg,MASTG-TEST-0223,Stack Canaries Not Enabled,true,4,D16-008;D16-011;D16-034;D27-059
-mastg,MASTG-TEST-0224,Usage of Insecure APK Signature Version,true,2,D02-012;D22-025
+mastg,MASTG-TEST-0222,Position Independent Code (PIC) Not Enabled,true,3,D16-008;D16-010;D16-HEAD
+mastg,MASTG-TEST-0223,Stack Canaries Not Enabled,true,7,D16-008;D16-011;D16-034;D16-HEAD;D19-HEAD;D27-059;D27-HEAD
+mastg,MASTG-TEST-0224,Usage of Insecure APK Signature Version,true,4,D02-012;D02-HEAD;D22-025;D22-HEAD
 mastg,MASTG-TEST-0225,Usage of Insecure APK Signature Key Size,true,1,D02-014
-mastg,MASTG-TEST-0226,Debuggable Flag Enabled in the AndroidManifest,true,1,D02-029
+mastg,MASTG-TEST-0226,Debuggable Flag Enabled in the AndroidManifest,true,2,D02-029;D27-HEAD
 mastg,MASTG-TEST-0227,Debugging Enabled for WebViews,true,2,D02-032;D10-049
-mastg,MASTG-TEST-0231,References to Logging APIs,true,2,D11-062;D20-007
-mastg,MASTG-TEST-0232,Broken Symmetric Encryption Modes,true,2,D12-014;D27-059
+mastg,MASTG-TEST-0231,References to Logging APIs,true,4,D11-062;D11-HEAD;D20-007;D20-HEAD
+mastg,MASTG-TEST-0232,Broken Symmetric Encryption Modes,true,3,D12-014;D27-059;D27-HEAD
 mastg,MASTG-TEST-0233,Hardcoded HTTP URLs,true,2,D01-063;D14-019
 mastg,MASTG-TEST-0234,Missing Implementation of Server Hostname Verification with SSLSockets,true,1,D14-010
-mastg,MASTG-TEST-0235,Android App Configurations Allowing Cleartext Traffic,true,4,D14-016;D14-017;D22-073;D27-059
+mastg,MASTG-TEST-0235,Android App Configurations Allowing Cleartext Traffic,true,6,D14-016;D14-017;D22-073;D22-HEAD;D27-059;D27-HEAD
 mastg,MASTG-TEST-0236,Cleartext Traffic Observed on the Network,true,4,D01-074;D14-004;D14-018;D15-006
-mastg,MASTG-TEST-0237,Cross-Platform Framework Configurations Allowing Cleartext Traffic,true,3,D01-022;D15-007;D19-075
+mastg,MASTG-TEST-0237,Cross-Platform Framework Configurations Allowing Cleartext Traffic,true,4,D01-022;D15-007;D19-075;D19-HEAD
 mastg,MASTG-TEST-0238,Runtime Use of Network APIs Transmitting Cleartext Traffic,true,3,D01-062;D14-019;D15-006
 mastg,MASTG-TEST-0239,Using low-level APIs (e.g. Socket) to set up a custom HTTP connection,true,0,
-mastg,MASTG-TEST-0242,Missing Certificate Pinning in Network Security Configuration,true,6,D01-063;D14-034;D14-036;D22-035;D22-060;D27-059
-mastg,MASTG-TEST-0243,Expired Certificate Pins in the Network Security Configuration,true,2,D14-035;D27-059
-mastg,MASTG-TEST-0244,Missing Certificate Pinning in Network Traffic,true,3,D14-003;D14-034;D27-059
-mastg,MASTG-TEST-0245,References to Platform Version APIs,true,1,D22-004
-mastg,MASTG-TEST-0247,References to APIs for Detecting Secure Screen Lock,true,1,D13-079
-mastg,MASTG-TEST-0249,Runtime Use of Secure Screen Lock Detection APIs,true,1,D13-079
-mastg,MASTG-TEST-0250,References to Content Provider Access in WebViews,true,4,D07-061;D08-006;D08-010;D10-033
+mastg,MASTG-TEST-0242,Missing Certificate Pinning in Network Security Configuration,true,7,D01-063;D14-034;D14-036;D22-035;D22-060;D27-059;D27-HEAD
+mastg,MASTG-TEST-0243,Expired Certificate Pins in the Network Security Configuration,true,3,D14-035;D27-059;D27-HEAD
+mastg,MASTG-TEST-0244,Missing Certificate Pinning in Network Traffic,true,4,D14-003;D14-034;D27-059;D27-HEAD
+mastg,MASTG-TEST-0245,References to Platform Version APIs,true,2,D22-004;D22-HEAD
+mastg,MASTG-TEST-0247,References to APIs for Detecting Secure Screen Lock,true,3,D13-079;D13-HEAD;D25-HEAD
+mastg,MASTG-TEST-0249,Runtime Use of Secure Screen Lock Detection APIs,true,2,D13-079;D25-HEAD
+mastg,MASTG-TEST-0250,References to Content Provider Access in WebViews,true,6,D07-061;D07-HEAD;D08-006;D08-010;D10-033;D22-HEAD
 mastg,MASTG-TEST-0251,Runtime Use of Content Provider Access APIs in WebViews,true,1,D10-001
-mastg,MASTG-TEST-0252,References to Local File Access in WebViews,true,2,D03-002;D10-031
-mastg,MASTG-TEST-0253,Runtime Use of Local File Access APIs in WebViews,true,1,D10-001
-mastg,MASTG-TEST-0254,Dangerous App Permissions,true,6,D03-055;D03-065;D07-072;D20-029;D20-059;D20-064
-mastg,MASTG-TEST-0255,Permission Requests Not Minimized,true,4,D20-029;D20-055;D20-056;D20-059
-mastg,MASTG-TEST-0256,Missing Permission Rationale,true,0,
-mastg,MASTG-TEST-0257,Not Resetting Unused Permissions,true,0,
-mastg,MASTG-TEST-0258,References to Keyboard Caching Attributes in UI Elements,true,2,D11-061;D20-046
-mastg,MASTG-TEST-0262,References to Backup Configurations Not Excluding Sensitive Data,true,5,D03-068;D03-069;D11-051;D22-014;D22-076
-mastg,MASTG-TEST-0263,Logging of StrictMode Violations,true,4,D11-062;D11-063;D20-013;D21-050
-mastg,MASTG-TEST-0264,Runtime Use of StrictMode APIs,true,3,D11-063;D20-013;D21-050
-mastg,MASTG-TEST-0265,References to StrictMode APIs,true,3,D11-063;D20-013;D21-050
-mastg,MASTG-TEST-0272,Identify Dependencies with Known Vulnerabilities in the Android Project,true,2,D02-060;D17-059
-mastg,MASTG-TEST-0274,Dependencies with Known Vulnerabilities in the App's SBOM,true,3,D02-059;D02-060;D17-059
+mastg,MASTG-TEST-0252,References to Local File Access in WebViews,true,3,D03-002;D10-031;D22-HEAD
+mastg,MASTG-TEST-0253,Runtime Use of Local File Access APIs in WebViews,true,2,D10-001;D22-HEAD
+mastg,MASTG-TEST-0254,Dangerous App Permissions,true,7,D03-055;D03-065;D07-072;D20-029;D20-059;D20-064;D20-HEAD
+mastg,MASTG-TEST-0255,Permission Requests Not Minimized,true,5,D20-029;D20-055;D20-056;D20-059;D20-HEAD
+mastg,MASTG-TEST-0256,Missing Permission Rationale,true,1,D20-HEAD
+mastg,MASTG-TEST-0257,Not Resetting Unused Permissions,true,1,D20-HEAD
+mastg,MASTG-TEST-0258,References to Keyboard Caching Attributes in UI Elements,true,4,D11-061;D11-HEAD;D20-046;D20-HEAD
+mastg,MASTG-TEST-0262,References to Backup Configurations Not Excluding Sensitive Data,true,7,D03-068;D03-069;D11-051;D11-HEAD;D22-014;D22-076;D22-HEAD
+mastg,MASTG-TEST-0263,Logging of StrictMode Violations,true,5,D11-062;D11-063;D20-013;D20-HEAD;D21-050
+mastg,MASTG-TEST-0264,Runtime Use of StrictMode APIs,true,5,D11-062;D11-063;D20-013;D20-HEAD;D21-050
+mastg,MASTG-TEST-0265,References to StrictMode APIs,true,5,D11-062;D11-063;D20-013;D20-HEAD;D21-050
+mastg,MASTG-TEST-0272,Identify Dependencies with Known Vulnerabilities in the Android Project,true,3,D02-060;D17-059;D17-HEAD
+mastg,MASTG-TEST-0274,Dependencies with Known Vulnerabilities in the App's SBOM,true,4,D02-059;D02-060;D17-059;D17-HEAD
 mastg,MASTG-TEST-0282,Unsafe Custom Trust Evaluation,true,3,D14-007;D14-008;D14-015
 mastg,MASTG-TEST-0283,Incorrect Implementation of Server Hostname Verification,true,2,D14-009;D14-011
 mastg,MASTG-TEST-0284,Incorrect SSL Error Handling in WebViews,true,2,D10-039;D10-040
-mastg,MASTG-TEST-0285,Outdated Android Version Allowing Trust in User-Provided CAs,true,3,D14-027;D22-035;D22-072
+mastg,MASTG-TEST-0285,Outdated Android Version Allowing Trust in User-Provided CAs,true,4,D14-027;D22-035;D22-072;D22-HEAD
 mastg,MASTG-TEST-0286,Network Security Configuration Allowing Trust in User-Provided CAs,true,1,D14-026
-mastg,MASTG-TEST-0287,Runtime Storage of Unencrypted Data via the SharedPreferences API,true,2,D11-006;D11-011
-mastg,MASTG-TEST-0288,Debugging Symbols in Native Binaries,true,1,D16-015
-mastg,MASTG-TEST-0289,Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding,true,5,D04-041;D04-042;D04-043;D04-071;D20-040
-mastg,MASTG-TEST-0291,References to Screen Capturing Prevention APIs,true,3,D04-042;D04-044;D20-040
-mastg,MASTG-TEST-0292,`setRecentsScreenshotEnabled` Not Used to Prevent Screenshots When Backgrounded,true,2,D04-044;D20-040
-mastg,MASTG-TEST-0293,`setSecure` Not Used to Prevent Screenshots in SurfaceViews,true,3,D04-044;D20-040;D20-041
-mastg,MASTG-TEST-0294,`SecureOn` Not Used to Prevent Screenshots in Compose Dialogs,true,2,D04-044;D20-040
+mastg,MASTG-TEST-0287,Runtime Storage of Unencrypted Data via the SharedPreferences API,true,3,D11-006;D11-011;D11-HEAD
+mastg,MASTG-TEST-0288,Debugging Symbols in Native Binaries,true,2,D16-015;D16-HEAD
+mastg,MASTG-TEST-0289,Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding,true,7,D04-041;D04-042;D04-043;D04-071;D04-HEAD;D20-040;D20-HEAD
+mastg,MASTG-TEST-0291,References to Screen Capturing Prevention APIs,true,5,D04-042;D04-044;D04-HEAD;D20-040;D20-HEAD
+mastg,MASTG-TEST-0292,`setRecentsScreenshotEnabled` Not Used to Prevent Screenshots When Backgrounded,true,3,D04-044;D20-040;D20-HEAD
+mastg,MASTG-TEST-0293,`setSecure` Not Used to Prevent Screenshots in SurfaceViews,true,4,D04-044;D20-040;D20-041;D20-HEAD
+mastg,MASTG-TEST-0294,`SecureOn` Not Used to Prevent Screenshots in Compose Dialogs,true,3,D04-044;D20-040;D20-HEAD
 mastg,MASTG-TEST-0295,GMS Security Provider Not Updated,true,1,D14-044
-mastg,MASTG-TEST-0304,References to Sensitive Data Unencrypted via Android Room Database,true,1,D11-022
-mastg,MASTG-TEST-0305,Sensitive Data Stored Unencrypted via DataStore,true,1,D11-022
-mastg,MASTG-TEST-0306,References to Sensitive Data Stored Unencrypted via Android Room DB,true,1,D11-014
+mastg,MASTG-TEST-0304,References to Sensitive Data Unencrypted via Android Room Database,true,3,D11-022;D11-HEAD;D27-HEAD
+mastg,MASTG-TEST-0305,Sensitive Data Stored Unencrypted via DataStore,true,2,D11-022;D11-HEAD
+mastg,MASTG-TEST-0306,References to Sensitive Data Stored Unencrypted via Android Room DB,true,2,D11-014;D11-HEAD
 mastg,MASTG-TEST-0307,References to Asymmetric Key Pairs Used For Multiple Purposes,true,2,D12-029;D22-026
 mastg,MASTG-TEST-0308,Runtime Use of Asymmetric Key Pairs Used For Multiple Purposes,true,1,D12-029
 mastg,MASTG-TEST-0309,References to Reused Initialization Vectors in Symmetric Encryption,true,0,
 mastg,MASTG-TEST-0310,Runtime Use of Reused Initialization Vectors in Symmetric Encryption,true,0,
-mastg,MASTG-TEST-0312,References to Explicit Security Provider in Cryptographic APIs,true,2,D12-070;D22-017
-mastg,MASTG-TEST-0315,Sensitive Data Exposed via Notifications,true,9,D03-002;D08-040;D13-048;D13-057;D13-085;D20-030;D20-031;D22-019;D22-047
-mastg,MASTG-TEST-0316,App Exposing User Authentication Data in Text Input Fields,true,4,D11-061;D20-042;D20-049;D27-059
-mastg,MASTG-TEST-0318,References to SDK APIs Known to Handle Sensitive User Data,true,4,D18-056;D20-003;D20-016;D20-019
-mastg,MASTG-TEST-0319,Runtime Use of SDK APIs Known to Handle Sensitive User Data,true,7,D18-057;D20-003;D20-016;D20-017;D20-018;D20-019;D20-022
-mastg,MASTG-TEST-0320,WebViews Not Cleaning Up Sensitive Data,true,3,D10-046;D10-047;D20-028
-mastg,MASTG-TEST-0324,References to Root Detection Mechanisms,true,1,D21-033
-mastg,MASTG-TEST-0325,Runtime Use of Root Detection Techniques,true,2,D21-033;D27-059
-mastg,MASTG-TEST-0326,References to APIs Allowing Fallback to Non-Biometric Authentication,true,1,D13-077
-mastg,MASTG-TEST-0327,References to APIs for Event-Bound Biometric Authentication,true,2,D13-074;D23-032
+mastg,MASTG-TEST-0312,References to Explicit Security Provider in Cryptographic APIs,true,3,D12-070;D22-017;D22-HEAD
+mastg,MASTG-TEST-0315,Sensitive Data Exposed via Notifications,true,12,D03-002;D08-040;D13-048;D13-057;D13-085;D13-HEAD;D20-030;D20-031;D20-HEAD;D22-019;D22-047;D22-HEAD
+mastg,MASTG-TEST-0316,App Exposing User Authentication Data in Text Input Fields,true,7,D11-061;D11-HEAD;D20-042;D20-049;D20-HEAD;D27-059;D27-HEAD
+mastg,MASTG-TEST-0318,References to SDK APIs Known to Handle Sensitive User Data,true,6,D18-056;D18-HEAD;D20-003;D20-016;D20-019;D20-HEAD
+mastg,MASTG-TEST-0319,Runtime Use of SDK APIs Known to Handle Sensitive User Data,true,9,D18-057;D18-HEAD;D20-003;D20-016;D20-017;D20-018;D20-019;D20-022;D20-HEAD
+mastg,MASTG-TEST-0320,WebViews Not Cleaning Up Sensitive Data,true,5,D10-046;D10-047;D13-HEAD;D20-028;D20-HEAD
+mastg,MASTG-TEST-0324,References to Root Detection Mechanisms,true,3,D21-033;D21-HEAD;D27-HEAD
+mastg,MASTG-TEST-0325,Runtime Use of Root Detection Techniques,true,3,D21-033;D27-059;D27-HEAD
+mastg,MASTG-TEST-0326,References to APIs Allowing Fallback to Non-Biometric Authentication,true,3,D13-077;D13-HEAD;D27-HEAD
+mastg,MASTG-TEST-0327,References to APIs for Event-Bound Biometric Authentication,true,3,D13-074;D23-032;D23-HEAD
 mastg,MASTG-TEST-0328,References to APIs Detecting Biometric Enrollment Changes,true,1,D13-076
-mastg,MASTG-TEST-0329,References to APIs Enforcing Authentication without Explicit User Action,true,1,D13-078
+mastg,MASTG-TEST-0329,References to APIs Enforcing Authentication without Explicit User Action,true,2,D13-078;D27-HEAD
 mastg,MASTG-TEST-0330,References to APIs for Keys used in Biometric Authentication with Extended Validity Duration,true,3,D12-004;D12-048;D13-078
-mastg,MASTG-TEST-0334,Native Code Exposed Through WebViews,true,6,D10-003;D10-004;D10-006;D10-009;D19-056;D22-074
-mastg,MASTG-TEST-0337,References to Object Deserialization of Untrusted Data,true,2,D17-043;D17-054
-mastg,MASTG-TEST-0338,References to Storage Integrity Check APIs,true,5,D15-063;D21-036;D23-003;D23-013;D27-059
-mastg,MASTG-TEST-0339,SQL Injection in Content Providers,true,4,D07-038;D07-039;D07-040;D07-041
-mastg,MASTG-TEST-0340,References to Overlay Attack Protections,true,6,D04-047;D04-048;D04-053;D20-051;D22-016;D23-034
-mastg,MASTG-TEST-0341,Runtime Use of Hook Detection Techniques,true,1,D21-045
+mastg,MASTG-TEST-0334,Native Code Exposed Through WebViews,true,9,D10-003;D10-004;D10-006;D10-009;D10-HEAD;D19-056;D19-HEAD;D22-074;D22-HEAD
+mastg,MASTG-TEST-0337,References to Object Deserialization of Untrusted Data,true,3,D17-043;D17-054;D17-HEAD
+mastg,MASTG-TEST-0338,References to Storage Integrity Check APIs,true,7,D15-063;D21-036;D23-003;D23-013;D23-HEAD;D27-059;D27-HEAD
+mastg,MASTG-TEST-0339,SQL Injection in Content Providers,true,5,D07-038;D07-039;D07-040;D07-041;D07-HEAD
+mastg,MASTG-TEST-0340,References to Overlay Attack Protections,true,9,D04-047;D04-048;D04-053;D04-HEAD;D20-051;D22-016;D22-HEAD;D23-034;D23-HEAD
+mastg,MASTG-TEST-0341,Runtime Use of Hook Detection Techniques,true,2,D21-045;D27-HEAD
 mastg,MASTG-TEST-0350,Runtime Use of Broken Symmetric Encryption Modes,true,1,D12-014
-mastg,MASTG-TEST-0351,Runtime Use of Emulator Detection Techniques,true,3,D21-033;D21-055;D27-059
-mastg,MASTG-TEST-0352,References to Debugging Detection APIs,true,2,D21-046;D27-059
-mastg,MASTG-TEST-0353,Runtime Use of Debugging Detection APIs,true,2,D21-046;D27-059
-mastg,MASTG-TEST-0355,References to Unauthorized Database Access through Content Providers,true,9,D01-035;D01-044;D03-009;D03-010;D07-001;D07-002;D07-012;D07-014;D07-021
-mastg,MASTG-TEST-0356,Runtime Verification of Unauthorized Database Access through Content Providers,true,2,D07-005;D07-068
-mastg,MASTG-TEST-0357,References to Oversharing of File-Based Content Providers,true,6,D07-057;D07-058;D07-059;D07-061;D08-006;D08-053
-mastg,MASTG-TEST-0364,Exported And Unprotected Activities That Expose Sensitive Functionality,true,5,D03-066;D04-005;D04-007;D04-010;D25-009
-mastg,MASTG-TEST-0365,Exported And Unprotected Services That Expose Sensitive Functionality,true,10,D06-002;D06-003;D06-006;D06-008;D06-015;D06-017;D06-026;D06-027;D06-032;D25-009
-mastg,MASTG-TEST-0366,Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality,true,10,D05-001;D05-003;D05-006;D05-012;D05-013;D05-014;D05-015;D05-016;D05-052;D25-009
-mastg,MASTG-TEST-0368,Insufficient Obfuscation of Security-Relevant Java/Kotlin Code,true,2,D21-051;D23-026
+mastg,MASTG-TEST-0351,Runtime Use of Emulator Detection Techniques,true,4,D21-033;D21-055;D27-059;D27-HEAD
+mastg,MASTG-TEST-0352,References to Debugging Detection APIs,true,3,D21-046;D27-059;D27-HEAD
+mastg,MASTG-TEST-0353,Runtime Use of Debugging Detection APIs,true,3,D21-046;D27-059;D27-HEAD
+mastg,MASTG-TEST-0355,References to Unauthorized Database Access through Content Providers,true,11,D01-035;D01-044;D03-009;D03-010;D03-HEAD;D07-001;D07-002;D07-012;D07-014;D07-021;D07-HEAD
+mastg,MASTG-TEST-0356,Runtime Verification of Unauthorized Database Access through Content Providers,true,3,D07-005;D07-068;D07-HEAD
+mastg,MASTG-TEST-0357,References to Oversharing of File-Based Content Providers,true,7,D07-057;D07-058;D07-059;D07-061;D07-HEAD;D08-006;D08-053
+mastg,MASTG-TEST-0364,Exported And Unprotected Activities That Expose Sensitive Functionality,true,8,D01-035;D03-066;D04-005;D04-007;D04-010;D04-HEAD;D25-009;D25-HEAD
+mastg,MASTG-TEST-0365,Exported And Unprotected Services That Expose Sensitive Functionality,true,13,D01-035;D06-002;D06-003;D06-006;D06-008;D06-015;D06-017;D06-026;D06-027;D06-032;D06-HEAD;D25-009;D25-HEAD
+mastg,MASTG-TEST-0366,Exported And Unprotected Broadcast Receivers That Expose Sensitive Functionality,true,13,D01-035;D05-001;D05-003;D05-006;D05-012;D05-013;D05-014;D05-015;D05-016;D05-052;D05-HEAD;D25-009;D25-HEAD
+mastg,MASTG-TEST-0368,Insufficient Obfuscation of Security-Relevant Java/Kotlin Code,true,3,D21-051;D23-026;D23-HEAD
 mastg,MASTG-TEST-0369,Insufficient Obfuscation of Security-Relevant Native Code,true,1,D21-051
-mastg,MASTG-TEST-0372,Implicit Intents Used for Internal App Communication,true,3,D05-040;D05-042;D08-016
-mastg,MASTG-TEST-0374,References to Implicit Intents Carrying Sensitive Extras,true,6,D05-030;D05-033;D05-034;D05-040;D05-041;D08-054
-mastg,MASTG-TEST-0375,Missing Validation of Data Returned from Implicit Intents,true,4,D05-046;D05-047;D08-035;D08-036
-mastg,MASTG-TEST-0381,References to Insecure PendingIntent Creation,true,6,D08-003;D08-037;D08-040;D08-052;D22-012;D22-032
-mastg,MASTG-TEST-0382,Runtime Use of Enforced Updating APIs,true,2,D15-083;D17-041
-mastg,MASTG-TEST-0392,References to Enforced Updating APIs,true,2,D15-083;D17-041
-mastg,MASTG-TEST-0393,Use of Unverified App Links,true,9,D01-048;D09-006;D09-014;D09-015;D09-021;D09-022;D09-026;D09-027;D09-061
-mastg,MASTG-TEST-0394,Missing Input Validation in Custom URL Scheme Handlers,true,4,D09-004;D09-041;D09-058;D09-068
+mastg,MASTG-TEST-0372,Implicit Intents Used for Internal App Communication,true,5,D05-040;D05-042;D05-HEAD;D08-016;D08-HEAD
+mastg,MASTG-TEST-0374,References to Implicit Intents Carrying Sensitive Extras,true,8,D05-030;D05-033;D05-034;D05-040;D05-041;D05-HEAD;D08-054;D08-HEAD
+mastg,MASTG-TEST-0375,Missing Validation of Data Returned from Implicit Intents,true,6,D05-046;D05-047;D05-HEAD;D08-035;D08-036;D08-HEAD
+mastg,MASTG-TEST-0381,References to Insecure PendingIntent Creation,true,8,D08-003;D08-037;D08-040;D08-052;D08-HEAD;D22-012;D22-032;D22-HEAD
+mastg,MASTG-TEST-0382,Runtime Use of Enforced Updating APIs,true,3,D15-083;D17-041;D17-HEAD
+mastg,MASTG-TEST-0392,References to Enforced Updating APIs,true,4,D15-083;D15-HEAD;D17-041;D17-HEAD
+mastg,MASTG-TEST-0393,Use of Unverified App Links,true,12,D01-048;D09-006;D09-014;D09-015;D09-021;D09-022;D09-026;D09-027;D09-061;D09-HEAD;D22-HEAD;D27-HEAD
+mastg,MASTG-TEST-0394,Missing Input Validation in Custom URL Scheme Handlers,true,6,D09-004;D09-041;D09-058;D09-068;D09-HEAD;D27-HEAD
 mastg,MASTG-TEST-0398,References to WebViewClient URL Loading Handlers,true,1,D10-020
-mastg,MASTG-TEST-0399,SafeBrowsing Disabled,true,1,D10-052
+mastg,MASTG-TEST-0399,SafeBrowsing Disabled,true,3,D10-052;D22-HEAD;D27-HEAD
 mastg,MASTG-TEST-0400,Runtime Use of WebViewClient URL Loading Handlers,true,1,D10-020
-mastg,MASTG-TOOL-0001,Frida (Android),true,15,D06-004;D06-010;D16-002;D16-004;D16-007;D16-017;D16-022;D16-047;D19-020;D20-009;D21-045;D26-001;D26-010;D26-041;D26-060
+mastg,MASTG-TOOL-0001,Frida (Android),true,20,D06-004;D06-010;D06-HEAD;D16-002;D16-004;D16-007;D16-017;D16-022;D16-047;D16-HEAD;D19-020;D20-009;D20-HEAD;D21-045;D21-HEAD;D26-001;D26-010;D26-041;D26-060;D26-HEAD
 mastg,MASTG-TOOL-0002,MobSF (Android),true,2,D26-027;D26-028
 mastg,MASTG-TOOL-0003,nm (Android),true,5,D16-003;D16-015;D16-041;D26-029;D26-058
-mastg,MASTG-TOOL-0004,adb,true,15,D01-001;D01-003;D01-037;D02-051;D03-004;D03-054;D04-001;D07-072;D22-010;D25-022;D26-001;D26-002;D26-013;D26-018;D26-036
+mastg,MASTG-TOOL-0004,adb,true,17,D01-001;D01-003;D01-037;D01-HEAD;D02-051;D03-004;D03-054;D04-001;D07-072;D22-010;D25-022;D25-HEAD;D26-001;D26-002;D26-013;D26-018;D26-036
 mastg,MASTG-TOOL-0005,Android NDK,true,0,
 mastg,MASTG-TOOL-0006,Android SDK,true,0,
 mastg,MASTG-TOOL-0007,Android Studio,true,1,D02-043
-mastg,MASTG-TOOL-0008,Android-SSL-TrustKiller,true,2,D14-038;D26-062
-mastg,MASTG-TOOL-0009,APKiD,true,12,D01-022;D01-023;D17-005;D17-076;D19-001;D19-005;D21-004;D21-043;D21-052;D21-055;D26-023;D26-060
+mastg,MASTG-TOOL-0008,Android-SSL-TrustKiller,true,3,D14-038;D14-HEAD;D26-062
+mastg,MASTG-TOOL-0009,APKiD,true,14,D01-022;D01-023;D17-005;D17-076;D17-HEAD;D19-001;D19-005;D19-HEAD;D21-004;D21-043;D21-052;D21-055;D26-023;D26-060
 mastg,MASTG-TOOL-0010,APKLab,true,1,D26-020
 mastg,MASTG-TOOL-0011,Apktool,true,12,D01-002;D01-011;D01-024;D01-029;D02-022;D19-021;D19-046;D21-051;D26-002;D26-008;D26-009;D26-020
 mastg,MASTG-TOOL-0012,apkx,true,1,D26-019
 mastg,MASTG-TOOL-0013,Busybox,true,0,
 mastg,MASTG-TOOL-0014,Bytecode Viewer,true,1,D26-019
-mastg,MASTG-TOOL-0015,drozer,true,14,D04-001;D04-004;D04-031;D05-012;D05-030;D06-002;D06-027;D06-031;D06-032;D07-004;D20-044;D26-030;D26-031;D26-032
+mastg,MASTG-TOOL-0015,drozer,true,18,D04-001;D04-004;D04-031;D04-HEAD;D05-012;D05-030;D05-HEAD;D06-002;D06-027;D06-031;D06-032;D06-HEAD;D07-004;D20-044;D20-HEAD;D26-030;D26-031;D26-032
 mastg,MASTG-TOOL-0016,gplaycli,true,0,
 mastg,MASTG-TOOL-0017,House,true,0,
 mastg,MASTG-TOOL-0018,jadx,true,7,D01-001;D01-002;D01-024;D21-051;D26-002;D26-018;D26-019
 mastg,MASTG-TOOL-0019,jdb,true,4,D02-030;D21-046;D26-038;D26-056
 mastg,MASTG-TOOL-0020,JustTrustMe,true,2,D14-038;D26-062
 mastg,MASTG-TOOL-0021,Magisk,true,3,D21-009;D21-033;D26-003
-mastg,MASTG-TOOL-0022,ProGuard,true,2,D17-005;D17-061
+mastg,MASTG-TOOL-0022,ProGuard,true,3,D17-005;D17-061;D17-HEAD
 mastg,MASTG-TOOL-0023,RootCloak Plus,true,0,
-mastg,MASTG-TOOL-0024,Scrcpy,true,3,D26-013;D26-051;D27-030
+mastg,MASTG-TOOL-0024,Scrcpy,true,4,D26-013;D26-051;D27-030;D27-HEAD
 mastg,MASTG-TOOL-0025,SSLUnpinning,true,2,D14-038;D26-062
 mastg,MASTG-TOOL-0026,Termux,true,0,
 mastg,MASTG-TOOL-0027,Xposed,true,0,
 mastg,MASTG-TOOL-0028,radare2 for Android,true,3,D16-003;D16-015;D26-059
-mastg,MASTG-TOOL-0029,objection (Android),true,5,D20-044;D21-033;D26-009;D26-050;D26-060
+mastg,MASTG-TOOL-0029,objection (Android),true,7,D11-HEAD;D20-044;D20-HEAD;D21-033;D26-009;D26-050;D26-060
 mastg,MASTG-TOOL-0030,Angr,true,2,D16-020;D16-044
 mastg,MASTG-TOOL-0031,Frida,true,2,D26-010;D26-041
-mastg,MASTG-TOOL-0032,Frida CodeShare,true,4,D09-012;D12-002;D26-054;D26-060
+mastg,MASTG-TOOL-0032,Frida CodeShare,true,6,D09-012;D09-HEAD;D12-002;D12-HEAD;D26-054;D26-060
 mastg,MASTG-TOOL-0033,Ghidra,true,3,D16-020;D16-032;D26-059
 mastg,MASTG-TOOL-0034,LIEF,true,1,D19-043
 mastg,MASTG-TOOL-0035,MobSF,true,0,
-mastg,MASTG-TOOL-0036,r2frida,true,4,D11-066;D16-023;D26-059;D26-060
+mastg,MASTG-TOOL-0036,r2frida,true,5,D11-066;D11-HEAD;D16-023;D26-059;D26-060
 mastg,MASTG-TOOL-0037,RMS Runtime Mobile Security,true,1,D16-017
 mastg,MASTG-TOOL-0038,objection,true,2,D14-038;D26-050
 mastg,MASTG-TOOL-0075,tcpdump (Android),true,2,D14-004;D14-018
 mastg,MASTG-TOOL-0076,bettercap,true,0,
-mastg,MASTG-TOOL-0077,Burp Suite,true,4,D14-002;D19-039;D20-025;D26-004
+mastg,MASTG-TOOL-0077,Burp Suite,true,5,D14-002;D19-039;D20-025;D20-HEAD;D26-004
 mastg,MASTG-TOOL-0078,MITM Relay,true,3,D01-074;D14-018;D14-024
-mastg,MASTG-TOOL-0079,ZAP (Zed Attack Proxy),true,2,D20-025;D26-004
+mastg,MASTG-TOOL-0079,ZAP (Zed Attack Proxy),true,3,D20-025;D20-HEAD;D26-004
 mastg,MASTG-TOOL-0080,tcpdump,true,0,
-mastg,MASTG-TOOL-0081,Wireshark,true,4,D14-004;D14-018;D14-042;D20-025
-mastg,MASTG-TOOL-0097,mitmproxy,true,4,D14-002;D14-005;D20-025;D26-004
+mastg,MASTG-TOOL-0081,Wireshark,true,5,D14-004;D14-018;D14-042;D20-025;D20-HEAD
+mastg,MASTG-TOOL-0097,mitmproxy,true,5,D14-002;D14-005;D20-025;D20-HEAD;D26-004
 mastg,MASTG-TOOL-0098,iaito,true,0,
 mastg,MASTG-TOOL-0099,FlowDroid,true,1,D26-025
 mastg,MASTG-TOOL-0100,reFlutter,true,5,D14-038;D19-034;D19-039;D19-043;D26-060
 mastg,MASTG-TOOL-0101,disable-flutter-tls-verification,true,3,D14-038;D19-039;D26-060
 mastg,MASTG-TOOL-0103,uber-apk-signer,true,10,D02-022;D02-041;D14-038;D19-021;D19-039;D19-043;D19-068;D21-037;D26-008;D26-009
-mastg,MASTG-TOOL-0104,hermes-dec,true,8,D01-025;D01-026;D19-006;D19-007;D19-008;D19-078;D26-060;D27-004
-mastg,MASTG-TOOL-0106,Fridump,true,1,D11-066
+mastg,MASTG-TOOL-0104,hermes-dec,true,9,D01-025;D01-026;D19-006;D19-007;D19-008;D19-078;D26-060;D27-004;D27-HEAD
+mastg,MASTG-TOOL-0106,Fridump,true,3,D11-066;D11-HEAD;D20-HEAD
 mastg,MASTG-TOOL-0107,jnitrace,true,5,D16-004;D16-017;D16-022;D16-041;D26-058
 mastg,MASTG-TOOL-0108,Corellium,true,0,
 mastg,MASTG-TOOL-0109,Nope-Proxy,true,0,
-mastg,MASTG-TOOL-0110,semgrep,true,5,D05-030;D05-041;D07-038;D14-026;D26-025
-mastg,MASTG-TOOL-0112,pidcat,true,3,D19-076;D20-007;D20-011
+mastg,MASTG-TOOL-0110,semgrep,true,6,D05-030;D05-041;D05-HEAD;D07-038;D14-026;D26-025
+mastg,MASTG-TOOL-0112,pidcat,true,4,D19-076;D20-007;D20-011;D20-HEAD
 mastg,MASTG-TOOL-0115,HTTP Toolkit,true,0,
 mastg,MASTG-TOOL-0116,blutter,true,9,D01-028;D12-003;D12-009;D19-033;D19-034;D19-035;D19-036;D19-038;D26-060
 mastg,MASTG-TOOL-0120,ProxyDroid,true,2,D14-005;D19-039
 mastg,MASTG-TOOL-0123,apksigner,true,7,D02-001;D02-011;D02-014;D09-015;D26-002;D26-008;D26-022
 mastg,MASTG-TOOL-0124,aapt2,true,5,D03-001;D03-054;D19-001;D26-021;D26-066
-mastg,MASTG-TOOL-0125,Apkleaks,true,11,D01-064;D02-046;D02-047;D12-003;D12-011;D15-007;D18-003;D18-004;D19-011;D19-012;D26-024
-mastg,MASTG-TOOL-0129,rabin2,true,9,D01-063;D11-066;D16-003;D16-011;D16-015;D16-041;D26-024;D26-058;D26-059
-mastg,MASTG-TOOL-0130,blint,true,2,D02-059;D17-059
-mastg,MASTG-TOOL-0131,dependency-check,true,3,D02-060;D17-059;D18-008
-mastg,MASTG-TOOL-0132,dependency-track,true,2,D02-060;D17-059
+mastg,MASTG-TOOL-0125,Apkleaks,true,13,D01-064;D02-046;D02-047;D12-003;D12-011;D15-007;D15-HEAD;D18-003;D18-004;D18-HEAD;D19-011;D19-012;D26-024
+mastg,MASTG-TOOL-0129,rabin2,true,10,D01-063;D11-066;D11-HEAD;D16-003;D16-011;D16-015;D16-041;D26-024;D26-058;D26-059
+mastg,MASTG-TOOL-0130,blint,true,3,D02-059;D17-059;D17-HEAD
+mastg,MASTG-TOOL-0131,dependency-check,true,5,D02-060;D17-059;D17-HEAD;D18-008;D18-HEAD
+mastg,MASTG-TOOL-0132,dependency-track,true,3,D02-060;D17-059;D17-HEAD
 mastg,MASTG-TOOL-0133,Visual Studio Code (vscode),true,0,
-mastg,MASTG-TOOL-0134,cdxgen,true,3,D02-059;D17-059;D18-008
-mastg,MASTG-TOOL-0140,frida-multiple-unpinning,true,1,D14-038
+mastg,MASTG-TOOL-0134,cdxgen,true,5,D02-059;D17-059;D17-HEAD;D18-008;D18-HEAD
+mastg,MASTG-TOOL-0140,frida-multiple-unpinning,true,2,D14-038;D27-HEAD
 mastg,MASTG-TOOL-0143,badssl,true,0,
-mastg,MASTG-TOOL-0144,gitleaks,true,9,D02-047;D12-003;D12-011;D18-003;D18-004;D19-012;D19-035;D19-037;D26-024
+mastg,MASTG-TOOL-0144,gitleaks,true,11,D02-047;D11-HEAD;D12-003;D12-011;D18-003;D18-004;D18-HEAD;D19-012;D19-035;D19-037;D26-024
 mastg,MASTG-TOOL-0145,Frooky,true,0,
 mastg,MASTG-TOOL-0146,RootBeer,true,4,D01-023;D21-004;D21-033;D26-023
 mastg,MASTG-TOOL-0147,Android RASP,true,1,D21-004
@@ -569,229 +569,229 @@ mastg,MASTG-TOOL-0149,LSPosed,true,3,D21-009;D21-033;D26-062
 mastg,MASTG-TOOL-0151,debugmepLS,true,1,D21-046
 mastg,MASTG-TOOL-0152,lldb (Android),true,5,D16-020;D16-032;D16-051;D21-046;D26-059
 mastg,MASTG-TOOL-0153,dProtect,true,1,D21-051
-maswe,MASWE-0001,Sensitive Data Stored Unencrypted in Private Storage,true,11,D09-072;D10-046;D11-001;D11-005;D11-011;D11-012;D11-013;D11-014;D11-016;D11-019;D11-022
-maswe,MASWE-0002,Sensitive Data Stored Unencrypted Outside of Private Storage,true,4,D07-057;D11-026;D11-041;D11-044
-maswe,MASWE-0003,Cryptographic Keys Stored Outside of Platform Keystore,true,3,D12-005;D12-013;D12-060
-maswe,MASWE-0004,Sensitive Data Hardcoded in the App Package,true,16,D02-047;D12-005;D12-006;D13-016;D18-002;D18-004;D18-014;D18-021;D18-024;D18-035;D18-038;D18-039;D18-043;D19-012;D19-037;D23-002
-maswe,MASWE-0005,Insertion of Sensitive Data into Logs,true,5,D11-062;D20-007;D20-009;D20-010;D25-015
-maswe,MASWE-0006,Sensitive Data Not Excluded From Backup,true,13,D03-068;D03-069;D03-070;D11-021;D11-030;D11-051;D11-052;D11-053;D11-054;D11-055;D11-056;D11-057;D21-035
+maswe,MASWE-0001,Sensitive Data Stored Unencrypted in Private Storage,true,13,D09-072;D10-046;D11-001;D11-005;D11-011;D11-012;D11-013;D11-014;D11-016;D11-019;D11-022;D11-HEAD;D27-HEAD
+maswe,MASWE-0002,Sensitive Data Stored Unencrypted Outside of Private Storage,true,6,D07-057;D07-HEAD;D11-026;D11-041;D11-044;D11-HEAD
+maswe,MASWE-0003,Cryptographic Keys Stored Outside of Platform Keystore,true,5,D02-HEAD;D12-005;D12-013;D12-060;D12-HEAD
+maswe,MASWE-0004,Sensitive Data Hardcoded in the App Package,true,19,D02-047;D12-005;D12-006;D13-016;D18-002;D18-004;D18-014;D18-021;D18-024;D18-035;D18-038;D18-039;D18-043;D18-HEAD;D19-012;D19-037;D19-HEAD;D23-002;D23-HEAD
+maswe,MASWE-0005,Insertion of Sensitive Data into Logs,true,8,D11-062;D11-HEAD;D20-007;D20-009;D20-010;D20-HEAD;D25-015;D25-HEAD
+maswe,MASWE-0006,Sensitive Data Not Excluded From Backup,true,16,D03-068;D03-069;D03-070;D03-HEAD;D11-021;D11-030;D11-051;D11-052;D11-053;D11-054;D11-055;D11-056;D11-057;D11-HEAD;D21-035;D21-HEAD
 maswe,MASWE-0007,Improper Encryption,true,10,D12-014;D12-015;D12-017;D12-018;D12-019;D12-020;D12-022;D12-029;D12-057;D12-070
 maswe,MASWE-0008,Improper Hashing,true,3,D12-016;D12-026;D12-039
 maswe,MASWE-0009,Improper Use of Message Authentication Code (MAC),true,9,D12-016;D12-017;D12-039;D12-040;D12-041;D12-042;D23-006;D23-030;D23-032
 maswe,MASWE-0010,Improper Generation of Cryptographic Signatures,true,0,
-maswe,MASWE-0011,Improper Verification of Cryptographic Signature,true,7,D02-019;D02-025;D17-015;D17-022;D17-032;D23-002;D23-010
+maswe,MASWE-0011,Improper Verification of Cryptographic Signature,true,8,D02-019;D02-025;D17-015;D17-022;D17-032;D17-HEAD;D23-002;D23-010
 maswe,MASWE-0012,Improper Random Number Generation,true,3,D12-033;D12-034;D12-035
 maswe,MASWE-0013,Improper Cryptographic Key Generation,true,2,D12-025;D12-035
 maswe,MASWE-0014,Improper Cryptographic Key Derivation,true,4,D12-012;D12-026;D12-027;D12-028
 maswe,MASWE-0015,Cryptographic Key Rotation Not Implemented,true,0,
 maswe,MASWE-0016,Cryptographic Key Access Not Restricted,true,3,D12-048;D12-060;D13-078
-maswe,MASWE-0017,Device Secure Lock Not Enforced,true,1,D13-079
-maswe,MASWE-0018,Lack of Authentication or Authorization on App Components,true,76,D01-042;D01-045;D03-003;D03-008;D03-009;D03-010;D03-012;D03-024;D03-031;D03-066;D04-007;D04-009;D05-001;D05-003;D05-004;D05-006;D05-012;D05-013;D05-014;D05-015;D05-016;D05-017;D05-022;D05-025;D05-050;D05-053;D05-059;D06-003;D06-006;D06-008;D06-015;D06-016;D06-017;D06-018;D06-019;D06-020;D06-021;D06-023;D06-024;D06-025;D06-026;D06-028;D06-029;D06-033;D06-034;D06-035;D06-041;D06-045;D06-046;D06-052;D06-053;D06-054;D06-055;D06-056;D06-058;D06-060;D06-062;D06-070;D07-005;D07-019;D07-026;D07-027;D07-057;D07-068;D09-066;D09-067;D15-015;D15-034;D23-005;D23-013;D23-016;D23-029;D25-009;D25-058;D25-061;D25-062
-maswe,MASWE-0019,Lack of Auto-fill Support for Credential Providers,true,3,D06-049;D13-089;D20-048
-maswe,MASWE-0020,Local Authentication Can Be Bypassed,true,6,D05-050;D05-052;D12-048;D13-049;D13-074;D13-078
+maswe,MASWE-0017,Device Secure Lock Not Enforced,true,3,D13-079;D13-HEAD;D25-HEAD
+maswe,MASWE-0018,Lack of Authentication or Authorization on App Components,true,84,D01-042;D01-045;D01-HEAD;D03-003;D03-008;D03-009;D03-010;D03-012;D03-024;D03-031;D03-066;D04-007;D04-009;D04-HEAD;D05-001;D05-003;D05-004;D05-006;D05-012;D05-013;D05-014;D05-015;D05-016;D05-017;D05-022;D05-025;D05-050;D05-053;D05-059;D05-HEAD;D06-003;D06-006;D06-008;D06-015;D06-016;D06-017;D06-018;D06-019;D06-020;D06-021;D06-023;D06-024;D06-025;D06-026;D06-028;D06-029;D06-033;D06-034;D06-035;D06-041;D06-045;D06-046;D06-052;D06-053;D06-054;D06-055;D06-056;D06-058;D06-060;D06-062;D06-070;D06-HEAD;D07-005;D07-019;D07-026;D07-027;D07-057;D07-068;D07-HEAD;D09-066;D09-067;D09-HEAD;D15-015;D15-034;D15-HEAD;D23-005;D23-013;D23-016;D23-029;D25-009;D25-058;D25-061;D25-062;D25-HEAD
+maswe,MASWE-0019,Lack of Auto-fill Support for Credential Providers,true,4,D06-049;D13-089;D20-048;D20-HEAD
+maswe,MASWE-0020,Local Authentication Can Be Bypassed,true,7,D05-050;D05-052;D05-HEAD;D12-048;D13-049;D13-074;D13-078
 maswe,MASWE-0021,Fallback to Non-biometric Credentials Allowed for Sensitive Transactions,true,1,D13-077
 maswe,MASWE-0022,Crypto Keys Not Invalidated on New Biometric Enrollment,true,2,D12-050;D13-076
-maswe,MASWE-0023,Step-Up Authentication Not Implemented for Sensitive Actions,true,6,D04-068;D06-050;D12-049;D13-070;D23-032;D23-035
-maswe,MASWE-0024,Sensitive Data Accessible After Session Termination,true,8,D11-033;D11-034;D11-037;D11-054;D13-018;D13-025;D13-026;D13-090
-maswe,MASWE-0025,Lack of Non-Repudiation for Critical Actions,true,6,D20-051;D23-032;D23-033;D23-053;D23-054;D23-055
-maswe,MASWE-0026,Network Traffic Not Encrypted,true,17,D14-016;D14-017;D14-018;D14-019;D14-020;D14-021;D14-022;D14-041;D14-042;D14-043;D14-045;D14-046;D14-050;D14-051;D19-075;D22-044;D25-057
+maswe,MASWE-0023,Step-Up Authentication Not Implemented for Sensitive Actions,true,8,D04-068;D04-HEAD;D06-050;D06-HEAD;D12-049;D13-070;D23-032;D23-035
+maswe,MASWE-0024,Sensitive Data Accessible After Session Termination,true,9,D11-033;D11-034;D11-037;D11-054;D11-HEAD;D13-018;D13-025;D13-026;D13-090
+maswe,MASWE-0025,Lack of Non-Repudiation for Critical Actions,true,7,D20-051;D20-HEAD;D23-032;D23-033;D23-053;D23-054;D23-055
+maswe,MASWE-0026,Network Traffic Not Encrypted,true,20,D14-016;D14-017;D14-018;D14-019;D14-020;D14-021;D14-022;D14-041;D14-042;D14-043;D14-045;D14-046;D14-050;D14-051;D14-HEAD;D19-075;D19-HEAD;D22-044;D25-057;D25-HEAD
 maswe,MASWE-0027,Insecure Certificate Validation,true,13,D10-039;D14-007;D14-008;D14-009;D14-010;D14-011;D14-012;D14-013;D14-015;D14-026;D14-027;D14-030;D14-044
 maswe,MASWE-0028,Insecure Identity Pinning,true,6,D14-029;D14-030;D14-034;D14-035;D14-036;D14-037
-maswe,MASWE-0029,Insecure Deep Links,true,6,D08-022;D08-026;D09-014;D09-026;D09-041;D14-023
-maswe,MASWE-0030,Improper Use of the Clipboard,true,4,D11-059;D13-048;D20-043;D20-045
-maswe,MASWE-0032,Insecure Intents,true,17,D05-030;D05-041;D05-042;D06-055;D08-001;D08-005;D08-007;D08-008;D08-009;D08-017;D08-022;D08-024;D08-025;D08-026;D08-037;D08-045;D25-062
-maswe,MASWE-0033,Sensitive Native Functionality Exposed in WebViews,true,11,D10-003;D10-004;D10-010;D10-072;D19-018;D19-022;D19-040;D19-049;D19-051;D19-053;D19-056
-maswe,MASWE-0034,WebViews Allow Access to Local Resources with Untrusted Content,true,2,D10-031;D10-033
-maswe,MASWE-0035,WebViews Loading Untrusted Content,true,5,D10-020;D10-052;D19-022;D19-047;D19-056
-maswe,MASWE-0036,Unnecessary Exposure of Sensitive Data via the User Interface,true,14,D04-047;D06-034;D06-049;D06-051;D06-056;D07-066;D08-046;D11-038;D11-061;D20-042;D20-046;D20-047;D20-048;D20-049
-maswe,MASWE-0037,Unnecessary Exposure of Sensitive Data via Notifications,true,6,D06-048;D13-048;D13-085;D20-030;D20-031;D20-033
-maswe,MASWE-0038,Insufficient Protection of Sensitive Data from Screenshots or Screen Recordings,true,7,D04-042;D11-039;D20-017;D20-036;D20-038;D20-040;D20-041
-maswe,MASWE-0039,App Vulnerable to Overlay Attacks,true,5,D04-047;D04-048;D06-047;D21-023;D23-034
-maswe,MASWE-0040,Sensitive Data Leaked via Accessibility Services,true,10,D04-050;D06-049;D11-038;D13-048;D20-042;D20-048;D20-050;D21-023;D23-034;D23-053
-maswe,MASWE-0041,Running on a Recent Platform Version Not Ensured,true,1,D22-004
-maswe,MASWE-0042,Latest Platform Version Not Targeted,true,2,D22-001;D22-004
-maswe,MASWE-0043,Enforced Updating Not Implemented,true,2,D15-083;D17-041
-maswe,MASWE-0044,Dependencies with Known Vulnerabilities,true,8,D02-055;D02-060;D16-006;D17-059;D17-063;D17-076;D18-006;D18-008
-maswe,MASWE-0045,Compiler-Provided Security Features Not Used,true,8,D16-001;D16-008;D16-009;D16-010;D16-011;D16-012;D16-013;D16-034
-maswe,MASWE-0046,Use of Deprecated APIs or Functionality,true,1,D22-017
+maswe,MASWE-0029,Insecure Deep Links,true,9,D08-022;D08-026;D08-HEAD;D09-014;D09-026;D09-041;D09-HEAD;D14-023;D25-HEAD
+maswe,MASWE-0030,Improper Use of the Clipboard,true,6,D11-059;D11-HEAD;D13-048;D20-043;D20-045;D20-HEAD
+maswe,MASWE-0032,Insecure Intents,true,20,D05-030;D05-041;D05-042;D05-HEAD;D06-055;D08-001;D08-005;D08-007;D08-008;D08-009;D08-017;D08-022;D08-024;D08-025;D08-026;D08-037;D08-045;D08-HEAD;D25-062;D25-HEAD
+maswe,MASWE-0033,Sensitive Native Functionality Exposed in WebViews,true,13,D10-003;D10-004;D10-010;D10-072;D10-HEAD;D19-018;D19-022;D19-040;D19-049;D19-051;D19-053;D19-056;D19-HEAD
+maswe,MASWE-0034,WebViews Allow Access to Local Resources with Untrusted Content,true,3,D10-031;D10-033;D19-HEAD
+maswe,MASWE-0035,WebViews Loading Untrusted Content,true,6,D10-020;D10-052;D19-022;D19-047;D19-056;D19-HEAD
+maswe,MASWE-0036,Unnecessary Exposure of Sensitive Data via the User Interface,true,19,D04-047;D04-HEAD;D06-034;D06-049;D06-051;D06-056;D06-HEAD;D07-066;D07-HEAD;D08-046;D11-038;D11-061;D11-HEAD;D20-042;D20-046;D20-047;D20-048;D20-049;D20-HEAD
+maswe,MASWE-0037,Unnecessary Exposure of Sensitive Data via Notifications,true,8,D06-048;D06-HEAD;D13-048;D13-085;D20-030;D20-031;D20-033;D20-HEAD
+maswe,MASWE-0038,Insufficient Protection of Sensitive Data from Screenshots or Screen Recordings,true,10,D04-042;D04-HEAD;D11-039;D11-HEAD;D20-017;D20-036;D20-038;D20-040;D20-041;D20-HEAD
+maswe,MASWE-0039,App Vulnerable to Overlay Attacks,true,6,D04-047;D04-048;D04-HEAD;D06-047;D21-023;D23-034
+maswe,MASWE-0040,Sensitive Data Leaked via Accessibility Services,true,14,D04-050;D04-HEAD;D06-049;D06-HEAD;D11-038;D11-HEAD;D13-048;D20-042;D20-048;D20-050;D20-HEAD;D21-023;D23-034;D23-053
+maswe,MASWE-0041,Running on a Recent Platform Version Not Ensured,true,2,D22-004;D22-HEAD
+maswe,MASWE-0042,Latest Platform Version Not Targeted,true,3,D22-001;D22-004;D22-HEAD
+maswe,MASWE-0043,Enforced Updating Not Implemented,true,4,D15-083;D15-HEAD;D17-041;D17-HEAD
+maswe,MASWE-0044,Dependencies with Known Vulnerabilities,true,11,D02-055;D02-060;D16-006;D16-HEAD;D17-059;D17-063;D17-076;D17-HEAD;D18-006;D18-008;D18-HEAD
+maswe,MASWE-0045,Compiler-Provided Security Features Not Used,true,9,D16-001;D16-008;D16-009;D16-010;D16-011;D16-012;D16-013;D16-034;D16-HEAD
+maswe,MASWE-0046,Use of Deprecated APIs or Functionality,true,2,D22-017;D22-HEAD
 maswe,MASWE-0047,Using Non-Standard APIs for Security-Critical Functionality,true,2,D03-045;D12-023
-maswe,MASWE-0048,Malicious Code Included in the App,true,5,D02-055;D17-063;D17-075;D17-076;D19-025
-maswe,MASWE-0049,Unsafe Dynamic Code Loading,true,13,D02-027;D14-047;D14-049;D17-001;D17-004;D17-008;D17-013;D17-021;D19-025;D19-026;D19-027;D19-030;D19-072
-maswe,MASWE-0050,Unsafe Handling of Untrusted Data,true,37,D05-027;D05-029;D05-046;D05-047;D05-051;D06-030;D06-066;D07-028;D07-029;D07-038;D07-062;D08-027;D08-028;D08-032;D08-035;D08-036;D09-068;D11-045;D11-056;D15-090;D16-005;D16-018;D16-019;D16-020;D16-031;D16-035;D16-037;D16-041;D17-043;D17-045;D17-046;D17-047;D17-048;D17-049;D17-054;D17-055;D23-002
+maswe,MASWE-0048,Malicious Code Included in the App,true,7,D02-055;D17-063;D17-075;D17-076;D17-HEAD;D19-025;D19-HEAD
+maswe,MASWE-0049,Unsafe Dynamic Code Loading,true,15,D02-027;D14-047;D14-049;D17-001;D17-004;D17-008;D17-013;D17-021;D17-HEAD;D19-025;D19-026;D19-027;D19-030;D19-072;D19-HEAD
+maswe,MASWE-0050,Unsafe Handling of Untrusted Data,true,48,D05-027;D05-029;D05-046;D05-047;D05-051;D05-HEAD;D06-030;D06-066;D06-HEAD;D07-028;D07-029;D07-038;D07-062;D07-HEAD;D08-027;D08-028;D08-032;D08-035;D08-036;D08-HEAD;D09-068;D09-HEAD;D11-045;D11-056;D11-HEAD;D15-090;D15-HEAD;D16-005;D16-018;D16-019;D16-020;D16-031;D16-035;D16-037;D16-041;D16-HEAD;D17-043;D17-045;D17-046;D17-047;D17-048;D17-049;D17-054;D17-055;D17-HEAD;D20-HEAD;D23-002;D25-HEAD
 maswe,MASWE-0051,Root/Jailbreak Detection Not Implemented,true,4,D21-013;D21-033;D21-034;D21-035
 maswe,MASWE-0052,App Virtualization Environment Detection Not Implemented,true,0,
 maswe,MASWE-0053,Emulated or Virtual Device Detection Not Implemented,true,2,D21-033;D21-055
 maswe,MASWE-0054,Device Attestation Not Implemented,true,7,D21-006;D21-013;D21-014;D21-015;D21-020;D21-021;D21-026
 maswe,MASWE-0055,Malware Detection Not Implemented,true,0,
 maswe,MASWE-0056,App Attestation Not Implemented,true,4,D02-012;D02-014;D21-006;D21-014
-maswe,MASWE-0057,App Resources Integrity Not Verified,true,9,D15-063;D21-035;D21-036;D23-002;D23-003;D23-004;D23-014;D23-015;D23-018
+maswe,MASWE-0057,App Resources Integrity Not Verified,true,10,D15-063;D15-HEAD;D21-035;D21-036;D23-002;D23-003;D23-004;D23-014;D23-015;D23-018
 maswe,MASWE-0058,Runtime Code Integrity Not Verified,true,6,D21-005;D21-037;D21-038;D21-041;D21-042;D21-045
-maswe,MASWE-0059,Code Obfuscation Not Implemented,true,2,D21-051;D23-026
+maswe,MASWE-0059,Code Obfuscation Not Implemented,true,3,D19-HEAD;D21-051;D23-026
 maswe,MASWE-0060,Resource Obfuscation Not Implemented,true,0,
-maswe,MASWE-0061,Debug Artifacts Not Removed,true,7,D11-062;D11-063;D16-015;D20-013;D21-048;D21-049;D21-050
-maswe,MASWE-0062,No Application-Level Payload Encryption,true,1,D15-084
+maswe,MASWE-0061,Debug Artifacts Not Removed,true,10,D11-062;D11-063;D11-HEAD;D16-015;D16-HEAD;D20-013;D20-HEAD;D21-048;D21-049;D21-050
+maswe,MASWE-0062,No Application-Level Payload Encryption,true,2,D15-084;D15-HEAD
 maswe,MASWE-0063,Debug Mechanisms Not Disabled,true,5,D02-029;D02-032;D02-035;D10-049;D14-028
 maswe,MASWE-0064,Debugger Detection Not Implemented,true,1,D21-046
 maswe,MASWE-0065,Dynamic Analysis Tools Detection Not Implemented,true,0,
 maswe,MASWE-0066,Inadequate Permission Management,true,2,D03-055;D03-065
-maswe,MASWE-0067,Lack of Anonymization or Pseudonymisation Measures,true,4,D20-018;D20-029;D20-053;D20-058
-maswe,MASWE-0068,Incorrect Use of Identifiers for User Tracking,true,5,D20-052;D20-053;D20-054;D20-056;D20-057
-maswe,MASWE-0069,Usage of Non-Privacy-Preserving Functionality,true,3,D06-057;D18-059;D18-065
-maswe,MASWE-0070,Inadequate Awareness for Privacy Relevant Actions,true,1,D25-074
+maswe,MASWE-0067,Lack of Anonymization or Pseudonymisation Measures,true,5,D20-018;D20-029;D20-053;D20-058;D20-HEAD
+maswe,MASWE-0068,Incorrect Use of Identifiers for User Tracking,true,6,D20-052;D20-053;D20-054;D20-056;D20-057;D20-HEAD
+maswe,MASWE-0069,Usage of Non-Privacy-Preserving Functionality,true,4,D06-057;D18-059;D18-065;D18-HEAD
+maswe,MASWE-0070,Inadequate Awareness for Privacy Relevant Actions,true,2,D25-074;D25-HEAD
 maswe,MASWE-0071,Inadequate Defaults for Privacy Relevant Actions,true,0,
 maswe,MASWE-0072,Inadequate Privacy Policy,true,0,
-maswe,MASWE-0073,Inadequate Data Collection Declarations,true,13,D18-056;D18-057;D18-058;D18-060;D20-016;D20-017;D20-018;D20-020;D20-021;D20-025;D20-026;D20-055;D20-059
-maswe,MASWE-0074,Inadequate Tracking Domains Declarations,true,3,D20-020;D20-025;D20-053
-maswe,MASWE-0075,Non-Reproducible Builds,true,2,D17-006;D17-076
+maswe,MASWE-0073,Inadequate Data Collection Declarations,true,15,D18-056;D18-057;D18-058;D18-060;D18-HEAD;D20-016;D20-017;D20-018;D20-020;D20-021;D20-025;D20-026;D20-055;D20-059;D20-HEAD
+maswe,MASWE-0074,Inadequate Tracking Domains Declarations,true,4,D20-020;D20-025;D20-053;D20-HEAD
+maswe,MASWE-0075,Non-Reproducible Builds,true,3,D17-006;D17-076;D17-HEAD
 maswe,MASWE-0076,Lack of Proper Data Management Controls,true,0,
 maswe,MASWE-0077,Inadequate Data Visibility Controls,true,0,
-maswe,MASWE-0078,Inadequate or Ambiguous User Consent Mechanisms,true,3,D18-058;D18-065;D25-074
-masvs,MASVS-AUTH-1,The app uses secure authentication and authorization protocols and follows the relevant best practices.,true,9,D01-060;D01-061;D04-007;D13-089;D15-005;D23-001;D23-002;D23-005;D23-032
-masvs,MASVS-AUTH-2,The app performs local authentication securely according to the platform best practices.,true,4,D13-074;D13-076;D13-077;D13-078
-masvs,MASVS-AUTH-3,The app secures sensitive operations with additional authentication.,true,3,D09-066;D13-056;D13-070
-masvs,MASVS-CODE-1,The app requires an up-to-date platform version.,true,1,D22-004
-masvs,MASVS-CODE-2,The app has a mechanism for enforcing app updates.,true,2,D15-083;D17-041
-masvs,MASVS-CODE-3,The app only uses software components without known vulnerabilities.,true,7,D02-027;D02-060;D16-008;D16-009;D16-010;D16-011;D17-059
-masvs,MASVS-CODE-4,The app validates and sanitizes all untrusted inputs.,true,4,D05-047;D14-047;D15-090;D21-036
-masvs,MASVS-CRYPTO-1,The app employs current strong cryptography and uses it according to industry best practices.,true,0,
-masvs,MASVS-CRYPTO-2,The app performs key management according to industry best practices.,true,3,D12-013;D13-076;D13-078
-masvs,MASVS-NETWORK-1,The app secures all network traffic according to the current best practices.,true,1,D14-001
-masvs,MASVS-NETWORK-2,The app performs identity pinning for all remote endpoints under the developer's control.,true,1,D14-034
-masvs,MASVS-PLATFORM-1,The app uses IPC mechanisms securely.,true,7,D01-035;D01-042;D01-045;D01-048;D06-015;D06-070;D22-011
-masvs,MASVS-PLATFORM-2,The app uses WebViews securely.,true,0,
-masvs,MASVS-PLATFORM-3,The app uses the user interface securely.,true,2,D04-042;D04-047
-masvs,MASVS-PRIVACY-1,The app minimizes access to sensitive data and resources.,true,7,D18-057;D18-058;D18-059;D20-020;D20-021;D20-023;D20-025
-masvs,MASVS-PRIVACY-2,The app prevents identification of the user.,true,1,D20-053
-masvs,MASVS-PRIVACY-3,The app is transparent about data collection and usage.,true,2,D20-025;D20-026
+maswe,MASWE-0078,Inadequate or Ambiguous User Consent Mechanisms,true,6,D18-058;D18-065;D18-HEAD;D25-074;D25-HEAD;D27-HEAD
+masvs,MASVS-AUTH-1,The app uses secure authentication and authorization protocols and follows the relevant best practices.,true,16,D01-060;D01-061;D01-HEAD;D04-007;D04-HEAD;D09-HEAD;D13-089;D13-HEAD;D15-005;D15-HEAD;D23-001;D23-002;D23-005;D23-032;D23-HEAD;D27-HEAD
+masvs,MASVS-AUTH-2,The app performs local authentication securely according to the platform best practices.,true,6,D12-HEAD;D13-074;D13-076;D13-077;D13-078;D13-HEAD
+masvs,MASVS-AUTH-3,The app secures sensitive operations with additional authentication.,true,5,D09-066;D09-HEAD;D13-056;D13-070;D13-HEAD
+masvs,MASVS-CODE-1,The app requires an up-to-date platform version.,true,2,D22-004;D22-HEAD
+masvs,MASVS-CODE-2,The app has a mechanism for enforcing app updates.,true,4,D15-083;D15-HEAD;D17-041;D17-HEAD
+masvs,MASVS-CODE-3,The app only uses software components without known vulnerabilities.,true,11,D02-027;D02-060;D02-HEAD;D16-008;D16-009;D16-010;D16-011;D16-HEAD;D17-059;D17-HEAD;D22-HEAD
+masvs,MASVS-CODE-4,The app validates and sanitizes all untrusted inputs.,true,18,D05-047;D05-HEAD;D08-HEAD;D09-HEAD;D10-HEAD;D14-047;D14-HEAD;D15-090;D15-HEAD;D16-008;D16-011;D16-HEAD;D17-HEAD;D19-HEAD;D21-036;D21-HEAD;D26-HEAD;D27-HEAD
+masvs,MASVS-CRYPTO-1,The app employs current strong cryptography and uses it according to industry best practices.,true,1,D12-HEAD
+masvs,MASVS-CRYPTO-2,The app performs key management according to industry best practices.,true,6,D12-013;D12-HEAD;D13-076;D13-078;D13-HEAD;D25-HEAD
+masvs,MASVS-NETWORK-1,The app secures all network traffic according to the current best practices.,true,5,D10-HEAD;D14-001;D14-HEAD;D19-HEAD;D26-HEAD
+masvs,MASVS-NETWORK-2,The app performs identity pinning for all remote endpoints under the developer's control.,true,2,D14-034;D14-HEAD
+masvs,MASVS-PLATFORM-1,The app uses IPC mechanisms securely.,true,17,D01-035;D01-042;D01-045;D01-048;D01-HEAD;D03-HEAD;D04-HEAD;D05-HEAD;D06-015;D06-070;D06-HEAD;D08-HEAD;D09-HEAD;D11-HEAD;D22-011;D22-HEAD;D27-HEAD
+masvs,MASVS-PLATFORM-2,The app uses WebViews securely.,true,3,D10-HEAD;D19-HEAD;D27-HEAD
+masvs,MASVS-PLATFORM-3,The app uses the user interface securely.,true,5,D04-042;D04-047;D04-HEAD;D11-HEAD;D20-HEAD
+masvs,MASVS-PRIVACY-1,The app minimizes access to sensitive data and resources.,true,11,D03-HEAD;D18-057;D18-058;D18-059;D18-HEAD;D20-020;D20-021;D20-023;D20-025;D20-HEAD;D27-HEAD
+masvs,MASVS-PRIVACY-2,The app prevents identification of the user.,true,2,D20-053;D20-HEAD
+masvs,MASVS-PRIVACY-3,The app is transparent about data collection and usage.,true,3,D20-025;D20-026;D20-HEAD
 masvs,MASVS-PRIVACY-4,The app offers user control over their data.,true,2,D18-058;D20-061
-masvs,MASVS-RESILIENCE-1,The app validates the integrity of the platform.,true,3,D21-013;D21-034;D21-053
-masvs,MASVS-RESILIENCE-2,The app implements anti-tampering mechanisms.,true,4,D02-012;D02-014;D21-036;D23-003
-masvs,MASVS-RESILIENCE-3,The app implements anti-static analysis mechanisms.,true,7,D15-084;D16-007;D16-015;D16-023;D21-050;D23-020;D23-026
-masvs,MASVS-RESILIENCE-4,The app implements anti-dynamic analysis techniques.,true,1,D02-029
-masvs,MASVS-STORAGE-1,The app securely stores sensitive data.,true,2,D02-047;D12-013
-masvs,MASVS-STORAGE-2,The app prevents leakage of sensitive data.,true,2,D03-068;D03-069
-attack,T1398,Boot or Logon Initialization Scripts,true,2,D05-024;D25-042
-attack,T1404,Exploitation for Privilege Escalation,true,0,
-attack,T1406,Obfuscated Files or Information,true,4,D02-049;D12-005;D12-012;D26-023
+masvs,MASVS-RESILIENCE-1,The app validates the integrity of the platform.,true,5,D21-013;D21-034;D21-053;D21-HEAD;D27-HEAD
+masvs,MASVS-RESILIENCE-2,The app implements anti-tampering mechanisms.,true,6,D02-012;D02-014;D02-HEAD;D21-036;D23-003;D23-HEAD
+masvs,MASVS-RESILIENCE-3,The app implements anti-static analysis mechanisms.,true,11,D15-084;D15-HEAD;D16-007;D16-015;D16-023;D16-HEAD;D19-HEAD;D21-050;D23-020;D23-026;D23-HEAD
+masvs,MASVS-RESILIENCE-4,The app implements anti-dynamic analysis techniques.,true,2,D02-029;D02-HEAD
+masvs,MASVS-STORAGE-1,The app securely stores sensitive data.,true,12,D02-047;D02-HEAD;D10-HEAD;D11-HEAD;D12-013;D12-HEAD;D18-HEAD;D19-HEAD;D20-HEAD;D25-HEAD;D26-HEAD;D27-HEAD
+masvs,MASVS-STORAGE-2,The app prevents leakage of sensitive data.,true,8,D03-068;D03-069;D03-HEAD;D10-HEAD;D11-HEAD;D20-HEAD;D25-HEAD;D27-HEAD
+attack,T1398,Boot or Logon Initialization Scripts,true,4,D05-024;D05-HEAD;D25-042;D25-HEAD
+attack,T1404,Exploitation for Privilege Escalation,true,1,D16-HEAD
+attack,T1406,Obfuscated Files or Information,true,8,D02-049;D02-HEAD;D12-005;D12-012;D12-HEAD;D19-HEAD;D26-023;D26-HEAD
 attack,T1406.001,Steganography,true,0,
-attack,T1406.002,Software Packing,true,3,D02-049;D17-004;D26-023
-attack,T1407,Download New Code at Runtime,true,13,D02-027;D02-042;D02-049;D10-004;D11-046;D16-002;D16-039;D17-007;D19-018;D19-025;D19-026;D19-072;D22-074
-attack,T1409,Stored Application Data,true,5,D02-029;D02-031;D08-012;D08-034;D08-053
-attack,T1414,Clipboard Data,true,3,D20-043;D20-044;D20-045
-attack,T1417,Input Capture,true,1,D03-061
-attack,T1417.001,Keylogging,true,1,D03-057
-attack,T1417.002,GUI Input Capture,true,7,D03-061;D04-032;D04-047;D04-049;D04-050;D04-052;D23-034
-attack,T1418,Software Discovery,true,2,D01-043;D22-075
-attack,T1418.001,Security Software Discovery,true,1,D01-043
-attack,T1420,File and Directory Discovery,true,0,
-attack,T1421,System Network Connections Discovery,true,0,
-attack,T1422,System Network Configuration Discovery,true,1,D20-052
-attack,T1422.001,Internet Connection Discovery,true,1,D01-077
-attack,T1422.002,Wi-Fi Discovery,true,0,
-attack,T1423,Network Service Scanning,true,0,
-attack,T1424,Process Discovery,true,0,
-attack,T1426,System Information Discovery,true,3,D12-012;D15-090;D22-023
-attack,T1428,Exploitation of Remote Services,true,3,D06-072;D15-034;D15-090
-attack,T1429,Audio Capture,true,3,D03-062;D20-064;D22-028
-attack,T1430,Location Tracking,true,4,D03-048;D03-062;D03-063;D20-058
-attack,T1430.001,Remote Device Management Services,true,0,
+attack,T1406.002,Software Packing,true,5,D02-049;D02-HEAD;D17-004;D17-HEAD;D26-023
+attack,T1407,Download New Code at Runtime,true,20,D02-027;D02-042;D02-049;D02-HEAD;D09-HEAD;D10-004;D10-HEAD;D11-046;D16-002;D16-039;D16-HEAD;D17-007;D17-HEAD;D19-018;D19-025;D19-026;D19-072;D19-HEAD;D22-074;D22-HEAD
+attack,T1409,Stored Application Data,true,10,D02-029;D02-031;D02-HEAD;D07-HEAD;D08-012;D08-034;D08-053;D08-HEAD;D10-HEAD;D11-HEAD
+attack,T1414,Clipboard Data,true,4,D20-043;D20-044;D20-045;D20-HEAD
+attack,T1417,Input Capture,true,2,D03-061;D03-HEAD
+attack,T1417.001,Keylogging,true,4,D03-057;D03-HEAD;D11-HEAD;D20-HEAD
+attack,T1417.002,GUI Input Capture,true,10,D03-061;D03-HEAD;D04-032;D04-047;D04-049;D04-050;D04-052;D04-HEAD;D23-034;D23-HEAD
+attack,T1418,Software Discovery,true,4,D01-043;D01-HEAD;D22-075;D22-HEAD
+attack,T1418.001,Security Software Discovery,true,3,D01-043;D01-HEAD;D21-HEAD
+attack,T1420,File and Directory Discovery,true,2,D01-HEAD;D11-HEAD
+attack,T1421,System Network Connections Discovery,true,1,D01-HEAD
+attack,T1422,System Network Configuration Discovery,true,2,D01-HEAD;D20-052
+attack,T1422.001,Internet Connection Discovery,true,2,D01-077;D01-HEAD
+attack,T1422.002,Wi-Fi Discovery,true,1,D01-HEAD
+attack,T1423,Network Service Scanning,true,1,D01-HEAD
+attack,T1424,Process Discovery,true,1,D01-HEAD
+attack,T1426,System Information Discovery,true,6,D01-HEAD;D12-012;D12-HEAD;D15-090;D15-HEAD;D22-023
+attack,T1428,Exploitation of Remote Services,true,5,D06-072;D06-HEAD;D15-034;D15-090;D15-HEAD
+attack,T1429,Audio Capture,true,5,D03-062;D03-HEAD;D20-064;D20-HEAD;D22-028
+attack,T1430,Location Tracking,true,7,D01-HEAD;D03-048;D03-062;D03-063;D03-HEAD;D20-058;D20-HEAD
+attack,T1430.001,Remote Device Management Services,true,1,D18-HEAD
 attack,T1430.002,Impersonate SS7 Nodes,true,0,
 attack,T1437,Application Layer Protocol,true,0,
-attack,T1437.001,Web Protocols,true,2,D14-024;D18-034
-attack,T1451,SIM Card Swap,true,1,D13-052
-attack,T1453,Abuse Accessibility Features,true,8,D03-057;D03-061;D04-049;D04-050;D13-048;D20-036;D20-050;D23-034
-attack,T1456,Drive-By Compromise,true,0,
-attack,T1458,Replication Through Removable Media,true,3,D25-043;D25-044;D25-048
-attack,T1461,Lockscreen Bypass,true,1,D13-074
+attack,T1437.001,Web Protocols,true,4,D14-024;D14-HEAD;D18-034;D18-HEAD
+attack,T1451,SIM Card Swap,true,2,D13-052;D13-HEAD
+attack,T1453,Abuse Accessibility Features,true,12,D03-057;D03-061;D03-HEAD;D04-049;D04-050;D13-048;D13-HEAD;D20-036;D20-050;D20-HEAD;D23-034;D23-HEAD
+attack,T1456,Drive-By Compromise,true,2,D09-HEAD;D10-HEAD
+attack,T1458,Replication Through Removable Media,true,4,D25-043;D25-044;D25-048;D25-HEAD
+attack,T1461,Lockscreen Bypass,true,2,D13-074;D13-HEAD
 attack,T1464,Network Denial of Service,true,0,
-attack,T1471,Data Encrypted for Impact,true,1,D21-039
-attack,T1474,Supply Chain Compromise,true,1,D17-076
-attack,T1474.001,Compromise Software Dependencies and Development Tools,true,3,D12-006;D17-068;D18-064
-attack,T1474.002,Compromise Hardware Supply Chain,true,2,D25-025;D25-040
-attack,T1474.003,Compromise Software Supply Chain,true,3,D02-067;D17-076;D25-025
+attack,T1471,Data Encrypted for Impact,true,2,D21-039;D21-HEAD
+attack,T1474,Supply Chain Compromise,true,2,D17-076;D17-HEAD
+attack,T1474.001,Compromise Software Dependencies and Development Tools,true,7,D02-HEAD;D12-006;D12-HEAD;D17-068;D17-HEAD;D18-064;D18-HEAD
+attack,T1474.002,Compromise Hardware Supply Chain,true,3,D25-025;D25-040;D25-HEAD
+attack,T1474.003,Compromise Software Supply Chain,true,6,D02-067;D02-HEAD;D17-076;D17-HEAD;D25-025;D25-HEAD
 attack,T1481,Web Service,true,0,
 attack,T1481.001,Dead Drop Resolver,true,0,
-attack,T1481.002,Bidirectional Communication,true,3,D14-046;D18-014;D18-034
+attack,T1481.002,Bidirectional Communication,true,4,D14-046;D18-014;D18-034;D18-HEAD
 attack,T1481.003,One-Way Communication,true,0,
-attack,T1509,Non-Standard Port,true,1,D14-024
-attack,T1512,Video Capture,true,3,D03-062;D20-064;D22-028
-attack,T1513,Screen Capture,true,5,D06-035;D06-047;D06-073;D20-036;D20-037
-attack,T1516,Input Injection,true,6,D03-057;D04-047;D04-048;D06-047;D06-073;D23-034
-attack,T1517,Access Notifications,true,9,D06-048;D08-040;D13-048;D13-085;D20-030;D20-031;D20-032;D20-035;D20-050
-attack,T1521,Encrypted Channel,true,2,D12-041;D14-024
-attack,T1521.001,Symmetric Cryptography,true,1,D12-005
-attack,T1521.002,Asymmetric Cryptography,true,1,D12-006
-attack,T1521.003,SSL Pinning,true,1,D19-039
-attack,T1532,Archive Collected Data,true,2,D18-057;D20-024
-attack,T1533,Data from Local System,true,12,D02-029;D02-031;D03-055;D05-030;D08-012;D08-055;D11-062;D12-012;D15-058;D18-057;D19-073;D20-046
-attack,T1541,Foreground Persistence,true,7,D03-048;D03-062;D06-035;D06-036;D06-040;D20-064;D20-066
-attack,T1544,Ingress Tool Transfer,true,4,D02-027;D02-028;D11-046;D17-007
-attack,T1575,Native API,true,15,D06-012;D16-002;D16-003;D16-004;D16-005;D16-007;D16-018;D16-021;D16-033;D16-035;D16-038;D16-039;D16-057;D19-018;D19-040
-attack,T1577,Compromise Application Executable,true,1,D02-012
-attack,T1582,SMS Control,true,3,D03-058;D13-048;D23-062
-attack,T1603,Scheduled Task/Job,true,2,D05-024;D05-026
-attack,T1604,Proxy Through Victim,true,1,D06-072
-attack,T1616,Call Control,true,2,D03-059;D23-062
-attack,T1617,Hooking,true,5,D13-074;D16-007;D16-042;D21-045;D26-010
-attack,T1623,Command and Scripting Interpreter,true,1,D16-021
-attack,T1623.001,Unix Shell,true,3,D02-029;D16-021;D26-010
+attack,T1509,Non-Standard Port,true,2,D14-024;D14-HEAD
+attack,T1512,Video Capture,true,5,D03-062;D03-HEAD;D20-064;D20-HEAD;D22-028
+attack,T1513,Screen Capture,true,8,D06-035;D06-047;D06-073;D06-HEAD;D11-HEAD;D20-036;D20-037;D20-HEAD
+attack,T1516,Input Injection,true,10,D03-057;D03-HEAD;D04-047;D04-048;D04-HEAD;D06-047;D06-073;D06-HEAD;D23-034;D23-HEAD
+attack,T1517,Access Notifications,true,12,D06-048;D06-HEAD;D08-040;D13-048;D13-085;D13-HEAD;D20-030;D20-031;D20-032;D20-035;D20-050;D20-HEAD
+attack,T1521,Encrypted Channel,true,3,D12-041;D12-HEAD;D14-024
+attack,T1521.001,Symmetric Cryptography,true,2,D12-005;D12-HEAD
+attack,T1521.002,Asymmetric Cryptography,true,2,D12-006;D12-HEAD
+attack,T1521.003,SSL Pinning,true,5,D10-HEAD;D14-HEAD;D19-039;D19-HEAD;D26-HEAD
+attack,T1532,Archive Collected Data,true,5,D11-HEAD;D18-057;D18-HEAD;D20-024;D20-HEAD
+attack,T1533,Data from Local System,true,23,D02-029;D02-031;D02-HEAD;D03-055;D03-HEAD;D05-030;D05-HEAD;D07-HEAD;D08-012;D08-055;D08-HEAD;D10-HEAD;D11-062;D11-HEAD;D12-012;D12-HEAD;D15-058;D18-057;D18-HEAD;D19-073;D19-HEAD;D20-046;D20-HEAD
+attack,T1541,Foreground Persistence,true,10,D03-048;D03-062;D03-HEAD;D06-035;D06-036;D06-040;D06-HEAD;D20-064;D20-066;D20-HEAD
+attack,T1544,Ingress Tool Transfer,true,6,D02-027;D02-028;D02-HEAD;D11-046;D17-007;D17-HEAD
+attack,T1575,Native API,true,18,D06-012;D06-HEAD;D16-002;D16-003;D16-004;D16-005;D16-007;D16-018;D16-021;D16-033;D16-035;D16-038;D16-039;D16-057;D16-HEAD;D19-018;D19-040;D19-HEAD
+attack,T1577,Compromise Application Executable,true,2,D02-012;D02-HEAD
+attack,T1582,SMS Control,true,6,D03-058;D03-HEAD;D13-048;D13-HEAD;D23-062;D23-HEAD
+attack,T1603,Scheduled Task/Job,true,3,D05-024;D05-026;D05-HEAD
+attack,T1604,Proxy Through Victim,true,2,D06-072;D06-HEAD
+attack,T1616,Call Control,true,4,D03-059;D03-HEAD;D23-062;D23-HEAD
+attack,T1617,Hooking,true,11,D12-HEAD;D13-074;D13-HEAD;D16-007;D16-042;D16-HEAD;D19-HEAD;D21-045;D21-HEAD;D26-010;D26-HEAD
+attack,T1623,Command and Scripting Interpreter,true,3,D06-HEAD;D16-021;D16-HEAD
+attack,T1623.001,Unix Shell,true,6,D02-029;D02-HEAD;D16-021;D16-HEAD;D26-010;D26-HEAD
 attack,T1624,Event Triggered Execution,true,0,
-attack,T1624.001,Broadcast Receivers,true,8,D03-003;D05-014;D05-016;D05-024;D05-026;D05-053;D05-059;D08-008
-attack,T1625,Hijack Execution Flow,true,0,
-attack,T1625.001,System Runtime API Hijacking,true,2,D16-039;D25-042
-attack,T1626,Abuse Elevation Control Mechanism,true,5,D03-056;D04-010;D06-071;D22-012;D22-052
-attack,T1626.001,Device Administrator Permissions,true,1,D03-056
+attack,T1624.001,Broadcast Receivers,true,10,D03-003;D03-HEAD;D05-014;D05-016;D05-024;D05-026;D05-053;D05-059;D05-HEAD;D08-008
+attack,T1625,Hijack Execution Flow,true,1,D16-HEAD
+attack,T1625.001,System Runtime API Hijacking,true,4,D16-039;D16-HEAD;D25-042;D25-HEAD
+attack,T1626,Abuse Elevation Control Mechanism,true,10,D03-056;D03-HEAD;D04-010;D04-HEAD;D06-071;D06-HEAD;D08-HEAD;D17-HEAD;D22-012;D22-052
+attack,T1626.001,Device Administrator Permissions,true,2,D03-056;D03-HEAD
 attack,T1627,Execution Guardrails,true,0,
-attack,T1627.001,Geofencing,true,2,D01-077;D03-063
-attack,T1628,Hide Artifacts,true,2,D04-063;D20-065
-attack,T1628.001,Suppress Application Icon,true,1,D04-063
-attack,T1628.002,User Evasion,true,1,D20-065
-attack,T1628.003,Conceal Multimedia Files,true,1,D11-050
-attack,T1629,Impair Defenses,true,1,D21-040
+attack,T1627.001,Geofencing,true,4,D01-077;D01-HEAD;D03-063;D03-HEAD
+attack,T1628,Hide Artifacts,true,3,D04-063;D20-065;D20-HEAD
+attack,T1628.001,Suppress Application Icon,true,2,D04-063;D04-HEAD
+attack,T1628.002,User Evasion,true,2,D20-065;D20-HEAD
+attack,T1628.003,Conceal Multimedia Files,true,2,D11-050;D11-HEAD
+attack,T1629,Impair Defenses,true,2,D21-040;D21-HEAD
 attack,T1629.001,Prevent Application Removal,true,0,
-attack,T1629.002,Device Lockout,true,4,D03-056;D13-071;D13-086;D21-039
-attack,T1629.003,Disable or Modify Tools,true,1,D21-040
+attack,T1629.002,Device Lockout,true,6,D03-056;D03-HEAD;D13-071;D13-086;D21-039;D21-HEAD
+attack,T1629.003,Disable or Modify Tools,true,2,D21-040;D21-HEAD
 attack,T1630,Indicator Removal on Host,true,0,
 attack,T1630.001,Uninstall Malicious Application,true,0,
-attack,T1630.002,File Deletion,true,2,D03-056;D21-039
-attack,T1630.003,Disguise Root/Jailbreak Indicators,true,2,D15-084;D21-033
-attack,T1631,Process Injection,true,1,D16-042
-attack,T1631.001,Ptrace System Calls,true,1,D16-042
-attack,T1632,Subvert Trust Controls,true,6,D02-028;D14-026;D14-027;D22-072;D26-004;D26-005
-attack,T1632.001,Code Signing Policy Modification,true,2,D02-028;D21-040
-attack,T1633,Virtualization/Sandbox Evasion,true,1,D21-055
-attack,T1633.001,System Checks,true,4,D15-084;D21-033;D21-055;D22-002
-attack,T1635,Steal Application Access Token,true,8,D05-013;D05-030;D06-028;D08-052;D09-028;D10-004;D11-064;D12-006
-attack,T1635.001,URI Hijacking,true,4,D08-054;D09-005;D09-026;D09-028
-attack,T1636,Protected User Data,true,2,D07-052;D20-052
-attack,T1636.001,Calendar Entries,true,3,D03-031;D03-055;D20-029
+attack,T1630.002,File Deletion,true,4,D03-056;D03-HEAD;D21-039;D21-HEAD
+attack,T1630.003,Disguise Root/Jailbreak Indicators,true,4,D15-084;D15-HEAD;D21-033;D21-HEAD
+attack,T1631,Process Injection,true,2,D16-042;D16-HEAD
+attack,T1631.001,Ptrace System Calls,true,2,D16-042;D16-HEAD
+attack,T1632,Subvert Trust Controls,true,11,D02-028;D02-HEAD;D14-026;D14-027;D14-HEAD;D21-HEAD;D22-072;D22-HEAD;D26-004;D26-005;D26-HEAD
+attack,T1632.001,Code Signing Policy Modification,true,5,D02-028;D02-HEAD;D14-HEAD;D21-040;D21-HEAD
+attack,T1633,Virtualization/Sandbox Evasion,true,3,D19-HEAD;D21-055;D21-HEAD
+attack,T1633.001,System Checks,true,8,D15-084;D15-HEAD;D21-033;D21-055;D21-HEAD;D22-002;D22-HEAD;D26-HEAD
+attack,T1635,Steal Application Access Token,true,16,D05-013;D05-030;D05-HEAD;D06-028;D06-HEAD;D08-052;D08-HEAD;D09-028;D09-HEAD;D10-004;D10-HEAD;D11-064;D11-HEAD;D12-006;D12-HEAD;D13-HEAD
+attack,T1635.001,URI Hijacking,true,6,D08-054;D08-HEAD;D09-005;D09-026;D09-028;D09-HEAD
+attack,T1636,Protected User Data,true,4,D07-052;D07-HEAD;D20-052;D20-HEAD
+attack,T1636.001,Calendar Entries,true,4,D03-031;D03-055;D03-HEAD;D20-029
 attack,T1636.002,Call Log,true,1,D03-055
 attack,T1636.003,Contact List,true,2,D03-055;D20-029
-attack,T1636.004,SMS Messages,true,7,D03-055;D03-058;D06-048;D13-048;D15-055;D15-086;D20-059
+attack,T1636.004,SMS Messages,true,9,D03-055;D03-058;D06-048;D13-048;D13-HEAD;D15-055;D15-086;D15-HEAD;D20-059
 attack,T1636.005,Accounts,true,1,D03-055
-attack,T1637,Dynamic Resolution,true,1,D14-046
+attack,T1637,Dynamic Resolution,true,2,D14-046;D14-HEAD
 attack,T1637.001,Domain Generation Algorithms,true,0,
-attack,T1638,Adversary-in-the-Middle,true,10,D06-072;D11-046;D14-007;D14-009;D14-012;D14-021;D14-045;D14-046;D22-073;D26-004
+attack,T1638,Adversary-in-the-Middle,true,15,D06-072;D06-HEAD;D10-HEAD;D11-046;D11-HEAD;D14-007;D14-009;D14-012;D14-021;D14-045;D14-046;D14-HEAD;D22-073;D26-004;D26-HEAD
 attack,T1639,Exfiltration Over Alternative Protocol,true,0,
-attack,T1639.001,Exfiltration Over Unencrypted Non-C2 Protocol,true,2,D14-018;D22-073
-attack,T1640,Account Access Removal,true,4,D13-019;D13-071;D13-086;D13-087
-attack,T1641,Data Manipulation,true,6,D07-065;D15-063;D15-064;D23-022;D23-025;D23-046
-attack,T1641.001,Transmitted Data Manipulation,true,5,D12-041;D15-076;D20-045;D23-021;D23-023
-attack,T1642,Endpoint Denial of Service,true,3,D03-056;D13-086;D21-039
-attack,T1643,Generate Traffic from Victim,true,3,D03-058;D03-059;D23-062
-attack,T1644,Out of Band Data,true,3,D03-058;D13-048;D20-031
-attack,T1645,Compromise Client Software Binary,true,2,D02-067;D25-042
-attack,T1646,Exfiltration Over C2 Channel,true,4,D18-057;D20-016;D20-019;D20-024
+attack,T1639.001,Exfiltration Over Unencrypted Non-C2 Protocol,true,3,D14-018;D14-HEAD;D22-073
+attack,T1640,Account Access Removal,true,5,D13-019;D13-071;D13-086;D13-087;D13-HEAD
+attack,T1641,Data Manipulation,true,9,D07-065;D07-HEAD;D15-063;D15-064;D15-HEAD;D23-022;D23-025;D23-046;D23-HEAD
+attack,T1641.001,Transmitted Data Manipulation,true,9,D12-041;D12-HEAD;D15-076;D15-HEAD;D20-045;D20-HEAD;D23-021;D23-023;D23-HEAD
+attack,T1642,Endpoint Denial of Service,true,5,D03-056;D03-HEAD;D13-086;D21-039;D21-HEAD
+attack,T1643,Generate Traffic from Victim,true,6,D03-058;D03-059;D03-HEAD;D15-HEAD;D23-062;D23-HEAD
+attack,T1644,Out of Band Data,true,6,D03-058;D03-HEAD;D13-048;D13-HEAD;D20-031;D20-HEAD
+attack,T1645,Compromise Client Software Binary,true,4,D02-067;D02-HEAD;D25-042;D25-HEAD
+attack,T1646,Exfiltration Over C2 Channel,true,6,D18-057;D18-HEAD;D20-016;D20-019;D20-024;D20-HEAD
 attack,T1655,Masquerading,true,0,
-attack,T1655.001,Match Legitimate Name or Location,true,1,D04-032
-attack,T1658,Exploitation for Client Execution,true,3,D16-035;D16-036;D16-037
-attack,T1660,Phishing,true,3,D13-052;D13-084;D23-062
-attack,T1661,Application Versioning,true,3,D02-027;D17-076;D22-018
-attack,T1662,Data Destruction,true,1,D21-039
-attack,T1663,Remote Access Software,true,2,D06-047;D06-073
+attack,T1655.001,Match Legitimate Name or Location,true,4,D04-032;D04-HEAD;D09-HEAD;D21-HEAD
+attack,T1658,Exploitation for Client Execution,true,6,D10-HEAD;D16-035;D16-036;D16-037;D16-HEAD;D19-HEAD
+attack,T1660,Phishing,true,6,D09-HEAD;D13-052;D13-084;D13-HEAD;D23-062;D23-HEAD
+attack,T1661,Application Versioning,true,7,D02-027;D02-HEAD;D03-HEAD;D17-076;D17-HEAD;D22-018;D22-HEAD
+attack,T1662,Data Destruction,true,2,D21-039;D21-HEAD
+attack,T1663,Remote Access Software,true,3,D06-047;D06-073;D06-HEAD
 attack,T1664,Exploitation for Initial Access,true,0,
-attack,T1670,Virtualization Solution,true,0,
-attack,T1676,Linked Devices,true,1,D13-084
+attack,T1670,Virtualization Solution,true,1,D19-HEAD
+attack,T1676,Linked Devices,true,2,D13-084;D13-HEAD
 vrt,ai_application_security.adversarial_example_injection.ai_misclassification_attacks,AI Misclassification Attacks,true,0,
 vrt,ai_application_security.ai_safety.misinformation_wrong_factual_data,Misinformation / Wrong Factual Data,true,0,
 vrt,ai_application_security.denial_of_service_dos.application_wide,Application-Wide,true,0,
@@ -1230,44 +1230,46 @@ vrt,active_directory.configuration_weaknesses.dormant_enabled_user_accounts,Dorm
 vrt,active_directory.sensitive_data_exposure.ldap_anonymous_bind_enabled,LDAP Anonymous Bind Enabled,true,0,
 vrt,active_directory.sensitive_data_exposure.sensitive_data_in_open_file_shares,Sensitive Data in Open File Shares,true,0,
 vrt,active_directory.dacl_abuse,DACL Abuse,true,0,
-cwe,CWE-1021,,true,1,D04-047
+cwe,CWE-1021,,true,2,D04-047;D04-HEAD
 cwe,CWE-1059,,true,1,D05-060
-cwe,CWE-1104,,true,1,D22-004
-cwe,CWE-116,,true,1,D15-090
+cwe,CWE-1104,,true,2,D22-004;D22-HEAD
+cwe,CWE-116,,true,2,D15-090;D15-HEAD
 cwe,CWE-1204,,true,1,D12-020
-cwe,CWE-122,,true,3,D16-020;D16-024;D16-027
-cwe,CWE-125,,true,4,D16-018;D16-028;D16-029;D16-045
-cwe,CWE-1295,,true,2,D16-015;D21-050
-cwe,CWE-1326,,true,2,D21-013;D21-033
-cwe,CWE-1357,,true,3,D02-060;D16-006;D22-004
-cwe,CWE-1395,,true,2,D02-060;D16-006
-cwe,CWE-16,,true,13,D25-009;D25-010;D25-011;D25-014;D25-015;D25-021;D25-025;D25-027;D25-028;D25-032;D25-033;D25-042;D25-044
-cwe,CWE-190,,true,5,D16-024;D16-026;D16-033;D16-045;D16-057
-cwe,CWE-191,,true,2,D16-025;D16-026
-cwe,CWE-197,,true,1,D16-025
-cwe,CWE-20,,true,10,D01-050;D05-027;D05-046;D05-047;D07-038;D08-035;D15-090;D16-005;D16-018;D17-043
-cwe,CWE-200,,true,16,D01-040;D01-043;D01-072;D01-075;D04-042;D05-032;D11-059;D16-042;D18-057;D20-001;D20-027;D20-030;D20-043;D20-050;D23-058;D23-059
-cwe,CWE-208,,true,2,D12-039;D12-040
-cwe,CWE-212,,true,1,D03-068
-cwe,CWE-22,,true,4,D05-029;D05-046;D05-047;D08-035
-cwe,CWE-250,,true,2,D03-055;D25-041
-cwe,CWE-256,,true,1,D11-011
-cwe,CWE-259,,true,3,D11-023;D25-025;D25-041
-cwe,CWE-269,,true,61,D05-013;D05-018;D05-028;D05-051;D08-037;D08-038;D08-039;D08-040;D08-047;D15-061;D15-064;D21-013;D21-053;D23-002;D23-003;D23-006;D23-009;D23-011;D23-012;D23-013;D23-014;D23-015;D23-016;D23-020;D23-022;D23-024;D23-025;D23-026;D23-027;D23-029;D23-036;D23-040;D23-041;D23-043;D23-044;D23-046;D23-047;D23-054;D23-055;D23-060;D23-061;D25-008;D25-009;D25-012;D25-017;D25-018;D25-019;D25-020;D25-022;D25-023;D25-024;D25-029;D25-047;D25-058;D25-061;D25-068;D25-069;D25-070;D25-071;D25-073;D25-074
-cwe,CWE-276,,true,3,D11-019;D25-043;D25-047
-cwe,CWE-280,,true,3,D06-011;D06-012;D06-013
-cwe,CWE-284,,true,1,D12-048
-cwe,CWE-285,,true,2,D13-018;D13-074
-cwe,CWE-287,,true,3,D13-076;D13-077;D13-089
-cwe,CWE-288,,true,1,D13-077
+cwe,CWE-122,,true,4,D16-020;D16-024;D16-027;D16-HEAD
+cwe,CWE-125,,true,5,D16-018;D16-028;D16-029;D16-045;D16-HEAD
+cwe,CWE-1295,,true,3,D16-015;D21-050;D21-HEAD
+cwe,CWE-1326,,true,3,D21-013;D21-033;D21-HEAD
+cwe,CWE-1357,,true,5,D02-060;D02-HEAD;D16-006;D22-004;D22-HEAD
+cwe,CWE-1395,,true,4,D02-060;D02-HEAD;D16-006;D17-HEAD
+cwe,CWE-16,,true,14,D25-009;D25-010;D25-011;D25-014;D25-015;D25-021;D25-025;D25-027;D25-028;D25-032;D25-033;D25-042;D25-044;D25-HEAD
+cwe,CWE-190,,true,6,D16-024;D16-026;D16-033;D16-045;D16-057;D16-HEAD
+cwe,CWE-191,,true,3,D16-025;D16-026;D16-HEAD
+cwe,CWE-197,,true,2,D16-025;D16-HEAD
+cwe,CWE-20,,true,16,D01-050;D05-027;D05-046;D05-047;D05-HEAD;D07-038;D07-HEAD;D08-035;D08-HEAD;D09-HEAD;D15-090;D15-HEAD;D16-005;D16-018;D16-HEAD;D17-043
+cwe,CWE-200,,true,23,D01-040;D01-043;D01-072;D01-075;D01-HEAD;D04-042;D05-032;D07-HEAD;D10-HEAD;D11-059;D11-HEAD;D16-042;D18-057;D18-HEAD;D20-001;D20-027;D20-030;D20-043;D20-050;D20-HEAD;D23-058;D23-059;D26-HEAD
+cwe,CWE-208,,true,3,D12-039;D12-040;D12-HEAD
+cwe,CWE-212,,true,2,D03-068;D03-HEAD
+cwe,CWE-22,,true,7,D05-029;D05-046;D05-047;D05-HEAD;D08-035;D09-HEAD;D10-HEAD
+cwe,CWE-250,,true,5,D03-055;D03-HEAD;D21-HEAD;D25-041;D25-HEAD
+cwe,CWE-256,,true,3,D11-011;D11-HEAD;D20-HEAD
+cwe,CWE-259,,true,5,D11-023;D11-HEAD;D25-025;D25-041;D25-HEAD
+cwe,CWE-266,,true,1,D27-HEAD
+cwe,CWE-269,,true,68,D03-HEAD;D05-013;D05-018;D05-028;D05-051;D06-HEAD;D08-037;D08-038;D08-039;D08-040;D08-047;D08-HEAD;D15-061;D15-064;D15-HEAD;D21-013;D21-053;D21-HEAD;D23-002;D23-003;D23-006;D23-009;D23-011;D23-012;D23-013;D23-014;D23-015;D23-016;D23-020;D23-022;D23-024;D23-025;D23-026;D23-027;D23-029;D23-036;D23-040;D23-041;D23-043;D23-044;D23-046;D23-047;D23-054;D23-055;D23-060;D23-061;D23-HEAD;D25-008;D25-009;D25-012;D25-017;D25-018;D25-019;D25-020;D25-022;D25-023;D25-024;D25-029;D25-047;D25-058;D25-061;D25-068;D25-069;D25-070;D25-071;D25-073;D25-074;D25-HEAD
+cwe,CWE-276,,true,5,D11-019;D11-HEAD;D25-043;D25-047;D25-HEAD
+cwe,CWE-280,,true,4,D06-011;D06-012;D06-013;D06-HEAD
+cwe,CWE-284,,true,2,D11-HEAD;D12-048
+cwe,CWE-285,,true,3,D13-018;D13-074;D13-HEAD
+cwe,CWE-287,,true,4,D13-076;D13-077;D13-089;D13-HEAD
+cwe,CWE-288,,true,2,D13-077;D13-HEAD
 cwe,CWE-290,,true,1,D14-040
-cwe,CWE-295,,true,5,D10-039;D14-007;D14-008;D14-012;D14-013
-cwe,CWE-297,,true,4,D14-009;D14-010;D14-011;D14-014
-cwe,CWE-306,,true,12,D01-053;D04-007;D05-012;D06-015;D06-029;D06-070;D09-066;D13-070;D15-023;D18-014;D18-015;D18-022
-cwe,CWE-312,,true,10,D02-047;D10-046;D11-001;D11-011;D11-016;D11-041;D12-005;D12-013;D16-043;D23-058
-cwe,CWE-313,,true,1,D03-068
-cwe,CWE-319,,true,11,D10-039;D10-040;D14-016;D14-018;D14-019;D14-020;D14-021;D14-022;D14-025;D14-041;D23-036
-cwe,CWE-321,,true,2,D01-028;D11-023
+cwe,CWE-295,,true,7,D10-039;D10-HEAD;D14-007;D14-008;D14-012;D14-013;D14-HEAD
+cwe,CWE-297,,true,5,D14-009;D14-010;D14-011;D14-014;D14-HEAD
+cwe,CWE-306,,true,22,D01-053;D01-HEAD;D04-007;D04-HEAD;D05-012;D05-HEAD;D06-015;D06-029;D06-070;D06-HEAD;D07-HEAD;D09-066;D09-HEAD;D13-070;D13-HEAD;D15-023;D15-HEAD;D18-014;D18-015;D18-022;D18-HEAD;D27-HEAD
+cwe,CWE-311,,true,1,D27-HEAD
+cwe,CWE-312,,true,16,D02-047;D02-HEAD;D03-HEAD;D10-046;D10-HEAD;D11-001;D11-011;D11-016;D11-041;D11-HEAD;D12-005;D12-013;D16-043;D19-HEAD;D20-HEAD;D23-058
+cwe,CWE-313,,true,3,D03-068;D03-HEAD;D11-HEAD
+cwe,CWE-319,,true,14,D10-039;D10-040;D10-HEAD;D14-016;D14-018;D14-019;D14-020;D14-021;D14-022;D14-025;D14-041;D14-HEAD;D23-036;D27-HEAD
+cwe,CWE-321,,true,5,D01-028;D02-HEAD;D11-023;D11-HEAD;D27-HEAD
 cwe,CWE-323,,true,2,D12-029;D12-030
 cwe,CWE-325,,true,4,D12-017;D12-048;D23-008;D23-033
 cwe,CWE-326,,true,2,D12-025;D12-026
@@ -1277,60 +1279,72 @@ cwe,CWE-329,,true,1,D12-019
 cwe,CWE-330,,true,1,D12-033
 cwe,CWE-331,,true,1,D12-012
 cwe,CWE-340,,true,1,D12-019
-cwe,CWE-345,,true,4,D05-027;D05-046;D05-047;D08-035
-cwe,CWE-347,,true,7,D02-012;D02-014;D12-042;D13-027;D16-024;D23-002;D23-010
-cwe,CWE-353,,true,3,D12-042;D14-047;D19-026
-cwe,CWE-354,,true,1,D12-016
-cwe,CWE-358,,true,1,D18-058
-cwe,CWE-359,,true,12,D04-042;D07-068;D18-058;D20-001;D20-016;D20-018;D20-025;D20-029;D20-030;D20-050;D20-052;D20-053
-cwe,CWE-415,,true,1,D16-030
-cwe,CWE-416,,true,3,D16-030;D16-031;D16-032
-cwe,CWE-434,,true,1,D25-040
-cwe,CWE-459,,true,6,D11-022;D11-026;D11-040;D12-061;D20-060;D20-061
-cwe,CWE-471,,true,5,D21-035;D21-036;D23-002;D23-003;D23-015
-cwe,CWE-477,,true,1,D22-017
-cwe,CWE-489,,true,7,D01-055;D02-029;D10-049;D11-063;D16-015;D21-050;D26-038
-cwe,CWE-494,,true,12,D01-012;D01-013;D01-024;D01-032;D01-033;D02-027;D14-047;D16-039;D17-008;D19-025;D19-026;D19-072
-cwe,CWE-497,,true,2,D16-015;D21-050
-cwe,CWE-501,,true,2,D08-028;D08-029
-cwe,CWE-502,,true,6,D08-028;D08-029;D08-032;D16-031;D17-043;D17-053
-cwe,CWE-506,,true,1,D17-076
-cwe,CWE-522,,true,2,D13-076;D22-017
-cwe,CWE-524,,true,2,D11-061;D20-028
-cwe,CWE-532,,true,8,D11-062;D20-007;D20-010;D20-012;D20-014;D20-015;D20-016;D25-015
-cwe,CWE-540,,true,2,D16-015;D21-050
+cwe,CWE-345,,true,6,D05-027;D05-046;D05-047;D05-HEAD;D08-035;D08-HEAD
+cwe,CWE-347,,true,12,D02-012;D02-014;D02-HEAD;D12-042;D13-027;D13-HEAD;D14-HEAD;D16-024;D16-HEAD;D23-002;D23-010;D23-HEAD
+cwe,CWE-353,,true,7,D02-HEAD;D12-042;D14-047;D14-HEAD;D17-HEAD;D19-026;D19-HEAD
+cwe,CWE-354,,true,5,D02-HEAD;D12-016;D14-HEAD;D17-HEAD;D19-HEAD
+cwe,CWE-358,,true,2,D18-058;D18-HEAD
+cwe,CWE-359,,true,16,D04-042;D07-068;D11-HEAD;D18-058;D18-HEAD;D20-001;D20-016;D20-018;D20-025;D20-029;D20-030;D20-050;D20-052;D20-053;D20-HEAD;D27-HEAD
+cwe,CWE-415,,true,2,D16-030;D16-HEAD
+cwe,CWE-416,,true,4,D16-030;D16-031;D16-032;D16-HEAD
+cwe,CWE-434,,true,2,D25-040;D25-HEAD
+cwe,CWE-459,,true,8,D11-022;D11-026;D11-040;D11-HEAD;D12-061;D20-060;D20-061;D20-HEAD
+cwe,CWE-471,,true,7,D21-035;D21-036;D21-HEAD;D23-002;D23-003;D23-015;D23-HEAD
+cwe,CWE-476,,true,1,D16-HEAD
+cwe,CWE-477,,true,2,D22-017;D22-HEAD
+cwe,CWE-489,,true,12,D01-055;D02-029;D02-HEAD;D10-049;D10-HEAD;D11-063;D16-015;D16-HEAD;D21-050;D21-HEAD;D26-038;D26-HEAD
+cwe,CWE-494,,true,17,D01-012;D01-013;D01-024;D01-032;D01-033;D01-HEAD;D02-027;D02-HEAD;D14-047;D14-HEAD;D16-039;D17-008;D17-HEAD;D19-025;D19-026;D19-072;D19-HEAD
+cwe,CWE-497,,true,3,D16-015;D21-050;D21-HEAD
+cwe,CWE-501,,true,3,D08-028;D08-029;D17-HEAD
+cwe,CWE-502,,true,8,D08-028;D08-029;D08-032;D08-HEAD;D16-031;D17-043;D17-053;D17-HEAD
+cwe,CWE-506,,true,2,D17-076;D17-HEAD
+cwe,CWE-507,,true,1,D17-HEAD
+cwe,CWE-511,,true,1,D17-HEAD
+cwe,CWE-522,,true,3,D13-076;D13-HEAD;D22-017
+cwe,CWE-524,,true,4,D11-061;D11-HEAD;D20-028;D20-HEAD
+cwe,CWE-532,,true,11,D11-062;D11-HEAD;D20-007;D20-010;D20-012;D20-014;D20-015;D20-016;D20-HEAD;D25-015;D25-HEAD
+cwe,CWE-540,,true,4,D02-HEAD;D16-015;D21-050;D21-HEAD
 cwe,CWE-598,,true,1,D20-015
-cwe,CWE-601,,true,2,D19-047;D19-056
-cwe,CWE-602,,true,1,D17-041
+cwe,CWE-601,,true,4,D09-HEAD;D10-HEAD;D19-047;D19-056
+cwe,CWE-602,,true,3,D13-HEAD;D17-041;D17-HEAD
+cwe,CWE-603,,true,1,D13-HEAD
+cwe,CWE-613,,true,1,D13-HEAD
 cwe,CWE-649,,true,1,D12-018
-cwe,CWE-668,,true,2,D11-059;D20-043
-cwe,CWE-693,,true,4,D17-041;D21-051;D22-004;D23-026
-cwe,CWE-73,,true,7,D05-029;D05-046;D05-047;D06-030;D07-062;D08-035;D08-036
-cwe,CWE-749,,true,5,D06-015;D06-070;D10-003;D10-034;D19-051
+cwe,CWE-668,,true,4,D11-059;D11-HEAD;D20-043;D20-HEAD
+cwe,CWE-669,,true,1,D10-HEAD
+cwe,CWE-693,,true,11,D02-HEAD;D17-041;D17-HEAD;D19-HEAD;D21-051;D21-HEAD;D22-004;D22-HEAD;D23-026;D23-HEAD;D27-HEAD
+cwe,CWE-729,,true,2,D11-HEAD;D27-HEAD
+cwe,CWE-73,,true,11,D05-029;D05-046;D05-047;D05-HEAD;D06-030;D06-HEAD;D07-062;D07-HEAD;D08-035;D08-036;D17-HEAD
+cwe,CWE-732,,true,2,D11-HEAD;D20-HEAD
+cwe,CWE-749,,true,9,D06-015;D06-070;D06-HEAD;D10-003;D10-034;D10-HEAD;D19-051;D19-HEAD;D26-HEAD
 cwe,CWE-755,,true,1,D04-061
 cwe,CWE-759,,true,1,D12-027
 cwe,CWE-760,,true,1,D12-027
-cwe,CWE-77,,true,2,D05-045;D16-021
+cwe,CWE-77,,true,4,D05-045;D06-HEAD;D16-021;D16-HEAD
 cwe,CWE-780,,true,1,D12-022
-cwe,CWE-787,,true,10,D16-018;D16-020;D16-027;D16-028;D16-032;D16-033;D16-034;D16-035;D16-037;D16-045
-cwe,CWE-79,,true,2,D19-047;D19-056
-cwe,CWE-798,,true,19,D01-010;D01-018;D01-028;D01-064;D12-006;D16-022;D18-002;D18-004;D18-031;D18-032;D18-035;D18-038;D18-047;D18-050;D19-012;D19-037;D23-038;D23-039;D25-041
-cwe,CWE-829,,true,6,D02-054;D10-052;D16-039;D17-065;D19-047;D19-056
-cwe,CWE-862,,true,15,D01-039;D01-045;D01-054;D01-067;D01-068;D01-070;D03-008;D03-010;D03-024;D05-012;D06-003;D06-015;D09-066;D15-034;D23-005
-cwe,CWE-863,,true,3,D03-008;D06-003;D15-034
-cwe,CWE-89,,true,2,D07-038;D15-090
-cwe,CWE-908,,true,1,D16-029
-cwe,CWE-912,,true,2,D16-015;D21-050
-cwe,CWE-917,,true,2,D08-022;D09-026
+cwe,CWE-787,,true,11,D16-018;D16-020;D16-027;D16-028;D16-032;D16-033;D16-034;D16-035;D16-037;D16-045;D16-HEAD
+cwe,CWE-79,,true,4,D10-HEAD;D19-047;D19-056;D19-HEAD
+cwe,CWE-798,,true,27,D01-010;D01-018;D01-028;D01-064;D01-HEAD;D02-HEAD;D12-006;D16-022;D16-HEAD;D18-002;D18-004;D18-031;D18-032;D18-035;D18-038;D18-047;D18-050;D18-HEAD;D19-012;D19-037;D19-HEAD;D23-038;D23-039;D23-HEAD;D25-041;D25-HEAD;D27-HEAD
+cwe,CWE-829,,true,10,D02-054;D02-HEAD;D10-052;D10-HEAD;D16-039;D17-065;D17-HEAD;D19-047;D19-056;D19-HEAD
+cwe,CWE-862,,true,23,D01-039;D01-045;D01-054;D01-067;D01-068;D01-070;D01-HEAD;D03-008;D03-010;D03-024;D03-HEAD;D04-HEAD;D05-012;D05-HEAD;D06-003;D06-015;D06-HEAD;D09-066;D09-HEAD;D15-034;D15-HEAD;D23-005;D23-HEAD
+cwe,CWE-863,,true,9,D03-008;D03-HEAD;D04-HEAD;D05-HEAD;D06-003;D06-HEAD;D13-HEAD;D15-034;D15-HEAD
+cwe,CWE-89,,true,4,D07-038;D07-HEAD;D15-090;D15-HEAD
+cwe,CWE-908,,true,2,D16-029;D16-HEAD
+cwe,CWE-912,,true,3,D16-015;D21-050;D21-HEAD
+cwe,CWE-917,,true,3,D08-022;D09-026;D09-HEAD
 cwe,CWE-918,,true,1,D01-060
-cwe,CWE-919,,true,3,D03-068;D10-036;D11-038
-cwe,CWE-925,,true,2,D05-006;D05-020
-cwe,CWE-926,,true,10,D01-035;D01-036;D05-028;D05-051;D05-058;D06-020;D08-007;D08-033;D22-052;D25-017
-cwe,CWE-927,,true,31,D01-035;D01-044;D03-076;D05-030;D05-031;D05-041;D05-042;D05-043;D08-001;D08-007;D08-009;D08-022;D08-037;D22-012;D22-052;D23-017;D23-018;D23-019;D23-028;D23-040;D23-041;D23-052;D23-062;D25-017;D25-045;D25-049;D25-054;D25-055;D25-059;D27-001;D27-013
-cwe,CWE-929,,true,2,D10-004;D17-008
-cwe,CWE-939,,true,4,D07-057;D08-022;D09-026;D09-042
-cwe,CWE-94,,true,1,D19-051
-cwe,CWE-940,,true,6,D05-041;D07-026;D07-057;D08-001;D08-007;D08-037
+cwe,CWE-919,,true,6,D03-068;D03-HEAD;D10-036;D11-038;D11-HEAD;D27-HEAD
+cwe,CWE-921,,true,2,D11-HEAD;D20-HEAD
+cwe,CWE-922,,true,2,D11-HEAD;D27-HEAD
+cwe,CWE-925,,true,4,D05-006;D05-020;D05-HEAD;D27-HEAD
+cwe,CWE-926,,true,19,D01-035;D01-036;D01-HEAD;D04-HEAD;D05-028;D05-051;D05-058;D05-HEAD;D06-020;D06-HEAD;D07-HEAD;D08-007;D08-033;D08-HEAD;D22-052;D22-HEAD;D25-017;D25-HEAD;D27-HEAD
+cwe,CWE-927,,true,44,D01-035;D01-044;D01-HEAD;D03-076;D03-HEAD;D04-HEAD;D05-030;D05-031;D05-041;D05-042;D05-043;D05-HEAD;D06-HEAD;D07-HEAD;D08-001;D08-007;D08-009;D08-022;D08-037;D08-HEAD;D10-HEAD;D20-HEAD;D22-012;D22-052;D22-HEAD;D23-017;D23-018;D23-019;D23-028;D23-040;D23-041;D23-052;D23-062;D23-HEAD;D25-017;D25-045;D25-049;D25-054;D25-055;D25-059;D25-HEAD;D27-001;D27-013;D27-HEAD
+cwe,CWE-929,,true,5,D10-004;D10-HEAD;D17-008;D17-HEAD;D27-HEAD
+cwe,CWE-932,,true,1,D15-HEAD
+cwe,CWE-939,,true,7,D07-057;D07-HEAD;D08-022;D09-026;D09-042;D09-HEAD;D27-HEAD
+cwe,CWE-94,,true,2,D19-051;D19-HEAD
+cwe,CWE-940,,true,9,D05-041;D05-HEAD;D07-026;D07-057;D07-HEAD;D08-001;D08-007;D08-037;D08-HEAD
+cwe,CWE-95,,true,1,D10-HEAD
 vrt,privacy_concerns.unnecessary_data_collection,,false,25,D03-046;D03-048;D03-050;D03-051;D03-052;D03-053;D03-055;D03-062;D03-063;D18-058;D18-065;D18-066;D20-020;D20-021;D20-022;D20-023;D20-052;D20-053;D20-054;D20-055;D20-056;D20-059;D20-064;D20-065;D20-066
 vrt,sensitive_data_exposure.disclosure_of_secrets,,false,3,D11-062;D11-063;D16-022
 vrt,sensitive_data_exposure.weak_password_reset_implementation,,false,1,D09-027

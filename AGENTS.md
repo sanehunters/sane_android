@@ -163,8 +163,8 @@ DEX/JS updaters)? What are `minSdkVersion` and `targetSdkVersion`, from two sour
 If you can spawn sub-agents, split by **domain**, never by item, and never let two agents write the same
 row. The protocol in `prompts/05-fanout-multi-agent.md`: the coordinator owns `engagement.json` and
 `assessment-status.md`; each worker gets one domain card, writes only `<eng>/logs/Dnn-NNN.txt` files for its own
-domain, settles its rows with `python3 scripts/mark.py <eng> Dnn-NNN <result> --note … --tracker
-checklist-status.Dnn.partial.csv`, records the instances it tested in `inventory/<register>.Dnn.partial.csv`
+domain, settles its rows with `python3 scripts/mark.py <eng> Dnn-NNN <result> --note … --partial Dnn` (which seeds
+`checklist-status.Dnn.partial.csv` on first use), records the instances it tested in `inventory/<register>.Dnn.partial.csv`
 and parks leads as `hypotheses/H-Dnn-NN.md` (valid ids; nothing is renumbered); the coordinator merges both
 kinds of partial with `scripts/coverage.py --merge` and commits.
 Escalation (P7) is always single-agent — chains need every primitive in one context.

@@ -323,7 +323,7 @@ def main():
     ap.add_argument("--pkg", required=True, help="target package")
     ap.add_argument("--deeplinks", help="override: deeplinks.csv path")
     ap.add_argument("--manifest", help="apktool-decoded AndroidManifest.xml: adds non-exported activities to intent:// component= probes")
-    ap.add_argument("--out", help="evidence dir (default deeplink-fuzz/<pkg>)")
+    ap.add_argument("--out", help="evidence dir (default $E/recon/deeplink-fuzz when $E is set, else ./deeplink-fuzz/<pkg>)")
     ap.add_argument("--classes", default=",".join(CLASSES), help="comma list of " + ",".join(CLASSES))
     ap.add_argument("--params", default=",".join(PARAMS), help="open-redirect parameter names")
     ap.add_argument("--attacker-host", default="attacker.example")

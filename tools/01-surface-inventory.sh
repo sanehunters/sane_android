@@ -672,7 +672,7 @@ w("")
 w("== UNVERIFIED (%d) — checks that did not run; never record a negative from them" % len(unverified))
 for u in unverified: w("   UNVERIFIED: " + u)
 w("")
-w("NEXT: python3 scripts/inventory.py (registers components/deeplinks/providers from surface.json) -> tools/07 + tools/08 (deep links),")
+w("NEXT: python3 scripts/inventory.py base.apk --out $E/inventory (registers components/deeplinks/providers from the APK; cross-check surface.json) -> tools/07 + tools/08 (deep links),")
 w("      tools/09 (providers), tools/05 (storage, --manifest), tools/04 --apk (App Link assetlinks vs the signer digest above).")
 text = "\n".join(L) + "\n"
 try:

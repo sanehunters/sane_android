@@ -1,7 +1,8 @@
 # This repository is the methodology ONLY. It is public. Engagements (BugBountyTarget/<Target>_<DDMMYYYY>/) are
 # each their own git repository — the evidence repo — created by scripts/new-engagement.sh and pushed only to a
 # private remote (SANE_EVIDENCE_REMOTE). Nothing under an engagement folder is ever tracked here.
-BugBountyTarget/[!_]*_*/
+BugBountyTarget/*_*/
+!BugBountyTarget/_TEMPLATE/
 
 # binaries, keys and raw captures — never, anywhere (the same list as .claude/hooks/_lib.sh FORBIDDEN_RE)
 *.apk

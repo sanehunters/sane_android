@@ -12,6 +12,17 @@ and the gate for the current phase (scripts/gate.py). Never edits anything. The 
 not numeric order (START.md §5 step 3).
 """
 import csv, glob, json, os, re, subprocess, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from gate import row_valid                 # the single definition of "settled" (gate.py, coverage.py, state.py)
+except Exception:
+    def row_valid(r):                          # gate.py absent: the approximation (completed or n/a)
+        return ((str(r.get("completed") or "").lower() == "true" or (r.get("result") or "").lower() in ("n/a", "na")), "open")
+
+
+def is_open(r):
+    """A row is work when gate.py would not count it settled — INVALID rows (completed without the §6 note) stay open."""
+    return not row_valid(r)[0]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 E = {"critical": "🟥", "high": "🟧", "medium": "🟨", "low": "🟩", "support": "⬜", "varies": "🔷"}
@@ -74,7 +85,7 @@ def main():
         # between phases (P0, P7, P8): show the open rows of the earliest unfinished phase instead
         for ph in PHASES:
             cand = sorted({r["domain"] for r in rows if (r.get("phase") or "") == ph and r["domain"] not in na
-                           and (r.get("completed") or "").lower() != "true"})
+                           and is_open(r)})
             if cand:
                 domains = cand; break
 
@@ -82,7 +93,7 @@ def main():
     for d in domains:
         for iid in triage_order(d):
             r = by_id.get(iid)
-            if r and (r.get("completed") or "").lower() != "true" and (r.get("result") or "").lower() not in ("n/a", "na"):
+            if r and is_open(r):
                 items.append(r)
     open_total = len(items)
     items = items[:n]

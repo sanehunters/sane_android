@@ -23,6 +23,9 @@ timeout 120 frida -D "$ANDROID_SERIAL" -n com.victim.app -l frida/01-webview-set
 `send()` events (the machine lines: `{script, ev, tag:"CANDIDATE", items:[...]}`) appear as `message:` lines in the
 tee'd log; grep them with `grep -o '"ev":.*' $E/logs/frida-*.log`. One Frida session per device: a second worker's
 `frida -f`, `am force-stop` or `pm clear` on the same device kills yours — take the device lock (docs/03 §5).
+The harness underneath is docs/03: §3 is the API 34+ system-CA procedure (relabel, every zygote including
+`webview_zygote`, already-running processes, verified from the target's PID), §7 is the positive-control run
+(`lab.positive_controls`) that must print at least once before any zero from these scripts is read.
 
 ## Three correctness rules that cost people whole engagements
 

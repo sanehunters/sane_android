@@ -578,7 +578,7 @@ not a search: enumerate the *loaded* set and the *writable* set separately, then
 ```bash
 # the loaded set
 grep -RnE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|DelegateLastClassLoader|BaseDexClassLoader|System\.load\(' -A4 $DEC/jadx/sources/
-frida-trace -U -n com.target.app -j 'dalvik.system.DexClassLoader!$init' -j 'dalvik.system.BaseDexClassLoader!$init'
+frida-trace -D "$SERIAL" -n com.target.app -j 'dalvik.system.DexClassLoader!$init' -j 'dalvik.system.BaseDexClassLoader!$init'
 
 # the writable set
 adb shell run-as com.target.app find . -type f \( -name '*.dex' -o -name '*.jar' -o -name '*.apk' -o -name '*.so' -o -name '*.zip' \) -exec ls -lZ {} \;

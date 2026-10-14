@@ -29,6 +29,11 @@ A `null` priority is not "unrated". It means the taxonomy refuses to rate it wit
 context is **your evidence**. IDOR is the worked example Bugcrowd itself gives: the same class runs from
 P4 to P1 depending entirely on what the tester proved.
 
+The chapters and the cards use two more words in the `Severity ceiling` cell, and both map onto this
+table: **`support`** means the item cannot be reported alone — it is a primitive or a method step whose
+only value is as a link in a chain, i.e. P5 until chained (docs/11 §3); **`varies`** is the `null` row
+above — rate it on the impact you demonstrated. A card that renders `[support]` is never a submission.
+
 ---
 
 ## 2. The uncomfortable fact about Android findings

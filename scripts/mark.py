@@ -7,6 +7,7 @@ Validates the vocabulary so the gates mean something.
   python3 scripts/mark.py <eng> D13-020 blocked   --note "needs: second account (requested 2026-10-10, see BLOCKERS)"
   python3 scripts/mark.py <eng> D10 n/a           --note "no WebView: zero android.webkit imports in jadx; Java.choose('android.webkit.WebView') empty after full UI walk"   # whole domain: OPEN rows only
   python3 scripts/mark.py <eng> D10 n/a --force   --note "..."                                              # also re-settle rows already settled (findings included)
+  python3 scripts/mark.py <eng> D11 applies       --note "SharedPreferences + Room in the APK: 14 getSharedPreferences call sites (jadx)"   # the probe says the domain applies: no rows change
   python3 scripts/mark.py <eng> D10-004 reopen                                                           # back to completed=false
   python3 scripts/mark.py <eng> --show D10-004                                                           # print the row
   python3 scripts/mark.py <eng> D10-004 ruled-out --note "..." --partial D10                             # fan-out worker: writes <eng>/checklist-status.D10.partial.csv
@@ -18,9 +19,12 @@ Rules enforced (R4, START.md §6):
              unless the note also cites a file:line, or names the control / experiment / precondition that makes the silence meaningful
   blocked    needs --note containing "needs:" (what is missing / which environment unblocks it)
   n/a        needs --note of at least 25 characters (why the item cannot apply to this app)
+  applies    whole domain only; needs --note of at least 25 characters (the probe's evidence that the domain DOES apply);
+             writes no rows — it records the P3 applicability decision gate.py p3 waits for (domains_decided)
 A whole-domain n/a / blocked touches only OPEN rows and refuses to run over a `finding` row unless --force.
 Every write to the master tracker stamps engagement.json.updated; a whole-domain n/a records domains_na.Dnn,
-reopen removes it; every write adds the domain to domains_decided. Writes to a partial slice touch nothing else.
+applies records domains_applicable.Dnn, a whole-domain reopen removes both; every write adds the domain to
+domains_decided (reopen of a whole domain removes it again). Writes to a partial slice touch nothing else.
 --partial Dnn seeds the slice from the master tracker (that domain's rows) the first time; coverage.py --merge
 applies exactly these rules again, so merge == mark.
 """
@@ -33,7 +37,7 @@ try:
 except Exception:
     F_RE, H_RE = r"\bF-\d{2,3}\b", r"\bH-(?:D\d{2}-)?\d{2,3}\b"
 
-RESULTS = ("finding", "ruled-out", "blocked", "n/a", "reopen")
+RESULTS = ("finding", "ruled-out", "blocked", "n/a", "reopen", "applies")
 SILENCE = re.compile(r"(found nothing|no (hits|output|results?)|nothing found|scanner (found|printed|returned) nothing"
                      r"|tool (printed|returned) nothing|empty output)", re.I)
 FILE_LINE = re.compile(r"\b[\w$.-]+\.(java|kt|kts|xml|smali|so|js|dex|json|txt|log|py|c|cpp|h|gradle):\d+\b")
@@ -63,6 +67,8 @@ def validate(result, note, fid=""):
         if "needs:" not in note.lower(): return "blocked needs --note containing 'needs: <what is missing / which environment unblocks it>'"
     elif result == "n/a":
         if len(note) < 25: return "n/a needs a reason in --note (≥25 chars): why this item cannot apply to this app"
+    elif result == "applies":
+        if len(note) < 25: return "applies needs the probe's evidence in --note (≥25 chars): what in the APK makes this domain apply"
     elif result != "reopen":
         return f"result must be one of {RESULTS}"
     return None
@@ -128,6 +134,8 @@ def main():
         if os.path.abspath(path) != os.path.abspath(master) and not os.path.basename(path).endswith(".partial.csv"):
             die("--tracker must name checklist-status.csv or a *.partial.csv slice")
     partial = os.path.abspath(path) != os.path.abspath(master)
+    if partial and result == "applies":
+        die("applies is an engagement-level decision (engagement.json): record it on the master tracker, not a slice")
     if partial and not os.path.exists(path):
         if not slice_dom: die(f"{path} not found (a --tracker slice is created with --partial Dnn)")
         cols, mrows = read_tracker(master)
@@ -139,11 +147,13 @@ def main():
     by = {row["item_id"]: row for row in rows}
 
     if re.fullmatch(r"D\d\d", target):
-        if result not in ("n/a", "blocked", "reopen"):
-            die("a whole domain can only be marked n/a, blocked or reopened")
+        if result not in ("n/a", "blocked", "reopen", "applies"):
+            die("a whole domain can only be marked n/a, blocked, applies or reopened")
         all_ids = [k for k in by if k.startswith(target + "-")]
         if not all_ids: die(f"no rows for {target} in {os.path.basename(path)} (D24/D28 have no chapter yet)")
-        if result == "reopen" or force:
+        if result == "applies":
+            ids, skipped = [], []            # a decision, not a row write
+        elif result == "reopen" or force:
             ids, skipped = all_ids, []
         else:
             ids = [k for k in all_ids if not (str(by[k].get("completed") or "").lower() == "true" or (by[k].get("result") or "").lower() == "n/a")]
@@ -152,6 +162,7 @@ def main():
             if findings and not ids:
                 die(f"every {target} row is already settled ({len(findings)} finding row(s): {', '.join(findings[:5])}); use --force to re-settle them")
     elif re.fullmatch(r"D\d\d-\d{3}", target):
+        if result == "applies": die("applies is a whole-domain decision: mark.py <eng> Dnn applies --note \"<probe evidence>\"")
         ids, skipped = ([target] if target in by else die(f"no row {target} in {os.path.basename(path)}")), []
     else:
         die("target must be Dnn-NNN or Dnn")
@@ -173,7 +184,7 @@ def main():
             row["finding_id"] = fid if result == "finding" else ""
             row["evidence"] = ev or (row.get("evidence", "") if same else "")   # stale evidence never survives a result change
             row["notes"] = note
-    write_tracker(path, cols, rows)
+    if ids: write_tracker(path, cols, rows)
 
     ej = os.path.join(eng, "engagement.json")
     if os.path.exists(ej) and not partial:
@@ -181,19 +192,24 @@ def main():
             e = json.load(open(ej, encoding="utf-8")); e["updated"] = today
             dom = target[:3]
             whole = re.fullmatch(r"D\d\d", target)
+            for k in ("domains_na", "domains_applicable"):
+                if not isinstance(e.get(k), dict): e[k] = {}
+            dec = e.get("domains_decided")
+            if not isinstance(dec, list): dec = e["domains_decided"] = []
             if result == "n/a" and whole:
-                if not isinstance(e.get("domains_na"), dict): e["domains_na"] = {}
-                e["domains_na"][target] = note
-            elif result == "reopen" and whole and isinstance(e.get("domains_na"), dict):
-                e["domains_na"].pop(target, None)
-            if result != "reopen":
-                dec = e.get("domains_decided")
-                if not isinstance(dec, list): dec = e["domains_decided"] = []
-                if dom not in dec: dec.append(dom)
+                e["domains_na"][target] = note; e["domains_applicable"].pop(target, None)
+            elif result == "applies":
+                e["domains_applicable"][target] = note; e["domains_na"].pop(target, None)
+            elif result == "reopen" and whole:            # the decision is undone with the rows
+                e["domains_na"].pop(target, None); e["domains_applicable"].pop(target, None)
+                if dom in dec: dec.remove(dom)
+            if result != "reopen" and dom not in dec: dec.append(dom)
             json.dump(e, open(ej, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
         except Exception as ex:
             print("!! engagement.json not updated:", ex)
     where = f" → {os.path.basename(path)}" if partial else ""
+    if result == "applies":
+        print(f"recorded {target} applies (engagement.json.domains_applicable + domains_decided); no rows changed — work its items in their phase"); return
     print(f"marked {len(ids)} row(s) {result}{where}: {', '.join(ids[:8])}{'…' if len(ids) > 8 else ''}"
           + (f"  (skipped {len(skipped)} already-settled row(s); --force to include them)" if skipped else ""))
 

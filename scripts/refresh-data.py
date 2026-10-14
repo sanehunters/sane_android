@@ -41,23 +41,23 @@ def ensure_sources(refs, offline):
     else:
         os.makedirs(refs, exist_ok=True)
     for name, url in REPOS.items():
+        if offline: break                     # every clone was verified present above; nothing to fetch
         d = os.path.join(refs, name)
         if os.path.isdir(os.path.join(d, ".git")):
-            if not offline:
-                r = run(["git", "-C", d, "pull", "--ff-only", "-q"])
-                print(f"  {name}: updated" if r.returncode == 0 else f"  {name}: pull failed ({r.stderr.strip()[:80]}) — using existing clone")
-        elif offline:
-            sys.exit(f"!! {d} missing and --offline given")
+            r = run(["git", "-C", d, "pull", "--ff-only", "-q"])
+            print(f"  {name}: updated" if r.returncode == 0 else f"  {name}: pull failed ({r.stderr.strip()[:80]}) — using existing clone")
         else:
             print(f"  cloning {name} …")
             r = run(["git", "clone", "-q", "--depth", "1", "--single-branch", url, d], timeout=600)
             if r.returncode != 0:
                 sys.exit(f"!! clone failed for {name}: {r.stderr.strip()[:200]}")
     att_dir = os.path.join(refs, "_untrusted_attack"); cwe_dir = os.path.join(refs, "_untrusted_cwe")
-    os.makedirs(att_dir, exist_ok=True); os.makedirs(cwe_dir, exist_ok=True)
     att = os.path.join(att_dir, "mobile-attack.json"); cwe = os.path.join(cwe_dir, "top25_2025.html")
     if not offline:
-        for url, dst in ((ATTACK_URL, att), (CWE_URL, cwe)):
+        os.makedirs(att_dir, exist_ok=True); os.makedirs(cwe_dir, exist_ok=True)
+        if not shutil.which("curl"):
+            print("  !! curl not found — ATT&CK / CWE downloads skipped (keeping existing files if any)")
+        for url, dst in (((ATTACK_URL, att), (CWE_URL, cwe)) if shutil.which("curl") else ()):
             r = run(["curl", "-sSL", "--max-time", "120", "-o", dst + ".tmp", url])
             if r.returncode == 0 and os.path.getsize(dst + ".tmp") > 1000:
                 os.replace(dst + ".tmp", dst); print(f"  fetched {os.path.basename(dst)}")

@@ -87,11 +87,11 @@ body:
     validations: {required: true}
   - type: textarea
     id: delta
-    attributes: {label: The delta, description: "Authorised access vs access obtained, with the canary value.", placeholder: "Authorised: 1 contact. Obtained: all 3 incl. canary SANE-7f3a… never shown to the picker."}
+    attributes: {label: The delta, description: "Authorised access vs access obtained, with the canary value.", placeholder: "Authorised: 1 contact. Obtained: all 3 incl. canary CANARY-7f3a… never shown to the picker."}
     validations: {required: true}
   - type: input
     id: canary
-    attributes: {label: Canary value planted, placeholder: "SANE-CANARY-7f3a91 in shared_prefs/session.xml"}
+    attributes: {label: Canary value planted, placeholder: "CANARY-7f3a91 in shared_prefs/session.xml"}
     validations: {required: true}
   - type: textarea
     id: negative_control

@@ -83,7 +83,7 @@ cat > "$ENG/engagement.json" <<JSON
   "phase": "P0",
   "gates": { "P0": false, "P1": false, "P2": false, "P3": false, "P4": false, "P5": false, "P6": false, "P7": false, "P8": false, "P9": false },
   "domains_in_scope": "all",
-  "domains_na": {},
+  "domains_na": null,
   "blockers": [],
   "created": "${TODAY}",
   "updated": "${TODAY}"
@@ -124,7 +124,7 @@ git -C "$ENG" config user.email >/dev/null 2>&1 || { git -C "$ENG" config user.n
   printf "FORBIDDEN_RE='%s'\nFORBIDDEN_DIR_RE='%s'\nCRED_RE='%s'\nCRED_ALLOW_RE='%s'\n" "$FORBIDDEN_RE" "$FORBIDDEN_DIR_RE" "$CRED_RE" "$CRED_ALLOW_RE"
   cat <<'HOOK'
 rc=0
-bad="$(git diff --cached --name-only -z 2>/dev/null | tr '\0' '\n' | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" || true)"
+bad="$(git diff --cached --name-only -z 2>/dev/null | tr '\0' '\n' | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" | grep -v '/\.gitkeep$' || true)"
 [ -n "$bad" ] && { echo "pre-commit: forbidden artefacts staged (binaries, keys, decompiled trees, secrets):"; echo "$bad"; rc=1; }
 hits="$(git diff --cached -U0 2>/dev/null | grep -E '^\+' | grep -v '^+++' | grep -E "$CRED_RE" | grep -Ev "$CRED_ALLOW_RE" | head -3 || true)"
 [ -n "$hits" ] && { echo "pre-commit: live-looking credential or JWT in the staged diff — redact it (<redacted>, keep the shape):"; echo "$hits" | cut -c1-120; rc=1; }
@@ -167,6 +167,7 @@ cat <<TXT
 
 NEXT
   1. Fill engagement.json: target identity, authorisation basis, scope, accounts (START.md §6).
+     domains_na starts null (= applicability probes not run); scripts/mark.py <eng> Dnn n/a records each n/a domain, {} means "all apply".
   2. Fill the header of report/assessment-status.md.
   3. export SANE_ENGAGEMENT="$ENG"; python3 scripts/state.py "\$SANE_ENGAGEMENT"   # the resume card — run it at the start of every session
   4. Work P0 → P9 per START.md. Settle rows only through scripts/mark.py. After every batch:

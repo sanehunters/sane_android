@@ -21,7 +21,7 @@ jobs:
             echo "::error::binary or evidence artefacts committed:"; echo "$bad"; exit 1
           fi
           # the methodology never tracks an engagement: only README.md and _TEMPLATE/ live under BugBountyTarget/
-          eng=$(git ls-files 'BugBountyTarget/*' | grep -Ev '^BugBountyTarget/(README\.md|_TEMPLATE/)' || true)
+          eng=$(git ls-files | grep -E "$ENG_PATH_RE" | grep -Ev "$ENG_PATH_ALLOW_RE" || true)
           if [ -n "$eng" ]; then
             echo "::error::engagement evidence committed to the public methodology repo (it belongs in the private evidence repo):"; echo "$eng"; exit 1
           fi

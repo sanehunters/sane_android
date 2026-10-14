@@ -224,7 +224,7 @@ def main():
     ap.add_argument("--classes", default="matrix,urimatcher,traversal,sql", help="subset of matrix,urimatcher,traversal,sql")
     ap.add_argument("--user", help="content --user N")
     ap.add_argument("--serial", default=os.environ.get("ANDROID_SERIAL", ""))
-    ap.add_argument("--out", help="evidence dir (default provider-fuzz/<pkg>)")
+    ap.add_argument("--out", help="evidence dir (default $E/recon/provider-fuzz when $E is set, else ./provider-fuzz/<pkg>)")
     ap.add_argument("--repeat", type=int, default=3, help="identical baseline requests before the SQL oracle (default 3)")
     ap.add_argument("--timeout", type=int, default=15)
     ap.add_argument("--no-write", action="store_true", help="skip insert/update/delete")

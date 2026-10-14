@@ -22,6 +22,10 @@ engagement.json keys the gates read (seeded by scripts/new-engagement.sh, docume
                         lockscreen, positive_controls must all be true (docs/03 §7); with "static-only" they may
                         stay false (START.md §3) and p1 is open                                        (p1)
   domains_na            {} or {"Dnn": "<probe note>"} — null/absent means the applicability probes were not run (p3)
+  domains_decided       ["Dnn", …] every domain whose applicability probe was answered: mark.py adds a domain on
+                        `Dnn applies`, `Dnn n/a` or its first settled row; p3 stays closed while any tracker
+                        domain is missing (absent list = nothing decided)                                      (p3)
+  domains_applicable    {"Dnn": "<probe evidence>"} written by `mark.py <eng> Dnn applies` (informational)
 """
 import csv, glob, json, os, re, sys
 
@@ -167,10 +171,11 @@ def check(eng, gate):
                 reasons.append(f"inventory/{f} has no rows and no inventory/EMPTY-{stem}.md explaining why (manifest or code evidence)")
         if not isinstance(na, dict):
             reasons.append("engagement.json.domains_na not decided (run every card's applicability probe; {} is a valid answer, null is not)")
-        decided = e.get("domains_decided")
-        if isinstance(decided, list):
-            undecided = sorted({(r.get("domain") or "").strip() for r in rows} - set(decided) - set(na or {}))
-            if undecided: reasons.append(f"domains_decided lacks {', '.join(undecided)} — run each card's applicability probe and settle or mark n/a")
+        decided = e.get("domains_decided") if isinstance(e.get("domains_decided"), list) else []   # absent = nothing decided
+        undecided = sorted({(r.get("domain") or "").strip() for r in rows} - set(decided) - set(na if isinstance(na, dict) else {}) - {""})
+        if undecided:
+            reasons.append(f"applicability undecided for {', '.join(undecided)} — run each card's applicability probe, then "
+                           "scripts/mark.py <eng> Dnn applies --note \"<evidence>\" or scripts/mark.py <eng> Dnn n/a --note \"<reason>\"")
         for iid, why in settled_rows({"D01", "D03"}): reasons.append(f"{iid}: {why}")
     elif g in ("p4", "p5", "p6"):
         pd = phase_domains(rows).get(g.upper(), set())
@@ -201,6 +206,16 @@ def check(eng, gate):
     return reasons
 
 
+def fold_open(rs):
+    """(specific reasons, open-row ids): hundreds of 'Dnn-NNN: open' lines would otherwise hide the few reasons that
+    need a decision (invalid rows, inventory instances, missing files) behind the print limit."""
+    opens = [r.split(":")[0] for r in rs if r.endswith(": open")]
+    others = [r for r in rs if not r.endswith(": open")]
+    if opens:
+        others.append(f"{len(opens)} row(s) still open: {', '.join(opens[:10])}{'…' if len(opens) > 10 else ''} (scripts/next.py lists them in triage order)")
+    return others
+
+
 def main():
     a = sys.argv[1:]
     if len(a) < 2: print(__doc__); sys.exit(1)
@@ -208,14 +223,15 @@ def main():
     if a[1] == "--all":
         for g in ["p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "done"]:
             rs = check(eng, g)
-            print(f"  {g:<5} {'OPEN  ' if not rs else 'CLOSED'} {('' if not rs else '· ' + str(len(rs)) + ' reason(s): ' + rs[0][:70])}")
+            first = fold_open(rs)[0][:70] if rs else ""
+            print(f"  {g:<5} {'OPEN  ' if not rs else 'CLOSED'} {('' if not rs else '· ' + str(len(rs)) + ' reason(s): ' + first)}")
         return
     if a[1] == "--pass":
         if len(a) < 3 or a[2].lower() not in [p.lower() for p in PHASES[:9]] + ["done"]:
             print("!! usage: gate.py <eng> --pass p0..p8|done"); sys.exit(2)
         g = a[2].lower(); rs = check(eng, g)
         if rs:
-            print(f"⛔ gate {g} is CLOSED; cannot record it:"); [print("   -", r) for r in rs[:40]]; sys.exit(1)
+            print(f"⛔ gate {g} is CLOSED; cannot record it:"); [print("   -", r) for r in fold_open(rs)[:40]]; sys.exit(1)
         ej = os.path.join(eng, "engagement.json"); e = json.load(open(ej, encoding="utf-8"))
         e.setdefault("gates", {})[g.upper()] = True
         nxt = PHASES[min(PHASES.index(g.upper()) + 1, 9)] if g != "done" else "P9"
@@ -230,8 +246,9 @@ def main():
     rs = check(eng, a[1])
     if rs:
         print(f"⛔ gate {a[1]} CLOSED — {len(rs)} reason(s):")
-        for r in rs[:60]: print("   -", r)
-        if len(rs) > 60: print(f"   … and {len(rs) - 60} more")
+        shown = fold_open(rs)
+        for r in shown[:60]: print("   -", r)
+        if len(shown) > 60: print(f"   … and {len(shown) - 60} more")
         sys.exit(1)
     print(f"✅ gate {a[1]} OPEN"); sys.exit(0)
 

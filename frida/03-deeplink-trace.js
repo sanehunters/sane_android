@@ -1,7 +1,8 @@
 /* 03-deeplink-trace.js — D09: trace a URI from the entry point to the sink it reaches.
  *
  * Run      spawn:  frida -D $ANDROID_SERIAL -f <pkg> -l frida/03-deeplink-trace.js -t 120 -q | tee $E/logs/frida-03-$(date +%s).log
- *          then fire the link: adb shell am start -W -a android.intent.action.VIEW -d '<uri>' <pkg>
+ *          then fire the link: adb shell "am start -W -a android.intent.action.VIEW -d '<uri>' <pkg>"
+ *          (whole command in double quotes, the URI in single quotes: the device shell re-parses `&`, `?` and `;`)
  *          attach works too (the handler runs on every delivery), but a link delivered BEFORE attach is not seen.
  *
  * Why these classes (README rule 1: a hook on an abstract class records nothing)
@@ -96,5 +97,5 @@ Java.perform(function () {
     sink('PendingIntent.send', o, args, ' pi=' + this.toString());
     return o.apply(this, args);
   });
-  console.log(P + ' ready: fire the link now (adb shell am start -W -a android.intent.action.VIEW -d "<uri>" <pkg>)');
+  console.log(P + ' ready: fire the link now: adb shell "am start -W -a android.intent.action.VIEW -d \'<uri>\' <pkg>"');
 });

@@ -116,8 +116,9 @@ def write_csv(path, cols, rows):
         w.writeheader(); w.writerows(rows)
 
 
-def stamp_engagement(eng, na=None):
-    """Stamp `updated`; with na={Dnn: note} also record whole-domain n/a decisions that arrived through partials."""
+def stamp_engagement(eng, na=None, decided=()):
+    """Stamp `updated`; with na={Dnn: note} also record whole-domain n/a decisions that arrived through partials;
+    every domain that received a merged row joins domains_decided (what mark.py does on a direct write)."""
     ej = os.path.join(eng, "engagement.json")
     if not os.path.exists(ej):
         return
@@ -127,6 +128,11 @@ def stamp_engagement(eng, na=None):
         if na:
             if not isinstance(e.get("domains_na"), dict): e["domains_na"] = {}
             e["domains_na"].update(na)
+        if decided:
+            dec = e.get("domains_decided")
+            if not isinstance(dec, list): dec = e["domains_decided"] = []
+            for d in sorted(decided):
+                if d and d not in dec: dec.append(d)
         json.dump(e, open(ej, "w", encoding="utf-8"), indent=1, ensure_ascii=False)
     except Exception as ex:
         print(f"!! engagement.json not stamped: {ex}", file=sys.stderr)
@@ -479,7 +485,8 @@ def merge(master_path, dry_run, overwrite, archive, as_json):
     changed = R["merged"] or R["overwritten"]
     if changed and not dry_run:
         write_csv(master_path, cols, rows)
-        stamp_engagement(eng, na_domains(rows, {x["item_id"][:3] for x in R["merged"] + R["overwritten"]}))
+        touched = {x["item_id"][:3].upper() for x in R["merged"] + R["overwritten"]}
+        stamp_engagement(eng, na_domains(rows, touched), touched)
     inv = merge_inventory(eng, dry_run, overwrite, R)
     if inv["merged"] and not changed and not dry_run:
         stamp_engagement(eng)

@@ -12,8 +12,9 @@ WORKER CONTRACT (paste into each worker)
   You own domain Dnn only. Read START.md §5–§6 and cards/Dnn.md. Run the applicability probe, then the items
   in triage order via `python3 scripts/item.py`. Settle every row with the validated writer, into your own
   partial file — never by hand:
-    python3 scripts/mark.py <eng> Dnn-NNN <result> --note "..." --tracker checklist-status.Dnn.partial.csv
-  (same columns as checklist-status.csv; only Dnn rows; the same R4 rules apply). Raw output goes to
+    python3 scripts/mark.py <eng> Dnn-NNN <result> --note "..." --partial Dnn
+  (--partial Dnn seeds <eng>/checklist-status.Dnn.partial.csv from the tracker on first use: same columns,
+  only Dnn rows, the same R4 rules apply). Raw output goes to
   <eng>/logs/Dnn-NNN.txt; parked leads to <eng>/hypotheses/H-Dnn-NN.md (that id is valid as-is in notes and
   is never renumbered). The instances you tested go to <eng>/inventory/<register>.Dnn.partial.csv (same
   columns as inventory/<register>.csv; only the rows you tested, with tested/result/finding_id/notes filled).

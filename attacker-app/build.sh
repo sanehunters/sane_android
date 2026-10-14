@@ -55,8 +55,9 @@ echo "built $APK ($(wc -c < "$APK" | tr -d ' ') bytes) sha256=$( (shasum -a 256 
 if [ "$INSTALL" = 1 ]; then
   command -v adb >/dev/null 2>&1 || { echo "UNVERIFIED: adb not found"; exit 2; }
   adb ${ADB_SERIAL:+-s "$ADB_SERIAL"} install -r "$APK" && cat <<EOT
-installed. Drive it (ALWAYS -S: a live probe ignores a plain am start):
-  adb shell am start -S -n com.sanehunters.probe/.MainActivity --es run baseline,enumerate --es victim ${VICTIM:-com.target.app}
+installed. Drive it (ALWAYS -S: a live probe ignores a plain am start; the whole command in double quotes and any value
+holding ; & ? > or a space in single quotes — the device shell re-parses the line):
+  adb shell "am start -S -n com.sanehunters.probe/.MainActivity --es run baseline,enumerate --es victim ${VICTIM:-com.target.app}"
   adb logcat -s PROBE:V
   adb pull /sdcard/Android/data/com.sanehunters.probe/files/ "\${E:-.}/logs/probe/"     # file mirror (some builds drop app Log output)
 EOT
