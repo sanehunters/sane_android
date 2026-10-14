@@ -83,6 +83,8 @@ PHASE_NAMES = ["Scope & Authorisation", "Lab & Harness", "Acquisition & Binary I
 def repo_slug(arg):
     if arg: return arg
     url = subprocess.run(["git", "-C", ROOT, "remote", "get-url", "origin"], capture_output=True, text=True).stdout.strip()
+    if not url:  # linked worktrees and detached checkouts: fall back to the config value, then to the pushed branch's remote
+        url = subprocess.run(["git", "-C", ROOT, "config", "--get", "remote.origin.url"], capture_output=True, text=True).stdout.strip()
     m = re.search(r'github\.com[:/]([^/]+)/([^/.]+)', url)
     return f"{m.group(1)}/{m.group(2)}" if m else sys.exit("!! cannot determine repo; pass --repo owner/name")
 

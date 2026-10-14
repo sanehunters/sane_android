@@ -47,7 +47,7 @@ CRED_ALLOW_RE='<redacted>|EXAMPLE|hygiene:allow'
 # staged forbidden artefacts / live-looking credentials in one repo; prints the problem, returns 1 when dirty
 staged_problems() { # staged_problems <repo-dir> [methodology]
   local r="$1" kind="${2:-}" bad hits
-  bad="$(git -C "$r" diff --cached --name-only -z 2>/dev/null | tr '\0' '\n' | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" || true)"
+  bad="$(git -C "$r" diff --cached --name-only -z 2>/dev/null | tr '\0' '\n' | grep -Ei "$FORBIDDEN_RE|$FORBIDDEN_DIR_RE" | grep -v '/\.gitkeep$' || true)"
   if [ "$kind" = methodology ]; then
     # the methodology legitimately contains credential SHAPES as detection patterns: exclude by path, never by content
     hits="$(git -C "$r" diff --cached -U0 -- . ':(exclude)docs' ':(exclude)checklist' ':(exclude)cards' ':(exclude)json' ':(exclude)CHECKLIST.md' ':(exclude)MASTER-CHECKLIST.md' ':(exclude)checklist.csv' 2>/dev/null | grep -E '^\+' | grep -v '^+++' | grep -E "$CRED_RE" | grep -Ev "$CRED_ALLOW_RE" | head -3 || true)"
