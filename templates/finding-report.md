@@ -56,7 +56,9 @@ Any application installed on the device, declaring no permissions, can ...
 > is, and the sha256 of any build delivered to the programme goes in `apk/versions.txt`.
 
 - `videos/F-NNN.mp4` — one continuous take, under 5 MB, conforming to the PoC standard (docs/04)
-- `pocs/F-NNN/` — attacker-app source only (zero permissions), never a built APK
+- `pocs/F-NNN/attacker-app/` — attacker-app source only (zero permissions), never a built APK
+- `pocs/F-NNN/attacker-app/AndroidManifest.xml` — declares no permissions (the Rung-4 artefact, committed as evidence)
+- built APK: `pocs/F-NNN/build/` (gitignored) — attached to the submission together with the video, never committed (docs/04 §7 "Where the APK lives")
 - `logs/Dnn-NNN.txt` — raw tool output of the item(s) that produced the finding
 - `screenshots/Dnn-NNN-<n>.png` — stills, third-party data redacted
 - `findings/F-NNN/device.txt` — build fingerprint, SDK, target version · `commands.txt` — exact commands run · `notes.md`

@@ -12,23 +12,12 @@ issue. Corrections to existing items outrank new items.
 
 ## Standard every item must meet
 
-The format is `docs/11-item-schema.md`; validate with `python3 scripts/build-checklist.py && python3 scripts/lint-checklist.py`.
-An item is not accepted until it has the ten required fields:
-
-| Field | Requirement |
-|---|---|
-| **Severity ceiling** | Critical/High/Medium/Low — the most the item can reach on its own. A P5-only item needs an escalation |
-| **VRT** | The Bugcrowd VRT path it reaches (`data/vrt.csv`), never a P5 mobile leaf as the final rating |
-| **Attacker** | The weakest attacker model that still works (AM-01…AM-12, `docs/05`) |
-| **Applies to** | API level, framework or app-type preconditions, or "all" |
-| **Maps to** | Only identifiers you actually verified. Never invent a MASTG or ATT&CK ID |
-| **Test** | What to check, in one or two sentences |
-| **How** | The exact command, grep, manifest attribute or tool step. Not "look for X" |
-| **Proof** | The specific observable that confirms it — a log line, returned bytes, a status delta |
-| **Escalation** | What this primitive chains into |
-| **Ruled out when** | The mechanism that closes the item, as the `notes` of a `ruled-out` row would state it |
-
-Strongly recommended: **Requires** (device/root/MitM/accounts), **Record** (what goes to `logs/`), **Skip when**.
+`docs/11-item-schema.md` §1 is the only item schema — the metadata rows (`Severity ceiling`, `VRT`, `Attacker`, `Applies to`,
+`Requires`, `Maps to`, `Record`), the body fields (`Skip when`, `Test`, `How`, `Proof`, `Escalation`, `Ruled out when`), which of
+them are required and the grammar of each. It is not repeated here so that it cannot drift. An item is not accepted until it
+carries every required field; validate with `python3 scripts/build-checklist.py && python3 scripts/lint-checklist.py`.
+The two rules most often missed: **Maps to** cites only identifiers you verified in `data/` (never invent a MASTG or ATT&CK
+id), and **Ruled out when** names the mechanism exactly as the `notes` of a `ruled-out` row would state it.
 
 ## House rules
 
@@ -48,8 +37,12 @@ Strongly recommended: **Requires** (device/root/MitM/accounts), **Record** (what
 ## Never commit
 
 APKs, decompiled trees, keystores, raw HAR/PCAP captures, videos over 5 MB, credentials, or any third
-party's data. **Never an engagement folder to this repository**: it is public, `.gitignore` ignores
-`BugBountyTarget/*_*/` and only `BugBountyTarget/README.md` and `_TEMPLATE/` are tracked. Each engagement folder is
-its own git repository (created by `scripts/new-engagement.sh`) whose hashes, logs, sanitised captures, notes and
-small videos are committed there and pushed to a private remote (`engagement.json.evidence_remote`). See
-`.gitignore` and `BugBountyTarget/README.md`.
+party's data. **Never commit or push engagement evidence to the methodology repository (it is public)**: `.gitignore` ignores
+`BugBountyTarget/*_*/` and only `BugBountyTarget/README.md` and `_TEMPLATE/` are tracked. Each engagement folder is its own git repository — the evidence repo
+(created by `scripts/new-engagement.sh`) — whose hashes, logs, sanitised captures, notes and
+small videos are committed there and pushed to a private remote (`engagement.json.evidence_remote`); without one the hooks
+state the blocker `no evidence remote configured: evidence is committed locally only — set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>`.
+A folder committed in an operator's checkout before this design (never pushed) is left alone until you migrate it:
+`cd BugBountyTarget/<eng> && git init && git add -A && git commit -m "import" && git remote add origin <private url>
+&& git push -u origin HEAD`, then in the methodology checkout `git rm -r --cached BugBountyTarget/<eng>`.
+See `.gitignore` and `BugBountyTarget/README.md`.

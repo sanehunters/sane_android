@@ -9,8 +9,9 @@ cards/Dnn.md, the inventory/*.csv rows for its domain, and the write contract be
 the same domain. Merge when all return.
 
 WORKER CONTRACT (paste into each worker)
-  You own domain Dnn only. Read START.md §5–§6 and cards/Dnn.md. Run the applicability probe, then the items
-  in triage order via `python3 scripts/item.py`. Settle every row with the validated writer, into your own
+  You own domain Dnn only. Read START.md §5–§6 and cards/Dnn.md. Applicability was decided by the coordinator
+  in P3 (engagement.json.domains_decided): never run `mark.py <eng> Dnn applies` or a whole-domain n/a (applies is
+  refused on a slice). Work the items in triage order via `python3 scripts/item.py`. Settle every row with the validated writer, into your own
   partial file — never by hand:
     python3 scripts/mark.py <eng> Dnn-NNN <result> --note "..." --partial Dnn
   (--partial Dnn seeds <eng>/checklist-status.Dnn.partial.csv from the tracker on first use: same columns,
@@ -24,7 +25,7 @@ WORKER CONTRACT (paste into each worker)
 
 MERGE
   python3 scripts/coverage.py <eng>/checklist-status.csv --merge   # folds every checklist-status.Dnn.partial.csv
-  AND every inventory/<register>.Dnn.partial.csv (same row_valid and conflict rules as mark.py; a REJECTED
-  row goes back to its worker). Then update assessment-status.md; git -C <eng> commit; git -C <eng> push.
+  AND every inventory/<register>.Dnn.partial.csv (same row_valid and conflict rules as mark.py; H-Dnn-NN ids
+  are accepted as-is — renumbering to H-NNN is optional and AFTER the merge; a REJECTED row goes back to its worker). Then update assessment-status.md; git -C <eng> commit; git -C <eng> push.
   Then run `python3 scripts/coverage.py … --gate p7`.
 ```

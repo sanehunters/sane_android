@@ -114,6 +114,6 @@ jobs:
             for b in $builtins; do [ "$n" = "$b" ] && { echo "::error::$f: skill name '$n' is a Claude Code built-in — rename it (sane-$n)"; exit 1; }; done
           done; echo "clean"
       - name: Item lookup works
-        run: python3 scripts/item.py D10-004 >/dev/null && python3 scripts/item.py --grep JavascriptInterface | head -3
+        run: python3 scripts/item.py D10-004 >/dev/null && python3 scripts/item.py --domain D17 >/dev/null && python3 scripts/item.py --grep JavascriptInterface | head -3
       - name: End-to-end self-test on a scratch engagement
         run: $SH scripts/selftest.sh

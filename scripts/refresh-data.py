@@ -5,6 +5,8 @@
   python3 scripts/refresh-data.py --refs DIR      use existing clones under DIR (owasp-mastg, maswe, owasp-masvs,
                                                   vulnerability-rating-taxonomy, www-project-mobile-top-10)
   python3 scripts/refresh-data.py --offline       never touch the network; fail if a source is missing
+  python3 scripts/refresh-data.py --crosswalk-only  rebuild data/crosswalk.csv (+ versions.json row_counts) from json/ and
+                                                  the committed data/*.csv — no network, no .refs/, no PyYAML
 
 Sources (all public): OWASP MASTG, MASWE, MASVS; Bugcrowd VRT; OWASP Mobile Top 10; MITRE ATT&CK Mobile (STIX);
 CWE Top 25. Downloads land in <refs>/_untrusted_*/ and are only ever parsed, never executed.
@@ -146,9 +148,30 @@ def build_crosswalk(index):
     for r in unk[:10]: print("    !! unknown", r["standard"], r["standard_id"], "cited by", r["item_ids"][:60])
 
 
+def update_row_counts():
+    """data/versions.json row_counts for the two derived files — kept by the script, never by hand (DATA-10)."""
+    vp = os.path.join(DATA, "versions.json")
+    if not os.path.exists(vp): return
+    v = json.load(open(vp, encoding="utf-8"))
+    for f in ("standards-index.csv", "crosswalk.csv"):
+        p = os.path.join(DATA, f)
+        if not os.path.exists(p): continue
+        with open(p, newline="", encoding="utf-8") as fh:
+            v.setdefault("row_counts", {})[f] = sum(1 for _ in csv.DictReader(fh))   # csv rows, as new-engagement.sh counts
+    open(vp, "w", encoding="utf-8").write(json.dumps(v, indent=1) + "\n")
+    print(f"  versions.json row_counts: standards-index.csv {v['row_counts'].get('standards-index.csv')} · crosswalk.csv {v['row_counts'].get('crosswalk.csv')}")
+
+
 def main():
     a = sys.argv[1:]
     offline = "--offline" in a
+    if "--crosswalk-only" in a:
+        # the derived files only: json/ (scripts/build-checklist.py) + the committed data/*.csv → standards-index.csv, crosswalk.csv
+        if not glob.glob(os.path.join(ROOT, "json", "D*.json")):
+            sys.exit("!! json/ is empty: run python3 scripts/build-checklist.py first")
+        build_crosswalk(build_standards_index()); update_row_counts()
+        print("done — crosswalk.csv rebuilt from json/; rebuild docs/07 with its §6 heredoc and commit data/ with the chapters")
+        return
     refs = a[a.index("--refs") + 1] if "--refs" in a else os.environ.get("SANE_REFS") or os.path.join(ROOT, ".refs")
     print(f"sources under {refs}")
     import importlib.util
@@ -170,6 +193,7 @@ def main():
         sys.exit("!! builder failed:\n" + r.stderr[-2000:])
     index = build_standards_index()
     build_crosswalk(index)
+    update_row_counts()
     print("done — commit data/ together with the chapters that cite it")
 
 

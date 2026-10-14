@@ -16,7 +16,7 @@ identifier in a chapter either exists here or the linter rejects it. **Never inv
 | `vrt-deprecated-nodes.csv` | 113 | old VRT paths → their current replacement | `old_path, vrt_version, new_path` |
 | `attack-mobile-android.csv` | 122 | MITRE ATT&CK Mobile techniques whose platforms include Android, with the ATT&CK version | `id, name, tactics, platforms, attack_version` |
 | `mobile-top10-2024.csv` · `cwe-top25.csv` | 10 · 25 | OWASP Mobile Top 10 2024 and the CWE Top 25 (2025). Not in the crosswalk universe: items cite them as free text (`Mobile Top 10 2024 Mn`, `CWE-n` in a Maps-to row) and the generated `docs/07` §3 derives that coverage from `json/` | `id, title` / `rank, id, name, year, url` |
-| `crosswalk.csv` | 1,335 | **standard id → checklist item ids** that cite it, for every standard entry (cited or not). This is how `docs/07` is proven rather than asserted: an uncited MASWE weakness is a coverage gap | `standard, standard_id, title, known, n_items, item_ids` |
+| `crosswalk.csv` | 1,349 | **standard id → checklist item ids** that cite it, for every standard entry (cited or not); a chapter-head `Maps to` citation counts as the pseudo-item `Dnn-HEAD`. This is how `docs/07` is proven rather than asserted: an uncited MASWE weakness is a coverage gap | `standard, standard_id, title, known, n_items, item_ids` |
 | `versions.json` | — | provenance: commit + date of each source, row counts of every file above (the two derived files included), platforms kept | |
 
 ## How a model should use this
@@ -39,7 +39,7 @@ identifier in a chapter either exists here or the linter rejects it. **Never inv
 python3 scripts/refresh-data.py             # clones/updates sources into .refs/ (gitignored), rebuilds data/ incl. vrt.csv
                                             #   needs PyYAML once (python3 -m pip install pyyaml); the script says so before cloning
 python3 scripts/build-checklist.py          # views (cards/, json/, checklist.csv): VRT priorities come from the fresh vrt.csv
-python3 scripts/refresh-data.py --offline   # rebuilds crosswalk.csv from the fresh json/ (no network; .refs/ already present)
+python3 scripts/refresh-data.py --crosswalk-only   # rebuilds crosswalk.csv + versions.json row_counts from the fresh json/ (no network, no .refs/, no PyYAML)
 python3 scripts/build-checklist.py --check  # must report current — a refresh that changed a priority is now in the views
 python3 scripts/lint-checklist.py           # every cited id must still resolve
 # then rebuild docs/07 (dataset table, §1–§4, Known gaps) with the heredoc in docs/07 §6; it warns when

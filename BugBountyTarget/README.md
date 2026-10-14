@@ -60,7 +60,7 @@ A folder committed in an operator's checkout before this design (never pushed) i
 
 | Path | Contents (file pattern · id family) | Committed? |
 |---|---|---|
-| `engagement.json` | phase, gates, target, authorisation, accounts, `lab`, `domains_na`, `blockers`, `evidence_remote` | ✅ |
+| `engagement.json` | phase, gates, target, authorisation, accounts, `lab`, `domains_na` / `domains_decided` / `domains_applicable`, `blockers`, `evidence_remote` | ✅ |
 | `checklist-status.csv` | the coverage tracker, one row per item `Dnn-NNN`; written only through `scripts/mark.py` (`result` ∈ finding · ruled-out · blocked · n/a, `notes` = the mechanism) | ✅ |
 | `apk/` | `versions.txt` — hashes, signer, split list. The binaries themselves | ✅ versions.txt only |
 | `decompiled/` | `jadx/`, `apktool/` (`$DEC`) | ❌ never (regenerable) |
@@ -69,7 +69,7 @@ A folder committed in an operator's checkout before this design (never pushed) i
 | `hypotheses/` | `H-NNN.md`, one parked lead each (copy `H-000-TEMPLATE.md`) | ✅ |
 | `findings/F-NNN/` | `report.md` (from `templates/finding-report.md`), `device.txt`, `commands.txt`, `notes.md` | ✅ |
 | `chains/` | `X-NNN.md`, one row per link with its status | ✅ |
-| `pocs/F-NNN/` | attacker-app **source** — never a built APK (hashes of a delivered build go in `apk/versions.txt`) | ✅ source only |
+| `pocs/F-NNN/` | `attacker-app/` **source** — never a built APK; `build/` is gitignored (the APK is attached to the submission; hashes of a delivered build go in `apk/versions.txt`) | ✅ source only |
 | `videos/` | `F-NNN.mp4`, one continuous take, under 5 MB | ✅ |
 | `screenshots/` | `<item_id>-<n>.png` — **redact third-party data before committing** | ✅ |
 | `logs/` | `<item_id>.txt` raw tool output · `harness/` (lab verification) · `compactions.log` · `loop-*.log` | ✅ |

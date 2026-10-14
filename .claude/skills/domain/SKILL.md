@@ -6,7 +6,7 @@ description: Work one checklist domain end to end: card, applicability probe, it
 # /domain Dnn
 
 1. `cat cards/Dnn.md` — crux question, applicability probe, triage order, one line per item.
-2. Run the **Applicability probe**. If the domain does not apply: `python3 scripts/mark.py $E Dnn n/a --note "<the probe's exact note, ≥25 chars>"` (writes every Dnn row and `engagement.json.domains_na.Dnn` in one validated call), commit, done.
+2. Run the **Applicability probe**. If the domain does not apply: `python3 scripts/mark.py $E Dnn n/a --note "<the probe's exact note, ≥25 chars>"` (writes every Dnn row and `engagement.json.domains_na.Dnn` in one validated call), commit, done. If it does apply: `python3 scripts/mark.py $E Dnn applies --note "<probe evidence, ≥25 chars>"` (records `engagement.json.domains_applicable.Dnn` and `domains_decided`; writes no rows — they are worked in step 3; `python3 scripts/gate.py $E p3` lists every domain still undecided).
 3. For each item in the card's **triage order**:
    - `python3 scripts/item.py Dnn-NNN` → run **How**, compare with **Proof**, save raw output to `logs/Dnn-NNN.txt`.
    - Settle the row only through `python3 scripts/mark.py $E Dnn-NNN <result> --note "..." [--evidence logs/Dnn-NNN.txt]` (START.md §6: `finding` with `H-0NN` · `ruled-out` with the mechanism and `file:line` · `blocked` with `needs: …` · `n/a` with why).

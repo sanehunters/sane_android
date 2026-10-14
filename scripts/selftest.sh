@@ -29,6 +29,7 @@ step "checklist integrity"
 expect_ok python3 scripts/lint-checklist.py
 expect_ok python3 scripts/build-checklist.py --check
 expect_ok python3 scripts/item.py D10-004
+expect_ok python3 scripts/item.py --domain D17        # the 'varies'-severity items live only in D17 (ITEM-02 regression guard)
 expect_ok python3 scripts/item.py --grep JavascriptInterface
 [ -f cards/D10.md ] && ok "cards exist" || bad "cards missing"
 [ -f json/index.json ] && ok "json index exists" || bad "json index missing"
@@ -82,7 +83,7 @@ expect_ok   python3 scripts/gate.py "$E" --pass p0
 [ "$(jq_ "$E/engagement.json" "e['phase']")" = P6 ] && ok "re-passing p0 at P6 did not rewind the phase" || bad "phase rewound by --pass p0"
 expect_ok   python3 scripts/state.py "$E"
 expect_ok   python3 scripts/state.py "$E" --json
-python3 scripts/state.py "$E" --json | grep -q '"settled_predicate": "scripts/gate.py row_valid"' && ok "state.py counts with gate.row_valid" || bad "state.py predicate"
+out="$(python3 scripts/state.py "$E" --json 2>/dev/null)"; printf '%s' "$out" | grep -q '"settled_predicate": "scripts/gate.py row_valid"' && ok "state.py counts with gate.row_valid" || bad "state.py predicate"   # capture first (pipefail)
 expect_ok   python3 scripts/coverage.py "$E/checklist-status.csv" --brief
 expect_ok   python3 scripts/next.py "$E"
 out="$(python3 scripts/next.py "$E" --domain D10 2>/dev/null)"; printf '%s' "$out" | grep -q 'D10-005' && bad "next.py offers a settled finding row" || ok "next.py skips settled rows (gate.row_valid)"

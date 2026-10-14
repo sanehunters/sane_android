@@ -25,9 +25,9 @@ one domain, how to record, and what to load (never a whole chapter). Everything 
 
 You supply an APK (or package), a scope and an authorisation basis, and paste
 [`prompts/00-bootstrap.md`](prompts/00-bootstrap.md) into a fresh session of any frontier model (Claude Code,
-Codex, Gemini CLI, Cursor…). The session creates a dated engagement folder (its own git repository), works 26 domains of checkpoints
+Codex, Gemini CLI, Cursor…). The session creates a dated engagement folder (each engagement folder is its own git repository — the evidence repo), works 26 domains of checkpoints
 tracked as rows, proves primitives from a zero-permission attacker app, chains them into payable impact
-categories in a dedicated phase, records what it ruled out and why, and pushes the evidence to a private remote as it goes — never to this public repository.
+categories in a dedicated phase, records what it ruled out and why, and pushes the evidence to a private remote as it goes; never commit or push engagement evidence to the methodology repository (it is public).
 You read `BugBountyTarget/<Target>_<date>/report/assessment-status.md` and the findings.
 
 ---

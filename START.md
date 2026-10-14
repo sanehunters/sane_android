@@ -41,7 +41,7 @@ production without written permission, never exfiltrate a third party's data (pl
 | R4 | **Negative results are a deliverable.** A clean item names the *mechanism* that closes it, with `file:line`. A tool's silence is never a negative. | Every `ruled-out` row has a mechanism in `notes`. |
 | R5 | **Do not fool yourself.** Normalise before you diff; establish the error oracle before injection; beware the layer-ordering trap; look for the second implementation; a base-class Frida hook with zero hits is a false negative; emulator artefacts are never findings; never fabricate a CVE, report id, bounty figure, CVSS vector or PoC. | Every claim carries the evidence that produced it. |
 | R6 | **Coverage is two-dimensional and on disk.** `checklist-status.csv` proves the methodology was walked; `inventory/*.csv` proves every component *in this app* was individually tested. | Both files exist and are current. |
-| R7 | **State lives on disk, not in your context.** `engagement.json`, `checklist-status.csv`, `report/assessment-status.md` and `hypotheses/` are updated as you go and **committed and pushed after every batch of items**, never at the end. Each engagement folder is its own git repository (the *evidence repo*) with a **private** remote; the public methodology repository holds no engagements and nothing under `BugBountyTarget/<Target>_*/` is ever committed to it. A session that ends with unpushed state has destroyed its work. | `git -C $E status` is clean and `git -C $E log @{u}..` is empty when you stop — or `engagement.json.evidence_remote` is `null` and the missing remote is a stated blocker. |
+| R7 | **State lives on disk, not in your context.** `engagement.json`, `checklist-status.csv`, `report/assessment-status.md` and `hypotheses/` are updated as you go and **committed and pushed after every batch of items**, never at the end. Each engagement folder is its own git repository — the evidence repo — with a **private** remote. R7 in one line — state on disk: committed in the evidence repo after every batch, pushed to its private remote when one exists. The public methodology repository holds no engagements; never commit or push engagement evidence to the methodology repository (it is public). A session that ends with unpushed state has destroyed its work. | `git -C $E status` is clean and `git -C $E log @{u}..` is empty when you stop — or `engagement.json.evidence_remote` is `null` and the missing remote is a stated blocker. |
 
 ---
 
@@ -59,7 +59,7 @@ E=BugBountyTarget/<Target>_<DDMMYYYY>
 #    edit $E/report/assessment-status.md header
 # 3. Commit inside the evidence repo and push it to its PRIVATE remote (never to the methodology origin)
 git -C "$E" add -A && git -C "$E" commit -m "engage: <Target> P0 scope" && git -C "$E" push -u origin HEAD
-#    no remote given? evidence_remote is null: record the blocker "no evidence remote configured" and keep committing locally
+#    no remote given? evidence_remote is null and the hooks state the blocker: no evidence remote configured: evidence is committed locally only — set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>
 # 4. Work the state machine in §4, one phase at a time, starting at P0
 ```
 
@@ -93,7 +93,7 @@ blocker is non-fatal.
 | **P0 Scope** | — | authorisation basis known | `templates/scoping-questionnaire.md`; chase two accounts, OTP route, payment sandbox, KYC state now, not on day 9 | authorisation + scope + exclusions recorded in `engagement.json`; accounts recorded or their absence listed as a blocker | `engagement.json`, `report/assessment-status.md` |
 | **P1 Lab** | D26 | P0 | build and *verify* the harness per `docs/03`: TLS intercepted from a non-pinning host, Frida attaches, root works, lockscreen exists; positive control for every instrument | all five harness checks pass, or static-only mode declared | `engagement.json.lab`, `logs/harness/` |
 | **P2 Acquire** | D02 (+D01-001…010) | P1 | full APK set (every split), signature verified, `minSdk`/`targetSdk` from two sources, **framework identified** (Flutter / RN / Hermes / Xamarin / Unity / Cordova / native), **OTA question answered** (expo-updates, CodePush, custom DEX/JS updater → re-base on the on-device bundle) | `target.*` in `engagement.json` filled; hashes in `apk/versions.txt` | `apk/` (hashes only), `recon/` |
-| **P3 Inventory** | D01, D03 | P2 | `tools/01-surface-inventory.sh`, `python3 scripts/inventory.py base.apk --out $E/inventory/` (add `--all` when D08 applies: non-exported activities/services/receivers are the redirect targets; providers are always listed), `tools/06-secrets-endpoints.sh`, `tools/04-applink-verify.sh`; run the **applicability probe** of every domain card (or, where a card has none yet, answer its crux question with the two most decisive greps) and record `domains_na` with reasons | every entry point written down; `inventory/components.csv`, `deeplinks.csv`, `webviews.csv`, `endpoints.csv` exist; `domains_na` decided | `inventory/`, `recon/`, `engagement.json.domains_na` |
+| **P3 Inventory** | D01, D03 | P2 | `tools/01-surface-inventory.sh`, `python3 scripts/inventory.py base.apk --out $E/inventory/` (add `--all` when D08 applies: non-exported activities/services/receivers are the redirect targets; providers are always listed), `tools/06-secrets-endpoints.sh`, `tools/04-applink-verify.sh`; run the **applicability probe** of every domain card (or, where a card has none yet, answer its crux question with the two most decisive greps) and record every decision with `python3 scripts/mark.py $E Dnn applies\|n/a --note "<probe evidence>"` | every entry point written down; `inventory/components.csv`, `deeplinks.csv`, `webviews.csv`, `endpoints.csv` exist (or `inventory/EMPTY-<register>.md` says why one is empty); applicability decided for every domain (`engagement.json.domains_decided` = every Dnn, via `mark.py Dnn applies\|n/a`; `gate.py p3` lists what is undecided) | `inventory/`, `recon/`, `engagement.json.domains_decided` / `domains_na` / `domains_applicable` |
 | **P4 Static** | D11 D12 D16 D17 D19 D20 D21 D22 (+ static halves of D03–D10, D13, D14, D18, D23) | P3 | read every inventory item to its sink; grep for the validator, enumerate its call sites, the unguarded sibling is the finding | every inventory row read to its sink or deferred with a reason | rows flipped, `hypotheses/` |
 | **P5 IPC** | D04 D05 D06 D07 D08 D09 D10 D25 | P4 | prove from the **zero-permission attacker app** what static suggested; `tools/02`, `tools/09` (providers; `tools/03` for the quick authority list), `tools/07`, `tools/08`; triage order: intent redirection → deep links → WebView/bridges → providers → implicit-intent interception → task hijack | every exported surface produced a primitive or a ruled-out entry naming the mechanism | rows, `inventory/components.csv.tested`, `pocs/` |
 | **P6 Network/API** | D13 D14 D15 D18 D23 | P5 + MitM + two accounts (else static-only) | exercise the endpoint map; cross-account matrix read **and** write; mass assignment from the body models; business logic; shadow-API (older mobile endpoints with weaker controls); error oracle before injection | endpoint map exercised; `inventory/endpoints.csv` complete | rows, `requests/`, `responses/` |
@@ -122,6 +122,8 @@ settling it, or the same probe re-run three times, or exploit code during P3–P
 2. Decide applicability    run the card's Applicability probe (if the card has none yet, answer the crux question with the
                            two most decisive greps and write them as the note). If the domain does not apply:
                            python3 scripts/mark.py $E Dnn n/a --note "<probe note>"   (every row + engagement.json.domains_na.Dnn), done.
+                           If it does apply:
+                           python3 scripts/mark.py $E Dnn applies --note "<probe evidence>"   (records the decision; rows are worked in their phase)
    Think first             answer the crux question for THIS app in three lines → hypotheses/_notes-Dnn.md
                            (which surface, which trust boundary, which value would an attacker want here)
 3. Walk the items in the card's triage order, not numeric order:
@@ -159,7 +161,8 @@ vocabulary (a fan-out worker writes its partial file the same way with `--partia
 **`engagement.json`** — `phase`, `gates.Pn`, `target.*`, `authorisation.*` (`basis` ∈ `own-app` | `sow` |
 `public-programme` | `vdp` | `lab`; `scope`, `programme_url`, `excluded`), `accounts`, `lab` (`mode`: `"dynamic"` |
 `"static-only"`; `device`: `"<serial> api <n>"`; `tls_intercept`, `frida`, `root`, `lockscreen`, `positive_controls`:
-booleans — the five P1 checks of `docs/03`), `domains_na` (`{"D10": "reason"}`), `blockers` (array of strings),
+booleans — the five P1 checks of `docs/03`), `domains_na` (`{"D10": "reason"}`; `null` until the first P3 decision), `domains_decided` (list: every `Dnn` whose
+applicability `mark.py Dnn applies|n/a` has recorded), `domains_applicable` (`{"D11": "probe evidence"}`), `blockers` (array of strings),
 `evidence_remote` (the private git url the evidence repo pushes to, or `null`), `updated` (ISO date). Update
 `updated` on every edit.
 
@@ -178,16 +181,21 @@ with its refutation.
 
 **Canonical paths** — decompiled output always lives at `$E/decompiled/apktool/` and
 `$E/decompiled/jadx/` (gitignored; the chapters write `$DEC` for `$E/decompiled`). Evidence:
-`logs/<item_id>.txt` raw tool output · `screenshots/<item_id>-<n>.png` · `findings/F-NNN/report.md` ·
-`pocs/F-NNN/` (attacker-app source, never a built APK) · `videos/F-NNN.mp4` (under 5 MB) ·
+`logs/<item_id>.txt` raw tool output · `screenshots/<item_id>-<n>.png` · `findings/F-NNN/{report.md,device.txt,commands.txt,log.txt,notes.md}` ·
+`pocs/F-NNN/attacker-app/` (attacker-app source, never a built APK) and `pocs/F-NNN/build/` (gitignored build output; the APK is
+attached to the submission, never committed) · `videos/F-NNN.mp4` (under 5 MB) ·
 `requests/<E-NNN>.http` and `responses/<E-NNN>.http` (credentials stripped) · `chains/X-NNN.md`.
 
 **Never commit** an APK, AAB, DEX, `.so`, keystore, HAR, a video over 5 MB, a credential, or any third
 party's data. `.gitignore` and the pre-commit hook block most of it; the rule is yours regardless.
-**Never commit an engagement to the methodology repository.** The methodology repo is public; `.gitignore`
-ignores `BugBountyTarget/*_*/` and the hooks refuse to stage it. Evidence is committed inside the engagement
-folder (its own git repository, created by `new-engagement.sh`) and pushed to the private remote recorded in
-`engagement.json.evidence_remote`; with no remote it is committed locally and the blocker is stated.
+**Never commit or push engagement evidence to the methodology repository (it is public).** `.gitignore`
+ignores `BugBountyTarget/*_*/` and the hooks refuse to stage it. Each engagement folder is its own git repository — the evidence repo
+(created by `new-engagement.sh`): evidence is committed there and pushed to the private remote recorded in
+`engagement.json.evidence_remote`; with no remote the hooks state the blocker
+`no evidence remote configured: evidence is committed locally only — set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>`.
+A folder committed in an operator's checkout before this design (never pushed) is left alone until you migrate it:
+`cd BugBountyTarget/<eng> && git init && git add -A && git commit -m "import" && git remote add origin <private url>
+&& git push -u origin HEAD`, then in the methodology checkout `git rm -r --cached BugBountyTarget/<eng>`.
 
 ---
 
@@ -219,7 +227,7 @@ mechanism; every finding still needs its full evidence tree. The rules:
 
 | Rule | How |
 |---|---|
-| Raw output goes to files; you read digests | every tool prints counts + candidates to stdout — redirect it (`tools/NN-… … \| tee $E/logs/tools-NN.txt`) and read the counts, open the file only for a candidate; never `cat` a decompiled file — `grep -n`, `sed -n 'a,bp'` |
+| Raw output goes to files; you read digests | every tool appends its human output to `$E/logs/tools-NN.txt` by itself and prints counts + candidates; read the counts, open the file only for a candidate (no `\| tee` — it doubles the log); never `cat` a decompiled file — `grep -n`, `sed -n 'a,bp'` |
 | One card per domain, one item at a time | `cards/Dnn.md` once; `python3 scripts/item.py Dnn-NNN --brief` (Test + How + Proof + Ruled out when) for the item you are on; `python3 scripts/item.py Dnn-NNN --field how` when you only need the commands |
 | Never re-derive state | `python3 scripts/state.py <eng>` ("where am I") and `python3 scripts/next.py <eng>` ("what next", in card triage order) answer it in one screen; do not re-read the tracker |
 | Think in writing, briefly | before a domain: answer its crux question for *this* app in three lines in `hypotheses/_notes-Dnn.md`; after it: three cross-surface hypotheses. Thirty seconds of thinking saves an hour of probing |
@@ -257,8 +265,8 @@ mechanism; every finding still needs its full evidence tree. The rules:
 
 A second account or a different privilege level · an OTP or KYC state · a payment sandbox or test
 instrument · a scope or authorisation decision · physical hardware you do not have · **a private evidence
-remote** (`SANE_EVIDENCE_REMOTE=<git url>` or `scripts/new-engagement.sh --remote <url>`; without it the evidence
-repo is committed locally only and `evidence_remote: null` is a stated blocker — never push evidence anywhere else).
+remote** (`SANE_EVIDENCE_REMOTE=<git url>` or `scripts/new-engagement.sh --remote <url>`; without it `evidence_remote` is
+`null` and the hooks state the blocker `no evidence remote configured: evidence is committed locally only — set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>` — never push evidence anywhere else).
 
 Ask by writing the exact need into `engagement.json.blockers` and the `BLOCKERS` section, committing,
 and stating it in your final message. **Everything else you decide yourself** — which surface next, whether

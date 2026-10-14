@@ -26,11 +26,12 @@ Progress is **never** recorded by closing them.
 | 📋 Checklist gap | `04-checklist-gap.yml` | `type: gap`, `domain: …` | the checklist missed or mis-stated something | merged into a chapter |
 | 🔧 Audit finding | — | `type: audit` | a defect in the methodology itself is found | fixed in a commit |
 
-Per-engagement issues are **optional** mirrors of the engagement folder — the folder (its own private evidence
-repository, see START.md R7) is the record of truth; the issues exist for people who live in GitHub. This tracker
+Per-engagement issues are **optional** mirrors of the engagement folder — each engagement folder is its own git repository — the evidence repo
+(private, START.md R7) — and that folder is the record of truth; the issues exist for people who live in GitHub. This tracker
 is public: an engagement, finding or ruled-out issue names the target only if the programme allows it and **never
 carries vulnerability details** (no mechanism, path, payload or evidence) — it links to the private evidence repo
-(`engagement.json.evidence_remote`, `findings/F-NNN/report.md`) instead.
+(`engagement.json.evidence_remote`, `findings/F-NNN/report.md`) instead; when no remote is configured the hooks state the
+blocker `no evidence remote configured: evidence is committed locally only — set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>` and the issue carries no link.
 
 ## 3. Labels
 

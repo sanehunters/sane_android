@@ -84,6 +84,8 @@ cat > "$ENG/engagement.json" <<JSON
   "gates": { "P0": false, "P1": false, "P2": false, "P3": false, "P4": false, "P5": false, "P6": false, "P7": false, "P8": false, "P9": false },
   "domains_in_scope": "all",
   "domains_na": null,
+  "domains_decided": [],
+  "domains_applicable": {},
   "blockers": [],
   "created": "${TODAY}",
   "updated": "${TODAY}"
@@ -109,6 +111,8 @@ secrets.csv
 sensitive/
 state-snapshot.json
 logs/tmp/
+# built PoC output (the signed APK is attached to the submission, never committed; docs/04 §7)
+pocs/*/build/
 # OS / tooling noise
 .DS_Store
 __pycache__/
@@ -167,7 +171,8 @@ cat <<TXT
 
 NEXT
   1. Fill engagement.json: target identity, authorisation basis, scope, accounts (START.md §6).
-     domains_na starts null (= applicability probes not run); scripts/mark.py <eng> Dnn n/a records each n/a domain, {} means "all apply".
+     domains_na starts null (= applicability probes not run); scripts/mark.py <eng> Dnn applies|n/a --note "<probe evidence>"
+     records each P3 decision (domains_decided / domains_applicable / domains_na); domains_na {} means "all apply".
   2. Fill the header of report/assessment-status.md.
   3. export SANE_ENGAGEMENT="$ENG"; python3 scripts/state.py "\$SANE_ENGAGEMENT"   # the resume card — run it at the start of every session
   4. Work P0 → P9 per START.md. Settle rows only through scripts/mark.py. After every batch:

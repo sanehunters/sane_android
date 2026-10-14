@@ -118,10 +118,12 @@ and 5 WebViews in version 18.15.0 were individually tested. Here is the result f
 ### R7 — State lives on disk, pushed
 Context dies; disk does not. `engagement.json`, `checklist-status.csv`, `report/assessment-status.md`,
 `hypotheses/`, `findings/` — updated as you go, committed and pushed after every batch of items. "Pushed" means
-to the engagement's **private evidence repository**: each `BugBountyTarget/<Target>_<DDMMYYYY>/` is its own git
-repo (created by `scripts/new-engagement.sh`), its remote is `engagement.json.evidence_remote`
+to the engagement's **private evidence repository** — R7 in one line: state on disk: committed in the evidence repo after
+every batch, pushed to its private remote when one exists. Each engagement folder is its own git repository — the evidence repo
+(`BugBountyTarget/<Target>_<DDMMYYYY>/`, created by `scripts/new-engagement.sh`); its remote is `engagement.json.evidence_remote`
 (`SANE_EVIDENCE_REMOTE` or `--remote`, an operator input), and the public methodology repository ignores every
-engagement folder. No remote configured → commit locally, state the blocker, never push elsewhere. The
+engagement folder. No remote configured → the hooks state the blocker `no evidence remote configured: evidence is committed locally only — set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>`;
+never commit or push engagement evidence to the methodology repository (it is public). The
 `.claude/hooks` enforce this under Claude Code; elsewhere, you enforce it with `git -C <eng>` (START.md §10).
 
 ---
@@ -165,8 +167,10 @@ row. The protocol in `prompts/05-fanout-multi-agent.md`: the coordinator owns `e
 `assessment-status.md`; each worker gets one domain card, writes only `<eng>/logs/Dnn-NNN.txt` files for its own
 domain, settles its rows with `python3 scripts/mark.py <eng> Dnn-NNN <result> --note … --partial Dnn` (which seeds
 `checklist-status.Dnn.partial.csv` on first use), records the instances it tested in `inventory/<register>.Dnn.partial.csv`
-and parks leads as `hypotheses/H-Dnn-NN.md` (valid ids; nothing is renumbered); the coordinator merges both
-kinds of partial with `scripts/coverage.py --merge` and commits.
+and parks leads as `hypotheses/H-Dnn-NN.md` (valid ids; renumbering to `H-NNN` is optional and happens only AFTER the
+merge). Workers never run `mark.py … applies` or a whole-domain `n/a`: applicability is the coordinator's P3 decision
+(`engagement.json.domains_decided`; `mark.py` refuses `applies` on a slice). The coordinator merges both kinds of
+partial with `scripts/coverage.py --merge` (accepts `H-Dnn-NN` and inventory partials) and commits the evidence repo.
 Escalation (P7) is always single-agent — chains need every primitive in one context.
 
 ---

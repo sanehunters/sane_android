@@ -38,6 +38,16 @@ verify-hints.sh
 sensitive/
 state-snapshot.json
 
+# tool output when $E / SANE_ENGAGEMENT is unset: tools/01–09 fall back to ./<name>/<pkg> in the cwd (tools/README 'Where outputs go')
+surface-inventory/
+component-sweep/
+provider-sweep/
+applinks/
+storage-sweep/
+deeplink-sweep/
+deeplink-fuzz/
+provider-fuzz/
+
 # OS / tooling noise
 .DS_Store
 __pycache__/
