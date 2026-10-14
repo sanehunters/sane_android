@@ -27,9 +27,11 @@ Checks (the parser is scripts/build-checklist.py, imported here, so the gate and
   phantoms    no 'SANE-' prefixes, no references to domains that have no chapter
   portability (warnings, aggregated per file) jadx_out/apktool_out instead of $DEC; `frida -U`; `--no-pause`;
               `sed -i`; duplicate item titles across chapters
-  style       operator paths (ERROR) and vendor model names / host-specific wording (warning) in docs,
-              templates, skills, hooks, tools and scripts; SANE_LINT_TARGET_NAMES=<a,b> adds real target
-              names as errors (keep the list outside the repo)
+  style       operator paths (ERROR); a reference to a removed vendor entry file, or that file still on
+              disk (ERROR: the repo targets Opus 5.5 / Opus 5 in Claude Code, CLAUDE.md is the entry);
+              model names other than the targeted Opus 5.5 / Opus 5 and host-specific wording (warning) in
+              docs, templates, skills, agents, workflows, hooks, tools and scripts; SANE_LINT_TARGET_NAMES=<a,b>
+              adds real target names as errors (keep the list outside the repo)
 """
 import argparse, csv, collections, importlib.util, os, re, sys
 
@@ -72,15 +74,25 @@ PORTABILITY = [
 ]
 # style rules over every operator-facing file. Code fences are NOT stripped: a laptop path inside a command is
 # exactly the thing a public, host-neutral methodology must not carry.
-STYLE_ERR = [(re.compile(r'lamppentest|AndroidStudioProjects|ultracode'), "operator path"),
-             (re.compile(r'/Users/[A-Za-z0-9_.-]+/'), "macOS home path")]
-STYLE_WARN = [(re.compile(r'\b(Opus|Sonnet|Haiku) ?\d|GPT-?[45]|Gemini \d'), "names a vendor model"),
+STYLE_ERR = [(re.compile(r'lamppentest|AndroidStudioProjects'), "operator path"),
+             (re.compile(r'/Users/[A-Za-z0-9_.-]+/'), "macOS home path"),
+             (re.compile(r'GEMINI\.md|\.windsurfrules|\.cursor/|copilot-instructions\.md'),
+              "references a removed vendor entry file (the entry is CLAUDE.md; git history keeps the old files)")]
+# the vendor entry files removed when the repo was retargeted at Opus 5.5 / Opus 5 in Claude Code
+REMOVED_ENTRY_FILES = ["GEMINI.md", ".windsurfrules", ".cursor", ".github/copilot-instructions.md"]
+# Opus is named on purpose (the repo targets Opus 5.5 / Opus 5); any other model name is drift
+STYLE_WARN = [(re.compile(r'\b(Sonnet|Haiku) ?\d|\bclaude-(sonnet|haiku)-|GPT-?[45]|Gemini \d'),
+               "names a model the repo does not target (Opus 5.5 / Opus 5)"),
               (re.compile(r'~/Library/Android|/Applications/Android Studio'), "macOS path (fine only next to the Linux form)"),
               (re.compile(r'your Mac\b'), "operator-specific"),
               (re.compile(r'\bbrew install\b'), "host-specific installer (give the Linux form too)"),
               (re.compile(r'~/sane_android\b'), "assumes the checkout lives at ~/sane_android (say 'the methodology checkout')")]
 TARGET_NAMES = [x.strip() for x in os.environ.get("SANE_LINT_TARGET_NAMES", "").split(",") if x.strip()]
 STYLE_EXEMPT = {"docs/08-senior-audit-2026-10.md"}     # the audit record quotes the defects it reports
+# docs/11 is the linter's own rulebook: it quotes every pattern it forbids, so it is exempt from the portability and style warnings
+RULEBOOK_EXEMPT = {"docs/11-item-schema.md"}
+# a macOS path is fine on a line that also gives the Linux form
+LINUX_FORM = re.compile(r'~/Android/Sdk|\$HOME/Android/Sdk|/opt/android|/usr/lib/android|\bLinux\b')
 
 errors, warns = [], []
 err = lambda f, m: errors.append(f"{f}: {m}")
@@ -101,6 +113,8 @@ def line_of(t, pos):
 
 
 def portability(f, t):
+    if f in STYLE_EXEMPT or f in RULEBOOK_EXEMPT:
+        return
     for pat, why in PORTABILITY:
         lines = [line_of(t, m.start()) for m in pat.finditer(t)]
         if lines:
@@ -110,6 +124,7 @@ def portability(f, t):
 def style(f, t):
     if f in STYLE_EXEMPT:
         return
+    rulebook = f in RULEBOOK_EXEMPT
     for pat, why in STYLE_ERR:
         m = pat.search(t)
         if m:
@@ -118,10 +133,15 @@ def style(f, t):
         m = re.search(re.escape(name), t, re.I)
         if m:
             err(f, f"names a real engagement target at line {line_of(t, m.start())} (SANE_LINT_TARGET_NAMES)")
+    if rulebook:
+        return
     for pat, why in STYLE_WARN:
-        m = pat.search(t)
-        if m:
+        for m in pat.finditer(t):
+            line = t[t.rfind("\n", 0, m.start()) + 1: t.find("\n", m.start()) if t.find("\n", m.start()) >= 0 else len(t)]
+            if "macOS path" in why and LINUX_FORM.search(line):
+                continue
             warn(f, f"{why} at line {line_of(t, m.start())}: {m.group(0)}")
+            break
 
 
 # a backticked path under data/ or the source-note corpus must name a file that exists (data/README; DATA-04/DATA-19).
@@ -356,13 +376,16 @@ for dp, dns, fns in os.walk(ROOT):
     dns[:] = sorted(d for d in dns if d not in (".git", "node_modules", ".refs", "__pycache__")
                     and not (rel == "BugBountyTarget" and "_" in d and not d.startswith("_")))
     for fn in fns:
-        if fn.endswith(".md") or fn == ".windsurfrules":
+        if fn.endswith(".md"):
             md_files.append(os.path.join(dp, fn))
-extra = [p for sub in ("scripts", "tools", "frida", ".claude/hooks") for p in sorted(
+extra = [p for sub in ("scripts", "tools", "frida", ".claude/hooks", ".claude/workflows") for p in sorted(
          os.path.join(ROOT, sub, x) for x in (os.listdir(os.path.join(ROOT, sub)) if os.path.isdir(os.path.join(ROOT, sub)) else []))
          if os.path.isfile(p) and not p.endswith(".md") and os.path.basename(p) != "lint-checklist.py"]
-PHANTOM_SCOPE = ("docs/", "README", "START", "AGENTS", "CLAUDE", "GEMINI", "ISSUES", "CHECKLIST", "flow", "prompts/",
-                 ".windsurfrules", ".github/", ".claude/", "templates/", "loops/", "BugBountyTarget/")
+PHANTOM_SCOPE = ("docs/", "README", "START", "AGENTS", "CLAUDE", "ISSUES", "CHECKLIST", "flow", "prompts/",
+                 ".github/", ".claude/", "templates/", "loops/", "BugBountyTarget/")
+for x in REMOVED_ENTRY_FILES:
+    if os.path.lexists(os.path.join(ROOT, x)):
+        err(x, "removed vendor entry file is back on disk: delete it (the entry is CLAUDE.md)")
 for p in sorted(md_files):
     f = os.path.relpath(p, ROOT)
     t = open(p, encoding="utf-8", errors="replace").read()

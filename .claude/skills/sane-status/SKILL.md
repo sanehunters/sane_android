@@ -1,6 +1,8 @@
 ---
 name: sane-status
-description: Print where the engagement is: phase, gates, coverage per domain, next items, blockers, git state.
+description: "Print where the engagement is: phase, gates, coverage per domain, next items, blockers, git state."
+argument-hint: "[engagement-dir]"
+allowed-tools: Bash(python3 scripts/state.py:*), Bash(python3 scripts/coverage.py:*), Bash(python3 scripts/next.py:*)
 ---
 
 # /sane-status   (`sane-` because `/status` is a Claude Code built-in)

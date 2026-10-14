@@ -2332,7 +2332,7 @@ adb shell ls -l /data/data/com.google.android.inputmethod.latin/databases/ 2>/de
 | | |
 |---|---|
 | **Severity ceiling** | Medium local-only on a modern device; High when written to shared storage or shipped by a crash/analytics SDK |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (varies); the base observation is not a finding |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); the base observation is not a finding |
 | **Attacker** | AM-04 (a `READ_LOGS`-holding OEM preload); AM-08 (a log-shipping SDK); AM-11 (ADB) |
 | **Applies to** | Cross-app `READ_LOGS` is **LEGACY (pre-Android 4.1)** for ordinary apps — state the reader |
 | **Requires** | device |
@@ -2380,7 +2380,7 @@ Java.perform(function () {
 | | |
 |---|---|
 | **Severity ceiling** | Low; contributes to D11-062 |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (varies) only if it leaks a secret |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) only if it leaks a secret |
 | **Attacker** | AM-11; AM-04 |
 | **Applies to** | all; check ORM debug logging too |
 | **Requires** | device |

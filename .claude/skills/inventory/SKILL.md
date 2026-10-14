@@ -1,6 +1,8 @@
 ---
 name: inventory
 description: Build the per-instance registers for this app (components, deep links, WebViews, endpoints) in P3.
+argument-hint: "<base.apk>"
+when_to_use: P3, after P2 has the full APK set and the framework identified; again whenever a new build is acquired.
 ---
 
 # /inventory <base.apk>

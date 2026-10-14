@@ -1060,7 +1060,7 @@ tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
 | **Attacker** | AM-12 recovers it; the **impact** is AM-01 — anyone can then forge requests from outside the app |
 | **Applies to** | all apps that "moved the key into C++" |
 | **Requires** | native, device, frida |
-| **Maps to** | MASTG-TECH-0035, MASTG-TOOL-0107, MASTG-TOOL-0001; CWE-798; VRT `sensitive_data_exposure.disclosure_of_secrets` |
+| **Maps to** | MASTG-TECH-0035, MASTG-TOOL-0107, MASTG-TOOL-0001; CWE-798 |
 
 - **Test:** "Native = protected" is false. A key in `libnative.so` is no harder to recover than one in
   `strings.xml` — it is one `strings` run or one `onLeave` hook away. The severity comes from what the key

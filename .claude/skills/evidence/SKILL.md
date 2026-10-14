@@ -1,6 +1,8 @@
 ---
 name: evidence
 description: Produce the evidence tree and the seven-beat PoC video for a confirmed finding (phase 8).
+argument-hint: "F-NNN"
+when_to_use: P8, for a finding that chain-lead or /chain recorded as confirmed; one finding per run.
 ---
 
 # /evidence F-0NN

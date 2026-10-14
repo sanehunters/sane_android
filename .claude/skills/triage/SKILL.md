@@ -1,6 +1,7 @@
 ---
 name: triage
 description: Answer programme pushback on a finding using the triage ladder (docs/06).
+argument-hint: "F-NNN"
 ---
 
 # /triage F-0NN

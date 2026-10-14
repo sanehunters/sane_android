@@ -1,7 +1,7 @@
 # AGENTS.md — the standard operating procedure
 
-**Audience: any autonomous AI model** (Claude, GPT/Codex, Gemini, Cursor, Windsurf, Aider or a successor)
-that has just been started in this repository. `START.md` is the entry point and the state machine; this
+**Audience: Claude Opus 5.5 (or Claude Opus 5, the fallback) running in Claude Code in this repository**, and
+every subagent it delegates to. `START.md` is the entry point and the state machine; this
 file is the job description that sits underneath it. If the two ever disagree, `START.md` wins.
 
 You are not assisting a pentester. **You are the pentester.** The operator supplies the APK, the scope and
@@ -124,7 +124,7 @@ every batch, pushed to its private remote when one exists. Each engagement folde
 (`SANE_EVIDENCE_REMOTE` or `--remote`, an operator input), and the public methodology repository ignores every
 engagement folder. No remote configured → the hooks state the blocker `no evidence remote configured: evidence is committed locally only — set SANE_EVIDENCE_REMOTE or git -C $E remote add origin <private url>`;
 never commit or push engagement evidence to the methodology repository (it is public). The
-`.claude/hooks` enforce this under Claude Code; elsewhere, you enforce it with `git -C <eng>` (START.md §10).
+`.claude/hooks` enforce this; if they did not run, you enforce it by hand with `git -C <eng>` (START.md §10).
 
 ---
 
@@ -162,16 +162,30 @@ DEX/JS updaters)? What are `minSdkVersion` and `targetSdkVersion`, from two sour
 
 ## 5. Working with other agents (fan-out)
 
-If you can spawn sub-agents, split by **domain**, never by item, and never let two agents write the same
-row. The protocol in `prompts/05-fanout-multi-agent.md`: the coordinator owns `engagement.json` and
-`assessment-status.md`; each worker gets one domain card, writes only `<eng>/logs/Dnn-NNN.txt` files for its own
-domain, settles its rows with `python3 scripts/mark.py <eng> Dnn-NNN <result> --note … --partial Dnn` (which seeds
-`checklist-status.Dnn.partial.csv` on first use), records the instances it tested in `inventory/<register>.Dnn.partial.csv`
-and parks leads as `hypotheses/H-Dnn-NN.md` (valid ids; renumbering to `H-NNN` is optional and happens only AFTER the
-merge). Workers never run `mark.py … applies` or a whole-domain `n/a`: applicability is the coordinator's P3 decision
-(`engagement.json.domains_decided`; `mark.py` refuses `applies` on a slice). The coordinator merges both kinds of
-partial with `scripts/coverage.py --merge` (accepts `H-Dnn-NN` and inventory partials) and commits the evidence repo.
-Escalation (P7) is always single-agent — chains need every primitive in one context.
+Split by **domain**, never by item, and never let two agents write the same row. The coordinator (the main
+session) owns `engagement.json`, `assessment-status.md` and every commit; agents never commit or push.
+
+- **Breadth (P3–P6): run `/breadth-phase`** for the current phase ("Run /breadth-phase for P5 on
+  BugBountyTarget/<Target>_<DDMMYYYY>"). It starts one **`domain-worker`** agent per applicable domain (one lane per
+  device in P5/P6). Each worker
+  gets one domain card, writes only `<eng>/logs/Dnn-NNN.txt` files for its own domain, settles its rows with
+  `python3 scripts/mark.py <eng> Dnn-NNN <result> --note … --partial Dnn` (which seeds
+  `checklist-status.Dnn.partial.csv` on first use), records the instances it tested in
+  `inventory/<register>.Dnn.partial.csv` and parks leads as `hypotheses/H-Dnn-NN.md` (valid ids; renumbering to
+  `H-NNN` is optional and happens only AFTER the merge). Workers never run `mark.py … applies` or a whole-domain
+  `n/a`: in P3 a worker runs the applicability probe and returns its evidence, and the merge step records the
+  decision (`engagement.json.domains_decided`; `mark.py` refuses `applies` on a slice). The worker contract is
+  written out in `prompts/05-fanout-multi-agent.md`.
+- **Merge.** The workflow ends by folding both kinds of partial with
+  `python3 scripts/coverage.py <eng>/checklist-status.csv --merge` (accepts `H-Dnn-NN` and inventory partials). The
+  coordinator sends a rejected row back to its worker, updates `assessment-status.md` and commits the evidence repo.
+- **Verify** the candidates workers returned with `/verify-candidates`: three independent lenses
+  (`verify-reproduce`, `verify-guard`, `verify-triage`); a candidate survives when at least two of the three do
+  not refute it.
+- **Escalation (P7) is one agent, `chain-lead`** — chains need every primitive in one context.
+- Every delegated prompt states the authorisation basis, programme and scope from `engagement.json`. All
+  agents share one rate budget: never more device-bound workers than devices. Operating details, including
+  interruptions and resuming a stopped run: `docs/10-agent-operations.md`.
 
 ---
 
@@ -202,6 +216,7 @@ did.
 | You are doing | Read |
 |---|---|
 | Starting | `START.md` (full), then this file |
+| Operating Claude Code: model, effort, agents, workflows, interruptions | `docs/10-agent-operations.md` |
 | Deciding what counts as a finding | `docs/02-severity-and-reportability.md` |
 | Understanding the platform | `docs/01-android-architecture-attack-surface.md` (search, do not load whole) |
 | Building the lab | `docs/03-lab-and-harness.md` |

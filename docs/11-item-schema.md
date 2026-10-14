@@ -138,6 +138,9 @@ Errors (exit 1):
 - an operator or laptop path (the `STYLE_ERR` patterns in `scripts/lint-checklist.py`: the known operator
   folder names and `/Users/<name>/`) in any operator-facing file, and a real target name listed in
   `SANE_LINT_TARGET_NAMES` (a comma-separated env var; keep the list outside the repo)
+- a reference to one of the other vendors' entry files removed by the retarget to Claude Code
+  (`REMOVED_ENTRY_FILES` in `scripts/lint-checklist.py`; `docs/08` is exempt as the audit record), or one of
+  those files back on disk
 
 Warnings (reported, do not fail): a chapter without `## Applicability probe` · the count of items without
 `Requires` / `Record` / `Skip when` · a deprecated row (§7) · a VRT cell outside the §1 grammar · a dotted
@@ -149,7 +152,8 @@ row that does not name `logs/Dnn-NNN.txt` · a
 citation of a placeholder or deprecated MASTG page without saying so (tests: the `covered_by` replacement;
 tools/knowledge: cite a current page) · an unknown `mastg-android-*` rule id · a `Ruled out when` shorter
 than a mechanism · duplicate item titles across chapters · `jadx_out`/`apktool_out`, `frida -U`,
-`--no-pause`, `sed -i` (per file, with the first line numbers) · a vendor model name, `your Mac`,
+`--no-pause`, `sed -i` (per file, with the first line numbers) · a model name other than the targeted
+Opus 5.5 / Opus 5, `your Mac`,
 `brew install` without the Linux form, a macOS SDK path, or `~/sane_android` as the assumed checkout path.
 Each warning class is promoted to an error once the corpus is clean of it.
 

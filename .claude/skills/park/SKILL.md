@@ -1,6 +1,7 @@
 ---
 name: park
 description: Park a promising lead as a hypothesis stub and return to the sweep (rule R0).
+argument-hint: "Dnn-NNN <short title>"
 ---
 
 # /park Dnn-NNN <short title>

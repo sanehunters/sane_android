@@ -1,6 +1,8 @@
 ---
 name: item
 description: Run one checklist item by id and record the result.
+argument-hint: "Dnn-NNN"
+allowed-tools: Bash(python3 scripts/item.py:*), Bash(python3 scripts/next.py:*)
 ---
 
 # /item Dnn-NNN

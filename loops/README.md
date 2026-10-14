@@ -1,9 +1,10 @@
 # loops/ — recurring self-checks for a long-running session
 
 A model working a two-week engagement in one session drifts: it chases one bug, forgets to push, stops
-updating state. These loops are the mechanical counter. Under Claude Code start one with
-`/loop <interval> <prompt>` (paste the prompt block; `<eng>` is the engagement folder, its own git repo); under other runners schedule the same prompt with
-whatever timer you have. Each loop is idempotent and cheap.
+updating state. These loops are the mechanical counter. Start one with `/loop <interval> <prompt>` (paste the
+prompt block; `<eng>` is the engagement folder, its own git repo). Each loop is idempotent and cheap. A loop
+prompt is a delegated task: keep the engagement path in it, so the authorisation and scope in that engagement's
+`engagement.json` apply (`docs/10-agent-operations.md` §2).
 
 | Loop | Interval | Stops when |
 |---|---|---|

@@ -1,6 +1,6 @@
 # MASTER CHECKLIST — compact view
 
-> 2161 items · 28 domains · generated from `checklist/` (source digest `e6e8df042793`). One line per item, for `grep`. To work a domain load `cards/Dnn.md`; to run an item use `python3 scripts/item.py Dnn-NNN`. Coverage lives in `<engagement>/checklist-status.csv` (`scripts/mark.py`); never tick anything here.
+> 2161 items · 28 domains · generated from `checklist/` (source digest `b82eae24e57d`). One line per item, for `grep`. To work a domain load `cards/Dnn.md`; to run an item use `python3 scripts/item.py Dnn-NNN`. Coverage lives in `<engagement>/checklist-status.csv` (`scripts/mark.py`); never tick anything here.
 
 | | Items |
 |---|---|

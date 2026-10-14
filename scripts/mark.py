@@ -150,7 +150,7 @@ def main():
         if result not in ("n/a", "blocked", "reopen", "applies"):
             die("a whole domain can only be marked n/a, blocked, applies or reopened")
         all_ids = [k for k in by if k.startswith(target + "-")]
-        if not all_ids: die(f"no rows for {target} in {os.path.basename(path)} (D24/D28 have no chapter yet)")
+        if not all_ids: die(f"no rows for {target} in {os.path.basename(path)} (no chapter defines that domain)")
         if result == "applies":
             ids, skipped = [], []            # a decision, not a row write
         elif result == "reopen" or force:

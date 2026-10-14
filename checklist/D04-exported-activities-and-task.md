@@ -156,7 +156,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; the implicit-export default is **LEGACY** and applies only at targetSdk < 31 |
 | **Requires** | — |
@@ -202,7 +202,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if the aliased screen is post-auth |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) if the aliased screen is post-auth |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -238,7 +238,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -294,7 +294,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -349,7 +349,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | targetSdk >= 36 for the control; the underlying gap exists on every version |
 | **Requires** | exported-activity, api>=36 |
@@ -395,7 +395,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the backend honours it; `broken_access_control.exposed_sensitive_android_intent` (null) when it renders cached local data only |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the backend honours it; `broken_access_control.exposed_sensitive_android_intent` (varies) when it renders cached local data only |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -443,7 +443,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) only if it crosses a *user* boundary rather than the local gate |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) only if it crosses a *user* boundary rather than the local gate |
 | **Attacker** | AM-03 where the inner activity is exported; AM-11 otherwise |
 | **Applies to** | every app shipping an "app lock", "require biometrics to open" or PIN-on-resume setting |
 | **Requires** | exported-activity |
@@ -572,7 +572,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the permanent-DoS half is `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); the permanent-DoS half is `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) |
 | **Attacker** | AM-03; AM-02 where the same activity carries a `BROWSABLE` filter |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -606,7 +606,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; especially `SEND`, `PROCESS_TEXT`, `VIEW` share-target activities |
 | **Requires** | exported-activity |
@@ -650,7 +650,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when it prints tokens |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when it prints tokens |
 | **Attacker** | AM-03 |
 | **Applies to** | all; React Native and Ionic builds specifically |
 | **Requires** | exported-activity |
@@ -683,7 +683,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | the `PreferenceActivity` path is **LEGACY** (API 19 enforces `isValidFragment()`); the extra-driven class-instantiation pattern applies to all API levels |
 | **Requires** | exported-activity |
@@ -718,7 +718,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the loaded origin yields a session token; `broken_access_control.exposed_sensitive_android_intent` (null) otherwise |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the loaded origin yields a session token; `broken_access_control.exposed_sensitive_android_intent` (varies) otherwise |
 | **Attacker** | AM-03; AM-02 where the same activity is `BROWSABLE` |
 | **Applies to** | any app with an exported activity that renders web content |
 | **Requires** | exported-activity, webview |
@@ -763,7 +763,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | any activity whose intent-derived string reaches `loadData`/`loadDataWithBaseURL` — as the whole body (an `html` extra next to a `url` extra), or interpolated into an HTML template on a trusted base |
 | **Requires** | exported-activity, webview |
@@ -801,7 +801,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `server_side_injection.content_spoofing.external_authentication_injection` (P4); `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `server_side_injection.content_spoofing.external_authentication_injection` (P4); `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -831,7 +831,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if the route renders session data |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) if the route renders session data |
 | **Attacker** | AM-03 |
 | **Applies to** | Flutter apps using `io.flutter.embedding.android.FlutterActivity` (v2 embedding), all current Flutter versions |
 | **Requires** | exported-activity, flutter |
@@ -847,7 +847,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) if you can hold the user out |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) if you can hold the user out |
 | **Attacker** | AM-03 |
 | **Applies to** | apps whose launcher/start activity is `launchMode="singleInstance"` and re-runs startup navigation in `onNewIntent()` |
 | **Requires** | exported-activity |
@@ -877,7 +877,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) or `authentication_bypass` (P1) depending on the file |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) or `authentication_bypass` (P1) depending on the file |
 | **Attacker** | AM-03 |
 | **Applies to** | all apps with a `SEND` / `SEND_MULTIPLE` / `GET_CONTENT` receiving activity |
 | **Requires** | exported-activity |
@@ -917,7 +917,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 15 / API 35+ for the attribute; the underlying confused deputy works on every version |
 | **Requires** | exported-activity, api>=35 |
@@ -951,7 +951,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) when the returned value is a session token |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) when the returned value is a session token |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -987,7 +987,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rate on the provider reached |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); rate on the provider reached |
 | **Attacker** | AM-03 |
 | **Applies to** | all; the victim's own providers become reachable only where `android:grantUriPermissions="true"` (the `<provider>` default for that attribute is `"false"`) |
 | **Requires** | exported-activity |
@@ -1036,7 +1036,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rate on the sink |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); rate on the sink |
 | **Attacker** | AM-03 |
 | **Applies to** | all apps calling `startActivityForResult`/`registerForActivityResult` with an implicit Intent |
 | **Requires** | exported-activity |
@@ -1077,7 +1077,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | activities that return results and can be started in the same task |
 | **Requires** | exported-activity |
@@ -1156,7 +1156,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) where the ignored check was the only gate |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) where the ignored check was the only gate |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -1219,7 +1219,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 15 / API 35+ for the API; the `onNewIntent` gap itself is universal |
 | **Requires** | exported-activity, api>=35 |
@@ -1252,7 +1252,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity, device |
@@ -1285,7 +1285,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity, device |
@@ -1330,7 +1330,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | no dedicated path. File as `broken_access_control.exposed_sensitive_android_intent` (null) when an exported component is the pivot, or `server_side_injection.content_spoofing.external_authentication_injection` (P4) if the triager insists on spoofing framing — argue up with the captured credential |
+| **VRT** | no dedicated path. File as `broken_access_control.exposed_sensitive_android_intent` (varies) when an exported component is the pivot, or `server_side_injection.content_spoofing.external_authentication_injection` (P4) if the triager insists on spoofing framing — argue up with the captured credential |
 | **Attacker** | AM-03 |
 | **Applies to** | **LEGACY.** Live only where `minSdkVersion` still admits devices below API 30. `risks/strandhogg` states both variants are patched at OS level in Android 11+ (v1 March 2019, v2 September 2020) and recommends `minSdkVersion=30` |
 | **Requires** | minsdk<30, legacy, device |
@@ -1458,7 +1458,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 15+ for the defence; the docs place full enforcement at API 37+, so on Android 15/16 this is an opt-in the app must have taken |
 | **Requires** | api>=35, device |
@@ -1491,7 +1491,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 15+ |
 | **Requires** | api>=35, device |
@@ -1517,7 +1517,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | API 33+ for `allowUntrustedActivityEmbedding` / `knownActivityEmbeddingCerts` (both default to closed); `android:allowEmbedded` defaults to `"false"` on every version |
 | **Requires** | api>=33 |
@@ -1606,7 +1606,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if the reached screen is post-auth |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) if the reached screen is post-auth |
 | **Attacker** | AM-03 |
 | **Applies to** | all; implicit redirection mitigated at targetSdk 34+; on **Android 16 devices** nested-explicit redirection is blocked by launch-security protection (an Intent unparcelled from another app's Intent may not start a non-exported component) unless the deputy or the forwarding activity calls `removeLaunchSecurityProtection()` — below API 36, or where that call exists, it is live |
 | **Requires** | device |
@@ -1656,7 +1656,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) if it renders another user's conversation |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) if it renders another user's conversation |
 | **Attacker** | AM-03 |
 | **Applies to** | API 29+ for bubbles; API 30+ requires a long-lived sharing shortcut |
 | **Requires** | — |
@@ -1723,7 +1723,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Low |
-| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5); escalate through `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) only with a named consumer |
+| **VRT** | `insecure_data_storage.screen_caching_enabled` (P5); escalate through `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) only with a named consumer |
 | **Attacker** | AM-04 (a screen-capture-capable co-resident app) or AM-11 |
 | **Applies to** | all |
 | **Requires** | device |
@@ -1849,7 +1849,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-11 |
 | **Applies to** | targetSdk 36+ on `sw600dp`+ displays; games (`android:appCategory`) are excepted |
 | **Requires** | targetsdk>=36, device |
@@ -1865,7 +1865,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rate on the action confirmed |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); rate on the action confirmed |
 | **Attacker** | AM-01 (no attacker required — the app does it to itself), escalating with AM-04 |
 | **Applies to** | targetSdk 35+ / 36+ |
 | **Requires** | targetsdk>=35, device |
@@ -2002,7 +2002,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the captured-credential outcome is `broken_authentication_and_session_management.authentication_bypass` (P1) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); the captured-credential outcome is `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-04 (the user enables an accessibility service) |
 | **Applies to** | all; API 34+ gives the app a concrete defence to check for |
 | **Requires** | device |
@@ -2163,7 +2163,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rate on what the control protected |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); rate on what the control protected |
 | **Attacker** | AM-01 (the platform disables it) escalating with AM-11 |
 | **Applies to** | targetSdk 36+ on Android 16; also verify on Android 15 where animations are default-on for opted-in apps |
 | **Requires** | targetsdk>=36, device |
@@ -2196,7 +2196,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); usually a business-logic defect |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); usually a business-logic defect |
 | **Attacker** | AM-01 |
 | **Applies to** | Android 16+ |
 | **Requires** | targetsdk>=36 |
@@ -2222,7 +2222,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_authentication_and_session_management.authentication_bypass` (P1) if it reaches the account |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_authentication_and_session_management.authentication_bypass` (P1) if it reaches the account |
 | **Attacker** | AM-10 physical locked; AM-03 where an installed app supplies the trigger |
 | **Applies to** | all. Background activity starts are blocked for third-party apps from API 29 (tightened at 34/35), so from the attacker side the trigger must be a foreground-equivalent path — the PoC's own `showWhenLocked` activity started while the PoC is visible, a notification action, a Quick Settings tile, an NFC tag, a USB attach — and the report says which you used. (D25-054 is the OEM-surface twin; this item owns the method.) |
 | **Requires** | physical, device |
@@ -2268,7 +2268,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.privilege_escalation` (null) for the cross-user case |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_access_control.privilege_escalation` (varies) for the cross-user case |
 | **Attacker** | AM-05 another user of the same device/profile; AM-10 for the pre-unlock case |
 | **Applies to** | `showForAllUsers` is API 23+; `directBootAware` defaults to `false` |
 | **Requires** | device |
@@ -2284,7 +2284,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03; AM-02 through the browser |
 | **Applies to** | all apps with a single entry activity that dispatches by URI |
 | **Requires** | deeplink |
@@ -2318,7 +2318,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); inherits the PendingIntent finding in D08 |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); inherits the PendingIntent finding in D08 |
 | **Attacker** | AM-03 / AM-08 |
 | **Applies to** | targetSdk >= 31 |
 | **Requires** | targetsdk>=31, device |
@@ -2453,7 +2453,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) for the availability half |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) for the availability half |
 | **Attacker** | AM-03 |
 | **Applies to** | From **Android 10** the OS shows a synthesised launcher entry pointing at the app's settings page unless the app is a system app, requests no permissions, has no launcher activity, or is in a managed device/work-profile context — so full concealment is **LEGACY** except in those four carve-outs, which are exactly where to test it |
 | **Requires** | — |
@@ -2684,7 +2684,7 @@ Every `How` below assumes the P2 layout (START.md §6): `$DEC` is `$E/decompiled
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); rises with what the extra controls |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); rises with what the extra controls |
 | **Attacker** | AM-03 |
 | **Applies to** | Unity Android builds (`com.unity3d.player.UnityPlayerActivity` and subclasses); by extension any engine or framework activity exported as `MAIN`/`LAUNCHER` |
 | **Requires** | exported-activity, unity |

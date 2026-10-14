@@ -2,11 +2,13 @@
 
 # sane_android
 
-### An Android bug-bounty methodology built to be **executed by an autonomous AI model**, not read by a human
+### An Android bug-bounty methodology built for **Claude Opus 5.5 and Opus 5 in Claude Code** — executed by the model, not read by a human
 
-26 chapters · 1,933 addressable test items (D24 and D28 in progress) · a state machine with mechanical gates · a
-harness that keeps the agent honest and its evidence pushed to a private evidence repository
+28 chapters · 2,161 addressable test items · a state machine with mechanical gates · subagents and
+saved workflows for the breadth and verification phases · a harness that keeps the agent honest and its evidence
+pushed to a private evidence repository
 
+[![Built for](https://img.shields.io/badge/BUILT_FOR-Claude_Opus_5.5_%2F_Opus_5_in_Claude_Code-D97757?style=for-the-badge)](docs/10-agent-operations.md)
 [![Start here](https://img.shields.io/badge/MODEL%3F_START_HERE-START.md-0E8A16?style=for-the-badge)](START.md)
 [![Index](https://img.shields.io/badge/DOMAIN_INDEX-CHECKLIST.md-1D76DB?style=for-the-badge)](CHECKLIST.md)
 [![Audit](https://img.shields.io/badge/WHAT_CHANGED-docs%2F08-B60205?style=for-the-badge)](docs/08-senior-audit-2026-10.md)
@@ -15,17 +17,20 @@ harness that keeps the agent honest and its evidence pushed to a private evidenc
 
 ---
 
-## If you are a model
+## If you are the model
 
+You are Claude Opus 5.5 (or Opus 5, the fallback) in Claude Code; [`CLAUDE.md`](CLAUDE.md) is already loaded.
 Read [`START.md`](START.md). It is the only file you must read in full; it tells you which situation you
 are in, the eight rules, the exact bootstrap sequence, the P0–P9 state machine with its gates, how to work
-one domain, how to record, and what to load (never a whole chapter). Everything else is loaded per item.
+one domain, how to record, and what to load (never a whole chapter). Everything else is loaded per item;
+the operating layer (model, effort, agents, workflows, interruptions) is
+[`docs/10-agent-operations.md`](docs/10-agent-operations.md).
 
 ## If you are a human
 
-You supply an APK (or package), a scope and an authorisation basis, and paste
-[`prompts/00-bootstrap.md`](prompts/00-bootstrap.md) into a fresh session of any frontier model (Claude Code,
-Codex, Gemini CLI, Cursor…). The session creates a dated engagement folder (each engagement folder is its own git repository — the evidence repo), works 26 domains of checkpoints
+You supply an APK (or package), a scope and an authorisation basis, start Claude Code in the checkout
+(`claude`; `/model` shows Claude Opus 5.5) and paste the parameters block of
+[`prompts/00-bootstrap.md`](prompts/00-bootstrap.md). The session creates a dated engagement folder (each engagement folder is its own git repository — the evidence repo), works 28 domains of checkpoints
 tracked as rows, proves primitives from a zero-permission attacker app, chains them into payable impact
 categories in a dedicated phase, records what it ruled out and why, and pushes the evidence to a private remote as it goes; never commit or push engagement evidence to the methodology repository (it is public).
 You read `BugBountyTarget/<Target>_<date>/report/assessment-status.md` and the findings.
@@ -52,18 +57,20 @@ every checkpoint and every component instance is settled.
 
 ```mermaid
 flowchart LR
-    subgraph ENTRY["Entry layer — any vendor"]
+    subgraph ENTRY["Entry layer — Claude Code · Opus 5.5 / Opus 5"]
+        V[CLAUDE.md<br/>model · skills · agents · workflows]
         S[START.md<br/>situation · rules · state machine]
         A[AGENTS.md<br/>the SOP]
-        V[CLAUDE.md · GEMINI.md<br/>.cursor · copilot]
+        O[docs/10<br/>agent operations]
         P[prompts/<br/>bootstrap · resume · fan-out …]
         V --> S
         P --> S
         S --> A
+        V --> O
     end
 
     subgraph KB["Knowledge — three loading tiers"]
-        I[CHECKLIST.md<br/>26 domains · crux questions]
+        I[CHECKLIST.md<br/>28 domains · crux questions]
         C[cards/Dnn.md<br/>one line per item]
         IT[scripts/item.py Dnn-NNN<br/>one item in full]
         CH[checklist/Dnn-*.md<br/>source of truth]
@@ -98,7 +105,9 @@ flowchart LR
 
     subgraph HARNESS["Harness (.claude/)"]
         HK[hooks: session-start · prompt-context<br/>pre-bash · post-bash · stop-guard · pre-compact]
-        SK[20 skills · loops/]
+        SK[skills · loops/]
+        AG[agents: domain-worker · verify ×3<br/>chain-lead · evidence-reporter · checklist-maintainer]
+        WF[workflows: breadth-phase<br/>verify-candidates · chapter-audit]
     end
 
     S --> DR --> NE --> EJ
@@ -110,6 +119,7 @@ flowchart LR
     HK -. enforce R7 .-> ENG
     HK -. resume card .-> S
     SK --> ST & MK
+    WF --> AG --> MK
 ```
 
 ### The three loading tiers
@@ -133,7 +143,7 @@ contract; `completed=true` with no mechanism keeps the gate closed. Details: [`S
 
 | Mechanism | Guarantee |
 |---|---|
-| `scripts/lint-checklist.py` (CI) | every item has its required fields (`docs/11`); every MASTG/MASWE/VRT id exists; cross-references resolve; no phantom domains; no vendor/laptop strings in operator docs |
+| `scripts/lint-checklist.py` (CI) | every item has its required fields (`docs/11`); every MASTG/MASWE/VRT id exists; cross-references resolve; no phantom domains; no operator-laptop paths in operator docs |
 | `scripts/build-checklist.py --check` (CI) | the cards, JSON, CSV and index are never stale relative to the chapters |
 | `scripts/refresh-data.py` | `data/` is regenerated from the OWASP, Bugcrowd and MITRE repositories with provenance |
 | `scripts/mark.py` | `ruled-out` needs a mechanism, `blocked` needs `needs:`, `n/a` needs a reason, a finding needs an id |
@@ -146,12 +156,15 @@ contract; `completed=true` with no mechanism keeps the gate closed. Details: [`S
 
 | Path | What |
 |---|---|
-| [`START.md`](START.md) · [`AGENTS.md`](AGENTS.md) · [`CLAUDE.md`](CLAUDE.md) · [`GEMINI.md`](GEMINI.md) | entry point, SOP, vendor files |
+| [`CLAUDE.md`](CLAUDE.md) · [`START.md`](START.md) · [`AGENTS.md`](AGENTS.md) | Claude Code entry (model, skills, agents, workflows) · entry point and state machine · SOP |
 | [`CHECKLIST.md`](CHECKLIST.md) · [`cards/`](cards/) · [`checklist/`](checklist/) · [`json/`](json/) · [`checklist.csv`](checklist.csv) · [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md) | the checklist in its tiers |
-| [`docs/`](docs/) | 01 architecture as attack surface · 02 severity doctrine · 03 lab · 04 evidence standard · 05 attacker models · 06 triage ladder · 07 coverage crosswalk · 08 senior audit · 09 coverage discipline · 11 item schema |
+| [`docs/`](docs/) | 01 architecture as attack surface · 02 severity doctrine · 03 lab · 04 evidence standard · 05 attacker models · 06 triage ladder · 07 coverage crosswalk · 08 senior audit · 09 coverage discipline · 10 agent operations · 11 item schema |
 | [`scripts/`](scripts/) | doctor · new-engagement · state · next · mark · gate · coverage · item · inventory · apply-item-meta · build-checklist · lint-checklist · refresh-data · gh-sync · selftest |
 | [`tools/`](tools/) · [`frida/`](frida/) · [`attacker-app/`](attacker-app/) | sweeps and fuzzers · runtime scripts · the zero-permission probe |
-| [`prompts/`](prompts/) · [`loops/`](loops/) · [`.claude/`](.claude/) | vendor-neutral prompts · recurring self-checks · hooks and skills |
+| [`prompts/`](prompts/) · [`loops/`](loops/) | Claude Code session prompts · recurring self-checks for `/loop` |
+| [`.claude/`](.claude/) `settings.json` · `hooks/` · `skills/` | model and effort defaults · hooks · slash commands |
+| `.claude/agents/` | subagents: `domain-worker`, `verify-reproduce`, `verify-guard`, `verify-triage`, `chain-lead`, `evidence-reporter`, `checklist-maintainer` |
+| `.claude/workflows/` | saved workflows: `breadth-phase`, `verify-candidates`, `chapter-audit` |
 | [`templates/`](templates/) · [`BugBountyTarget/`](BugBountyTarget/) | report templates · the engagement folders (one dated folder per target, each its own private git repo — ignored here; only `README.md` and `_TEMPLATE/` are tracked) |
 | [`data/`](data/) | the standards, regenerated — see [`data/README.md`](data/README.md) |
 | [`ISSUES.md`](ISSUES.md) | how the GitHub issue tracker mirrors the methodology |

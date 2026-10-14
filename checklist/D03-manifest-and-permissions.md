@@ -199,7 +199,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | High (when the declared level and the enforced level differ) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; definer-wins resolution is PackageManager behaviour, not a targetSdk gate |
 | **Requires** | — |
@@ -301,7 +301,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (inherited from the component behind it) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) escalating to `broken_authentication_and_session_management.authentication_bypass` (P1) or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) escalating to `broken_authentication_and_session_management.authentication_bypass` (P1) or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | **all versions.** No install-order race, no user interaction, not fixed by any platform change. Reachable on current Android whenever the defining package is simply absent. |
 | **Requires** | — |
@@ -349,7 +349,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (inherited) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -383,7 +383,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (inherited) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) or `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) or `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-03 (normal) / AM-04 (dangerous — one tap) |
 | **Applies to** | all |
 | **Requires** | — |
@@ -418,7 +418,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -447,7 +447,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -477,7 +477,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (Critical when the guarded interface issues tokens or performs privileged writes) |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all — but the install-order precondition must be demonstrated on the tested platform version, not assumed. Android 5.0 tightened same-name definitions toward requiring the same signing key; state the API level you proved it on. |
 | **Requires** | — |
@@ -511,7 +511,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-03 (requires the legitimate definer to be absent or removed) |
 | **Applies to** | **LEGACY for the CVE-2019-2200 variant: devices whose `ro.build.version.security_patch` is older than 2020-02-01** (the bulletin lists Android 8.0–10 builds before that patch level — the gate is a patch level, not an API level). Record `adb shell getprop ro.build.version.security_patch` with every result. Live on any device in the app's `minSdkVersion` range below that. Multi-APK products (companion app, plugin, SDK host) are where this is realistic. |
 | **Requires** | — |
@@ -537,7 +537,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | vendor app families, OEM preinstall sets, plugin/companion architectures |
 | **Requires** | — |
@@ -564,7 +564,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-03 / AM-09 (a backend that controls the permission name) |
 | **Applies to** | all |
 | **Requires** | — |
@@ -591,7 +591,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-04 |
 | **Applies to** | Android 6.0+ (the runtime permission model) |
 | **Requires** | — |
@@ -613,7 +613,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-08 (a partner or rotated-away key holder) |
 | **Applies to** | **Android 12+** for the `knownSigner` level. **LEGACY note, and it runs the other way:** on older platforms the same manifest resolves to plain `signature`, which is *stricter* — the newer device is the weaker one. |
 | **Requires** | api>=31 |
@@ -641,7 +641,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | Medium — the High belongs to whichever preinstalled holder you then pivot through, and that is filed in D25 |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-08 / OEM scope |
 | **Applies to** | all. **LEGACY as a declaration** (deprecated API 23) but still enforced wherever present. |
 | **Requires** | — |
@@ -667,7 +667,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (inherited) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 12+ |
 | **Requires** | api>=31 |
@@ -712,7 +712,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-02 (one user tap to change the role holder) |
 | **Applies to** | Android 10+ (RoleManager) |
 | **Requires** | api>=29 |
@@ -736,7 +736,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -759,7 +759,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) escalating to `broken_authentication_and_session_management.authentication_bypass` (P1) or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) escalating to `broken_authentication_and_session_management.authentication_bypass` (P1) or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -785,7 +785,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) -> P1 as above |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) -> P1 as above |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -808,7 +808,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -831,7 +831,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; most impactful in system/OEM apps running as UID 1000 |
 | **Requires** | — |
@@ -866,7 +866,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -893,7 +893,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -921,7 +921,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (Low as first disclosed — rate on what the component holds) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -953,7 +953,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** |
-| **VRT** | `broken_access_control.privilege_escalation` (null); files to P1 when the delegated read yields another user's data via `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` |
+| **VRT** | `broken_access_control.privilege_escalation` (varies); files to P1 when the delegated read yields another user's data via `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -984,7 +984,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 / AM-04 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -1006,7 +1006,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | exported-activity |
@@ -1031,7 +1031,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (Critical when the component performs an authenticated state change) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk 31+.** LEGACY below 31, where the *absence* of the attribute on an intent-filtered component is the bug instead (see D03-003). |
 | **Requires** | targetsdk>=31 |
@@ -1057,7 +1057,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -1081,7 +1081,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -1108,7 +1108,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
 | **Requires** | provider |
@@ -1131,7 +1131,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | Medium — an enabler; the High lives in whatever runs inside the collapsed boundary (D16) |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -1178,7 +1178,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | all. `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` exist from Android 13 (API 33) and are **required** for non-system broadcasts when the app targets **API 34+** (registration throws `SecurityException` without one). Below targetSdk 34 a flagless `registerReceiver` is exported by default — that is the bug shape. (D22-030 owns the targetSdk-34 gate; D05-004 the legacy default.) |
 | **Requires** | — |
@@ -1215,7 +1215,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (when the screen exposes logs, tokens, or toggles a security control) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 (broadcast it programmatically) / AM-02 (social-engineer the user into dialling) |
 | **Applies to** | all; yield is highest on OEM/carrier builds |
 | **Requires** | exported-receiver |
@@ -1238,7 +1238,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (Low if it only crashes) |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the crash-only case is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); the crash-only case is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) |
 | **Attacker** | AM-03 (forge the intent from an app) / AM-10–AM-11 (present the physical device or tag) |
 | **Applies to** | apps declaring `USB_DEVICE_ATTACHED`, `USB_ACCESSORY_ATTACHED` or `NDEF_DISCOVERED` |
 | **Requires** | exported-activity |
@@ -1262,7 +1262,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) once harvested credentials complete an ATO; the primitive alone files under `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) once harvested credentials complete an ATO; the primitive alone files under `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 (install order matters — demonstrate it and state it) |
 | **Applies to** | all Android versions for the squatting itself |
 | **Requires** | — |
@@ -1288,7 +1288,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (when the exempt component routes an arbitrary URI); Medium standalone |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | **Android 16 (API 36)+ devices**, and the enforcement is keyed on the *receiving* app (its targetSdk, or an explicit `android:intentMatchingFlags` opt-in). Settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>`, `<provider>`; only components that declare at least one `<intent-filter>` are subject. Intents from shell, root or system senders are **not** valid controls in either direction — an engagement observed explicit broadcasts with a non-matching or null action delivered from `adb shell` on an API 36 device. |
 | **Requires** | api>=36, targetsdk>=36 |
@@ -1318,7 +1318,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** |
-| **VRT** | `broken_access_control.privilege_escalation` (null); rate on the control the gate protects |
+| **VRT** | `broken_access_control.privilege_escalation` (varies); rate on the control the gate protects |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk 30+ only.** Below 30 these calls are unfiltered and the gate works — this is a bug that *appears* when the app raises its target SDK, which is why it survives old checklists. |
 | **Requires** | targetsdk>=30 |
@@ -1425,7 +1425,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (for an app-store / enterprise-installer target) |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-08 / AM-09 (the installer is the third party making the decision) |
 | **Applies to** | Android 10+ |
 | **Requires** | device, api>=29 |
@@ -1447,7 +1447,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (on an OEM engagement) |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `broken_access_control.privilege_escalation` (null) if it yields a capability the user cannot revoke |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `broken_access_control.privilege_escalation` (varies) if it yields a capability the user cannot revoke |
 | **Attacker** | n/a — this is a multi-party-authorisation violation, not an attack |
 | **Applies to** | Android 6.0+ |
 | **Requires** | device, api>=23 |
@@ -1503,7 +1503,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (when it proves an undeclared SDK collects a dangerous-permission data type) |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); escalates to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); escalates to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-08 |
 | **Applies to** | Android 11+ (API 30) for the callback; `<attribution android:tag>` required for targetSdk 31+ |
 | **Requires** | frida, api>=30 |
@@ -1600,7 +1600,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | Support standalone; **Medium** as a privacy finding once the data reaches a party the Data safety declaration does not name; **High** when the same permission is reachable through an exported component — but that is the re-delegation item and is filed there |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies), escalating to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) once third-party PII actually egresses. A permission inventory on its own maps to **no VRT node at all** |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies), escalating to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) once third-party PII actually egresses. A permission inventory on its own maps to **no VRT node at all** |
 | **Attacker** | AM-08 (the SDK doing the collection inside the app); n/a for the pure over-request case |
 | **Applies to** | all; runtime permissions exist from Android 6.0 (API 23) |
 | **Requires** | — |
@@ -1656,7 +1656,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** |
-| **VRT** | `broken_access_control.privilege_escalation` (null); the destructive outcome files under `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (P2) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies); the destructive outcome files under `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (P2) |
 | **Attacker** | AM-03 (to reach the sink) |
 | **Applies to** | all. From **Android 7**, `resetPassword()` is restricted to device/profile owners — arbitrary passcode reset by a plain admin app is **LEGACY**; `lockNow()` and `wipeData()` remain available to admins. **Android 13+ restricted settings / Android 15+ Enhanced Confirmation Mode:** an app installed by a session-based installer (any store or installer app other than `adb install` / Play-signed flows) cannot be granted accessibility, notification-listener or device-admin until the user opens App info → *Allow restricted settings*. Install the PoC the way the attacker would (an `adb shell pm install-create/-write/-commit` session from a helper app, or a sideload session) and record `adb shell dumpsys appops --op ACCESS_RESTRICTED_SETTINGS <pkg>` before and after. |
 | **Requires** | — |
@@ -1680,7 +1680,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (when captured text egresses); High otherwise |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) when the captured text leaves the device |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) when the captured text leaves the device |
 | **Attacker** | AM-08 (the SDK inside the app) / AM-02 (the user is walked through enabling it) |
 | **Applies to** | all. **Android 13+ restricted settings / Android 15+ Enhanced Confirmation Mode:** an app installed by a session-based installer (any store or installer app other than `adb install` / Play-signed flows) cannot be granted accessibility, notification-listener or device-admin until the user opens App info → *Allow restricted settings*. Install the PoC the way the attacker would (an `adb shell pm install-create/-write/-commit` session from a helper app, or a sideload session) and record `adb shell dumpsys appops --op ACCESS_RESTRICTED_SETTINGS <pkg>` before and after. |
 | **Requires** | — |
@@ -1756,7 +1756,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (full-screen-intent target is attacker-influenced); Low-Medium for the exact-alarm auto-grant case |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) for the FSI phishing surface |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for the FSI phishing surface |
 | **Attacker** | AM-01/AM-09 (a push payload) for the FSI case |
 | **Applies to** | `USE_EXACT_ALARM` Android 13+; `SCHEDULE_EXACT_ALARM` default-deny for new installs from **Android 14**; the FSI restriction applies at **targetSdk 34+**, the capability check is Android 14+ |
 | **Requires** | api>=33 |
@@ -1812,7 +1812,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** when a sensor is held with no visible indication tied to a user-initiated action; Medium when the retention is disclosed but over-broad |
-| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies), escalating to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) once the captured data egresses to a named host |
+| **VRT** | `privacy_concerns.unnecessary_data_collection` (varies), escalating to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) once the captured data egresses to a named host |
 | **Attacker** | AM-08 (the SDK doing it inside the app); n/a where it is first-party behaviour |
 | **Applies to** | the background-sensor cut-off is **Android 9+**; a declared `foregroundServiceType` is mandatory from **Android 10 (API 29)**; on **API 34+** each type needs its `FOREGROUND_SERVICE_<TYPE>` permission and, for camera/microphone/location, a runtime grant and a while-in-use start path — `specialUse` with a `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` string is the opt-out, so read the subtype string and treat a sensor hold under `specialUse` as undisclosed; camera/microphone status indicators arrived in **Android 12** |
 | **Requires** | device, api>=29 |
@@ -1867,7 +1867,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (reproductive or mental-health records leaving the device to a third party) |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) — argue the special-category nature explicitly |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) — argue the special-category nature explicitly |
 | **Attacker** | AM-08 / AM-09 |
 | **Applies to** | apps integrating Health Connect; Android 14+ ships it as a platform component. At **targetSdk 36+** the granular `android.permission.health.READ_HEART_RATE` etc. **replace** `BODY_SENSORS`, and `READ_HEALTH_DATA_IN_BACKGROUND` replaces `BODY_SENSORS_BACKGROUND`. |
 | **Requires** | — |
@@ -1915,7 +1915,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** |
-| **VRT** | `broken_access_control.privilege_escalation` (null) |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | preloaded / OEM / carrier apps only |
 | **Requires** | oem-scope |
@@ -1943,7 +1943,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** (Critical when a low-assurance sibling is exported and the privileged sibling holds tokens) |
-| **VRT** | `broken_access_control.privilege_escalation` (null) escalating through whatever the sibling holds |
+| **VRT** | `broken_access_control.privilege_escalation` (varies) escalating through whatever the sibling holds |
 | **Attacker** | AM-08 (compromise the weak sibling) / AM-11 |
 | **Applies to** | all. **LEGACY declaration** — `android:sharedUserId` deprecated at API 29, deprecated for new users from Android 13 — but still honoured. The documented migration is `android:sharedUserMaxSdkVersion="32"`, and the docs warn **not** to remove `android:sharedUserId` (that breaks updates), so both attributes must be read together. |
 | **Requires** | — |
@@ -2025,7 +2025,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **High** — a client-side entitlement, PIN state or backend host that the app honours after restore |
-| **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) covers the flag only. The finding is what the restored value changes: `broken_access_control.privilege_escalation` (null) for an entitlement flip, `broken_authentication_and_session_management.authentication_bypass` (P1) for an app-lock or PIN bypass |
+| **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) covers the flag only. The finding is what the restored value changes: `broken_access_control.privilege_escalation` (varies) for an entitlement flip, `broken_authentication_and_session_management.authentication_bypass` (P1) for an app-lock or PIN bypass |
 | **Attacker** | AM-11 (physical, unlocked, with developer mode enabled) |
 | **Applies to** | all; the `adb backup` / `adb restore` path is heavily restricted from Android 12 and dead on many OEM builds — demonstrate on an in-scope device or do not file. Samsung's programme explicitly downgrades reports that require persistently enabling developer mode |
 | **Requires** | device, physical |
@@ -2072,7 +2072,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (when the loaded path is group/other-writable or on external storage) |
-| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) is the wrong node for a local load — file the local case under `broken_access_control.privilege_escalation` (null) with the code-execution impact stated, or `client_side_injection.binary_planting.privilege_escalation` (P3) where the planting shape fits |
+| **VRT** | `server_side_injection.remote_code_execution_rce` (P1) is the wrong node for a local load — file the local case under `broken_access_control.privilege_escalation` (varies) with the code-execution impact stated, or `client_side_injection.binary_planting.privilege_escalation` (P3) where the planting shape fits |
 | **Attacker** | AM-03 / AM-04 (write the file), AM-09 (if the blob is downloaded) |
 | **Applies to** | Allow-list enforcement at **targetSdk 24+**; the `<uses-native-library>` manifest declaration is required from **API 31+**. LEGACY: `targetSdk < 24` can still `dlopen` private platform libraries for backward compatibility. |
 | **Requires** | native |
@@ -2140,7 +2140,7 @@ Every `How` below assumes the P2 layout (START.md §6), written once here: `M=$D
 | | |
 |---|---|
 | **Severity ceiling** | **Critical** (when the older version bypasses auth entirely) |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) / `broken_access_control.idor.*` (P1–P3) / `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) — file the *weakened control*, never the version difference |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) / `broken_access_control.idor.*` (P1–P3) / `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) — file the *weakened control*, never the version difference |
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API |
 | **Requires** | backend-api |

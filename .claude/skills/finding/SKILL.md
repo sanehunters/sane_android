@@ -1,6 +1,7 @@
 ---
 name: finding
 description: Write up a confirmed finding in the house format and register it.
+argument-hint: "F-NNN"
 ---
 
 # /finding F-0NN

@@ -4,7 +4,9 @@
 # Covers: syntax, lint + deterministic build check, item.py, engagement lifecycle (mark.py incl. whole-domain
 # n/a / reopen / --show / --partial, gate.py --all and --pass, state.py, next.py, coverage.py --merge with a
 # checklist partial carrying H-Dnn-NN and an inventory partial), inventory.py on a fixture manifest, hooks,
-# tools --help (rc 0), doctor.sh (non-empty output on bash 3.2 and 5).
+# tools --help (rc 0), doctor.sh (non-empty output on bash 3.2 and 5), and the Claude Code layer: settings.json,
+# .claude/agents/*.md and .claude/skills frontmatter (documented fields only), .claude/workflows/*.js (meta, agent
+# types, phases, no clock/randomness, node --check when node exists). `selftest.sh --claude-layer` runs that step alone.
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 2
@@ -16,6 +18,122 @@ expect_fail() { if "$@" >/dev/null 2>&1; then bad "expected failure: $*"; else o
 expect_ok()   { if "$@" >/dev/null 2>&1; then ok "$*"; else bad "$*"; fi; }
 jq_() { python3 -c 'import json,sys; e=json.load(open(sys.argv[1])); print(eval(sys.argv[2], {}, {"e": e}))' "$@" 2>/dev/null; }
 
+claude_layer() {
+  step "claude code layer (settings, agents, skills, workflows)"
+  python3 - <<'PY' || fail=1
+import glob, json, os, re, sys
+rc = 0
+def ok(m): print(f"   ok   {m}")
+def no(m):
+    global rc; rc = 1; print(f"   FAIL {m}")
+def front(path):                      # top-level keys of a YAML frontmatter block
+    t = open(path, encoding="utf-8").read()
+    m = re.match(r"---\n(.*?)\n---\n", t, re.S)
+    if not m: return None
+    return {k: v.strip().strip("'\"") for k, v in re.findall(r"^([A-Za-z][A-Za-z0-9_-]*):[ \t]*(.*)$", m.group(1), re.M)}
+EFFORT = {"low", "medium", "high", "xhigh"}
+TARGET = {"claude-opus-5-5", "claude-opus-5"}            # CLAUDE.md: the repo targets Opus 5.5, Opus 5 as fallback
+S = ".claude/settings.json"
+try:
+    s = json.load(open(S, encoding="utf-8")); ok(f"{S} is valid JSON")
+except Exception as e:
+    s = {}; no(f"{S} is not valid JSON: {e}")
+if s.get("model") in TARGET: ok(f'{S} "model" = {s["model"]}')
+else: no(f'{S} "model" must be one of {sorted(TARGET)} (got {s.get("model")!r})')
+fb = s.get("fallbackModel")
+if fb is not None and not (isinstance(fb, list) and 0 < len(fb) <= 3 and all(isinstance(x, str) and x for x in fb)):
+    no(f'{S} "fallbackModel" must be a list of 1-3 model ids')
+if "effortLevel" in s and s["effortLevel"] not in EFFORT: no(f'{S} "effortLevel" must be one of {sorted(EFFORT)}')
+for mid, ms in (s.get("modelSettings") or {}).items():
+    if not isinstance(ms, dict) or ms.get("effortLevel", "high") not in EFFORT: no(f'{S} modelSettings.{mid}.effortLevel invalid')
+if s.get("ultracode"): no(f'{S} sets "ultracode": that cost is the operator\'s opt-in (docs/10), never the repo default')
+hooks = s.get("hooks") or {}
+for ev in ("SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "PreCompact"):
+    cmds = [h.get("command", "") for g in hooks.get(ev, []) for h in g.get("hooks", [])]
+    scripts = [m for c in cmds for m in re.findall(r"\.claude/hooks/[\w.-]+\.sh", c)]
+    if not scripts: no(f"{S} hooks.{ev} does not run a .claude/hooks script")
+    elif not all(os.path.isfile(x) for x in scripts): no(f"{S} hooks.{ev} names a missing script: {scripts}")
+
+AGENT_KEYS = {"name", "description", "tools", "disallowedTools", "model", "permissionMode", "maxTurns", "skills",
+              "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "isolation", "color", "initialPrompt"}
+COLORS = {"red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"}
+REQUIRED_AGENTS = {"domain-worker", "verify-reproduce", "verify-guard", "verify-triage", "chain-lead",
+                   "evidence-reporter", "checklist-maintainer"}
+agents, ap = {}, []
+for f in sorted(glob.glob(".claude/agents/*.md")):
+    fm, stem = front(f), os.path.basename(f)[:-3]
+    if fm is None: ap.append(f"{f}: no frontmatter"); continue
+    agents[stem] = fm
+    probs = [f"unknown field {k}" for k in fm if k not in AGENT_KEYS]
+    probs += [f"missing {k}" for k in ("name", "description") if not fm.get(k)]
+    if fm.get("name") and fm["name"] != stem: probs.append(f"name {fm['name']} != file name")
+    if "model" in fm and fm["model"] not in TARGET | {"inherit", "opus"}: probs.append(f"model {fm['model']} is not Opus 5.5 / Opus 5 / inherit")
+    if "effort" in fm and fm["effort"] not in EFFORT | {"max"}: probs.append(f"effort {fm['effort']}")
+    if "color" in fm and fm["color"] not in COLORS: probs.append(f"color {fm['color']}")
+    if "isolation" in fm and fm["isolation"] != "worktree": probs.append("isolation must be worktree")
+    if probs: ap.append(f"{f}: {'; '.join(probs)}")
+missing = sorted(REQUIRED_AGENTS - set(agents))
+if missing: ap.append(f".claude/agents: missing {' '.join(missing)} (CLAUDE.md subagent table)")
+for x in ap: no(x)
+if not ap: ok(f".claude/agents: {len(agents)} agents, documented frontmatter only")
+
+SKILL_KEYS = {"name", "description", "when_to_use", "argument-hint", "arguments", "disable-model-invocation",
+              "user-invocable", "allowed-tools", "disallowed-tools", "model", "effort", "context", "agent", "background",
+              "hooks", "paths", "shell"}
+skills, sp = set(), []
+for f in sorted(glob.glob(".claude/skills/*/SKILL.md")):
+    fm = front(f) or {}; skills.add(fm.get("name") or os.path.basename(os.path.dirname(f)))
+    probs = [f"unknown field {k}" for k in fm if k not in SKILL_KEYS]
+    if fm.get("context") not in (None, "fork"): probs.append("context must be fork")
+    if fm.get("agent") and fm["agent"] not in {"Explore", "Plan", "general-purpose"} | set(agents): probs.append(f"agent {fm['agent']} does not exist")
+    if probs: sp.append(f"{f}: {'; '.join(probs)}")
+for x in sp: no(x)
+if not sp: ok(f".claude/skills: {len(skills)} skills, documented frontmatter only")
+
+wfs = sorted(glob.glob(".claude/workflows/*.js"))
+if not wfs: no(".claude/workflows: no saved workflow")
+for f in wfs:
+    t, stem, probs = open(f, encoding="utf-8").read(), os.path.basename(f)[:-3], []
+    m = re.match(r"\s*export const meta = (\{.*?\n\})\n", t, re.S)
+    if not m: no(f"{f}: the first statement must be `export const meta = {{ … }}`"); continue
+    mt = m.group(1)
+    if "`" in mt or "${" in mt or re.search(r"\b[A-Za-z_]\w*\(", mt): probs.append("meta is not a plain literal")
+    name = re.search(r"^\s*name:\s*'([^']+)'", mt, re.M)
+    if not name or name.group(1) != stem: probs.append("meta.name must equal the file name (it is the /command)")
+    if not re.search(r"^\s*description:\s*'", mt, re.M): probs.append("meta.description missing")
+    if name and name.group(1) in skills: probs.append(f"/{name.group(1)} is also a skill")
+    titles = set(re.findall(r"title:\s*'([^']+)'", mt))
+    used = set(re.findall(r"\bphase\(\s*'([^']+)'", t)) | set(re.findall(r"\bphase:\s*'([^']+)'\s*[,}]", t))
+    if used - titles: probs.append(f"phase(s) not in meta.phases: {sorted(used - titles)}")
+    for bad in (r"Date\.now\(", r"Math\.random\(", r"new Date\(\s*\)", r"\bimport\(", r"\brequire\("):
+        if re.search(bad, t): probs.append(f"uses {bad.replace(chr(92), '')} (breaks resume / not available)")
+    for at in re.findall(r"agentType:\s*([^,}\n]+)", t):
+        lit = re.fullmatch(r"'([\w-]+)'", at.strip())
+        if not lit: probs.append(f"agentType must be a string literal: {at.strip()}")
+        elif lit.group(1) not in agents and lit.group(1) != "general-purpose": probs.append(f"agentType {lit.group(1)} has no .claude/agents file")
+    if not re.search(r"Authorisation: ", t): probs.append("no 'Authorisation: ' line in the agent briefs")
+    if probs: no(f"{f}: {'; '.join(probs)}")
+    else: ok(f"{f}: meta, phases, agent types")
+sys.exit(rc)
+PY
+  if command -v node >/dev/null 2>&1; then
+    for f in .claude/workflows/*.js; do
+      [ -f "$f" ] || continue
+      d="$(mktemp -d "${TMPDIR:-/tmp}/wf.XXXXXX")" || { bad "mktemp"; continue; }
+      { echo 'async function __w(){'; sed 's/^export const meta/const meta/' "$f"; echo '}'; } > "$d/w.js"
+      if node --check "$d/w.js" >/dev/null 2>&1; then ok "node --check $f"; else bad "node --check $f"; fi
+      rm -f "$d/w.js"; rmdir "$d"
+    done
+  else
+    printf '   note node is not installed: the workflow syntax check was skipped (the structural checks above ran)\n'
+  fi
+}
+if [ "${1:-}" = "--claude-layer" ]; then
+  claude_layer
+  printf '\n%s\n' "$([ $fail = 0 ] && echo 'CLAUDE LAYER PASSED' || echo 'CLAUDE LAYER FAILED')"
+  exit $fail
+fi
+
 E="BugBountyTarget/Selftest_$(date +%d%m%Y)"
 cleanup() { rm -rf "$E"; }
 trap cleanup EXIT
@@ -24,6 +142,8 @@ rm -rf "$E"
 step "syntax"
 for f in scripts/*.sh tools/*.sh .claude/hooks/*.sh; do bash -n "$f" && ok "bash -n $f" || bad "bash -n $f"; done
 for f in scripts/*.py tools/*.py; do [ -f "$f" ] && { python3 -m py_compile "$f" && ok "py_compile $f" || bad "py_compile $f"; }; done
+
+claude_layer
 
 step "checklist integrity"
 expect_ok python3 scripts/lint-checklist.py

@@ -2720,7 +2720,7 @@ curl -s https://api.target/v1/me/passkeys -H "Authorization: Bearer $VICTIM" | j
 | **Attacker** | AM-01 (initiates logins), AM-05 (second account) |
 | **Applies to** | Apps that approve logins or transactions through an in-app or push prompt |
 | **Requires** | backend-api, push, two-accounts |
-| **Maps to** | ATT&CK T1621 Multi-Factor Authentication Request Generation; NIST SP 800-63B §5.1.3 (an out-of-band authenticator must bind the approval to the session); MASWE-0023 |
+| **Maps to** | ATT&CK Enterprise "Multi-Factor Authentication Request Generation" (no ATT&CK Mobile technique covers it); NIST SP 800-63B §5.1.3 (an out-of-band authenticator must bind the approval to the session); MASWE-0023 |
 | **Record** | `logs/D13-093.txt`, `screenshots/D13-093-1.png` (the prompt with no context) |
 
 - **Skip when:** No push / in-app approval factor exists (D13-064's inventory has no "device-pairing / approval" row and `grep -rlE 'approveLogin|approve_login|pendingAuth|authRequestId' "$DEC/jadx/sources"` is empty). Note: `D13-093 n/a — no push-approval factor`.

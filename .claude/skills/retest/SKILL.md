@@ -1,6 +1,7 @@
 ---
 name: retest
 description: Re-verify a finding against a new build and record the outcome.
+argument-hint: "F-NNN <new-apk>"
 ---
 
 # /retest F-0NN <new-apk>

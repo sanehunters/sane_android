@@ -19,6 +19,15 @@ carries every required field; validate with `python3 scripts/build-checklist.py 
 The two rules most often missed: **Maps to** cites only identifiers you verified in `data/` (never invent a MASTG or ATT&CK
 id), and **Ruled out when** names the mechanism exactly as the `notes` of a `ruled-out` row would state it.
 
+## Maintaining with Claude Code
+
+Methodology work runs in a Claude Code session in the checkout (`docs/10-agent-operations.md`): `/gap` writes a gap
+or correction into its chapter and opens a Checklist-gap issue; the `checklist-maintainer` agent edits chapters
+under the `docs/11` schema and keeps lint clean; `/chapter-audit` runs one review-only reviewer per chapter plus an
+adversarial verifier and returns a defect list in the `docs/11` vocabulary (it edits nothing). Agents re-read the
+current text of an item before every edit, because a usage limit can stop an agent mid-edit and another agent may
+have changed the chapter since.
+
 ## House rules
 
 1. **Mechanism over pattern.** "Grep for `addJavascriptInterface`" is weak. "Grep it, confirm the bridge

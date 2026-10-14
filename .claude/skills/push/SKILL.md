@@ -1,6 +1,8 @@
 ---
 name: push
 description: Commit the engagement's evidence repo now and push it to the private evidence remote (rule R7).
+argument-hint: "[engagement-dir]"
+when_to_use: After every batch of 10–15 settled items, after every merge, at every phase gate and before the session ends (R7).
 ---
 
 # /push

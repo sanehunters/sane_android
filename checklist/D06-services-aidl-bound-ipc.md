@@ -3149,11 +3149,11 @@ adb shell ps -AZ | grep -E 'isolated_app|com.target.app'   # (a): a peer's class
   MASTG-TEST-0005 (deprecated), MASTG-TECH-0161, MASTG-TECH-0023, MASTG-TECH-0028, MASTG-TECH-0042, MASTG-TECH-0043,
   MASTG-KNOW-0020, MASTG-KNOW-0133, MASTG-BEST-0052, MASTG-TOOL-0001, MASTG-TOOL-0015; MASWE-0018, -0019,
   -0023, -0032, -0036, -0037, -0039, -0040, -0050, -0069; MASVS-PLATFORM-1; Mobile Top 10 2024 M3/M4/M8.
-- **Bugcrowd VRT release 2026-07-08** (`data/bugcrowd-vrt-full.csv`, 581 entries) for every VRT path and
+- **Bugcrowd VRT release 2026-07-08** (`data/vrt.csv`, 581 entries) for every VRT path and
   priority quoted in this chapter, including the null-rated
   `broken_access_control.exposed_sensitive_android_intent` node and its own remediation text on implicit
   service intents.
-- **MITRE ATT&CK Mobile** (`data/mitre-attack-mobile-android.csv`): T1575, T1623, T1635, T1626, T1663,
+- **MITRE ATT&CK Mobile** (`data/attack-mobile-android.csv`): T1575, T1623, T1635, T1626, T1663,
   T1604, T1638, T1428, T1541, T1517, T1636.004, T1513, T1516; mitigation M1012.
 - **Exploit-DB / CVE corpus** (`primary/exploitdb-cve-patterns.md`): CVE-2015-7889 (EDB 38558, Samsung
   `QuickReplyService`); CVE-2017-13236 (EDB 43996), CVE-2017-13209 (EDB 43513), CVE-2019-2023 (EDB 46504)

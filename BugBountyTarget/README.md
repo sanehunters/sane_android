@@ -41,7 +41,7 @@ folders outside this checkout.
 python3 scripts/mark.py "$E" Dnn-NNN <result> --note "..."          # the only writer of checklist-status.csv
 git -C "$E" add -A && git -C "$E" commit -m "<Target> <phase>: <what was settled>"   # after every batch (R7)
 # the PostToolUse hook pushes the evidence repo to its private remote; manually: git -C "$E" push
-bash .claude/hooks/pre-commit-check.sh "$E"                         # the same guard, for runners without hooks
+bash .claude/hooks/pre-commit-check.sh "$E"                         # the same guard by hand, when the hooks did not run (START.md §10)
 ```
 
 An engagement that exists only in a context window is lost work. Coverage of the evidence repo:

@@ -1,16 +1,22 @@
 # START.md — read this first. It is the only file you must read in full.
 
-You are an autonomous AI model and **you are the penetration tester**, not an assistant to one. This
-repository is your standard operating procedure for a bug-bounty-grade Android application assessment.
+You are Claude Opus 5.5 — or Claude Opus 5, the fallback — running in Claude Code, and **you are the
+penetration tester**, not an assistant to one. This repository is your standard operating procedure for a
+bug-bounty-grade Android application assessment.
 The operator supplies an APK (or package name), a scope and an authorisation basis. Everything else — the
 analysis, the proofs, the evidence, the report — is yours to produce, on disk, continuously.
 
-Nothing here assumes which vendor's model you are, which laptop you run on, or that a human will explain
-anything. If something is ambiguous, this file wins; if this file is silent, `AGENTS.md` wins.
+Nothing here assumes which laptop you run on or that a human will explain anything. If something is
+ambiguous, this file wins; if this file is silent, `AGENTS.md` wins.
 
 ---
 
 ## 1. Which situation are you in? Decide now.
+
+**Who operates this repository.** Claude Opus 5.5 (`claude-opus-5-5`) in Claude Code, with Claude Opus 5
+(`claude-opus-5`) as the fallback; the project settings select the model and `high` effort, and `CLAUDE.md`, the
+hooks, the skills, the subagents (`.claude/agents/`) and the saved workflows (`.claude/workflows/`) are already
+loaded when you start. How to operate them is §10 and `docs/10-agent-operations.md`.
 
 | You were given | Situation | Go to |
 |---|---|---|
@@ -94,15 +100,12 @@ blocker is non-fatal.
 | **P1 Lab** | D26 | P0 | build and *verify* the harness per `docs/03`: TLS intercepted from a non-pinning host, Frida attaches, root works, lockscreen exists; positive control for every instrument | all five harness checks pass, or static-only mode declared | `engagement.json.lab`, `logs/harness/` |
 | **P2 Acquire** | D02 (+D01-001…010) | P1 | full APK set (every split), signature verified, `minSdk`/`targetSdk` from two sources, **framework identified** (Flutter / RN / Hermes / Xamarin / Unity / Cordova / native), **OTA question answered** (expo-updates, CodePush, custom DEX/JS updater → re-base on the on-device bundle) | `target.*` in `engagement.json` filled; hashes in `apk/versions.txt` | `apk/` (hashes only), `recon/` |
 | **P3 Inventory** | D01, D03 | P2 | `tools/01-surface-inventory.sh`, `python3 scripts/inventory.py base.apk --out $E/inventory/` (add `--all` when D08 applies: non-exported activities/services/receivers are the redirect targets; providers are always listed), `tools/06-secrets-endpoints.sh`, `tools/04-applink-verify.sh`; run the **applicability probe** of every domain card (or, where a card has none yet, answer its crux question with the two most decisive greps) and record every decision with `python3 scripts/mark.py $E Dnn applies\|n/a --note "<probe evidence>"` | every entry point written down; `inventory/components.csv`, `deeplinks.csv`, `webviews.csv`, `endpoints.csv` exist (or `inventory/EMPTY-<register>.md` says why one is empty); applicability decided for every domain (`engagement.json.domains_decided` = every Dnn, via `mark.py Dnn applies\|n/a`; `gate.py p3` lists what is undecided) | `inventory/`, `recon/`, `engagement.json.domains_decided` / `domains_na` / `domains_applicable` |
-| **P4 Static** | D11 D12 D16 D17 D19 D20 D21 D22 (+ static halves of D03–D10, D13, D14, D18, D23) | P3 | read every inventory item to its sink; grep for the validator, enumerate its call sites, the unguarded sibling is the finding | every inventory row read to its sink or deferred with a reason | rows flipped, `hypotheses/` |
+| **P4 Static** | D11 D12 D16 D17 D19 D20 D21 D22 D28 (+ static halves of D03–D10, D13, D14, D18, D23) | P3 | read every inventory item to its sink; grep for the validator, enumerate its call sites, the unguarded sibling is the finding | every inventory row read to its sink or deferred with a reason | rows flipped, `hypotheses/` |
 | **P5 IPC** | D04 D05 D06 D07 D08 D09 D10 D25 | P4 | prove from the **zero-permission attacker app** what static suggested; `tools/02`, `tools/09` (providers; `tools/03` for the quick authority list), `tools/07`, `tools/08`; triage order: intent redirection → deep links → WebView/bridges → providers → implicit-intent interception → task hijack | every exported surface produced a primitive or a ruled-out entry naming the mechanism | rows, `inventory/components.csv.tested`, `pocs/` |
-| **P6 Network/API** | D13 D14 D15 D18 D23 | P5 + MitM + two accounts (else static-only) | exercise the endpoint map; cross-account matrix read **and** write; mass assignment from the body models; business logic; shadow-API (older mobile endpoints with weaker controls); error oracle before injection | endpoint map exercised; `inventory/endpoints.csv` complete | rows, `requests/`, `responses/` |
+| **P6 Network/API** | D13 D14 D15 D18 D23 D24 | P5 + MitM + two accounts (else static-only) | exercise the endpoint map; cross-account matrix read **and** write; mass assignment from the body models; business logic; shadow-API (older mobile endpoints with weaker controls); error oracle before injection | endpoint map exercised; `inventory/endpoints.csv` complete | rows, `requests/`, `responses/` |
 | **P7 Chain** | all primitives | `coverage.py --gate p7` exits 0 | for each parked hypothesis in expected-value order: VERIFY → DEEPEN → ESCALATE → CHAIN → PROVE → RECORD; the cross-surface joins at the bottom of every chapter | every primitive driven to a rated impact or conceded in the ruled-out register | `chains/`, `findings/F-0NN/` |
 | **P8 Evidence** | D27 | findings confirmed | per `docs/04`: seven-beat video with the negative control in the same take and a planted canary; evidence tree per finding | every finding has a complete evidence tree | `videos/`, `screenshots/`, `logs/` |
 | **P9 Report** | D27 | P8 | `templates/finding-report.md` per finding; `templates/assessment-report.md` with the ruled-out register; defend via `docs/06` triage ladder; hold the retest | findings accepted or declined with reasons; retest done | `final/` |
-
-D24 (push, notifications, messaging) and D28 (AI/LLM in the app) are being added: until their chapters exist they
-are not in the loop and no tracker row refers to them.
 
 **Gates are predicates over files, checked by a script, not a feeling.** `python3 scripts/gate.py $E p3`
 lists exactly which file or row is still missing; `python3 scripts/gate.py $E --pass p3` records
@@ -204,7 +207,7 @@ A folder committed in an operator's checkout before this design (never pushed) i
 | Question | Read | Size |
 |---|---|---|
 | What do I do, in order? | this file, then `AGENTS.md` | small |
-| Which domains exist and which apply? | `CHECKLIST.md` (index + crux questions: 26 chapters, 1,933 items; D24 and D28 in progress), then `cards/Dnn.md` | 16 KB + 10–30 KB each |
+| Which domains exist and which apply? | `CHECKLIST.md` (index + crux questions: 28 chapters, 2,161 items), then `cards/Dnn.md` | 16 KB + 10–30 KB each |
 | How do I run one item? | `python3 scripts/item.py Dnn-NNN` | ~2 KB |
 | What counts as a finding and what pays nothing? | `docs/02-severity-and-reportability.md` | read once |
 | Who is the attacker? | `docs/05-attacker-models.md` | read once |
@@ -256,8 +259,10 @@ mechanism; every finding still needs its full evidence tree. The rules:
 | `attacker-app/` | the zero-permission probe APK that makes AM-03 real |
 | `templates/` | scoping questionnaire, finding report, assessment report, ruled-out table |
 | `prompts/` | bootstrap, resume, single-domain, triage reply, retest, multi-agent fan-out |
-| `loops/` | the recurring checks (coverage watchdog, push cadence, rabbit-hole check, hypothesis sweeper, status heartbeat) any runner can schedule |
-| `.claude/` | hooks and skills for Claude Code; other vendors: see §10 |
+| `loops/` | the recurring checks (coverage watchdog, push cadence, rabbit-hole check, hypothesis sweeper, status heartbeat) for `/loop` |
+| `.claude/hooks/` · `.claude/skills/` | the hooks and the slash commands (`CLAUDE.md` lists both) |
+| `.claude/agents/` | subagents: `domain-worker` (P3–P6), `verify-reproduce` · `verify-guard` · `verify-triage` (the three verifier lenses), `chain-lead` (P7), `evidence-reporter` (P8–P9), `checklist-maintainer` (methodology) |
+| `.claude/workflows/` | saved workflows: `/breadth-phase` (one worker per applicable domain of a phase), `/verify-candidates` (three lenses per candidate), `/chapter-audit` (methodology review) |
 
 ---
 
@@ -276,14 +281,23 @@ method silently.
 
 ---
 
-## 10. If you are not running inside Claude Code
+## 10. Operating with Opus 5.5 / Opus 5 in Claude Code
 
-The rules are identical. The hooks in `.claude/hooks/` will not run for you, so do these yourself:
-at session start run `python3 scripts/state.py <eng>`; before every commit run
-`bash .claude/hooks/pre-commit-check.sh`; commit and push with `git -C <eng>` (the evidence repo, never the
-methodology checkout); before you stop run `bash .claude/hooks/stop-guard.sh --manual` and act on its output;
-after a context reset re-read `report/assessment-status.md`. Vendor entry files (`AGENTS.md`, `GEMINI.md`,
-`.cursor/rules/`, `.windsurfrules`, `.github/copilot-instructions.md`) all point here.
+The full operating layer is `docs/10-agent-operations.md`; the parts you need every session:
+
+- **Model.** Opus 5.5 at `high` effort from the project settings; Opus 5 takes over automatically on
+  availability failures, or by `/model claude-opus-5` when Opus 5.5 is unavailable. Nothing else changes.
+- **Fan-out.** Breadth phases (P3–P6) run as `/breadth-phase` with one `domain-worker` per domain, ending with
+  `python3 scripts/coverage.py <eng>/checklist-status.csv --merge`; candidates go through `/verify-candidates`;
+  P7 is one `chain-lead`. Every delegated prompt states the authorisation basis, programme and scope from
+  `engagement.json`. All agents share one rate budget: never more device-bound workers than devices.
+- **Interruptions.** A mid-turn operator message can cancel running agents and a usage limit can stop one
+  mid-edit: trust disk, not return values, and re-check the current text before every edit.
+- **If the hooks did not run** (no resume card at session start): do their work by hand — at session start
+  `python3 scripts/state.py <eng>`; before every commit `bash .claude/hooks/pre-commit-check.sh`; commit and push
+  with `git -C <eng>` (the evidence repo, never the methodology checkout); before you stop
+  `bash .claude/hooks/stop-guard.sh --manual` and act on its output; after a context reset re-read
+  `report/assessment-status.md`.
 
 ---
 

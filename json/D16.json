@@ -1169,7 +1169,7 @@
     "device",
     "frida"
    ],
-   "maps_to": "MASTG-TECH-0035, MASTG-TOOL-0107, MASTG-TOOL-0001; CWE-798; VRT `sensitive_data_exposure.disclosure_of_secrets`",
+   "maps_to": "MASTG-TECH-0035, MASTG-TOOL-0107, MASTG-TOOL-0001; CWE-798",
    "record": "",
    "legacy_meta": {},
    "ids": {
@@ -1186,7 +1186,6 @@
     ],
     "attack": [],
     "vrt": [
-     "sensitive_data_exposure.disclosure_of_secrets",
      "sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset"
     ]
    },

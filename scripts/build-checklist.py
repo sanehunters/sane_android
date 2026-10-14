@@ -451,7 +451,7 @@ def write_outputs(chapters, root):
     B("\n## Related\n")
     B("| | |\n|---|---|")
     B("| [`START.md`](START.md) | The operator entry point and state machine |")
-    B("| [`ISSUES.md`](ISSUES.md) | The ordered phase workflow |")
+    B("| [`ISSUES.md`](ISSUES.md) | How the GitHub tracker mirrors these files |")
     B("| [`AGENTS.md`](AGENTS.md) | The SOP |")
     B("| [`docs/09-coverage-discipline.md`](docs/09-coverage-discipline.md) | Breadth before depth |")
     B("| [`docs/02-severity-and-reportability.md`](docs/02-severity-and-reportability.md) | What counts as a finding |")

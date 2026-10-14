@@ -1,6 +1,7 @@
 ---
 name: sane-doctor
 description: Detect the environment (OS, SDK, device, root, tools) and decide dynamic vs static-only mode.
+allowed-tools: Bash(bash scripts/doctor.sh:*)
 ---
 
 # /sane-doctor   (`sane-` because `/doctor` is a Claude Code built-in)

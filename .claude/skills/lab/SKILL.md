@@ -1,6 +1,7 @@
 ---
 name: lab
 description: Build and verify the analysis harness (phase 1) and record it.
+when_to_use: P1, before any dynamic item; again when the device, emulator image or proxy changes.
 ---
 
 # /lab

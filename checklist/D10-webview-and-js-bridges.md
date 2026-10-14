@@ -479,7 +479,7 @@ Partial applicability: if probe 1 > 0 but probe 2 = 0 and no hybrid framework is
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) → `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
+| **VRT** | `server_security_misconfiguration.path_traversal` (varies) → `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps with a generic JS bridge dispatcher |
 | **Requires** | webview, js-bridge |
@@ -508,7 +508,7 @@ Partial applicability: if probe 1 > 0 but probe 2 = 0 and no hybrid framework is
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `server_security_misconfiguration.path_traversal` (VARIES); `server_side_injection.remote_code_execution_rce` (P1) only if a code-load path is writable |
+| **VRT** | `server_security_misconfiguration.path_traversal` (varies); `server_side_injection.remote_code_execution_rce` (P1) only if a code-load path is writable |
 | **Attacker** | AM-02 |
 | **Applies to** | all bridges accepting `(content, fileName, mimeType)` |
 | **Requires** | webview, js-bridge |
@@ -1651,7 +1651,7 @@ Partial applicability: if probe 1 > 0 but probe 2 = 0 and no hybrid framework is
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) for the write; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the cookie leak |
+| **VRT** | `server_security_misconfiguration.path_traversal` (varies) for the write; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the cookie leak |
 | **Attacker** | AM-02 |
 | **Applies to** | apps with an in-app browser or any WebView that can navigate to attacker content |
 | **Requires** | webview |

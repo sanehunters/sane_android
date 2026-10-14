@@ -1,6 +1,7 @@
 ---
 name: engage
-description: Start a new Android engagement: environment check, engagement folder, state file, first commit. Use when the operator hands over an APK or package plus a scope and an authorisation basis.
+description: "Start a new Android engagement: environment check, engagement folder, state file, first commit. Use when the operator hands over an APK or package plus a scope and an authorisation basis."
+argument-hint: "<TargetName> [--remote <private git url>]"
 ---
 
 # /engage <TargetName>

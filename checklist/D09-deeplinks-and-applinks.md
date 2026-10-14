@@ -121,7 +121,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | all |
 | **Requires** | — |
@@ -237,7 +237,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Support |
-| **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | none — inventory feeding `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03, AM-08 |
 | **Applies to** | all; especially apps bundling OAuth, chat, attribution or payment SDKs |
 | **Requires** | deeplink |
@@ -517,7 +517,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | React Native apps (`index.android.bundle`, Hermes or JSC) |
 | **Requires** | deeplink, react-native |
@@ -724,7 +724,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | no VRT node for App Links — file the consequence: `server_security_misconfiguration.oauth_misconfiguration.insecure_redirect_uri` (varies) or `broken_access_control.exposed_sensitive_android_intent` (null); **Critical** as `broken_authentication_and_session_management.authentication_bypass` (P1) once you intercept a login link |
+| **VRT** | no VRT node for App Links — file the consequence: `server_security_misconfiguration.oauth_misconfiguration.insecure_redirect_uri` (varies) or `broken_access_control.exposed_sensitive_android_intent` (varies); **Critical** as `broken_authentication_and_session_management.authentication_bypass` (P1) once you intercept a login link |
 | **Attacker** | AM-03 (a competing app wins the chooser); AM-02 for the delivery of the link itself |
 | **Applies to** | App Links exist from Android 6.0 (API 23); `pm get-app-links` / `pm verify-app-links` require **Android 12 (API 31)+** |
 | **Requires** | applink, device, api>=31 |
@@ -774,7 +774,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | file the consequence — `broken_access_control.exposed_sensitive_android_intent` (null), or P1 `authentication_bypass` once the hijacked link carries a login token |
+| **VRT** | file the consequence — `broken_access_control.exposed_sensitive_android_intent` (varies), or P1 `authentication_bypass` once the hijacked link carries a login token |
 | **Attacker** | AM-03 |
 | **Applies to** | all apps declaring `autoVerify` |
 | **Requires** | applink |
@@ -901,7 +901,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` if the over-trusted package can reach a login link |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); P1 `authentication_bypass` if the over-trusted package can reach a login link |
 | **Attacker** | AM-03, AM-08 |
 | **Applies to** | all apps declaring `autoVerify` |
 | **Requires** | applink |
@@ -1219,7 +1219,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the captured value completes a login; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the token itself; `broken_access_control.exposed_sensitive_android_intent` (null) when it captures something less |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the captured value completes a login; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the token itself; `broken_access_control.exposed_sensitive_android_intent` (varies) when it captures something less |
 | **Attacker** | AM-03 |
 | **Applies to** | all custom (non-http/https) schemes, every Android version. Custom schemes have **no** ownership verification and never have |
 | **Requires** | deeplink, device |
@@ -1272,7 +1272,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `sensitive_data_exposure.weak_password_reset_implementation` family when the captured artefact is a reset token |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `sensitive_data_exposure.sensitive_token_in_url.on_password_reset` (P5) when the captured artefact is a reset token that does not by itself complete the takeover |
 | **Attacker** | AM-03 |
 | **Applies to** | any `http`/`https` BROWSABLE filter whose host is **not** `verified` per D09-014 |
 | **Requires** | deeplink, device |
@@ -1608,7 +1608,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) for the routing case; the entitlement case is a business-logic finding — file the consequence |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) for the routing case; the entitlement case is a business-logic finding — file the consequence |
 | **Attacker** | AM-01 (anyone who can construct the referring URL) |
 | **Applies to** | all; any targetSdk |
 | **Requires** | device |
@@ -1643,7 +1643,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | consequence-rated; `broken_access_control.exposed_sensitive_android_intent` (null) at minimum, P1 `authentication_bypass` when the scan completes a login or account link |
+| **VRT** | consequence-rated; `broken_access_control.exposed_sensitive_android_intent` (varies) at minimum, P1 `authentication_bypass` when the scan completes a login or account link |
 | **Attacker** | AM-02 (a printed sticker over a legitimate code — no malware, no permissions) |
 | **Applies to** | any app with a scanner: payments/UPI, ticketing, delivery, "scan to pair", loyalty, device onboarding |
 | **Requires** | deeplink, device |
@@ -1715,7 +1715,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` when the trusted path skips an auth gate |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); P1 `authentication_bypass` when the trusted path skips an auth gate |
 | **Attacker** | AM-02 (a web link carrying a forged signature) |
 | **Applies to** | apps that gate deep-link routes on a notification-origin signature |
 | **Requires** | deeplink, push |
@@ -1752,7 +1752,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` when the retired path skips an auth step |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); P1 `authentication_bypass` when the retired path skips an auth step |
 | **Attacker** | AM-04 (launcher/shortcut access), AM-02 for the instant-app path |
 | **Applies to** | `ShortcutManager` from API 25+; the instant-app case applies to any app that ever shipped a Google Play Instant experience |
 | **Requires** | deeplink, device |
@@ -1967,7 +1967,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → the sink's path |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → the sink's path |
 | **Attacker** | AM-03 (requires app-to-app delivery of a `Uri` **object**, not a browser link) |
 | **Applies to** | **LEGACY-leaning** — Oversecured notes API 28+ forbids internal-interface use "but this can easily be bypassed", and describes it as less relevant on Android 12+. Report only where you demonstrate it on the target's supported API range |
 | **Requires** | deeplink, device |
@@ -2044,7 +2044,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → the framework sink's path |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → the framework sink's path |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | React Native, Flutter, Cordova/Capacitor, KMP — any app where the URI crosses a language boundary |
 | **Requires** | deeplink, flutter, react-native, cordova, capacitor, kmp |
@@ -2085,7 +2085,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — rated on the handler reached |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — rated on the handler reached |
 | **Attacker** | AM-02 |
 | **Applies to** | all. `pathSuffix` and `pathAdvancedPattern` are **API 31+**; `<data android:query*>` and `android:fragment*` matchers are **API 35+**, so an app using them has a *narrower* filter on old devices — a behavioural split worth testing on both |
 | **Requires** | deeplink, device |
@@ -2122,7 +2122,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — rated on what the escaped path reaches |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) — rated on what the escaped path reaches |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps using `android:pathPrefix` to scope an App Link |
 | **Requires** | deeplink, device |
@@ -2187,7 +2187,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-02 |
 | **Applies to** | **Android 15 (API 35)+** |
 | **Requires** | deeplink, device, api>=35 |
@@ -2219,7 +2219,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | **Android 16 (API 36)+** with `android:intentMatchingFlags` containing `allowNullAction` |
 | **Requires** | device, api>=36 |
@@ -2254,7 +2254,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 (local app; browser delivery remains filter-bound) |
 | **Applies to** | all; the attribute is **Android 16 (API 36)** opt-in, so its absence on older targets is a platform limitation rather than a defect — rate accordingly, and use sibling comparison |
 | **Requires** | deeplink, device |
@@ -2288,7 +2288,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) |
 | **Attacker** | AM-03 |
 | **Applies to** | **Android 16 (API 36)+**, targetSdk 36 |
 | **Requires** | device, api>=36, targetsdk>=36 |
@@ -2318,7 +2318,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Medium |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → the sink's path |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → the sink's path |
 | **Attacker** | AM-02 |
 | **Applies to** | apps whose hosts report `verified` — this is the residual risk once interception is closed |
 | **Requires** | applink, device |
@@ -2425,7 +2425,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.idor.*` when it lands on another user's object |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies); `broken_access_control.idor.*` when it lands on another user's object |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps that put a parameter **inside** the URL path (`https://api.target.example/v1/users/{username}`) |
 | **Requires** | deeplink, backend-api |
@@ -2459,7 +2459,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the WebView carries the session to your origin; `broken_authentication_and_session_management.authentication_bypass` (P1) once you complete the takeover; `broken_access_control.exposed_sensitive_android_intent` (null) for a non-session WebView |
+| **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the WebView carries the session to your origin; `broken_authentication_and_session_management.authentication_bypass` (P1) once you complete the takeover; `broken_access_control.exposed_sensitive_android_intent` (varies) for a non-session WebView |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
 | **Requires** | deeplink, webview |
@@ -2715,7 +2715,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → P1 by what the launched component does |
+| **VRT** | `broken_access_control.exposed_sensitive_android_intent` (varies) → P1 by what the launched component does |
 | **Attacker** | AM-02 (delivered from a web page through the app's own router — this is what makes it worse than the D08-022 local variant; the `shouldOverrideUrlLoading` variant is D10-065) |
 | **Applies to** | all |
 | **Requires** | deeplink |
@@ -2754,7 +2754,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | Critical |
-| **VRT** | `cross_site_request_forgery_csrf.action_specific.authenticated_action` (varies) when the action is server-side; `broken_access_control.exposed_sensitive_android_intent` (null) when it is local; `broken_authentication_and_session_management.authentication_bypass` (P1) when it changes credentials |
+| **VRT** | `cross_site_request_forgery_csrf.action_specific.authenticated_action` (varies) when the action is server-side; `broken_access_control.exposed_sensitive_android_intent` (varies) when it is local; `broken_authentication_and_session_management.authentication_bypass` (P1) when it changes credentials |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
 | **Requires** | deeplink, backend-api, device |
@@ -2793,7 +2793,7 @@ Decision:
 | | |
 |---|---|
 | **Severity ceiling** | High |
-| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if it exposes data or acts; `broken_access_control.exposed_sensitive_android_intent` (null) for navigation only |
+| **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if it exposes data or acts; `broken_access_control.exposed_sensitive_android_intent` (varies) for navigation only |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | all |
 | **Requires** | deeplink, device |
@@ -3655,7 +3655,7 @@ Decision:
   pre-12 verification-poisoning rule); MASTG-BEST-0070/-0071; MASTG-TOOL-0032; MASTG-DEMO-0152; the semgrep
   rules `mastg-android-deeplink-autoverify-missing`, `mastg-android-deeplink-unvalidated-parameter`,
   `mastg-android-custom-deeplink-scheme`; MASWE-0029, MASWE-0018, MASWE-0050. Identifiers cross-checked
-  against `data/mastg-android-tests.csv` and `data/mastg-android-techniques.csv`.
+  against `data/mastg-tests.csv` and `data/mastg-techniques.csv`.
 - **Android platform documentation** (`architecture/framework-internals.md`, `architecture/aosp-core.md`,
   `architecture/security-model.md`, `frontier/modern-api-surfaces.md`): `guide/topics/manifest/data-element`
   (the `<data>` combination rule, `pathPattern` glob semantics with its three documented non-matches, host
@@ -3717,5 +3717,5 @@ Decision:
   rule), `docs/05-attacker-models.md` (AM-02/AM-03 and "report the weakest attacker that still works"),
   `docs/04-poc-and-evidence-standard.md`, `tools/04-applink-verify.sh`, `tools/07-deeplink-sweep.sh`,
   `attacker-app/` (the permission-free probe manifest that establishes AM-03), and
-  `data/bugcrowd-vrt-full.csv` (Bugcrowd VRT release 2026-07-08, 581 entries — every VRT path in this chapter
+  `data/vrt.csv` (Bugcrowd VRT release 2026-07-08, 581 entries — every VRT path in this chapter
   was checked against it).

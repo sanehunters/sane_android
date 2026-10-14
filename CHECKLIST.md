@@ -1,6 +1,6 @@
 # CHECKLIST.md — domain index
 
-> 2161 test items across 28 domains, generated from `checklist/` (source digest `e6e8df042793`). Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
+> 2161 test items across 28 domains, generated from `checklist/` (source digest `b82eae24e57d`). Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)
 
 | Domain | Phase | Items | Ceiling mix | Card | Chapter |
 |---|---|---|---|---|---|
@@ -85,7 +85,7 @@ The single question that decides whether a domain has a bug in this app. Ask it 
 | | |
 |---|---|
 | [`START.md`](START.md) | The operator entry point and state machine |
-| [`ISSUES.md`](ISSUES.md) | The ordered phase workflow |
+| [`ISSUES.md`](ISSUES.md) | How the GitHub tracker mirrors these files |
 | [`AGENTS.md`](AGENTS.md) | The SOP |
 | [`docs/09-coverage-discipline.md`](docs/09-coverage-discipline.md) | Breadth before depth |
 | [`docs/02-severity-and-reportability.md`](docs/02-severity-and-reportability.md) | What counts as a finding |

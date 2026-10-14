@@ -1,6 +1,7 @@
 ---
 name: domain
-description: Work one checklist domain end to end: card, applicability probe, items in triage order, recording, pushing. Use for 'work domain Dnn' or when the state machine reaches a domain.
+description: "Work one checklist domain end to end: card, applicability probe, items in triage order, recording, pushing. Use for 'work domain Dnn' or when the state machine reaches a domain."
+argument-hint: "Dnn"
 ---
 
 # /domain Dnn

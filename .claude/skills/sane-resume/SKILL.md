@@ -1,6 +1,7 @@
 ---
 name: sane-resume
 description: Resume an existing engagement from disk after a new session or a context reset. Use whenever a BugBountyTarget/<Target>_<date> folder exists.
+argument-hint: "[engagement-dir]"
 ---
 
 # /sane-resume [engagement-dir]   (`sane-` because `/resume` is a Claude Code built-in)

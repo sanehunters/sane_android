@@ -3104,7 +3104,7 @@
    "severity": "high",
    "severity_floor": "medium",
    "severity_note": "Medium local-only on a modern device; High when written to shared storage or shipped by a crash/analytics SDK",
-   "vrt": "`sensitive_data_exposure.disclosure_of_secrets` (varies); the base observation is not a finding",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies); the base observation is not a finding",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-04 (a `READ_LOGS`-holding OEM preload); AM-08 (a log-shipping SDK); AM-11 (ADB)",
@@ -3142,7 +3142,7 @@
      "T1533"
     ],
     "vrt": [
-     "sensitive_data_exposure.disclosure_of_secrets"
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
     ]
    },
    "xrefs": [],
@@ -3165,7 +3165,7 @@
    "severity": "low",
    "severity_floor": "low",
    "severity_note": "Low; contributes to D11-062",
-   "vrt": "`sensitive_data_exposure.disclosure_of_secrets` (varies) only if it leaks a secret",
+   "vrt": "`sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) only if it leaks a secret",
    "vrt_priority": "varies",
    "vrt_best": "varies",
    "attacker": "AM-11; AM-04",
@@ -3197,7 +3197,7 @@
     ],
     "attack": [],
     "vrt": [
-     "sensitive_data_exposure.disclosure_of_secrets"
+     "sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure"
     ]
    },
    "xrefs": [

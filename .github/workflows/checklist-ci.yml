@@ -106,13 +106,24 @@ jobs:
           hook 'git commit -m "evidence"' | $SH .claude/hooks/pre-bash.sh 2>/dev/null && { echo "::error::legacy engagement path staged in the methodology repo was not refused"; exit 1; }
           $SH .claude/hooks/pre-commit-check.sh >/dev/null 2>&1 && { echo "::error::pre-commit-check passed a staged engagement path"; exit 1; }
           git reset -q -- BugBountyTarget/Legacy_01012026; rm -rf BugBountyTarget/Legacy_01012026
-      - name: Skill names must not shadow Claude Code built-ins (a built-in wins; the skill becomes unreachable)
+      - name: Skill and workflow names must not shadow Claude Code built-ins (a built-in wins; the command becomes unreachable)
         run: |
-          builtins='add-dir agents bug clear compact config context cost diff doctor exit export help hooks ide init install-github-app login logout mcp memory model permissions plugin pr-comments release-notes rename resume review security-review status terminal-setup todos upgrade usage vim'
+          builtins='add-dir agents bug clear compact config context cost diff doctor exit export help hooks ide init install-github-app login logout mcp memory model permissions plugin pr-comments release-notes reload-skills rename resume review security-review status terminal-setup todos upgrade usage vim workflows'
           for f in .claude/skills/*/SKILL.md; do
             n=$(sed -nE 's/^name:[[:space:]]*//p' "$f" | head -1)
             for b in $builtins; do [ "$n" = "$b" ] && { echo "::error::$f: skill name '$n' is a Claude Code built-in — rename it (sane-$n)"; exit 1; }; done
+          done
+          for f in .claude/workflows/*.js; do
+            [ -f "$f" ] || continue
+            n=$(sed -nE "s/^[[:space:]]*name:[[:space:]]*'([^']+)'.*/\1/p" "$f" | head -1)
+            for b in $builtins; do [ "$n" = "$b" ] && { echo "::error::$f: workflow name '$n' is a Claude Code built-in"; exit 1; }; done
           done; echo "clean"
+      - name: Claude Code layer — settings.json (valid JSON, model set), .claude/agents/*.md, skill frontmatter, .claude/workflows/*.js (node --check)
+        run: |
+          ls .claude/agents/*.md .claude/workflows/*.js >/dev/null || { echo "::error::.claude/agents/*.md or .claude/workflows/*.js missing"; exit 1; }
+          python3 -c 'import json; s = json.load(open(".claude/settings.json")); assert s.get("model"), "settings.json: model not set"'
+          command -v node >/dev/null || echo "node is not installed on this runner: the workflow syntax check is skipped"
+          $SH scripts/selftest.sh --claude-layer
       - name: Item lookup works
         run: python3 scripts/item.py D10-004 >/dev/null && python3 scripts/item.py --domain D17 >/dev/null && python3 scripts/item.py --grep JavascriptInterface | head -3
       - name: End-to-end self-test on a scratch engagement

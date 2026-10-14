@@ -1,6 +1,7 @@
 ---
 name: ruled-out
 description: Record a defensible negative for an item (rule R4).
+argument-hint: "Dnn-NNN"
 ---
 
 # /ruled-out Dnn-NNN

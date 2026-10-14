@@ -10,7 +10,7 @@
 |---|---|---|---|
 | **Start here** | `type: methodology` | repository | `START.md` §1–§4 |
 | **Phase playbook** `P0`…`P9` | `type: playbook`, `phase: n …` | phase | `START.md` §4 table row + the phase's gate predicate (`scripts/gate.py`) |
-| **Domain battery** `D01`…`D28` (D24 and D28 in progress; no chapter yet) | `type: checklist`, `domain: Dnn`, `phase: …`, `area: …`, `am: …` | domain | `cards/Dnn.md` (crux, applicability probe, triage order, the item table) |
+| **Domain battery** `D01`…`D28` | `type: checklist`, `domain: Dnn`, `phase: …`, `area: …`, `am: …` | domain | `cards/Dnn.md` (crux, applicability probe, triage order, the item table) |
 | **Doctrine reference** | `type: methodology` | doctrine doc | the first section of each `docs/*.md` |
 
 All standing issues carry `do-not-close`. A GitHub Action reopens any that is closed and comments why.

@@ -1,6 +1,8 @@
 ---
 name: coverage
 description: Show two-dimensional coverage and check the P7 gate.
+argument-hint: "[engagement-dir] [--gate p7]"
+allowed-tools: Bash(python3 scripts/coverage.py:*)
 ---
 
 # /coverage [--gate p7]
