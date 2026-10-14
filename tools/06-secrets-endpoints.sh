@@ -21,14 +21,14 @@
 # Exit: 0 ran and found >=1 secret/cloud/endpoint candidate; 1 ran, nothing found; 2 usage/environment.
 set -uo pipefail
 
-usage() { sed -n '2,3p' "$0" | sed 's/^# //'; sed -n '12,21p' "$0" | sed 's/^# //'; exit 2; }
+usage() { sed -n '2,3p' "$0" | sed 's/^# //'; sed -n '12,21p' "$0" | sed 's/^# //'; exit "${1:-2}"; }
 DIR=""; OUT=""; INV=""; JSON=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --out)       OUT="${2:-}"; shift ;;
     --inventory) INV="${2:-}"; shift ;;
     --json)      JSON=1 ;;
-    -h|--help)   usage ;;
+    -h|--help)   usage 0 ;;
     -*)          echo "unknown option: $1" >&2; usage ;;
     *)           if [ -z "$DIR" ]; then DIR="$1"; elif [ -z "$OUT" ]; then OUT="$1"; else echo "unexpected: $1" >&2; usage; fi ;;
   esac

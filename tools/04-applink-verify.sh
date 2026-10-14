@@ -3,6 +3,7 @@
 # App Link (Digital Asset Links) verification state. A FAILED verification turns every
 # "secure" App Link back into a hijackable implicit intent.
 set -uo pipefail
+case "${1:-}" in -h|--help) sed -n "2,12p" "$0" | grep "^#" | sed "s/^# \{0,1\}//"; exit 0 ;; esac
 PKG="${1:?usage: $0 <package>}"
 
 echo "== on-device verification state =="

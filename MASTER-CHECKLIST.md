@@ -1,6 +1,6 @@
 # MASTER CHECKLIST — compact view
 
-> 1933 items · 26 domains · generated 2026-10-11. One line per item, for `grep`. To work a domain load `cards/Dnn.md`; to run an item use `python3 scripts/item.py Dnn-NNN`.
+> 1933 items · 26 domains · generated from `checklist/` (source digest `f4334ccf62dc`). One line per item, for `grep`. To work a domain load `cards/Dnn.md`; to run an item use `python3 scripts/item.py Dnn-NNN`.
 
 | | Items |
 |---|---|

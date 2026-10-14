@@ -38,6 +38,16 @@ def find(iid):
     sys.exit(f"!! no item {iid}")
 
 
+def field_line(lab, text):
+    """Render '- **Label:** text' with continuation lines indented. A field whose text STARTS with a code fence
+    must put the fence on its own line, otherwise the fence is glued to the label and the code block never opens
+    for the reader (the chapters write the fence on the line after the label; the parser strips that newline)."""
+    body = text.replace("\n", "\n  ")
+    if text.lstrip().startswith("```"):
+        return f"- **{lab}:**\n  " + body
+    return f"- **{lab}:** " + body
+
+
 def render(i, brief=False):
     L = []
     if brief:
@@ -45,7 +55,7 @@ def render(i, brief=False):
         A(f"### {i['id']} · {i['title']}  [{i['severity']}{'' if i['severity_floor'] == i['severity'] else ' / ' + i['severity_floor'] + ' alone'} · {i['vrt_priority']} · {'/'.join(i['attacker_ids']) or 'n/a'}]")
         if i.get("requires"): A(f"Requires: {i['requires']}")
         for k, lab in [("skip_when", "Skip when"), ("test", "Test"), ("how", "How"), ("proof", "Proof")]:
-            if i.get(k): A(f"- **{lab}:** " + i[k].replace("\n", "\n  "))
+            if i.get(k): A(field_line(lab, i[k]))
         return "\n".join(L)
     A = L.append
     A(f"### {i['id']} · {i['title']}")
@@ -61,7 +71,7 @@ def render(i, brief=False):
     for k, lab in [("skip_when", "Skip when"), ("test", "Test"), ("how", "How"), ("proof", "Proof"),
                    ("escalation", "Escalation"), ("ruled_out_when", "Ruled out when"), ("record", "Record")]:
         if i.get(k):
-            A(f"- **{lab}:** " + i[k].replace("\n", "\n  "))
+            A(field_line(lab, i[k]))
     if i.get("xrefs"):
         A(""); A("Cross-references: " + ", ".join(f"`{x}`" for x in i["xrefs"]))
     return "\n".join(L)

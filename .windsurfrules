@@ -1,4 +1,4 @@
-# Copilot / Codex instructions
+# Windsurf instructions
 
 Read `START.md` in full before acting; `AGENTS.md` is the standard operating procedure. Phases P0→P9 in
 order, no escalation before P7. Load `cards/Dnn.md` and `python3 scripts/item.py Dnn-NNN`, never a whole

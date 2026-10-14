@@ -18,7 +18,7 @@ from them and must never be hand-edited (CI rebuilds and diffs).
 Run from anywhere:  python3 scripts/build-checklist.py [--check]
   --check   build to a temp dir and exit 1 if the committed outputs differ (CI mode)
 """
-import csv, glob, json, os, re, sys, collections, tempfile, filecmp, shutil, datetime
+import csv, glob, json, os, re, sys, collections, tempfile, filecmp, shutil, hashlib
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CH = os.path.join(ROOT, "checklist")
@@ -102,6 +102,17 @@ def load_vrt():
             pr = ("P" + pr) if pr.isdigit() else (pr.upper() if re.fullmatch(r"[pP][1-5]", pr) else pr.lower())
             out[r["vrt_path"].strip()] = pr
     return out
+
+
+def source_digest():
+    """A content digest of everything the outputs are generated from (the chapters and the VRT table). It replaces
+    the old date stamp: a date made `--check` fail on every day except the generation day, which turned the CI
+    staleness gate into a false positive. The digest changes exactly when a source changes."""
+    h = hashlib.sha256()
+    for p in sorted(glob.glob(os.path.join(CH, "D*.md"))) + [os.path.join(DATA, "vrt.csv")]:
+        if os.path.exists(p):
+            h.update(os.path.basename(p).encode()); h.update(b"\0"); h.update(open(p, "rb").read()); h.update(b"\0")
+    return h.hexdigest()[:12]
 
 
 VRT = load_vrt()
@@ -224,7 +235,7 @@ def write_outputs(chapters, root):
     os.makedirs(os.path.join(root, "json"), exist_ok=True)
     total = sum(len(c["items"]) for c in chapters)
     sev_all = collections.Counter(i["severity"] for c in chapters for i in c["items"])
-    stamp = datetime.date.today().isoformat()
+    stamp = source_digest()
 
     # ── checklist.csv (slim tracker) ─────────────────────────────────────────
     cols = ["item_id", "domain", "phase", "title", "severity_ceiling", "severity_floor", "attacker_model",
@@ -242,7 +253,7 @@ def write_outputs(chapters, root):
                             "completed": "false", "result": "", "finding_id": "", "evidence": "", "notes": ""})
 
     # ── json/Dnn.json + json/index.json ──────────────────────────────────────
-    index = {"generated": stamp, "total_items": total, "domains": {}, "items": {}}
+    index = {"source_digest": stamp, "total_items": total, "domains": {}, "items": {}}
     for c in chapters:
         ph, ms = PHASE.get(c["id"], ("P4", "M4"))
         c_out = dict(c); c_out["phase"] = ph; c_out["milestone"] = ms
@@ -292,7 +303,7 @@ def write_outputs(chapters, root):
     # ── MASTER-CHECKLIST.md (compact, grep-oriented) ─────────────────────────
     L = []; A = L.append
     A("# MASTER CHECKLIST — compact view\n")
-    A(f"> {total} items · {len(chapters)} domains · generated {stamp}. One line per item, for `grep`. "
+    A(f"> {total} items · {len(chapters)} domains · generated from `checklist/` (source digest `{stamp}`). One line per item, for `grep`. "
       "To work a domain load `cards/Dnn.md`; to run an item use `python3 scripts/item.py Dnn-NNN`.\n")
     A("| | Items |"); A("|---|---|")
     for s in SEV_ORDER:
@@ -314,7 +325,7 @@ def write_outputs(chapters, root):
     # ── CHECKLIST.md index ───────────────────────────────────────────────────
     I = []; B = I.append
     B("# CHECKLIST.md — domain index\n")
-    B(f"> {total} test items across {len(chapters)} domains, generated {stamp} from `checklist/`. "
+    B(f"> {total} test items across {len(chapters)} domains, generated from `checklist/` (source digest `{stamp}`). "
       "Per-domain cards: [`cards/`](cards/) · per-item lookup: `python3 scripts/item.py Dnn-NNN` · "
       "machine view: [`json/`](json/) · tracker: [`checklist.csv`](checklist.csv) · grep view: [`MASTER-CHECKLIST.md`](MASTER-CHECKLIST.md)\n")
     B("| Domain | Phase | Items | Ceiling mix | Card | Chapter |")

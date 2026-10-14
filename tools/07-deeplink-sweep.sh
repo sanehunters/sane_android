@@ -32,14 +32,14 @@ usage() {
   --dry-run     print the exact adb commands, fire nothing
   --json        print results.json to stdout at the end
 EOF
-  exit 2
+  exit "${1:-2}"
 }
 PKG=""; FILE=""; OUT=""; USERN=""; SERIAL="${ANDROID_SERIAL:-}"; PIN=0; WARM=0; SETTLE=4; DRY=0; JSON=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --out) OUT="${2:-}"; shift ;;  --user) USERN="${2:-}"; shift ;;  --serial) SERIAL="${2:-}"; shift ;;
     --pin) PIN=1 ;;  --warm) WARM=1 ;;  --settle) SETTLE="${2:-4}"; shift ;;  --dry-run) DRY=1 ;;  --json) JSON=1 ;;
-    -h|--help) usage ;;  -*) echo "unknown option: $1" >&2; usage ;;
+    -h|--help) usage 0 ;;  -*) echo "unknown option: $1" >&2; usage ;;
     *) if [ -z "$PKG" ]; then PKG="$1"; elif [ -z "$FILE" ]; then FILE="$1"; else echo "unexpected: $1" >&2; usage; fi ;;
   esac
   shift

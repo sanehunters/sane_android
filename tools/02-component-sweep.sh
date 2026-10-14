@@ -3,6 +3,7 @@
 # Dynamic sweep of exported components. WARM-START ONLY.
 # Cold starts route through the launcher activity and invalidate the result.
 set -uo pipefail
+case "${1:-}" in -h|--help) sed -n "2,12p" "$0" | grep "^#" | sed "s/^# \{0,1\}//"; exit 0 ;; esac
 PKG="${1:?usage: $0 <package>}"
 
 echo "[*] warming app (warm-start discipline: never force-stop between probes)"

@@ -39,7 +39,7 @@ def row_valid(r):
     if not truthy(r.get("completed")):
         return (False, "open")
     if res == "finding":
-        ok = bool(re.search(r"\b[FH]-\d{2,3}\b", notes + " " + (r.get("finding_id") or "")))
+        ok = bool(re.search(r"\b(?:F-\d{2,3}|H-(?:D\d{2}-)?\d{2,3})\b", notes + " " + (r.get("finding_id") or "")))
         return (ok, "finding without F-/H- id")
     if res == "ruled-out":
         return (len(notes) >= 40, "ruled-out without a mechanism")

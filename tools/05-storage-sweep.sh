@@ -34,7 +34,7 @@ usage() {
   --serial S     adb -s S (or export ANDROID_SERIAL)
   --json         print summary.json to stdout at the end
 EOF
-  exit 2
+  exit "${1:-2}"
 }
 
 PKG=""; USER_SEL="0"; OUT=""; PULL=0; BACKUP=0; MANIFEST=""; SERIAL="${ANDROID_SERIAL:-}"; JSON=0
@@ -47,7 +47,7 @@ while [ $# -gt 0 ]; do
     --manifest) MANIFEST="${2:-}"; shift ;;
     --serial)   SERIAL="${2:-}"; shift ;;
     --json)     JSON=1 ;;
-    -h|--help)  usage ;;
+    -h|--help)  usage 0 ;;
     -*)         echo "unknown option: $1" >&2; usage ;;
     *)          [ -z "$PKG" ] && PKG="$1" || { echo "unexpected argument: $1" >&2; usage; } ;;
   esac

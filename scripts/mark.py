@@ -9,7 +9,7 @@
   python3 scripts/mark.py <eng> --show D10-004                                                           # print the row
 
 Rules enforced (R4, START.md §6):
-  finding    needs --note (the primitive, one sentence) and either --finding F-NNN or an H-NNN in the note
+  finding    needs --note (the primitive, one sentence) and either --finding F-NNN or an H-NNN / H-Dnn-NN id in the note
   ruled-out  needs --note of at least 40 characters that names a mechanism; a tool's silence ("found nothing") is rejected
   blocked    needs --note containing "needs:" (what is missing / which environment unblocks it)
   n/a        needs --note of at least 25 characters (why the item cannot apply to this app)
@@ -66,7 +66,7 @@ def main():
 
     if result == "finding":
         if not note: die("finding needs --note (the primitive in one sentence)")
-        if not fid and not re.search(r"\bH-\d{2,3}\b", note):
+        if not fid and not re.search(r"\bH-(?:D\d{2}-)?\d{2,3}\b", note):
             die("finding needs --finding F-NNN or an H-NNN hypothesis id in the note (park it: R0)")
         if fid and not re.fullmatch(r"F-\d{3}", fid): die("finding id must look like F-001")
     elif result == "ruled-out":
