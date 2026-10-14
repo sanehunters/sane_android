@@ -48,7 +48,7 @@ expect_fail python3 scripts/mark.py "$E" D13-021 blocked --note "needs: second a
 expect_fail python3 scripts/mark.py "$E" D19 n/a --note "no"
 expect_ok   python3 scripts/mark.py "$E" D19 n/a --note "native app: no Flutter/RN/Hermes/Xamarin/Unity/Cordova artefacts in the APK (tools/01 framework detection)"
 [ "$(jq_ "$E/engagement.json" "'D19' in e['domains_na']")" = True ] && ok "whole-domain n/a recorded in domains_na" || bad "domains_na.D19 missing"
-expect_fail python3 scripts/mark.py "$E" D24 n/a --note "no push SDK in the APK: no FCM/OneSignal classes"   # no rows → refused
+expect_fail python3 scripts/mark.py "$E" D99 n/a --note "a domain that has no chapter and therefore no rows in the tracker"   # no rows → refused
 expect_fail python3 scripts/mark.py "$E" D10-005 finding --note "juicy"
 expect_ok   python3 scripts/mark.py "$E" D10-005 finding --note "H-001: bridge method returns session token" --evidence logs/D10-005.txt
 expect_ok   python3 scripts/mark.py "$E" D10 blocked --note "needs: rooted device for the live bridge checks"
