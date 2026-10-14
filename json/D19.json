@@ -4,7 +4,7 @@
  "file": "D19-cross-platform-frameworks.md",
  "why": "It pays because it is a coverage domain before it is a vulnerability domain. A Flutter app reviewed with\njadx yields a thin Java shell and a clean report; a Hermes React Native app reviewed with `strings` yields\na handful of giant unreadable lines and a clean report; a Unity app reviewed without `global-metadata.dat`\nyields unnamed functions and a clean report. In each case the app's entire router, API surface, credential\nset, storage schema and authorisation logic sat in one file that was never opened. One sampled corpus in\nthis research found **24 of 46 Android APKs were Flutter builds** — this is not a niche. The single\nhighest-yield sentence in the domain is negative: *a failed decompiler run is not evidence the file is\nunreadable.* One real engagement recovered **545,000 strings**, including every route, endpoint and\nstorage key, from a Hermes v96 bundle that no public decompiler supported, by parsing the string table by\nhand.\n\nThe reportable ceiling, though, is narrow and specific. Do not mistake recovery for a finding. \"Hermes\nbytecode is decompilable\", \"`libapp.so` parses in Blutter\", \"Xamarin DLLs open in ILSpy\", \"reFlutter\nintercepts the traffic\" are all statements of fact about a toolchain, and every one of them maps to a P5\nVRT node or to nothing at all. Four shapes in this chapter genuinely reach P1/P2, and they are the ones to\nhunt first: (1) an **unsigned OTA code channel** — CodePush with no `CodePushPublicKey`, or expo-updates\nwith `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS=true` — which is remote code execution in the app's UID on\nevery device on that channel, persisted across restarts, with no store review; (2) a **validated live\ncredential** from the bundle, the Dart object pool or a managed assembly, including the two 2048-bit RSA\nprivate keys one case study pulled straight out of `libapp.so` at fixed offsets; (3) a **bridged-WebView\nprimitive** in Cordova/Capacitor, where `/_capacitor_file_` turns any script execution into full app-sandbox\nfile read and `androidBridge.postMessage` turns it into native capability execution; (4) a **client-side\nauthority decision** — entitlement, price, role, MFA result — that the server accepts because the framework\nteam implemented it once in shared code and assumed the backend mirrored it.\n\nBe honest about the rest. Root-detection bypass in Dart, a repacked and re-signed APK that runs, a\ndefeatable Flutter pin, an unencrypted `RKStorage` database on internal storage: all P5, all Graveyard\nunless you carry them to one of the four shapes above. The one structural idea worth more than any single\nitem here is the **shadow API** (D19-073): a cross-platform app's hardcoded backend calls are frequently an\nolder API version than the current web client uses, with weaker auth, weaker throttling and more field\nexposure — and the bundle/snapshot hands you that version's full endpoint list for free, including routes\nthe UI never calls.",
  "crux": "**Which artefact in this package actually holds the app's logic, and once I have opened it, does it hand me a credential that authenticates, an endpoint the UI never calls, a bridge that reaches native capability, or a code channel that can replace the app after the store review?**",
- "applicability": "",
+ "applicability": "Run once, before any item, from `$E` (engagement dir; `$DEC` = `$E/decompiled`, `$SERIAL` from `scripts/doctor.sh --json`). The probe writes `target.framework` for the `Requires` tags and decides whether the chapter applies at all. Zero `$DEC` paths may be substituted by hand.\n\n```bash\n# 1. Per-split artefact list (one listing per archive: BSD/macOS unzip treats extra archive args as member patterns)\nfor f in \"$E\"/apk/*.apk; do printf '== %s %s entries\\n' \"$f\" \"$(unzip -Z1 \"$f\" | wc -l)\"; unzip -Z1 \"$f\"; done > \"$E/logs/D19-probe-apklist.txt\"\ngrep -oE 'assets/index\\.android\\.bundle|assets/main\\.jsbundle|lib/[^/]+/libhermes[^ ]*\\.so|lib/[^/]+/libjsc\\.so|lib/[^/]+/libflutter\\.so|lib/[^/]+/libapp\\.so|assets/flutter_assets/[^ ]*|flutter_assets/shorebird\\.yaml|assets/www/[^ ]*|res/xml/config\\.xml|assets/capacitor\\.config\\.json|assets/capacitor\\.plugins\\.json|assets/public/[^ ]*|lib/[^/]+/libil2cpp\\.so|lib/[^/]+/libunity\\.so|global-metadata\\.dat|assemblies/[^ ]*|assemblies\\.blob|lib/[^/]+/libassemblies\\.[^ ]*\\.blob\\.so|lib/[^/]+/libmonosgen-2\\.0\\.so|lib/[^/]+/libcoreclr\\.so|lib/[^/]+/libxamarin-app\\.so' \"$E/logs/D19-probe-apklist.txt\" | sed -E 's#/[^/]*$##' | sort | uniq -c | sort -rn | tee \"$E/logs/D19-probe-markers.txt\"\n\n# 2. Framework strings in the DEX (string literals survive R8; the KMP line needs its Compose control)\ngrep -rlE 'io\\.flutter\\.embedding|com\\.facebook\\.react\\.(ReactActivity|bridge|runtime)|com\\.getcapacitor\\.|org\\.apache\\.cordova\\.|com\\.unity3d\\.player|mono\\.android\\.|Lorg/jetbrains/compose|org\\.jetbrains\\.compose|composeResources/|com\\.russhwolf\\.settings|app\\.cash\\.sqldelight' \"$DEC/jadx/sources\" | wc -l\ngrep -rl 'androidx\\.compose' \"$DEC/jadx/sources\" | wc -l      # control: plain Jetpack Compose is NOT KMP\n\n# 3. A web app the artefact list cannot show: HTML/JS inlined in code and served into a first-party origin (gap #134)\ngrep -rnE 'loadDataWithBaseURL|\\.loadData\\(|WebViewAssetLoader|appassets\\.androidplatform\\.net|\"<html|\"<script' \"$DEC/jadx/sources\" | head -20\ntail -n +2 \"$E/inventory/webviews.csv\" | wc -l\n\n# 4. Compiler/obfuscator and the version gates every D19 finding must quote\napkid \"$E\"/apk/base.apk | tee -a \"$E/logs/D19-probe-markers.txt\"\naapt2 dump badging \"$E\"/apk/base.apk | grep -E 'targetSdkVersion|sdkVersion'\n```\n\n**Decision.**\n\n- Step 1 or step 2 hits for exactly one framework → set `engagement.json` `target.framework` to one of `flutter | react-native | hermes | cordova | capacitor | unity | xamarin | kmp` (RN on Hermes = `react-native, hermes`; Ionic = `cordova` or `capacitor` by step 1), keep D19 applicable, and let the `Requires` tags settle the other framework ranges. Note text for each such range: `D19 probe: framework=<x>; <other-framework> markers 0 in <N> splits (logs/D19-probe-markers.txt)`.\n- Step 1 and step 2 both 0, step 3 hits → `target.framework=native`, D19 applies only through D19-056, D19-057, D19-058, D19-071, D19-076 (and D19-080 if an environment table exists); the WebView itself goes to D10. Note for every other D19 row: `D19 probe: native app with inline web app (<file:line of loadDataWithBaseURL/WebViewAssetLoader>); framework items n/a, web-stack items kept`.\n- Everything 0 and `apkid` reports only a DEX compiler (`dexlib`/`r8`/`dx`) and `$DEC/jadx/sources` holds application-package Activities with real view code (not a lone `FlutterActivity`/`UnityPlayerActivity`/`BridgeActivity` subclass) → the whole domain is n/a:\n\n```bash\npython3 scripts/mark.py $E D19 n/a --note \"D19 probe: 0 framework markers across <N> splits (<split names>, logs/D19-probe-apklist.txt); DEX framework strings 0 (androidx.compose control=<n>); inline-webapp grep 0 and inventory/webviews.csv rows=<n> (handled in D10); apkid=<compiler list>; targetSdk=<n> minSdk=<n>; business logic in <example first-party Activity>. Native Android app — D19 not applicable.\"\n```\n\nA probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `apkid` `packer` entry is not a negative: collect the splits (D19-002) or unpack first, then re-run.",
  "triage": "1. **Fingerprint the runtime and collect every split** (D19-001, D19-002). Get this wrong and every\n   subsequent negative in D10–D15 is false. An ABI split holds `libapp.so`/`libil2cpp.so`, not the base APK.\n2. **Establish artefact identity, including OTA** (D19-003). If the app can pull a bundle, the APK's copy is\n   only a fallback and every static conclusion needs re-checking against the live one.\n3. **Rate the OTA channel immediately** (D19-025 → D19-030). This is the only P1 in the domain that needs no\n   further chaining; `grep CodePushPublicKey` and the expo meta-data keys take ninety seconds.\n4. **Open the logic artefact and mine it** (D19-007 → D19-012 for RN, D19-033 → D19-037 for Flutter,\n   D19-061 for Unity, D19-066 for Xamarin/MAUI). Endpoints, secrets, routes, storage keys, bridge names.\n5. **Validate every recovered secret before writing a word about it** (D19-012). An unvalidated key-shaped\n   string is not a finding and burns your validity ratio.\n6. **Rate the bridge by what it returns** (D19-018 RN modules, D19-040 Flutter channels, D19-049 → D19-052\n   Cordova/Capacitor). In a Cordova/Capacitor app the bridge *is* the app; in RN/Flutter it is the app's\n   real IPC.\n7. **Drive the recovered routes through the framework's own entry primitive** (D19-041, D19-042 Flutter;\n   D19-010 RN; D19-065 Unity). Routes that exist in the bundle but not the manifest are the payload.\n8. **Fix the traffic harness only when you need it** (D19-039 Flutter BoringSSL, D19-020 RN XHR interceptor).\n   Application-layer interception is usually faster than winning the TLS fight, and neither is a finding.\n9. **Take the client-authority sweep last** (D19-063, D19-064, D19-074). These are only findings when the\n   server accepts the forged state — prove the acceptance or drop the item.\n10. **Everything else is Graveyard or chain fuel.** Write it with an Escalation field or leave it out.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"The Hermes bundle can be decompiled\" / \"`hbctool` disassembles it\" | `lack_of_binary_hardening.lack_of_obfuscation` is **P5**. Bytecode raises effort, it is not a control | A credential, endpoint or client-side gate recovered *from* it, validated (D19-012) or exercised (D19-074) |\n| \"`libapp.so` parses in Blutter\" / \"Dart AOT is not obfuscated by default\" | Same. Recovery is a toolchain fact | A key, signing algorithm or route recovered from `pp.txt` and used (D19-035 → D19-038) |\n| \"`global-metadata.dat` is readable, so the C# is recoverable\" | Same | A client-authoritative entitlement the server then accepts (D19-063) |\n| \"Xamarin DLLs decompile to source in ILSpy\" | Same | A hardcoded key that decrypts real stored data, or a validated live credential (D19-067) |\n| \"Flutter ignores the system proxy, so we could not intercept\" | A tooling result, not an app property. Reporting it misleads the vendor | Nothing — it is a methodology step. Do the interception (D19-039) and report what the traffic shows |\n| \"Flutter pinning was bypassed with reFlutter / a Frida hook\" | `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` is **P5**, and AM-07 (network attacker with a trusted CA) is a tester convenience, not an attacker | The data exposed in the now-visible traffic: tokens in URLs, unauthenticated endpoints, IDOR (D14/D15) |\n| \"The APK was repacked with a modified bundle, re-signed and it ran\" | `lack_of_binary_hardening.*` is **P5**; every unprotected app behaves this way | The control the patch defeated, where the server honours the client's state (D19-021 → D19-074) |\n| \"Root/emulator detection was bypassed in Dart/C#/JS\" | `lack_of_binary_hardening.lack_of_jailbreak_detection` is **P5** | What the bypass unlocks — a local vault that decrypts, a paid tier the server accepts, a hidden admin console (D19-068) |\n| \"APKiD shows no obfuscator or packer\" | MASTG-TECH-0165 frames this as a statement of fact about the build | Nothing. It is the evidence paragraph that stops a real finding being closed as \"not exploitable\" (D19-005) |\n| \"`RKStorage` / `CapacitorStorage.xml` / `FlutterSharedPreferences.xml` is unencrypted\" | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` is **P5** | Replaying the token you found against the API to reach another session (D19-024), or reading it remotely through `/_capacitor_file_` (D19-049) |\n| \"The CodePush deployment key is embedded in the APK\" | It is documented and expected; the key alone grants nothing | The **absence** of `CodePushPublicKey`, making the channel unsigned (D19-027) |\n| \"The mobile app calls `/api/v1` while the web app calls `/api/v3`\" | A version difference alone is **Informational** | A demonstrated weakened control on v1: no auth, no 429, weaker validation, extra fields (D19-073) |\n| \"An OAuth `client_secret` is in the JS bundle\" | Known and expected for a public mobile client; on the never-submit list | PKCE **non-enforcement** — the authorisation server accepting a code exchange without a matching verifier (-> D13) |\n| \"`libflutter.so` / `libhermes.so` lacks a stack canary\" | **MASTG-TEST-0223** documents this as a known React Native / Flutter false positive | Nothing in this domain. Do not file it |\n| \"The framework renders secrets into Recents / screenshots\" | `insecure_data_storage.screen_caching_enabled` is **P5** | Nothing on its own; at most a supporting observation in a chain that already has impact (-> D20) |\n| \"The app pulls in unused permissions via plugin autolinking\" | Over-permissioning alone is Low at best | Pairing a granted permission with a reachable bridge primitive that turns it into attacker data access (D19-051) |\n| \"WebView debugging is enabled but there is no bridge and no sensitive content\" | Medium at most, and only with ADB access | The bridge being present, so the console reaches `/_capacitor_file_` or a plugin (D19-058 → D19-049) |\n| \"The app runs inside a dual-instance / virtualisation container\" | Out of this domain's scope and usually a platform-level argument | Demonstrating the container process reading the target's `shared_prefs` and the token still working (-> D21) |\n| \"`kernel_blob.bin` ships in the release build\" | A build-hygiene observation on its own | The Dart VM service actually listening, or debug-only entry points reachable from it (D19-032) |",
  "joins": "- **Hermes string table (D19-009/D19-010) × the manifest's single exported activity (D04/D09).** The bundle\n  lists every screen name; the manifest lists one `MainActivity`. Nobody reviews them together, so a\n  staff-only or debug screen that the navigator exposes by name is reachable through the one deep-link entry\n  point the manifest review already cleared as \"correctly configured\".\n- **Dart object pool (D19-035/D19-038) × the backend's rate limiting and WAF (D15).** A recovered\n  request-signing key and template lets you generate valid signed requests from a script. Every control that\n  assumed \"only our app can produce this signature\" — rate limits keyed on the client, bot detection, replay\n  windows — evaporates at once, and the API team has no idea their signature is the only gate.\n- **Capacitor `/_capacitor_file_` (D19-049) × the storage key names mined from the web bundle (D11/D19-024).**\n  The file-read primitive is only as good as the path you feed it. The bundle tells you the exact\n  `CapacitorStorage` key and database filename, converting a generic \"arbitrary file read\" into a one-request\n  session-token theft — and converting a P5 \"unencrypted internal storage\" finding into a P1 remote read.\n- **The bundle's endpoint inventory (D19-011) × API versioning (D15/D19-073).** The mobile client is the only\n  place the *old* API version's route list still exists in full. Joining the two surfaces is how you find the\n  v1 handler that the web team retired from their client but never removed from the server, with its\n  pre-fix auth middleware intact.\n- **OTA channel (D19-025 → D19-028) × every client-side control in the report (D13/D21/D23).** If the channel\n  is unsigned, every JS-layer control you did *not* report as broken can be removed remotely after the\n  engagement ends. That is the sentence that upgrades an OTA finding from \"config issue\" to \"the security\n  model of this client is advisory\", and it belongs in the executive summary, not a footnote.\n- **Flutter `route` intent extra (D19-042) × a path-taking `MethodChannel` handler (D19-040/D16).** Route\n  injection alone reaches a screen; a channel handler alone needs a caller. Joined, a zero-permission local\n  app selects the screen that calls the channel with parameters it controls — an attacker-reachable arbitrary\n  file operation that neither the activity review nor the JNI review would find alone.\n- **CodePush/expo deployment key in the APK (D19-025) × the update service's tenancy model (D18).** The key is\n  \"not a secret\" in isolation. Joined with an update backend that scopes deployments only by that key, it\n  enumerates and targets a specific deployment — and if the backend also lets a key holder *publish*, the\n  P5 observation becomes the P1.\n- **`react-native-webview` / `unity-webview` media auto-grant (D19-022) × the host app's `CAMERA`/`RECORD_AUDIO`\n  grant (D03).** The plugin auto-grants; the app already holds the permission for a legitimate feature.\n  Neither review flags the other, and published research found neither plugin offered a way for the app to\n  deny WebView media access at all — so the app cannot opt out without patching the plugin.\n- **Split-APK collection (D19-002) × the native-library review (D16).** A \"library not present, not\n  applicable\" negative in the native chapter is frequently just a missing ABI split. The join is procedural\n  rather than technical, and it silently voids whole sections of a report.\n- **Unity `PlayerPrefs` edit (D19-064) × the entitlement endpoint (D15/D23).** The local edit is P5 storage.\n  The server accepting it is revenue loss. Only testing both together tells you which one you have — and the\n  same logic applies to Flutter `shared_preferences` and RN `AsyncStorage` subscription caches.",
@@ -123,8 +123,13 @@
     "AM-09"
    ],
    "applies_to": "React Native with CodePush or expo-updates; Cordova/Capacitor with a live-update plugin",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, cordova, capacitor, device",
+   "requires_tags": [
+    "react-native",
+    "cordova",
+    "capacitor",
+    "device"
+   ],
    "maps_to": "facebook/hermes `BytecodeFileHeader.sourceHash`; `CodePushConstants` (`CODE_PUSH_FOLDER_PREFIX = \"CodePush\"`, `STATUS_FILE = \"codepush.json\"`, `BUNDLE_JWT_FILE = \".codepushrelease\"`, `DEFAULT_JS_BUNDLE_NAME = \"index.android.bundle\"`); expo `UpdatesConfiguration.kt`",
    "record": "",
    "legacy_meta": {},
@@ -150,7 +155,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If an OTA channel exists, the bundle inside the APK is only the fallback. Every static finding\nmust be re-checked against the bundle currently in use, and every vendor claim of \"we fixed that\" must be\nverified against the live bundle rather than the store build.",
-   "how": "```bash\n  # 1. hash the bundle shipped in the APK\n  python3 - <<'PY'\n  import struct\n  d = open('ext/assets/index.android.bundle','rb').read(64)\n  print('apk  bytecodeVersion', struct.unpack_from('<I', d, 8)[0], 'sourceHash', d[12:32].hex())\n  PY\n  # 2. locate and hash the bundle the device is actually running\n  adb shell \"run-as <pkg> find files -name 'index.android.bundle' -o -name '*.hbc'\"\n  adb shell \"run-as <pkg> ls -la files/CodePush/\"\n  adb shell \"run-as <pkg> cat files/CodePush/codepush.json\"        # currentPackage / previousPackage\n  adb shell \"run-as <pkg> cat shared_prefs/CodePush.xml\"           # CODE_PUSH_PENDING_UPDATE / FAILED_UPDATES\n  adb shell \"run-as <pkg> ls -laR files/.expo-internal/ 2>/dev/null\"\n  adb exec-out run-as <pkg> cat files/CodePush/<hash>/<app>/index.android.bundle > live.bundle\n  python3 - <<'PY'\n  import struct\n  d = open('live.bundle','rb').read(64)\n  print('live bytecodeVersion', struct.unpack_from('<I', d, 8)[0], 'sourceHash', d[12:32].hex())\n  PY\n```\nOr capture it at load time regardless of where it came from:\n```javascript\n// frida -U -f <pkg> -l which-bundle.js --no-pause\nJava.perform(function () {\n  var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n  C.loadScriptFromFile.implementation = function (f, u, z) {\n    console.log('[bundle-from-file]', f); return this.loadScriptFromFile(f, u, z); };\n  C.loadScriptFromAssets.implementation = function (a, u, z) {\n    console.log('[bundle-from-assets]', u); return this.loadScriptFromAssets(a, u, z); };\n});\n```",
+   "how": "```bash\n  # 1. hash the bundle shipped in the APK\n  python3 - <<'PY'\n  import struct\n  d = open('ext/assets/index.android.bundle','rb').read(64)\n  print('apk  bytecodeVersion', struct.unpack_from('<I', d, 8)[0], 'sourceHash', d[12:32].hex())\n  PY\n  # 2. locate and hash the bundle the device is actually running\n  adb shell \"run-as <pkg> find files -name 'index.android.bundle' -o -name '*.hbc'\"\n  adb shell \"run-as <pkg> ls -la files/CodePush/\"\n  adb shell \"run-as <pkg> cat files/CodePush/codepush.json\"        # currentPackage / previousPackage\n  adb shell \"run-as <pkg> cat shared_prefs/CodePush.xml\"           # CODE_PUSH_PENDING_UPDATE / FAILED_UPDATES\n  adb shell \"run-as <pkg> ls -laR files/.expo-internal/ 2>/dev/null\"\n  adb exec-out run-as <pkg> cat files/CodePush/<hash>/<app>/index.android.bundle > live.bundle\n  python3 - <<'PY'\n  import struct\n  d = open('live.bundle','rb').read(64)\n  print('live bytecodeVersion', struct.unpack_from('<I', d, 8)[0], 'sourceHash', d[12:32].hex())\n  PY\n```\nOr capture it at load time regardless of where it came from:\n```javascript\n// frida -D \"$SERIAL\" -f <pkg> -l which-bundle.js\nJava.perform(function () {\n  var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n  C.loadScriptFromFile.implementation = function (f, u, z) {\n    console.log('[bundle-from-file]', f); return this.loadScriptFromFile(f, u, z); };\n  C.loadScriptFromAssets.implementation = function (a, u, z) {\n    console.log('[bundle-from-assets]', u); return this.loadScriptFromAssets(a, u, z); };\n});\n```",
    "proof": "Two different `sourceHash` values between the APK copy and the on-device copy, or a\n`[bundle-from-file] /data/user/0/<pkg>/files/CodePush/...` log line proving the executing code did not\ncome from the package you analysed.",
    "escalation": "Reportable at Medium on its own — a security control the client believes shipped can be\nremoved post-review by a channel push with no version bump. -> D19-026/D19-027 for the P1 form,\n-> D17 supply chain.",
    "ruled_out_when": "No OTA mechanism is present (D19-025 negative: no `CodePush*` strings, no\n`expo.modules.updates.*` meta-data, no custom `loadScriptFromFile` override), and a `find` under the\napp's data directory returns no `.bundle`/`.hbc`/`www` payload. In that case the APK's bundle is\ndefinitively the running code and you may state so."
@@ -170,8 +175,11 @@
     "AM-09"
    ],
    "applies_to": "React Native + Expo, RN + CodePush, Flutter",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, flutter",
+   "requires_tags": [
+    "react-native",
+    "flutter"
+   ],
    "maps_to": "MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150; expo `UpdatesConfiguration.kt`; flutter `FlutterActivityLaunchConfigs.java`; `CodePush.java` / `docs/setup-android.md`",
    "record": "",
    "legacy_meta": {},
@@ -217,8 +225,16 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all frameworks",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, react-native, unity, xamarin, cordova, capacitor, kmp",
+   "requires_tags": [
+    "flutter",
+    "react-native",
+    "unity",
+    "xamarin",
+    "cordova",
+    "capacitor",
+    "kmp"
+   ],
    "maps_to": "MASTG-TECH-0165, MASTG-TOOL-0009 (APKiD)",
    "record": "",
    "legacy_meta": {},
@@ -257,8 +273,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "React Native. Hermes is the default engine from RN 0.70; JSC bundles are **LEGACY** but common in older enterprise builds",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, hermes",
+   "requires_tags": [
+    "react-native",
+    "hermes"
+   ],
    "maps_to": "MASTG-TOOL-0104 (hermes-dec — the `file`-based Hermes/plain-text distinction)",
    "record": "",
    "legacy_meta": {},
@@ -299,8 +318,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "React Native with `hermesEnabled=true` (RN default since 0.70)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, hermes",
+   "requires_tags": [
+    "react-native",
+    "hermes"
+   ],
    "maps_to": "MASTG-TOOL-0104; facebook/hermes `BytecodeFileFormat.h` (`struct BytecodeFileHeader`)",
    "record": "",
    "legacy_meta": {},
@@ -343,8 +365,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "React Native / Hermes",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, hermes",
+   "requires_tags": [
+    "react-native",
+    "hermes"
+   ],
    "maps_to": "MASTG-TOOL-0104 (hermes-dec)",
    "record": "",
    "legacy_meta": {},
@@ -388,8 +413,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "React Native / Hermes, all versions including those no public tool parses",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, hermes",
+   "requires_tags": [
+    "react-native",
+    "hermes"
+   ],
    "maps_to": "facebook/hermes `BytecodeFileFormat.h` (`stringCount`, `overflowStringCount`, `stringStorageSize`, `SmallStringTableEntry`)",
    "record": "",
    "legacy_meta": {},
@@ -440,8 +468,11 @@
     "AM-03"
    ],
    "applies_to": "React Native with React Navigation / react-native-navigation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, deeplink",
+   "requires_tags": [
+    "react-native",
+    "deeplink"
+   ],
    "maps_to": "MASTG-TECH-0172 (Listing Deep Links), MASTG-TECH-0173 (Monitoring Deep Link Handlers at Runtime with Frida)",
    "record": "",
    "legacy_meta": {},
@@ -489,8 +520,16 @@
     "AM-01"
    ],
    "applies_to": "all cross-platform frameworks",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, react-native, unity, xamarin, cordova, capacitor, backend-api",
+   "requires_tags": [
+    "flutter",
+    "react-native",
+    "unity",
+    "xamarin",
+    "cordova",
+    "capacitor",
+    "backend-api"
+   ],
    "maps_to": "MASTG-TOOL-0125 (apkleaks); hermes-decomp `strings`/`secrets`",
    "record": "",
    "legacy_meta": {},
@@ -537,8 +576,13 @@
     "AM-01"
    ],
    "applies_to": "React Native, Cordova/Ionic/Capacitor, and any framework that ships a JS/web bundle",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, cordova, capacitor, backend-api",
+   "requires_tags": [
+    "react-native",
+    "cordova",
+    "capacitor",
+    "backend-api"
+   ],
    "maps_to": "MASWE-0004 (CWE-798), MASTG-TECH-0019, MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks); hermes-decomp `secrets`",
    "record": "",
    "legacy_meta": {},
@@ -591,8 +635,12 @@
     "AM-01"
    ],
    "applies_to": "React Native; equally Cordova/Ionic/Capacitor web bundles",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, cordova, capacitor",
+   "requires_tags": [
+    "react-native",
+    "cordova",
+    "capacitor"
+   ],
    "maps_to": "MASTG-TECH-0019",
    "record": "",
    "legacy_meta": {},
@@ -639,8 +687,10 @@
     "AM-08"
    ],
    "applies_to": "React Native (Metro), both Hermes and plain-JS bundles",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "hermes-decomp README (`modules`, `deps`, `extract`); react-native-decompiler README (`--unpackOnly`)",
    "record": "",
    "legacy_meta": {},
@@ -686,8 +736,10 @@
     "AM-08"
    ],
    "applies_to": "React Native projects; the malicious-release half applies to the app repo **and every developer/CI host**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "**CVE-2024-21668** (`react-native-mmkv` Android before 2.11.0 logged the optional encryption key to Android logs); `react-native-document-picker` **< 9.1.1** path traversal on Android file selection, fixed in 9.1.1",
    "record": "",
    "legacy_meta": {},
@@ -730,8 +782,10 @@
     "AM-06"
    ],
    "applies_to": "React Native build environments where the repo or CI is in scope; patched by Meta in **version 20.0.0**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "**CVE-2025-11953** — `@react-native-community/cli`, CVSS **9.8**, unauthenticated attackers execute arbitrary OS commands via the package's development server",
    "record": "",
    "legacy_meta": {},
@@ -774,8 +828,11 @@
     "AM-06"
    ],
    "applies_to": "React Native release builds that still ship `DevSupportManager` wiring",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device",
+   "requires_tags": [
+    "react-native",
+    "device"
+   ],
    "maps_to": "React Native `devsupport/DevServerHelper.kt` (bundle URL format `\"%s://%s/%s.%s?platform=android&dev=%s&lazy=%s&minify=%s&app=%s&modulesOnly=%s&runModule=%s\"`, inspector device URL `\"%s://%s/inspector/device?name=%s&app=%s&device=%s&profiling=%b\"`, `\"%s://%s/open-debugger?device=%s\"`); MASTG-TECH-0160 (Enumerating Activities)",
    "record": "",
    "legacy_meta": {},
@@ -802,7 +859,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "RN's dev support fetches the JS bundle over plain HTTP from a packager host and exposes inspector\nendpoints. If any of that survives into release — or if a dev/settings activity remains exported — the app\nwill execute JavaScript from whatever host it is pointed at, with the app's full native-module surface.",
-   "how": "```bash\n  grep -a -nE 'packager|:8081|/index\\.bundle|/open-debugger|/inspector/device|debuggerHost|DevSettings|DEV_SUPPORT|getUseDeveloperSupport|BundleDownloader|packagerHost' hbc.strings\n  grep -rn 'DevSupportManager\\|getUseDeveloperSupport\\|BundleDownloader\\|packagerHost' out/sources out/smali/ | head\n  grep -nE 'android:exported=\"true\"' out/AndroidManifest.xml | grep -iE 'dev|debug|inspector|test|playground'\n  adb shell dumpsys package <pkg> | grep -iE 'devsupport|DevSettings|Inspector'\n  adb shell cat /data/data/<pkg>/shared_prefs/*.xml | grep -i debug_http_host\n  adb shell am start -n <pkg>/com.facebook.react.devsupport.DevSettingsActivity\n  adb logcat | grep -iE 'ReactNative|DevServer|packager'\n```\nForcing the flag at runtime (only report it if it actually works — in a properly built release\n`DevSupportManagerImpl` is stripped and this crashes or no-ops):\n```javascript\n// frida -U -f <pkg> -l enable-dev.js\nJava.perform(function () {\n  try {\n    var Host = Java.use('com.facebook.react.ReactNativeHost');\n    Host.getUseDeveloperSupport.implementation = function () { return true; };\n    console.log('[+] Patched ReactNativeHost.getUseDeveloperSupport');\n  } catch (e) { console.log('[-] Could not patch: ' + e); }\n});\n```",
+   "how": "```bash\n  grep -a -nE 'packager|:8081|/index\\.bundle|/open-debugger|/inspector/device|debuggerHost|DevSettings|DEV_SUPPORT|getUseDeveloperSupport|BundleDownloader|packagerHost' hbc.strings\n  grep -rn 'DevSupportManager\\|getUseDeveloperSupport\\|BundleDownloader\\|packagerHost' out/sources out/smali/ | head\n  grep -nE 'android:exported=\"true\"' out/AndroidManifest.xml | grep -iE 'dev|debug|inspector|test|playground'\n  adb shell dumpsys package <pkg> | grep -iE 'devsupport|DevSettings|Inspector'\n  adb shell cat /data/data/<pkg>/shared_prefs/*.xml | grep -i debug_http_host\n  adb shell am start -n <pkg>/com.facebook.react.devsupport.DevSettingsActivity\n  adb logcat | grep -iE 'ReactNative|DevServer|packager'\n```\nForcing the flag at runtime (only report it if it actually works — in a properly built release\n`DevSupportManagerImpl` is stripped and this crashes or no-ops):\n```javascript\n// frida -D \"$SERIAL\" -f <pkg> -l enable-dev.js\nJava.perform(function () {\n  try {\n    var Host = Java.use('com.facebook.react.ReactNativeHost');\n    Host.getUseDeveloperSupport.implementation = function () { return true; };\n    console.log('[+] Patched ReactNativeHost.getUseDeveloperSupport');\n  } catch (e) { console.log('[-] Could not patch: ' + e); }\n});\n```",
    "proof": "The app issuing a request to `http://<host>:8081/index.bundle?platform=android&dev=true&...`\nfrom a **store-signed** build (record `apksigner verify --print-certs` to prove it), or the dev menu opening\non that build, or a reachable `/open-debugger` / `/inspector/device` endpoint. Also check whether **Flipper**\nwas accidentally bundled into release — its Network plugin exposes requests and responses directly.",
    "escalation": "Owns the whole client: attacker-supplied JS runs with every native module the app\nregisters (-> D19-018) and every stored credential (-> D11).",
    "ruled_out_when": "The release build contains no `DevSupportManager`/`DevServerHelper` classes (confirm in\nthe DEX, not just the bundle), the dev activity is absent or `exported=\"false\"`, the Frida flag-flip throws\n`ClassNotFoundException`, and no `:8081` traffic appears on a full app walkthrough with a packet capture\nrunning. A crash after the flag flip is a negative, not a finding."
@@ -823,8 +880,12 @@
     "AM-09"
    ],
    "applies_to": "React Native, both the old batched bridge and — with `global.__turboModuleProxy` substituted — the new architecture",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device, frida",
+   "requires_tags": [
+    "react-native",
+    "device",
+    "frida"
+   ],
    "maps_to": "ATT&CK T1575 (Native API), T1407; MASWE-0033",
    "record": "",
    "legacy_meta": {},
@@ -875,8 +936,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "React Native",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "n/a (method; the worked retraction is recorded below)",
    "record": "",
    "legacy_meta": {},
@@ -916,8 +979,13 @@
     "AM-12"
    ],
    "applies_to": "React Native (old bridge). On the new architecture hook `global.__turboModuleProxy` instead",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device, frida, root",
+   "requires_tags": [
+    "react-native",
+    "device",
+    "frida",
+    "root"
+   ],
    "maps_to": "MASTG-TOOL-0001 (Frida Android), MASTG-TECH-0041 (Library Injection)",
    "record": "",
    "legacy_meta": {},
@@ -942,7 +1010,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Injecting a second script at `loadScriptFromAssets` time gives you a live JS console inside the\napp's own runtime — the most productive RN testing position there is, and it is entirely independent of\nTLS, so pinning stops mattering.",
-   "how": "```bash\n  adb push hook.js /data/local/tmp/hook.js\n  adb shell \"run-as <pkg> cp /data/local/tmp/hook.js files/hook.js\" 2>/dev/null || \\\n    adb shell su -c \"cp /data/local/tmp/hook.js /data/data/<pkg>/files/hook.js && chown <uid>:<uid> /data/data/<pkg>/files/hook.js\"\n  frida -U -f <pkg> -l inject-bundle.js --no-pause\n```\n```javascript\n// inject-bundle.js\nJava.perform(function () {\n  var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n  C.loadScriptFromAssets.implementation = function (am, url, z) {\n    this.loadScriptFromAssets(am, url, z);\n    this.loadScriptFromFile('/data/data/<pkg>/files/hook.js','/data/data/<pkg>/files/hook.js', z);\n  };\n});\n```\n```javascript\n// hook.js — full plaintext request/response logging, TLS-independent\nthis.XMLHttpRequest._interceptor = {\n  requestSent:      (id, url, method, headers) => console.log('REQ', id, method, url, JSON.stringify(headers)),\n  responseReceived: (id, url, status, h)       => console.log('RES', id, status, url),\n  dataReceived:     (id, data)                 => console.log('DATA', id, data)\n};\nconst _s = JSON.stringify;\nJSON.stringify = function () { const r = _s.apply(this, arguments); console.log('[json]', r); return r; };\n```\nInside `hook.js` you have `this.process`, `XMLHttpRequest`, `fetch`, `WebSocket`, `FormData`, and the Metro\nmodule system (`__r`, `__d`, `__c`) — so `__r(<moduleId>)` reaches the app's own modules.",
+   "how": "```bash\n  adb push hook.js /data/local/tmp/hook.js\n  adb shell \"run-as <pkg> cp /data/local/tmp/hook.js files/hook.js\" 2>/dev/null || \\\n    adb shell su -c \"cp /data/local/tmp/hook.js /data/data/<pkg>/files/hook.js && chown <uid>:<uid> /data/data/<pkg>/files/hook.js\"\n  frida -D \"$SERIAL\" -f <pkg> -l inject-bundle.js\n```\n```javascript\n// inject-bundle.js\nJava.perform(function () {\n  var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n  C.loadScriptFromAssets.implementation = function (am, url, z) {\n    this.loadScriptFromAssets(am, url, z);\n    this.loadScriptFromFile('/data/data/<pkg>/files/hook.js','/data/data/<pkg>/files/hook.js', z);\n  };\n});\n```\n```javascript\n// hook.js — full plaintext request/response logging, TLS-independent\nthis.XMLHttpRequest._interceptor = {\n  requestSent:      (id, url, method, headers) => console.log('REQ', id, method, url, JSON.stringify(headers)),\n  responseReceived: (id, url, status, h)       => console.log('RES', id, status, url),\n  dataReceived:     (id, data)                 => console.log('DATA', id, data)\n};\nconst _s = JSON.stringify;\nJSON.stringify = function () { const r = _s.apply(this, arguments); console.log('[json]', r); return r; };\n```\nInside `hook.js` you have `this.process`, `XMLHttpRequest`, `fetch`, `WebSocket`, `FormData`, and the Metro\nmodule system (`__r`, `__d`, `__c`) — so `__r(<moduleId>)` reaches the app's own modules.",
    "proof": "`hook.js` output in logcat naming real modules, and complete plaintext request/response pairs\nlogged with pinning still enabled.",
    "escalation": "Unblocks the whole of -> D15 for a pinned RN app without ever touching TLS; feeds D19-018.\nCaveat from the source author: React component props could not be overridden this way.",
    "ruled_out_when": "`CatalystInstanceImpl` is absent (new architecture — use `global.__turboModuleProxy`),\nor the app refuses to start under Frida. Neither is a finding: the app detecting Frida is a P5 resilience\nobservation (see the Graveyard)."
@@ -963,8 +1031,12 @@
     "AM-12"
    ],
    "applies_to": "React Native. `hbctool` reassembly is **LEGACY** (HBC ≤ 76); on newer bundles patch a string in place or inject a gadget instead",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, hermes, device",
+   "requires_tags": [
+    "react-native",
+    "hermes",
+    "device"
+   ],
    "maps_to": "MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0103 (uber-apk-signer); hermes-decomp `patch-string`, `asm`, `emit-hasm`",
    "record": "",
    "legacy_meta": {},
@@ -1017,8 +1089,12 @@
     "AM-02"
    ],
    "applies_to": "React Native apps using `react-native-webview`; the media half also applies to Unity apps using `unity-webview`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, webview, js-bridge",
+   "requires_tags": [
+    "react-native",
+    "webview",
+    "js-bridge"
+   ],
    "maps_to": "`RNCWebView.java` (`JAVASCRIPT_INTERFACE = \"ReactNativeWebView\"`, `addJavascriptInterface(fallbackBridge, JAVASCRIPT_INTERFACE)`, the injected `window.ReactNativeWebView.injectedObjectJson` shim); `RNCWebViewManager.kt` (`@ReactProp` setters and the `settings.setSupportMultipleWindows(true)` / `allowUniversalAccessFromFileURLs = false` defaults); MASWE-0033, MASWE-0035",
    "record": "",
    "legacy_meta": {},
@@ -1070,8 +1146,11 @@
     "AM-07"
    ],
    "applies_to": "React Native apps pinning via a JS-side library rather than a native config",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, mitm",
+   "requires_tags": [
+    "react-native",
+    "mitm"
+   ],
    "maps_to": "mobsfscan `android_certificate_pinning` (patterns include `import com.toyberman.RNSslPinningPackage;`) and `android_safetynet_api` (`new RNGoogleSafetyNetPackage(...)`)",
    "record": "",
    "legacy_meta": {},
@@ -1119,8 +1198,10 @@
     "AM-12"
    ],
    "applies_to": "all cross-platform frameworks",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0142 (Inspecting WebView Storage) for the Cordova/Capacitor stores",
    "record": "",
    "legacy_meta": {},
@@ -1169,8 +1250,13 @@
     "AM-09"
    ],
    "applies_to": "React Native with CodePush or expo-updates; Cordova/Ionic/Capacitor with a live-update plugin",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, cordova, capacitor, flutter",
+   "requires_tags": [
+    "react-native",
+    "cordova",
+    "capacitor",
+    "flutter"
+   ],
    "maps_to": "CodePush `docs/setup-android.md` (`strings.xml` `CodePushDeploymentKey`; `MainApplication.getJSBundleFile()` override); `CodePush.java` (`getCustomPropertyFromStringsIfExist(\"PublicKey\")` / `(\"ServerUrl\")`, default `mServerUrl = \"https://codepush.appcenter.ms/\"`); expo `UpdatesConfiguration.kt`; MASWE-0049 (CWE-494), MASWE-0048; ATT&CK T1407",
    "record": "",
    "legacy_meta": {},
@@ -1223,8 +1309,11 @@
     "AM-09"
    ],
    "applies_to": "Expo and bare RN apps using expo-updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device",
+   "requires_tags": [
+    "react-native",
+    "device"
+   ],
    "maps_to": "expo `UpdatesConfiguration.kt` meta-data keys `CODE_SIGNING_CERTIFICATE`, `CODE_SIGNING_METADATA`, `CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN`, `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS`, and `UpdatesController.overrideConfiguration()`; MASWE-0049 (CWE-494); ATT&CK T1407",
    "record": "",
    "legacy_meta": {},
@@ -1283,8 +1372,11 @@
     "AM-09"
    ],
    "applies_to": "React Native + `react-native-code-push`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device",
+   "requires_tags": [
+    "react-native",
+    "device"
+   ],
    "maps_to": "`CodePush.java` (`private static String mPublicKey;`, `getCustomPropertyFromStringsIfExist(\"PublicKey\")`, `getPublicKeyByResourceDescriptor(...)` throwing `CodePushInvalidPublicKeyException(\"Specified public key is empty\")`, default `mServerUrl = \"https://codepush.appcenter.ms/\"`); `CodePushConstants.java` (`BUNDLE_JWT_FILE = \".codepushrelease\"`, `STATUS_FILE = \"codepush.json\"`); CodePush README (`CheckFrequency.ON_APP_START` default); MASWE-0049",
    "record": "",
    "legacy_meta": {},
@@ -1329,8 +1421,11 @@
     "AM-02"
    ],
    "applies_to": "React Native with CodePush or expo-updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device",
+   "requires_tags": [
+    "react-native",
+    "device"
+   ],
    "maps_to": "`CodePush.java` (`public void setDeploymentKey(String deploymentKey)`; constructors taking `serverUrl`; CodePush docs: \"this key will override the 'default' one that was provided in your app's … files\"); expo `UpdatesConfiguration.kt` (`UpdatesController.overrideConfiguration()`, keys `updateUrl`, `requestHeaders`, `runtimeVersion`, `checkOnLaunch`, `codeSigningCertificate`)",
    "record": "",
    "legacy_meta": {},
@@ -1374,8 +1469,11 @@
     "AM-09"
    ],
    "applies_to": "React Native with CodePush or expo-updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device",
+   "requires_tags": [
+    "react-native",
+    "device"
+   ],
    "maps_to": "`CodePushConstants.java` (`PREVIOUS_PACKAGE_KEY`, `CURRENT_PACKAGE_KEY`, `FAILED_UPDATES_KEY`, `LATEST_ROLLBACK_INFO_KEY`, `LATEST_ROLLBACK_PACKAGE_HASH_KEY`, `LATEST_ROLLBACK_COUNT_KEY`); CodePush README (automatic rollback keeps a copy of the previous update); expo `UpdatesConfiguration.kt` (`DISABLE_ANTI_BRICKING_MEASURES`)",
    "record": "",
    "legacy_meta": {},
@@ -1417,8 +1515,12 @@
     "AM-09"
    ],
    "applies_to": "Cordova, Ionic and Capacitor apps with a live-update / hot-code-push plugin",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, capacitor, device",
+   "requires_tags": [
+    "cordova",
+    "capacitor",
+    "device"
+   ],
    "maps_to": "Capacitor `Bridge.java` (`localServer.hostAssets(DEFAULT_WEB_ASSET_DIR)` with `DEFAULT_WEB_ASSET_DIR = \"public\"`, and the configurable `getServerBasePath` plumbing); MASWE-0049",
    "record": "",
    "legacy_meta": {},
@@ -1465,8 +1567,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "React Native with CodePush or expo-updates; Cordova/Capacitor live update",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`CodePushConstants.DEFAULT_JS_BUNDLE_NAME`, `CODE_PUSH_FOLDER_PREFIX`, `STATUS_FILE`; facebook/hermes `BytecodeFileHeader.sourceHash`",
    "record": "",
    "legacy_meta": {},
@@ -1506,8 +1610,10 @@
     "AM-06"
    ],
    "applies_to": "Flutter Android",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter",
+   "requires_tags": [
+    "flutter"
+   ],
    "maps_to": "MASTG-TECH-0156 (Reverse Engineering Flutter Applications)",
    "record": "",
    "legacy_meta": {},
@@ -1552,8 +1658,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Flutter apps, all release builds including `--obfuscate` (obfuscation renames symbols; it does not touch constants)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, native",
+   "requires_tags": [
+    "flutter",
+    "native"
+   ],
    "maps_to": "MASTG-TECH-0156, MASTG-TOOL-0116 (blutter)",
    "record": "",
    "legacy_meta": {},
@@ -1603,8 +1712,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Flutter release (AOT) builds. Blutter is **arm64-only** and takes an extracted `lib/arm64-v8a` directory, not an APK",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, native",
+   "requires_tags": [
+    "flutter",
+    "native"
+   ],
    "maps_to": "MASTG-TECH-0156, MASTG-TOOL-0116 (blutter), MASTG-TOOL-0100 (reFlutter — \"dart.cc is modified to print classes, functions and some fields\")",
    "record": "",
    "legacy_meta": {},
@@ -1631,7 +1743,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Dart AOT snapshots resist normal reversing (custom registers and calling conventions, sequential\nclass metadata, an undocumented and evolving format). Blutter builds a Dart-VM analyser matching the\nengine's version and emits symbolised assembly plus an object-pool dump; reFlutter instead patches the\nengine so the app dumps its own class/function/field table at runtime.",
-   "how": "```bash\n  unzip -o target.apk \"lib/*\" -d app_extracted\n  # Blutter first — it needs cmake, ninja and capstone, and the Dart version string from libflutter.so .rodata\n  strings app_extracted/lib/arm64-v8a/libflutter.so | grep -m1 -E 'Dart VM version|^[0-9]+\\.[0-9]+\\.[0-9]+ '\n  python3 blutter.py app_extracted/lib/arm64-v8a out_dir\n  ls out_dir/      # asm/*  pp.txt  objs.txt  blutter_frida.js\n  grep -rn 'ensureInitialized\\|::init\\b' out_dir/asm/ | head\n  grep -rniE 'isPremium|entitlement|verify|validate|checkRoot|isJailbroken|licen[cs]e' out_dir/asm/ | head -40\n  frida -U -f <pkg> -l out_dir/blutter_frida.js --no-pause\n\n  # Fallback — reFlutter, when Blutter will not build for this Dart version\n  pip3 install reflutter && reflutter target.apk\n  java -jar uber-apk-signer.jar --apks <patched>.apk && adb install -r <signed>.apk\n  adb -d shell \"cat /data/data/<pkg>/dump.dart\" > dump.dart\n  grep -nE 'class |Function|0x' dump.dart | head -60\n  nm -D app_extracted/lib/arm64-v8a/libapp.so | grep -i IsolateSnapshotInstructions\n  # add the _kDartIsolateSnapshotInstructions offset to dumped offsets to get real VM addresses\n```",
+   "how": "```bash\n  unzip -o target.apk \"lib/*\" -d app_extracted\n  # Blutter first — it needs cmake, ninja and capstone, and the Dart version string from libflutter.so .rodata\n  strings app_extracted/lib/arm64-v8a/libflutter.so | grep -m1 -E 'Dart VM version|^[0-9]+\\.[0-9]+\\.[0-9]+ '\n  python3 blutter.py app_extracted/lib/arm64-v8a out_dir\n  ls out_dir/      # asm/*  pp.txt  objs.txt  blutter_frida.js\n  grep -rn 'ensureInitialized\\|::init\\b' out_dir/asm/ | head\n  grep -rniE 'isPremium|entitlement|verify|validate|checkRoot|isJailbroken|licen[cs]e' out_dir/asm/ | head -40\n  frida -D \"$SERIAL\" -f <pkg> -l out_dir/blutter_frida.js\n\n  # Fallback — reFlutter, when Blutter will not build for this Dart version\n  pip3 install reflutter && reflutter target.apk\n  java -jar uber-apk-signer.jar --apks <patched>.apk && adb install -r <signed>.apk\n  adb -d shell \"cat /data/data/<pkg>/dump.dart\" > dump.dart\n  grep -nE 'class |Function|0x' dump.dart | head -60\n  nm -D app_extracted/lib/arm64-v8a/libapp.so | grep -i IsolateSnapshotInstructions\n  # add the _kDartIsolateSnapshotInstructions offset to dumped offsets to get real VM addresses\n```",
    "proof": "Either symbolised output — a reconstructed `main` showing named call edges such as\n`bl #0x570d8c ; [package:flutter/src/widgets/binding.dart] WidgetsFlutterBinding::ensureInitialized` and\n`bl #0x59a98c ; [package:get_secure_storage/src/storage_impl.dart] GetSecureStorage::init` (which\nincidentally tells you which storage plugin holds the secrets) — or, from reFlutter, a `dump.dart` on device\ncontaining the app's class hierarchy, function signatures, code offsets and field values.",
    "escalation": "`pp.txt` -> D19-035; named functions -> Frida hooks for D19-038 and D19-040;\n`blutter_frida.js` is the instrumentation template.",
    "ruled_out_when": "Blutter builds and produces `asm/` files naming real first-party packages — then you\nhave symbols and the fallback is unnecessary. The documented failure to expect: Google first-party \"mara\"\nbuilds export a **combined `_kDartSnapshotData`** symbol instead of the split\n`_kDartVmSnapshotData`/`_kDartIsolateSnapshotData` that Blutter expects, and pin an internal Dart dev\nversion, so Blutter's C++ analyser will not compile without a source port. Blutter's own README lists\n\"Obfuscated app (still missing many functions)\" as an open TODO, so expect partial recovery there — record\nthe specific build error, then fall back to D19-033."
@@ -1651,8 +1763,11 @@
     "AM-01"
    ],
    "applies_to": "Flutter release AOT builds, arm64, including `--obfuscate`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, native",
+   "requires_tags": [
+    "flutter",
+    "native"
+   ],
    "maps_to": "MASTG-TECH-0156, MASTG-TOOL-0116 (blutter), MASTG-TOOL-0144 (gitleaks)",
    "record": "",
    "legacy_meta": {},
@@ -1706,8 +1821,11 @@
     "AM-01"
    ],
    "applies_to": "Flutter release builds, including `--obfuscate`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, native",
+   "requires_tags": [
+    "flutter",
+    "native"
+   ],
    "maps_to": "MASTG-TECH-0156 (`PP`/`THR` register annotations in Blutter output), MASTG-TOOL-0116",
    "record": "",
    "legacy_meta": {},
@@ -1756,8 +1874,13 @@
     "AM-01"
    ],
    "applies_to": "Flutter (`libapp.so`), Unity IL2CPP (`libil2cpp.so`), Xamarin/MAUI assemblies — anywhere DEX-oriented secret scanners do not look",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, unity, xamarin, native",
+   "requires_tags": [
+    "flutter",
+    "unity",
+    "xamarin",
+    "native"
+   ],
    "maps_to": "MASWE-0004 (CWE-798); MASTG-TOOL-0144 (gitleaks)",
    "record": "",
    "legacy_meta": {},
@@ -1787,7 +1910,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Cross-platform builds bury PEM blobs and HMAC seeds in the native blob. Scan the file statically,\nand also scan the loaded module at runtime, because some keys are assembled at init and never exist on disk\nas a contiguous string.",
-   "how": "```bash\n  strings -n 20 ext/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'\n  strings -n 20 ext/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'\n  grep -a -n -- '-----BEGIN' out_dir/pp.txt\n  grep -rna -- '-----BEGIN' out/assemblies/out/*.dll\n```\n```javascript\n// runtime module scan — catches keys assembled at init\n// frida -U -f <pkg> -q -e \"$(cat scan.js)\"\nvar m = Process.getModuleByName('libapp.so');\nMemory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {     // \"-----BEGIN\"\n  onMatch: function (a) { console.log(a, Memory.readUtf8String(a, 64)); }, onComplete: function () {} });\nMemory.scan(m.base, m.size, '2f 61 70 69 2f', {                    // \"/api/\"\n  onMatch: function (a) { console.log('api', a, Memory.readUtf8String(a, 80)); }, onComplete: function () {} });\n```",
+   "how": "```bash\n  strings -n 20 ext/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'\n  strings -n 20 ext/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'\n  grep -a -n -- '-----BEGIN' out_dir/pp.txt\n  grep -rna -- '-----BEGIN' out/assemblies/out/*.dll\n```\n```javascript\n// runtime module scan — catches keys assembled at init\n// frida -D \"$SERIAL\" -f <pkg> -q -e \"$(cat scan.js)\"\nvar m = Process.getModuleByName('libapp.so');\nMemory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {     // \"-----BEGIN\"\n  onMatch: function (a) { console.log(a, Memory.readUtf8String(a, 64)); }, onComplete: function () {} });\nMemory.scan(m.base, m.size, '2f 61 70 69 2f', {                    // \"/api/\"\n  onMatch: function (a) { console.log('api', a, Memory.readUtf8String(a, 80)); }, onComplete: function () {} });\n```",
    "proof": "A complete PEM private key extracted at a named offset — the referenced case study recovered two\n2048-bit RSA private keys from `libapp.so` at `0x85bb0` and `0x9f486` — **plus** a signature you produced\noffline with it that the production API accepts (HTTP 200). The offline acceptance is the finding; the key\nbytes alone are not.",
    "escalation": "A client-side private key voids the request-signing control entirely: forge\n`X-Nonce`/`X-Timestamp`/`X-Signature`-style headers and drive the whole API from a script -> D19-038, D15.",
    "ruled_out_when": "No PEM header appears statically or in a runtime module scan, and the app's signing (if\nany) uses a Keystore-resident key you cannot export (prove by attempting `getKey`/export and showing the\n`UnrecoverableKeyException`). A public certificate or a pinned CA in the blob is not a private key — check\nthe header type before writing it up."
@@ -1807,8 +1930,13 @@
     "AM-01"
    ],
    "applies_to": "Flutter release builds that sign requests",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, native, device, frida",
+   "requires_tags": [
+    "flutter",
+    "native",
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TOOL-0116 (blutter, `blutter_frida.js` and its `getDartString()` helper)",
    "record": "",
    "legacy_meta": {},
@@ -1835,7 +1963,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "When the signing material is derived rather than stored, hook the signing function Blutter named\nand capture the pre-signature message. This converts \"we sign our requests\" into a reproducible forgery and\nremoves the app from the attack entirely.",
-   "how": "```bash\n  python3 blutter.py ext/lib/arm64-v8a out_dir\n  grep -nE 'nonce=|&timestamp=|&method=|&url=|Signature|sign\\(' out_dir/pp.txt out_dir/asm/*.txt | head\n  frida -U -f <pkg> -l out_dir/blutter_frida.js --no-pause\n```\n```javascript\n// x27 is the Dart object-pool pointer; pool-relative loads look like\n//   add x16, x27, #0x24, lsl #12 ; ldr x16, [x16, #0x280]\nconst base = Module.getBaseAddress('libapp.so');\nInterceptor.attach(base.add(0xa30cfc), {              // address from out_dir/asm/\n  onEnter (a) { this.inSign = true; },\n  onLeave (r) { this.inSign = false; console.log('sig ->', getDartString(r)); }\n});\n```",
+   "how": "```bash\n  python3 blutter.py ext/lib/arm64-v8a out_dir\n  grep -nE 'nonce=|&timestamp=|&method=|&url=|Signature|sign\\(' out_dir/pp.txt out_dir/asm/*.txt | head\n  frida -D \"$SERIAL\" -f <pkg> -l out_dir/blutter_frida.js\n```\n```javascript\n// x27 is the Dart object-pool pointer; pool-relative loads look like\n//   add x16, x27, #0x24, lsl #12 ; ldr x16, [x16, #0x280]\nconst base = Module.getBaseAddress('libapp.so');\nInterceptor.attach(base.add(0xa30cfc), {              // address from out_dir/asm/\n  onEnter (a) { this.inSign = true; },\n  onLeave (r) { this.inSign = false; console.log('sig ->', getDartString(r)); }\n});\n```",
    "proof": "The exact signing template printed at runtime — the worked case recovered\n`nonce={uuid}&timestamp={epoch_seconds}&method={METHOD}&url={short_path}` signed with RSA PKCS#1 v1.5 +\nSHA-256 and carried in `X-Nonce`, `X-Timestamp`, `X-Signature` — followed by a standalone Python client\nreproducing byte-identical signatures and receiving HTTP 200 from production.",
    "escalation": "Combined with a recovered private key (D19-037) this is full API access with no app,\nno device and no rate limit tied to the client -> D15.",
    "ruled_out_when": "The signature is produced by a Keystore-backed key or a server-issued per-session key,\nso an offline reproduction fails with a 401 — show the failed forgery. If the \"signature\" turns out to be a\nkeyed hash over attacker-controllable fields with no secret you cannot obtain, that is still a replay/tamper\nfinding at High; do not discard it."
@@ -1855,8 +1983,12 @@
     "AM-07"
    ],
    "applies_to": "Flutter Android, all versions. Also relevant to Unity's `UnityWebRequest` and other non-platform stacks",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, mitm, device",
+   "requires_tags": [
+    "flutter",
+    "mitm",
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0109 (Intercepting Flutter HTTPS Traffic), MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0101 (disable-flutter-tls-verification), MASTG-TOOL-0120 (ProxyDroid), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TOOL-0077 (Burp Suite), MASTG-KNOW-0015; ATT&CK T1521.003",
    "record": "",
    "legacy_meta": {},
@@ -1889,7 +2021,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Dart's `HttpClient` uses BoringSSL compiled into `libflutter.so` with its **own** CA list. It does\nnot read the Android system or user trust store, and historically does not honour the device proxy. So\n\"no traffic in Burp\" is a tooling result, never evidence of pinning — and Objection's\n`android sslpinning disable` will install zero hooks, which is itself the confirmation you are on this path.\nNote the API-level context: `targetSdk<24` user-CA trust is irrelevant here because Flutter never used the\nsystem store, and at API 34+ the platform trust store moved to the Conscrypt APEX with\n`/system/etc/security/cacerts` ignored at runtime — neither affects Dart.",
-   "how": "In escalating order.\n```bash\n# 0. confirm the diagnosis\nunzip -l target.apk | grep -E 'libflutter\\.so|libapp\\.so'\n# objection: expect no \"Found ...\" lines and traffic still failing\nobjection -g <pkg> explore -s 'android sslpinning disable'\n# 1. transparent redirect — the system proxy is ignored, so redirect at L3\nadb shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 80  -j DNAT --to-destination <PROXY-IP>:8080'\nadb shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 443 -j DNAT --to-destination <PROXY-IP>:8080'\n# (or ProxyDroid / a VPN / an AP you control)\n# 2. Frida, pattern-matched hook of ssl_verify_peer_cert (handshake.cc)\nfrida -U -f <pkg> -l disable-flutter-tls.js --no-pause\nfrida -U --codeshare TheDauntless/disable-flutter-tls-v1 -f <pkg>\n# 3. engine patch — no root, no user CA\npip3 install reflutter && reflutter target.apk        # choose \"Traffic monitoring and interception\",\n                                                      # enter your Burp IP -> release.RE.apk\njava -jar uber-apk-signer.jar -a release.RE.apk --out demo-signed\nadb install demo-signed/release.RE-aligned-debugSigned.apk\n# Burp: add a listener on 8083 (reFlutter) or 8080, bind to all interfaces, enable invisible proxying\n# 4. plugin-level pinning is a separate, Java-side check:\ngrep -rn 'diefferson.http_certificate_pinning.HttpCertificatePinning' out/sources\n```\n```javascript\nfunction hook_ssl_verify_peer_cert (address) {\n  Interceptor.replace(address, new NativeCallback((pathPtr, flags) => {\n    console.log('[+] Certificate validation disabled'); return 0;\n  }, 'int', ['pointer', 'int']));\n}\n// located by scanning libflutter.so for, e.g.:\n//   android arm64: \"F? 0F 1C F8 F? 5? 01 A9 F? 5? 02 A9 F? ?? 03 A9 ?? ?? ?? ?? 68 1A 40 F9\"\n//   android arm32: \"2D E9 FE 43 D0 F8 00 80 81 46 D8 F8 18 00 D0 F8 ?? 71\"\n```\nWhen every BoringSSL symbol is stripped (only GPU exports such as `eglGetDisplay`, `glTexImage2D` remain)\npattern matching fails — do not stop, move the interception point above TLS:\n```bash\nnm -D ext/lib/arm64-v8a/libflutter.so | wc -l\nnm -D ext/lib/arm64-v8a/libflutter.so | grep -i ssl     # empty => stripped/static\n```\n```javascript\n['send','sendto','sendmsg','write','writev'].forEach(function (fn) {\n  var p = Module.findExportByName('libc.so', fn); if (!p) return;\n  Interceptor.attach(p, { onEnter (args) {\n    try { var t = new Uint8Array(Memory.readByteArray(args[1], 1))[0];\n          if (t === 0x17 || t === 0x16) console.log(fn, 'TLS record type', t.toString(16)); } catch (e) {}\n  }});\n});\n```\nThen hook the application-layer functions Blutter named (request builders, signers, JSON encoders) instead\nof fighting the TLS layer at all.",
+   "how": "In escalating order.\n```bash\n# 0. confirm the diagnosis\nunzip -l target.apk | grep -E 'libflutter\\.so|libapp\\.so'\n# objection: expect no \"Found ...\" lines and traffic still failing\nobjection -g <pkg> explore -s 'android sslpinning disable'\n# 1. transparent redirect — the system proxy is ignored, so redirect at L3\nadb shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 80  -j DNAT --to-destination <PROXY-IP>:8080'\nadb shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 443 -j DNAT --to-destination <PROXY-IP>:8080'\n# (or ProxyDroid / a VPN / an AP you control)\n# 2. Frida, pattern-matched hook of ssl_verify_peer_cert (handshake.cc)\nfrida -D \"$SERIAL\" -f <pkg> -l disable-flutter-tls.js\nfrida -D \"$SERIAL\" --codeshare TheDauntless/disable-flutter-tls-v1 -f <pkg>\n# 3. engine patch — no root, no user CA\npip3 install reflutter && reflutter target.apk        # choose \"Traffic monitoring and interception\",\n                                                      # enter your Burp IP -> release.RE.apk\njava -jar uber-apk-signer.jar -a release.RE.apk --out demo-signed\nadb install demo-signed/release.RE-aligned-debugSigned.apk\n# Burp: add a listener on 8083 (reFlutter) or 8080, bind to all interfaces, enable invisible proxying\n# 4. plugin-level pinning is a separate, Java-side check:\ngrep -rn 'diefferson.http_certificate_pinning.HttpCertificatePinning' out/sources\n```\n```javascript\nfunction hook_ssl_verify_peer_cert (address) {\n  Interceptor.replace(address, new NativeCallback((pathPtr, flags) => {\n    console.log('[+] Certificate validation disabled'); return 0;\n  }, 'int', ['pointer', 'int']));\n}\n// located by scanning libflutter.so for, e.g.:\n//   android arm64: \"F? 0F 1C F8 F? 5? 01 A9 F? 5? 02 A9 F? ?? 03 A9 ?? ?? ?? ?? 68 1A 40 F9\"\n//   android arm32: \"2D E9 FE 43 D0 F8 00 80 81 46 D8 F8 18 00 D0 F8 ?? 71\"\n```\nWhen every BoringSSL symbol is stripped (only GPU exports such as `eglGetDisplay`, `glTexImage2D` remain)\npattern matching fails — do not stop, move the interception point above TLS:\n```bash\nnm -D ext/lib/arm64-v8a/libflutter.so | wc -l\nnm -D ext/lib/arm64-v8a/libflutter.so | grep -i ssl     # empty => stripped/static\n```\n```javascript\n['send','sendto','sendmsg','write','writev'].forEach(function (fn) {\n  var p = Module.findExportByName('libc.so', fn); if (!p) return;\n  Interceptor.attach(p, { onEnter (args) {\n    try { var t = new Uint8Array(Memory.readByteArray(args[1], 1))[0];\n          if (t === 0x17 || t === 0x16) console.log(fn, 'TLS record type', t.toString(16)); } catch (e) {}\n  }});\n});\n```\nThen hook the application-layer functions Blutter named (request builders, signers, JSON encoders) instead\nof fighting the TLS layer at all.",
    "proof": "Full request/response pairs for the app's API appearing in Burp with the app functioning\nnormally — or, on a stripped engine, captured plaintext request bodies from an application-layer hook plus\n`nm -D` output showing no SSL symbols.",
    "escalation": "Unblocks the entire of -> D14 and -> D15 for a Flutter target. Report the findings the\nvisible traffic produces, never the interception.",
    "ruled_out_when": "n/a as a finding — but record the *coverage* outcome explicitly. Only after this step\ncan you assess whether real pinning exists, and a report that marks a Flutter app's API \"untested because\nit could not be proxied\" is a methodology failure, not a negative."
@@ -1911,8 +2043,12 @@
     "AM-12"
    ],
    "applies_to": "Flutter Android",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, device, frida",
+   "requires_tags": [
+    "flutter",
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TECH-0156 (platform channels as the Dart↔native boundary); MASWE-0033; ATT&CK T1575",
    "record": "",
    "legacy_meta": {},
@@ -1965,8 +2101,11 @@
     "AM-02"
    ],
    "applies_to": "Flutter v2 embedding (**CURRENT**). Older v1 embedding required explicit Java plumbing — treat a v1 app as a separate manual review",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, deeplink",
+   "requires_tags": [
+    "flutter",
+    "deeplink"
+   ],
    "maps_to": "Flutter `FlutterActivityLaunchConfigs.java` `HANDLE_DEEPLINKING_META_DATA_KEY = \"flutter_deeplinking_enabled\"` with documented default `true`; MASTG-TECH-0172, MASTG-TECH-0173, MASTG-TECH-0174",
    "record": "",
    "legacy_meta": {},
@@ -1996,7 +2135,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`FlutterActivityLaunchConfigs.deepLinkEnabled(metaData)` returns **true** when the key is missing.\nA Flutter activity with an `ACTION_VIEW`/`BROWSABLE` filter therefore hands the incoming URI straight to the\nDart router by default, with no Java-side allow-listing. Testers who look only for Java `getData()` handling\nfind nothing and wrongly close the deep-link surface.",
-   "how": "```bash\n  grep -n 'flutter_deeplinking_enabled' out/AndroidManifest.xml || echo \"ABSENT -> deep linking is ENABLED\"\n  grep -B3 -A20 'android.intent.action.VIEW' out/AndroidManifest.xml\n  # harvest candidate routes first (D19-033 / D19-035), then drive them:\n  grep -aoE '\"/[a-zA-Z0-9_/-]+\"' out_dir/pp.txt | sort -u | head -50\n  adb shell am start -a android.intent.action.VIEW -d \"myapp://admin/debug\" <pkg>\n  adb shell am start -a android.intent.action.VIEW -d \"https://app.target.com/internal/tools\" <pkg>\n  frida -U -f <pkg> -l deeplink-monitor.js --no-pause\n```",
+   "how": "```bash\n  grep -n 'flutter_deeplinking_enabled' out/AndroidManifest.xml || echo \"ABSENT -> deep linking is ENABLED\"\n  grep -B3 -A20 'android.intent.action.VIEW' out/AndroidManifest.xml\n  # harvest candidate routes first (D19-033 / D19-035), then drive them:\n  grep -aoE '\"/[a-zA-Z0-9_/-]+\"' out_dir/pp.txt | sort -u | head -50\n  adb shell am start -a android.intent.action.VIEW -d \"myapp://admin/debug\" <pkg>\n  adb shell am start -a android.intent.action.VIEW -d \"https://app.target.com/internal/tools\" <pkg>\n  frida -D \"$SERIAL\" -f <pkg> -l deeplink-monitor.js\n```",
    "proof": "The URI path rendering as a Dart route — visible on screen and observable in a Frida hook on the\nrouter Blutter recovered — with the decompiled `MainActivity` containing no validation at all.",
    "escalation": "A deep-linkable route that renders privileged data or performs a state-changing action ->\nD09; a route whose parameter reaches an in-app WebView `loadUrl` -> D10.",
    "ruled_out_when": "`flutter_deeplinking_enabled` is explicitly `false` **and** the Java `MainActivity`\nimplements its own validated handoff, or no Flutter activity carries a `BROWSABLE` filter. Verify the App\nLinks association separately (MASTG-TECH-0174) — an unverified `autoVerify` host is a different finding."
@@ -2016,8 +2155,11 @@
     "AM-03"
    ],
    "applies_to": "Flutter apps using `io.flutter.embedding.android.FlutterActivity` (v2 embedding), all current versions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, exported-activity",
+   "requires_tags": [
+    "flutter",
+    "exported-activity"
+   ],
    "maps_to": "Flutter `FlutterActivityLaunchConfigs.java` — `EXTRA_INITIAL_ROUTE = \"route\"`, `EXTRA_DART_ENTRYPOINT = \"dart_entrypoint\"`, `EXTRA_DART_ENTRYPOINT_ARGS = \"dart_entrypoint_args\"`, `EXTRA_CACHED_ENGINE_ID = \"cached_engine_id\"`, `EXTRA_CACHED_ENGINE_GROUP_ID`, `EXTRA_ENABLE_STATE_RESTORATION`; `getInitialRoute()` reads the intent extra **before** manifest metadata; MASTG-TECH-0160",
    "record": "",
    "legacy_meta": {},
@@ -2065,8 +2207,11 @@
     "AM-12"
    ],
    "applies_to": "Flutter, and any framework with a replaceable engine `.so`; the gadget path also works on non-rooted devices",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, device",
+   "requires_tags": [
+    "flutter",
+    "device"
+   ],
    "maps_to": "MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0034 (LIEF), MASTG-TOOL-0103 (uber-apk-signer)",
    "record": "",
    "legacy_meta": {},
@@ -2116,8 +2261,10 @@
     "AM-01"
    ],
    "applies_to": "Flutter apps built with `--obfuscate --split-debug-info`, where CI/CD artefacts, crash-upload buckets or update infrastructure are in scope",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter",
+   "requires_tags": [
+    "flutter"
+   ],
    "maps_to": "Flutter's official obfuscation documentation (the symbol map is what `flutter symbolize` consumes)",
    "record": "",
    "legacy_meta": {},
@@ -2160,8 +2307,10 @@
     "AM-08"
    ],
    "applies_to": "Flutter/Dart projects where the repository or CI is in scope — **not** an end-user-device finding",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter",
+   "requires_tags": [
+    "flutter"
+   ],
    "maps_to": "**CVE-2026-27704** — Dart SDK before **3.11.0** and Flutter SDK before **3.41.0**, Zip Slip during Pub package extraction letting a malicious archive write outside the intended Pub-cache destination; OSV tracks malicious packages under the `MAL-` id namespace (records exist at `osv.dev/vulnerability/MAL-2024-11812` and `MAL-2025-189`)",
    "record": "",
    "legacy_meta": {},
@@ -2203,8 +2352,11 @@
     "AM-01"
    ],
    "applies_to": "Cordova, Ionic (on either Cordova or Capacitor), Capacitor",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, capacitor",
+   "requires_tags": [
+    "cordova",
+    "capacitor"
+   ],
    "maps_to": "Capacitor `CapConfig.java` (`capacitor.config.json` asset path), Capacitor `PluginManager.java` (`capacitor.plugins.json`), Cordova `ConfigXmlParser.java` (`res/xml/config.xml`); MASTG-TOOL-0011 (Apktool)",
    "record": "",
    "legacy_meta": {},
@@ -2251,8 +2403,12 @@
     "AM-02"
    ],
    "applies_to": "Cordova, Ionic-on-Cordova",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, webview, js-bridge",
+   "requires_tags": [
+    "cordova",
+    "webview",
+    "js-bridge"
+   ],
    "maps_to": "Cordova `WhitelistPlugin.java` — `\"*\"` on `allow-navigation` expands to `http://*/*`, `https://*/*` **and `data:*`**; `\"*\"` on `access` expands to `http://*/*` + `https://*/*`; defaults seed `file:///*` and `data:*` into `allowedRequests`. Cordova whitelist docs: \"Cannot block redirects from whitelisted remote sites to non-whitelisted destinations\"; `allow-navigation` takes precedence over `allow-intent`. MASWE-0035 (CWE-79, CWE-601, CWE-829)",
    "record": "",
    "legacy_meta": {},
@@ -2306,8 +2462,11 @@
     "AM-09"
    ],
    "applies_to": "Capacitor, all versions. The Cordova equivalent is a remote `<content src=\"http...\">` in `config.xml`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "capacitor, webview",
+   "requires_tags": [
+    "capacitor",
+    "webview"
+   ],
    "maps_to": "Capacitor `CapConfig.java` (`server.url`, `server.hostname`, `server.errorPath`, `server.appStartPath`, `server.html5mode`); Capacitor docs describe `server.url`/`server.cleartext` as \"intended for use with live-reload servers\"",
    "record": "",
    "legacy_meta": {},
@@ -2349,8 +2508,12 @@
     "AM-02"
    ],
    "applies_to": "Capacitor Android. This is a **designed feature** of the local server, not a CVE — report it as the impact multiplier on any WebView script-execution finding in a Capacitor app",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "capacitor, webview, js-bridge",
+   "requires_tags": [
+    "capacitor",
+    "webview",
+    "js-bridge"
+   ],
    "maps_to": "Capacitor `Bridge.java` (`CAPACITOR_FILE_START = \"/_capacitor_file_\"`, `CAPACITOR_CONTENT_START = \"/_capacitor_content_\"`, and the injected `window.WEBVIEW_SERVER_URL` global); `AndroidProtocolHandler.openFile()` (`filePath.replace(Bridge.CAPACITOR_FILE_START,\"\")` -> `new FileInputStream(realPath)`); `AndroidProtocolHandler.openContentUrl()`; `WebViewLocalServer.isLocalFile()`; MASWE-0033",
    "record": "",
    "legacy_meta": {},
@@ -2401,8 +2564,12 @@
     "AM-02"
    ],
    "applies_to": "Capacitor Android with the CapacitorHttp plugin (default in recent Capacitor)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "capacitor, webview, js-bridge",
+   "requires_tags": [
+    "capacitor",
+    "webview",
+    "js-bridge"
+   ],
    "maps_to": "Capacitor `Bridge.java` (`CAPACITOR_HTTP_INTERCEPTOR_START = \"/_capacitor_http_interceptor_\"`, `CAPACITOR_HTTP_INTERCEPTOR_URL_PARAM = \"u\"`); `WebViewLocalServer.handleCapacitorHttpRequest()` (copies all request headers into the native request, honours `x-cap-user-agent`, and skips the pinning socket factory when `isDomainExcludedFromSSL(bridge,url)` is true); `plugin/CapacitorHttp.java` (`addJavascriptInterface(this, \"CapacitorHttpAndroidInterface\")`)",
    "record": "",
    "legacy_meta": {},
@@ -2448,8 +2615,12 @@
     "AM-02"
    ],
    "applies_to": "Capacitor Android",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "capacitor, webview, js-bridge",
+   "requires_tags": [
+    "capacitor",
+    "webview",
+    "js-bridge"
+   ],
    "maps_to": "Capacitor `MessageHandler.java` — installs the bridge as `WebViewCompat.addWebMessageListener(webView, \"androidBridge\", bridge.getAllowedOriginRules(), ...)` and **falls back to `webView.addJavascriptInterface(this, \"androidBridge\")` on exception or when `android.useLegacyBridge` is set**; `postMessage` dispatches on `type==\"cordova\"` versus plugin `pluginId`/`methodName`; `PluginManager.parsePluginsJSON()` reads `assets/capacitor.plugins.json`; MASWE-0033 (CWE-749, CWE-94)",
    "record": "",
    "legacy_meta": {},
@@ -2498,8 +2669,13 @@
     "AM-02"
    ],
    "applies_to": "Cordova / Ionic-on-Cordova Android. The `minSdk<17` reflection escape applies to this interface as a **LEGACY** class",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, webview, js-bridge, device",
+   "requires_tags": [
+    "cordova",
+    "webview",
+    "js-bridge",
+    "device"
+   ],
    "maps_to": "Cordova `SystemWebViewEngine.java` (`webView.addJavascriptInterface(exposedJsApi, \"_cordovaNative\")`); `SystemExposedJsApi.java` (`@JavascriptInterface exec` / `setNativeToJsBridgeMode` / `retrieveJsMessages`, all taking `bridgeSecret`); `CordovaBridge.java` (`verifySecret`, `promptOnJsPrompt` handling `gap:`, `gap_bridge_mode:`, `gap_poll:`, `gap_init:`, and the \"called from restricted origin\" branch)",
    "record": "",
    "legacy_meta": {},
@@ -2543,8 +2719,13 @@
     "AM-02"
    ],
    "applies_to": "Cordova-Android. The secure default is the `https://localhost` scheme (`preference \"scheme\"`/`\"hostname\"`); the insecure mode is **LEGACY** compatibility and should never ship",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, webview, js-bridge, device",
+   "requires_tags": [
+    "cordova",
+    "webview",
+    "js-bridge",
+    "device"
+   ],
    "maps_to": "Cordova `SystemWebViewEngine.java` — the `preferences.getBoolean(\"AndroidInsecureFileModeEnabled\", false)` branch calling `settings.setAllowFileAccess(true)` and `settings.setAllowUniversalAccessFromFileURLs(true)`; `ConfigXmlParser.getLaunchUrlPrefix()` (returns the `file://` launch prefix in that mode); MASWE-0033",
    "record": "",
    "legacy_meta": {},
@@ -2592,8 +2773,13 @@
     "AM-03"
    ],
    "applies_to": "Cordova / Ionic-on-Cordova",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, webview, js-bridge, device",
+   "requires_tags": [
+    "cordova",
+    "webview",
+    "js-bridge",
+    "device"
+   ],
    "maps_to": "Cordova `ConfigXmlParser.java` (`paramType.equals(\"onload\")` -> `onload = \"true\".equals(...)`)",
    "record": "",
    "legacy_meta": {},
@@ -2636,8 +2822,13 @@
     "AM-02"
    ],
    "applies_to": "Cordova, Ionic, Capacitor",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, capacitor, webview, js-bridge",
+   "requires_tags": [
+    "cordova",
+    "capacitor",
+    "webview",
+    "js-bridge"
+   ],
    "maps_to": "Capacitor `MessageHandler.callPluginMethod` / `callCordovaPluginMethod` dispatch; `PluginManager.java` loading classes from `capacitor.plugins.json`; Cordova `ConfigXmlParser.java` (`<feature name=...><param name=\"android-package\" value=\"<class>\"/>`)",
    "record": "",
    "legacy_meta": {},
@@ -2684,8 +2875,13 @@
     "AM-02"
    ],
    "applies_to": "Cordova, Ionic, Capacitor; and React Native apps rendering authenticated content in `react-native-webview`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview, cordova, capacitor, react-native",
+   "requires_tags": [
+    "webview",
+    "cordova",
+    "capacitor",
+    "react-native"
+   ],
    "maps_to": "MASTG-TEST-0334, MASWE-0035 (CWE-79, CWE-601, CWE-829), MASWE-0033; Cordova whitelist docs (\"Cordova apps are susceptible to XSS … secured by using the Cordova Whitelist Plugin and a strict CSP\")",
    "record": "",
    "legacy_meta": {},
@@ -2744,8 +2940,13 @@
     "AM-02"
    ],
    "applies_to": "Cordova, Ionic, Capacitor",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview, cordova, capacitor, react-native",
+   "requires_tags": [
+    "webview",
+    "cordova",
+    "capacitor",
+    "react-native"
+   ],
    "maps_to": "Cordova whitelist docs (CSP section, including the note that `gap:` is required for the bridge on iOS); Capacitor security guidance (CSP via meta tag)",
    "record": "",
    "legacy_meta": {},
@@ -2785,8 +2986,14 @@
     "AM-11"
    ],
    "applies_to": "Cordova, Capacitor and React Native WebViews",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview, device, cordova, capacitor, react-native",
+   "requires_tags": [
+    "webview",
+    "device",
+    "cordova",
+    "capacitor",
+    "react-native"
+   ],
    "maps_to": "Capacitor `Bridge.java` (`WebView.setWebContentsDebuggingEnabled(this.config.isWebContentsDebuggingEnabled())`) and `CapConfig.java` (`android.webContentsDebuggingEnabled`, defaulting to `isDebug`); Cordova `SystemWebViewEngine.java` (`preferences.getString(\"InspectableWebview\", null)` -> `WebView.setWebContentsDebuggingEnabled(true)`); `RNCWebViewManager.kt` (`RNCWebView.setWebContentsDebuggingEnabled(value)`)",
    "record": "",
    "legacy_meta": {},
@@ -2831,8 +3038,12 @@
     "AM-06"
    ],
    "applies_to": "Capacitor Android with CapacitorHttp",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "capacitor, webview, mitm",
+   "requires_tags": [
+    "capacitor",
+    "webview",
+    "mitm"
+   ],
    "maps_to": "Capacitor `WebViewLocalServer.java` (`if (!isDomainExcludedFromSSL(bridge, url)) connection.setSSLSocketFactory(bridge);`)",
    "record": "",
    "legacy_meta": {},
@@ -2876,8 +3087,12 @@
     "AM-06"
    ],
    "applies_to": "Capacitor Android; the scheme half also applies to Cordova",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "capacitor, webview, mitm",
+   "requires_tags": [
+    "capacitor",
+    "webview",
+    "mitm"
+   ],
    "maps_to": "Capacitor `Bridge.java` (`settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW)` branch, `DEFAULT_ANDROID_WEBVIEW_VERSION = 60`, `DEFAULT_HUAWEI_WEBVIEW_VERSION = 10`, `allowedOriginRules` seeded with `scheme + \"://\" + authority` then each `server.allowNavigation` entry, prefixing bare hosts with `https://`); `CapConfig.java` (`server.androidScheme` default `https`, rejecting the invalid schemes `file, ftp, ftps, ws, wss, about, blob, data`; `android.allowMixedContent`, `android.useLegacyBridge`, `android.captureInput`, `android.zoomEnabled`, `android.resolveServiceWorkerRequests`; defaults `allowMixedContent=false`, `webContentsDebuggingEnabled=isDebug`, `minWebViewVersion=60`, `minHuaweiWebViewVersion=10`, `useLegacyBridge=false`); Cordova `ConfigXmlParser.java` (`preference \"scheme\"` default `https`, `\"hostname\"` default `localhost`)",
    "record": "",
    "legacy_meta": {},
@@ -2916,8 +3131,13 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Unity IL2CPP Android builds. Il2CppDumper supports Unity **5.3–2022.2**; frida-il2cpp-bridge covers **5.3.0–6000.3.x**. Mono-backend builds instead ship managed `.dll` assemblies under `assets/bin/Data/Managed/` and are directly ILSpy-able",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "unity, native, device, root",
+   "requires_tags": [
+    "unity",
+    "native",
+    "device",
+    "root"
+   ],
    "maps_to": "Il2CppDumper README (outputs `DummyDll/`, `dump.cs`, `script.json`, `il2cpp.h`, `stringliteral.json`, `ida.py`, `ida_with_struct.py`, `ghidra.py`, `ghidra_wasm.py`, `Il2CppBinaryNinja`); frida-il2cpp-bridge README; MASTG-TECH-0165",
    "record": "",
    "legacy_meta": {},
@@ -2963,8 +3183,13 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Unity IL2CPP Android with metadata obfuscation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "unity, native, device, root",
+   "requires_tags": [
+    "unity",
+    "native",
+    "device",
+    "root"
+   ],
    "maps_to": "katyscode IL2CPP research (`IL2CPP_ASSERT(s_GlobalMetadataHeader->sanity == 0xFAB11BAF)`; the load chain `il2cpp_init()` -> `Runtime::Init()` -> `MetadataCache::Initialize()` -> `MetadataLoader::LoadMetadataFile()`; the `s_FrameworkVersion = framework_version_for(runtime_version)` `\"4.0\"` waypoint marking `Runtime::Init`; the XOR / renamed-file / embedded-metadata / JIT-decryption obfuscation classes); Il2CppDumper README (the error string, the GameGuardian memory-dump route, Zygisk-Il2CppDumper); Zygisk-Il2CppDumper README (`/data/data/GamePackageName/files/dump.cs`)",
    "record": "",
    "legacy_meta": {},
@@ -3005,8 +3230,13 @@
     "AM-12"
    ],
    "applies_to": "Unity IL2CPP Android",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "unity, device, frida, backend-api",
+   "requires_tags": [
+    "unity",
+    "device",
+    "frida",
+    "backend-api"
+   ],
    "maps_to": "frida-il2cpp-bridge README (trace/intercept/replace method calls; `dump` subcommand); Il2CppDumper README (`dump.cs` with method/field/property information)",
    "record": "",
    "legacy_meta": {},
@@ -3048,8 +3278,11 @@
     "AM-12"
    ],
    "applies_to": "Unity Android",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "unity, device",
+   "requires_tags": [
+    "unity",
+    "device"
+   ],
    "maps_to": "Il2CppDumper `dump.cs` (used to locate the `PlayerPrefs` call sites)",
    "record": "",
    "legacy_meta": {},
@@ -3093,8 +3326,11 @@
     "AM-03"
    ],
    "applies_to": "Unity Android apps exporting `UnityPlayerActivity` / `UnityPlayerGameActivity`. Note the `targetSdk<31` gate — with an intent-filter present, exported is the default",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "unity, exported-activity",
+   "requires_tags": [
+    "unity",
+    "exported-activity"
+   ],
    "maps_to": "**CVE-2025-59489** (arbitrary code execution in the Unity Runtime; Unity advisory \"Security Sept-2025-01\"); MASTG-TECH-0160; Il2CppDumper README",
    "record": "",
    "legacy_meta": {},
@@ -3142,8 +3378,13 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Xamarin.Android and .NET MAUI. `assemblies/assemblies.blob` is the **.NET ≤ 8 (LEGACY) layout**; `lib/<abi>/libassemblies.<abi>.blob.so` is **.NET 9+ (CURRENT)**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "xamarin, native, device, frida",
+   "requires_tags": [
+    "xamarin",
+    "native",
+    "device",
+    "frida"
+   ],
    "maps_to": "pyxamstore README (`unpack -d`, `pack`, LZ4 handling, and the caveat that \"DLLs containing associated debug or configuration data are not fully supported\"); HN Security write-up (`pyxamstore unpack -d apktoolOut/unknown/assemblies/`); mwalkowski .NET MAUI 9 write-up (`payload` ELF section, `XABA` magic `0x41424158`, 20-byte header, 28-byte `AssemblyStoreEntryDescriptor`, `XALZ` + LZ4 with the uncompressed size at bytes 8..12, and the `pymauistore` automation); Appknox guide (`Xamarin_XALZ_decompress.py`, `XamAsmUnZ`)",
    "record": "",
    "legacy_meta": {},
@@ -3191,8 +3432,13 @@
     "AM-07"
    ],
    "applies_to": "Xamarin.Android, .NET MAUI",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "xamarin, native, device, frida",
+   "requires_tags": [
+    "xamarin",
+    "native",
+    "device",
+    "frida"
+   ],
    "maps_to": "Appknox Xamarin guide (`ServicePointManager.ServerCertificateValidationCallback`; Fridax as \"primary tool for runtime Xamarin hooking\"; the `xamarin-unpin` Frida script); `@Gand3lf/xamarin-antiroot` (\"Bypass antiroot detection for Xamarin apps!\")",
    "record": "",
    "legacy_meta": {},
@@ -3219,7 +3465,7 @@
    "has_code": true,
    "skip_when": "",
    "test": ".NET apps pin, root-check and encrypt in managed code, typically via\n`ServicePointManager.ServerCertificateValidationCallback` or an `HttpClientHandler`. Standard\n`Java.perform`/ObjC Frida APIs do not reach Mono-managed methods — you must hook at the Mono boundary or use\na Xamarin-aware layer. Crypto here is plain C#, which is the fastest hardcoded-key path in any framework.",
-   "how": "```bash\n  for f in out/assemblies/out/*.dll; do ilspycmd \"$f\"; done > all.cs\n  grep -nE 'ServerCertificateValidationCallback|ServerCertificateCustomValidationCallback|HttpClientHandler' all.cs | head\n  grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\\[\\]|Convert\\.FromBase64String' all.cs | head -40\n  grep -nE 'IsJailBroken|isRooted|RootBeer|checkRoot|SafetyNet|PlayIntegrity|isEmulator' all.cs | head\n  grep -nE 'GetInstallerPackageName|signatures|PackageInfo' all.cs | head\n  # runtime:\n  frida-trace -U -f <pkg> -i \"mono_*\"          # surface the Mono API in use\n  frida -U -f <pkg> -l fridax.js --no-pause    # Fridax, for managed-method hooking\n  frida --codeshare <xamarin-unpin script> -U -f <pkg>\n```",
+   "how": "```bash\n  for f in out/assemblies/out/*.dll; do ilspycmd \"$f\"; done > all.cs\n  grep -nE 'ServerCertificateValidationCallback|ServerCertificateCustomValidationCallback|HttpClientHandler' all.cs | head\n  grep -nE 'Aes|Rijndael|TripleDES|MD5|SHA1|Rfc2898DeriveBytes|new byte\\[\\]|Convert\\.FromBase64String' all.cs | head -40\n  grep -nE 'IsJailBroken|isRooted|RootBeer|checkRoot|SafetyNet|PlayIntegrity|isEmulator' all.cs | head\n  grep -nE 'GetInstallerPackageName|signatures|PackageInfo' all.cs | head\n  # runtime:\n  frida-trace -U -f <pkg> -i \"mono_*\"          # surface the Mono API in use\n  frida -D \"$SERIAL\" -f <pkg> -l fridax.js    # Fridax, for managed-method hooking\n  frida --codeshare <xamarin-unpin script> -U -f <pkg>\n```",
    "proof": "For crypto, a literal key/IV byte array in the decompiled source plus a successful offline\ndecryption of the app's stored data with it. For pinning, the managed callback's arguments and return value\nprinted at runtime, or intercepted traffic after the unpin script loads.",
    "escalation": "Key -> D12 and offline decryption of exfiltrated data; pinning -> the traffic findings in\nD14/D15. Note that a signature or installer check written in managed code is patchable client-side and is\ntherefore an enabling weakness, not a control (-> D19-078).",
    "ruled_out_when": "No validation callback is overridden (pinning is delegated to the platform), the crypto\nderives its key from a Keystore-backed or server-issued source, and the root check is implemented natively.\nShow the Mono trace confirming the callback is not invoked, rather than concluding it from the absence of a\ngrep hit — obfuscated assemblies rename methods."
@@ -3239,8 +3485,11 @@
     "AM-12"
    ],
    "applies_to": "Xamarin.Android and .NET ≤ 8 MAUI (blob layout). For .NET 9 MAUI use the `payload`-section extraction and rebuild path",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "xamarin, device",
+   "requires_tags": [
+    "xamarin",
+    "device"
+   ],
    "maps_to": "HN Security write-up (`pyxamstore unpack -d apktoolOut/unknown/assemblies/`, dnSpy `IsJailBroken()` -> `return false`, `pyxamstore pack`, `apktool b`, `uber-apk-signer`, and the split-APK `pm install-create/write/commit` install path); pyxamstore README (`assemblies.json` is required for the repack); MASTG-TOOL-0103",
    "record": "",
    "legacy_meta": {},
@@ -3283,8 +3532,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Kotlin Multiplatform / Compose Multiplatform Android targets",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "kmp",
+   "requires_tags": [
+    "kmp"
+   ],
    "maps_to": "(method; no external identifier verified in this corpus for KMP specifically)",
    "record": "",
    "legacy_meta": {},
@@ -3322,8 +3573,10 @@
     "AM-01"
    ],
    "applies_to": "Kotlin Multiplatform",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "kmp",
+   "requires_tags": [
+    "kmp"
+   ],
    "maps_to": "(method; KMP secrets guidance: the `expect/actual` pattern, Android `BuildConfig` fed from `local.properties`, a Gradle-generated secrets file, and the explicit caveat that \"anyone with the app can disassemble and retrieve the secret\")",
    "record": "",
    "legacy_meta": {},
@@ -3368,8 +3621,10 @@
     "AM-12"
    ],
    "applies_to": "Cordova/Ionic/Capacitor WebViews, RN WebViews, Unity WebGL builds embedded in a WebView, and any in-app browser rendering first-party content that loads Wasm",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview",
+   "requires_tags": [
+    "webview"
+   ],
    "maps_to": "Il2CppDumper README (WASM is an explicitly supported binary format, with a dedicated `ghidra_wasm.py` for the ghidra-wasm-plugin — Unity WebGL/Wasm targets are dumpable the same way)",
    "record": "",
    "legacy_meta": {},
@@ -3415,8 +3670,12 @@
     "AM-09"
    ],
    "applies_to": "any Android app embedding a JS engine — including React Native apps that add a **second** engine for server-driven UI",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native, device, frida",
+   "requires_tags": [
+    "native",
+    "device",
+    "frida"
+   ],
    "maps_to": "(method; symbol-based engine detection); MASWE-0049 (CWE-494); ATT&CK T1407",
    "record": "",
    "legacy_meta": {},
@@ -3468,8 +3727,10 @@
     "AM-01"
    ],
    "applies_to": "any versioned API reached by a cross-platform client. **This is the highest-value mobile-to-backend bridge in the whole methodology**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "ATT&CK T1533; the endpoint inventory from D19-011 is the input",
    "record": "",
    "legacy_meta": {},
@@ -3516,8 +3777,10 @@
     "AM-01"
    ],
    "applies_to": "all frameworks; most acute in RN/Flutter/KMP, where \"write the logic once and share it\" is the selling point",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "n/a (method); the failure shapes below are drawn from the bug-hunting corpus",
    "record": "",
    "legacy_meta": {},
@@ -3565,8 +3828,15 @@
     "AM-06"
    ],
    "applies_to": "Flutter, Unity, React Native, Cordova/Capacitor — any framework with a non-platform HTTP stack",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm, flutter, unity, react-native, cordova, capacitor",
+   "requires_tags": [
+    "mitm",
+    "flutter",
+    "unity",
+    "react-native",
+    "cordova",
+    "capacitor"
+   ],
    "maps_to": "**MASTG-TEST-0237** (Cross-Platform Framework Configurations Allowing Cleartext Traffic — status **placeholder**; its note states: \"Cross-platform frameworks (e.g. Flutter, React native, …), typically have their own implementations for HTTP libraries, where cleartext traffic can be allowed\"), MASWE-0026, MASTG-KNOW-0015, MASTG-TECH-0151 (Analyzing the Network Security Configuration)",
    "record": "",
    "legacy_meta": {},
@@ -3616,8 +3886,10 @@
     "AM-11"
    ],
    "applies_to": "Capacitor and Cordova primarily; the RN/Flutter equivalents are `console.log`/`debugPrint` left in",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Capacitor `MessageHandler.java` (`Logger.verbose(Logger.tags(\"Plugin\"), \"To native (Cordova plugin): callbackId: … service: … action: … actionArgs: …\")` and the Capacitor-plugin equivalent); Capacitor `CapConfig.java` (`loggingBehavior`: `none` / `debug` / `production`, `android.loggingEnabled`); MASTG-TOOL-0112 (pidcat)",
    "record": "",
    "legacy_meta": {},
@@ -3660,8 +3932,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "every finding in this chapter that reaches an API or a rendered surface",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "n/a (method; drawn from the bug-hunting corpus's false-positive register)",
    "record": "",
    "legacy_meta": {},
@@ -3697,8 +3971,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "every finding in this chapter",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "MASTG-TOOL-0104 (the `file`-based engine identification MASTG itself prescribes), MASTG-TECH-0165",
    "record": "",
    "legacy_meta": {},
@@ -3744,8 +4020,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "any D19 finding that is a chain — which most of the P1s in this chapter are",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "n/a (method; drawn from the bug-hunting corpus's reporting register)",
    "record": "",
    "legacy_meta": {},

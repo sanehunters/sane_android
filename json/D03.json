@@ -4,7 +4,7 @@
  "file": "D03-manifest-and-permissions.md",
  "why": "Most of what this domain produces is worthless on its own. \"allowBackup is true\", \"the app requests 14 permissions\", \"component X is exported\" — Google's own invalid-report page says backups enabled is intended behaviour, Xiaomi lists `allowbackup:True` as out of scope, Bugcrowd pins `mobile_security_misconfiguration.auto_backup_allowed_by_default` at P5 with the vector `AV:P/AC:L/PR:H/UI:N/S:U/C:H/I:N/A:N`, and Google's invalid-reports guidance states plainly that \"excessive permissions alone do not have enough of a security impact to qualify for a reward\". If your D03 output is a permission inventory, you have produced nothing.\n\nThe domain pays in exactly two places. The first is **the permission string that is not a permission**: a component guarded by `android:permission=\"com.target.X\"` where nothing on the device defines `X` (orphan), where the definition omits `protectionLevel` (silently `normal`), where the string is misspelled, where it is a non-permission literal such as `android:permission=\"true\"`, or where an attacker app that defines the name first wins the binding protection level. In every case a twenty-line APK declaring `<permission>` plus `<uses-permission>` is granted the string at install with no prompt, and the component the developer cared most about protecting becomes an ordinary exported component. Google's Mobile VRP lists **\"orphaned permissions\" by name** in its additional-vulnerability-types-in-scope list — this is one of the few Android-native classes a first-party programme explicitly pays for.\n\nThe second is **the enforcement site**: `checkSelfPermission()` in an exported entry point (which asks \"do *I* hold this?\", and is therefore always true), `checkCallingOrSelfPermission()` (which passes whenever *either* side holds it, so the privileged callee satisfies it on the caller's behalf), `checkCallingPermission()` whose `int` return value is discarded, and any UID check placed after `Binder.clearCallingIdentity()`. That is the confused-deputy core, and its severity is whatever the deputy does. The base rate from the disclosed corpus is honest: ownCloud #145402 listed four exported activities with no permission and paid nothing; the report that paid (#377107, Medium, $750) was the one that found the sink behind one of them, and Twitter Lite #499348 reached **Critical** on the same class. Bitwarden #289000 and Nextcloud #331302 both closed **Low** because the exposed thing was low-value, not because the mechanism was wrong.\n\nEverything else in this chapter — appops, package visibility, backup rules, `intentMatchingFlags`, `sharedUserId` — is either an enabler that removes a triager's objection, or a precondition that raises another domain's finding. Treat it that way and write it up that way.",
  "crux": "**Is there any component whose only access control is a permission string that a zero-permission app can obtain — by declaring it, by defining it first, or because nobody ever defined it — and if the string does hold, does the code behind it interrogate the *caller* rather than itself?**",
- "applicability": "",
+ "applicability": "D03 is never n/a as a whole — every APK has a manifest and every finding in the repository is bound to its targetSdk/minSdk pair (D03-002). The probe decides which **families** of items apply and writes the n/a rows for the rest. Run it once after P2 decompile, against the merged, decoded manifest.\n\n```bash\nM=$DEC/apktool/AndroidManifest.xml; SRC=$DEC/jadx/sources\n# 1. Version pair and the merged-manifest sanity check (D03-001, D03-002) — always run\ngrep -oE '(minSdkVersion|targetSdkVersion)=\"[0-9]+\"' \"$M\" | tr '\\n' ' '; ls $E/decompiled/apktool/*/AndroidManifest.xml 2>/dev/null | wc -l   # >1 means splits: every split must be decoded\n# 2. Custom-permission family (D03-008..D03-023, D03-032): non-platform strings DEFINED and ENFORCED\ngrep -oE 'android:(permission|readPermission|writePermission)=\"[^\"]+\"' \"$M\" | cut -d'\"' -f2 | grep -v '^android\\.permission\\.' | sort -u | wc -l   # enforced (non-platform)\ngrep -cE '<permission(-tree)?\\b' \"$M\"                                                                                                     # defined\n# 3. Enforcement-site family (D03-024..D03-031, D03-033..D03-037, D03-040..D03-045): reachable components exist\npython3 scripts/inventory.py --all >/dev/null; awk -F, 'NR>1 && ($4==\"true\" || $4==\"unknown\")' inventory/components.csv | cut -d, -f2 | sort | uniq -c   # exported rows per type\ngrep -rlE 'check(Self|Calling|CallingOrSelf)?Permission\\(|enforceCalling|getCallingUid\\(|clearCallingIdentity\\(' $SRC | wc -l               # enforcement call sites\n# 4. Attribute families (D03-038, -039, -046, -056..-058, -060..-065, -067..-073, -075): which flags and elements are present at all\ngrep -oE 'android:(allowBackup|debuggable|testOnly|sharedUserId|sharedUserMaxSdkVersion|directBootAware|process|isolatedProcess|intentMatchingFlags|dataExtractionRules|fullBackupContent|backupAgent|restoreAnyVersion|requestLegacyExternalStorage|allowUntrustedActivityEmbedding|foregroundServiceType)=\"[^\"]*\"' \"$M\" | sort | uniq -c\ngrep -oE '<(queries|activity-alias|path-permission|grant-uri-permission|uses-native-library|attribution|property|permission-tree|protected-broadcast)\\b' \"$M\" | sort | uniq -c\ngrep -oE 'android.permission.(BIND_DEVICE_ADMIN|BIND_ACCESSIBILITY_SERVICE|SYSTEM_ALERT_WINDOW|MANAGE_EXTERNAL_STORAGE|QUERY_ALL_PACKAGES|REQUEST_INSTALL_PACKAGES|USE_EXACT_ALARM|USE_FULL_SCREEN_INTENT|ACCESS_BACKGROUND_LOCATION|NEARBY_WIFI_DEVICES|CALL_PHONE|ANSWER_PHONE_CALLS)|android.permission.health\\.[A-Z_]+|SMS_DELIVER|SECRET_CODE|USB_DEVICE_ATTACHED|USB_ACCESSORY_ATTACHED|NDEF_DISCOVERED|accountType|expo.modules.updates|CodePush' \"$M\" | sort | uniq -c\n```\n\nDecision rule: a family applies when its probe line prints at least one row; D03-001..D03-007, D03-054, D03-055 and D03-076 always apply. Probe 2 = `0 / 0` → D03-008..D03-023 and D03-032 are n/a. Probe 3 = no exported/unknown rows and 0 call sites → D03-024..D03-031 and D03-033..D03-045 are n/a (D03-040 stays if `registerReceiver` appears in `$SRC`). Each attribute/element/permission absent from probe 4 → the item named for it is n/a. `oem-scope` absent → D03-066 and D03-NEW-C are n/a. The n/a note a model writes in coverage.csv, verbatim shape:\n\n`D03-0NN | n/a | probe 2026-10-14: merged manifest ($M, N splits decoded) defines 0 and enforces 0 non-platform permission strings; attribute <name> absent; inventory/components.csv --all has 0 exported rows of type <type> — family not present on this build (versionCode V, targetSdk T)`\n\nNever write n/a for a family on the strength of `grep exported=\"true\"` alone (D03-003), and never for the whole domain.",
  "triage": "1. **Merged manifest + minSdk/targetSdk.** Everything downstream is version-gated; getting the pair wrong produces both false positives and false negatives and is the single most common reason an Android report is rejected.\n2. **`used.txt` minus `defined.txt`.** One `comm -23` finds orphan permissions — the highest-value, lowest-effort finding in the domain, with no install-order race and no user interaction.\n3. **`protectionLevel` of everything that *is* defined.** Missing or `normal` means the guard is decorative; `dangerous` means it is one tap.\n4. **The live `pm list permissions -f` resolution.** The manifest string and the enforced level diverge. The delta itself is a finding.\n5. **The enforcement site for every component that survives 2–4.** `checkSelfPermission` / `checkCallingOrSelf` / discarded `int` / post-`clearCallingIdentity` checks. This is where High and Critical live.\n6. **`<activity-alias>`, `<path-permission>`, `android:path`, per-component `android:permission` overrides.** Declaration traps that undo the control the developer applied one line above.\n7. **`sharedUserId` sibling set.** If it exists, the target's effective attack surface is the union of every sibling's, and you should be testing the weakest one.\n8. **`<queries>` / package-visibility gates and `intentMatchingFlags`.** Not findings themselves; they flip other domains' \"the attacker can't reach that\" objections.\n9. **Held-versus-requested, then the dangerous-permission binding table (D03-054, D03-055), last.** The manifest lists what the app *asks* for; `dumpsys package` lists what it *holds* on the device you are testing. Build the permission -> consumer -> feature table only as input to the re-delegation test in step 5 and as impact-ceiling evidence, never as a standalone report.\n10. **Backup, debuggable, testOnly — and the restore direction (D03-070).** Cheap, almost always P5 read-only, occasionally the only no-root extraction path you have. Prove the extraction, or prove that a *tampered restore* changes a decision the client makes locally, or do not file it.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"The app requests excessive permissions\" / permission-inventory report | Google's invalid-reports page: *\"excessive permissions alone do not have enough of a security impact to qualify for a reward.\"* HackenProof: *\"permissions declared but unused — common in many Android apps and not a security issue.\"* MASTG-TEST-0254 rates it under the privacy profile. | The permission -> consumer -> feature table (D03-055) has a row with a consumer and no feature, or a dangerous permission the app holds is reachable by a third party through an exported component (D03-031 re-delegation), or the collected data reaches a host not named in the Play Data safety declaration (-> D20). |\n| `android:allowBackup=\"true\"` | `mobile_security_misconfiguration.auto_backup_allowed_by_default` = **P5**, vector `AV:P`. Google: *\"backups are enabled by default ... we don't consider it a security vulnerability if an app allows backups.\"* Xiaomi lists it out of scope. `adb backup` is dead on most modern builds. | A demonstrated extraction, on a non-rooted device without developer mode, of a credential that then authenticates against the production API — or the same credential surviving a **cloud** backup restored on an attacker-controlled device, which removes `AV:P` (D03-068). |\n| \"Component X is exported\" | The export is the map, not the territory. Bugcrowd's `broken_access_control.exposed_sensitive_android_intent` is priority **VARIES** precisely because you must demonstrate the effect. ownCloud #145402 listed four and paid nothing. | The sink behind it: an extra reaching a WebView, a URI reaching a fetch, an intent being forwarded, a state change occurring — reached from a zero-permission app (D03-034, then D04–D08). |\n| SSL pinning absent or defeatable | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` and `.defeatable` are both **P5**. A user-installed CA is a tester convenience (AM-07), not an attacker. | Not in this domain at all — see D14. The `minSdk<24` user-CA-trust and `<certificates src=\"user\"/>` items there are the reportable shapes. |\n| Missing jailbreak/root detection, missing exploit mitigations | `lack_of_binary_hardening.lack_of_jailbreak_detection` and `.lack_of_exploit_mitigations` = **P5**. AM-12 (own rooted device) is not an attack. | Not in this domain — see D22. |\n| Malformed-intent crash on an exported component | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**. | The same unchecked parcelable reaching a memory-unsafe native parser (-> D16), or the crash being a reliable pre-condition for another primitive. |\n| `minSdkVersion` is low | A number is not a bug. The corpus is unanimous: report the legacy issue it enables, at that issue's severity. | A working reproduction of the enabled bypass on an emulator at that API level (D03-002). |\n| MASTG-TEST-0255 / -0256 / -0257 (permission minimisation, rationale, auto-reset) | All three carry `status: placeholder` in MASTG — empty stubs with no procedure. Compliance/UX, no attacker primitive. Demote to Informational. | Nothing in a bounty context. Keep as a programme-hygiene note in a pentest/WAPT deliverable where hygiene is a contracted output. |\n| `android:sharedUserId` present | Deprecated, yes; a finding, no. Enormously common in OEM and long-lived enterprise families. | The sibling set enumerated on-device (same `userId=` in `dumpsys package`), one sibling identified as lower-assurance, and a cross-read of the privileged sibling's private data demonstrated (D03-067). |\n| `QUERY_ALL_PACKAGES` declared | On `targetSdk < 30` package enumeration was free anyway; on ≥ 30 the permission is Play-policy-restricted, which is a policy matter, not a vulnerability. | The package list appearing in a request body to a third-party host (D03-046a), or the list feeding a targeting decision that changes security behaviour. |\n| Absence of `android:intentMatchingFlags=\"enforceIntentFilter\"` | Defence-in-depth on API 36+ only; its absence on an app that does not target 36 is meaningless. | A component that trusts intent data and is only reachable because the flag is absent, especially where a **sibling app in the same family sets it** — that sibling comparison converts it from a hardening note to a defect (D03-044). |\n| Cleartext permitted / `usesCleartextTraffic=\"true\"` | Manifest flag only. MASTG-TEST-0235's logic is precise and commonly mis-stated: it does **not** fail when the manifest sets it true but an NSC exists, even an empty one. | A captured plaintext request carrying a token or PII — and that finding belongs to D14, not here. D03's job is only to resolve the `@xml/...` reference so D14 can evaluate it. |\n| `SYSTEM_ALERT_WINDOW` declared in the manifest | The overlay permission needs a Settings trip from API 23 and is Play-policy restricted, and `mobile_security_misconfiguration.tapjacking` is **P5** anyway. An app *holding* the permission is an over-request row, not a vulnerability. | The **inverse**: the app's own consent/payment/permission screens lack `filterTouchesWhenObscured` and `setHideOverlayWindows`, and a recorded overlay PoC drives one of the three surfaces Google's Mobile VRP still accepts — a permission approval, an app-installation approval, or a hidden privacy-sensor indicator (D03-061 -> D04). |\n| `ACCESS_BACKGROUND_LOCATION` declared | Declaration is not collection, and on Android 10+ the user had to walk into Settings to grant \"all the time\". Filing the manifest line is a privacy note at best. | `dumpsys location` showing an active request while backgrounded with the screen off **plus** lat/long in the proxy (D03-063) — and, far better, the history endpoint returning a second controlled account's marker, which is a P1/P3 BOLA in D15. |\n| `foregroundServiceType` declared, or a foreground service running | Every media, navigation and sync app runs one; the type declaration is mandatory from API 29. | `dumpsys media.camera` / `dumpsys audio` showing the package holding a sensor while its UI is not visible, with a transparent or sensor-less notification, and the capture leaving the device (D03-062). |\n| A `backupAgent` / `restoreAnyVersion` attribute in the manifest | An attribute, exactly like `allowBackup`. `AV:P` and developer mode both apply. | A tampered archive restored on an in-scope device that flips a decision the client makes locally — entitlement, PIN lockout, API host — with the five-shot state-change set to prove it (D03-070). |\n| A drozer `app.package.attacksurface` count | An inventory. Informational by construction; the corpus is explicit: do not report standalone. | Each entry driven to an observable effect from a third-party APK (D03-006). |",
  "joins": "- **Orphan custom permission (D03-008) × the provider it guards (D07).** Nobody joins the `comm -23 used.txt defined.txt` output to the provider authority list. The provider reviewer sees `android:readPermission=\"com.target.X\"` and moves on; the permission reviewer sees an undefined string and files it as a hygiene note. Joined, it is: any installed app defines `X`, is granted it silently, and reads the provider — which, if the provider is keyed by a user id, is `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` at **P1**.\n- **`resolveActivity()==null` as a gate (D03-045) × name-only caller trust (D01/D03-030) × implicit-intent hijack (D05).** Three separate \"the attacker cannot be there\" assumptions that all fail to the same attacker app. The app decides it is safe because nothing else resolves, trusts the caller because the package name matches a prefix, and sends an implicit intent because no competitor is installed. One PoC APK with a chosen `applicationId`, a matching `<intent-filter>` at priority 999, and no `<queries>` entry defeats all three at once. Nobody reviews package visibility and intent resolution together.\n- **`sharedUserId` (D03-067) × Android Keystore (D12) × the weakest sibling's exported surface (D04–D07).** Same UID means the same Keystore namespace. The sibling review and the crypto review never meet: the crypto reviewer proves keys are hardware-backed and non-exportable, and the sibling reviewer proves two packages share a UID, and neither states the consequence — that a bug in the low-assurance sibling *uses* the strong sibling's keys through the shared Keystore without ever extracting them.\n- **Dangerous-permission inventory (D03-031) × exported component sinks (D04–D07) × the backend (D15).** Permission lists and IPC lists are produced by different passes and stapled together in the report. The join is the confused deputy: the app holds `READ_CONTACTS`/`ACCESS_FINE_LOCATION`/`INTERNET`, an exported component performs the gated action with attacker extras, and the resulting request reaches the backend **with the victim's session attached** — so the same primitive that leaks local data is also an authenticated request generator against D15.\n- **Manifest-declared backend hosts (D03-074) × API versioning (D15).** The manifest, `strings.xml` and framework `<meta-data>` are read for secrets, then discarded. They are actually a version inventory: the hardcoded endpoints in a mobile build are routinely an older API generation than the live web client uses, and the four behavioural diffs (auth strength, throttling, validation, field exposure) on that older generation are where a P1 lives. Nobody diffs the mobile-derived host list against the web app's.\n- **`<grant-uri-permission pathPrefix=\"/\">` (D03-036) × intent redirection (D08) × FileProvider (D07).** The manifest reviewer records the over-broad grant scope as a hygiene note; the intent reviewer finds a redirect primitive and rates it on \"an attacker can make the app start an activity\". Joined, the redirect carries a grant flag and the over-broad scope turns one granted URI into arbitrary read across the whole authority.\n- **`appop`-gated defensive controls (D03-047) × overlay/tapjacking (D04/D21).** The overlay reviewer tests whether an overlay can be drawn over the target; the permission reviewer records that the app's anti-overlay warning depends on `SYSTEM_ALERT_WINDOW`. The join is that setting the target's own op to `ignore` silently disables its defence with no exception and no user-visible error — so the tapjacking PoC that \"failed\" on a clean device succeeds on one where the op was flipped.\n- **`android:process` global name (D03-038) × `sharedUserId` (D03-067) × native libraries (D16).** Individually: a shared process, a shared UID, a native parser. Together: attacker code from a same-key sibling executing in the target's address space alongside a memory-unsafe parser, which is the OEM-app shape that produces platform-level findings.\n- **Account-type squatting (D03-043) × `FLAG_SECURE` and overlay hardening (D04).** The UI-redress reviewer verifies `FLAG_SECURE` and `filterTouchesWhenObscured` and declares the login screen hardened. Neither control touches an authenticator activity rendered *inside the victim's own task* by a squatted account type — the phishing surface survives every overlay defence the app has.\n- **Default-SMS role / call forwarding (D03-058, D03-059) × the OTP delivery channel (D13) × the backend's factor list (D15).** The permission reviewer notes `SMS_DELIVER` and `CALL_PHONE`; the auth reviewer tests the OTP's length, lifetime and rate limit. Neither asks the joined question: if the app can *read and delete* the SMS, or silently set `**21*` forwarding, then the second factor is not a second factor for anyone who can drive that component — and the backend still treats the account as MFA-protected. That is a `two_fa_bypass` (P3) or, where the voice/SMS factor is the whole of step-up, an `authentication_bypass` (P1).\n- **Held-versus-requested (D03-054) × every impact sentence in the report (D27).** The single most common downgrade in this domain is an impact claim resting on a permission the app does not hold on the tested device — `WRITE_EXTERNAL_STORAGE` above API 29, a `maxSdkVersion`-capped declaration, a runtime permission the user never granted. Nobody joins the manifest pass to the `dumpsys` grant record before writing the sentence, and the triager does it for you, at your expense.\n- **Backup restore (D03-070) × the app lock / in-app PIN (D13) × client-side entitlement (D23).** The storage reviewer reads the backup for secrets and finds none, because the app stores its token in the Keystore. The restore direction is never tested — and the failed-PIN counter, the \"biometric enrolled\" boolean and the cached entitlement all live in the plain preference file that *is* in the archive. One edited XML file converts a P5 backup flag into an app-lock bypass.",
@@ -58,7 +58,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The manifest that is enforced is the one inside the built APK, not `app/src/main/AndroidManifest.xml`. `AD_ID`, `QUERY_ALL_PACKAGES`, foreground-service types, the Photo Picker `ModuleDependencies` service and whole exported components arrive by AAR manifest merge. Reviewing source misses all of it.",
-   "how": "```bash\n  apktool d -f base.apk -o out/           # binary manifest -> XML\n  xmllint --format out/AndroidManifest.xml > merged.xml\n  jadx --no-src -d jadx_out base.apk      # second opinion: out/resources/AndroidManifest.xml\n  aapt2 dump xmltree base.apk --file AndroidManifest.xml | head -80   # raw; exported=\"true\" prints as 0xffffffff\n  # if you have the source tree, attribute each entry:\n  ./gradlew :app:processReleaseManifest\n  grep -nE 'ADDED from|MERGED from' app/build/outputs/logs/manifest-merger-release-report.txt\n  diff <(xmllint --format app/src/main/AndroidManifest.xml) merged.xml | head -80\n```\nFor split APKs, decode **every** split (`base`, `config.*`, feature modules) — a component can be declared in a feature split only.",
+   "how": "```bash\n  apktool d -f base.apk -o out/           # binary manifest -> XML\n  xmllint --format out/AndroidManifest.xml > merged.xml\n  jadx --no-src -d $DEC/jadx base.apk      # second opinion: out/resources/AndroidManifest.xml\n  aapt2 dump xmltree base.apk --file AndroidManifest.xml | head -80   # raw; exported=\"true\" prints as 0xffffffff\n  # if you have the source tree, attribute each entry:\n  ./gradlew :app:processReleaseManifest\n  grep -nE 'ADDED from|MERGED from' app/build/outputs/logs/manifest-merger-release-report.txt\n  diff <(xmllint --format app/src/main/AndroidManifest.xml) merged.xml | head -80\n```\nFor split APKs, decode **every** split (`base`, `config.*`, feature modules) — a component can be declared in a feature split only.",
    "proof": "A side-by-side where the merged manifest contains a `<uses-permission>` or exported component absent from the source manifest, with the merger report line naming the responsible AAR.",
    "escalation": "Named third-party responsibility turns a permission finding into an SDK supply-chain finding -> D18; whatever the SDK exported goes to D04–D07.",
    "ruled_out_when": "The merged manifest is byte-identical in entry set to the source manifest (only `tools:` attributes and `$` placeholders resolved), and the merger report shows only `ADDED from [main manifest]`. Then no dependency contributed surface and source review was sufficient."
@@ -833,8 +833,10 @@
     "AM-08"
    ],
    "applies_to": "**Android 12+** for the `knownSigner` level. **LEGACY note, and it runs the other way:** on older platforms the same manifest resolves to plain `signature`, which is *stricter* — the newer device is the weaker one.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=31",
+   "requires_tags": [
+    "api>=31"
+   ],
    "maps_to": "`developer.android.com/guide/topics/manifest/permission-element` — `\"knownSigner\"`: *\"granted only if requesting app is signed with an allowed certificate (listed as known signer). Automatically granted without user notification\"*; `PROTECTION_FLAG_KNOWN_SIGNER` = 0x8000 in `PermissionInfo`",
    "record": "",
    "legacy_meta": {},
@@ -922,8 +924,10 @@
     "AM-03"
    ],
    "applies_to": "Android 12+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=31",
+   "requires_tags": [
+    "api>=31"
+   ],
    "maps_to": "`PROTECTION_INTERNAL` = 4 in `PermissionInfo`; AOSP `Permissions.md` — *\"**internal**: no-op protection, useful with protection flags\"*",
    "record": "",
    "legacy_meta": {},
@@ -970,8 +974,10 @@
     "AM-11"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`PROTECTION_FLAG_DEVELOPMENT` = 0x20 in `PermissionInfo`; AOSP `Permissions.md` lists `development` among the \"optional flags [that] modify protection levels\" and documents `adb shell pm grant <package> <permission>`",
    "record": "",
    "legacy_meta": {},
@@ -1014,8 +1020,10 @@
     "AM-02"
    ],
    "applies_to": "Android 10+ (RoleManager)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=29",
+   "requires_tags": [
+    "api>=29"
+   ],
    "maps_to": "`PROTECTION_FLAG_ROLE` = 0x4000 in `PermissionInfo`; AOSP `Permissions.md` on role-protected permissions \"tied to system roles for better granularity\" and `DefaultPermissionGrantPolicy` pre-grants to \"predefined categories (browser, SMS app)\"",
    "record": "",
    "legacy_meta": {},
@@ -1521,8 +1529,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`developer.android.com/guide/topics/manifest/activity-alias-element` — *\"with the exception of `targetActivity`, `<activity-alias>` attributes are a subset of `<activity>` attributes. For attributes in the subset, none of the values set for the target carry over to the alias\"*, and the alias's `android:permission` *\"supplants any permission set for the target activity itself\"*; MASTG-TECH-0160 — *\"activity aliases have their own `android:exported`, `android:permission`, and intent filters, so review them separately from the target activity\"*",
    "record": "",
    "legacy_meta": {},
@@ -1569,8 +1579,10 @@
     "AM-03"
    ],
    "applies_to": "**targetSdk 31+.** LEGACY below 31, where the *absence* of the attribute on an intent-filtered component is the bug instead (see D03-003).",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31",
+   "requires_tags": [
+    "targetsdk>=31"
+   ],
    "maps_to": "`developer.android.com/about/versions/12/behavior-changes-12#exported` — *\"safer component exporting ... app cannot install on Android 12+ devices without this attribute\"*; `developer.android.com/privacy-and-security/risks/android-exported` (MASVS-PLATFORM)",
    "record": "",
    "legacy_meta": {},
@@ -1620,8 +1632,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "QARK plugin `qark/plugins/manifest/android_path.py` — *\"`android:path` means that the permission applies to the exact path declared in `android:path`. This expression does not protect the sub-directories\"*",
    "record": "",
    "legacy_meta": {},
@@ -1663,8 +1677,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "`developer.android.com/guide/topics/manifest/provider-element` (`<path-permission>` is path-scoped and takes precedence over the provider-level permission; `<grant-uri-permission>` names the URI subsets grantable when `grantUriPermissions=\"false\"`); MobSF `improper_provider_permission` (raised for `pathPrefix=\"/\"`, `path=\"/\"`, `path=\"*\"`)",
    "record": "",
    "legacy_meta": {},
@@ -1707,8 +1723,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "Oversecured, \"Content Providers and the potential weak spots they can have\" — weakness #3, permission declaration mismatches",
    "record": "",
    "legacy_meta": {},
@@ -1796,8 +1814,11 @@
     "AM-10"
    ],
    "applies_to": "all; default is `\"false\"` on activities, services, receivers and providers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root",
+   "requires_tags": [
+    "device",
+    "root"
+   ],
    "maps_to": "`developer.android.com/guide/topics/manifest/{activity,service,receiver,provider}-element` (`android:directBootAware`)",
    "record": "",
    "legacy_meta": {},
@@ -1889,8 +1910,10 @@
     "AM-03"
    ],
    "applies_to": "all; yield is highest on OEM/carrier builds",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-receiver",
+   "requires_tags": [
+    "exported-receiver"
+   ],
    "maps_to": "drozer `scanner.misc.secretcodes`; HackTricks drozer tutorial",
    "record": "",
    "legacy_meta": {},
@@ -1935,8 +1958,10 @@
     "AM-11"
    ],
    "applies_to": "apps declaring `USB_DEVICE_ATTACHED`, `USB_ACCESSORY_ATTACHED` or `NDEF_DISCOVERED`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`developer.android.com/develop/connectivity/usb/host` (the `<action android:name=\"android.hardware.usb.action.USB_DEVICE_ATTACHED\"/>` + `<meta-data>` pattern); `developer.android.com/develop/connectivity/nfc/nfc` (the three dispatch actions); `developer.android.com/privacy-and-security/risks/android-exported`",
    "record": "",
    "legacy_meta": {},
@@ -2026,8 +2051,11 @@
     "AM-03"
    ],
    "applies_to": "**Android 16 (API 36)+.** Settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>`, `<provider>`.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36, targetsdk>=36",
+   "requires_tags": [
+    "api>=36",
+    "targetsdk>=36"
+   ],
    "maps_to": "`developer.android.com/about/versions/16/behavior-changes-16` — values `enforceIntentFilter` / `none` / `allowNullAction`; the documented logcat filter is `tag:PackageManager & (message:\"Intent does not match component's intent filter:\" | message:\"Access blocked:\")`",
    "record": "",
    "legacy_meta": {},
@@ -2071,8 +2099,10 @@
     "AM-03"
    ],
    "applies_to": "**targetSdk 30+ only.** Below 30 these calls are unfiltered and the gate works — this is a bug that *appears* when the app raises its target SDK, which is why it survives old checklists.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=30",
+   "requires_tags": [
+    "targetsdk>=30"
+   ],
    "maps_to": "`developer.android.com/training/package-visibility` (filtering of `queryIntentActivities`, `getPackageInfo`, `getInstalledApplications`, and service binding); MASWE-0047 (Using Non-Standard APIs for Security-Critical Functionality)",
    "record": "",
    "legacy_meta": {},
@@ -2117,8 +2147,10 @@
     "AM-08"
    ],
    "applies_to": "**targetSdk 30+.** Free package visibility below 30 (LEGACY) — on those targets this is not a finding.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=30",
+   "requires_tags": [
+    "targetsdk>=30"
+   ],
    "maps_to": "`developer.android.com/training/package-visibility`; MobSF/Play policy treatment of `QUERY_ALL_PACKAGES` as a restricted permission",
    "record": "",
    "legacy_meta": {},
@@ -2163,8 +2195,10 @@
     "AM-11"
    ],
    "applies_to": "all; app-op modes are per-UID for security-relevant ops and per-package otherwise",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "AOSP `AppOps.md` — modes `MODE_DEFAULT` / `MODE_ALLOWED` / `MODE_FOREGROUND` / `MODE_IGNORED` (*\"deny access without throwing exceptions\"*) / `MODE_ERRORED` (*\"throw a `SecurityException` on access\"*); *\"certain permissions like `SYSTEM_ALERT_WINDOW` and `WRITE_SETTINGS` use the appop protection flag\"*; shell syntax `appops set [--user USER_ID] PACKAGE OP MODE`, `appops get`, `appops reset`; AOSP `Permissions.md` checker flow (`MODE_ALLOWED` -> `PERMISSION_GRANTED`, `MODE_IGNORED` -> `PERMISSION_DENIED`, `MODE_DEFAULT` -> fall back to the grant state); `PROTECTION_FLAG_APPOP` = 0x40",
    "record": "",
    "legacy_meta": {},
@@ -2205,8 +2239,11 @@
    "attacker": "n/a — this is a client-behaviour finding against the user's own stated choice",
    "attacker_ids": [],
    "applies_to": "Android 10+ for the location tri-state; Android 11+ for camera/mic and one-time permissions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=29",
+   "requires_tags": [
+    "device",
+    "api>=29"
+   ],
    "maps_to": "AOSP `Permissions.md` — *\"foreground: app-op mode is `MODE_ALLOWED`; background: app-op mode switches to `MODE_IGNORED`; `ACCESS_BACKGROUND_LOCATION` keeps the mode at `MODE_ALLOWED`\"*; AOSP security-model paper §4.3.2 on the third state granting access *\"only when an app is in the foreground, i.e. when it either has a visible activity or runs a foreground service with permanent notification\"*; ATT&CK T1541 Foreground Persistence, T1430",
    "record": "",
    "legacy_meta": {},
@@ -2253,8 +2290,11 @@
     "AM-09"
    ],
    "applies_to": "Android 10+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=29",
+   "requires_tags": [
+    "device",
+    "api>=29"
+   ],
    "maps_to": "AOSP `Permissions.md` — `RESTRICTION_UPGRADE_EXEMPT` (*\"whitelisted during P→Q upgrade\"*), `RESTRICTION_INSTALLER_EXEMPT` (*\"whitelisted by installer via `PackageInstaller.SessionParams.setWhitelistedRestrictedPermissions()`\"*), `RESTRICTION_SYSTEM_EXEMPT`; `source.android.com/docs/core/permissions/runtime_perms` — *\"hard restrictions: apps can't be granted permissions that aren't allowlisted\"*, and allowlisting *\"occurs during installation or upgrade, not through user action\"*",
    "record": "",
    "legacy_meta": {},
@@ -2294,8 +2334,11 @@
    "attacker": "n/a — this is a multi-party-authorisation violation, not an attack",
    "attacker_ids": [],
    "applies_to": "Android 6.0+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=23",
+   "requires_tags": [
+    "device",
+    "api>=23"
+   ],
    "maps_to": "AOSP `Permissions.md` flags `USER_SET`, `USER_FIXED` (*\"permanently denied; future requests denied without UI\"*), `SYSTEM_FIXED` (*\"required for normal device operation; user cannot revoke\"*), `GRANTED_BY_DEFAULT` (*\"pre-granted via `DefaultPermissionGrantPolicy`\"*); `source.android.com/docs/core/permissions/runtime_perms` — OEMs may pre-grant for default handlers but *\"pre-installed apps cannot bypass the runtime model — users retain revocation rights\"*",
    "record": "",
    "legacy_meta": {},
@@ -2337,8 +2380,10 @@
    "attacker": "n/a — client-behaviour finding",
    "attacker_ids": [],
    "applies_to": "targetSdk 33+ (Android 13+)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=33",
+   "requires_tags": [
+    "targetsdk>=33"
+   ],
    "maps_to": "`developer.android.com/about/versions/13/behavior-changes-13` — `NEARBY_WIFI_DEVICES` in the `NEARBY_DEVICES` group, and `android:usesPermissionFlags=\"neverForLocation\"`",
    "record": "",
    "legacy_meta": {},
@@ -2381,8 +2426,11 @@
     "AM-08"
    ],
    "applies_to": "Android 11+ (API 30) for the callback; `<attribution android:tag>` required for targetSdk 31+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida, api>=30",
+   "requires_tags": [
+    "frida",
+    "api>=30"
+   ],
    "maps_to": "`developer.android.com/guide/topics/data/audit-access` — `AppOpsManager.OnOpNotedCallback`, `onNoted(SyncNotedAppOp)`, `onSelfNoted`, `onAsyncNoted(AsyncNotedAppOp)`, `setOnOpNotedCallback(mainExecutor, cb)`, `SyncNotedAppOp.op` / `.attributionTag`, `AsyncNotedAppOp.getMessage()`, and `<attribution android:tag=\"sharePhotos\" android:label=\"@string/...\"/>`",
    "record": "",
    "legacy_meta": {},
@@ -2468,8 +2516,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all; `android:maxSdkVersion` on `<uses-permission>` is honoured at install time, and several platform permissions are split, replaced or dropped by API level",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0126 (listing app permissions), MASTG-TOOL-0124 (aapt2), MASTG-TOOL-0004 (adb); AOSP `Permissions.md` (the per-package grant record and its flags); `/etc/permissions/platform.xml` permission-to-GID mapping",
    "record": "",
    "legacy_meta": {},
@@ -2781,8 +2831,10 @@
     "AM-09"
    ],
    "applies_to": "`USE_EXACT_ALARM` Android 13+; `SCHEDULE_EXACT_ALARM` default-deny for new installs from **Android 14**; the FSI restriction applies at **targetSdk 34+**, the capability check is Android 14+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=33",
+   "requires_tags": [
+    "api>=33"
+   ],
    "maps_to": "`developer.android.com/about/versions/13/features` (`USE_EXACT_ALARM` auto-granted, restricted to alarm/timer/calendar apps); `developer.android.com/about/versions/14/behavior-changes-all` (`SCHEDULE_EXACT_ALARM` no longer pre-granted; compat flag `REQUIRE_EXACT_ALARM_PERMISSION`); `developer.android.com/about/versions/14/behavior-changes-14` (`USE_FULL_SCREEN_INTENT`, `NotificationManager.canUseFullScreenIntent()`, `Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`, *\"limits this to calling and alarm apps\"*)",
    "record": "",
    "legacy_meta": {},
@@ -2877,8 +2929,11 @@
     "AM-08"
    ],
    "applies_to": "the background-sensor cut-off is **Android 9+**; a declared `foregroundServiceType` is mandatory from **Android 10 (API 29)** and tightened again in Android 14; camera/microphone status indicators arrived in **Android 12**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=29",
+   "requires_tags": [
+    "device",
+    "api>=29"
+   ],
    "maps_to": "ATT&CK T1541 Foreground Persistence — apps *\"can retain sensor access by running in the foreground, using Android's `startForeground()` API method\"*, and *\"the only requirement is displaying a persistent notification, which malicious actors can spoof to appear legitimate\"*; Mandrake *\"uses transparent notifications to hide foreground service activity\"*. Also T1429 Audio Capture, T1512 Video Capture, T1430 Location Tracking",
    "record": "",
    "legacy_meta": {},
@@ -2929,8 +2984,10 @@
     "AM-05"
    ],
    "applies_to": "`ACCESS_BACKGROUND_LOCATION` as a separate grant is **Android 10+**. Below that, \"always\" was implicit with fine location — **LEGACY**, and worth stating when `targetSdk < 29`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "ATT&CK T1430 Location Tracking — *\"`ACCESS_BACKGROUND_LOCATION` permission in an application's manifest will allow applications to request location access even when the application is running in the background\"*, and on Android 10 and up users *\"cannot simply select 'Allow all the time'; they must navigate to settings\"*; T1627.001 Geofencing; mitigation M1006",
    "record": "",
    "legacy_meta": {},
@@ -3070,8 +3127,10 @@
     "AM-03"
    ],
    "applies_to": "preloaded / OEM / carrier apps only",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope",
+   "requires_tags": [
+    "oem-scope"
+   ],
    "maps_to": "MASTG-KNOW-0017 (the risk-scored permission table, sourced from the Uraniborg \"Device Preloaded App Risks Scoring Metrics\" paper), MASTG-TEST-0364/-0365/-0366, MASWE-0018",
    "record": "",
    "legacy_meta": {},
@@ -3167,8 +3226,11 @@
     "AM-11"
    ],
    "applies_to": "Auto Backup from Android 6.0 (API 23). **LEGACY:** `adb backup` is deprecated, gutted on Android 12+ and dead on many OEM builds — prove the extraction on an in-scope OS/device or the report closes as unreproducible. The `bmgr` local-transport route below does **not** need `android:debuggable`.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, physical",
+   "requires_tags": [
+    "device",
+    "physical"
+   ],
    "maps_to": "MASTG-TEST-0262 (static), MASTG-TEST-0216 (empirical restore), MASTG-TECH-0127, MASTG-TECH-0128; MASWE-0006 (CWE-212, CWE-313); MASVS-STORAGE-2; MobSF `app_allowbackup` / `allowbackup_not_set`; H1 **#12617** (account hijacking via ADB backup); drozer `app.package.backup`",
    "record": "",
    "legacy_meta": {},
@@ -3229,8 +3291,10 @@
     "AM-11"
    ],
    "applies_to": "`android:dataExtractionRules` on **API 31+ (Android 12+)**; `android:fullBackupContent` is the pre-31 equivalent and both are commonly present",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=31",
+   "requires_tags": [
+    "api>=31"
+   ],
    "maps_to": "MASTG-TEST-0262, MASWE-0006, MASVS-STORAGE-2",
    "record": "",
    "legacy_meta": {},
@@ -3283,8 +3347,11 @@
     "AM-11"
    ],
    "applies_to": "all; the `adb backup` / `adb restore` path is heavily restricted from Android 12 and dead on many OEM builds — demonstrate on an in-scope device or do not file. Samsung's programme explicitly downgrades reports that require persistently enabling developer mode",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, physical",
+   "requires_tags": [
+    "device",
+    "physical"
+   ],
    "maps_to": "`developer.android.com/guide/topics/manifest/application-element` — `android:backupAgent`, `android:restoreAnyVersion`, `android:fullBackupOnly`, `android:killAfterRestore`; MASWE-0006; MASTG-TEST-0216, MASTG-TECH-0127, MASTG-TECH-0128",
    "record": "",
    "legacy_meta": {},
@@ -3338,8 +3405,10 @@
     "AM-11"
    ],
    "applies_to": "all. Play blocks debuggable uploads, so this is found most often in enterprise, sideloaded, pre-prod and OEM channels — check every distribution channel in scope, not just the store build.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/risks/android-debuggable`; MobSF `app_in_test_mode` for `testOnly`; drozer `app.package.debuggable`",
    "record": "",
    "legacy_meta": {},
@@ -3386,8 +3455,10 @@
     "AM-09"
    ],
    "applies_to": "Allow-list enforcement at **targetSdk 24+**; the `<uses-native-library>` manifest declaration is required from **API 31+**. LEGACY: `targetSdk < 24` can still `dlopen` private platform libraries for backward compatibility.",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native",
+   "requires_tags": [
+    "native"
+   ],
    "maps_to": "`developer.android.com/about/versions/12/behavior-changes-12` (`<uses-native-library>` required for targetSdk 31+); AOSP \"Namespaces for native libraries\"; `/system/etc/public.libraries.txt`; CDD 3.1.1",
    "record": "",
    "legacy_meta": {},
@@ -3433,8 +3504,13 @@
     "AM-09"
    ],
    "applies_to": "React Native + Expo, Flutter, CodePush-enabled RN apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, react-native, cordova, capacitor",
+   "requires_tags": [
+    "flutter",
+    "react-native",
+    "cordova",
+    "capacitor"
+   ],
    "maps_to": "MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150; expo `UpdatesConfiguration.kt`; flutter `FlutterActivityLaunchConfigs.java`; `CodePush.java` / `docs/setup-android.md`",
    "record": "",
    "legacy_meta": {},
@@ -3480,8 +3556,10 @@
     "AM-01"
    ],
    "applies_to": "any versioned API",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "Claude-BugHunter `hunt-shadow-api` Stages 1 & 3; the corpus calls this *\"the highest-value mobile→backend bridge in the repo\"*",
    "record": "",
    "legacy_meta": {},

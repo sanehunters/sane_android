@@ -48,6 +48,32 @@ this parameter is structurally ruled out"* is a deliverable, not an absence of o
 server re-derive the answer from its own state — or does it trust the identifier, the field, the version, the
 header or the client's arithmetic?**
 
+## Applicability probe
+
+D15 applies when the app talks, from its own process, to a backend the programme lets you test. Run these five before touching any item; paste their output into `inventory/d15-probe.txt`.
+
+```bash
+# 0. scope — the only question that can make the whole domain n/a on policy grounds
+jq -r '.authorisation.scope.backend // "unset"' engagement.json          # in | out | pending | unset → unset means: read the policy now and write it
+# 1. does the client talk at all?
+grep -c 'android.permission.INTERNET' "$DEC/apktool/AndroidManifest.xml"
+# 2. route / host / stack evidence from the decompiled tree
+grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HTTP)\("[^"]+"\)' "$DEC/jadx/sources" | sort -u | wc -l                      # Retrofit routes
+grep -rhoE 'https?://[A-Za-z0-9._-]+' "$DEC/jadx/sources" "$DEC/apktool/res" "$DEC/apktool/assets" | sort -u | wc -l   # host literals
+unzip -l base.apk | grep -cE 'libflutter|lib/.*/libapp\.so|index\.android\.bundle|libhermes|assets/www'              # cross-platform stack (→ D15-007)
+grep -rlE 'io\.grpc|GeneratedMessageLite|CronetEngine' "$DEC/jadx/sources" | wc -l                                   # gRPC / protobuf-RPC / Cronet (→ D15-R02 branch, D15-009/010)
+# 3. who issues the traffic — the app's own PID or another process (D15-000)
+PID=$(adb -s "$SERIAL" shell pidof -s "$PKG"); adb -s "$SERIAL" shell 'ss -tnp' | grep -c "pid=$PID,"
+# 4. the AM-05 half of the chapter needs two owned accounts
+jq -r '.accounts | length' engagement.json
+```
+
+Decision: the domain applies if probe 0 is `in` **and** probe 1 ≥ 1 **and** (any of the probe-2 counts > 0) **and** probe 3 ≥ 1. If probe 4 < 2 the two-account items (`Requires: two-accounts`) are **blocked** (write the blocker), not n/a. If probe 0 is `pending`, run only D15-000/001/007 (static, no requests), timestamp every other sweep and keep per-sweep flow files (`mitmdump -w +flows/<item>-<ts>.mitm`).
+
+n/a note the model writes, verbatim shape:
+
+> D15 n/a — reason: (a) programme policy excludes backend/server-side services (quote + URL; `authorisation.scope.backend=out`), or (b) the client has no network surface (`INTERNET` absent / 0 routes, 0 hosts, no cross-platform stack, 0 RPC classes — probe output attached), or (c) every TLS socket in the exercise window belongs to another process (`ss -tnp` + User-Agent table from D15-000 attached) and that service is outside scope. Items D15-001..D15-090 marked n/a with this probe at `inventory/d15-probe.txt`; proxy capture retained at `flows/` for re-reading if scope changes.
+
 ## Triage order
 
 1. **The cross-boundary curl check (D15-021).** Two minutes, and it decides the shape of the entire phase: if
@@ -86,11 +112,11 @@ header or the client's arithmetic?**
   when the interface is renamed to `a.b.c`. "The build is obfuscated" is never a reason to skip this.
 - **How:**
   ```bash
-  jadx -d jadx_out --no-debug-info base.apk        # and every split_config.*.apk
-  S=jadx_out/sources
+  jadx -d $DEC/jadx --no-debug-info base.apk        # and every split_config.*.apk
+  S=$DEC/jadx/sources
   grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\("[^"]+"\)' $S | sort -u > endpoints.txt
   grep -rhoE '@HTTP\([^)]*\)' $S | sort -u                       # @HTTP hides the verb in a named arg
-  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' $S | sed 's#^jadx_out/sources/##' | sort -u > endpoints_with_owner.txt
+  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' $S | sed 's#^$DEC/jadx/sources/##' | sort -u > endpoints_with_owner.txt
   wc -l endpoints.txt
   # decompiler choked? the same strings live in the DEX string pool:
   unzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api|1\.0)/' | sort -u
@@ -200,6 +226,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a (enabler for every off-device replay) |
 | **Attacker** | AM-12 harness |
 | **Applies to** | all OkHttp-based apps (includes Retrofit, Coil, Firebase transports) |
+| **Requires** | backend-api |
 | **Maps to** | MASVS-AUTH-1; MASTG-TEST-0217 covers the same OkHttp/Retrofit configuration surface |
 
 - **Test:** Determine exactly how the app authenticates every request, because you must reproduce it
@@ -229,6 +256,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a (enabler) |
 | **Attacker** | AM-12 harness |
 | **Applies to** | all OkHttp apps; mandatory when the app bundles Cronet, gRPC, Flutter or Go |
+| **Requires** | backend-api, device, frida, mitm |
 | **Maps to** | MASTG-TEST-0238 (Runtime Use of Network APIs — placeholder test in MASTG beta; this is the technique it describes); MASTG-TEST-0236's stated proxy-vs-capture limitation |
 
 - **Test:** Capture full request/response pairs from inside the process. This is immune to pinning, to
@@ -236,7 +264,7 @@ header or the client's arithmetic?**
   map, not to replace the proxy.
 - **How:**
   ```javascript
-  // frida -U -p <pid> -l okhttp_tap.js
+  // frida -D "$SERIAL" -p <pid> -l okhttp_tap.js
   Java.perform(function () {
     var Buffer = Java.use("com.android.okhttp.okio.Buffer");
     var Interceptor = Java.use("okhttp3.Interceptor");
@@ -278,6 +306,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a (enabler) |
 | **Attacker** | AM-12 harness |
 | **Applies to** | React Native (Hermes/JSC), Flutter, Cordova, Unity, Xamarin/KMP |
+| **Requires** | backend-api, flutter, react-native, hermes, cordova, unity, xamarin, kmp |
 | **Maps to** | MASTG-TEST-0237 (Cross-Platform Framework Configurations — `status: placeholder`; the guide explicitly acknowledges cross-platform HTTP stacks are not yet covered); MASTG-TOOL-0125 |
 
 - **Test:** On cross-platform stacks zero Retrofit hits is *expected*, and the endpoint map lives in the
@@ -316,6 +345,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a (enabler for D15-072 … D15-081) |
 | **Attacker** | AM-05 |
 | **Applies to** | GraphQL backends |
+| **Requires** | backend-api |
 | **Maps to** | API9:2023; PortSwigger GraphQL (finding endpoints / schema discovery without introspection) |
 
 - **Test:** If the backend is GraphQL the client ships the operation documents (Apollo codegen) or only their
@@ -326,7 +356,7 @@ header or the client's arithmetic?**
   unzip -l base.apk | grep -iE '\.graphql|\.gql|graphql'
   grep -rn 'operationName\|__typename\|mutation \|query \|subscription ' $S | head -50
   grep -rnE '"[0-9a-f]{64}"' $S | grep -i 'persist\|hash\|apq\|query' | head      # APQ sha256Hash values
-  grep -rn 'OPERATION_DOCUMENT\|QUERY_DOCUMENT\|com/apollographql' $S jadx_out/resources 2>/dev/null | head
+  grep -rn 'OPERATION_DOCUMENT\|QUERY_DOCUMENT\|com/apollographql' $S $DEC/jadx/resources 2>/dev/null | head
   ```
 - **Proof:** The recovered document text, then that exact operation replayed against `/graphql` returning
   `data` rather than `PersistedQueryNotFound`.
@@ -343,6 +373,7 @@ header or the client's arithmetic?**
 | **VRT** | `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) for the reflection exposure; the authz failure rates under `broken_access_control.*` |
 | **Attacker** | AM-01 / AM-05 |
 | **Applies to** | apps bundling `io.grpc` / `grpc-okhttp` / Cronet+gRPC |
+| **Requires** | backend-api |
 | **Maps to** | API9:2023; API5:2023 Broken Function Level Authorization |
 
 - **Test:** gRPC traffic is invisible to a naive HTTP proxy and is often the *entire* API for newer apps.
@@ -378,6 +409,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a (enabler — once you can edit protobuf, every item in this chapter applies to gRPC at the same severities) |
 | **Attacker** | AM-12 harness |
 | **Applies to** | any protobuf/gRPC backend |
+| **Requires** | backend-api |
 | **Maps to** | protobuf.dev wire-format encoding guide; nccgroup blackboxprotobuf |
 
 - **Test:** Protobuf is self-describing enough to decode blind: each field is `(field_number << 3) | wire_type`
@@ -407,8 +439,8 @@ header or the client's arithmetic?**
   API9 finding: same data, weaker controls, and no WAF.
 - **How:**
   ```bash
-  apktool d -f -o apktool_out base.apk
-  grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' apktool_out/res apktool_out/assets $S \
+  apktool d -f -o $DEC/apktool base.apk
+  grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' $DEC/apktool/res $DEC/apktool/assets $S \
     | sed 's#\(https\?://[^/]*\).*#\1#' | sort | uniq -c | sort -rn | head -60
   grep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'
   grep -rn 'BASE_URL\|API_URL\|ENDPOINT' $S | head -40
@@ -432,6 +464,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when the mobile-only route is the one missing the check; `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) for the exposure alone |
 | **Attacker** | AM-01 / AM-05 |
 | **Applies to** | any target with both a web and a mobile client |
+| **Requires** | backend-api |
 | **Maps to** | API9:2023 Improper Inventory Management; API3:2023 (excessive data exposure sub-case); Cobalt case study #2 ("identified undisclosed API endpoints through code references", rated High) |
 
 - **Test:** The single highest-value structural idea in a mobile engagement. Mobile clients get endpoints the
@@ -467,6 +500,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.*` per the read/write fork; `broken_authentication_and_session_management.authentication_bypass` (P1) when the old path accepts no token |
 | **Attacker** | AM-01 / AM-05 |
 | **Applies to** | any versioned API; especially apps with a long tail of unforced updates |
+| **Requires** | backend-api |
 | **Maps to** | API9:2023 ("Running multiple versions of an API … expands the attack surface"); API1:2023 when the old version leaks objects |
 
 - **Test:** Mobile backends accumulate versions because old installs must keep working, and the old version is
@@ -503,6 +537,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES) / `broken_access_control.idor.*` |
 | **Attacker** | AM-01 / AM-05 |
 | **Applies to** | all apps with a long-lived install base |
+| **Requires** | backend-api |
 | **Maps to** | API9:2023 (the beta-environment-without-rate-limiting scenario is the same class) |
 
 - **Test:** Gateways often route by `X-App-Version` or `User-Agent` to keep old installs working. Downgrading
@@ -533,6 +568,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-05 |
 | **Applies to** | apps with Wear/Auto/TV/Glance companions |
+| **Requires** | backend-api, wear, tv, auto |
 | **Maps to** | MASWE-0018; the "validates the action but never the caller" pattern |
 
 - **Test:** Companion code paths frequently call *different* endpoints, or the same endpoints with a different
@@ -558,6 +594,7 @@ header or the client's arithmetic?**
 | **VRT** | `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) baseline; `broken_access_control.idor.*` if it returns user data |
 | **Attacker** | AM-01 |
 | **Applies to** | **LEGACY client surface, current server exposure.** Any app that ever shipped an instant experience |
+| **Requires** | backend-api, legacy |
 | **Maps to** | API9:2023; Google Play Instant discontinuation (instant apps cannot be published as of December 2025 and the Play services Instant APIs stop working) |
 
 - **Test:** Instant apps could only use a restricted subset of APIs and permissions, so teams built
@@ -565,7 +602,7 @@ header or the client's arithmetic?**
   frequently remain deployed and almost nobody checks them now.
 - **How:**
   ```bash
-  grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' $S apktool_out/AndroidManifest.xml
+  grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' $S $DEC/apktool/AndroidManifest.xml
   grep -rnE 'instant|/i/|/lite/|guest' $S | grep -iE 'http'
   for p in $(cat instant_paths.txt); do curl -s -o /dev/null -w "%{http_code} $p\n" "https://api.target$p"; done
   ```
@@ -582,6 +619,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES); `server_security_misconfiguration.exposed_portal.admin_portal` (P1) when it unlocks an admin surface |
 | **Attacker** | AM-05 |
 | **Applies to** | vendors shipping multiple apps against one backend |
+| **Requires** | backend-api |
 | **Maps to** | API5:2023 Broken Function Level Authorization |
 
 - **Test:** Staff, driver, merchant and partner builds of the same backend expose `/admin/`, `/internal/`,
@@ -612,6 +650,7 @@ header or the client's arithmetic?**
 | **VRT** | `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (VARIES); the consequence rates under `broken_access_control.*` |
 | **Attacker** | AM-01 |
 | **Applies to** | any API whose spec is reachable; default routes ship enabled in many .NET 6/7/8, Spring, FastAPI and Quarkus projects and stay on in production |
+| **Requires** | backend-api |
 | **Maps to** | API8:2023 Security Misconfiguration; API9:2023 |
 
 - **Test:** The spec discloses every endpoint, method, parameter name/type/format/max-length, model and
@@ -652,6 +691,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when unauthenticated state change is possible |
 | **Attacker** | AM-01 |
 | **Applies to** | all commerce/logistics apps |
+| **Requires** | backend-api |
 | **Maps to** | API5:2023; API8:2023; WSTG-BUSL-02 Test Ability to Forge Requests |
 
 - **Test:** Payment callbacks, delivery-partner webhooks and internal reconciliation endpoints are frequently
@@ -678,6 +718,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | all engagements with a live backend |
+| **Requires** | backend-api |
 | **Maps to** | NIST SP 800-115 Appendix B §5.2 (Technical Test Components — "significant detail should be included on what activities will occur on the target network") |
 
 - **Test:** WAF, bot defence, fraud engines and per-IP limits will throttle or ban the test accounts mid-sweep.
@@ -706,6 +747,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when it enables takeover |
 | **Attacker** | AM-05 (and AM-03/AM-06 once combined with a leak primitive) |
 | **Applies to** | all. Run this **before** anything else in D15 |
+| **Requires** | backend-api, mitm |
 | **Maps to** | API2:2023 Broken Authentication; RFC 9449 (DPoP) for what real sender-constraining looks like |
 
 - **Test:** The single highest-value mobile auth check and it takes two minutes. Take the exact `Authorization`
@@ -740,6 +782,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a (enabler) |
 | **Attacker** | AM-01 |
 | **Applies to** | all API testing; mandatory before any auth-bypass claim |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (`hunt-spa-api` step 3) |
 
 - **Test:** You cannot claim "this route has no auth" until you know what *correct* rejection looks like on
@@ -764,6 +807,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `broken_access_control.idor.*` for the data returned |
 | **Attacker** | AM-01 |
 | **Applies to** | every APK-derived endpoint list |
+| **Requires** | backend-api |
 | **Maps to** | API2:2023; API5:2023; CWE-306 Missing Authentication for Critical Function |
 
 - **Test:** The APK's endpoint inventory is the API surface for free. Strip the `Authorization` header and
@@ -809,6 +853,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-01 |
 | **Applies to** | **every auth-bypass claim** |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (`triage-validation` "THE LAYER-ORDERING TRAP") |
 
 - **Test:** The highest-confidence false positive in the entire auth-bypass class. Many stacks put a global
@@ -838,6 +883,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | all differential testing — injection, enumeration, authz, timing |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (local android-pentest reference 24 §B1) |
 
 - **Test:** Before drawing any conclusion from a response difference, establish the endpoint's baseline
@@ -870,6 +916,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | all injection triage against a mobile API |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (reference 24 §B2) |
 
 - **Test:** Measure how the endpoint responds to a spectrum of *non-payload* inputs before sending a single
@@ -903,6 +950,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | Symfony/Laravel/DRF/Spring-validation-style backends — most modern API estates |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (reference 24 §B3) |
 
 - **Test:** Framework-level typed validation closes whole injection classes before the value reaches storage.
@@ -933,6 +981,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | all API testing |
+| **Requires** | backend-api, mitm |
 | **Maps to** | field methodology (reference 24 §B4) |
 
 - **Test:** Four specific misreads that look like application behaviour:
@@ -960,6 +1009,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-05 |
 | **Applies to** | every access-control, reflection, cache-poisoning and bypass claim |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (`bb-methodology` PART 4; `hunt-idor` anti-patterns) |
 
 - **Test:** Two rules that together kill most false positives in this domain. **Marker discipline:** the second
@@ -994,6 +1044,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | timing oracles, user enumeration, rate-limit absence, race conditions |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (`bb-methodology` PART 4) |
 
 - **Test:** Single outliers are not signal; network jitter routinely produces 2× outliers. Minimum **n ≥ 10
@@ -1034,6 +1085,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | every oracle/bypass claim |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (`bb-methodology` PART 4) |
 
 - **Test:** Establish whether the differentiator tracks *your input* or a *fixed deny-list*. The corpus's case:
@@ -1056,6 +1108,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | every automated sweep in this chapter, including agent-driven ones |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (`bb-methodology` PART 4 "Shell-Loop Ban") |
 
 - **Test:** zsh array expansion fails **silently**. `for x in "${arr[@]}"` can produce zero iterations with no
@@ -1079,6 +1132,7 @@ header or the client's arithmetic?**
 | **VRT** | n/a |
 | **Attacker** | AM-12 harness |
 | **Applies to** | every Critical/High in this chapter |
+| **Requires** | backend-api |
 | **Maps to** | field methodology (`bb-methodology` Phase 5) |
 
 - **Test:** Before labelling anything Critical or High, reproduce it via **two independent tools with different
@@ -1106,6 +1160,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for read-only; the P1 node applies once write also works (D15-035) |
 | **Attacker** | AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API1:2023 Broken Object Level Authorization (its documented scenario is a mobile API that fails to verify the VIN belongs to the authenticated user); MASWE-0018 (CWE-862, CWE-863); ATT&CK T1428; H1 #186279 ($1,500, `/api_android_v3/getUserVideos`), #754044, #203042 |
 
 - **Test:** For each route from `idor_candidates.txt`, replay account **A**'s authenticated request with
@@ -1143,6 +1198,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**); modify-only is `.modify_sensitive_information_iterable_object_identifiers` (P2) |
 | **Attacker** | AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API1:2023; H1 #757095 (Razer, "broken access control allowing other user's bank account to be deleted", $1,000, 311 upvotes), #753280 ($1,000), #1819832 ($15,000 remote deletion), #1213237 ($5,000, ~4.4M private messages) |
 
 - **Test:** Read and write are different VRT nodes spanning three priority levels. Record precisely whether you
@@ -1174,6 +1230,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) |
 | **Attacker** | AM-05 |
 | **Applies to** | REST-shaped APIs; older Rails, some Java stacks and some Node middleware honour the override |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API5:2023; PortSwigger access control — method variation |
 
 - **Test:** Routers dispatch to different handlers per method, and not all handlers receive the auth
@@ -1203,6 +1260,7 @@ header or the client's arithmetic?**
 | **VRT** | per the underlying endpoint |
 | **Attacker** | AM-05 / AM-01 |
 | **Applies to** | all; the fastest way to cover a 200-endpoint mobile API in one session |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | PortSwigger Autorize extension (statuses Bypassed! / Enforced! / Is enforced???); API1:2023; API5:2023 |
 
 - **Test:** Rather than testing endpoints one at a time, replay *every* observed request under a
@@ -1225,6 +1283,7 @@ header or the client's arithmetic?**
 | **VRT** | the VRT distinguishes **Iterable** (P1/P2/P3) from **GUID** (P4) object identifiers precisely on this axis |
 | **Attacker** | AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api |
 | **Maps to** | API1:2023 prevention guidance ("use random and unpredictable values as GUIDs for records' IDs"); CVE-2015-7889 / EDB 38558 (the message id "just seems to be an incrementing number") |
 
 - **Test:** You do not need a second account to establish enumerability, and enumerability is what converts a
@@ -1258,6 +1317,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_guid` (**P4**) for the bare swap; the iterable nodes once the ids are obtainable |
 | **Attacker** | AM-05 |
 | **Applies to** | any target whose ids "look random" |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | HackerOne Platform Standards, IDORs with Unpredictable IDs (effective 2 April 2024, updated 20 January 2026): "Default: Set Attack Complexity to 'High' (AC:H)"; "Set Attack Complexity to 'Low' (AC:L) if the vulnerability report demonstrates a reliable, repeatable method for an attacker to obtain the specific IDs"; RFC 4122 |
 
 - **Test:** "UUID" is not synonymous with "random". UUIDv1 encodes a 100 ns-resolution timestamp in the first
@@ -1478,6 +1538,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for the cross-user case; the own-data case is Medium and often Informational |
 | **Attacker** | AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api |
 | **Maps to** | API3:2023 Broken Object Property Level Authorization — the "excessive data exposure" sub-case (formerly API3:2019); its prevention text: "explicitly whitelist returned properties … avoid automatic binding functions like `to_json()`" |
 
 - **Test:** Compare what the API returns against what the app renders. Mobile clients over-fetch because the
@@ -1651,6 +1712,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (P4) as the nearest node; rate the cross-tenant access it enables under `broken_access_control.*` |
 | **Attacker** | AM-05 (a former member of the tenant) |
 | **Applies to** | team/org products |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API2:2023; `hunt-idor` Chain 5 (the removed-staff persistence class) and root cause #7 |
 
 - **Test:** The "remove member" endpoint flips `active=false` but does not invalidate the session or the
@@ -1678,6 +1740,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_guid` (P4) baseline; higher where the token is predictable or grants org membership |
 | **Attacker** | AM-01 / AM-05 |
 | **Applies to** | collaboration features |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API1:2023; `hunt-idor` "IDOR via share or invite link reuse"; `hunt-business-logic` "invitation-token reuse"; H1 #2032716 ($12,500, viewing any user's email via a crafted invitation) |
 
 - **Test:** Tokens that look random but are guessable, sequential, or never burn. Also: a token granting
@@ -1700,6 +1763,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for the data; the mechanism is a cache-key defect |
 | **Attacker** | AM-01 / AM-02 |
 | **Applies to** | CDN/proxy-fronted APIs |
+| **Requires** | backend-api |
 | **Maps to** | API8:2023; `hunt-idor` "IDOR through caching layer"; H1 #409370, #728664, #622122, #942629, #1183263, #1096609, #326639 (web-cache class) |
 
 - **Test:** Two related defects. **Cross-user caching:** a response cached at a layer whose cache key omits the
@@ -1732,6 +1796,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when notification content carries OTPs or message bodies |
 | **Attacker** | AM-05 |
 | **Applies to** | all apps with push |
+| **Requires** | backend-api, push, two-accounts |
 | **Maps to** | API1:2023; ATT&CK T1636.004 for the OTP target |
 
 - **Test:** The `/devices` or `/push/register` endpoint takes an FCM token and a device id. If it does not bind
@@ -1761,6 +1826,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) → P1 where it harvests OTPs/PII at scale |
 | **Attacker** | AM-05 (any user of the app) |
 | **Applies to** | any app using FCM topics; not applicable to token-addressed messaging only |
+| **Requires** | backend-api, push, firebase, frida |
 | **Maps to** | API1:2023 — topic naming is a client-side construct with **no server-side ACL** |
 
 - **Test:** `subscribeToTopic()` is a **client-side** call with no server authorisation. If the app subscribes
@@ -1819,6 +1885,7 @@ header or the client's arithmetic?**
 | **VRT** | per the object; the identifiers themselves are Support |
 | **Attacker** | AM-03 (a zero-permission local app harvesting the ids) → AM-05 (using them) |
 | **Applies to** | all |
+| **Requires** | backend-api, device, two-accounts |
 | **Maps to** | API1:2023; ATT&CK T1533 Data from Local System |
 
 - **Test:** Close the loop between the client-side domains and this one: identifiers harvested locally —
@@ -1852,6 +1919,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2); P1 with read |
 | **Attacker** | AM-05 |
 | **Applies to** | all ID-bearing endpoints |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API1:2023; H1 #1819832 ($15,000), #1213237 ($5,000), #757095 ($1,000) |
 
 - **Test:** DELETE, unlink, revoke, transfer, cancel and "remove member" IDORs are under-tested and pay the
@@ -1876,6 +1944,7 @@ header or the client's arithmetic?**
 | **VRT** | composed: `broken_authentication_and_session_management.authentication_bypass` (P1), `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1), or `server_security_misconfiguration.exposed_portal.admin_portal` (P1) |
 | **Attacker** | AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | `hunt-idor` operator-level pattern and Chain 6; H1 #394329 ($8,000, cross-user parameter tampering in billing/subscription), #415081 ($10,500, adding privileged secondary users to another owner's business account) |
 
 - **Test:** When you confirm a read-IDOR at A, immediately ask: *what state-change accepts the same id, and
@@ -1903,6 +1972,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES, CWE-269); `server_security_misconfiguration.exposed_portal.admin_portal` (P1) when it unlocks an admin surface |
 | **Attacker** | AM-05 |
 | **Applies to** | all multi-role products; **the most under-tested area in mobile engagements because the UI never reveals the endpoints** |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API5:2023 Broken Function Level Authorization ("complex access controls with unclear separation between administrative and regular functions"); Mobile Top 10 2024 M3 (its attack vector is "authenticate as legitimate users then force-browse to a vulnerable endpoint to execute administrative functionality") |
 
 - **Test:** Mobile apps for two-sided marketplaces (buyer/seller, rider/driver, patient/clinician) ship **one**
@@ -1941,6 +2011,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES); `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (VARIES) |
 | **Attacker** | AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api, frida |
 | **Maps to** | API5:2023; Cobalt's OWASP Mobile Top 10 2024 detection step ("test authorization checks on backend hidden functionality, assuming that the hidden functionality will only be accessed by a user with the appropriate role") |
 
 - **Test:** Feature flags, remote config and `isPremium`/`isAdmin` booleans decide what the UI draws. They do
@@ -1972,6 +2043,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES) |
 | **Attacker** | AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api, mitm, root |
 | **Maps to** | ATT&CK T1641 Data Manipulation; AOSP Application Sandbox (the app process is fully under the device owner's control once instrumented); MASTG-TEST-0338 / MASWE-0057 for the stored-state variant |
 
 - **Test:** Anything the app decides in-process — role, entitlement, price, limit, KYC state — is advisory.
@@ -2007,6 +2079,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES, CWE-269); escalates to `server_security_misconfiguration.exposed_portal.admin_portal` (P1) when it unlocks an admin surface |
 | **Attacker** | AM-05 |
 | **Applies to** | any JSON-merge update endpoint |
+| **Requires** | backend-api |
 | **Maps to** | API3:2023 — the "mass assignment" sub-case (formerly API6:2019), with the documented scenarios `"total_stay_price": "$1,000,000"` and `"blocked": false`; Mobile Top 10 2024 M3; ATT&CK T1641 |
 
 - **Test:** A profile/settings/account endpoint merges the JSON body into the user object. Expected fields
@@ -2042,6 +2115,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES); `broken_authentication_and_session_management.authentication_bypass` (P1) where `emailVerified:true` skips the verification gate |
 | **Attacker** | AM-01 (registration is usually unauthenticated) |
 | **Applies to** | all |
+| **Requires** | backend-api |
 | **Maps to** | API3:2023; PortSwigger API testing — "identify hidden parameters by examining object fields returned in API responses … test by adding suspected parameters to PATCH/POST" |
 
 - **Test:** Account creation is the highest-value mass-assignment target, because a single extra field can grant
@@ -2075,6 +2149,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-05 |
 | **Applies to** | multi-user/org products |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API1:2023 + API3:2023 combined; `hunt-idor` Chain 4; H1 #981472 ($2,000, undocumented `fileCopy` mutation), #1066203 (cross-tenant `UpdateAtlasApplicationPerson`) |
 
 - **Test:** The most efficient takeover chain on team-management APIs: the IDOR gets you into the victim team,
@@ -2102,6 +2177,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) where it overwrites another principal's content |
 | **Attacker** | AM-05 |
 | **Applies to** | all offline/sync-capable apps |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API1:2023; API3:2023 (no external identifier verified in the corpus for this specific surface) |
 
 - **Test:** Offline-capable apps resolve conflicts with last-write-wins on a timestamp the *client* sends, or
@@ -2129,6 +2205,7 @@ header or the client's arithmetic?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) at the RCE end; `broken_access_control.privilege_escalation` (VARIES) for the flag flip |
 | **Attacker** | AM-05 |
 | **Applies to** | Node/Express backends |
+| **Requires** | backend-api |
 | **Maps to** | API3:2023 (the object-merge mechanism); API8:2023 |
 
 - **Test:** Do not stop at a 200 on `__proto__`. Prove that polluted prototype state reaches a **later**
@@ -2163,6 +2240,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) → `broken_authentication_and_session_management.authentication_bypass` (P1) when it yields a credential |
 | **Attacker** | AM-05 |
 | **Applies to** | frontends and BFFs that proxy to an internal REST API — **extremely common behind mobile backends** |
+| **Requires** | backend-api |
 | **Maps to** | API8:2023; PortSwigger API testing — server-side parameter pollution |
 
 - **Test:** The server interpolates your input into a *backend* URL path or query
@@ -2196,6 +2274,7 @@ header or the client's arithmetic?**
 | **VRT** | `sensitive_data_exposure.graphql_introspection_enabled` (**P5**) for the exposure itself |
 | **Attacker** | AM-01 |
 | **Applies to** | GraphQL backends |
+| **Requires** | backend-api |
 | **Maps to** | PortSwigger GraphQL (universal `{__typename}` probe, introspection, special-character and method bypasses, suggestions/Clairvoyance); mitigation is Apollo Server v4+ `hideSchemaDetailsFromClientErrors` |
 
 - **Test:** Confirm the endpoint is GraphQL, then recover the schema — by introspection if it is enabled, by a
@@ -2238,6 +2317,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1); P3 for read-only |
 | **Attacker** | AM-05 |
 | **Applies to** | GitHub/Shopify/Facebook-style Relay APIs |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API1:2023 (its documented scenario is a GraphQL `deleteReports` mutation that "deletes documents using only their ID without permission checks"); H1 #1618347 ($25,000), #807448, #489146, #2207248 ($5,000 `BillingDocumentDownload`/`BillDetails`) |
 
 - **Test:** The most-paid GraphQL bug class. Relay APIs expose `node(id: ID!)` returning any object by global
@@ -2270,6 +2350,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) → `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when it returns credentials |
 | **Attacker** | AM-05 |
 | **Applies to** | all GraphQL |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | API3:2023 (its documented scenario is a `reportUser` mutation returning the reported user's `fullName` and `recentLocation`); API1:2023 |
 
 - **Test:** GraphQL resolvers authorise per *field*, and teams routinely protect the top-level query while
@@ -2303,6 +2384,7 @@ header or the client's arithmetic?**
 | **VRT** | `server_security_misconfiguration.no_rate_limiting_on_form.login` (P4) as the nearest node; rate the brute force it enables |
 | **Attacker** | AM-01 / AM-05 |
 | **Applies to** | GraphQL endpoints with request-keyed throttling — which is most mobile GraphQL backends |
+| **Requires** | backend-api |
 | **Maps to** | API4:2023 Unrestricted Resource Consumption; PortSwigger GraphQL ("bypassing rate limiting using aliases", batching); H1 #3287208 ($12,500, DoS via mutation aliasing in an account-recovery flow) |
 
 - **Test:** The rate limiter counts HTTP requests, not resolver invocations. Two independent multipliers:
@@ -2347,6 +2429,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES) — the impact is **mutation-surface unlock**, not information leakage |
 | **Attacker** | AM-01 / AM-05 |
 | **Applies to** | Apollo APQ deployments — **very common in mobile GraphQL clients** |
+| **Requires** | backend-api |
 | **Maps to** | API5:2023; PortSwigger/field methodology `hunt-graphql` "persisted-query fallback bypass" |
 
 - **Test:** An endpoint that claims "persisted queries only" and rejects ad-hoc queries may silently fall back
@@ -2376,6 +2459,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) for the anonymous side effect; CSRF-to-state-change for the GET variant |
 | **Attacker** | AM-01 (Query confusion) / AM-02 (mutation over GET, delivered as a link) |
 | **Applies to** | all GraphQL |
+| **Requires** | backend-api |
 | **Maps to** | API5:2023; API8:2023; `hunt-graphql` "operation-type confusion" and "mutation-via-GET" |
 
 - **Test:** Two shapes of the same mistake. (a) Auth middleware guards mutations strictly and treats `query` as
@@ -2408,6 +2492,7 @@ header or the client's arithmetic?**
 | **VRT** | `decentralized_application_misconfiguration.marketplace_security.price_or_fee_manipulation` (P2) is the closest verified taxonomy node; the VRT has no general business-logic leaf, so carry the rating with CVSS and the money |
 | **Attacker** | AM-05 |
 | **Applies to** | every app with a checkout, top-up or payout |
+| **Requires** | backend-api, payments |
 | **Maps to** | API3:2023 (the `"total_stay_price"` property-injection scenario); WSTG-BUSL-01 Test Business Logic Data Validation; WSTG-BUSL-03 Test Integrity Checks; ATT&CK T1641.001; Gowthams `price-manipulation.md` / `payment-bypasses.md` |
 
 - **Test:** Whether the server recomputes the payable amount from server-side state (cart id, catalogue price)
@@ -2447,6 +2532,7 @@ header or the client's arithmetic?**
 | **VRT** | `decentralized_application_misconfiguration.marketplace_security.price_or_fee_manipulation` (P2) as the nearest node |
 | **Attacker** | AM-05 |
 | **Applies to** | multi-currency apps; also single-currency apps that expose the field anyway |
+| **Requires** | backend-api, payments |
 | **Maps to** | WSTG-BUSL-01; API3:2023 |
 
 - **Test:** The server stores price in one currency but accepts a client-supplied `currency`, or assumes a
@@ -2478,6 +2564,7 @@ header or the client's arithmetic?**
 | **VRT** | no dedicated VRT leaf — file under business logic and quantify the loss |
 | **Attacker** | AM-05 |
 | **Applies to** | all commerce apps |
+| **Requires** | backend-api, payments |
 | **Maps to** | WSTG-BUSL-05 Test Number of Times a Function Can Be Used Limits; API6:2023 Unrestricted Access to Sensitive Business Flows; H1 #1849626 ($5,000, fee discount redeemable many times), #759247 (gift cards redeemed multiple times) |
 
 - **Test:** Four distinct behaviours, tested separately: reuse of a single-use code; stacking multiple
@@ -2515,6 +2602,7 @@ header or the client's arithmetic?**
 | **VRT** | no dedicated VRT leaf — business logic, quantified |
 | **Attacker** | AM-05 |
 | **Applies to** | all consumer apps with growth incentives |
+| **Requires** | backend-api, device |
 | **Maps to** | API6:2023 (its documented scenario is exactly this: "scripts automate user registration repeatedly, accumulating credits in attacker wallets"); WSTG-BUSL-05; WSTG-BUSL-06 Circumvention of Work Flows |
 
 - **Test:** Whether the referral flow can be self-referred, automated or replayed — with tester-owned accounts
@@ -2550,6 +2638,7 @@ header or the client's arithmetic?**
 | **VRT** | no dedicated VRT leaf; `broken_access_control.privilege_escalation` (VARIES) where a stage runs as another principal |
 | **Attacker** | AM-05 |
 | **Applies to** | all commerce / mobility / ticketing / delivery / enterprise-workflow apps |
+| **Requires** | backend-api, payments |
 | **Maps to** | WSTG-BUSL-06 Testing for the Circumvention of Work Flows; WSTG-BUSL-04 Test for Process Timing; API6:2023; PortSwigger access control — context-dependent controls ("modifying shopping cart contents after payment completion"); H1 #307239 ($10,000, double payout via mishandled provider transaction states), #1295844 ($7,500, modifying in-flight data to a payment provider to generate wallet balance), #1543159 ($5,000, self-approving an admin approval), #894569 ($12,000, running pipeline jobs as an arbitrary user) |
 
 - **Test:** Multi-step flows — `cart → payment → fulfilment`, `KYC → limit raise`, `address verify → delivery`,
@@ -2593,6 +2682,7 @@ header or the client's arithmetic?**
 | **VRT** | no dedicated VRT leaf; rate with CVSS and the ledger delta |
 | **Attacker** | AM-05 (client replay); AM-01 (webhook replay) |
 | **Applies to** | all apps with state-changing endpoints; mandatory for fintech |
+| **Requires** | backend-api, payments |
 | **Maps to** | WSTG-BUSL-05; WSTG-BUSL-02 Test Ability to Forge Requests; API6:2023 |
 
 - **Test:** The non-concurrent cousin of the race tests, and it often succeeds where the race does not: can a
@@ -2629,6 +2719,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) as the nearest node for the control bypass; quantify the limit delta |
 | **Attacker** | AM-05 |
 | **Applies to** | all regulated apps with in-app identity verification |
+| **Requires** | backend-api |
 | **Maps to** | API6:2023; WSTG-BUSL-06 (no external identifier verified in the corpus for this specific surface) |
 
 - **Test:** Vendor SDKs return a completion callback to the app; weak integrations then tell the *backend*
@@ -2659,6 +2750,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES) as the nearest node |
 | **Attacker** | AM-05 / AM-12 |
 | **Applies to** | apps using Google Play In-App Updates or a backend `minVersion` gate |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASTG-TEST-0392 (References to Enforced Updating APIs), MASTG-TEST-0382 (Runtime Use of Enforced Updating APIs — explicitly instructs "lowering the reported version value in network requests, for example `version`, `versionCode`, or `build` using an interception proxy"), MASWE-0043, MASTG-KNOW-0023, MASVS-CODE-2 |
 
 - **Test:** An app that gates access on a minimum version is enforcing a business-logic control in the client.
@@ -2688,6 +2780,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the claim is the only gate; otherwise rate what it re-opens |
 | **Attacker** | AM-05 / AM-12 |
 | **Applies to** | all apps sending a signature, device id, integrity verdict or "rooted:false" claim |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASWE-0062 (No Application-Level Payload Encryption — a MAS-R resilience control; its converse is that the layer, once bypassed, provides no authorisation); MASTG-TECH-0043; MASVS-RESILIENCE-3; ATT&CK T1633.001 System Checks, T1630.003 Disguise Root/Jailbreak Indicators, mitigation M1002 Attestation; Google Play Integrity documentation (`requestDetails`, `appIntegrity.appRecognitionVerdict == PLAY_RECOGNIZED`, `accountDetails.appLicensingVerdict == LICENSED`, `deviceIntegrity`, `requestHash` for standard requests / `nonce` for classic, "No caching: request verdicts on-demand to prevent replay/proxying attacks", and the note that `requestPackageName` can be spoofed in the middle of the request) |
 
 - **Test:** Four claims the client makes and the server usually fails to verify, tested as one battery.
@@ -2735,6 +2828,7 @@ header or the client's arithmetic?**
 | **VRT** | `server_security_misconfiguration.race_condition` (VARIES) |
 | **Attacker** | AM-05 |
 | **Applies to** | all stateful backends; highest yield on account-settings and order-state machines |
+| **Requires** | backend-api |
 | **Maps to** | PortSwigger "Smashing the state machine" (limit-overrun, multi-endpoint collisions, single-endpoint collisions, sub-states, the single-packet attack); WSTG-BUSL-05; API6:2023; H1 #300305 ($15,250, email-verification bypass enabling takeover), #2110030 ($3,000), #759247, #429026, #1438052 ($5,000), #1520931 ($4,000), #2078571 ($2,480), #119657 ($2,000), #486629 (unlocking a loyalty benefit multiple times in one day) |
 
 - **Test:** Check-then-act flows read state, validate, then mutate, with a window between read and write. Three
@@ -2838,6 +2932,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.username_enumeration.non_brute_force` (P4); `server_security_misconfiguration.username_enumeration.brute_force` (P5) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | backend-api |
 | **Maps to** | API3:2023; API4:2023; MHL "Using WhatsApp for OSINT" (the pre-confirmation `POST /v2/exist` leaking `wa_old_device_name`, and its honest calibration — Meta did not classify it as a security issue) |
 
 - **Test:** Four dimensions on login, registration, password-reset and "check availability": status code, body,
@@ -2880,6 +2975,7 @@ header or the client's arithmetic?**
 | **VRT** | `server_security_misconfiguration.unsafe_cross_origin_resource_sharing` (parent node, no priority of its own — rate on the demonstrated data impact) |
 | **Attacker** | AM-02 |
 | **Applies to** | all HTTP APIs; mobile API hosts are often permissive because "only the app calls it" |
+| **Requires** | backend-api |
 | **Maps to** | OWASP REST Security Cheat Sheet (disable CORS headers unless cross-domain calls are necessary; be specific about allowed origins) |
 
 - **Test:** `Access-Control-Allow-Origin` reflecting the request origin (or `null`) together with
@@ -2920,6 +3016,7 @@ header or the client's arithmetic?**
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES) when it bypasses a control |
 | **Attacker** | AM-02 / AM-05 |
 | **Applies to** | all |
+| **Requires** | backend-api |
 | **Maps to** | PortSwigger API testing ("changing the content type may enable you to trigger errors that disclose useful information" or bypass defences); OWASP REST Security Cheat Sheet (reject unexpected content types → 415) |
 
 - **Test:** The same handler often behaves differently when the body is form-encoded rather than JSON —
@@ -2957,6 +3054,7 @@ header or the client's arithmetic?**
 | **VRT** | `server_side_injection.sql_injection` (P1), `server_side_injection.remote_code_execution_rce` (P1), `server_security_misconfiguration.server_side_request_forgery_ssrf.internal_secrets_exposure` |
 | **Attacker** | AM-05 |
 | **Applies to** | all apps with a remote backend |
+| **Requires** | backend-api |
 | **Maps to** | API7:2023 Server Side Request Forgery; API8:2023; Mobile Top 10 2024 M4; MASWE-0050 (CWE-20, CWE-89, CWE-116); MASVS-CODE-4; ATT&CK T1428, T1426 |
 
 - **Test:** This chapter's job is not to re-run a web injection catalogue; it is to hand the injection and SSRF

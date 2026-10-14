@@ -56,6 +56,40 @@ the UI never calls.
 a credential that authenticates, an endpoint the UI never calls, a bridge that reaches native capability, or
 a code channel that can replace the app after the store review?**
 
+## Applicability probe
+
+Run once, before any item, from `$E` (engagement dir; `$DEC` = `$E/decompiled`, `$SERIAL` from `scripts/doctor.sh --json`). The probe writes `target.framework` for the `Requires` tags and decides whether the chapter applies at all. Zero `$DEC` paths may be substituted by hand.
+
+```bash
+# 1. Per-split artefact list (one listing per archive: BSD/macOS unzip treats extra archive args as member patterns)
+for f in "$E"/apk/*.apk; do printf '== %s %s entries\n' "$f" "$(unzip -Z1 "$f" | wc -l)"; unzip -Z1 "$f"; done > "$E/logs/D19-probe-apklist.txt"
+grep -oE 'assets/index\.android\.bundle|assets/main\.jsbundle|lib/[^/]+/libhermes[^ ]*\.so|lib/[^/]+/libjsc\.so|lib/[^/]+/libflutter\.so|lib/[^/]+/libapp\.so|assets/flutter_assets/[^ ]*|flutter_assets/shorebird\.yaml|assets/www/[^ ]*|res/xml/config\.xml|assets/capacitor\.config\.json|assets/capacitor\.plugins\.json|assets/public/[^ ]*|lib/[^/]+/libil2cpp\.so|lib/[^/]+/libunity\.so|global-metadata\.dat|assemblies/[^ ]*|assemblies\.blob|lib/[^/]+/libassemblies\.[^ ]*\.blob\.so|lib/[^/]+/libmonosgen-2\.0\.so|lib/[^/]+/libcoreclr\.so|lib/[^/]+/libxamarin-app\.so' "$E/logs/D19-probe-apklist.txt" | sed -E 's#/[^/]*$##' | sort | uniq -c | sort -rn | tee "$E/logs/D19-probe-markers.txt"
+
+# 2. Framework strings in the DEX (string literals survive R8; the KMP line needs its Compose control)
+grep -rlE 'io\.flutter\.embedding|com\.facebook\.react\.(ReactActivity|bridge|runtime)|com\.getcapacitor\.|org\.apache\.cordova\.|com\.unity3d\.player|mono\.android\.|Lorg/jetbrains/compose|org\.jetbrains\.compose|composeResources/|com\.russhwolf\.settings|app\.cash\.sqldelight' "$DEC/jadx/sources" | wc -l
+grep -rl 'androidx\.compose' "$DEC/jadx/sources" | wc -l      # control: plain Jetpack Compose is NOT KMP
+
+# 3. A web app the artefact list cannot show: HTML/JS inlined in code and served into a first-party origin (gap #134)
+grep -rnE 'loadDataWithBaseURL|\.loadData\(|WebViewAssetLoader|appassets\.androidplatform\.net|"<html|"<script' "$DEC/jadx/sources" | head -20
+tail -n +2 "$E/inventory/webviews.csv" | wc -l
+
+# 4. Compiler/obfuscator and the version gates every D19 finding must quote
+apkid "$E"/apk/base.apk | tee -a "$E/logs/D19-probe-markers.txt"
+aapt2 dump badging "$E"/apk/base.apk | grep -E 'targetSdkVersion|sdkVersion'
+```
+
+**Decision.**
+
+- Step 1 or step 2 hits for exactly one framework → set `engagement.json` `target.framework` to one of `flutter | react-native | hermes | cordova | capacitor | unity | xamarin | kmp` (RN on Hermes = `react-native, hermes`; Ionic = `cordova` or `capacitor` by step 1), keep D19 applicable, and let the `Requires` tags settle the other framework ranges. Note text for each such range: `D19 probe: framework=<x>; <other-framework> markers 0 in <N> splits (logs/D19-probe-markers.txt)`.
+- Step 1 and step 2 both 0, step 3 hits → `target.framework=native`, D19 applies only through D19-056, D19-057, D19-058, D19-071, D19-076 (and D19-080 if an environment table exists); the WebView itself goes to D10. Note for every other D19 row: `D19 probe: native app with inline web app (<file:line of loadDataWithBaseURL/WebViewAssetLoader>); framework items n/a, web-stack items kept`.
+- Everything 0 and `apkid` reports only a DEX compiler (`dexlib`/`r8`/`dx`) and `$DEC/jadx/sources` holds application-package Activities with real view code (not a lone `FlutterActivity`/`UnityPlayerActivity`/`BridgeActivity` subclass) → the whole domain is n/a:
+
+```bash
+python3 scripts/mark.py $E D19 n/a --note "D19 probe: 0 framework markers across <N> splits (<split names>, logs/D19-probe-apklist.txt); DEX framework strings 0 (androidx.compose control=<n>); inline-webapp grep 0 and inventory/webviews.csv rows=<n> (handled in D10); apkid=<compiler list>; targetSdk=<n> minSdk=<n>; business logic in <example first-party Activity>. Native Android app — D19 not applicable."
+```
+
+A probe with an unlisted split (`pm path` count ≠ files in `$E/apk/`) or an `apkid` `packer` entry is not a negative: collect the splits (D19-002) or unpack first, then re-run.
+
 ## Triage order
 
 1. **Fingerprint the runtime and collect every split** (D19-001, D19-002). Get this wrong and every
@@ -176,6 +210,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a standalone; the associated finding is `server_side_injection.remote_code_execution_rce` (P1) via D19-026/D19-027 |
 | **Attacker** | AM-09 |
 | **Applies to** | React Native with CodePush or expo-updates; Cordova/Capacitor with a live-update plugin |
+| **Requires** | react-native, cordova, capacitor, device |
 | **Maps to** | facebook/hermes `BytecodeFileHeader.sourceHash`; `CodePushConstants` (`CODE_PUSH_FOLDER_PREFIX = "CodePush"`, `STATUS_FILE = "codepush.json"`, `BUNDLE_JWT_FILE = ".codepushrelease"`, `DEFAULT_JS_BUNDLE_NAME = "index.android.bundle"`); expo `UpdatesConfiguration.kt` |
 
 - **Test:** If an OTA channel exists, the bundle inside the APK is only the fallback. Every static finding
@@ -204,7 +239,7 @@ a code channel that can replace the app after the store review?**
   ```
   Or capture it at load time regardless of where it came from:
   ```javascript
-  // frida -U -f <pkg> -l which-bundle.js --no-pause
+  // frida -D "$SERIAL" -f <pkg> -l which-bundle.js
   Java.perform(function () {
     var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');
     C.loadScriptFromFile.implementation = function (f, u, z) {
@@ -232,6 +267,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the keys show an unauthenticated code channel; otherwise Support |
 | **Attacker** | AM-09 |
 | **Applies to** | React Native + Expo, RN + CodePush, Flutter |
+| **Requires** | react-native, flutter |
 | **Maps to** | MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150; expo `UpdatesConfiguration.kt`; flutter `FlutterActivityLaunchConfigs.java`; `CodePush.java` / `docs/setup-android.md` |
 
 - **Test:** Each framework stores security-relevant configuration as `<meta-data>` in the merged manifest or
@@ -265,6 +301,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (report-defence control) |
 | **Attacker** | n/a |
 | **Applies to** | all frameworks |
+| **Requires** | flutter, react-native, unity, xamarin, cordova, capacitor, kmp |
 | **Maps to** | MASTG-TECH-0165, MASTG-TOOL-0009 (APKiD) |
 
 - **Test:** Vendors close real findings by asserting that Flutter `--obfuscate`, Hermes bytecode, IL2CPP or
@@ -295,6 +332,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (coverage control) |
 | **Attacker** | n/a |
 | **Applies to** | React Native. Hermes is the default engine from RN 0.70; JSC bundles are **LEGACY** but common in older enterprise builds |
+| **Requires** | react-native, hermes |
 | **Maps to** | MASTG-TOOL-0104 (hermes-dec — the `file`-based Hermes/plain-text distinction) |
 
 - **Test:** RN ships three runtime shapes that need different attacks: Hermes bytecode bundles, JSC plain-JS
@@ -324,6 +362,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (prerequisite for every RN static finding) |
 | **Attacker** | n/a |
 | **Applies to** | React Native with `hermesEnabled=true` (RN default since 0.70) |
+| **Requires** | react-native, hermes |
 | **Maps to** | MASTG-TOOL-0104; facebook/hermes `BytecodeFileFormat.h` (`struct BytecodeFileHeader`) |
 
 - **Test:** The HBC version number decides which tools can parse the file at all, and the `sourceHash` is a
@@ -360,6 +399,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (coverage control) |
 | **Attacker** | n/a |
 | **Applies to** | React Native / Hermes |
+| **Requires** | react-native, hermes |
 | **Maps to** | MASTG-TOOL-0104 (hermes-dec) |
 
 - **Test:** Verify your decompiler actually supports the app's HBC version instead of silently producing
@@ -403,6 +443,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a directly; routinely produces the `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) input |
 | **Attacker** | n/a |
 | **Applies to** | React Native / Hermes, all versions including those no public tool parses |
+| **Requires** | react-native, hermes |
 | **Maps to** | facebook/hermes `BytecodeFileFormat.h` (`stringCount`, `overflowStringCount`, `stringStorageSize`, `SmallStringTableEntry`) |
 
 - **Test:** Even with an unsupported HBC version, every string literal is recoverable: the string table is a
@@ -457,6 +498,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) upward where the screen renders another user's data |
 | **Attacker** | AM-02 remote one-click via a deep link; AM-03 zero-permission local app via `am start` |
 | **Applies to** | React Native with React Navigation / react-native-navigation |
+| **Requires** | react-native, deeplink |
 | **Maps to** | MASTG-TECH-0172 (Listing Deep Links), MASTG-TECH-0173 (Monitoring Deep Link Handlers at Runtime with Frida) |
 
 - **Test:** RN navigation declares screens as string names. That list is the app's true page inventory,
@@ -497,6 +539,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) / `.view_sensitive_information_iterable_object_identifiers` (P3) depending on what the unreferenced route returns |
 | **Attacker** | AM-01 remote no interaction (once you hold a route and a token) |
 | **Applies to** | all cross-platform frameworks |
+| **Requires** | flutter, react-native, unity, xamarin, cordova, capacitor, backend-api |
 | **Maps to** | MASTG-TOOL-0125 (apkleaks); hermes-decomp `strings`/`secrets` |
 
 - **Test:** Traffic observation only reveals the endpoints the UI happens to exercise. The bundle or
@@ -535,6 +578,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `.for_internal_asset` (P3) when the asset is not publicly reachable |
 | **Attacker** | AM-01 |
 | **Applies to** | React Native, Cordova/Ionic/Capacitor, and any framework that ships a JS/web bundle |
+| **Requires** | react-native, cordova, capacitor, backend-api |
 | **Maps to** | MASWE-0004 (CWE-798), MASTG-TECH-0019, MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks); hermes-decomp `secrets` |
 
 - **Test:** RN and Ionic apps routinely embed keys that are "public" by the vendor's framing but privileged
@@ -570,6 +614,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when the recovered source names internal hosts or unreleased functionality; Low/Informational when it only removes reversing friction |
 | **Attacker** | AM-01 |
 | **Applies to** | React Native; equally Cordova/Ionic/Capacitor web bundles |
+| **Requires** | react-native, cordova, capacitor |
 | **Maps to** | MASTG-TECH-0019 |
 
 - **Test:** An `index.android.bundle.map`, or a map reachable on the CDN/OTA host, collapses the whole static
@@ -600,6 +645,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a as inventory; the finding is whatever the reachable vulnerable package yields |
 | **Attacker** | AM-08 |
 | **Applies to** | React Native (Metro), both Hermes and plain-JS bundles |
+| **Requires** | react-native |
 | **Maps to** | hermes-decomp README (`modules`, `deps`, `extract`); react-native-decompiler README (`--unpackOnly`) |
 
 - **Test:** A Metro bundle is a map of numbered modules (`__d(factory, moduleId, deps)`). Recovering that map
@@ -634,6 +680,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the developer/CI compromise outcome; `broken_access_control.idor.*` or per-sink for the vulnerable-library outcome |
 | **Attacker** | AM-08 malicious third-party SDK (the package), AM-03/AM-04 for the on-device path-traversal case |
 | **Applies to** | React Native projects; the malicious-release half applies to the app repo **and every developer/CI host** |
+| **Requires** | react-native |
 | **Maps to** | **CVE-2024-21668** (`react-native-mmkv` Android before 2.11.0 logged the optional encryption key to Android logs); `react-native-document-picker` **< 9.1.1** path traversal on Android file selection, fixed in 9.1.1 |
 
 - **Test:** Two distinct classes. (a) A shipped library version with a known defect whose impact you can
@@ -683,6 +730,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) against the developer/CI host, where that host is in scope |
 | **Attacker** | AM-06 network attacker on the developer/CI network |
 | **Applies to** | React Native build environments where the repo or CI is in scope; patched by Meta in **version 20.0.0** |
+| **Requires** | react-native |
 | **Maps to** | **CVE-2025-11953** — `@react-native-community/cli`, CVSS **9.8**, unauthenticated attackers execute arbitrary OS commands via the package's development server |
 
 - **Test:** The CLI exposed an unauthenticated OS-command path through its development server. The exposure
@@ -710,6 +758,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1); `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) for the state-only variant |
 | **Attacker** | AM-06 network attacker (serves the bundle); AM-03 zero-permission local app (sets `debug_http_host`, launches the dev activity) |
 | **Applies to** | React Native release builds that still ship `DevSupportManager` wiring |
+| **Requires** | react-native, device |
 | **Maps to** | React Native `devsupport/DevServerHelper.kt` (bundle URL format `"%s://%s/%s.%s?platform=android&dev=%s&lazy=%s&minify=%s&app=%s&modulesOnly=%s&runModule=%s"`, inspector device URL `"%s://%s/inspector/device?name=%s&app=%s&device=%s&profiling=%b"`, `"%s://%s/open-debugger?device=%s"`); MASTG-TECH-0160 (Enumerating Activities) |
 
 - **Test:** RN's dev support fetches the JS bundle over plain HTTP from a packager host and exposes inspector
@@ -728,7 +777,7 @@ a code channel that can replace the app after the store review?**
   Forcing the flag at runtime (only report it if it actually works — in a properly built release
   `DevSupportManagerImpl` is stripped and this crashes or no-ops):
   ```javascript
-  // frida -U -f <pkg> -l enable-dev.js
+  // frida -D "$SERIAL" -f <pkg> -l enable-dev.js
   Java.perform(function () {
     try {
       var Host = Java.use('com.facebook.react.ReactNativeHost');
@@ -756,6 +805,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when a module returns the live session/keychain material; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a returned secret; otherwise rate by the capability reached |
 | **Attacker** | AM-09 (an OTA bundle chooses the calls) / AM-02 (a WebView `postMessage` routed into a module) |
 | **Applies to** | React Native, both the old batched bridge and — with `global.__turboModuleProxy` substituted — the new architecture |
+| **Requires** | react-native, device, frida |
 | **Maps to** | ATT&CK T1575 (Native API), T1407; MASWE-0033 |
 
 - **Test:** RN's bridge exposes every registered native module to JS. Enumerate the registry, then rate the
@@ -799,6 +849,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (retraction prevention) |
 | **Attacker** | n/a |
 | **Applies to** | React Native |
+| **Requires** | react-native |
 | **Maps to** | n/a (method; the worked retraction is recorded below) |
 
 - **Test:** Two specific ways an RN review produces a confident wrong negative. (1) **The JS-visible module
@@ -835,6 +886,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (harness; it converts a "pinned, untestable" app into a fully testable one) |
 | **Attacker** | AM-12 own rooted device — **not an attack** |
 | **Applies to** | React Native (old bridge). On the new architecture hook `global.__turboModuleProxy` instead |
+| **Requires** | react-native, device, frida, root |
 | **Maps to** | MASTG-TOOL-0001 (Frida Android), MASTG-TECH-0041 (Library Injection) |
 
 - **Test:** Injecting a second script at `loadScriptFromAssets` time gives you a live JS console inside the
@@ -845,7 +897,7 @@ a code channel that can replace the app after the store review?**
   adb push hook.js /data/local/tmp/hook.js
   adb shell "run-as <pkg> cp /data/local/tmp/hook.js files/hook.js" 2>/dev/null || \
     adb shell su -c "cp /data/local/tmp/hook.js /data/data/<pkg>/files/hook.js && chown <uid>:<uid> /data/data/<pkg>/files/hook.js"
-  frida -U -f <pkg> -l inject-bundle.js --no-pause
+  frida -D "$SERIAL" -f <pkg> -l inject-bundle.js
   ```
   ```javascript
   // inject-bundle.js
@@ -885,6 +937,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (P5) standalone — **do not file it there**; file the unlocked control (e.g. `broken_access_control.privilege_escalation`, null) |
 | **Attacker** | AM-12 own rooted device for the demonstration; the real attacker is AM-09 via the OTA path |
 | **Applies to** | React Native. `hbctool` reassembly is **LEGACY** (HBC ≤ 76); on newer bundles patch a string in place or inject a gadget instead |
+| **Requires** | react-native, hermes, device |
 | **Maps to** | MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0103 (uber-apk-signer); hermes-decomp `patch-string`, `asm`, `emit-hasm` |
 
 - **Test:** Replace or edit the bundle, re-sign, install, and confirm the app runs attacker-controlled JS.
@@ -928,6 +981,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when `injectedJavaScriptObject` carries a session token into a page that can be navigated off-origin; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the covert camera/mic case |
 | **Attacker** | AM-02 remote one-click |
 | **Applies to** | React Native apps using `react-native-webview`; the media half also applies to Unity apps using `unity-webview` |
+| **Requires** | react-native, webview, js-bridge |
 | **Maps to** | `RNCWebView.java` (`JAVASCRIPT_INTERFACE = "ReactNativeWebView"`, `addJavascriptInterface(fallbackBridge, JAVASCRIPT_INTERFACE)`, the injected `window.ReactNativeWebView.injectedObjectJson` shim); `RNCWebViewManager.kt` (`@ReactProp` setters and the `settings.setSupportMultipleWindows(true)` / `allowUniversalAccessFromFileURLs = false` defaults); MASWE-0033, MASWE-0035 |
 
 - **Test:** `react-native-webview` installs a JS interface named `ReactNativeWebView` with `postMessage`, and
@@ -973,6 +1027,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) — never file this as a finding |
 | **Attacker** | AM-06/AM-07 |
 | **Applies to** | React Native apps pinning via a JS-side library rather than a native config |
+| **Requires** | react-native, mitm |
 | **Maps to** | mobsfscan `android_certificate_pinning` (patterns include `import com.toyberman.RNSslPinningPackage;`) and `android_safetynet_api` (`new RNGoogleSafetyNetPackage(...)`) |
 
 - **Test:** When pinning lives in a JS library rather than a Network Security Config or an OkHttp
@@ -1000,6 +1055,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) as filed — the reportable form is the token replay: `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-11 physical unlocked / AM-12 own device for the read; AM-09 via the bridge primitives for the remote form |
 | **Applies to** | all cross-platform frameworks |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0142 (Inspecting WebView Storage) for the Cordova/Capacitor stores |
 
 - **Test:** Each framework has a default key/value store in a predictable file. Because the *key names* are
@@ -1041,6 +1097,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a directly |
 | **Attacker** | AM-09 |
 | **Applies to** | React Native with CodePush or expo-updates; Cordova/Ionic/Capacitor with a live-update plugin |
+| **Requires** | react-native, cordova, capacitor, flutter |
 | **Maps to** | CodePush `docs/setup-android.md` (`strings.xml` `CodePushDeploymentKey`; `MainApplication.getJSBundleFile()` override); `CodePush.java` (`getCustomPropertyFromStringsIfExist("PublicKey")` / `("ServerUrl")`, default `mServerUrl = "https://codepush.appcenter.ms/"`); expo `UpdatesConfiguration.kt`; MASWE-0049 (CWE-494), MASWE-0048; ATT&CK T1407 |
 
 - **Test:** OTA JS/web delivery converts the app into a remote-code-execution surface whose trust anchor is a
@@ -1083,6 +1140,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1). The nearest literal node is `insecure_data_transport.executable_download.no_secure_integrity_check` (P4, CWE-353/354/494) — cite it, then request P1 on the demonstrated arbitrary-code-execution chain |
 | **Attacker** | AM-09 malicious backend/CDN; AM-06 network attacker where TLS is the only remaining control |
 | **Applies to** | Expo and bare RN apps using expo-updates |
+| **Requires** | react-native, device |
 | **Maps to** | expo `UpdatesConfiguration.kt` meta-data keys `CODE_SIGNING_CERTIFICATE`, `CODE_SIGNING_METADATA`, `CODE_SIGNING_INCLUDE_MANIFEST_RESPONSE_CERTIFICATE_CHAIN`, `CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS`, and `UpdatesController.overrideConfiguration()`; MASWE-0049 (CWE-494); ATT&CK T1407 |
 
 - **Test:** expo-updates verifies an update only when a code-signing certificate is configured. If
@@ -1121,6 +1179,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1); baseline `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) |
 | **Attacker** | AM-09; AM-06 where TLS is the only control; AM-01 for anyone who obtains the deployment key |
 | **Applies to** | React Native + `react-native-code-push` |
+| **Requires** | react-native, device |
 | **Maps to** | `CodePush.java` (`private static String mPublicKey;`, `getCustomPropertyFromStringsIfExist("PublicKey")`, `getPublicKeyByResourceDescriptor(...)` throwing `CodePushInvalidPublicKeyException("Specified public key is empty")`, default `mServerUrl = "https://codepush.appcenter.ms/"`); `CodePushConstants.java` (`BUNDLE_JWT_FILE = ".codepushrelease"`, `STATUS_FILE = "codepush.json"`); CodePush README (`CheckFrequency.ON_APP_START` default); MASWE-0049 |
 
 - **Test:** CodePush verifies the downloaded bundle only when a public key is configured — `mPublicKey` is
@@ -1156,6 +1215,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-02 remote one-click |
 | **Applies to** | React Native with CodePush or expo-updates |
+| **Requires** | react-native, device |
 | **Maps to** | `CodePush.java` (`public void setDeploymentKey(String deploymentKey)`; constructors taking `serverUrl`; CodePush docs: "this key will override the 'default' one that was provided in your app's … files"); expo `UpdatesConfiguration.kt` (`UpdatesController.overrideConfiguration()`, keys `updateUrl`, `requestHeaders`, `runtimeVersion`, `checkOnLaunch`, `codeSigningCertificate`) |
 
 - **Test:** Both OTA runtimes allow the update source to be changed at runtime. If any of that plumbing is
@@ -1186,6 +1246,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.privilege_escalation` (null — rated on the control the old bundle lacks); or the specific vulnerability class the rollback target reintroduces |
 | **Attacker** | AM-03 zero-permission local app (corrupting the current bundle requires only the app's own writable cache in the `run-as`/rooted case); AM-09 for the served-downgrade variant |
 | **Applies to** | React Native with CodePush or expo-updates |
+| **Requires** | react-native, device |
 | **Maps to** | `CodePushConstants.java` (`PREVIOUS_PACKAGE_KEY`, `CURRENT_PACKAGE_KEY`, `FAILED_UPDATES_KEY`, `LATEST_ROLLBACK_INFO_KEY`, `LATEST_ROLLBACK_PACKAGE_HASH_KEY`, `LATEST_ROLLBACK_COUNT_KEY`); CodePush README (automatic rollback keeps a copy of the previous update); expo `UpdatesConfiguration.kt` (`DISABLE_ANTI_BRICKING_MEASURES`) |
 
 - **Test:** CodePush keeps the previous package and rolls back on failure; expo-updates has anti-bricking
@@ -1217,6 +1278,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-09 |
 | **Applies to** | Cordova, Ionic and Capacitor apps with a live-update / hot-code-push plugin |
+| **Requires** | cordova, capacitor, device |
 | **Maps to** | Capacitor `Bridge.java` (`localServer.hostAssets(DEFAULT_WEB_ASSET_DIR)` with `DEFAULT_WEB_ASSET_DIR = "public"`, and the configurable `getServerBasePath` plumbing); MASWE-0049 |
 
 - **Test:** The web-stack frameworks have the same problem in a different shape: a plugin downloads a new
@@ -1251,6 +1313,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (evidence control) |
 | **Attacker** | n/a |
 | **Applies to** | React Native with CodePush or expo-updates; Cordova/Capacitor live update |
+| **Requires** | device |
 | **Maps to** | `CodePushConstants.DEFAULT_JS_BUNDLE_NAME`, `CODE_PUSH_FOLDER_PREFIX`, `STATUS_FILE`; facebook/hermes `BytecodeFileHeader.sourceHash` |
 
 - **Test:** For any OTA/code-delivery finding the decisive evidence is that the running code changed without a
@@ -1285,6 +1348,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) when it also enables the Dart VM service; otherwise Informational/Low |
 | **Attacker** | AM-01 for the artefact; AM-03/AM-06 if the VM service is reachable |
 | **Applies to** | Flutter Android |
+| **Requires** | flutter |
 | **Maps to** | MASTG-TECH-0156 (Reverse Engineering Flutter Applications) |
 
 - **Test:** A debug or profile Flutter build ships `kernel_blob.bin`, `isolate_snapshot_data` and
@@ -1317,6 +1381,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a directly |
 | **Attacker** | n/a |
 | **Applies to** | Flutter apps, all release builds including `--obfuscate` (obfuscation renames symbols; it does not touch constants) |
+| **Requires** | flutter, native |
 | **Maps to** | MASTG-TECH-0156, MASTG-TOOL-0116 (blutter) |
 
 - **Test:** jadx gives only the thin Java shell. The router, WebView configuration, API authentication and
@@ -1355,6 +1420,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | Flutter release (AOT) builds. Blutter is **arm64-only** and takes an extracted `lib/arm64-v8a` directory, not an APK |
+| **Requires** | flutter, native |
 | **Maps to** | MASTG-TECH-0156, MASTG-TOOL-0116 (blutter), MASTG-TOOL-0100 (reFlutter — "dart.cc is modified to print classes, functions and some fields") |
 
 - **Test:** Dart AOT snapshots resist normal reversing (custom registers and calling conventions, sequential
@@ -1370,7 +1436,7 @@ a code channel that can replace the app after the store review?**
   ls out_dir/      # asm/*  pp.txt  objs.txt  blutter_frida.js
   grep -rn 'ensureInitialized\|::init\b' out_dir/asm/ | head
   grep -rniE 'isPremium|entitlement|verify|validate|checkRoot|isJailbroken|licen[cs]e' out_dir/asm/ | head -40
-  frida -U -f <pkg> -l out_dir/blutter_frida.js --no-pause
+  frida -D "$SERIAL" -f <pkg> -l out_dir/blutter_frida.js
 
   # Fallback — reFlutter, when Blutter will not build for this Dart version
   pip3 install reflutter && reflutter target.apk
@@ -1403,6 +1469,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter release AOT builds, arm64, including `--obfuscate` |
+| **Requires** | flutter, native |
 | **Maps to** | MASTG-TECH-0156, MASTG-TOOL-0116 (blutter), MASTG-TOOL-0144 (gitleaks) |
 
 - **Test:** Every string constant, class name and crypto parameter the app uses is reachable from the AOT
@@ -1437,6 +1504,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cryptographic_weakness.key_reuse.inter_environment` (P2) where one static key covers every environment |
 | **Attacker** | AM-01 (offline, from the public APK) |
 | **Applies to** | Flutter release builds, including `--obfuscate` |
+| **Requires** | flutter, native |
 | **Maps to** | MASTG-TECH-0156 (`PP`/`THR` register annotations in Blutter output), MASTG-TOOL-0116 |
 
 - **Test:** Two mechanics make Dart constants look like noise. (1) Dart AOT keeps the object pool in `x27`
@@ -1482,6 +1550,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter (`libapp.so`), Unity IL2CPP (`libil2cpp.so`), Xamarin/MAUI assemblies — anywhere DEX-oriented secret scanners do not look |
+| **Requires** | flutter, unity, xamarin, native |
 | **Maps to** | MASWE-0004 (CWE-798); MASTG-TOOL-0144 (gitleaks) |
 
 - **Test:** Cross-platform builds bury PEM blobs and HMAC seeds in the native blob. Scan the file statically,
@@ -1496,7 +1565,7 @@ a code channel that can replace the app after the store review?**
   ```
   ```javascript
   // runtime module scan — catches keys assembled at init
-  // frida -U -f <pkg> -q -e "$(cat scan.js)"
+  // frida -D "$SERIAL" -f <pkg> -q -e "$(cat scan.js)"
   var m = Process.getModuleByName('libapp.so');
   Memory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {     // "-----BEGIN"
     onMatch: function (a) { console.log(a, Memory.readUtf8String(a, 64)); }, onComplete: function () {} });
@@ -1522,6 +1591,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) once forgery unlocks the API; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (null) for the signature scheme itself |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter release builds that sign requests |
+| **Requires** | flutter, native, device, frida |
 | **Maps to** | MASTG-TOOL-0116 (blutter, `blutter_frida.js` and its `getDartString()` helper) |
 
 - **Test:** When the signing material is derived rather than stored, hook the signing function Blutter named
@@ -1531,7 +1601,7 @@ a code channel that can replace the app after the store review?**
   ```bash
   python3 blutter.py ext/lib/arm64-v8a out_dir
   grep -nE 'nonce=|&timestamp=|&method=|&url=|Signature|sign\(' out_dir/pp.txt out_dir/asm/*.txt | head
-  frida -U -f <pkg> -l out_dir/blutter_frida.js --no-pause
+  frida -D "$SERIAL" -f <pkg> -l out_dir/blutter_frida.js
   ```
   ```javascript
   // x27 is the Dart object-pool pointer; pool-relative loads look like
@@ -1561,6 +1631,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) if filed as a pinning issue — do not file it there |
 | **Attacker** | AM-07 network attacker with a trusted CA is a **tester convenience, not an attacker**; the real finding is what the decrypted traffic shows |
 | **Applies to** | Flutter Android, all versions. Also relevant to Unity's `UnityWebRequest` and other non-platform stacks |
+| **Requires** | flutter, mitm, device |
 | **Maps to** | MASTG-TECH-0109 (Intercepting Flutter HTTPS Traffic), MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0101 (disable-flutter-tls-verification), MASTG-TOOL-0120 (ProxyDroid), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TOOL-0077 (Burp Suite), MASTG-KNOW-0015; ATT&CK T1521.003 |
 
 - **Test:** Dart's `HttpClient` uses BoringSSL compiled into `libflutter.so` with its **own** CA list. It does
@@ -1581,8 +1652,8 @@ a code channel that can replace the app after the store review?**
   adb shell su -c 'iptables -t nat -A OUTPUT -p tcp --dport 443 -j DNAT --to-destination <PROXY-IP>:8080'
   # (or ProxyDroid / a VPN / an AP you control)
   # 2. Frida, pattern-matched hook of ssl_verify_peer_cert (handshake.cc)
-  frida -U -f <pkg> -l disable-flutter-tls.js --no-pause
-  frida -U --codeshare TheDauntless/disable-flutter-tls-v1 -f <pkg>
+  frida -D "$SERIAL" -f <pkg> -l disable-flutter-tls.js
+  frida -D "$SERIAL" --codeshare TheDauntless/disable-flutter-tls-v1 -f <pkg>
   # 3. engine patch — no root, no user CA
   pip3 install reflutter && reflutter target.apk        # choose "Traffic monitoring and interception",
                                                         # enter your Burp IP -> release.RE.apk
@@ -1636,6 +1707,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) for a path-taking handler; otherwise rate by the native capability reached |
 | **Attacker** | AM-03 zero-permission local app when the channel is reachable from an exported component; otherwise AM-12 for the demonstration and AM-09 for the realistic delivery |
 | **Applies to** | Flutter Android |
+| **Requires** | flutter, device, frida |
 | **Maps to** | MASTG-TECH-0156 (platform channels as the Dart↔native boundary); MASWE-0033; ATT&CK T1575 |
 
 - **Test:** Every Dart↔native capability crosses a channel with a string name. Those names point at privileged
@@ -1680,6 +1752,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what the route exposes) |
 | **Attacker** | AM-02 remote one-click |
 | **Applies to** | Flutter v2 embedding (**CURRENT**). Older v1 embedding required explicit Java plumbing — treat a v1 app as a separate manual review |
+| **Requires** | flutter, deeplink |
 | **Maps to** | Flutter `FlutterActivityLaunchConfigs.java` `HANDLE_DEEPLINKING_META_DATA_KEY = "flutter_deeplinking_enabled"` with documented default `true`; MASTG-TECH-0172, MASTG-TECH-0173, MASTG-TECH-0174 |
 
 - **Test:** `FlutterActivityLaunchConfigs.deepLinkEnabled(metaData)` returns **true** when the key is missing.
@@ -1694,7 +1767,7 @@ a code channel that can replace the app after the store review?**
   grep -aoE '"/[a-zA-Z0-9_/-]+"' out_dir/pp.txt | sort -u | head -50
   adb shell am start -a android.intent.action.VIEW -d "myapp://admin/debug" <pkg>
   adb shell am start -a android.intent.action.VIEW -d "https://app.target.com/internal/tools" <pkg>
-  frida -U -f <pkg> -l deeplink-monitor.js --no-pause
+  frida -D "$SERIAL" -f <pkg> -l deeplink-monitor.js
   ```
 - **Proof:** The URI path rendering as a Dart route — visible on screen and observable in a Frida hook on the
   router Blutter recovered — with the decompiled `MainActivity` containing no validation at all.
@@ -1712,6 +1785,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) upward when the route renders another user's data |
 | **Attacker** | AM-03 zero-permission local app (a twenty-line unprivileged PoC app is sufficient) |
 | **Applies to** | Flutter apps using `io.flutter.embedding.android.FlutterActivity` (v2 embedding), all current versions |
+| **Requires** | flutter, exported-activity |
 | **Maps to** | Flutter `FlutterActivityLaunchConfigs.java` — `EXTRA_INITIAL_ROUTE = "route"`, `EXTRA_DART_ENTRYPOINT = "dart_entrypoint"`, `EXTRA_DART_ENTRYPOINT_ARGS = "dart_entrypoint_args"`, `EXTRA_CACHED_ENGINE_ID = "cached_engine_id"`, `EXTRA_CACHED_ENGINE_GROUP_ID`, `EXTRA_ENABLE_STATE_RESTORATION`; `getInitialRoute()` reads the intent extra **before** manifest metadata; MASTG-TECH-0160 |
 
 - **Test:** `getInitialRoute()` checks `intent.hasExtra("route")` first. Any exported `FlutterActivity` or
@@ -1748,6 +1822,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) — do not file; report what the substitution unlocks |
 | **Attacker** | AM-12 own device — **not an attack** |
 | **Applies to** | Flutter, and any framework with a replaceable engine `.so`; the gadget path also works on non-rooted devices |
+| **Requires** | flutter, device |
 | **Maps to** | MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0034 (LIEF), MASTG-TOOL-0103 (uber-apk-signer) |
 
 - **Test:** reFlutter-patched engines and gadget-injected builds are the standard testing path. An app that
@@ -1794,6 +1869,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when the map is reachable and materially accelerates recovery |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter apps built with `--obfuscate --split-debug-info`, where CI/CD artefacts, crash-upload buckets or update infrastructure are in scope |
+| **Requires** | flutter |
 | **Maps to** | Flutter's official obfuscation documentation (the symbol map is what `flutter symbolize` consumes) |
 
 - **Test:** `--obfuscate --split-debug-info` only renames symbols and stores the map externally. It does not
@@ -1822,6 +1898,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) against the build host where it is in scope |
 | **Attacker** | AM-08 malicious third-party SDK |
 | **Applies to** | Flutter/Dart projects where the repository or CI is in scope — **not** an end-user-device finding |
+| **Requires** | flutter |
 | **Maps to** | **CVE-2026-27704** — Dart SDK before **3.11.0** and Flutter SDK before **3.41.0**, Zip Slip during Pub package extraction letting a malicious archive write outside the intended Pub-cache destination; OSV tracks malicious packages under the `MAL-` id namespace (records exist at `osv.dev/vulnerability/MAL-2024-11812` and `MAL-2025-189`) |
 
 - **Test:** Two distinct issues: a malicious or compromised pub package, and the Zip Slip in the toolchain
@@ -1853,6 +1930,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the assets yield a validated backend credential; `.for_internal_asset` (P3) for an internal admin base URL or a shipped `.map` |
 | **Attacker** | AM-01 |
 | **Applies to** | Cordova, Ionic (on either Cordova or Capacitor), Capacitor |
+| **Requires** | cordova, capacitor |
 | **Maps to** | Capacitor `CapConfig.java` (`capacitor.config.json` asset path), Capacitor `PluginManager.java` (`capacitor.plugins.json`), Cordova `ConfigXmlParser.java` (`res/xml/config.xml`); MASTG-TOOL-0011 (Apktool) |
 
 - **Test:** For these frameworks all application logic ships as readable (sometimes minified) web assets.
@@ -1888,6 +1966,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the plugin-driven file/exec outcome it enables |
 | **Attacker** | AM-02 remote one-click |
 | **Applies to** | Cordova, Ionic-on-Cordova |
+| **Requires** | cordova, webview, js-bridge |
 | **Maps to** | Cordova `WhitelistPlugin.java` — `"*"` on `allow-navigation` expands to `http://*/*`, `https://*/*` **and `data:*`**; `"*"` on `access` expands to `http://*/*` + `https://*/*`; defaults seed `file:///*` and `data:*` into `allowedRequests`. Cordova whitelist docs: "Cannot block redirects from whitelisted remote sites to non-whitelisted destinations"; `allow-navigation` takes precedence over `allow-intent`. MASWE-0035 (CWE-79, CWE-601, CWE-829) |
 
 - **Test:** `<allow-navigation href="*">` and `<access origin="*">` are extremely common copy-paste defaults.
@@ -1927,6 +2006,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) — whoever controls that host or its DNS serves the app body into a fully bridged WebView |
 | **Attacker** | AM-06 network attacker (with `server.cleartext: true`); AM-09 whoever controls the host |
 | **Applies to** | Capacitor, all versions. The Cordova equivalent is a remote `<content src="http...">` in `config.xml` |
+| **Requires** | capacitor, webview |
 | **Maps to** | Capacitor `CapConfig.java` (`server.url`, `server.hostname`, `server.errorPath`, `server.appStartPath`, `server.html5mode`); Capacitor docs describe `server.url`/`server.cleartext` as "intended for use with live-reload servers" |
 
 - **Test:** `server.url` makes the WebView load an **external** URL instead of the bundled assets. Shipped in
@@ -1959,6 +2039,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) once the read lifts a session token; `server_side_injection.file_inclusion.local` (P1) for the read primitive itself |
 | **Attacker** | AM-02 remote one-click (given any script execution in the WebView) |
 | **Applies to** | Capacitor Android. This is a **designed feature** of the local server, not a CVE — report it as the impact multiplier on any WebView script-execution finding in a Capacitor app |
+| **Requires** | capacitor, webview, js-bridge |
 | **Maps to** | Capacitor `Bridge.java` (`CAPACITOR_FILE_START = "/_capacitor_file_"`, `CAPACITOR_CONTENT_START = "/_capacitor_content_"`, and the injected `window.WEBVIEW_SERVER_URL` global); `AndroidProtocolHandler.openFile()` (`filePath.replace(Bridge.CAPACITOR_FILE_START,"")` -> `new FileInputStream(realPath)`); `AndroidProtocolHandler.openContentUrl()`; `WebViewLocalServer.isLocalFile()`; MASWE-0033 |
 
 - **Test:** Capacitor's local server maps any request whose path starts with `/_capacitor_file_` to
@@ -1997,6 +2078,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) where it reaches an internal service that yields execution; otherwise `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) upward by what the internal response contains |
 | **Attacker** | AM-02 |
 | **Applies to** | Capacitor Android with the CapacitorHttp plugin (default in recent Capacitor) |
+| **Requires** | capacitor, webview, js-bridge |
 | **Maps to** | Capacitor `Bridge.java` (`CAPACITOR_HTTP_INTERCEPTOR_START = "/_capacitor_http_interceptor_"`, `CAPACITOR_HTTP_INTERCEPTOR_URL_PARAM = "u"`); `WebViewLocalServer.handleCapacitorHttpRequest()` (copies all request headers into the native request, honours `x-cap-user-agent`, and skips the pinning socket factory when `isDomainExcludedFromSSL(bridge,url)` is true); `plugin/CapacitorHttp.java` (`addJavascriptInterface(this, "CapacitorHttpAndroidInterface")`) |
 
 - **Test:** The local server intercepts `/_capacitor_http_interceptor_?u=<absolute-url>` and performs the
@@ -2029,6 +2111,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for a Filesystem/exec-class plugin; otherwise rate by the capability the answering plugin holds |
 | **Attacker** | AM-02 |
 | **Applies to** | Capacitor Android |
+| **Requires** | capacitor, webview, js-bridge |
 | **Maps to** | Capacitor `MessageHandler.java` — installs the bridge as `WebViewCompat.addWebMessageListener(webView, "androidBridge", bridge.getAllowedOriginRules(), ...)` and **falls back to `webView.addJavascriptInterface(this, "androidBridge")` on exception or when `android.useLegacyBridge` is set**; `postMessage` dispatches on `type=="cordova"` versus plugin `pluginId`/`methodName`; `PluginManager.parsePluginsJSON()` reads `assets/capacitor.plugins.json`; MASWE-0033 (CWE-749, CWE-94) |
 
 - **Test:** Every registered plugin method is invokable from JS by posting a JSON message. Enumerate the
@@ -2073,6 +2156,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when `exec()` succeeds from attacker content; High when only the bridge object is exposed off-origin |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova / Ionic-on-Cordova Android. The `minSdk<17` reflection escape applies to this interface as a **LEGACY** class |
+| **Requires** | cordova, webview, js-bridge, device |
 | **Maps to** | Cordova `SystemWebViewEngine.java` (`webView.addJavascriptInterface(exposedJsApi, "_cordovaNative")`); `SystemExposedJsApi.java` (`@JavascriptInterface exec` / `setNativeToJsBridgeMode` / `retrieveJsMessages`, all taking `bridgeSecret`); `CordovaBridge.java` (`verifySecret`, `promptOnJsPrompt` handling `gap:`, `gap_bridge_mode:`, `gap_poll:`, `gap_init:`, and the "called from restricted origin" branch) |
 
 - **Test:** Cordova exposes `exec()` through `addJavascriptInterface(exposedJsApi, "_cordovaNative")`, guarded
@@ -2108,6 +2192,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1); `broken_authentication_and_session_management.authentication_bypass` (P1) once it lifts the session token |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova-Android. The secure default is the `https://localhost` scheme (`preference "scheme"`/`"hostname"`); the insecure mode is **LEGACY** compatibility and should never ship |
+| **Requires** | cordova, webview, js-bridge, device |
 | **Maps to** | Cordova `SystemWebViewEngine.java` — the `preferences.getBoolean("AndroidInsecureFileModeEnabled", false)` branch calling `settings.setAllowFileAccess(true)` and `settings.setAllowUniversalAccessFromFileURLs(true)`; `ConfigXmlParser.getLaunchUrlPrefix()` (returns the `file://` launch prefix in that mode); MASWE-0033 |
 
 - **Test:** This single preference switches the WebView back to a `file://` origin **and** enables both
@@ -2139,6 +2224,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | rated by behaviour; `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null) or the sink the plugin reaches |
 | **Attacker** | AM-01/AM-03 depending on what the plugin does pre-authentication |
 | **Applies to** | Cordova / Ionic-on-Cordova |
+| **Requires** | cordova, webview, js-bridge, device |
 | **Maps to** | Cordova `ConfigXmlParser.java` (`paramType.equals("onload")` -> `onload = "true".equals(...)`) |
 
 - **Test:** `ConfigXmlParser` honours `<param name="onload" value="true"/>`, instantiating the plugin before
@@ -2168,6 +2254,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) for a path-taking method; `server_side_injection.sql_injection` (P1) where a method takes raw SQL; otherwise by capability |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova, Ionic, Capacitor |
+| **Requires** | cordova, capacitor, webview, js-bridge |
 | **Maps to** | Capacitor `MessageHandler.callPluginMethod` / `callCordovaPluginMethod` dispatch; `PluginManager.java` loading classes from `capacitor.plugins.json`; Cordova `ConfigXmlParser.java` (`<feature name=...><param name="android-package" value="<class>"/>`) |
 
 - **Test:** Hand-written plugins are where the interesting bugs live: a `@PluginMethod` that takes a path, a
@@ -2206,6 +2293,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) for the cross-user case; escalating to `server_side_injection.remote_code_execution_rce` (P1) via the bridge |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova, Ionic, Capacitor; and React Native apps rendering authenticated content in `react-native-webview` |
+| **Requires** | webview, cordova, capacitor, react-native |
 | **Maps to** | MASTG-TEST-0334, MASWE-0035 (CWE-79, CWE-601, CWE-829), MASWE-0033; Cordova whitelist docs ("Cordova apps are susceptible to XSS … secured by using the Cordova Whitelist Plugin and a strict CSP") |
 
 - **Test:** For these frameworks there is no separate "native app" to test — the app *is* a web app with a
@@ -2245,6 +2333,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | no standalone node — a missing CSP alone is on the never-submit list; file the chained outcome |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova, Ionic, Capacitor |
+| **Requires** | webview, cordova, capacitor, react-native |
 | **Maps to** | Cordova whitelist docs (CSP section, including the note that `gap:` is required for the bridge on iOS); Capacitor security guidance (CSP via meta tag) |
 
 - **Test:** For these frameworks the CSP meta tag in `index.html` is the only real defence once
@@ -2273,6 +2362,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `cloud_security.misconfigured_services_and_apis.exposed_debug_or_admin_interfaces` (null); the chained outcome via the bridge is `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-11 physical unlocked, or anyone with ADB access to the device |
 | **Applies to** | Cordova, Capacitor and React Native WebViews |
+| **Requires** | webview, device, cordova, capacitor, react-native |
 | **Maps to** | Capacitor `Bridge.java` (`WebView.setWebContentsDebuggingEnabled(this.config.isWebContentsDebuggingEnabled())`) and `CapConfig.java` (`android.webContentsDebuggingEnabled`, defaulting to `isDebug`); Cordova `SystemWebViewEngine.java` (`preferences.getString("InspectableWebview", null)` -> `WebView.setWebContentsDebuggingEnabled(true)`); `RNCWebViewManager.kt` (`RNCWebView.setWebContentsDebuggingEnabled(value)`) |
 
 - **Test:** All three WebView frameworks expose a switch that enables remote debugging. In a release build
@@ -2303,6 +2393,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (null) where the excluded host carries authentication material; the filed finding is what the intercepted traffic exposes |
 | **Attacker** | AM-06 network attacker |
 | **Applies to** | Capacitor Android with CapacitorHttp |
+| **Requires** | capacitor, webview, mitm |
 | **Maps to** | Capacitor `WebViewLocalServer.java` (`if (!isDomainExcludedFromSSL(bridge, url)) connection.setSSLSocketFactory(bridge);`) |
 
 - **Test:** `handleCapacitorHttpRequest()` installs the pinning-aware socket factory only when the domain is
@@ -2329,6 +2420,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | no standalone node; it is the context that makes the D19-047 → D19-053 findings accurate, and `allowMixedContent` is the enabling condition for script injection into the bridge origin |
 | **Attacker** | AM-06 for mixed content; AM-01 for the WebView-version gate |
 | **Applies to** | Capacitor Android; the scheme half also applies to Cordova |
+| **Requires** | capacitor, webview, mitm |
 | **Maps to** | Capacitor `Bridge.java` (`settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW)` branch, `DEFAULT_ANDROID_WEBVIEW_VERSION = 60`, `DEFAULT_HUAWEI_WEBVIEW_VERSION = 10`, `allowedOriginRules` seeded with `scheme + "://" + authority` then each `server.allowNavigation` entry, prefixing bare hosts with `https://`); `CapConfig.java` (`server.androidScheme` default `https`, rejecting the invalid schemes `file, ftp, ftps, ws, wss, about, blob, data`; `android.allowMixedContent`, `android.useLegacyBridge`, `android.captureInput`, `android.zoomEnabled`, `android.resolveServiceWorkerRequests`; defaults `allowMixedContent=false`, `webContentsDebuggingEnabled=isDebug`, `minWebViewVersion=60`, `minHuaweiWebViewVersion=10`, `useLegacyBridge=false`); Cordova `ConfigXmlParser.java` (`preference "scheme"` default `https`, `"hostname"` default `localhost`) |
 
 - **Test:** The local-server scheme determines the WebView's origin, and therefore which origin your
@@ -2359,6 +2451,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a as recon; `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) if filed as a finding — do not |
 | **Attacker** | n/a |
 | **Applies to** | Unity IL2CPP Android builds. Il2CppDumper supports Unity **5.3–2022.2**; frida-il2cpp-bridge covers **5.3.0–6000.3.x**. Mono-backend builds instead ship managed `.dll` assemblies under `assets/bin/Data/Managed/` and are directly ILSpy-able |
+| **Requires** | unity, native, device, root |
 | **Maps to** | Il2CppDumper README (outputs `DummyDll/`, `dump.cs`, `script.json`, `il2cpp.h`, `stringliteral.json`, `ida.py`, `ida_with_struct.py`, `ghidra.py`, `ghidra_wasm.py`, `Il2CppBinaryNinja`); frida-il2cpp-bridge README; MASTG-TECH-0165 |
 
 - **Test:** IL2CPP ships `global-metadata.dat` alongside `libil2cpp.so`; together they regenerate near-complete
@@ -2398,6 +2491,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (metadata protection is a resilience control; report only what the recovered code reveals) |
 | **Attacker** | n/a |
 | **Applies to** | Unity IL2CPP Android with metadata obfuscation |
+| **Requires** | unity, native, device, root |
 | **Maps to** | katyscode IL2CPP research (`IL2CPP_ASSERT(s_GlobalMetadataHeader->sanity == 0xFAB11BAF)`; the load chain `il2cpp_init()` -> `Runtime::Init()` -> `MetadataCache::Initialize()` -> `MetadataLoader::LoadMetadataFile()`; the `s_FrameworkVersion = framework_version_for(runtime_version)` `"4.0"` waypoint marking `Runtime::Init`; the XOR / renamed-file / embedded-metadata / JIT-decryption obfuscation classes); Il2CppDumper README (the error string, the GameGuardian memory-dump route, Zygisk-Il2CppDumper); Zygisk-Il2CppDumper README (`/data/data/GamePackageName/files/dump.cs`) |
 
 - **Test:** When Il2CppDumper reports `ERROR: Metadata file supplied is not valid metadata file.`, the metadata
@@ -2433,6 +2527,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.privilege_escalation` (null — rated on the entitlement obtained); Critical where it produces direct revenue loss |
 | **Attacker** | AM-12 own device for the manipulation; the impact is on the vendor |
 | **Applies to** | Unity IL2CPP Android |
+| **Requires** | unity, device, frida, backend-api |
 | **Maps to** | frida-il2cpp-bridge README (trace/intercept/replace method calls; `dump` subcommand); Il2CppDumper README (`dump.cs` with method/field/property information) |
 
 - **Test:** Unity games commonly grant entitlements client-side and tell the server afterwards. Find the grant
@@ -2476,6 +2571,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.privilege_escalation` (null) when the server accepts the edited value; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) if filed as a storage issue — do not |
 | **Attacker** | AM-12 own device |
 | **Applies to** | Unity Android |
+| **Requires** | unity, device |
 | **Maps to** | Il2CppDumper `dump.cs` (used to locate the `PlayerPrefs` call sites) |
 
 - **Test:** Unity games routinely persist currency, entitlements and progression in `PlayerPrefs` or under
@@ -2502,6 +2598,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the CLI-extras library-load path; `broken_access_control.exposed_sensitive_android_intent` (null) for the general extras case |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | Unity Android apps exporting `UnityPlayerActivity` / `UnityPlayerGameActivity`. Note the `targetSdk<31` gate — with an intent-filter present, exported is the default |
+| **Requires** | unity, exported-activity |
 | **Maps to** | **CVE-2025-59489** (arbitrary code execution in the Unity Runtime; Unity advisory "Security Sept-2025-01"); MASTG-TECH-0160; Il2CppDumper README |
 
 - **Test:** Unity apps typically export a player activity as `MAIN`/`LAUNCHER`, and the Unity runtime honours
@@ -2536,6 +2633,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a as recon |
 | **Attacker** | n/a |
 | **Applies to** | Xamarin.Android and .NET MAUI. `assemblies/assemblies.blob` is the **.NET ≤ 8 (LEGACY) layout**; `lib/<abi>/libassemblies.<abi>.blob.so` is **.NET 9+ (CURRENT)** |
+| **Requires** | xamarin, native, device, frida |
 | **Maps to** | pyxamstore README (`unpack -d`, `pack`, LZ4 handling, and the caveat that "DLLs containing associated debug or configuration data are not fully supported"); HN Security write-up (`pyxamstore unpack -d apktoolOut/unknown/assemblies/`); mwalkowski .NET MAUI 9 write-up (`payload` ELF section, `XABA` magic `0x41424158`, 20-byte header, 28-byte `AssemblyStoreEntryDescriptor`, `XALZ` + LZ4 with the uncompressed size at bytes 8..12, and the `pymauistore` automation); Appknox guide (`Xamarin_XALZ_decompress.py`, `XamAsmUnZ`) |
 
 - **Test:** All Xamarin/MAUI business logic is IL in .NET assemblies. Where those assemblies live changed
@@ -2589,6 +2687,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a hardcoded key; `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` (**P5**) for the pinning half — file the traffic finding instead |
 | **Attacker** | AM-01 for the key; AM-06/AM-07 for the traffic |
 | **Applies to** | Xamarin.Android, .NET MAUI |
+| **Requires** | xamarin, native, device, frida |
 | **Maps to** | Appknox Xamarin guide (`ServicePointManager.ServerCertificateValidationCallback`; Fridax as "primary tool for runtime Xamarin hooking"; the `xamarin-unpin` Frida script); `@Gand3lf/xamarin-antiroot` ("Bypass antiroot detection for Xamarin apps!") |
 
 - **Test:** .NET apps pin, root-check and encrypt in managed code, typically via
@@ -2604,7 +2703,7 @@ a code channel that can replace the app after the store review?**
   grep -nE 'GetInstallerPackageName|signatures|PackageInfo' all.cs | head
   # runtime:
   frida-trace -U -f <pkg> -i "mono_*"          # surface the Mono API in use
-  frida -U -f <pkg> -l fridax.js --no-pause    # Fridax, for managed-method hooking
+  frida -D "$SERIAL" -f <pkg> -l fridax.js    # Fridax, for managed-method hooking
   frida --codeshare <xamarin-unpin script> -U -f <pkg>
   ```
 - **Proof:** For crypto, a literal key/IV byte array in the decompiled source plus a successful offline
@@ -2626,6 +2725,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) if filed as a resilience issue — file the unlocked control instead |
 | **Attacker** | AM-12 own device |
 | **Applies to** | Xamarin.Android and .NET ≤ 8 MAUI (blob layout). For .NET 9 MAUI use the `payload`-section extraction and rebuild path |
+| **Requires** | xamarin, device |
 | **Maps to** | HN Security write-up (`pyxamstore unpack -d apktoolOut/unknown/assemblies/`, dnSpy `IsJailBroken()` -> `return false`, `pyxamstore pack`, `apktool b`, `uber-apk-signer`, and the split-APK `pm install-create/write/commit` install path); pyxamstore README (`assemblies.json` is required for the repack); MASTG-TOOL-0103 |
 
 - **Test:** The cleanest Xamarin PoC is an IL edit: flip the method that gates a feature, repack the assembly
@@ -2658,6 +2758,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a directly |
 | **Attacker** | n/a |
 | **Applies to** | Kotlin Multiplatform / Compose Multiplatform Android targets |
+| **Requires** | kmp |
 | **Maps to** | (method; no external identifier verified in this corpus for KMP specifically) |
 
 - **Test:** In a KMP app a defect in `commonMain` affects every target; a defect in `androidMain` affects only
@@ -2693,6 +2794,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Kotlin Multiplatform |
+| **Requires** | kmp |
 | **Maps to** | (method; KMP secrets guidance: the `expect/actual` pattern, Android `BuildConfig` fed from `local.properties`, a Gradle-generated secrets file, and the explicit caveat that "anyone with the app can disassemble and retrieve the secret") |
 
 - **Test:** KMP guidance routes secrets through `BuildConfig` fields fed from `local.properties`, or a
@@ -2720,6 +2822,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) where key material is recovered; `broken_access_control.privilege_escalation` (null) where a licence/entitlement decision the server trusts is bypassed |
 | **Attacker** | AM-01 (offline analysis) / AM-12 (runtime interception) |
 | **Applies to** | Cordova/Ionic/Capacitor WebViews, RN WebViews, Unity WebGL builds embedded in a WebView, and any in-app browser rendering first-party content that loads Wasm |
+| **Requires** | webview |
 | **Maps to** | Il2CppDumper README (WASM is an explicitly supported binary format, with a dedicated `ghidra_wasm.py` for the ghidra-wasm-plugin — Unity WebGL/Wasm targets are dumpable the same way) |
 
 - **Test:** Some apps ship `.wasm` modules for crypto, DRM, licence checks or ML inside the web assets, or
@@ -2760,6 +2863,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the script text is attacker-influenceable |
 | **Attacker** | AM-09 malicious backend/CDN; AM-06 where the fetch is unauthenticated or interceptable |
 | **Applies to** | any Android app embedding a JS engine — including React Native apps that add a **second** engine for server-driven UI |
+| **Requires** | native, device, frida |
 | **Maps to** | (method; symbol-based engine detection); MASWE-0049 (CWE-494); ATT&CK T1407 |
 
 - **Test:** Beyond React Native, apps ship general JS engines (QuickJS, Duktape, JerryScript, V8,
@@ -2791,6 +2895,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the old version accepts no token; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) / `.view_sensitive_information_iterable_object_identifiers` (P3) for the field-exposure and object-access regressions |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | any versioned API reached by a cross-platform client. **This is the highest-value mobile-to-backend bridge in the whole methodology** |
+| **Requires** | backend-api |
 | **Maps to** | ATT&CK T1533; the endpoint inventory from D19-011 is the input |
 
 - **Test:** Old API versions stay reachable without receiving the same fixes, and a mobile app's hardcoded
@@ -2830,6 +2935,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `broken_access_control.privilege_escalation` (null) or `broken_authentication_and_session_management.authentication_bypass` (P1) for the auth cases; `broken_authentication_and_session_management.two_fa_bypass` (P3) for the MFA case |
 | **Attacker** | AM-01 |
 | **Applies to** | all frameworks; most acute in RN/Flutter/KMP, where "write the logic once and share it" is the selling point |
+| **Requires** | backend-api |
 | **Maps to** | n/a (method); the failure shapes below are drawn from the bug-hunting corpus |
 
 - **Test:** Cross-platform teams frequently implement validation once, in shared code, and assume the server
@@ -2883,6 +2989,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (null — rated on what travels) |
 | **Attacker** | AM-06 network attacker, no trusted CA required |
 | **Applies to** | Flutter, Unity, React Native, Cordova/Capacitor — any framework with a non-platform HTTP stack |
+| **Requires** | mitm, flutter, unity, react-native, cordova, capacitor |
 | **Maps to** | **MASTG-TEST-0237** (Cross-Platform Framework Configurations Allowing Cleartext Traffic — status **placeholder**; its note states: "Cross-platform frameworks (e.g. Flutter, React native, …), typically have their own implementations for HTTP libraries, where cleartext traffic can be allowed"), MASWE-0026, MASTG-KNOW-0015, MASTG-TECH-0151 (Analyzing the Network Security Configuration) |
 
 - **Test:** A Network Security Config that forbids cleartext constrains the platform `HttpsURLConnection`/OkHttp
@@ -2933,6 +3040,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); Critical only when the logged value is authentication material and a local reader exists |
 | **Attacker** | AM-04 local app with a common permission (`READ_LOGS` where granted), AM-11 physical unlocked, or anyone receiving a bug report |
 | **Applies to** | Capacitor and Cordova primarily; the RN/Flutter equivalents are `console.log`/`debugPrint` left in |
+| **Requires** | device |
 | **Maps to** | Capacitor `MessageHandler.java` (`Logger.verbose(Logger.tags("Plugin"), "To native (Cordova plugin): callbackId: … service: … action: … actionArgs: …")` and the Capacitor-plugin equivalent); Capacitor `CapConfig.java` (`loggingBehavior`: `none` / `debug` / `production`, `android.loggingEnabled`); MASTG-TOOL-0112 (pidcat) |
 
 - **Test:** Capacitor logs every plugin call and every Cordova-compat call including `actionArgs`. If verbose
@@ -2967,6 +3075,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (validity control) |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter that reaches an API or a rendered surface |
+| **Requires** | backend-api |
 | **Maps to** | n/a (method; drawn from the bug-hunting corpus's false-positive register) |
 
 - **Test:** Framework recovery produces a very high volume of candidate strings and routes. Four disciplines
@@ -3010,6 +3119,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (triage control) |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter |
+| **Requires** | backend-api |
 | **Maps to** | MASTG-TOOL-0104 (the `file`-based engine identification MASTG itself prescribes), MASTG-TECH-0165 |
 
 - **Test:** A cross-platform finding is not reproducible without the runtime, the bundle/snapshot identity and
@@ -3050,6 +3160,7 @@ a code channel that can replace the app after the store review?**
 | **VRT** | n/a (submission control) |
 | **Attacker** | n/a |
 | **Applies to** | any D19 finding that is a chain — which most of the P1s in this chapter are |
+| **Requires** | backend-api |
 | **Maps to** | n/a (method; drawn from the bug-hunting corpus's reporting register) |
 
 - **Test:** The high-value outcomes here are chains: *bundle-recovered endpoint* + *shadow-API auth

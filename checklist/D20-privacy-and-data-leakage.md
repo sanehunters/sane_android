@@ -64,6 +64,30 @@ Medium; only root or ADB reaches it, and it is Low or informational.
 holding that value — a co-resident app with one user grant, a third-party host, the lock screen, another
 signed-in user — and if none does, is any value the app emits an authenticator?**
 
+## Applicability probe
+
+D20 never goes `n/a` as a whole — every app emits log lines, renders a screen and usually posts a notification. The probe decides which of the five item groups apply and records the baseline facts the items reuse. Run it once in P4 before the Triage order; it takes under a minute.
+
+```bash
+DEC=$E/decompiled; M=$DEC/apktool/AndroidManifest.xml; SRC=$DEC/jadx/sources
+# 1. third-party hosts and SDKs — decides the egress group (D20-016..025, D20-053..056, D20-072/073)
+grep -rhoE 'https?://[A-Za-z0-9.-]+\.[a-z]{2,}' $SRC $DEC/apktool/res/values 2>/dev/null | sort -u | tee $E/inventory/hosts-static.txt | wc -l
+grep -nE 'InitProvider|meta-data' $M | grep -iE 'crashlytics|sentry|bugsnag|instabug|datadog|uxcam|smartlook|clarity|fullstory|quantum|logrocket|firebase|AD_ID|appsearch' | wc -l   # R8-safe SDK census
+# 2. notification, capture, input and sensor surfaces — decides D20-030..035, D20-036..051, D20-029/055/059/064..066
+grep -oE 'POST_NOTIFICATIONS|BIND_NOTIFICATION_LISTENER_SERVICE|DETECT_SCREEN_CAPTURE|FOREGROUND_SERVICE_MEDIA_PROJECTION|QUERY_ALL_PACKAGES|HIGH_SAMPLING_RATE_SENSORS|READ_CONTACTS|READ_CALENDAR|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE|RECORD_AUDIO|android.permission.CAMERA|foregroundServiceType="[a-zA-Z|]+"' $M | sort | uniq -c
+grep -rlE 'Notification\$Builder|NotificationCompat\$Builder|FLAG_SECURE|setContentSensitivity|EXTRA_IS_SENSITIVE|accessibilityDataSensitive|importantForAutofill|SetSchemaRequest|ShortcutManager' $SRC $DEC/apktool/res/layout 2>/dev/null | wc -l
+# 3. backend and accounts — decides D20-027/028/058/060..063 (two-accounts for the cross-user halves)
+jq -c '{scope: .authorisation.scope, accounts: (.accounts|length), framework: .target.framework, targetSdk: .target.targetSdk, minSdk: .target.minSdk}' $E/engagement.json
+```
+
+Write the result into `assessment-status.md` as one line per group, then mark rows in `coverage.csv`:
+
+- Egress group `n/a` only when step 1 lists zero third-party hosts AND zero SDK registrations AND the D14 proxy capture of a full flow pass contacted first-party hosts only. Note text: `D20-016..025 n/a — static host sweep: N hosts, all first-party (inventory/hosts-static.txt); 0 SDK init providers; D14 capture M flows, 0 third-party hosts`.
+- Notification group `n/a` when the manifest has no `POST_NOTIFICATIONS` and step 2 finds 0 Notification builders. Note text: `D20-030..035 n/a — no POST_NOTIFICATIONS, 0 Notification builder classes; minSdk=<n>`.
+- Sensor/contacts/media group `n/a` per permission absent in step 2 (one note per item: `D20-029 n/a — READ_CONTACTS/READ_CALENDAR absent from manifest`).
+- Backend/cross-user items are `blocked`, never `n/a`, when `accounts < 2` or the backend is out of scope: `D20-058/061/062 blocked — second account missing (engagement.json.blockers)`.
+- Everything else (method items D20-001..006, logcat D20-007..015, screen/input D20-036..051, lifecycle D20-060/063, governance D20-067..070) is always applicable; record `targetSdk/minSdk` and the device API from step 3 so the `api>=N` items can be marked `n/a` on an older device image with the note `D20-0xx n/a — device API <n> below the item gate`.
+
 ## Triage order
 
 1. **Build the canary identity and the marker set first** (D20-002). Every later capture is greppable only
@@ -205,7 +229,7 @@ grep -rn "$VAL" out/sources/ | head -40                        # Java/Kotlin
 strings -n 6 out/resources/resources.arsc | grep -i "$VAL"     # string table
 for so in out/lib/*/*.so; do strings -n 6 "$so" | grep -i "$VAL" && echo "  ^ $so"; done
 # 2. enumerate its sinks at runtime in one pass
-frida -U -f $PKG -l sinkmap.js --no-pause
+frida -D "$SERIAL" -f $PKG -l sinkmap.js
 ```
 ```javascript
 // sinkmap.js — one hook per sink class, all printing the same marker
@@ -364,6 +388,7 @@ grep -ic 'authorization\|"cookie"\|set-cookie' out.sanitized.har
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — the mechanism alone has no node above P5 |
 | **Attacker** | AM-04 (a `READ_LOGS` holder), AM-08 (a log-forwarding SDK), AM-11 (ADB on an unlocked device) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0203 (Runtime Use of Logging APIs), MASTG-TEST-0231 (References to Logging APIs), MASTG-TECH-0009 (Monitoring System Logs), MASTG-TOOL-0112 (pidcat), MASTG-KNOW-0049, MASTG-BEST-0002, MASWE-0005, CWE-532; deprecated predecessor MASTG-TEST-0003 |
 
 - **Test:** Clear the buffers, capture **all** of them, drive exactly **one** flow, then sweep. Passive
@@ -404,6 +429,7 @@ grep -rnE 'Log\.[vdiwef]\(|System\.(out|err)\.print|Timber\.|printStackTrace' ou
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with a *demonstrated* off-device recipient it becomes a third-party disclosure, and with an authenticator `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-04 / AM-08 / AM-11 |
 | **Applies to** | **CURRENT** on every modern target |
+| **Requires** | device |
 | **Maps to** | Google Mobile VRP Invalid Reports, "Logging sensitive data" — *"since debugging privileges are required to access logs, an app logging sensitive data is not considered a severe enough vulnerability to qualify"*; HackenProof: "Debug Logs / Stack Traces — unless they expose sensitive data like credentials or tokens"; H1 #462416 (Grammarly, Low, $0); H1 #5314 (Coinbase, OAuth code in logcat, payable only once chained with the hardcoded client secret); AOSP threats [T.P3]/[T.P4] |
 
 - **Test:** `READ_LOGS` has been `signature|privileged` since **Android 4.1 (API 16)**, so a third-party app
@@ -450,6 +476,7 @@ adb bugreport /tmp/br.zip && unzip -l /tmp/br.zip | grep -iE 'bugreport.*txt|FS/
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | n/a — instrumentation |
 | **Applies to** | all; essential where R8 has renamed the logging wrapper |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TEST-0203 (Runtime Use of Logging APIs); MASTG-TOOL-0001 (Frida); MASWE-0005 |
 
 - **Test:** Apps route logging through their own wrapper (`AppLog`, `Timber`, a Kotlin `inline fun log`),
@@ -459,7 +486,7 @@ adb bugreport /tmp/br.zip && unzip -l /tmp/br.zip | grep -iE 'bugreport.*txt|FS/
   never reach the buffer because the wrapper is a no-op in release but still formats the string in memory.
 - **How:**
 ```bash
-frida -U -f $PKG -l loghooks.js --no-pause
+frida -D "$SERIAL" -f $PKG -l loghooks.js
 ```
 ```javascript
 Java.perform(function () {
@@ -496,6 +523,7 @@ Java.perform(function () {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with a working token, `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-04 / AM-08 / AM-11 |
 | **Applies to** | all OkHttp/Retrofit apps; check the **release** flavour specifically |
+| **Requires** | device, frida |
 | **Maps to** | H1 **#56002** (Shopify, "Shopify android client all API request's response leakage, including access_token, cookie, response header, response body content"); CVE-2014-1664 / EDB 39061 (GoToMeeting for Android — `D/G2M` lines containing the full `getInfo` URL and a body with `"authToken":"AAFe4rYexu4..."` and `"accessCode"`); CWE-532; MASWE-0005 |
 
 - **Test:** The single most common form of "insecure logging" that actually matters. A debug network
@@ -506,7 +534,7 @@ Java.perform(function () {
 ```bash
 grep -rnE 'HttpLoggingInterceptor|Level\.(BODY|HEADERS)|setLevel\(|Stetho|Chucker|ChuckerInterceptor|FlipperOkhttpInterceptor|addNetworkInterceptor|addInterceptor' out/sources/
 # who is actually installed at runtime?
-frida -U -f $PKG -l interceptors.js --no-pause
+frida -D "$SERIAL" -f $PKG -l interceptors.js
 ```
 ```javascript
 Java.perform(function () {
@@ -543,6 +571,7 @@ adb logcat -d | grep -iE 'authorization: bearer|set-cookie|"access_token"'
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-04 / AM-11 |
 | **Applies to** | Capacitor, Cordova, Ionic; the React Native and Flutter equivalents are `console.log` / `debugPrint` left in |
+| **Requires** | capacitor, cordova, react-native, flutter |
 | **Maps to** | Capacitor `MessageHandler.java` — `Logger.verbose(Logger.tags("Plugin"), "To native (Cordova plugin): callbackId: … service: … action: … actionArgs: …")` and the Capacitor-plugin equivalent; Capacitor `CapConfig.java` (`loggingBehavior`: `none` / `debug` / `production`; `android.loggingEnabled`); MASTG-TOOL-0112 |
 
 - **Test:** Capacitor logs every plugin call including `actionArgs`, and Cordova-compat calls the same way.
@@ -595,6 +624,7 @@ adb logcat -c && <drive a data flow> && adb logcat -d | grep -aiE 'SELECT |INSER
 | **VRT** | `sensitive_data_exposure.visible_detailed_error_page.full_path_disclosure` (P5) is the nearest node; usually informational |
 | **Attacker** | AM-11 |
 | **Applies to** | all; MASTG is explicit that "the target of this test is the production build of the app" |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0263 (Logging of StrictMode Violations), MASTG-TEST-0264 (Runtime Use of StrictMode APIs), MASTG-TEST-0265 (References to StrictMode APIs), MASTG-KNOW-0009, MASWE-0061, semgrep rule `mastg-android-strictmode`; deprecated predecessor MASTG-TEST-0041 |
 
 - **Test:** `StrictMode` policy-violation logging in release leaks implementation detail — file paths, SQL,
@@ -619,6 +649,7 @@ adb logcat -d | grep -i 'StrictMode'
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-11 (physical unlocked with ADB), AM-04 (an OEM diagnostics package) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0009; hackwithsingh sec-14-25 #12 "crash dump residue", #26 "tombstone crash file", #27 "dropbox (system) crash entries"; CWE-532 |
 
 - **Test:** Logcat is not the only system-held copy. Native crashes write tombstones, the framework writes
@@ -648,6 +679,7 @@ echo "bugreport files: $(find /tmp/br -type f | wc -l)"
 | **VRT** | `sensitive_data_exposure.sensitive_token_in_url.user_facing` (P4); the log copy files as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); a reset token reaching a third party is `sensitive_data_exposure.token_leakage_via_referer.untrusted_third_party` (P4) |
 | **Attacker** | AM-04 / AM-08 / AM-11 |
 | **Applies to** | all apps with a remote backend |
+| **Requires** | backend-api, mitm |
 | **Maps to** | CVE-2014-1664 (GoToMeeting for Android, EDB 39061); CVE-2018-11505 (EDB 44776); OWASP Mobile Top 10 2024 M6 — "URL query parameters: data visible in server logs and browser history"; CWE-532, CWE-598 |
 
 - **Test:** A token in a query string is copied into every log that touches the request: the app's log, the
@@ -683,6 +715,7 @@ PY
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with a live token in the payload, `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-08 (the SDK's own backend is now a copy-holder) |
 | **Applies to** | all apps embedding Crashlytics / Sentry / Bugsnag / Instabug / Datadog |
+| **Requires** | device, mitm |
 | **Maps to** | developer.android.com risk `log-info-disclosure` (MASVS-STORAGE); MASTG-TEST-0318 / MASTG-TEST-0319; MASWE-0073; CWE-359, CWE-532; T1646 Exfiltration Over C2 Channel |
 
 - **Test:** This is the item that converts a P5 logcat observation into a reportable disclosure: the log line
@@ -727,6 +760,7 @@ PY
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — **not** `insecure_data_storage.screen_caching_enabled`, because the capture is in-process and `FLAG_SECURE` is irrelevant to it |
 | **Attacker** | AM-08 |
 | **Applies to** | all; any API level |
+| **Requires** | device, mitm |
 | **Maps to** | MASWE-0038, MASWE-0073; MASTG-TEST-0319; no vendor CVE — the mechanism is documented SDK behaviour |
 
 - **Test:** The inversion worth knowing: **`FLAG_SECURE` does not stop an in-process capture.** It excludes
@@ -778,6 +812,7 @@ PY
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — HackerOne's multi-user PII standard applies once the console holds many users' recordings) |
 | **Attacker** | AM-08 |
 | **Applies to** | any app embedding UXCam, Smartlook, Microsoft Clarity, FullStory, Quantum Metric, Contentsquare, Glassbox, LogRocket or an in-house replay SDK |
+| **Requires** | device, mitm |
 | **Maps to** | MASWE-0073, MASWE-0067; MASTG-TEST-0319; local corpus bridge table (`getUxCamSessionUrl` — a JS-bridge method that hands a third party a replay URL of the user's session); CWE-359 |
 
 - **Test:** Replay SDKs record the view hierarchy or the rendered frames. Masking is **opt-in per view**, so
@@ -810,6 +845,7 @@ mitmdump -nr run.mitm -q ~ 'uxcam|smartlook|clarity|fullstory|quantummetric|cont
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-08 |
 | **Applies to** | all |
+| **Requires** | mitm, frida |
 | **Maps to** | MASTG-TEST-0318 (References to SDK APIs Known to Handle Sensitive User Data), MASTG-TEST-0319 (Runtime Use of…), MASTG-TEST-0206 (which explicitly gives no code locations — pair the two); Google Play "Using SDKs safely and securely" (developers must treat SDK collection as their own and verify SDKs "implement logic respecting user consent preferences"); Oversecured SDK-security research on SDKs "collecting undisclosed data"; T1646 |
 
 - **Test:** "The app talks to eleven hosts" is an inventory. "This analytics SDK sent this user's email and
@@ -818,7 +854,7 @@ mitmdump -nr run.mitm -q ~ 'uxcam|smartlook|clarity|fullstory|quantummetric|cont
 - **How:**
 ```bash
 mitmdump -s dump.py --set block_global=false -w flows.mitm   # SDKs often ignore the app's proxy settings
-frida -U -f $PKG -l attrib.js --no-pause
+frida -D "$SERIAL" -f $PKG -l attrib.js
 ```
 ```javascript
 // attrib.js — attribute every URL to the stack that requested it
@@ -858,6 +894,7 @@ awk '/^\[URL\]/{u=$2} /at com\./{if(u){print u" <- "$2; u=""}}' frida.log | sort
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null; the only concrete child, `…wifi_ssid_password`, is P4) — escalate via `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-08 |
 | **Applies to** | all apps with a consent banner, a "do not sell/share" toggle, or a privacy-settings screen |
+| **Requires** | device, mitm |
 | **Maps to** | Google Play "Using SDKs safely and securely" (SDKs must "implement logic respecting user consent preferences"); MASWE-0073, MASWE-0074; MASVS-PRIVACY-1; the Body-Diff Rule (a byte-identical response is not a bypass — here, a byte-identical **capture** is the control failure) |
 
 - **Test:** The single most convincing privacy test, and it takes two captures. Run one identical flow with
@@ -900,6 +937,7 @@ done
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-08 |
 | **Applies to** | all apps that show a consent, ToS or privacy dialog on first launch |
+| **Requires** | device, mitm |
 | **Maps to** | MASWE-0073; MASVS-PRIVACY-1; hackwithsingh sec-14-18 #15 "logs user location data without proper consent", #25, #30; riya78 §7 |
 
 - **Test:** Pre-consent transmission is the step that converts a hygiene note into a reportable finding — the
@@ -937,6 +975,7 @@ mitmdump -nr firstlaunch.mitm --set flow_detail=3 2>/dev/null | grep -c "$AID"
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
 | **Attacker** | n/a — instrumentation that produces the strongest evidence in this chapter |
 | **Applies to** | **Android 11+ (API 30+)**; `<attribution android:tag>` is required for targetSdk 31+ |
+| **Requires** | device, frida, api>=30 |
 | **Maps to** | developer.android.com/guide/topics/data/audit-access — `AppOpsManager.OnOpNotedCallback`, `onNoted(SyncNotedAppOp)`, `onSelfNoted(SyncNotedAppOp)`, `onAsyncNoted(AsyncNotedAppOp)`, `setOnOpNotedCallback(mainExecutor, cb)`, `SyncNotedAppOp.op` / `.attributionTag`, `AsyncNotedAppOp.getMessage()`; MASTG-TEST-0319 |
 
 - **Test:** The platform will tell you which code read the user's private data — including code inside
@@ -981,6 +1020,7 @@ adb shell appops get $PKG | grep -iE 'CAMERA|RECORD_AUDIO|FINE_LOCATION|READ_CON
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
 | **Attacker** | n/a — transparency defect |
 | **Applies to** | **targetSdk 31+** |
+| **Requires** | device, frida, targetsdk>=31 |
 | **Maps to** | developer.android.com/guide/topics/data/audit-access — *"A `null` attribution tag indicates the main part of your app"*; `<attribution android:tag="sharePhotos" android:label="@string/share_photos_attribution_label" />`; MASVS-PRIVACY-1 |
 
 - **Test:** Attribution tags feed the system's access records, which the user sees in the Privacy Dashboard.
@@ -1013,6 +1053,7 @@ PY
 | **VRT** | rate on what the decoded payload contains |
 | **Attacker** | n/a — instrumentation |
 | **Applies to** | all; standard for high-volume analytics SDKs |
+| **Requires** | frida, mitm |
 | **Maps to** | T1532 Archive Collected Data (ATT&CK: BRATA S1094 "compressed data with the `zlib` library before exfiltration"; Exodus "encrypts data using XOR prior to exfiltration"); T1646 Exfiltration Over C2 Channel; MASTG-TECH-0100 |
 
 - **Test:** When a telemetry batch is gzipped, protobuf-encoded or encrypted before upload, the proxy shows
@@ -1050,6 +1091,7 @@ grep -rnE 'GZIPOutputStream|Deflater|ZipOutputStream|GzipSource|Okio|protobuf|Ci
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-08 (a third-party recipient) — for a first-party-only flow this is a compliance finding, which most bounty programmes route to a privacy track rather than pay |
 | **Applies to** | all apps handling user data |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASTG-TEST-0206 (Undeclared PII in Network Traffic Capture) — the test fails *"if you can find the PII you entered in the app that is not declared in the app's marketplace privacy declarations (e.g. Data Safety section in Google Play) and/or in its privacy policy"*; prerequisites `identify-sensitive-data`, `privacy-policy`, `app-store-privacy-declarations`; MASTG-TECH-0100; MASTG-TOOL-0097 (mitmproxy), MASTG-TOOL-0077 (Burp), MASTG-TOOL-0079 (ZAP), MASTG-TOOL-0081 (Wireshark); MASWE-0073 (Inadequate Data Collection Declarations), MASWE-0074 (Inadequate Tracking Domains Declarations); MASVS-PRIVACY-1, MASVS-PRIVACY-3; OWASP Mobile Top 10 2024 M6; CWE-359 |
 
 - **Test:** The evaluation is a compliance **delta**, not a judgement: capture decrypted traffic while
@@ -1102,6 +1144,7 @@ Request Body: uid=…&email=zq4h7m2kx9%40example.invalid&lat=51.5074&lon=-0.1278
 | **VRT** | `sensitive_data_exposure.sensitive_token_in_url.user_facing` (P4), `…on_password_reset` (P5), `sensitive_data_exposure.non_sensitive_token_in_url` (P5); with a third-party referer recipient, `sensitive_data_exposure.token_leakage_via_referer.untrusted_third_party` (P4) |
 | **Attacker** | AM-08 / AM-09 |
 | **Applies to** | all apps with a remote backend; the WebView half applies to any in-app browser |
+| **Requires** | backend-api, mitm |
 | **Maps to** | OWASP Mobile Top 10 2024 M6 — *"URL query parameters: Data visible in server logs and browser history"*; MASWE-0073; MASVS-PRIVACY-3 |
 
 - **Test:** A value in a query string is copied into CDN logs, proxy logs, WebView history and — if the URL
@@ -1132,6 +1175,7 @@ PY
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); a recovery-code dump chains to `broken_authentication_and_session_management.two_fa_bypass` (P3) or `…authentication_bypass` (P1) |
 | **Attacker** | AM-05 (own account, own token — then escalate cross-user via D15) |
 | **Applies to** | all mobile backends |
+| **Requires** | backend-api |
 | **Maps to** | `hunt-mfa-bypass` recovery-code dump; `hunt-graphql` field-level authorisation; `triage-validation` anti-patterns list; CWE-200 |
 
 - **Test:** The mobile client displays three fields; the API returns forty — including recovery codes,
@@ -1166,6 +1210,7 @@ jq -r '.components.schemas | keys[]' openapi.json 2>/dev/null
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); the on-disk half is `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) |
 | **Attacker** | AM-05 (a shared device), AM-04 where the cache is reachable |
 | **Applies to** | all |
+| **Requires** | backend-api, device |
 | **Maps to** | sehno "Test for cache management on HTTP (eg Pragma, Expires, Max-age)"; MASTG-TEST-0320 (WebViews Not Cleaning Up Sensitive Data) for the WebView cache half; CWE-524 |
 
 - **Test:** Two halves. Server side: does a PII-bearing response carry `Cache-Control: no-store`? Client
@@ -1194,6 +1239,7 @@ strings -n 6 "app_webview/Default/Local Storage/leveldb/"*.log 2>/dev/null | gre
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) — this is third-party PII (the contacts themselves never consented) |
 | **Attacker** | AM-08; the data subjects are people who are not users of the app at all |
 | **Applies to** | all apps with an invite, "find people you know", or contact-sync feature |
+| **Requires** | device, mitm |
 | **Maps to** | T1636.003 Protected User Data: Contact List; T1636.001 Calendar Entries; MASTG-TEST-0254 (Dangerous App Permissions), MASTG-TEST-0255 (Permission Requests Not Minimized); MASWE-0067 (Lack of Anonymisation or Pseudonymisation Measures); CWE-359 |
 
 - **Test:** Four questions, each a different finding: (a) is the **whole** address book uploaded or only the
@@ -1230,6 +1276,7 @@ curl -s https://api.target.example/v1/me/contacts -H "Authorization: Bearer $A" 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**) |
 | **Attacker** | **AM-10** physical locked — the rare item where AM-10 is the primary model |
 | **Applies to** | all. MASTG's evaluation uses **`minSdkVersion`**, not `targetSdkVersion`, because that "ensures the test accounts for the least secure environment in which the app can operate": it fails if sensitive data is exposed **and** (`minSdkVersion >= 33` with `POST_NOTIFICATIONS` declared) **or** (`minSdkVersion <= 32`, regardless of the permission) |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0315 (Sensitive Data Exposed via Notifications) — named data types "personally identifiable information (PII), one-time passwords (OTPs), or other sensitive data, like health or financial details"; MASWE-0037 (CWE-200, CWE-359); MASTG-KNOW-0054; MASTG-BEST-0027; semgrep rules `mastg-android-sensitive-data-in-notifications` and `…-manifest`; mobsfscan `android_sensitive_notification`; deprecated predecessor MASTG-TEST-0005; developer.android.com `develop/ui/views/notifications/build-notification` (`VISIBILITY_PUBLIC` / `VISIBILITY_PRIVATE` / `VISIBILITY_SECRET`, `setPublicVersion()`, channel `lockscreenVisibility`); T1517 |
 
 - **Test:** Three settings interact and developers get the precedence wrong. `VISIBILITY_PUBLIC` shows full
@@ -1267,6 +1314,7 @@ adb exec-out screencap -p > lockscreen.png
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (**P3**) |
 | **Attacker** | **AM-04** — notification access is a single user toggle, no dangerous permission |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | developer.android.com `reference/android/service/notification/NotificationListenerService` (`BIND_NOTIFICATION_LISTENER_SERVICE`, `onNotificationPosted`, `getActiveNotifications()`, `Notification.extras`, `Notification.EXTRA_TEXT`, `contentIntent`); MASWE-0037; MASTG-TEST-0315; Google Mobile VRP Low Impact Data includes "content of a user's messages (email, instant messages, text messages)"; empirical: Mail.ru "read new emails from any inbox in notification center" **$10,000**; T1517 Access Notifications (ATT&CK: *"In the case of Credential Access, adversaries may attempt to intercept one-time code sent to the device"*; Escobar "steals Google Authenticator MFA codes"; SharkBot "intercepts notifications and leverages Direct Reply features"; mitigation: **Application Developer Guidance — avoid sensitive data in notification text**); T1644 Out of Band Data |
 
 - **Test:** Lock-screen visibility settings are irrelevant here: a listener reads `Notification.extras`
@@ -1316,6 +1364,7 @@ adb logcat -s POC:E -d
 | **VRT** | `broken_authentication_and_session_management.two_fa_bypass` (**P3**) |
 | **Attacker** | AM-04 |
 | **Applies to** | **Android 15+**, all apps regardless of targetSdk |
+| **Requires** | device, api>=35 |
 | **Maps to** | developer.android.com `about/versions/15/behavior-changes-all` — *"Untrusted apps implementing `NotificationListenerService` cannot read unredacted OTP content from notifications. Trusted companion device associations exempt. System automatically redacts OTPs"*; T1517 |
 
 - **Test:** Android 15 redacts OTP content from untrusted listeners, with a carve-out for trusted
@@ -1349,6 +1398,7 @@ adb logcat -s POC:E -d
 | **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-11 physical unlocked, AM-05 shared device |
 | **Applies to** | **Android 11+ (API 30+)** where the user has enabled notification history |
+| **Requires** | device, api>=30 |
 | **Maps to** | hackwithsingh sec-14-14 #48 "notification history accessible via settings reveals sensitive data", #42 "ticker text reveals sensitive information on status bar", #17 "big text style exposes full message content on lock screen"; MASWE-0037 |
 
 - **Test:** Dismissing a notification does not remove it. Android 11's notification history keeps recent
@@ -1377,6 +1427,7 @@ adb exec-out screencap -p > nhistory.png
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
 | **Attacker** | AM-02 (a remote party on a support or casting session — the classic remote-access-scam vector) |
 | **Applies to** | **Android 15+** for the platform protection; below that there is no protection at all |
+| **Requires** | device, api>=35 |
 | **Maps to** | developer.android.com `about/versions/15/behavior-changes-all` — "Notification content hidden during screen sharing"; `Notification.Builder.setPublicVersion()`; **"Default system screen recorder exempted"** |
 
 - **Test:** Android 15 hides notification content during screen sharing and lets the app supply an
@@ -1405,6 +1456,7 @@ adb pull /sdcard/r.mp4
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null = rated on what it exposes) |
 | **Attacker** | AM-04 (notification access) |
 | **Applies to** | all apps posting notifications with actions |
+| **Requires** | device |
 | **Maps to** | T1517 Access Notifications (ATT&CK: SharkBot "intercepts notifications and leverages Direct Reply features"); developer.android.com `NotificationListenerService` (`Notification.Action.actionIntent`, `RemoteInput`) |
 
 - **Test:** A notification listener does not only read — it can **fire** a notification's actions and fill a
@@ -1441,6 +1493,7 @@ if (n.actions != null) for (Notification.Action a : n.actions) {
 | **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) is the trap node; the escalation is `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-04 (MediaProjection or accessibility consumer), AM-08 (in-process SDK), AM-11 (physical) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | T1513 Screen Capture (ATT&CK: *"Background applications can capture screenshots or videos of another application running in the foreground by using the Android `MediaProjectionManager` (generally requires the device user to grant consent)"*; mitigation *"Application developers can apply the `FLAG_SECURE` property to sensitive screens"*; *"An adversary with root access or Android Debug Bridge (adb) access could call the Android `screencap` or `screenrecord` commands"*); T1453; MASWE-0038 |
 
 - **Test:** "No `FLAG_SECURE`" is P5 (`screen_caching_enabled`) and Bugcrowd's own remediation text calls the
@@ -1478,6 +1531,7 @@ grep -rnE 'FLAG_SECURE|setContentSensitivity|setRecentsScreenshotEnabled|setFilt
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-04 for a third-party capturer; for the target app itself this is a covert-collection finding |
 | **Applies to** | **targetSdk 34+** for the per-session rule; Android 15+ adds the status-bar chip and auto-stop on lock |
+| **Requires** | device |
 | **Maps to** | developer.android.com `about/versions/14/behavior-changes-14` — per-session consent, `SecurityException` on reusing a cached `createScreenCaptureIntent()` result, one `createVirtualDisplay()` per `MediaProjection`, mandatory `MediaProjection.Callback#onStop()` (otherwise `IllegalStateException`), `VirtualDisplay#resize()`/`setSurface()` for config changes; `about/versions/15/behavior-changes-all` — status-bar chip, "auto-stops when device screen locked"; `media/grow/media-projection`; T1513 |
 
 - **Test:** From targetSdk 34 an app can no longer cache the projection consent `Intent` and silently
@@ -1510,6 +1564,7 @@ adb shell dumpsys activity services $PKG | grep -iE 'mediaProjection|foreground|
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-02 (the remote viewer in a support-call or casting scam) |
 | **Applies to** | **Android 15+**, all apps |
+| **Requires** | device, api>=35 |
 | **Maps to** | developer.android.com `about/versions/15/behavior-changes-all` — screenshare protection, `Notification.Builder.setPublicVersion()`, `View.setContentSensitivity(int)`, Developer Options "Disable screen share protections", default system screen recorder exempted; `about/versions/16/…` for `accessibilityDataSensitive` (see D20-050); MASWE-0038 |
 
 - **Test:** Android 15 hides sensitive password input and OTP-bearing notification content from remote
@@ -1538,6 +1593,7 @@ adb shell settings put global disable_screen_share_protections 1
 | **VRT** | `insecure_data_storage.screen_caching_enabled` (P5) for the capture itself; the missing control has no node of its own — argue it as a contributing factor |
 | **Attacker** | AM-04 / AM-11 |
 | **Applies to** | **Android 14+** for screenshot detection, **Android 15+** for recording detection |
+| **Requires** | device, api>=34 |
 | **Maps to** | developer.android.com `about/versions/14/features/screenshot-detection` — `<uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />`, `Activity.ScreenCaptureCallback`, `registerScreenCaptureCallback(mainExecutor, cb)` in `onStart()`, `unregisterScreenCaptureCallback(cb)` in `onStop()`, per-activity scope, **"Only detects screenshots from hardware button combinations, not from ADB or instrumentation tests"**, the callback does not receive the image, and `FLAG_SECURE` prevents capture entirely; `about/versions/15/features` — `WindowManager.addScreenRecordingCallback()`, `SCREEN_RECORDING_STATE_VISIBLE`, `removeScreenRecordingCallback` |
 
 - **Test:** For an app whose threat model includes remote-access-trojan scams — banking, crypto, brokerage —
@@ -1566,6 +1622,7 @@ adb shell input keyevent KEYCODE_SYSRQ   # or press Power+VolDown physically
 | **VRT** | `insecure_data_storage.screen_caching_enabled` (**P5**) |
 | **Attacker** | AM-11 / AM-05 |
 | **Applies to** | all; **D04-042, D04-043 and D04-044 own the mechanics** — this item exists so the D20 pass does not re-derive them and so the privacy framing is recorded |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0289 (Runtime Verification of Sensitive Content Exposure in Screenshots During App Backgrounding — names the exact paths `/data/system_ce/0/snapshots` and `/data/system`), MASTG-TEST-0291 (References to Screen Capturing Prevention APIs), MASTG-TEST-0292 (`setRecentsScreenshotEnabled` not used), MASTG-TEST-0293 (`SurfaceView.setSecure` not used), MASTG-TEST-0294 (Compose dialogs `SecureOn` not used) — **0292/0293/0294 are `status: placeholder` with no published procedure, so test them by hand**; MASTG-KNOW-0053; MASTG-BEST-0014; MASWE-0038; semgrep rule `mastg-android-sensitive-data-in-screenshot`; deprecated predecessor MASTG-TEST-0010; AOSP threat [T.P4] "Screen unlocked (shared) devices under control of an authorized but different user" |
 
 - **Test:** Run D04-042/043/044 once, then bring the result here and answer the only question that changes
@@ -1599,6 +1656,7 @@ adb root && adb shell ls -la /data/system_ce/0/snapshots/ && adb pull /data/syst
 | **VRT** | `insecure_data_storage.screen_caching_enabled` (P5); escalate on data class |
 | **Attacker** | AM-04 / AM-11 |
 | **Applies to** | Flutter, Unity, and any engine rendering into a single `SurfaceView`/`TextureView`; also Cordova/Capacitor/RN where the WebView is the whole window |
+| **Requires** | device, flutter, unity, cordova, capacitor, react-native |
 | **Maps to** | MASTG-TEST-0293 (`setSecure` not used to prevent screenshots in `SurfaceView`s); MASWE-0038 |
 
 - **Test:** Native Android lets you protect a single activity. Flutter and Unity render every screen into one
@@ -1630,6 +1688,7 @@ adb shell input keyevent KEYCODE_APP_SWITCH && adb exec-out screencap -p > t_rec
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-04 (an enabled accessibility service; `uiautomator` itself is AM-11/AM-12 and is only the evidence tool) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASWE-0040; MASWE-0036; MASTG-TEST-0316 |
 
 - **Test:** The underrated check. A screenshot proves a human can read the screen; a `uiautomator` dump proves
@@ -1658,6 +1717,7 @@ echo "nodes: $(grep -c '<node' ui.xml)"
 | **VRT** | `mobile_security_misconfiguration.clipboard_enabled` (**P5**). The VRT changelog shows the finer-grained children `on_sensitive_content` / `on_non_sensitive_content` were **removed** and the parent set to P5 "due to children removal" — Bugcrowd deliberately flattened this and will not entertain a "but it was sensitive content" argument *on category grounds*. Escalate through the value: `broken_authentication_and_session_management.two_fa_bypass` (P3) for an OTP, `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) otherwise |
 | **Attacker** | AM-04 (the default IME's clipboard history; a foreground app) |
 | **Applies to** | `ClipDescription.EXTRA_IS_SENSITIVE` exists from **Android 13 (API 33)**; below 33 the literal string `"android.content.extra.IS_SENSITIVE"` is used |
+| **Requires** | device, frida |
 | **Maps to** | MASWE-0030 (Improper Use of the Clipboard, CWE-200/CWE-668 — modes: copying secrets without consent, not flagging with `EXTRA_IS_SENSITIVE`, not clearing, processing pasted data without validation). **There is no Android MASTG-TEST for the clipboard — a documented MASTG gap.** developer.android.com `privacy-and-security/risks/secure-clipboard-handling` and `develop/ui/views/touch-and-input/copy-paste`; T1414 Clipboard Data |
 
 - **Test:** "Copy" buttons on account numbers, IBANs, card numbers, recovery phrases, OTPs and API tokens.
@@ -1702,6 +1762,7 @@ Java.perform(function () {
 | **VRT** | `mobile_security_misconfiguration.clipboard_enabled` (**P5**); `external_behavior.system_clipboard_leak.shared_links` (P5) |
 | **Attacker** | AM-04 — a **foreground** app, or the default IME. **Background clipboard scraping is dead from Android 10; do not claim it.** |
 | **Applies to** | **CURRENT** Android 10+ behaviour; LEGACY below that |
+| **Requires** | device, frida |
 | **Maps to** | objection `android clipboard monitor`; drozer-modules `metall0id/post/clipboard.py` (`post.capture.clipboard`, `post.perform.setclipboard`) — MASTG-TOOL-0015, MASTG-TOOL-0029; T1414 Clipboard Data (ATT&CK: from Android 10, `ClipboardManager.OnPrimaryClipChangedListener()` *"can only be used if the application is in the foreground, or is set as the device's default input method editor (IME)"*) |
 
 - **Test:** The claim that carries weight is "a *different* application read this value", demonstrated from a
@@ -1737,6 +1798,7 @@ adb shell dumpsys clipboard 2>/dev/null | head
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the read; the paste direction is a business-logic finding rated on the transaction |
 | **Attacker** | For the read: the app itself as AM-08-shaped behaviour. For the paste: AM-04 (a clipboard-swapping app) |
 | **Applies to** | all; the read direction is constrained to foreground/default-IME from **Android 10** |
+| **Requires** | device, frida |
 | **Maps to** | MASWE-0030; T1414 Clipboard Data; T1641.001 Transmitted Data Manipulation (ATT&CK: *"replacing a copied Bitcoin wallet address with a wallet address that is under adversarial control"*; S.O.V.A. S1062 *"specifically manipulates clipboard data to swap cryptocurrency addresses"*) |
 
 - **Test:** Two directions nobody runs together. (a) Does the app read the clipboard on resume and ship what
@@ -1781,6 +1843,7 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -c zk8v3p1nd6
 | **VRT** | `external_behavior.browser_feature.autocorrect_enabled` (P5), `…autocomplete_enabled` (P5); escalate on the value |
 | **Attacker** | AM-04 (the IME), AM-05 (a shared device where the suggestion surfaces for the next user) |
 | **Applies to** | all; Jetpack Compose equivalent is `KeyboardOptions(keyboardType = …, autoCorrect = false)` |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0258 (References to Keyboard Caching Attributes in UI Elements), MASTG-KNOW-0055 (Keyboard Cache — "Non-Caching Input Types"), MASTG-BEST-0019, MASWE-0036, semgrep rule `mastg-android-keyboard-cache-input-types`; deprecated predecessor MASTG-TEST-0006; AOSP `EditorInfo` javadoc for `IME_FLAG_NO_PERSONALIZED_LEARNING` (value `0x1000000`), verbatim: *"used to request that the IME should not update any personalized data such as typing history and personalized language model based on what the user typed on this text editing object"*; T1533 Data from Local System (ATT&CK names "keyboard cache" as an example of local system data) |
 
 - **Test:** A field that is not a non-caching input type has its contents learned by the IME dictionary and
@@ -1811,6 +1874,7 @@ grep -rnE 'setInputType|KeyboardOptions|keyboardType|autoCorrect|imeOptions|IME_
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
 | **Attacker** | **AM-04** — being the default IME is one user action (or a keyboard a family member installed, which is AM-05 flavoured) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | HackTricks `inputmethodservice-ime-abuse.md` (note: `BIND_INPUT_METHOD` on the service only restricts *binding* to the system; the operative step is the victim enabling and selecting the keyboard); AOSP threat [T.A5] — the IME is one of only two parties allowed to read the clipboard from Android 10 and is an explicit trust point in the platform model; MASWE-0036 |
 
 - **Test:** An IME sees every keystroke in every app, including apps with no WebView at all. The app's only
@@ -1849,6 +1913,7 @@ adb shell dumpsys input_method | head -40
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-04 — the user enabling a third-party autofill service is a single action |
 | **Applies to** | **API 26+** |
+| **Requires** | device, api>=26 |
 | **Maps to** | developer.android.com `identity/autofill/autofill-services` (`AssistStructure` traversal via `WindowNode` / `ViewNode` with `getText()` and `getHint()`, `IMPORTANT_FOR_AUTOFILL_YES/NO/AUTO`, `setDataIsSensitive()`, `BIND_AUTOFILL_SERVICE`, action `android.service.autofill.AutofillService`); `guide/topics/text/autofill-services` (SaveInfo, Dataset, `setAuthentication`, the WebView caution *"compromised web content could capture autofilled data"*, and "verify package identity before sending data to untrusted packages"); MASWE-0036, MASWE-0040, MASWE-0019 (Lack of Auto-fill Support for Credential Providers) |
 
 - **Test:** An enabled `AutofillService` receives an `AssistStructure` — the **full view hierarchy of the
@@ -1910,6 +1975,7 @@ grep -rn 'android:inputType' out/res/layout/*.xml
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); with an OTP, `broken_authentication_and_session_management.two_fa_bypass` (P3) |
 | **Attacker** | **AM-04** — an enabled accessibility service, which is precisely what the prevailing Android banking-malware family obtains |
 | **Applies to** | all; `android:accessibilityDataSensitive="accessibilityDataPrivateYes"` is the **API 34+** control, `setAccessibilityDataSensitive()` its runtime form, `importantForAccessibility="no"` the pre-34 fallback |
+| **Requires** | device |
 | **Maps to** | MASWE-0040 (Sensitive Data Leaked via Accessibility Services, CWE-200/CWE-359 — modes: secrets in accessibility metadata, sensitive fields not using secure input, high-risk flows fully automatable, system keyboards exposing sensitive input). **There is no Android MASTG-TEST for accessibility — a documented MASTG gap.** developer.android.com `guide/topics/ui/accessibility/service` (`canRetrieveWindowContent`, `canPerformGestures`, `accessibilityEventTypes="typeAllMask"`, node `text`/`contentDescription`, `performAction`, `dispatchGesture`); HackTricks `accessibility-services-abuse.md`; T1453; T1517 |
 
 - **Test:** A service declaring `android:canRetrieveWindowContent="true"` reads
@@ -1964,6 +2030,7 @@ adb shell uiautomator dump /sdcard/a.xml && adb pull /sdcard/a.xml && grep -oE '
 | **VRT** | no VRT node for the missing control; file the demonstrated capture under `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) and name the missing control as remediation |
 | **Attacker** | AM-04 |
 | **Applies to** | banking, wallet, health and any app whose threat model includes on-device malware |
+| **Requires** | device |
 | **Maps to** | HackTricks `accessibility-services-abuse.md` "Hardening recommendations for app developers" — `android:accessibilityDataSensitive="accessibilityDataPrivateYes"` (API 34+), `setFilterTouchesWhenObscured(true)` + `FLAG_SECURE`, overlay detection, refusing to operate when `Settings.canDrawOverlays()` or a non-trusted service is active; MDM/EMM can enforce `ACCESSIBILITY_ENFORCEMENT_DEFAULT_DENY` (**Android 13+**) to block sideloaded services; MASTG-TEST-0340 (References to Overlay Attack Protections); MASWE-0025 |
 
 - **Test:** The platform-level abuse of accessibility is a device-compromise scenario, not an app bug. The
@@ -1992,6 +2059,7 @@ adb shell settings put secure accessibility_enabled 1
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null); if it becomes an auth factor, see D20-057 |
 | **Attacker** | AM-08 (the recipient); AM-03 on an OEM build where a non-privileged app obtains a restricted value |
 | **Applies to** | **Android 10+**: the restriction applies to **all devices regardless of target API level**. Apps targeting 10+ get a `SecurityException`; apps targeting 9 or earlier holding `READ_PHONE_STATE` get "`null` or placeholder data". **LEGACY:** below 10, `READ_PHONE_STATE` alone returned the real IMEI |
+| **Requires** | device, mitm |
 | **Maps to** | source.android.com `docs/core/permissions/immutable-device-ids` — restricted IDs are "telephony IMEI, MEID, ESN, and IMSI numbers, build, SIM, or USB serial numbers"; access limited to the default SMS app, privileged apps holding `READ_PRIVILEGED_PHONE_STATE` **and** allow-listed in `privapp-permission.xml`, carrier-privileged apps, and device/profile owners with `READ_PHONE_STATE`; AOSP security-model threat [T.D1] "Abusing unique identifiers for targeted attacks … including using stable device identifiers to cross profile boundaries or factory resets"; MASWE-0068 (CWE-359); MobSF rules `api_get_device`, `api_get_subscriber`, `api_get_sim_serial`, `api_get_sim_provider`, `api_get_sim_operator`, `api_get_phone`; QARK `file/phone_identifier.py`; T1422 lineage via T1636 |
 
 - **Test:** Their presence in modern code means one of three things and you must say which: a legacy path
@@ -2024,6 +2092,7 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -cE '[0-9]{15}'
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null); a resettable advertising ID on its own is not a finding |
 | **Attacker** | AM-08 |
 | **Applies to** | all; `ANDROID_ID` before **Android 8.0 (API 26)** was a non-resettable, first-boot random value, while in recent versions it is unique per app-signing-key + user + device |
+| **Requires** | mitm |
 | **Maps to** | MASWE-0068 (Incorrect Use of Identifiers for User Tracking, CWE-359), MASWE-0067 (Lack of Anonymisation or Pseudonymisation Measures), MASWE-0074 (Inadequate Tracking Domains Declarations); MASVS-PRIVACY-2 — requires *"technical barriers when employing complex 'fingerprint-like' signals… a fingerprint used for fraud detection should be isolated and not repurposed for audience measurement in an analytics SDK"*; MobSF `api_get_advertising`; H1 **#803941** (NordVPN, Low, **$0**) |
 
 - **Test:** The reportable shape is not "the app collects an advertising ID" — that is expected. It is
@@ -2062,6 +2131,7 @@ adb shell settings put secure limit_ad_tracking 1
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
 | **Attacker** | AM-08; AM-03 on an OEM build |
 | **Applies to** | **Android 10+** for default MAC randomisation; **11–13** for the progressive tightening |
+| **Requires** | mitm |
 | **Maps to** | AOSP security-model paper Table 3 — **11–13** "Restricted access to the hardware MAC address", mitigating [T.D1]; Table 6 — **10** "MAC randomization enabled by default for client mode, SoftAP, and Wi-Fi Direct", mitigating [T.P1][T.N1]; Table 3 — **10** "/proc/net limitations and other side channel mitigations"; §4.3.3 notes the `/proc` and `/sys` restrictions from Android 7/8 were partly motivated by apps abusing them "for side-channel attacks on data not otherwise accessible through their lack of required Android permissions (e.g. network hardware MAC addresses)"; MobSF `api_get_wifi`; MASWE-0068 |
 
 - **Test:** MAC randomisation removed a stable identifier deliberately. An app that recovers the **hardware**
@@ -2088,6 +2158,7 @@ adb shell cat /sys/class/net/wlan0/address 2>&1     # expect permission denied f
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
 | **Attacker** | AM-08 |
 | **Applies to** | **targetSdk 31+** — Android 12 rate-limits motion sensors "to protect sensitive user information"; `HIGH_SAMPLING_RATE_SENSORS` lifts the limit |
+| **Requires** | mitm |
 | **Maps to** | developer.android.com `about/versions/12/behavior-changes-12` (motion sensors rate-limited for targetSdk 31+); `develop/background-work/services/fgs/service-types` (`HIGH_SAMPLING_RATE_SENSORS` as a manifest prerequisite for the `health` FGS type); MASTG-TEST-0255 (Permission Requests Not Minimized); MASWE-0073 |
 
 - **Test:** An app holding `HIGH_SAMPLING_RATE_SENSORS` without a stated high-rate use case (fitness tracking,
@@ -2119,6 +2190,7 @@ PY
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) — and see the Graveyard: enumeration *as such* is documented intended behaviour |
 | **Attacker** | AM-08 |
 | **Applies to** | **LEGACY:** free package visibility is `targetSdk < 30`; from targetSdk 30 `<queries>` or `QUERY_ALL_PACKAGES` is required |
+| **Requires** | mitm |
 | **Maps to** | Google Mobile VRP Invalid Reports, Intended Behavior: *"the ability of an application to tell which versions of which apps are installed is intended functionality of the Android platform which we do not consider a vulnerability"*; MobSF `api_installed`; MASTG-TEST-0255; MASWE-0068 |
 
 - **Test:** The installed-app list is a high-entropy, stable fingerprint. The finding is not "the app can
@@ -2154,6 +2226,7 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -cE 'com\.[a-z]+\.[
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the identifier alone yields a session |
 | **Attacker** | AM-03 (any local app that can read or spoof the identifier) / AM-01 if it is accepted remotely |
 | **Applies to** | all; common in legacy device-binding, "trusted device" and silent-login flows |
+| **Requires** | backend-api, frida |
 | **Maps to** | MASWE-0068; MobSF `api_get_device`; QARK `file/phone_identifier.py` — Google's guidance is to *"create UUID instead of using phone identifiers"* |
 
 - **Test:** The inversion that pays. If `ANDROID_ID`, the advertising ID, the serial, a MAC or an
@@ -2191,6 +2264,7 @@ Java.perform(function () {
 | **VRT** | `sensitive_data_exposure.exif_geolocation_data_not_stripped_from_uploaded_images.automatic_user_enumeration` (**P3**) / `…manual_user_enumeration` (**P4**) — note the qualifier. **Without user enumeration there is no rated node**, and several programmes exclude EXIF by name |
 | **Attacker** | **AM-05** — another signed-in user of the same app, fetching a photo the victim uploaded |
 | **Applies to** | all apps that accept and re-serve user photos: marketplace listings, dating profiles, review photos, claim evidence, support attachments |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | Google Mobile VRP: *"Location information alone does not qualify (unless combined with the ability to uniquely identify an individual)"*; Basecamp lists "EXIF information not stripped from uploaded images" as out of scope; HackenProof excludes image metadata "unless they expose sensitive user information"; empirical: X/xAI "Twitter for android is exposing user's location to any installed android app" **$560**; T1430 Location Tracking; MASWE-0067 |
 
 - **Test:** The self-directed finding — "my own photo keeps its GPS" — is discounted everywhere. The payable
@@ -2226,6 +2300,7 @@ curl -s "https://cdn.target.example/listings/<id>/original.jpg" -o anon.jpg && e
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-08 |
 | **Applies to** | API 29+ apps with a media-import feature; the photo picker and `READ_MEDIA_VISUAL_USER_SELECTED` are the modern alternative to a full `READ_MEDIA_IMAGES` grant |
+| **Requires** | device, mitm, api>=29 |
 | **Maps to** | MASTG-TEST-0254 (Dangerous App Permissions), MASTG-TEST-0255 (Permission Requests Not Minimized); MASWE-0073; T1636.004 Protected User Data: Photos |
 
 - **Test:** An app that asks for the full media permission when the photo picker would do gains read access
@@ -2255,6 +2330,7 @@ mitmdump -nr run.mitm --set flow_detail=3 2>/dev/null | grep -c zk8v3p1nd6
 | **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null, CWE-459); `cryptographic_weakness.incomplete_cleanup_of_keying_material` (**P5**, CWE-459); `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (**P4**) |
 | **Attacker** | **AM-05** — another user of the same device, which the vendor supports for kiosks, POS terminals, ward tablets and family devices ([T.P4]) |
 | **Applies to** | all |
+| **Requires** | device, root, backend-api |
 | **Maps to** | H1 **#23913** (Twitter iOS — DMs surviving logout in the application-state file); H1 **#377582** (VK, Low 3.0 — cache DB obtainable by a third-party app); hackwithsingh sec-14-25 #54 "recent apps list", #55 "screenshot file residue" |
 
 - **Test:** Log out, then diff. The question is not "is anything left" (something always is) but "is what is
@@ -2288,6 +2364,7 @@ adb shell ls /data/system_ce/0/snapshots/ 2>/dev/null
 | **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-05 / AM-11 for the device side; the server side is a data-subject-rights failure |
 | **Applies to** | all apps offering in-app account deletion — a Play requirement for apps with accounts |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | VRT `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (CWE-459); MASVS-PRIVACY-4-flavoured data-deletion expectations; riya78 §7 "Analyze any cloud synchronization or backup mechanisms for data exposure" |
 
 - **Test:** Delete the account, then check both ends. Server side: does `GET /me` 404, does the user still
@@ -2328,6 +2405,7 @@ adb shell ls -laR /sdcard/Android/data/$PKG /sdcard/Download 2>/dev/null
 | **VRT** | `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (**P4**); where the surviving token still reaches user data, `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-05 / whoever holds a previously issued token |
 | **Applies to** | all apps offering account deletion |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | VRT `broken_authentication_and_session_management.failure_to_invalidate_session.*`; no external identifier verified in the corpus for the grant-revocation half |
 
 - **Test:** Deletion usually flips a flag on a row. Enumerate everything that was issued in the account's
@@ -2359,6 +2437,7 @@ curl -i "https://target.example/s/<share-token-created-before-deletion>"
 | **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**); the escalation is `broken_authentication_and_session_management.authentication_bypass` (**P1**) via the restored token |
 | **Attacker** | AM-11 / AM-05 |
 | **Applies to** | all. **`adb backup` is LEGACY** — from Android 12 (API 31) it no longer includes app data unless the app is debuggable, so report through the **Auto Backup / device-transfer** path and `<data-extraction-rules>` (which replaced `fullBackupContent` at API 31), or the report closes as non-reproducible |
+| **Requires** | device, root |
 | **Maps to** | hackwithsingh sec-14-25 #1 "data recovery after application uninstall", #17 "cloud backup (Google Drive)", #18 "auto-backup mechanism", #19 "device transfer mechanism", #20 "smart switch migration", sec-14-17 #49 "backup data is bound to device identity preventing cross-device restore abuse"; **D11-051 to D11-058 own the backup rig** — reuse it |
 
 - **Test:** Uninstall and reinstall, then see what returns and what was left behind. Two distinct findings:
@@ -2392,6 +2471,7 @@ adb shell bmgr enabled; adb shell bmgr list transports; adb shell bmgr backupnow
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null); the recorded artefact files as `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-08 / the app itself |
 | **Applies to** | Background sensor restriction is **Android 9+**; the status-bar indicator and global mic/camera toggles are **Android 12+** |
+| **Requires** | device, frida |
 | **Maps to** | T1429 Audio Capture (ATT&CK: `RECORD_AUDIO` for the mic; `CAPTURE_AUDIO_OUTPUT` for call recording is *"restricted to privileged apps… only privileged applications, such as those distributed by Google or the device vendor, can access audio output"*, with `MediaRecorder.AudioSource.VOICE_CALL` as the call-capture source); T1512 Video Capture (`android.permission.CAMERA`; *"Android 9 and above restricts access to the mic, camera, and other device sensors from applications running in the background"*); T1541 Foreground Persistence; developer.android.com `about/versions/12/behavior-changes-all` (mic/camera toggles and indicators); MASTG-TEST-0254 |
 
 - **Test:** `appops` records a last-access timestamp per operation. Compare that record against your own
@@ -2432,6 +2512,7 @@ Java.perform(function () {
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
 | **Attacker** | the app / an SDK inside it (AM-08) |
 | **Applies to** | all |
+| **Requires** | device, frida |
 | **Maps to** | T1628.002 User Evasion (ATT&CK: BRATA *"can turn off or fake turning off the screen while performing malicious activities"*; BusyGasper *"hide[s] malicious activity by turning the screen's brightness as low as possible and muting the device"*; Crocodilus S9004 *"has displayed a black screen overlay and has muted the sound of the device to conceal all malicious actions"*; Hornbill *"uses an infrequent data upload schedule to avoid user detection"*); T1628 Hide Artifacts |
 
 - **Test:** Does the app suppress its own UI indications while collecting — a black or transparent overlay, a
@@ -2459,6 +2540,7 @@ adb shell dumpsys window | grep -iE 'TYPE_APPLICATION_OVERLAY|alpha='
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (null) |
 | **Attacker** | AM-08 (the app itself, or an SDK inside it) |
 | **Applies to** | targetSdk 34+ apps must declare an FGS type; `mediaProjection`, `microphone`, `camera` and `health` are the relevant ones |
+| **Requires** | device, frida |
 | **Maps to** | T1541 Foreground Persistence; developer.android.com `develop/background-work/services/fgs/service-types` (`HIGH_SAMPLING_RATE_SENSORS` as a manifest prerequisite for the `health` FGS type) |
 
 - **Test:** Android 9+ blocks background sensor access, so an app that wants continuous access keeps a

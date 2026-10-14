@@ -4,7 +4,7 @@
  "file": "D22-platform-version-behaviour.md",
  "why": "It pays negatively, and that is worth more than it sounds. The single largest structural defect the\nresearch corpus found in the public Android checklist literature is stated plainly by the\nIndusface/hackwithsingh/riya78 review: **\"None of the three sources gate any item by API level. That is\nthe single largest gap between these checklists and a usable 2026 methodology.\"** Every circulating\nchecklist still tells testers to report `MODE_WORLD_READABLE`, `adb backup` extraction, user-CA trust,\nimplicit component export, sticky broadcasts and the `addJavascriptInterface` reflection RCE as if the\nplatform had not closed each of them at a specific, knowable API level. A consultancy whose report is\ncompared against what independent hunters submit cannot afford to file any of those against a\ntargetSdk-35 app, and equally cannot afford to *drop* one against an app whose `minSdkVersion` is 24.\n\nThe positive half is narrower and much more valuable. Every hardening Google shipped between Android 12\nand Android 16 came with a documented opt-out, because compatibility demanded one. `Android 16` blocks\nnested-intent redirection by default — and ships `Intent.removeLaunchSecurityProtection()`. `Android 14`\nblocks zip traversal in `ZipFile`/`ZipInputStream` — and ships `dalvik.system.ZipPathValidator.clearCallback()`.\n`Android 16` adds strict intent matching — and ships `android:intentMatchingFlags=\"none\"`, which the\ndocs state *takes precedence* over the application-level value. `Android 12` removed BouncyCastle — and\nnothing stops an app bundling `bcprov` and calling `Security.insertProviderAt(..., 1)`. Each of those is\na one-line grep that finds a developer deliberately restoring a blocked primitive, in an app the client\nbelieves is on a modern platform. That is not a misconfiguration observation; it is the precondition\nthat makes a D08 or D17 finding land as P1 on a current device.\n\nNo source in the corpus gives a base rate for this domain, and that is the honest answer: it has no base\nrate because it has no bugs of its own. What it has is a measurable effect on everyone else's — the\ncorpus repeatedly records the same failure mode from two directions (the Google Mobile VRP excludes\n\"vulnerabilities that do not work on the latest available operating system version\"; Xiaomi excludes\n\"attacks that are only available in lower versions of Android\"; YesWeHack's Gojek programme excludes\nverbatim \"Exploits that are only possible on Android version 8 and below\"). Get the version regime\nwrong in the permissive direction and the report is closed for free; get it wrong in the conservative\ndirection and you never test the class at all.",
  "crux": "**For every candidate finding in this engagement: at which `minSdkVersion`, `targetSdkVersion` and device API level is it actually reachable — and has this app explicitly opted out of the platform hardening that would otherwise close it?**",
- "applicability": "",
+ "applicability": "D22 is the gate every other chapter reads, so the domain as a whole is never `n/a`. The probe decides which of its three blocks apply — the modern mandates (D22-011..062), the Play-layer gates (D22-063..069) and the LEGACY block (D22-070..077, plus D22-087) — and seeds `inventory/app.csv` with the integers every version-gated item quotes.\n\n```bash\n# 1. the triplet, from the installed package (never the store listing)\naapt2 dump badging \"$E/apk/base.apk\" | grep -oE \"(sdkVersion|targetSdkVersion|compileSdkVersion):'[0-9]+'\"\nadb -s \"$SERIAL\" shell dumpsys package \"$PKG\" | grep -oE '(minSdk|targetSdk|versionCode|versionName)=[^ ]+' | sort -u\n# 2. the device side, major + minor level + patch\nfor p in ro.build.version.sdk ro.build.version.sdk_minor ro.build.version.release ro.build.version.security_patch ro.build.fingerprint; do printf '%s=' \"$p\"; adb -s \"$SERIAL\" shell getprop \"$p\"; done\n# 3. the opt-out strings that are findings in their own right (one grep, record the counts)\ngrep -rlE 'removeLaunchSecurityProtection|ZipPathValidator|insertProviderAt|grantKeyAccess|FLAG_ALLOW_UNSAFE_IMPLICIT_INTENT' \"$DEC/jadx/sources\" | head\ngrep -cE 'intentMatchingFlags|debuggable=\"true\"|sharedUserId|allowCrossUidActivitySwitchFromBelow|allowUntrustedActivityEmbedding|requestLegacyExternalStorage' \"$DEC/AndroidManifest.merged.xml\"\n# 4. split delivery (D22-063/064) and the programme floor (D22-082)\nadb -s \"$SERIAL\" shell pm path \"$PKG\" | wc -l        # >1 = splits present\n```\n\nWrite `minSdk`, `targetSdk`, `compileSdk`, device `api`, `api_minor` and `patch` to `inventory/app.csv`, then run the D22-004 emitter. The `n/a` notes a model writes:\n\n- LEGACY block: `D22-070..077, D22-087 n/a — targetSdk=<T> (>=31) and minSdk=<M> (>=24) from aapt2 and dumpsys (inventory/app.csv); D22-004 emitter printed no LEGACY-live row; mechanism = the two integers.`\n- Play layer: `D22-063/064 n/a — pm path returns base.apk plus config splits only (logs/D22-063.txt); D22-065 n/a — no SafetyNet class in the APK (unzip -l count 0).`\n- Device-gated items on a missing image are **blocked**, not n/a: `D22-052..060 blocked — no API>=36 image in the lab (lab.md); re-run when the image exists.`\n- Per-item opt-out greps with count 0 are ruled out, not n/a: `D22-052 ruled out — removeLaunchSecurityProtection grep count 0 on $DEC/jadx/sources (logs/D22-052.txt).`",
  "triage": "1. **Pin the version triplet from the installed package** (D22-001). Thirty seconds, and it decides the\n   applicability of roughly sixty items across the other chapters. Nothing else in this chapter is\n   meaningful without it.\n2. **Grep the six opt-out strings** (D22-052, D22-034, D22-053, D22-017, D22-058, D22-013). These are\n   the only items in the chapter that are findings in their own right, and each is a single grep.\n3. **Build the version matrix and install on each image** (D22-003). Everything that follows needs two\n   API levels to be defensible; building it after you have a PoC wastes the PoC.\n4. **Run the mechanical LEGACY/CURRENT verdict** (D22-004) over the candidate list from every other\n   domain. This is where you delete the items you were about to waste a day on.\n5. **Distinguish a platform block from an app-side check** (D22-005). Run this *before* writing any\n   negative result, because a platform refusal proves nothing about the app and will not hold on the\n   client's minSdk fleet.\n6. **The targetSdk-31/33/34 mandates, audited as choices rather than omissions** (D22-011, D22-012,\n   D22-030, D22-031). On a modern target, an insecure value is something a developer typed.\n7. **The hardening opt-outs the app inherited from an SDK** (D22-039, D22-029, and the merged-manifest\n   route in D22-001). The app's effective posture is the merged manifest, not its own.\n8. **Play-layer controls** (D22-063 → D22-069). SafetyNet has been dead since January 2025 and is still\n   shipping; that is the cheapest High in this chapter.\n9. **The LEGACY block** (D22-070 → D22-077) only if the recorded SDK values put the app on the wrong\n   side of a gate. Otherwise these are graveyard entries, not tests.\n10. **Reporting discipline** (D22-078 → D22-082) last, but before you submit anything version-dependent.",
  "graveyard": "Every row here is a class the corpus's circulating checklists still present as current. Each is dead\nunconditionally at the stated level, or dead as a *default-driven* finding. Do not file them; cite this\ntable when a junior tester or a scanner report proposes one.\n\n| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"`android:exported` is missing, so the component is exported\" on a targetSdk 31+ app | The app cannot install on Android 12+ without the attribute — the absence you are reporting does not exist in the shipped build | An explicit `android:exported=\"true\"` with no `android:permission` on a component that performs a state change (D22-011) |\n| \"`<provider>` defaults to exported\" on a targetSdk 17+ app | The default has been `false` since Android 4.2 when no `<intent-filter>` is present | An explicit `exported=\"true\"` provider, or a `grantUriPermissions` path — D07's work, not a default (D22-071) |\n| \"The app trusts user-installed CAs\" on a minSdk 24+ app with no NSC opt-in | Untrusted by default since API 24; you installed the CA as a tester (AM-07), which is not an attacker model | An explicit `<certificates src=\"user\"/>` or a `<debug-overrides>` block in the release build (D22-072) |\n| \"Cleartext traffic is allowed\" on a targetSdk 28+ app with no override | Blocked by the default network security config since API 28 | `usesCleartextTraffic=\"true\"` or a `cleartextTrafficPermitted=\"true\"` domain config naming a production host (D22-073) |\n| \"`addJavascriptInterface` allows reflection to `Runtime.exec`\" on a minSdk 17+ app | From API 17 only `@JavascriptInterface`-annotated methods are reachable; the reflection chain is gone | The annotated bridge methods themselves, rated by what each one returns — D10, not this (D22-074) |\n| \"`MODE_WORLD_READABLE`/`MODE_WORLD_WRITEABLE` file modes\" | Throws `SecurityException` from API 24, and SELinux blocks cross-app `/data/data` access regardless of the DAC bits | Nothing at API 24+. Below it, a world-readable file containing a secret, proved by reading it from a second app |\n| \"The app sends sticky broadcasts\" | Deprecated at API 21; third-party apps can no longer send them | Nothing. A system or OEM sender is D25's surface |\n| \"`adb backup` extracts the app's data\" on an Android 12+ device | Gutted in Android 12 and effectively dead on 13+ unless the app is debuggable | Either an Android 11-or-lower device (D22-076), or `android:debuggable=\"true\"` in the release build (D22-013), or the D2D path (D22-014) |\n| \"StrandHogg 2.0 (CVE-2020-0096)\" on Android 10+ | Patched by back-port into Android 8.0/8.1/9 at the May 2020 patch level; Android 10 and later are not affected | Nothing on a supported device. StrandHogg 1.0 shapes need re-confirmation on the target's own targetSdk, and the platform-level task-affinity fix lands at API 30 |\n| \"Tapjacking via an overlay\" on Android 12+ | Touches from another UID's non-trusted overlay at opacity >= 0.8 are dropped by default | An overlay under the opacity threshold that still steers a state-changing tap, filed through the action it causes, not as tapjacking (D22-016) |\n| \"SafetyNet Attestation is bypassable\" | The API was fully turned down in January 2025 and now always fails | The app still calling it **and failing open** — which is a live High, filed as an integrity-gate bypass (D22-065) |\n| \"Implicit intents reach the app's internal components\" on a targetSdk 34+ app | Implicit intents are delivered only to exported components from targetSdk 34 | A component newly exported to absorb the implicit send (D22-031), or an implicit *send* that leaks its payload to any app |\n| \"Zip path traversal in the app's extractor\" on a targetSdk 34+ app with no opt-out | `ZipFile`/`ZipInputStream` throw `ZipException` on `..` and leading `/` by default | `ZipPathValidator.clearCallback()` present (D22-034), or an extractor that does not use the platform zip classes at all |\n| \"Nested intent redirection\" on Android 16, blocked in your PoC | Hardened by default for all apps since Android 16 | `removeLaunchSecurityProtection()` present (D22-052), or a demonstration on the client's supported older fleet with the population stated |\n| \"Background clipboard read\" | Blocked since Android 10; the access toast lands at API 31 | A foreground read of another app's clip on first paste, or the app placing a secret on the clipboard without `EXTRA_IS_SENSITIVE` (API 33+) — D11's work |\n| \"`READ_EXTERNAL_STORAGE` gives access to all media\" on an API 33+ device | The permission has no effect from API 33; `READ_MEDIA_*` replaced it | The granular permissions taken instead of the Photo Picker (D22-021) |\n| \"`setAllowFileAccess` defaults to true\" on a targetSdk 30+ app | Default is `false` from API 30 | An explicit `setAllowFileAccess(true)` call site — D10's |\n| \"The BouncyCastle provider is deprecated\" | Deprecated at API 28, removed at API 31 — a deprecation is not a vulnerability | A bundled `bcprov` re-registered at provider position 1, restoring parameters the platform refuses (D22-017) |\n| \"The app targets an old SDK\" with no further analysis | On its own this is `using_components_with_known_vulnerabilities.outdated_software_version` (P5), and on Android 14/15 the app may not even install | The enumerated list of legacy-permissive defaults the low target re-enables, each with a reproduced PoC (D22-004) |\n| \"The app does not check `Build.VERSION.SDK_INT`\" | MASTG-TEST-0245's failure condition is a hardening/quality item, Informational under a bounty rating | A specific version-gated control (`setHideOverlayWindows`, `EXTRA_IS_SENSITIVE`, `DETECT_SCREEN_CAPTURE`) that is never used on devices that support it, **plus** the exposure that results |\n| \"A platform CVE affects this device\" (CVE-2024-31317, CVE-2025-48543, CVE-2025-38352 and similar) | These are OS bugs. They are reported to Google or the OEM, not to the app vendor, and most programmes exclude \"generic Android vulnerabilities\" | Nothing in an app engagement. Record the patch level in the environment section so triage does not conflate the two, and note it as a caveat against a \"requires root\" severity reduction (D22-077) |",
  "joins": "- **The version matrix × the WebView setting defaults (D10).** Nobody re-reads `setAllowFileAccess`,\n  `setAllowFileAccessFromFileURLs` and `setAllowUniversalAccessFromFileURLs` against the app's *actual*\n  min/target pair — they read the modern defaults and move on. `setAllowContentAccess` defaults to\n  **true at every API level**, which is the join: on a modern target where `file://` payloads are dead by\n  default, `content://` payloads into the same sink are still live, and D10's file-access triage usually\n  stops before it gets there.\n- **The merged manifest × the SDK that demanded a legacy attribute (D17/D18).** An AAR can inject\n  `requestLegacyExternalStorage`, `usesCleartextTraffic=\"true\"`, `QUERY_ALL_PACKAGES`, a\n  `foregroundServiceType` or a `<uses-sdk-library>` into the app's effective manifest. The app team\n  reviews their own manifest; the SAST reviews the source tree; nobody diffs the **merged** manifest\n  against it. `manifest-merger-release-report.txt` names the responsible dependency, which turns a\n  posture observation into an attributable supply-chain finding.\n- **Split APKs × the exported-component census (D01/D04).** The component inventory is built from\n  `base.apk` and the version gates are applied to `base.apk`'s target — but a dynamic feature split ships\n  its own manifest with its own exported components, delivered post-install, reviewed by nobody. Join\n  `pm path` against the census: any component in a split and absent from base is unreviewed exported\n  surface (D22-063).\n- **Platform hardening opt-outs × the sink they re-open (D07/D08/D17).** `removeLaunchSecurityProtection()`\n  is greppable in a minute; the non-exported provider it reaches is in D07's inventory; nobody joins the\n  two because the grep belongs to a \"version behaviour\" checklist and the provider to an \"IPC\" one. The\n  same join applies to `ZipPathValidator.clearCallback()` × D17's extractor inventory, and\n  `intentMatchingFlags=\"none\"` × D05's receiver census.\n- **The Conscrypt APEX split × the RASP trust-store check (D14/D21).** The interception-detection code\n  in a banking app was written before Android 14 and hashes `/system/etc/security/cacerts`. The MitM\n  harness section of every checklist tells you to place a CA in the APEX path. Put those two facts\n  together and the app's flagship anti-MitM control is blind by construction — a finding neither the\n  networking review nor the RASP review produces alone (D22-035).\n- **Force-stop PendingIntent cancellation × the D08 PoC procedure.** Android 15 cancels every\n  PendingIntent when an app is force-stopped. Testers routinely `am force-stop` between setting up a\n  PendingIntent and triggering it, conclude \"not reproducible\", and close a real D08 finding. The join is\n  purely procedural and it silently destroys findings (D22-046).\n- **Notification permission × the account-security alert channel (D13/D24).** The auth review tests\n  whether a password change requires re-authentication; the notification review tests whether\n  notifications leak data on the lock screen. Neither asks whether the \"your password was changed\" alert\n  has any delivery channel other than a notification the user declined on Android 13+ — which converts a\n  detectable takeover into a silent one (D22-019).\n- **Restricted Settings × every accessibility/notification-listener PoC (D21/D27).** A PoC that needs an\n  accessibility service is AM-03 on Android 12 and AM-04-with-significant-interaction on Android 13+.\n  The exploitation chapter builds the PoC; the reporting chapter assigns the attacker model; nobody\n  re-checks the sideload gate in between, and the severity is wrong in both directions (D22-023).\n- **Predictive back × the payment-confirmation screen (D23/D11).** The payments review tests the\n  transaction flow; the storage review tests what persists. Neither tests what a *back gesture* does at\n  targetSdk 36, where `onBackPressed()` is no longer called — so the \"clear the card buffer on back\"\n  control stopped running without a code change and without a failing test (D22-055).\n- **Key attestation root rotation × the backend verifier (D12/D15).** A new EC-based attestation root\n  signs chains from 1 February 2026, and Android 16 devices use RKP with deliberately short-lived\n  certificates. The mobile review tests the device side; the API review tests authorisation. The join is\n  the verifier's trust list and expiry handling, which belongs to neither and breaks or fails open on a\n  schedule (D22-067).",
@@ -405,8 +405,11 @@
     "AM-12"
    ],
    "applies_to": "device API >= 31 for `detectUnsafeIntentLaunch()`; API >= 36 for `detectBlockedBackgroundActivityLaunch()`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida, api>=31",
+   "requires_tags": [
+    "frida",
+    "api>=31"
+   ],
    "maps_to": "rule `mastg-android-strictmode`, MASTG-TECH-0043; `about/versions/12/behavior-changes-12` (unsafe-intent-launch detection), `about/versions/15/behavior-changes-15` (`StrictMode.VmPolicy.Builder().detectUnsafeIntentLaunch()`), `guide/components/activities/background-starts` (`detectBlockedBackgroundActivityLaunch()`, Android 16+)",
    "record": "",
    "legacy_meta": {},
@@ -432,7 +435,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The platform ships runtime detectors for two of the classes this chapter gates. Inject them\ninto a release build with Frida instead of hoping the developer enabled them; the violation stack\ntraces turn a grep hypothesis into a runtime-confirmed call site.",
-   "how": "```javascript\n  // d22_strictmode.js\n  Java.perform(function () {\n    var B  = Java.use('android.os.StrictMode$VmPolicy$Builder');\n    var SM = Java.use('android.os.StrictMode');\n    var b  = B.$new().detectUnsafeIntentLaunch().penaltyLog();\n    try { b = b.detectBlockedBackgroundActivityLaunch(); } catch (e) { /* pre-36 */ }\n    SM.setVmPolicy(b.build());\n    console.log('[+] StrictMode detectors armed');\n  });\n```\n```bash\nfrida -U -f com.target.app -l d22_strictmode.js --no-pause\nadb logcat -c && adb logcat -s StrictMode:* | tee /tmp/d22_strictmode.log\n# platform-side alternative on a debuggable build:\nadb shell am compat enable DETECT_UNSAFE_INTENT_LAUNCH com.target.app\n```",
+   "how": "```javascript\n  // d22_strictmode.js\n  Java.perform(function () {\n    var B  = Java.use('android.os.StrictMode$VmPolicy$Builder');\n    var SM = Java.use('android.os.StrictMode');\n    var b  = B.$new().detectUnsafeIntentLaunch().penaltyLog();\n    try { b = b.detectBlockedBackgroundActivityLaunch(); } catch (e) { /* pre-36 */ }\n    SM.setVmPolicy(b.build());\n    console.log('[+] StrictMode detectors armed');\n  });\n```\n```bash\nfrida -D \"$SERIAL\" -f com.target.app -l d22_strictmode.js\nadb logcat -c && adb logcat -s StrictMode:* | tee /tmp/d22_strictmode.log\n# platform-side alternative on a debuggable build:\nadb shell am compat enable DETECT_UNSAFE_INTENT_LAUNCH com.target.app\n```",
    "proof": "`StrictMode` violation entries with full stack traces naming the offending\n`startActivity`/`sendBroadcast` call site inside the app's own package.",
    "escalation": "Every violation is a D08 redirection candidate or a D04 background-launch candidate.",
    "ruled_out_when": "The detectors are armed (the `[+]` line printed), the app is driven through every\nentry point in the D01 inventory, and zero violations are logged. Record the driving script and the\nempty log."
@@ -452,8 +455,10 @@
     "AM-03"
    ],
    "applies_to": "attacker/agent app `targetSdk >= 30` on an Android 11+ device",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "drozer `app.package.list`, `app.package.attacksurface`; MASTG-TOOL-0004 (adb); `training/package-visibility` (filtered APIs `queryIntentActivities()`, `getPackageInfo()`, `getInstalledApplications()`, `resolveActivity()`, `bindService()`)",
    "record": "",
    "legacy_meta": {},
@@ -497,8 +502,10 @@
     "AM-03"
    ],
    "applies_to": "targetSdk >= 31. LEGACY variant (absence is the bug) is D22-070",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31",
+   "requires_tags": [
+    "targetsdk>=31"
+   ],
    "maps_to": "`about/versions/12/behavior-changes-12` (\"Safer component exporting… App cannot install on Android 12+ devices without this attribute\"), `INSTALL_FAILED_VERIFICATION_FAILURE`; `privacy-and-security/risks/android-exported`; MASTG-TECH-0160/0161/0162/0163; MASVS-PLATFORM-1",
    "record": "",
    "legacy_meta": {},
@@ -553,8 +560,10 @@
     "AM-04"
    ],
    "applies_to": "targetSdk >= 31 for the mandate; see D22-032 for the targetSdk-34 variant and D22-070 for the pre-31 default",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31",
+   "requires_tags": [
+    "targetsdk>=31"
+   ],
    "maps_to": "MASTG-TEST-0381 (References to Insecure PendingIntent Creation), MASTG-KNOW-0024, rule `mastg-android-pendingintent-mutable`; `about/versions/12/behavior-changes-12` (mutability mandate, lint `UnspecifiedImmutableFlag`); `privacy-and-security/risks/pending-intent`; CWE-927; ATT&CK T1626",
    "record": "",
    "legacy_meta": {},
@@ -610,8 +619,11 @@
     "AM-11"
    ],
    "applies_to": "targetSdk >= 31 for the exclusion; `android:debuggable` matters at every level",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31, device",
+   "requires_tags": [
+    "targetsdk>=31",
+    "device"
+   ],
    "maps_to": "`about/versions/12/behavior-changes-12` (\"`adb backup` excludes app data for apps targeting Android 12; opt-in by setting `android:debuggable=\"true\"`… Must set to false before release\"); `privacy-and-security/risks/android-debuggable`; MASTG-TECH-0128 (Performing a Backup and Restore of App Data); MASVS-STORAGE",
    "record": "",
    "legacy_meta": {},
@@ -658,8 +670,10 @@
     "AM-11"
    ],
    "applies_to": "targetSdk >= 31 (Android 12+); apps must ship **both** `android:fullBackupContent` (for Android 11 devices) and `android:dataExtractionRules`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31",
+   "requires_tags": [
+    "targetsdk>=31"
+   ],
    "maps_to": "`about/versions/12/behavior-changes-12` (\"XML include/exclude rules don't affect D2D transfers\"; `android:dataExtractionRules`); `guide/topics/data/autobackup` (domains `root`, `file`, `database`, `sharedpref`, `external`, `device_root`, `device_file`, `device_database`, `device_sharedpref`; `<exclude>` takes precedence over `<include>`; no regex, no `..`); `risks/backup-best-practices`; MASTG-TEST-0262",
    "record": "",
    "legacy_meta": {},
@@ -704,8 +718,11 @@
     "AM-03"
    ],
    "applies_to": "targetSdk >= 31",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31, push",
+   "requires_tags": [
+    "targetsdk>=31",
+    "push"
+   ],
    "maps_to": "`about/versions/12/behavior-changes-12` (trampoline restriction, the logcat string, compat change `NOTIFICATION_TRAMPOLINE_BLOCK`)",
    "record": "",
    "legacy_meta": {},
@@ -751,8 +768,10 @@
     "AM-04"
    ],
    "applies_to": "device API >= 31 for the block; `setHideOverlayWindows`/`HIDE_OVERLAY_WINDOWS` available API 31+; `android:accessibilityDataSensitive` from Android 16",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=31",
+   "requires_tags": [
+    "api>=31"
+   ],
    "maps_to": "MASTG-TEST-0340 (References to Overlay Attack Protections); `developer.android.com/.../tapjacking` (background custom toasts blocked at Android 11/API 30; toast-burst mitigated at Android 12/API 31; touches from a non-trusted overlay of another UID blocked for full occlusion at API 31 with the opacity >= 0.8 caveat; `Window.setHideOverlayWindows(true)` API 31+; `android:accessibilityDataSensitive` Android 16)",
    "record": "",
    "legacy_meta": {},
@@ -798,8 +817,10 @@
     "AM-09"
    ],
    "applies_to": "Android 12+ (API 31); BouncyCastle JCA provider deprecated at API 28 and removed at API 31; `Crypto` provider deprecated API 24, removed API 28; specifying a provider in `getInstance` fails for apps targeting API 28+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=31",
+   "requires_tags": [
+    "api>=31"
+   ],
    "maps_to": "MASTG-TEST-0312 (References to Explicit Security Provider in Cryptographic APIs), MASWE-0046 (Use of Deprecated APIs or Functionality — CWE-327, CWE-477, CWE-522), MASTG-KNOW-0046 (BouncyCastle KeyStore); `about/versions/12/behavior-changes-all` (BouncyCastle removed in favour of Conscrypt; 512-bit AES unsupported; invalid `KeyGenerator` key sizes rejected; \"GCM ciphers initialized with non-12-byte sizes\" rejected); `risks/broken-cryptographic-algorithm`",
    "record": "",
    "legacy_meta": {},
@@ -852,8 +873,11 @@
     "AM-01"
    ],
    "applies_to": "auto-revoke and hibernation from Android 11/12 (API 30/31); runtime permissions API 23+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=30, device",
+   "requires_tags": [
+    "api>=30",
+    "device"
+   ],
    "maps_to": "ATT&CK T1661 (Application Versioning) for the hibernation-adjacent behaviour, mitigation M1006; `about/versions/12/behavior-changes-all` (app hibernation, permission auto-reset for unused apps)",
    "record": "",
    "legacy_meta": {},
@@ -898,8 +922,11 @@
     "AM-04"
    ],
    "applies_to": "Android 13+ (API 33). targetSdk 33+ controls when the prompt appears; targetSdk 32 and lower get it automatically on first channel creation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=33, push",
+   "requires_tags": [
+    "api>=33",
+    "push"
+   ],
    "maps_to": "MASTG-TEST-0315 (Sensitive Data Exposed via Notifications); `develop/ui/views/notifications/notification-permission` (`android.permission.POST_NOTIFICATIONS`; off by default for new installs on Android 13+; pre-granted on upgrade only if a channel existed and the user had not disabled notifications; `areNotificationsEnabled()`; exemptions for media-session and call-style notifications)",
    "record": "",
    "legacy_meta": {},
@@ -945,8 +972,11 @@
     "AM-08"
    ],
    "applies_to": "Android 13+ for the exemption; Android 14+ for the `CallStyle` exception to the dismissable-ongoing-notification rule",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=33, push",
+   "requires_tags": [
+    "api>=33",
+    "push"
+   ],
    "maps_to": "`develop/ui/views/notifications/notification-permission` (call-style and media-session exemptions; `MANAGE_OWN_CALLS` + `ConnectionService` + `registerPhoneAccount()`); `about/versions/13/behavior-changes-all` (\"Exception: Media sessions and self-managed phone calls are exempt\"); `about/versions/14/behavior-changes-all` (`CallStyle` excepted from the now-dismissable rule)",
    "record": "",
    "legacy_meta": {},
@@ -990,8 +1020,10 @@
     "AM-09"
    ],
    "applies_to": "targetSdk >= 33 for the granular permissions; Photo Picker native on API 30+ and available below via the Play services backport",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=33",
+   "requires_tags": [
+    "targetsdk>=33"
+   ],
    "maps_to": "`about/versions/13/behavior-changes-13` (`READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO`/`READ_MEDIA_AUDIO` replacing `READ_EXTERNAL_STORAGE`); `training/data-storage/shared/photopicker` (\"No permissions are required\"; grants last \"until the device is restarted or until your app stops\"; persistable via `takePersistableUriPermission`; maximum 5,000 media grants per app, additional grants remove the oldest); `about/versions/14/behavior-changes-14` (`READ_MEDIA_VISUAL_USER_SELECTED`); MASTG-KNOW-0042",
    "record": "",
    "legacy_meta": {},
@@ -1036,8 +1068,10 @@
     "AM-05"
    ],
    "applies_to": "targetSdk >= 34",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` (Selected Photos Access, `READ_MEDIA_VISUAL_USER_SELECTED`, compatibility mode)",
    "record": "",
    "legacy_meta": {},
@@ -1080,8 +1114,10 @@
     "AM-04"
    ],
    "applies_to": "Android 13+ for sideloaded installers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=33",
+   "requires_tags": [
+    "api>=33"
+   ],
    "maps_to": "`support.google.com/android/answer/12623953` (\"Some of these steps work only on Android 13 and up\"; \"Allow restricted settings\"; \"When you enable restricted settings, you allow apps to get access to sensitive info that could put your personal data at risk\"); ATT&CK T1426 (the Chameleon family is documented as checking for this)",
    "record": "",
    "legacy_meta": {},
@@ -1263,8 +1299,11 @@
     "AM-01"
    ],
    "applies_to": "Android 13+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=33, push",
+   "requires_tags": [
+    "api>=33",
+    "push"
+   ],
    "maps_to": "`about/versions/13/behavior-changes-all` (Task Manager user-initiated stopping; dismissible foreground-service notifications; App Standby Buckets no longer determine FCM quotas; the system downgrades high-priority FCMs sent without displaying a notification; `RemoteMessage.getPriority()`, `PRIORITY_HIGH`, handle `ForegroundServiceStartNotAllowedException`)",
    "record": "",
    "legacy_meta": {},
@@ -1309,8 +1348,10 @@
     "AM-03"
    ],
    "applies_to": "targetSdk >= 34 (Android 14+)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`develop/background-work/services/fgs/service-types` (the type-to-permission table: `camera`/`FOREGROUND_SERVICE_CAMERA`, `microphone`/`FOREGROUND_SERVICE_MICROPHONE`, `location`, `health`, `mediaProjection`, `connectedDevice`, `dataSync`, `mediaProcessing`, `remoteMessaging`, `shortService`, `specialUse`, `systemExempted`); `about/versions/14/behavior-changes-14` (Play Console FGS type declaration requirement); ATT&CK T1429, T1512",
    "record": "",
    "legacy_meta": {},
@@ -1357,8 +1398,10 @@
     "AM-08"
    ],
    "applies_to": "targetSdk >= 34",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`develop/background-work/services/fgs/service-types` (`specialUse` requires a declared subtype in `<property android:name=\"android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE\">`; `systemExempted` is reserved for system-level exemptions)",
    "record": "",
    "legacy_meta": {},
@@ -1401,8 +1444,10 @@
     "AM-03"
    ],
    "applies_to": "the flags exist from API 33; declaring one is mandatory for apps targeting API 34+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "MASTG-TECH-0162 (Enumerating Broadcast Receivers), MASTG-KNOW-0134; `about/versions/14/behavior-changes-14` (`Context.RECEIVER_EXPORTED` / `RECEIVER_NOT_EXPORTED` required for non-system broadcasts)",
    "record": "",
    "legacy_meta": {},
@@ -1447,8 +1492,10 @@
     "AM-03"
    ],
    "applies_to": "targetSdk >= 34",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` (\"Restrictions to Implicit and Pending Intents\"; the documented fix is `explicitIntent.package = context.packageName`, producing `ActivityNotFoundException` for the unfixed case); MASTG-KNOW-0134",
    "record": "",
    "legacy_meta": {},
@@ -1495,8 +1542,10 @@
     "AM-03"
    ],
    "applies_to": "targetSdk >= 34",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` (creating a mutable `PendingIntent` whose intent has no component or package throws; the documented \"SUCCEEDS\" example is `setPackage(context.packageName)`); `privacy-and-security/risks/pending-intent`; MASTG-TEST-0381",
    "record": "",
    "legacy_meta": {},
@@ -1634,8 +1683,12 @@
     "AM-12"
    ],
    "applies_to": "Android 14+; some Android 12/13 devices with Conscrypt Mainline updates already use the APEX path",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34, root, mitm",
+   "requires_tags": [
+    "api>=34",
+    "root",
+    "mitm"
+   ],
    "maps_to": "`source.android.com/docs/core/ota/modular-system/conscrypt` (\"Android 14 introduced updatable root certificates… root trust certificates are stored in the Conscrypt module APEX and the system partition\"; paths `/apex/com.android.conscrypt/cacerts` and `/system/etc/security/cacerts`; APEX package `com.android.conscrypt`); MASTG-TEST-0285; MASTG-TEST-0242",
    "record": "",
    "legacy_meta": {},
@@ -1682,8 +1735,10 @@
     "AM-04"
    ],
    "applies_to": "screenshot detection Android 14+ (`DETECT_SCREEN_CAPTURE` + `Activity.ScreenCaptureCallback`); screen-recording callback Android 15+ (`WindowManager.addScreenRecordingCallback()`, `SCREEN_RECORDING_STATE_VISIBLE`)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34",
+   "requires_tags": [
+    "api>=34"
+   ],
    "maps_to": "`about/versions/14/features/screenshot-detection` (`<uses-permission android:name=\"android.permission.DETECT_SCREEN_CAPTURE\" />`, `registerScreenCaptureCallback(mainExecutor, cb)` in `onStart()`, `unregisterScreenCaptureCallback(cb)` in `onStop()`, per-activity scope, the callback does **not** receive the image, `FLAG_SECURE` prevents capture entirely, and — critically — \"Only detects screenshots from hardware button combinations, not from ADB or instrumentation tests\"); `about/versions/15/features` (`addScreenRecordingCallback()`, `SCREEN_RECORDING_STATE_VISIBLE`, `removeScreenRecordingCallback`)",
    "record": "",
    "legacy_meta": {},
@@ -1726,8 +1781,10 @@
     "AM-04"
    ],
    "applies_to": "targetSdk >= 34",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` (per-session consent, `SecurityException` on reuse of a cached `Intent`/`MediaProjection`, `VirtualDisplay#resize()`/`setSurface()` for configuration changes, mandatory `MediaProjection.Callback` with `onStop()`); `about/versions/15/behavior-changes-all` (status-bar chip; auto-stops when the device screen locks)",
    "record": "",
    "legacy_meta": {},
@@ -1770,8 +1827,10 @@
     "AM-03"
    ],
    "applies_to": "Android 14+, **all apps regardless of targetSdk**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34",
+   "requires_tags": [
+    "api>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-all` (`MediaStore.MediaColumns.OWNER_PACKAGE_NAME` redacted unless the owner is always-visible or the querying app holds `QUERY_ALL_PACKAGES`)",
    "record": "",
    "legacy_meta": {},
@@ -1815,8 +1874,11 @@
     "AM-08"
    ],
    "applies_to": "Android 14+ for the SDK Runtime environment; Privacy Sandbox incorporated in Android 16",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34, ads-sdk",
+   "requires_tags": [
+    "api>=34",
+    "ads-sdk"
+   ],
    "maps_to": "`privacysandbox.google.com/private-advertising/sdk-runtime` (separate SDK Runtime process; \"No app data access\", \"Permission limitations\", \"File access constraints\", \"IPC restrictions\", \"Activity access: Controlled through `SdkSandboxActivityHandler`\"; `SdkSandboxManager`, `loadSdk()`, `SandboxedSdkProvider`, `SdkSandboxController`, `<uses-sdk-library>`, `certDigest`); `about/versions/16/features`",
    "record": "",
    "legacy_meta": {},
@@ -1860,8 +1922,11 @@
     "AM-05"
    ],
    "applies_to": "Android 13+ (API 33) devices carrying the ad services extension",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=33, ads-sdk",
+   "requires_tags": [
+    "api>=33",
+    "ads-sdk"
+   ],
    "maps_to": "`developer.android.com/guide/sdk-extensions` (`SdkExtensions.getExtensionVersion()`, `SdkExtensions.AD_SERVICES`, eligible on Android 13/API 33+, `android:minExtensionVersion`)",
    "record": "",
    "legacy_meta": {},
@@ -1904,8 +1969,10 @@
     "AM-11"
    ],
    "applies_to": "Android 14 refuses installs below targetSdk 23; Android 15 raises the floor to 24",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-all` (minimum installable targetSdkVersion; `--bypass-low-target-sdk-block`); `about/versions/15/behavior-changes-all` (floor raised to 24; the rationale is that low targets bypass runtime permissions and later mitigations)",
    "record": "",
    "legacy_meta": {},
@@ -1949,8 +2016,11 @@
     "AM-08"
    ],
    "applies_to": "targetSdk >= 34 for the restriction; the capability check is Android 14+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34, push",
+   "requires_tags": [
+    "api>=34",
+    "push"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` (`USE_FULL_SCREEN_INTENT` limited to calling and alarm apps; `NotificationManager.canUseFullScreenIntent()`; `Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`)",
    "record": "",
    "legacy_meta": {},
@@ -1993,8 +2063,10 @@
     "AM-12"
    ],
    "applies_to": "non-SDK restrictions from Android 9; the blocked set grows each release and is also updated by ART Mainline updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`about/versions/13/behavior-changes-13`, `.../14/behavior-changes-14`, `.../15/behavior-changes-15` (each carries an \"Updated non-SDK restrictions\" section and a `/about/versions/NN/changes/non-sdk-NN` page); the Mobile Hacking Lab finding that the hidden-API blocklist is an ART-level check, not a kernel one, and is bypassed by raw `IBinder.transact()`",
    "record": "",
    "legacy_meta": {},
@@ -2035,8 +2107,10 @@
     "AM-06"
    ],
    "applies_to": "targetSdk >= 35 for the platform restriction; a bundled TLS stack is unaffected at every level",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=35",
+   "requires_tags": [
+    "targetsdk>=35"
+   ],
    "maps_to": "MASTG-TEST-0217 (Insecure TLS Protocols Explicitly Allowed in Code); `about/versions/15/behavior-changes-15` (\"Restricted TLS Versions — Disallowed: TLS 1.0 and 1.1… Apps targeting Android 15 cannot use these versions\"); `risks/unsafe-trustmanager`; `risks/unsafe-hostname`; MASWE-0026",
    "record": "",
    "legacy_meta": {},
@@ -2083,8 +2157,10 @@
     "AM-03"
    ],
    "applies_to": "targetSdk >= 34 for the sender opt-in; >= 35 for the creator opt-in; `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE` is the recommended mode from SDK 36",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34",
+   "requires_tags": [
+    "api>=34"
+   ],
    "maps_to": "`guide/components/activities/background-starts` (`setPendingIntentBackgroundActivityStartMode()` sender opt-in API 34+; `setPendingIntentCreatorBackgroundActivityStartMode()` creator opt-in API 35+; `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE`; `detectBlockedBackgroundActivityLaunch()`; the `realCallingPackage`/`callingPackage` log fields); `about/versions/14/behavior-changes-14`; `.../15/behavior-changes-15` (Secured Background Activity Launches); `Context.BIND_ALLOW_ACTIVITY_STARTS`",
    "record": "",
    "legacy_meta": {},
@@ -2129,8 +2205,10 @@
     "AM-01"
    ],
    "applies_to": "Android 15+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35",
+   "requires_tags": [
+    "api>=35"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-all` (the system cancels all pending intents when an app enters the stopped state; `ApplicationStartInfo.wasForceStopped()`)",
    "record": "",
    "legacy_meta": {},
@@ -2171,8 +2249,10 @@
     "AM-04"
    ],
    "applies_to": "Android 15+, all apps regardless of targetSdk",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35",
+   "requires_tags": [
+    "api>=35"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-all` (\"Untrusted apps implementing `NotificationListenerService` cannot read unredacted OTP content from notifications. Trusted companion device associations exempt. System automatically redacts OTPs\"); MASTG-TEST-0315",
    "record": "",
    "legacy_meta": {},
@@ -2217,8 +2297,10 @@
     "AM-02"
    ],
    "applies_to": "Android 15+, all apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35",
+   "requires_tags": [
+    "api>=35"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-all` (notification content hidden during screen sharing; sensitive password input hidden from remote viewers; `Notification.Builder.setPublicVersion()`; `View.setContentSensitivity(int)`; the Developer Options toggle \"Disable screen share protections\"; the default system screen recorder is exempt)",
    "record": "",
    "legacy_meta": {},
@@ -2261,8 +2343,11 @@
     "AM-05"
    ],
    "applies_to": "Android 15+ for private space; multi-user from Android 5; work profiles on managed devices",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35, device",
+   "requires_tags": [
+    "api>=35",
+    "device"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-all` (private space is a separate user profile; launcher requirements `ROLE_HOME`, `ACCESS_HIDDEN_PROFILES`, `getLauncherUserInfo()`, `requestQuietModeEnabled()`, `ACTION_PROFILE_AVAILABLE`/`ACTION_PROFILE_UNAVAILABLE`; app stores must declare `android.intent.category.APP_MARKET`); Android & Google Devices programme in-scope impact \"Multi-User & Private Space\"",
    "record": "",
    "legacy_meta": {},
@@ -2306,8 +2391,10 @@
     "AM-03"
    ],
    "applies_to": "Android 15+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35",
+   "requires_tags": [
+    "api>=35"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-15` (`dataSync`/`mediaProcessing` cumulative six-hour cap; the documented `device_config put activity_manager data_sync_fgs_timeout_duration` command; `FGS_INTRODUCE_TIME_LIMITS`, `FGS_BOOT_COMPLETED_RESTRICTIONS`, `FGS_SAW_RESTRICTIONS` compat changes; the `did not stop within its timeout` ANR string)",
    "record": "",
    "legacy_meta": {},
@@ -2352,8 +2439,10 @@
     "AM-01"
    ],
    "applies_to": "targetSdk >= 35 for edge-to-edge by default; targetSdk >= 36 disables the `windowOptOutEdgeToEdgeEnforcement` opt-out and ignores orientation/aspect-ratio locks on `sw600dp`+ displays (games are excepted)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=35",
+   "requires_tags": [
+    "targetsdk>=35"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-15` (edge-to-edge default; `Window.setStatusBarColor()` and friends become no-ops; `Configuration.screenWidthDp`/`screenHeightDp`/`orientation` now include the system bars); `about/versions/16/behavior-changes-16` (`R.attr#windowOptOutEdgeToEdgeEnforcement` deprecated and disabled; `android:screenOrientation`, `android:resizableActivity`, `android:minAspectRatio`, `android:maxAspectRatio` and `Activity#setRequestedOrientation()` ignored at `sw600dp`+; opt-out `<property android:name=\"android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY\" android:value=\"true\"/>`, temporary and not applying at API 37+)",
    "record": "",
    "legacy_meta": {},
@@ -2397,8 +2486,10 @@
     "AM-03"
    ],
    "applies_to": "Android 16+ (API 36), **all apps regardless of targetSdk**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36",
+   "requires_tags": [
+    "api>=36"
+   ],
    "maps_to": "`privacy-and-security/risks/intent-redirection` (\"Android 16 introduces by-default security hardening for intent redirection exploits\"; `removeLaunchSecurityProtection()`; \"Only opt out when absolutely necessary\"); `about/versions/16/behavior-changes-all` (\"Improved security against Intent redirection attacks\"); CWE-926, CWE-927; ATT&CK T1626",
    "record": "",
    "legacy_meta": {},
@@ -2450,8 +2541,10 @@
     "AM-03"
    ],
    "applies_to": "Android 16 (API 36); settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>` and `<provider>`, with the component value overriding the application value",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36",
+   "requires_tags": [
+    "api>=36"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-16` (values `enforceIntentFilter`, `none`, `allowNullAction`; `none` disables all special matching rules and takes precedence; the logcat filter `tag:PackageManager & (message:\"Intent does not match component's intent filter:\" \\| message:\"Access blocked:\")`); the per-element manifest reference pages",
    "record": "",
    "legacy_meta": {},
@@ -2494,8 +2587,11 @@
     "AM-03"
    ],
    "applies_to": "device API >= 36",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36, exported-receiver",
+   "requires_tags": [
+    "api>=36",
+    "exported-receiver"
+   ],
    "maps_to": "`guide/components/broadcasts` (Android 16 priority changes); `about/versions/16/behavior-changes-all` (\"Ordered broadcast priority scope no longer global\"): priorities are honoured only within one app's process and are clamped to `IntentFilter.SYSTEM_LOW_PRIORITY + 1` .. `SYSTEM_HIGH_PRIORITY - 1`, with only system components permitted the extremes",
    "record": "",
    "legacy_meta": {},
@@ -2536,8 +2632,10 @@
     "AM-11"
    ],
    "applies_to": "targetSdk >= 36 on Android 16; also verify on Android 15 where the animations are default-on for opted-in apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36",
+   "requires_tags": [
+    "targetsdk>=36"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-16` (predictive back is default at targetSdk 36; \"`onBackPressed()` is no longer called\"; \"`KeyEvent.KEYCODE_BACK` is not dispatched\"; `android:enableOnBackInvokedCallback`); `guide/navigation/custom-back/predictive-back-gesture` (`OnBackInvokedCallback`, `OnBackPressedCallback`, priority constants)",
    "record": "",
    "legacy_meta": {},
@@ -2581,8 +2679,10 @@
     "AM-01"
    ],
    "applies_to": "Android 16+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36",
+   "requires_tags": [
+    "api>=36"
+   ],
    "maps_to": "`guide/navigation/custom-back/predictive-back-gesture` (`PRIORITY_SYSTEM_NAVIGATION_OBSERVER` is observer-only and does not consume the event)",
    "record": "",
    "legacy_meta": {},
@@ -2625,8 +2725,10 @@
     "AM-06"
    ],
    "applies_to": "device API >= 36 for the gate; the protocol weakness applies at every level",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36",
+   "requires_tags": [
+    "api>=36"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-16` (local network access gated behind `android.permission.NEARBY_WIFI_DEVICES`; the address ranges IPv4 `169.254.0.0/16`, `100.64.0.0/10`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, IPv6 link-local, directly-connected routes, stub networks, multicast, broadcast `255.255.255.255`; cellular and VPN excluded; DNS to the local DNS server on port 53 exempt; the compat flag `RESTRICT_LOCAL_NETWORK`; the denial strings `sendto failed: EPERM (Operation not permitted)` and `sendto failed: ECONNABORTED (Operation not permitted)`; opt-in phase 25Q2-26Q2)",
    "record": "",
    "legacy_meta": {},
@@ -2669,8 +2771,10 @@
     "AM-08"
    ],
    "applies_to": "Android 16+ (API 36)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36",
+   "requires_tags": [
+    "api>=36"
+   ],
    "maps_to": "`about/versions/16/features` (`KeyStoreManager`, `grantKeyAccess(String, int)`, `revokeKeyAccess(String, int)`; \"Share access to Android Keystore keys with other apps\")",
    "record": "",
    "legacy_meta": {},
@@ -2715,8 +2819,10 @@
     "AM-09"
    ],
    "applies_to": "apps integrating Health Connect; Android 14+ ships it as a platform component; at targetSdk 36 the granular `android.permission.health.*` permissions **replace** `BODY_SENSORS`, and `READ_HEALTH_DATA_IN_BACKGROUND` replaces `BODY_SENSORS_BACKGROUND`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36",
+   "requires_tags": [
+    "targetsdk>=36"
+   ],
    "maps_to": "`health-and-fitness/guides/health-connect/plan/data-types` (the `android.permission.health.*` family including `READ_MENSTRUATION`, `READ_SEXUAL_ACTIVITY`, `READ_MINDFULNESS`); `health-and-fitness/guides/health-connect` (`HealthConnectClient`, `READ_HEALTH_DATA_IN_BACKGROUND`, `READ_HEALTH_DATA_HISTORY`, the required privacy-policy activity carrying `android.intent.action.VIEW_PERMISSION_USAGE`); `about/versions/16/behavior-changes-16` (`android.permission.health.READ_HEART_RATE` and friends replacing `BODY_SENSORS`; affects `HEART_RATE_BPM`, `Sensor.TYPE_HEART_RATE`, `FOREGROUND_SERVICE_TYPE_HEALTH`)",
    "record": "",
    "legacy_meta": {},
@@ -2759,8 +2865,10 @@
     "AM-06"
    ],
    "applies_to": "`<certificateTransparency>` available from Android 16 (API 36), disabled by default; enabled by default at API 37+; not available at API 35 and lower",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36",
+   "requires_tags": [
+    "api>=36"
+   ],
    "maps_to": "`privacy-and-security/security-config` (`<certificateTransparency enabled=\"true\\|false\"/>`, API 36 opt-in and API 37+ default-on; \"Certificate transparency verification is NOT performed on connections using custom trust anchors\"; `<certificates src>` values `system`/`user`/raw resource; `overridePins` default false except inside `<debug-overrides>` where it is true); MASTG-TEST-0242",
    "record": "",
    "legacy_meta": {},
@@ -2804,8 +2912,10 @@
     "AM-01"
    ],
    "applies_to": "Android 12+ for ART as an APEX; non-SDK restrictions from Android 9",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-all` (apps relying on internal ART structures or non-SDK interfaces may break on Android 16 and on earlier versions receiving ART updates through Google Play system updates); AOSP ART module `com.android.art`; the Conscrypt APEX (D22-035) is the same mechanism applied to trust",
    "record": "",
    "legacy_meta": {},
@@ -2846,8 +2956,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "preview/QPR builds and apps targeting API 37; state it as forward-looking, never as a current finding",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=37",
+   "requires_tags": [
+    "targetsdk>=37"
+   ],
    "maps_to": "`privacy-and-security/security-config` (`<domainEncryption>` Encrypted Client Hello, API 37+; `<certificateTransparency>` default-on at API 37+); the compat change `ENFORCE_STRICT_SQL_CHECKS` (id `484953293`, Android 17, applying only to callers with targetSdk >= 37); the read-only mandate extended to `System.load()` native libraries at targetSdk 37; `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` documented as not applying at API 37+",
    "record": "",
    "legacy_meta": {},
@@ -2889,8 +3001,10 @@
     "AM-03"
    ],
    "applies_to": "apps distributed as app bundles with `dynamicFeatures`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`guide/app-bundle/play-feature-delivery` (`android:isFeatureSplit`, `dist:module`, `dist:delivery`, `dist:removable`, `SplitInstallManager`, `SplitCompatApplication`; the doc's own warning that \"Feature modules should not export activities unless guaranteed to be installed\"; \"App bundles are signed using signing configs from the base module only\"; \"Split APKs are verified by the Play Store before delivery\")",
    "record": "",
    "legacy_meta": {},
@@ -2937,8 +3051,10 @@
     "AM-12"
    ],
    "applies_to": "apps shipped as AAB with dynamic features",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`guide/app-bundle/play-feature-delivery` (\"Apps must verify module installation before accessing code/resources via `SplitInstallManager.getInstalledModules()`\"; `android:isSplitRequired`)",
    "record": "",
    "legacy_meta": {},
@@ -3028,8 +3144,10 @@
     "AM-12"
    ],
    "applies_to": "apps using the Play Integrity API (Standard requests need Android 6.0 / API 23+ at library v1.4.0+)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`google/play/integrity/overview` (verdict fields `requestDetails`, `appIntegrity.appRecognitionVerdict` = `PLAY_RECOGNIZED`, `deviceIntegrity` labels `MEETS_BASIC_INTEGRITY`/`MEETS_DEVICE_INTEGRITY`/`MEETS_STRONG_INTEGRITY`, `accountDetails.appLicensingVerdict` = `LICENSED`, `environmentDetails` opt-ins `appAccessRiskVerdict`/`playProtectVerdict`/`recentDeviceActivity`/`deviceRecall`; `requestHash` for standard requests and `nonce` for classic; \"No caching: Request verdicts on-demand to prevent replay/proxying attacks\"; the warning that data in `nonce`/`requestHash` is visible in cleartext to the app and to Google)",
    "record": "",
    "legacy_meta": {},
@@ -3075,8 +3193,10 @@
     "AM-12"
    ],
    "applies_to": "all apps using key attestation; device-side behaviour differs on Android 15 (RKP optional) versus Android 16 (RKP only, factory keys phased out)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`privacy-and-security/security-key-attestation` (\"Perform verification on a separate, trusted server (not on the compromised device)\"; the requirement list — root signed with the Google attestation root key, `attestationSecurityLevel` of `TrustedEnvironment` or `StrongBox`, all signatures verified, no certificate in the CRL; CRL at `https://android.googleapis.com/attestation/status` with `status` values `REVOKED`/`SUSPENDED` and `reason` values `UNSPECIFIED`/`KEY_COMPROMISE`/`CA_COMPROMISE`/`SUPERSEDED`/`SOFTWARE_FLAW`; root list at `https://android.googleapis.com/attestation/root`; `attestationSecurityLevel` values `SOFTWARE`/`TRUSTED_ENVIRONMENT`/`STRONGBOX`; `verifiedBootState`, `deviceLocked`, `attestationChallenge`; \"Don't assume the key attestation extension is in the leaf certificate. Only the first occurrence of the extension can be trusted\"; a new EC-based root signing attestation chains from 1 February 2026 alongside the existing root `SERIALNUMBER=f92009e853b6b045` valid 2022-03-20 to 2042-03-15; \"Android 15+: RKP support is optional. Android 16+: Only RKP is supported\"; RKP certificates have deliberately short validity and \"the shorter expiration is part of the threat model\"; the official verifier library at `github.com/android/keyattestation`)",
    "record": "",
    "legacy_meta": {},
@@ -3213,8 +3333,11 @@
     "AM-03"
    ],
    "applies_to": "**targetSdk <= 30 only.** At targetSdk 31+ the attribute is mandatory and the app fails to install without it (`INSTALL_FAILED_VERIFICATION_FAILURE`) — see D22-011 for the modern form",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk<31, legacy",
+   "requires_tags": [
+    "targetsdk<31",
+    "legacy"
+   ],
    "maps_to": "MASTG-TECH-0160/0161/0162, MASTG-KNOW-0132/0133/0134; the Android 12 \"Safer component exporting\" change",
    "record": "",
    "legacy_meta": {},
@@ -3268,8 +3391,11 @@
     "AM-03"
    ],
    "applies_to": "**targetSdk <= 16 only.** Deep LEGACY; `android:exported` defaults to `false` from API 17 when no `<intent-filter>` is present",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk<17, legacy",
+   "requires_tags": [
+    "targetsdk<17",
+    "legacy"
+   ],
    "maps_to": "MASTG-TECH-0163 (Enumerating Content Providers), MASTG-KNOW-0117; `guide/topics/manifest/provider-element` (the API 17 default change)",
    "record": "",
    "legacy_meta": {},
@@ -3317,8 +3443,11 @@
     "AM-07"
    ],
    "applies_to": "**targetSdk/minSdk < 24 only**, or at any level where the network security config explicitly includes `<certificates src=\"user\"/>` — which is common in debug configs shipped to production",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "minsdk<24, legacy",
+   "requires_tags": [
+    "minsdk<24",
+    "legacy"
+   ],
    "maps_to": "MASTG-TEST-0285 (Outdated Android Version Allowing Trust in User-Provided CAs), MASTG-KNOW-0014; `privacy-and-security/security-config` (`<certificates src=\"user\"/>`); ATT&CK T1632",
    "record": "",
    "legacy_meta": {},
@@ -3366,8 +3495,11 @@
     "AM-06"
    ],
    "applies_to": "**targetSdk <= 27** for the default; at 28+ the finding is that the app **re-enabled** it with `android:usesCleartextTraffic=\"true\"` or a `cleartextTrafficPermitted=\"true\"` domain config",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk<28, legacy",
+   "requires_tags": [
+    "targetsdk<28",
+    "legacy"
+   ],
    "maps_to": "MASTG-TEST-0235 (Android App Configurations Allowing Cleartext Traffic), MASTG-KNOW-0014; the `android:usesCleartextTraffic` default flip at API 28; ATT&CK T1638, T1639.001",
    "record": "",
    "legacy_meta": {},
@@ -3417,8 +3549,13 @@
     "AM-06"
    ],
    "applies_to": "**minSdk < 17 only.** The gate is `minSdkVersion`, not target. From API 17 only `@JavascriptInterface`-annotated methods are reachable",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview, js-bridge, minsdk<17, legacy",
+   "requires_tags": [
+    "webview",
+    "js-bridge",
+    "minsdk<17",
+    "legacy"
+   ],
    "maps_to": "MASTG-TEST-0334 (Native Code Exposed Through WebViews), MASTG-KNOW-0018; `privacy-and-security/risks/insecure-webview-native-bridges`; ATT&CK T1407",
    "record": "",
    "legacy_meta": {},
@@ -3465,8 +3602,11 @@
     "AM-03"
    ],
    "applies_to": "**targetSdk <= 29** for free enumeration; from 30 it requires `<queries>` or `QUERY_ALL_PACKAGES`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk<30, legacy",
+   "requires_tags": [
+    "targetsdk<30",
+    "legacy"
+   ],
    "maps_to": "`training/package-visibility` (filtered APIs `queryIntentActivities()`, `getPackageInfo()`, `getInstalledApplications()`, `resolveActivity()`, `bindService()`; Google \"treats the list of installed apps as personal and sensitive user data\" and requires Play approval for `QUERY_ALL_PACKAGES`); ATT&CK T1418",
    "record": "",
    "legacy_meta": {},
@@ -3514,8 +3654,12 @@
     "AM-11"
    ],
    "applies_to": "**device Android 11 and lower**; Android 12 gutted it and 13+ is effectively dead unless the app is debuggable (D22-013)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api<=30, device, legacy",
+   "requires_tags": [
+    "api<=30",
+    "device",
+    "legacy"
+   ],
    "maps_to": "MASTG-TECH-0128 (Performing a Backup and Restore of App Data), MASTG-TEST-0262; `guide/topics/data/autobackup`",
    "record": "",
    "legacy_meta": {},
@@ -3566,8 +3710,12 @@
     "AM-03"
    ],
    "applies_to": "**LEGACY** — Android 9 through 14 below the June 2024 patch level. Fixed in the June 2024 Android Security Bulletin (`ZygoteCommandBuffer` hardened)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api<=34, device, legacy",
+   "requires_tags": [
+    "api<=34",
+    "device",
+    "legacy"
+   ],
    "maps_to": "CVE-2024-31317 (Zygote `--runtime-flags` command injection)",
    "record": "",
    "legacy_meta": {},

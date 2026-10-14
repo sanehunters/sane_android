@@ -53,6 +53,42 @@ positives before the triager does.
 stands between the attacker-influenceable source of those bytes and the `ClassLoader`/`dlopen`/JS-engine
 call that runs them?**
 
+## Applicability probe
+
+D17 never goes fully n/a — D17-001, D17-002, D17-005, D17-017, D17-078, D17-079 and D17-080 always run — but four probes decide which of its six blocks apply and let `scripts/scope.py` mark the rest. Run them against `$DEC`, the apktool manifest and `inventory/components.csv`, and paste the four numbers into `notes`.
+
+```bash
+# 1. Code-load call sites outside framework namespaces (blocks D17-003..023, D17-083)
+grep -rlE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|DelegateLastClassLoader|System\.load\(|Runtime\.getRuntime\(\)\.load|createPackageContext\(|org/mozilla/javascript|com/eclipsesource/v8|org/luaj|com/chaquo/python' \
+  "$DEC/jadx/sources" | grep -vE '/(android|androidx|kotlin|kotlinx|dalvik)/' | wc -l
+# 2. Post-install code/config channels (blocks D17-025..041, D17-081)
+printf 'manifest=%s strings=%s playcore=%s\n' \
+  "$(grep -cE 'expo\.modules\.updates\.|uses-sdk-library' "$DEC/apktool/AndroidManifest.xml")" \
+  "$(grep -cE 'CodePush(DeploymentKey|PublicKey|ServerUrl)' "$DEC/apktool/res/values/strings.xml" 2>/dev/null)" \
+  "$(grep -rlE 'com/google/android/play/core|SplitCompat|PhenotypeFlag|MobileDataDownload|DynamiteModule|FirebaseRemoteConfig|LDClient' "$DEC/jadx/sources" | wc -l)"
+# 3. Deserialization / archive sinks in first-party code × exported components (blocks D17-043..058)
+grep -rlE 'ObjectInputStream|getSerializableExtra|readSerializable|ZipInputStream|ZipFile\(|Intent\.parseUri|\.unmarshall\(' "$DEC/jadx/sources" \
+  | grep -vE '/(android|androidx|kotlin|kotlinx)/' | wc -l
+awk -F, 'NR>1 && tolower($0) ~ /exported=true|,true,/' "$E/inventory/components.csv" | wc -l
+# 4. Native surface and build-system facts (blocks D17-013/014/062/082; D17-059..074)
+unzip -Z1 "$E/apk/base.apk" | grep -c '^lib/.*\.so$'
+grep -oE 'extractNativeLibs="[a-z]+"' "$DEC/apktool/AndroidManifest.xml"
+unzip -Z1 "$E/apk/base.apk" | grep -cE '^META-INF/.*\.version$'          # 0 + no source repo => build-side items n/a
+```
+
+Decision table (write the matching note into `notes` for every row the probe retires):
+
+| Probe result | Rows marked `n/a` | Exact note text |
+|---|---|---|
+| 1 = 0 **and** D17-002 runtime trace shows only `/data/app/` and `/apex/` loads | D17-003, D17-004, D17-008..D17-016, D17-021..D17-023, D17-083 | `n/a: no loader/createPackageContext/interpreter call site outside framework namespaces (probe 1 = 0) and D17-002 trace clean` |
+| 2: manifest=0, strings=0, playcore=0 and the proxy shows no bundle/archive/executable response | D17-025..D17-036, D17-041, D17-081 | `n/a: no OTA, split, remote-config or dynamic-module channel (probe 2 = 0/0/0); D17-025 negative recorded` |
+| 3: first-party sink count = 0 **or** exported component count = 0 | D17-043..D17-051, D17-056..D17-058 | `n/a: no deserialization/archive sink in first-party code (probe 3 = 0) / no exported component (components.csv = 0)` |
+| 4: `.so` count = 0 | D17-013, D17-014, D17-062, D17-082 | `n/a: APK ships no native libraries (probe 4 = 0)` |
+| 4: `META-INF/*.version` = 0 and no source repo in scope | D17-059 (source half), D17-063..D17-069, D17-072..D17-074 | `n/a (black-box): build system not Gradle or no source access; binary-side SBOM (D17-059) and duplicate-class check (D17-069b) recorded instead` |
+| framework ≠ react-native / cordova / capacitor / flutter | D17-006, D17-026..D17-030, D17-033, D17-034, D17-072, D17-073, D17-074 | `n/a: framework=<value>; no JS/Dart bundle to substitute` |
+
+A probe count of 0 is a negative only with its control: for probe 1 the D17-002 runtime trace must have run to completion (`-t` honoured, no crash — D17-A01), and for probe 3 the `components.csv` must have been regenerated after P3 (gap 55: the generator can drop providers).
+
 ## Triage order
 
 1. **Hook every loader at runtime for one full app walkthrough** (`DexClassLoader.$init`,
@@ -135,7 +171,7 @@ call that runs them?**
   an update.
 - **How:**
   ```javascript
-  // loaders.js  —  frida -U -f com.target.app -l loaders.js --no-pause
+  // loaders.js  —  frida -D "$SERIAL" -f com.target.app -l loaders.js
   Java.perform(function () {
     var DCL = Java.use('dalvik.system.DexClassLoader');
     DCL.$init.implementation = function (dex, opt, lib, parent) {
@@ -233,6 +269,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the upstream input is attacker-influenceable |
 | **Attacker** | AM-03 / AM-06 / AM-09 depending on where the blob comes from |
 | **Applies to** | all; modern updaters and packers specifically. Note `InMemoryDexClassLoader` sidesteps the Android 14 file-path DCL hardening entirely because no writable DEX path ever exists |
+| **Requires** | device, frida |
 | **Maps to** | MASWE-0049; HackTricks *insecure-in-app-update-rce* ("In-memory DEX loaders"); ATT&CK T1406.002 (the `assets/*.dat` → AES/CBC hardcoded key+IV → `DexClassLoader` dropper pattern) |
 
 - **Test:** An updater that decrypts into a `ByteBuffer` and calls `InMemoryDexClassLoader` produces no
@@ -306,6 +343,7 @@ call that runs them?**
 | **VRT** | `insecure_data_transport.executable_download.no_secure_integrity_check` (P4) as the reportable half; the methodological half is not a finding |
 | **Attacker** | n/a for the method; AM-09 for the consequence |
 | **Applies to** | React Native / Expo / CodePush / Cordova / any app with a custom DEX or JS updater |
+| **Requires** | device, frida, react-native, cordova, capacitor, flutter |
 | **Maps to** | facebook/hermes `BytecodeFileHeader.sourceHash`; `CodePushConstants.DEFAULT_JS_BUNDLE_NAME`; expo `dev.expo.updates.prefs` / `updates.db`; MASWE-0075 (Non-Reproducible Builds) |
 
 - **Test:** If OTA is enabled, the bundle inside the APK is only the *fallback*. Every static finding, and
@@ -330,7 +368,7 @@ call that runs them?**
   print('live sourceHash', d[12:32].hex(), 'bytecodeVersion', struct.unpack_from('<I', d, 8)[0])
   PY
   # 3. or capture it at load time regardless of location
-  frida -U -f com.target.app -q -e "
+  frida -D "$SERIAL" -f com.target.app -q -e "
   Java.perform(function(){
     var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');
     C.loadScriptFromFile.implementation=function(f,u,z){console.log('[bundle-from-file] '+f);return this.loadScriptFromFile(f,u,z);};
@@ -513,6 +551,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1); the storage half alone is `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4) — do not file it there |
 | **Attacker** | AM-03 (pre-scoped-storage) / AM-04 with `READ/WRITE_EXTERNAL_STORAGE` |
 | **Applies to** | `targetSdk < 29`, or `targetSdk ≥ 29` with `android:requestLegacyExternalStorage="true"`. On scoped storage the world-writable variant narrows to the app's own `Android/data/<pkg>/` tree, which is still reachable by anything holding `MANAGE_EXTERNAL_STORAGE` or by the user |
+| **Requires** | device, targetsdk<29, legacy |
 | **Maps to** | MASTG-KNOW-0042 ("external storage can lead to arbitrary control of the application"); HackTricks *insecure-in-app-update-rce* ("External storage staging"); **CVE-2021-24027** (WhatsApp) as the named man-in-the-disk precedent |
 
 - **Test:** If an archive, plugin or library is written to external storage before being loaded, another app
@@ -623,6 +662,7 @@ call that runs them?**
 | **VRT** | n/a |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | targetSdk ≥ 34 (DEX/JAR/APK) and targetSdk ≥ 37 (native `System.load()`) |
+| **Requires** | api>=34, device |
 | **Maps to** | HackTricks *insecure-in-app-update-rce* ("Platform changes that change exploitation"), citing Android's dynamic-code-loading risk documentation |
 
 - **Test:** On a matching API level the platform throws when the app loads a writable dynamic artefact —
@@ -681,6 +721,7 @@ call that runs them?**
 | **VRT** | n/a |
 | **Attacker** | n/a (tester step) |
 | **Applies to** | all; the constraint bites from `untrusted_app_29` upwards |
+| **Requires** | device, root |
 | **Maps to** | AOSP SELinux policy for `untrusted_app` / `app_data_file`; the corpus's SELinux-downgrade discipline (D25) |
 
 - **Test:** A write into an app-private directory is not automatically execution. From `untrusted_app_29`
@@ -936,6 +977,7 @@ call that runs them?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for the secret hand-off; `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (VARIES) for the unpinned identity |
 | **Attacker** | AM-08 |
 | **Applies to** | Android 14+ for the SDK Runtime environment (incorporated into Privacy Sandbox on Android 16) |
+| **Requires** | api>=34 |
 | **Maps to** | `privacysandbox.google.com/private-advertising/sdk-runtime` — separate SDK Runtime process, "No app data access", "Permission limitations", "File access constraints", "IPC restrictions", "Activity access: Controlled through `SdkSandboxActivityHandler`"; `SdkSandboxManager`, `loadSdk()`, `SandboxedSdkProvider`, `SdkSandboxController`, `<uses-sdk-library>`, `certDigest`; `about/versions/16/features` |
 
 - **Test:** The SDK Runtime moves a runtime-enabled SDK into a separate process with no access to the app's
@@ -1131,6 +1173,7 @@ call that runs them?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) or whichever control the rollback target lacks; otherwise rate on the reinstated defect |
 | **Attacker** | AM-03 (local corruption of the current bundle) / AM-09 |
 | **Applies to** | React Native with CodePush / expo-updates |
+| **Requires** | react-native, device |
 | **Maps to** | `CodePushConstants.java` (`PREVIOUS_PACKAGE_KEY`, `CURRENT_PACKAGE_KEY`, `FAILED_UPDATES_KEY`, `LATEST_ROLLBACK_INFO_KEY`, `LATEST_ROLLBACK_PACKAGE_HASH_KEY`, `LATEST_ROLLBACK_COUNT_KEY`); CodePush README (automatic rollback keeps a copy of the previous update); expo `UpdatesConfiguration.kt` `DISABLE_ANTI_BRICKING_MEASURES` |
 
 - **Test:** CodePush keeps the previous package and rolls back on failure; expo has anti-bricking measures
@@ -1248,6 +1291,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 (writable staging dir) / AM-09 |
 | **Applies to** | Cordova, Ionic and Capacitor apps with a live-update plugin |
+| **Requires** | cordova, capacitor, device |
 | **Maps to** | Capacitor `Bridge.java` (`localServer.hostAssets(DEFAULT_WEB_ASSET_DIR)` with `DEFAULT_WEB_ASSET_DIR = "public"`, and the configurable `getServerBasePath` plumbing) |
 
 - **Test:** The web-stack frameworks have the same problem in a different shape: a plugin downloads a new
@@ -1278,6 +1322,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 / AM-09 |
 | **Applies to** | all RN / Expo / Cordova / Flutter-with-dynamic-assets apps, regardless of Android version |
+| **Requires** | react-native, cordova, capacitor, flutter, device |
 | **Maps to** | `about/versions/14/behavior-changes-14` — the read-only mandate applies to **DEX, JAR, APK**, i.e. not to JS or Dart bundles; `risks/dynamic-code-loading` (MASVS-CODE) |
 
 - **Test:** Teams routinely believe Android 14 secured their OTA. It did not: the mandate covers DEX/JAR/APK
@@ -1307,6 +1352,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the install primitive; rate the installed package's own privilege precisely |
 | **Attacker** | AM-09 |
 | **Applies to** | OEM/vendor updaters, IoT and automotive head units, enterprise installers, MDM agents |
+| **Requires** | oem-scope, enterprise, device |
 | **Maps to** | HackTricks *insecure-in-app-update-rce* ("Trusted updater abuse: installing packages that do not exist yet"), citing the MoYu Android head-unit research and Android's `pm` documentation |
 
 - **Test:** Do not test only *replacement* updates. A preinstalled or privileged updater may deserialise a
@@ -1424,6 +1470,7 @@ call that runs them?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES); Critical framing if the SDK loads remote code (then it is D17-025/036) |
 | **Attacker** | AM-08 |
 | **Applies to** | all; ad, attribution and "security" SDKs first |
+| **Requires** | device |
 | **Maps to** | Snyk SourMint (Mintegral) — Android side: `AlphabReceiver` listening for `android.intent.action.PACKAGE_ADDED` plus a custom `alphab_net_debug_action`; a `ContentObserver` on `content://downloads/public_downloads`; reports POSTed to `https://n.systemlog.me/stlog` with obfuscated JSON keys (`p`, `v`, `ul`, `kw`, `fl`, `dvi`); a `ParseAndLoad` class checking for a WiFi proxy and VPN and honouring a remote anti-debug disable intent; custom Base64 via `AlphabBase64Util` (`aELKr0xI7UL67iN6HinI` → `android.net.Uri`, `r0HeQibP7inj7EbAQi7ArR==` → `registerReceiver`, `asx6f3H6foh4FsJ4fsLzYscKr2xMfEnzQEbm73xyY0q4aEJgFM==` → `content://downloads/public_downloads`). Same vendor iOS side: `MTGBaseBridgeWebView` `mv://(.+?):(.+?)/(.+?)\?([\s\S]*)` dispatched via `MTGCommandDispatcher`/`MTGRemoteCommandParser`/`MTGInvocationBoxing` giving arbitrary method invocation; malicious functionality in all iOS versions ≥ 5.5.1 (2019-07-17), component removed in 6.5.0.0 (2020-09-03), RCE bridge remediated in 6.6.0.0 |
 
 - **Test:** An SDK that disables its own collection under a debugger, proxy, VPN or emulator reads clean in
@@ -1461,6 +1508,7 @@ call that runs them?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) or `broken_access_control.idor.*` depending on what regressed. **A version difference alone is Informational.** |
 | **Attacker** | AM-01 |
 | **Applies to** | any app with a versioned update/manifest/config endpoint |
+| **Requires** | backend-api |
 | **Maps to** | the mobile→backend bridge rule: a mobile app's hardcoded backend calls are frequently an **older API version** than the current web app uses, with weaker auth, weaker rate limits, weaker validation and more field exposure |
 
 - **Test:** The OTA manifest endpoint, the remote-config endpoint and the plugin-catalogue endpoint are
@@ -1526,6 +1574,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for the code-load sink; otherwise the sink's own node |
 | **Attacker** | AM-09 (compromised backend, stale/taken-over API subdomain, rogue insider) / AM-06 |
 | **Applies to** | all |
+| **Requires** | backend-api, mitm, device |
 | **Maps to** | `risks/dynamic-code-loading`, `risks/unsafe-uri-loading`, `risks/unsafe-download-manager`, `risks/path-traversal` (all four slugs verified in the Android risks index) |
 
 - **Test:** The malicious-backend attacker model is systematically under-tested. Whoever controls the
@@ -2051,6 +2100,7 @@ call that runs them?**
 | **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) → `server_side_injection.remote_code_execution_rce` (P1) chained |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | targetSdk ≥ 34 — below 34 there is nothing to opt out of and the class is fully live anyway (LEGACY) |
+| **Requires** | targetsdk>=34, legacy |
 | **Maps to** | `about/versions/14/behavior-changes-14` — `ZipFile(String)` and `ZipInputStream.getNextEntry()` throw `ZipException` for entries containing `".."` or starting with `"/"`, with `dalvik.system.ZipPathValidator.clearCallback()` as the documented opt-out; `risks/zip-path-traversal` (MASVS-STORAGE) |
 
 - **Test:** Its presence in a 34+ app means a developer deliberately turned the mitigation off — usually
@@ -2077,6 +2127,7 @@ call that runs them?**
 | **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) → `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | all apps extracting downloaded or user-supplied archives |
+| **Requires** | device |
 | **Maps to** | HackTricks *insecure-in-app-update-rce* ("Zip Slip path traversal while extracting plugins … Also test symlink entries and non-empty destination directories; canonical-path checks only help if extraction happens inside a fresh app-private directory") |
 
 - **Test:** A canonical-path check defeats `../` but not a **symlink entry**: the archive creates
@@ -2183,7 +2234,7 @@ call that runs them?**
   #     onCreate/onNewIntent, onReceive, shouldOverrideUrlLoading/@JavascriptInterface,
   #     openFile/query, or a network-response parser
   # (c) confirm the frame is actually entered
-  frida -U -f com.target.app -l reach.js
+  frida -D "$SERIAL" -f com.target.app -l reach.js
   ```
   ```javascript
   // reach.js — prove the sink executes, dump the argument and the stack that got there
@@ -2378,6 +2429,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | **LEGACY — Gradle 5.1 through 6.8.3 only**, fixed in 7.0. Still routinely present in long-lived enterprise Android repos |
+| **Requires** | legacy |
 | **Maps to** | **GHSA-jvmj-rh6q-x395 / CVE-2021-29427** — `content { includeGroup … }` / `exclusiveContent` filters inside a `settings.gradle` `pluginManagement {}` block are ignored; CVSS **8.0**, CWE-829 (Inclusion of Functionality from Untrusted Control Sphere); impacts: information disclosure of internal package identifiers and dependency confusion/poisoning via name squatting |
 
 - **Test:** On those Gradle versions, the filter that the team believes confines internal **plugin**
@@ -2649,6 +2701,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) against the build host |
 | **Attacker** | AM-01 on the developer/CI network |
 | **Applies to** | source-review engagements and any RN/Cordova project |
+| **Requires** | react-native |
 | **Maps to** | **CVE-2025-11953** — `@react-native-community/cli`, CVSS **9.8**, unauthenticated OS command execution via the development server's `/open-url` endpoint passing unfiltered input to `open()`; affects 4.8.0 through 20.0.0-alpha.2, patched by Meta in **20.0.0**. Also `cordova-plugin-acuant` removed from npm in July 2024 for dropping malicious code at install; **CVE-2023-2507** (CleverTap Cordova Plugin ≤ 2.6.2, unsanitised deeplink → arbitrary JS in the main WebView context) |
 
 - **Test:** The 2025 mobile-tooling RCEs landed on the developer machine, not the device. Report them that
@@ -2675,6 +2728,7 @@ call that runs them?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter/Dart projects |
+| **Requires** | flutter |
 | **Maps to** | **CVE-2026-27704** — Dart SDK before **3.11.0** and Flutter SDK before **3.41.0**, Zip Slip during Pub package extraction letting a malicious package archive write outside the Pub-cache destination. The XCSSET incident: the macOS worm infected the `example/` directory of `universal_file_viewer` **0.1.5** on pub.dev (~500 downloads), injecting malicious build hooks into Android Gradle, Xcode and git build files when the maintainer published — with the textbook reachability caveat that "simply adding universal_file_viewer to pubspec.yaml and building an app does not trigger the malware, as the infected files live only inside the example/ directory, which ships in the pub.dev tarball but is never compiled as a dependency". OSV `MAL-` namespace (e.g. `MAL-2024-11812`, `MAL-2025-189`) |
 
 - **Test:** Two distinct issues: a malicious or compromised pub package, and the Zip Slip in the toolchain

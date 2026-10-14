@@ -45,6 +45,38 @@ mostly graveyard, and the exception is that it decides whether the other twenty-
 result on this exact device in this session — and if the answer is "the tool printed nothing", what is my
 positive control?**
 
+## Applicability probe
+
+D26 is not a target domain: it decides whether every other chapter's *dynamic* negative is admissible. It is never wholly n/a — D26-063, D26-067..072 and D26-078 apply to a code-review-only engagement — but its device, root, interception, native and cross-platform blocks each switch off on a measurable fact. Run these five checks at P1 and write the matching note into `engagement.json.domains_na` (partial) before any other domain's dynamic row is settled.
+
+```bash
+# 1. device lane: none => static-only engagement
+adb devices -l | grep -vE '^List|^$' | tee "$E/lab/devices.txt"; export SERIAL=${SERIAL:-$(awk 'NR==1{print $1}' "$E/lab/devices.txt")}
+adb -s "$SERIAL" shell id; adb -s "$SERIAL" shell getprop ro.build.version.sdk; adb -s "$SERIAL" shell getprop ro.build.type
+# 2. root + interception + instrumentation reachable? (doctor.sh needs bash>=4; the three lines are the macOS fallback)
+bash scripts/doctor.sh --json 2>/dev/null | jq -c '{device,root,frida,mitm}' || true
+adb -s "$SERIAL" root 2>&1 | head -1; frida-ps -D "$SERIAL" 2>&1 | head -1; adb -s "$SERIAL" shell settings get global http_proxy
+# 3. the static chain exists at the canonical paths
+ls "$E"/apk/*.apk | wc -l; ls -d "$DEC/jadx/sources" "$DEC/apktool" 2>&1
+# 4. native and cross-platform gates for D26-058..061
+unzip -l "$E/apk/base.apk" | grep -cE ' lib/[^/]+/.*\.so$'; apkid "$E/apk/base.apk" 2>/dev/null | grep -iE 'packer|anti_|compiler' | head -5
+unzip -l "$E"/apk/*.apk | grep -ciE 'flutter_assets|libapp\.so|index\.android\.bundle|assets/www/|il2cpp|assemblies'
+# 5. the inventory the rest of the chapter's conversions (D26-065/066) will be proved against
+grep -c . "$E"/inventory/components.csv "$E"/inventory/deeplinks.csv "$E"/inventory/webviews.csv 2>/dev/null
+```
+
+Decision and the exact n/a note to write:
+
+- **No device at all** (`adb devices` empty): `D26 partial n/a — static-only engagement (adb devices empty, doctor device=false). Dynamic items D26-001..017, D26-028, D26-030..038, D26-041..061, D26-064..066, D26-073..074, D26-077, D26-079 n/a; D26-018..027, D26-029, D26-039..040, D26-062..063, D26-067..072, D26-075..076, D26-078 still apply. Every dynamic negative in other domains is recorded as BLOCKED (B-nn), never as clean.`
+- **Device but `adb root` refused** (`adbd cannot run as root in production builds`): `D26-004..007, D26-057, D26-083 n/a — no root (image <variant>/<build.type>); D26-008 (NSC repack) and D26-009 (gadget) are mandatory substitutes and the report's Limitations names the cost.`
+- **Device API ≤ 33**: `D26-005..007 n/a — API <sdk> uses the legacy /system trust store; D26-004 applies.` **API ≥ 34**: `D26-004 n/a — API <sdk>: Conscrypt APEX store; D26-005/006 mandatory.`
+- **No `.so` in any split and no packer line**: `D26-058..061 n/a — the APK ships no native libraries (unzip count 0, APKiD: no packer/anti_* entries).`
+- **No cross-platform runtime markers**: `D26-060 n/a — framework=native-android (no flutter_assets/libapp.so, index.android.bundle, assets/www, il2cpp, assemblies).`
+- **Single tester, single device** (`SANE_WORKER` unset, one worker): `D26-081 n/a — one worker owns <serial> for the session.`
+- **No physical device**: `D26-013 n/a — emulator-only lab; D26-014's 'not covered — no hardware' rows are the coverage limitation.`
+
+Anything else: D26 applies in full. The probe's own outputs (`devices.txt`, the `id`/`sdk`/`build.type` triple, the frida-ps line) are the first three lines of `lab/harness-baseline-YYYYMMDD.txt` (D26-001).
+
 ## Triage order
 
 1. **Run the harness acceptance script and keep the output** (D26-001). Every hour billed before this
@@ -164,6 +196,7 @@ positive control?**
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | emulator-based labs; Apple Silicon hosts especially |
+| **Requires** | device |
 | **Maps to** | MASTG-TOOL-0021 (Magisk) as the fallback route |
 
 - **Test:** Three *independent* constraints decide whether an AVD can be rooted at all. Check all three
@@ -202,6 +235,7 @@ positive control?**
 | **VRT** | none; note `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` is **P5** — the bypass is never the finding |
 | **Attacker** | AM-07 network attacker with a trusted CA — **tester convenience, not an attacker model** |
 | **Applies to** | devices at API ≤ 33. **targetSdk < 24** apps trust user CAs and need none of this — if traffic decrypts from the *user* store, that is a D14 finding, record it |
+| **Requires** | device, root, mitm, api<=33 |
 | **Maps to** | MASTG-TECH-0011 (Setting Up an Interception Proxy), MASTG-TECH-0010 (Basic Network Monitoring/Sniffing), MASTG-TOOL-0077 (Burp Suite), MASTG-TOOL-0097 (mitmproxy), MASTG-TOOL-0079 (ZAP); ATT&CK T1638, T1632 |
 
 - **Test:** Put the proxy CA where a `targetSdk >= 24` app will actually trust it, and route traffic.
@@ -324,13 +358,14 @@ positive control?**
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | API 34+ builds whose Conscrypt implements the check; must be set **before** the app's first TLS use, hence spawn mode |
+| **Requires** | device, frida, api>=34 |
 | **Maps to** | Conscrypt `SystemCertificateSource`, quoted in the OverrideSysPropModule README: `if ((System.getProperty("system.certs.enabled") != null) && (System.getProperty("system.certs.enabled")).equals("true")) { return new File(System.getenv("ANDROID_ROOT") + "/etc/security/cacerts"); }` |
 
 - **Test:** Where namespace surgery is impractical, flip the app's own Conscrypt source back to
   `$ANDROID_ROOT/etc/security/cacerts` from inside the process.
 - **How:**
   ```javascript
-  // frida -U -f com.target.app -l certs.js --no-pause
+  // frida -D "$SERIAL" -f com.target.app -l certs.js
   Java.perform(function () {
     var S = Java.use('java.lang.System');
     S.setProperty('system.certs.enabled', 'true');
@@ -354,6 +389,7 @@ positive control?**
 | **VRT** | none |
 | **Attacker** | AM-07 (tester convenience) |
 | **Applies to** | stock non-rooted handsets; apps that do **not** verify their own signature |
+| **Requires** | device, mitm |
 | **Maps to** | MASTG-TECH-0004 (Repackaging Apps), MASTG-TECH-0039 (Repackaging & Re-Signing), MASTG-TECH-0011, MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TOOL-0123 (apksigner) |
 
 - **Test:** When no rootable image is available, add a debug-friendly NSC and re-sign.
@@ -409,7 +445,7 @@ positive control?**
   apktool b -o patched.apk out
   java -jar uber-apk-signer.jar -a patched.apk --out signed
   adb install signed/patched-aligned-debugSigned.apk
-  frida -U -n Gadget -l script.js
+  frida -D "$SERIAL" -n Gadget -l script.js
   ```
 - **Proof:** The patched app pausing at launch until the Frida client connects, then hooks firing — on a
   stock, non-rooted device. Say exactly that in the report.
@@ -444,7 +480,7 @@ positive control?**
   [ "$HOST" = "$DEV" ] || { echo "VERSION MISMATCH host=$HOST device=$DEV — fix before testing"; exit 1; }
   frida-ps -Uai | head
   # positive control: a hook that cannot be absent
-  frida -U -n com.target.app -q -e '
+  frida -D "$SERIAL" -n com.target.app -q -e '
   Java.perform(function(){
     var L = Java.use("android.util.Log");
     L.i.overload("java.lang.String","java.lang.String").implementation = function(a,b){
@@ -500,6 +536,7 @@ positive control?**
 | **VRT** | none directly; it is what moves a finding off `lack_of_binary_hardening.*` (P5) into a real category |
 | **Attacker** | AM-12 for the research device; the user device *is* the attacker's real environment |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | Google Mobile VRP reporting guidance (device/build in text, not screenshots; warn about emulators and rooted devices); AOSP severity modifiers (unlocked bootloader / Developer Mode -> "No higher than Low") |
 
 - **Test:** Keep two devices with the same account and the same build. Discover on the rooted one; prove
@@ -541,6 +578,7 @@ positive control?**
 | **VRT** | none |
 | **Attacker** | AM-12 |
 | **Applies to** | Android 11+ physical devices |
+| **Requires** | physical |
 | **Maps to** | `adb pair` / `adb connect`; `settings put global http_proxy`; MASTG-TOOL-0004 (adb), MASTG-TOOL-0024 (Scrcpy) |
 
 - **Test:** Two-device evidence (attacker phone + victim phone) needs the USB port free and a second
@@ -1096,6 +1134,7 @@ positive control?**
 | **VRT** | rated by what the recovered comparison protects — `broken_authentication_and_session_management.authentication_bypass` (P1) for a local PIN/licence gate that the server also honours; P5 if the gate is client-side only |
 | **Attacker** | AM-12 for capture; **must be converted** to AM-11 or AM-05 before reporting |
 | **Applies to** | apps with a local PIN, passcode, licence or entitlement comparison; Android 5+ for the auto-Frida path |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TOOL-0002 (MobSF (Android)), MASTG-TECH-0043 (Method Hooking), MASTG-TECH-0042 (Getting Loaded Classes and Methods Dynamically) |
 
 - **Test:** MobSF's dynamic analyser runs a broad first pass while you learn the app. Its most valuable
@@ -1148,7 +1187,7 @@ positive control?**
   dexdump -d /tmp/classes*.dex > /tmp/dump.txt
   grep -c "Lcom/vendor/sdk/" /tmp/dump.txt
   # then hook by the obfuscated name the anchor gave you
-  frida -U -f com.target.app -l hook.js --no-pause
+  frida -D "$SERIAL" -f com.target.app -l hook.js
   ```
 - **Proof:** An obfuscated class (`a.b.c.d`) tied to a known SDK by a string or resource anchor, plus a
   Frida hook on that obfuscated name producing the expected behaviour.
@@ -1399,6 +1438,7 @@ positive control?**
 | **VRT** | routed to D07: `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) up to `server_side_injection.sql_injection` (P1) |
 | **Attacker** | AM-12 harness (shell UID 2000 for the command); **the finding must be re-proved from a real app UID — AM-03** (D26-065) |
 | **Applies to** | all; `cmd content` needs ADB from Android 8.0+ |
+| **Requires** | device, provider |
 | **Maps to** | MASTG-TECH-0148 (Interacting with Android ContentProviders), MASTG-TOOL-0004 (adb); H1 #242727 (Nextcloud, $75), #518669, #534541 |
 
 - **Test:** Prove a provider is reachable with no tooling at all. It reads better at triage than a drozer
@@ -1442,6 +1482,7 @@ positive control?**
 | **VRT** | `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4), escalating on what the internal service exposes |
 | **Attacker** | AM-04 local app with `INTERNET` on a device with privileged network placement (corporate Wi-Fi, tethered VPN, MDM-managed handset) |
 | **Applies to** | apps deployed on managed or corporate handsets, or that talk to a host reachable only from the device's network |
+| **Requires** | device, backend-api |
 | **Maps to** | drozer-modules `meatballs1/auxillary/port_forward.py` |
 
 - **Test:** Where the app talks to an internal host reachable only from the device's network, prove that
@@ -1474,6 +1515,7 @@ positive control?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) — JDWP gives arbitrary code execution *as the app*, so everything the app's session can do, an attacker with device access can do |
 | **Attacker** | AM-11 physical unlocked, or AM-04 where another app can reach the JDWP transport |
 | **Applies to** | any shipped build carrying `android:debuggable="true"`. **API gate:** on `targetSdk >= 31` a debuggable release build is unambiguously a developer choice; Android 12 also excludes app data from `adb backup` **unless** `android:debuggable="true"`, which makes the flag doubly valuable |
+| **Requires** | device |
 | **Maps to** | drozer `app.package.debuggable`, `exploit/jdwp/check.py`; MASTG-TOOL-0019 (jdb), MASTG-TECH-0031 (Debugging), MASTG-TECH-0040 (Waiting for the Debugger); CWE-489 |
 
 - **Test:** Sweep the whole device, not just the target — a debuggable *sibling* app that shares a
@@ -1598,14 +1640,14 @@ positive control?**
   frida-ps -Uai                                  # -a applications only, -i include all installed
   frida-ps -U -j                                 # JSON
   frida-ps -Ua                                   # running apps
-  frida -U -f com.target.app -l hook.js          # spawn, gated (paused until you resume)
-  frida -U -f com.target.app -l hook.js --no-pause
-  frida -U -N com.target.app -l hook.js          # attach by identifier
-  frida -U -n "com.target.app:remote" -l hook.js # attach to a separate-process service
-  frida -U -p 12345 -l hook.js                   # attach by PID
-  frida -U -W 'com.target.*' -l hook.js          # await a spawn matching PATTERN
+  frida -D "$SERIAL" -f com.target.app -l hook.js          # spawn, gated (paused until you resume)
+  frida -D "$SERIAL" -f com.target.app -l hook.js
+  frida -D "$SERIAL" -N com.target.app -l hook.js          # attach by identifier
+  frida -D "$SERIAL" -n "com.target.app:remote" -l hook.js # attach to a separate-process service
+  frida -D "$SERIAL" -p 12345 -l hook.js                   # attach by PID
+  frida -D "$SERIAL" -W 'com.target.*' -l hook.js          # await a spawn matching PATTERN
   frida -H 127.0.0.1:27042 -N com.target.app     # remote frida-server
-  frida -U -f com.target.app -l a.js -l b.js --runtime=v8 --debug
+  frida -D "$SERIAL" -f com.target.app -l a.js -l b.js --runtime=v8 --debug
   frida-kill -U <pid>
   ```
   Other verified `application.py` flags: `-D/--device`, `-R/--remote`, `--certificate`, `--origin`,
@@ -1991,7 +2033,7 @@ positive control?**
   evidence a triager needs. Strip it at runtime for capture, and say in the report that you did.
 - **How:**
   ```javascript
-  // frida -U -f com.target.app -l disable-flag-secure.js --no-pause
+  // frida -D "$SERIAL" -f com.target.app -l disable-flag-secure.js
   Java.perform(function () {
     var LP = Java.use('android.view.WindowManager$LayoutParams');
     var FLAG_SECURE = LP.FLAG_SECURE.value;          // 0x00002000
@@ -2035,13 +2077,14 @@ positive control?**
 | **VRT** | routed to D08: `broken_access_control.exposed_sensitive_android_intent` (**null — rated on what it exposes**), reaching `broken_authentication_and_session_management.authentication_bypass` (P1) where the redirected intent reaches an authenticated component |
 | **Attacker** | AM-03 zero-permission local app for the resulting finding |
 | **Applies to** | `detectUnsafeIntentLaunch()` needs an **Android 12+ (API 31)** test device; `detectBlockedBackgroundActivityLaunch()` needs **Android 16+**. The underlying bug exists on all versions — the detector is only the discovery tool |
+| **Requires** | device, frida, api>=31 |
 | **Maps to** | MASTG-TECH-0043 (Method Hooking); rule `mastg-android-strictmode`; Android 12 behaviour change "Unsafe Intent Launch Detection"; `developer.android.com/guide/components/activities/background-starts` (`detectBlockedBackgroundActivityLaunch()`) |
 
 - **Test:** Rather than reading code for nested-intent launches, make the app report them. Inject the
   detector at process start and then drive every exported entry point.
 - **How:**
   ```javascript
-  // frida -U -f com.target.app -l strict.js --no-pause
+  // frida -D "$SERIAL" -f com.target.app -l strict.js
   Java.perform(function () {
     var SM = Java.use('android.os.StrictMode');
     var B  = Java.use('android.os.StrictMode$VmPolicy$Builder');
@@ -2244,6 +2287,7 @@ positive control?**
 | **VRT** | routed to whatever the read variable protects (D10 bridge allow-list, D13 gate) |
 | **Attacker** | AM-11 physical unlocked |
 | **Applies to** | **debuggable builds only** — shipped `android:debuggable="true"` (which is D26-038's finding) or a build you repacked debuggable (which is your patch, not a finding) |
+| **Requires** | device |
 | **Maps to** | MASTG-TOOL-0019 (jdb), MASTG-TECH-0031 (Debugging), MASTG-TECH-0040 (Waiting for the Debugger), MASTG-TECH-0038 (Patching) |
 
 - **Test:** When Frida is detected or the app crashes under instrumentation, break in the validator and
@@ -2285,6 +2329,7 @@ positive control?**
 | **VRT** | routed to D11/D16/D21 |
 | **Attacker** | AM-12 |
 | **Applies to** | rooted or userdebug devices; `strace` typically needs root |
+| **Requires** | device, root |
 | **Maps to** | MASTG-TECH-0032 (Execution Tracing), MASTG-TECH-0027 (Get Open Files — `NAME` and `TYPE` are the relevant columns), MASTG-TECH-0028 (Get Open Connections — `rem_address`, `tx_queue`/`rx_queue`, `uid` in `/proc/<pid>/net/tcp`), MASTG-TECH-0030 (Sandbox Inspection), MASTG-TECH-0143 (Monitor File System Operations in WebViews) |
 
 - **Test:** Catch behaviour that never crosses a Java API — native file access, root checks, WebView
@@ -2403,6 +2448,7 @@ positive control?**
 | **VRT** | routed to D19 |
 | **Attacker** | AM-12 |
 | **Applies to** | React Native, Flutter, Cordova/Capacitor, Unity/IL2CPP, Xamarin/.NET MAUI |
+| **Requires** | device, frida, flutter, react-native, hermes, cordova, capacitor, unity, xamarin |
 | **Maps to** | MASTG-TOOL-0001 (Frida (Android)), MASTG-TOOL-0029 (objection (Android)), MASTG-TOOL-0032 (Frida CodeShare), MASTG-TOOL-0036 (r2frida), MASTG-TOOL-0116 (blutter), MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0101 (disable-flutter-tls-verification), MASTG-TOOL-0104 (hermes-dec), MASTG-TOOL-0009 (APKiD); MASTG-TECH-0156, MASTG-TECH-0109 (Intercepting Flutter HTTPS Traffic) |
 
 - **Test:** Each framework needs a different instrumentation entry point, and the wrong one produces
@@ -2412,11 +2458,11 @@ positive control?**
   # common base
   adb root 2>/dev/null; frida-ps -U | head
   # React Native (old bridge) — CatalystInstanceImpl load hook + XHR interceptor
-  frida -U -f <pkg> -l rn-bridge.js --no-pause
+  frida -D "$SERIAL" -f <pkg> -l rn-bridge.js
   # Flutter — TLS and symbol recovery
-  frida -U -f <pkg> -l disable-flutter-tls.js --no-pause
+  frida -D "$SERIAL" -f <pkg> -l disable-flutter-tls.js
   python3 blutter.py apk_extracted/lib/arm64-v8a out_dir && wc -l out_dir/pp.txt out_dir/objs.txt
-  frida -U -f <pkg> -l out_dir/blutter_frida.js --no-pause
+  frida -D "$SERIAL" -f <pkg> -l out_dir/blutter_frida.js
   # Cordova / Capacitor — chrome://inspect (needs webContentsDebuggingEnabled or a debuggable build)
   objection -g <pkg> explore
   # Unity / IL2CPP
@@ -2477,6 +2523,7 @@ positive control?**
 | **VRT** | routed to D16/D25 and rated on the reachable crash: `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**, while memory corruption in a privileged process is an OEM/Google VRP matter |
 | **Attacker** | AM-03 or AM-09 depending on where the malformed input enters |
 | **Applies to** | apps with a parser in native code (media, image, archive, protocol); AArch64 targets emulated on an x86 host |
+| **Requires** | native |
 | **Maps to** | AOSP AIDL fuzzing (`fuzzService` takes an IBinder and a data provider, initialises a random Parcel and calls `transact`; C++ via `libbinder_ndk_driver.h`, Rust via `binder_random_parcel_rs`; `service_fuzzer_bindings.go` makes a fuzzer or an explicit exception mandatory for every binder service or the build fails) |
 
 - **Test:** Choose the engine from the constraint, not from fashion, and make the bug oracle work before
@@ -2594,7 +2641,7 @@ positive control?**
   dz> run scanner.provider.injection -a com.target.app
   dz> run app.provider.query content://<auth>/<known-injectable> --projection "'"
   # 2. against a hook that cannot be absent:
-  frida -U -n com.target.app -q -e 'Java.perform(function(){var L=Java.use("android.util.Log");
+  frida -D "$SERIAL" -n com.target.app -q -e 'Java.perform(function(){var L=Java.use("android.util.Log");
     L.i.overload("java.lang.String","java.lang.String").implementation=function(a,b){
       console.log("[CTRL] "+a); return this.i(a,b);};});'
   # 3. against a string you know exists:
@@ -2622,6 +2669,7 @@ positive control?**
 | **VRT** | none; it is the cheapest false-positive filter available |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | the emulator-artefact class generalised from the device to the platform |
 
 - **Test:** Many "findings" are the platform doing what it always does — backup semantics, recents
@@ -3074,6 +3122,7 @@ positive control?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) or `broken_authentication_and_session_management.authentication_bypass` (P1) when the mobile-only path lacks a control the current path enforces; `broken_access_control.privilege_escalation` where the delta is a client-asserted role |
 | **Attacker** | AM-01 remote no interaction (the endpoints are reachable from curl once you know them) |
 | **Applies to** | any app whose backend also serves a web or partner client — i.e. most of them |
+| **Requires** | mitm, backend-api |
 | **Maps to** | Bugcrowd VRT `broken_access_control.idor.*`; bug-hunting corpus "Shadow API — the mobile-to-backend bridge" |
 
 - **Test:** A mobile app's hardcoded backend calls are frequently an **older API version** than the current
@@ -3129,6 +3178,7 @@ positive control?**
 | **VRT** | none directly; it is the control that prevents an entire feature — and its bugs — from being missed |
 | **Attacker** | AM-12 |
 | **Applies to** | all |
+| **Requires** | device, frida |
 | **Maps to** | `dumpsys package` resolver tables; `adb shell monkey` (breadth only — **no security signal on its own**) |
 
 - **Test:** Guarantee that every feature was driven at least once with instrumentation on, and produce the
@@ -3139,7 +3189,7 @@ positive control?**
   # a) full activity inventory (including aliases and non-exported)
   adb shell dumpsys package $PKG | grep -oE "$PKG/[A-Za-z0-9_.\$]+" | sort -u > $OUT/activities.txt
   # b) instrumentation on for the whole tour
-  frida -U -f $PKG -l hooks.js --no-pause &            # the D26-054 hook pack
+  frida -D "$SERIAL" -f $PKG -l hooks.js &            # the D26-054 hook pack
   mitmdump -w $OUT/tour.flows &
   # c) drive it, snapshotting state per step
   step(){ adb shell dumpsys activity activities | grep -m1 topResumedActivity >> $OUT/stack.log
@@ -3219,6 +3269,7 @@ positive control?**
 | **VRT** | none |
 | **Attacker** | n/a |
 | **Applies to** | any new tool, hook chain or harness capability |
+| **Requires** | device |
 | **Maps to** | the practice-app corpus: `oversecured/ovaa`, `optiv/InsecureShop`, `B3nac/InjuredAndroid`, `rewanth1997/Damn-Vulnerable-Bank`, `jaiswalakshansh/Vuldroid`, `dineshshetty/Android-InsecureBankv2`, `payatu/diva-android`, `WheresMyBrowser.Android`, VyAPI, DVHMA, WaTF Bank, OWASP GoatDroid |
 
 - **Test:** Verify each harness capability end to end on an app whose bug you already know, so a negative
@@ -3234,7 +3285,7 @@ positive control?**
   adb install ovaa.apk
   dz> run app.package.attacksurface oversecured.ovaa
   dz> run scanner.provider.injection -a oversecured.ovaa     # must find the bug you know is there
-  frida -U -f oversecured.ovaa -l hooks.js --no-pause        # your D26-054 pack must produce lines
+  frida -D "$SERIAL" -f oversecured.ovaa -l hooks.js        # your D26-054 pack must produce lines
   ```
 - **Proof:** Your harness reproduces the known bug in the lab app, with the same commands you will run
   against the client build.

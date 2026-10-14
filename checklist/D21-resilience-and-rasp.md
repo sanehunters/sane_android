@@ -73,6 +73,39 @@ the client chose?**
 If the honest answer is "the check only stops the device's own owner from seeing their own data", you have
 a P5 hardening observation, and the correct output is a ruled-out entry, not a report.
 
+## Applicability probe
+
+Run these five before marking any D21 row. The chapter has two halves: the always-on half (engagement mode, filing gates, debug artefacts, local-state integrity, obfuscation, evidence discipline) applies to every app; the attestation half and the detection half apply only when the probe finds the control.
+
+```bash
+# 1. Attestation / integrity APIs referenced?  -> decides D21-003, D21-006, D21-013..D21-032, D21-058..D21-063
+grep -rlE 'IntegrityManager|StandardIntegrityManager|requestIntegrityToken|SafetyNetClient|\.attest\(|setAttestationChallenge\(|getCertificateChain\(|FirebaseAppCheck|installAppCheckProviderFactory' "$DEC/jadx/sources" | wc -l
+# 2. Detection / RASP / tamper response present?  -> decides D21-004, D21-005, D21-007..D21-009, D21-033..D21-035, D21-037..D21-039, D21-041..D21-045, D21-055
+apkid "$E/apk/base.apk" | grep -iE 'anti_root|anti_vm|anti_debug|obfuscator|packer'
+for so in "$DEC"/apktool/lib/*/*.so; do strings -a "$so" | grep -aoiE 'guardsquare|dexguard|appdome|promon|shield|verimatrix|talsec|freerasp|rootbeer|magisk|frida|TracerPid' | head -1 | sed "s#^#$so: #"; done
+grep -rlE 'RootBeer|isRooted|isDeviceRooted|checkRoot|isEmulator|Debug\.isDebuggerConnected|/system/xbin/su|wipeData|lockNow|clearApplicationUserData' "$DEC/jadx/sources" | wc -l
+# 3. Debug artefacts (always run)  -> decides D21-047..D21-050
+aapt2 dump xmltree "$E/apk/base.apk" --file AndroidManifest.xml | grep -E 'debuggable|testOnly'
+grep -rlE 'setWebContentsDebuggingEnabled|StrictMode\.(setVmPolicy|setThreadPolicy)' "$DEC/jadx/sources" | wc -l
+# 4. Integrity-shaped traffic on the wire (after P6 capture)  -> confirms or overrides probe 1
+mitmdump -nr "$E/requests/traffic.flows" -s /dev/stdin <<'PY' | sort -u | head
+def request(f):
+    h = {k.lower() for k in f.request.headers}
+    b = (f.request.content or b'').lower()
+    if any('integrity' in k or 'attest' in k or 'appcheck' in k for k in h) or any(k in b for k in (b'integrity', b'attest', b'rooted', b'tampered')):
+        print(f.request.pretty_host, f.request.path[:60])
+PY
+# 5. Backend in scope?  -> every High in the chapter needs it
+jq -r '.authorisation.scope, .app_facts.backend_api' "$E/engagement.json"
+```
+
+Write the n/a note in `checklist-status.csv` exactly as:
+
+- Probe 1 = 0 **and** probe 4 empty: `D21-003, D21-006, D21-013..D21-032, D21-058..D21-063 n/a — no attestation, App Check or integrity-shaped request found (probe 1: 0 files, probe 4: empty); "no attestation implemented" is MASWE-0054/-0056 hardening, not filed`.
+- Probe 2 = no APKiD signature, no vendor string, 0 call sites: `D21-004, D21-005, D21-007..D21-009, D21-033..D21-035, D21-037..D21-039, D21-041..D21-045, D21-055 n/a — no root/emulator/hook/tamper control shipped (APKiD clean, no RASP vendor .so, 0 detection call sites); absence is lack_of_binary_hardening P5 (MASWE-0051/-0053/-0065), not filed`.
+- Probe 5 says the backend is out of scope: `D21-013..D21-021, D21-025..D21-031, D21-053, D21-054, D21-058, D21-062, D21-063 blocked — backend out of scope; client-side halves recorded under D21-005/D21-033 only`.
+- Never n/a: D21-001, D21-002, D21-010..D21-012, D21-036, D21-040, D21-046..D21-052, D21-057 (and D21-061 when `.so` present). Probe 4 overriding probe 1 (token on the wire, no API reference) means a delegate process mints it: see D21-006 branch (c).
+
 ## Triage order
 
 1. **Is MAS-R contractually in scope?** One question to the client. It decides whether half this chapter
@@ -195,6 +228,7 @@ adb -s deviceB shell run-as com.target.app cat files/key.bin | xxd | head   # id
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | any app with Play Integrity, SafetyNet remnants or a commercial RASP SDK |
+| **Requires** | device |
 | **Maps to** | Play Integrity device-integrity labels `MEETS_DEVICE_INTEGRITY`, `MEETS_BASIC_INTEGRITY`, `MEETS_STRONG_INTEGRITY`, `MEETS_VIRTUAL_INTEGRITY` |
 
 - **Test:** If the app hard-fails on a rooted or emulated device, the whole dynamic phase is blocked on
@@ -241,11 +275,11 @@ adb logcat -d | grep -iE 'integrity|deviceRecognitionVerdict|MEETS_(DEVICE|BASIC
 - **How:** Build the complete check-site inventory first.
 ```bash
 apkid target.apk                                  # anti_root / anti_vm / obfuscator / packer, per library
-grep -rn '/system/xbin/su\|/system/bin/su\|/sbin/su\|Superuser.apk\|busybox\|magisk\|Magisk' jadx_out/sources
-grep -rn 'Runtime.getRuntime().exec\|ProcessBuilder' jadx_out/sources
-grep -rn 'ro.build.tags\|test-keys\|ro.debuggable\|ro.secure\|SystemProperties.get' jadx_out/sources
-grep -rn 'isDeviceRooted\|checkRootMethod\|RootBeer\|SafetyNet\|IntegrityManager\|attest' jadx_out/sources
-grep -rn 'getInstallerPackageName\|getInstallSourceInfo\|signatures\|GET_SIGNING_CERTIFICATES' jadx_out/sources
+grep -rn '/system/xbin/su\|/system/bin/su\|/sbin/su\|Superuser.apk\|busybox\|magisk\|Magisk' $DEC/jadx/sources
+grep -rn 'Runtime.getRuntime().exec\|ProcessBuilder' $DEC/jadx/sources
+grep -rn 'ro.build.tags\|test-keys\|ro.debuggable\|ro.secure\|SystemProperties.get' $DEC/jadx/sources
+grep -rn 'isDeviceRooted\|checkRootMethod\|RootBeer\|SafetyNet\|IntegrityManager\|attest' $DEC/jadx/sources
+grep -rn 'getInstallerPackageName\|getInstallSourceInfo\|signatures\|GET_SIGNING_CERTIFICATES' $DEC/jadx/sources
 strings out/lib/arm64-v8a/*.so | grep -iE 'busybox|magisk|superuser|/su$|frida|gum-js|xposed|ptrace|TracerPid'
 # vendor fingerprint - which commercial RASP is this?
 for so in out/lib/*/*.so; do strings -a "$so" \
@@ -284,6 +318,7 @@ Java.perform(() => Java.enumerateLoadedClasses({ onMatch: n => console.log(n), o
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-KNOW-0118 (RASP), MASWE-0058 |
 
 - **Test:** Most commercial RASP SDKs *report* signals to a backend and never block anything. A signal
@@ -292,7 +327,7 @@ Java.perform(() => Java.enumerateLoadedClasses({ onMatch: n => console.log(n), o
 - **How:** Attach and drive the app through its most sensitive flow with hooks live, then look for the
   three possible outcomes rather than the two people expect.
 ```bash
-frida -U -n com.target.app -l noop.js        # attach AFTER the UI loads; no spawn-time race
+frida -D "$SERIAL" -n com.target.app -l noop.js        # attach AFTER the UI loads; no spawn-time race
 # watch all three channels at once
 adb logcat --pid=$(adb shell pidof -s com.target.app) | grep -iE 'tamper|integrity|root|hook|rasp|threat'
 ```
@@ -321,6 +356,7 @@ outcome C  app runs, no beacon, nothing changes   -> no control at all. Graveyar
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | any app referencing Play Integrity, SafetyNet or Android key attestation |
+| **Requires** | mitm |
 | **Maps to** | MASTG-KNOW-0035, MASWE-0054, MASWE-0056; Play Integrity documentation ("token verification must occur on your backend server, not on the client app") |
 
 - **Test:** One observation splits this domain in half. Either the app forwards an **opaque token** that
@@ -364,6 +400,7 @@ PY
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | device, frida |
 | **Maps to** | Frida `Java.use` on `java.lang.System` / `android.os.Process`; `Log.getStackTraceString` |
 
 - **Test:** When the app exits or degrades under instrumentation there are two explanations, and testers
@@ -407,6 +444,7 @@ adb logcat -d | grep -iE 'SIGSEGV|abort|Fatal signal|tombstone'
 | **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (P5) |
 | **Attacker** | AM-12 — i.e. not an attacker |
 | **Applies to** | all hardened apps |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TECH-0043, MASTG-KNOW-0030 |
 
 - **Test:** Many checks execute only during spawn or `Application.onCreate()`. Spawn-time injection
@@ -415,9 +453,9 @@ adb logcat -d | grep -iE 'SIGSEGV|abort|Fatal signal|tombstone'
 ```bash
 # launch normally from the launcher or adb, wait for the UI, then attach
 adb shell monkey -p com.target.app 1 >/dev/null 2>&1; sleep 6
-frida -U -n com.target.app -l hooks.js
+frida -D "$SERIAL" -n com.target.app -l hooks.js
 # contrast with the spawn path that failed
-frida -U -f com.target.app -l hooks.js --no-pause
+frida -D "$SERIAL" -f com.target.app -l hooks.js
 ```
   If you genuinely need hooks before `onCreate`, use consolidated spawn-mode tooling so each Java method
   and native symbol is hooked exactly once — overlapping hooks are their own crash source.
@@ -437,6 +475,7 @@ frida -U -f com.target.app -l hooks.js --no-pause
 | **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (P5) |
 | **Attacker** | AM-12 |
 | **Applies to** | hardened banking, wallet and identity apps |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-KNOW-0030 (Reverse Engineering Tool Detection), MASTG-TOOL-0021 (Magisk + Zygisk/DenyList), MASTG-TOOL-0149 (LSPosed) |
 
 - **Test:** Anti-Frida detection is a fixed list of artefacts. Enumerate the list from the binary rather
@@ -445,7 +484,7 @@ frida -U -f com.target.app -l hooks.js --no-pause
 - **How:**
 ```bash
 grep -rn -i 'frida\|gum-js-loop\|gmain\|gdbus\|pool-spawner\|linjector\|re\.frida\.server\|27042\|27047\|LIBFRIDA' \
-  jadx_out/sources out/lib/*/*.so
+  $DEC/jadx/sources out/lib/*/*.so
 ```
   Vectors a modern detector covers, and which a renamed/stealth server changes: process name
   `frida-server`; the mapped `libfrida-agent.so`; thread names `gmain` / `gdbus` / `pool-spawner`; the
@@ -480,6 +519,7 @@ frida --gadget=libgadget.so -f com.target.app
 | **VRT** | n/a (payout precondition) |
 | **Attacker** | converts AM-12 to AM-01/AM-03 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | Google's reporting guidance (device model/Android version/build number in the report **text**, not a screenshot); AOSP severity modifiers (unlocked bootloader / Developer Mode -> no higher than Low) |
 
 - **Test:** Keep two devices: a rooted analysis device and a stock verification device. Every candidate
@@ -518,6 +558,7 @@ objection -g com.target.app explore -q
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | Android 13+ for restricted settings; all for the rest |
+| **Requires** | device |
 | **Maps to** | Android restricted-settings behaviour ("Allow restricted settings", Android 13+); Google's reporting guidance on non-standard device configurations; AOSP severity modifiers |
 
 - **Test:** Omitting a precondition inflates severity and gets the whole report downgraded when the
@@ -551,6 +592,7 @@ adb shell settings get global development_settings_enabled
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every attestation-stripping or verdict-flipping claim in this chapter |
+| **Requires** | backend-api, mitm |
 | **Maps to** | the Body-Diff Rule, the Layer-Ordering Trap and the Statistical-Sample Rule from the bug-hunting corpus |
 
 - **Test:** Three false positives dominate this domain's payable half, and all three look like a bypass.
@@ -596,6 +638,7 @@ curl -s -X POST https://api.target/v1/transfer -H 'Content-Type: application/jso
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 — any client can make the claim; no root is needed to send the request |
 | **Applies to** | any app that sends a device-state field to its backend |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASWE-0051 (CWE-1326), MASWE-0054, MASVS-RESILIENCE-1; Play Integrity overview's explicit "Do NOT" list ("Trust verdicts on client-side only", "Cache verdicts", "Make binary Allow/Deny decisions", "Rely solely on Play Integrity API") |
 
 - **Test:** This is the payable form of root detection, and it has nothing to do with the detection. Find
@@ -634,6 +677,7 @@ curl -i -X POST https://api.target/v1/session -H "Authorization: Bearer $TOK" \
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (the consequence); AM-12 for the mechanism |
 | **Applies to** | all Play Integrity integrations |
+| **Requires** | backend-api, frida |
 | **Maps to** | MASTG-KNOW-0035, MASWE-0054, MASWE-0056; Play Integrity documentation: token decryption/verification belongs on Google's servers or the app's server, never in the app |
 
 - **Test:** Play Integrity tokens can be decrypted on Google's servers or on the app's server. Decrypting
@@ -669,6 +713,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Play Integrity **classic** requests |
+| **Requires** | backend-api, mitm, two-accounts |
 | **Maps to** | MASTG-KNOW-0035 ("Include a NONCE with integrity verification requests"); Play Integrity documentation — the nonce "is used to protect against certain types of attacks, such as replay and tampering attacks"; MASWE-0054 |
 
 - **Test:** The reportable bug is not that a verdict can be spoofed on a rooted device — it is the
@@ -702,6 +747,7 @@ grep -rn 'setNonce(\|requestIntegrityToken\|IntegrityTokenRequest' sources/ -B6 
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Play Integrity **standard** requests |
+| **Requires** | backend-api, mitm, two-accounts |
 | **Maps to** | Play Integrity documentation — `requestHash` is "a digest of all relevant values from your app's request"; standard requests carry Google-managed replay mitigation but the backend must still validate `requestHash` against the protected action |
 
 - **Test:** Standard requests have Google-side replay mitigation, so testers assume binding is handled.
@@ -733,6 +779,7 @@ body B {"amount":9999,"to":"attacker"}  requestHash = 9f3c... > identical => bin
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all Play Integrity integrations |
+| **Requires** | backend-api, mitm, two-accounts |
 | **Maps to** | Play Integrity documented server check on `timestampMillis`; the overview's "No caching: Request verdicts on-demand to prevent replay/proxying attacks" and the "Do NOT cache verdicts (replay attack risk)" list entry |
 
 - **Test:** Even a correctly-nonce-bound integration fails if the backend never checks how old the token
@@ -771,6 +818,7 @@ grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putS
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (an emulator farm is a remote client) |
 | **Applies to** | all apps using Play Integrity |
+| **Requires** | backend-api, physical |
 | **Maps to** | Play Integrity verdicts documentation: `MEETS_DEVICE_INTEGRITY` = "Genuine certified Android device with hardware-backed proof of locked bootloader and certified OS (Android 13+)"; `MEETS_BASIC_INTEGRITY` = "bootloader can be locked/unlocked (less strict)"; `MEETS_VIRTUAL_INTEGRITY` = "Android-powered emulator with Google Play services"; MASTG-KNOW-0035 |
 
 - **Test:** These labels are not equivalent and the backend's tier logic frequently collapses them into a
@@ -802,6 +850,7 @@ grep -rn 'integrityToken\|verdict' sources/ | grep -i 'cache\|shared_?pref\|putS
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps using Play Integrity |
+| **Requires** | backend-api, device |
 | **Maps to** | Play Integrity verdicts: `appIntegrity.appRecognitionVerdict` (`PLAY_RECOGNIZED`, `UNRECOGNIZED_VERSION`, `UNEVALUATED`), `accountDetails.appLicensingVerdict` (`LICENSED`, `UNLICENSED`, `UNEVALUATED`); the documented caveat that `requestPackageName` can be spoofed mid-request and must not be the only app-identity check; MASTG-KNOW-0035 |
 
 - **Test:** A backend that checks only `deviceIntegrity` accepts a token from a **modified** build of the
@@ -833,6 +882,7 @@ adb install -r modified-aligned-debugSigned.apk
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (anyone can induce the error condition) |
 | **Applies to** | all apps using Play Integrity |
+| **Requires** | backend-api, frida |
 | **Maps to** | MASTG-KNOW-0035 — local errors `APP_NOT_INSTALLED`, `APP_UID_MISMATCH`, default quota 10,000 requests/day; MASWE-0054 |
 
 - **Test:** The API has documented local error conditions and a daily quota. An app whose failure listener
@@ -867,6 +917,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | **LEGACY** — any app still shipping the SafetyNet Attestation dependency; still common in older enterprise and white-label builds |
+| **Requires** | backend-api |
 | **Maps to** | Android SafetyNet deprecation timeline (deprecated 2022; full turndown January 2025; "the attest API returns a task that always invokes the on failure listener with an `ApiException`", status code 7 `NETWORK_ERROR`); MASWE-0054 |
 
 - **Test:** SafetyNet Attestation was fully turned down. The `attest` API now *always* invokes the failure
@@ -902,6 +953,7 @@ Java.perform(function () {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) |
 | **Attacker** | AM-09 / third-party processor exposure rather than a direct attacker |
 | **Applies to** | all apps using Play Integrity |
+| **Requires** | mitm |
 | **Maps to** | Play Integrity documentation: data used for `requestHash` and `nonce` "is visible in cleartext to your app, and to Google. You should encrypt or hash the data before passing it to the Play Integrity API." |
 
 - **Test:** Apps routinely stuff a user id, an email address or a session token straight into the nonce.
@@ -930,6 +982,7 @@ echo "$NONCE" | tr '_-' '/+' | base64 -d 2>/dev/null | strings | head
 | **VRT** | `mobile_security_misconfiguration.tapjacking` (P5) for the overlay half alone; argue up under `broken_access_control.privilege_escalation` (**VARIES**) where the verdict was purchased to gate a transfer |
 | **Attacker** | AM-04 (a local app holding one common permission — overlay or accessibility) |
 | **Applies to** | apps with the `environmentDetails` opt-ins enabled; supported form factors only |
+| **Requires** | backend-api, device |
 | **Maps to** | Play Integrity verdicts: `environmentDetails.appAccessRiskVerdict.appsDetected` (`KNOWN_INSTALLED`/`UNKNOWN_INSTALLED`, `KNOWN_CAPTURING`/`UNKNOWN_CAPTURING`, `KNOWN_CONTROLLING`/`UNKNOWN_CONTROLLING`, `KNOWN_OVERLAYS`/`UNKNOWN_OVERLAYS`), `playProtectVerdict` (`NO_ISSUES`, `NO_DATA`, `POSSIBLE_RISK`, `MEDIUM_RISK`, `HIGH_RISK`, `UNEVALUATED`); MASWE-0039, MASWE-0040 |
 
 - **Test:** These opt-in verdicts exist precisely to detect screen-capturing, overlaying and
@@ -988,6 +1041,7 @@ grep -rn -i 'deviceRecall\|device_recall\|recentDeviceActivity' sources/
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); the data it exposes may rate higher under `sensitive_data_exposure.disclosure_of_secrets\|*` |
 | **Attacker** | AM-01 |
 | **Applies to** | apps using Firebase/GCP-backed services or the App Check custom-backend integration |
+| **Requires** | firebase, backend-api |
 | **Maps to** | Firebase App Check documentation — Play Integrity is the Android provider; protects Cloud Firestore, Realtime Database, Cloud Storage, callable Cloud Functions, Firebase Authentication (Preview) and custom backends; debug providers are local-development-only |
 
 - **Test:** App Check is the control that makes "only our app may call this backend" true. Without it,
@@ -996,7 +1050,7 @@ grep -rn -i 'deviceRecall\|device_recall\|recentDeviceActivity' sources/
 - **How:**
 ```bash
 grep -rnE 'FirebaseAppCheck|installAppCheckProviderFactory|PlayIntegrityAppCheckProviderFactory|DebugAppCheckProviderFactory|SafetyNetAppCheckProviderFactory|firebase_app_check_debug_token' \
-  jadx_out/sources jadx_out/resources
+  $DEC/jadx/sources $DEC/jadx/resources
 # is enforcement actually on?  call the backend with a valid ID token and NO App Check header
 curl -s -X POST "https://firestore.googleapis.com/v1/projects/$PROJ/databases/(default)/documents:runQuery" \
   -H "Authorization: Bearer $ID_TOKEN" -H 'Content-Type: application/json' -d '{"structuredQuery":{}}' -i
@@ -1019,6 +1073,7 @@ curl -s -X POST "https://firestore.googleapis.com/v1/projects/$PROJ/databases/(d
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) where the chain is accepted unverified |
 | **Attacker** | AM-01 |
 | **Applies to** | Android 7.0+ (Keymaster 2 key attestation) |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASTG-KNOW-0044 (Key Attestation), MASTG-KNOW-0034 (Device Binding), MASWE-0054; Android security-key-attestation documentation — "Perform verification on a **separate server**, not on the device itself"; extension OID `1.3.6.1.4.1.11129.2.1.17` |
 
 - **Test:** Attestation checked on the device is worthless: a compromised OS controls the checker. The
@@ -1053,6 +1108,7 @@ BAD   {"hardwareBacked":true,"securityLevel":"TrustedEnvironment"}   # a client 
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**, argue Critical); `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the attestation is the authentication for device enrolment |
 | **Attacker** | AM-01 |
 | **Applies to** | all servers consuming Android key attestation |
+| **Requires** | backend-api, mitm |
 | **Maps to** | Android security-key-attestation documentation — "**Critical**: Only trust the **first occurrence** of the extension (nearest to root). Extensions in the leaf certificate may have been added by attackers"; `KeyDescription` ASN.1 shape in AOSP keystore attestation docs |
 
 - **Test:** If the server verifies the chain but reads `KeyDescription` from the **leaf**, an attacker who
@@ -1085,6 +1141,7 @@ openssl x509 -in chain_0.pem -text -noout | grep -A40 '1.3.6.1.4.1.11129.2.1.17'
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) for the enrolment case; otherwise `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | backend-api, mitm |
 | **Maps to** | Android security-key-attestation verification checklist — "`attestationChallenge` matches your nonce"; `KeyDescription.attestationChallenge` in AOSP keystore attestation docs; MASTG-KNOW-0034 |
 
 - **Test:** `setAttestationChallenge()` must carry a fresh, server-issued, single-use value. A constant, a
@@ -1114,6 +1171,7 @@ diff <(openssl x509 -in enrol1_leaf.pem -text -noout | grep -A5 'attestationChal
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | Android 7.0+ for the fields; Android 10+ for the VBMeta digest |
+| **Requires** | backend-api, physical |
 | **Maps to** | AOSP keystore attestation — `RootOfTrust` contains `verifiedBootKey`, `deviceLocked`, `verifiedBootState` (`Verified`, `SelfSigned`, `Unverified`, `Failed`), `verifiedBootHash`; AOSP security-model paper §4.7 (the state "can be verified by apps as well as passed onto backend services to remotely verify boot integrity"; from Android 10 with AVB2 the VBMeta struct digest is included "to support firmware transparency") |
 
 - **Test:** A verified attestation *carries* the boot state. The common defect is a backend that validates
@@ -1143,6 +1201,7 @@ adb shell getprop ro.boot.flash.locked
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all servers consuming Android key attestation |
+| **Requires** | backend-api, physical |
 | **Maps to** | Android security-key-attestation documentation — check `attestationSecurityLevel` is `TrustedEnvironment` or `StrongBox`, verify the root "is signed with Google's attestation root key", check the chain against the CRL at `https://android.googleapis.com/attestation/status`, roots listed at `https://android.googleapis.com/attestation/root`, official verifier `github.com/android/keyattestation`; AOSP `SecurityLevel` values `Software` / `TrustedEnvironment` / `StrongBox` |
 
 - **Test:** Two checks are commonly missing: the security level (a *software* attestation chain is
@@ -1180,6 +1239,7 @@ adb shell pm list features | grep -iE 'strongbox|hardware_keystore'   # absent o
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 (the attacker runs the modified client and owns a second clean handset) |
 | **Applies to** | apps that treat an AndroidKeyStore X.509 attestation chain as a device-integrity boolean |
+| **Requires** | backend-api, frida, physical |
 | **Maps to** | MASTG-KNOW-0044; AOSP key/ID attestation docs; the published key-attestation relay research |
 
 - **Test:** OID `1.3.6.1.4.1.11129.2.1.17` proves that *some* acceptable TEE or StrongBox generated the
@@ -1224,6 +1284,7 @@ adb shell pm list features | grep -iE 'strongbox|hardware_keystore'   # absent o
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 for the consequence |
 | **Applies to** | all |
+| **Requires** | frida |
 | **Maps to** | AOSP security-model paper §4.7 (the Verified Boot state "is included in key attestation certificates (provided by Keymint/Strongbox) in the `deviceLocked` and `verifiedBootState` fields, which can be verified by apps as well as passed onto backend services"); AOSP verified-boot device-state documentation (LOCKED vs UNLOCKED, `fastboot flashing [unlock\|lock]` wiping data) |
 
 - **Test:** An app reading `ro.boot.verifiedbootstate` or `ro.boot.flash.locked` to decide device
@@ -1262,6 +1323,7 @@ Java.perform(function () {
 | **VRT** | `lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) for the bypass; file the *consequence* under `broken_access_control.privilege_escalation` (**VARIES**) or the relevant D11/D12/D13/D15 node |
 | **Attacker** | AM-12 for the bypass — which is why the bypass is never the finding; AM-01/AM-05 for whatever it reaches |
 | **Applies to** | all apps shipping root/emulator/hook detection |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TEST-0324, MASTG-TEST-0325, MASTG-TEST-0351, MASTG-TECH-0144, MASWE-0051 (CWE-1326), MASWE-0053, MASTG-KNOW-0027, MASTG-KNOW-0031, MASTG-TOOL-0029/-0038 (objection), MASTG-TOOL-0146 (RootBeer), MASTG-TOOL-0021 (Magisk), MASTG-TOOL-0149 (LSPosed), rule `mastg-android-root-detection`; ATT&CK T1633.001, T1630.003 |
 
 - **Test:** Locate the check, establish **what it gates**, bypass it, then demonstrate the delta in the
@@ -1330,6 +1392,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) where a server decision or key release depends on it |
 | **Attacker** | AM-12 for the mechanism; AM-01 where an induced error is remotely reachable |
 | **Applies to** | all |
+| **Requires** | frida |
 | **Maps to** | MASWE-0051, MASVS-RESILIENCE-1; AOSP security-model paper §3 rule ③ (rooting is "modifying the system to allow starting processes that are not subject to sandboxing and isolation" — a CDD non-compliance, and attestation rather than a local check is the supported mechanism) |
 
 - **Test:** This is a different, better test than bypassing. Detection routines wrapped in a broad
@@ -1366,6 +1429,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); the backup path itself is `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) and is not the headline |
 | **Attacker** | AM-11 physical unlocked / AM-03 where a backup transport is reachable — materially weaker preconditions than "root plus Frida" |
 | **Applies to** | apps with `allowBackup` effectively true, or any on-disk cache of the verdict |
+| **Requires** | device |
 | **Maps to** | MASWE-0006, MASWE-0051, MASWE-0057 (CWE-471 "Modification of Assumed-Immutable Data") |
 
 - **Test:** A detection result cached in SharedPreferences (`"is_rooted":false`, `"integrity_ok":true`,
@@ -1397,6 +1461,7 @@ adb shell run-as com.target.app cat shared_prefs/security.xml
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); `cryptographic_weakness.insufficient_verification_of_data_authenticity.identity_check_value` (**P4**) as the integrity-primitive framing |
 | **Attacker** | AM-11 / AM-12 locally; AM-01 once the server honours it |
 | **Applies to** | all |
+| **Requires** | root |
 | **Maps to** | MASTG-TEST-0338, MASTG-TECH-0008, MASWE-0057 (CWE-471), MASTG-KNOW-0036, MASTG-BEST-0066, MASVS-RESILIENCE-2, MASVS-CODE-4 |
 
 - **Test:** The R-profile test that produces genuine findings, because its failure condition is
@@ -1434,6 +1499,7 @@ adb shell am force-stop com.target.app; adb shell monkey -p com.target.app 1
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) for the absence; `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**) where the check is the integrity control the vendor claims |
 | **Attacker** | AM-12 |
 | **Applies to** | all; cross-platform builds where the check lives in JS/Dart/C# are the weakest case |
+| **Requires** | frida |
 | **Maps to** | MASWE-0058 (Runtime Code Integrity Not Verified), MASTG-KNOW-0032 (Runtime Integrity Verification), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TECH-0039 |
 
 - **Test:** Apps that check their own signature at runtime read `PackageManager` data that an instrumented
@@ -1472,6 +1538,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**); rate through the D17 finding it enables |
 | **Attacker** | AM-03/AM-08 where the writable path is reachable by another app or an SDK |
 | **Applies to** | apps with integrity or attestation claims |
+| **Requires** | frida |
 | **Maps to** | MASWE-0058; the Dirty Stream research pattern (the vendor hash check was defeated by overwriting the stored reference hash — the check ran against attacker-controlled reference data) |
 
 - **Test:** Ordering matters. If any attacker-writable `.so`, DEX or reference hash resolves *before* the
@@ -1501,6 +1568,7 @@ ls -l /sdcard/Android/data/com.target.app/files 2>/dev/null
 | **VRT** | `application_level_denial_of_service_dos.critical_impact_and_or_easy_difficulty` (**P2**), or `\|high_impact_and_or_medium_difficulty` (**P3**) |
 | **Attacker** | AM-03 zero-permission local app where the trigger is a file on shared storage; AM-01 where the trigger is a server-influenced signal |
 | **Applies to** | all apps with a destructive tamper response |
+| **Requires** | device |
 | **Maps to** | ATT&CK T1662 Data Destruction, T1630.002 File Deletion (`wipeData`), T1629.002 Device Lockout (`DevicePolicyManager.lockNow()`), T1642 Endpoint Denial of Service, T1471 Data Encrypted for Impact |
 
 - **Test:** Nobody checks this, and it is the one item in the chapter with a Critical ceiling. Does the
@@ -1568,6 +1636,7 @@ adb shell settings get global install_non_market_apps
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-02 (the user installs the container), AM-08 (the container is the hostile party) |
 | **Applies to** | banking, wallet and DRM apps; any app whose threat model assumes per-package UID isolation |
+| **Requires** | device |
 | **Maps to** | MASWE-0058; the dex-load primitive `DexFile.openDexFile()` -> `openDexFileNative()` that containers hook and redirect |
 
 - **Test:** Container and cloning frameworks run the target inside a host process. Where the guest executes
@@ -1602,6 +1671,7 @@ adb shell dumpsys package com.target.app | grep -i 'userId=\|pkgFlags'
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**) where the detection gates a flow; otherwise Support |
 | **Attacker** | AM-07 for the mechanism (tester convenience, not an attacker) — so the finding is the **false claim**, not the interception |
 | **Applies to** | **API 34+**: the live trust store moved to the Conscrypt APEX at `/apex/com.android.conscrypt/cacerts`; `/system/etc/security/cacerts` is ignored at runtime |
+| **Requires** | api>=34, mitm, frida |
 | **Maps to** | AOSP Conscrypt modular-system documentation (dual location, Android 14+); MASWE-0058 |
 
 - **Test:** RASP implementations commonly detect "MITM in progress" by hashing
@@ -1631,6 +1701,7 @@ adb shell ls /system/etc/security/cacerts | head
 | **VRT** | `using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) for the version string alone — you must reach the code path to rate it higher |
 | **Attacker** | AM-08 malicious third-party SDK / AM-09 where the vulnerable parser consumes remote data |
 | **Applies to** | apps with commercial RASP |
+| **Requires** | native |
 | **Maps to** | D16 for the version ranges and the reachability proof; MASTG-TOOL-0009 (APKiD) for vendor fingerprinting |
 
 - **Test:** Security SDKs are dependencies too. Fingerprint the RASP vendor's `.so` and check whether the
@@ -1664,6 +1735,7 @@ aapt2 dump xmltree target.apk --file AndroidManifest.xml | grep -iA6 -E 'provide
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all dynamic SDK testing |
+| **Requires** | mitm |
 | **Maps to** | the SourMint research pattern (`ParseAndLoad` checking the Wi-Fi proxy and VPN client; the iOS analogue checking simulator, debugger, jailbreak paths and the system proxy settings) |
 
 - **Test:** Before concluding "the SDK does nothing interesting", verify the SDK is not gating on your
@@ -1694,6 +1766,7 @@ run B: transparent interception (no proxy settings set; redirect at the gateway/
 | **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (**P5**) for the missing detection — never the headline; file the extracted secret under its own node |
 | **Attacker** | AM-12 for the extraction; the finding only exists once D21-002 condition 2 or 6 converts it to AM-01/AM-05 |
 | **Applies to** | all |
+| **Requires** | frida, two-accounts |
 | **Maps to** | MASTG-TEST-0341 (source of the API list below), MASWE-0058, MASTG-KNOW-0030, MASTG-KNOW-0032, MASTG-KNOW-0118, MASTG-BEST-0041, MASTG-TECH-0043, MASTG-TOOL-0001; ATT&CK T1617 Hooking (M1002, M1010) |
 
 - **Test:** Hook the APIs that handle secrets. If the hooks fire and return data, the app has no runtime
@@ -1708,7 +1781,7 @@ EncryptedSharedPreferences APIs                -> the decrypted values
 KeyGenParameterSpec.Builder.setUserAuthenticationRequired()  -> authentication bypass
 ```
 ```bash
-frida -U -n com.target.app -l - <<'JS'
+frida -D "$SERIAL" -n com.target.app -l - <<'JS'
 Java.perform(function(){
   try { var AM = Java.use('android.accounts.AccountManager');
     AM.getPassword.implementation = function(a){ var r=this.getPassword(a); console.log('[AccountManager.getPassword] '+r); return r; }; } catch(e){}
@@ -1743,6 +1816,7 @@ JS
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) for the absence |
 | **Attacker** | AM-11 physical unlocked with USB debugging, or AM-12 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0352, MASTG-TEST-0353, MASWE-0064, MASTG-KNOW-0028 (Anti-Debugging), MASTG-KNOW-0007, MASTG-TECH-0031, MASTG-TECH-0040, MASTG-TECH-0018, MASTG-BEST-0007/-0029/-0047, rules `mastg-android-debugger-checks` and `mastg-android-native-debugger-checks`, MASTG-TOOL-0019 (jdb), MASTG-TOOL-0152 (lldb), MASTG-TOOL-0151 (debugmepLS); deprecated MASTG-TEST-0046 |
 
 - **Test:** Confirm whether debugging detection exists **and executes in release**, then attach. The
@@ -1781,6 +1855,7 @@ if (ptrace) Interceptor.replace(ptrace, new NativeCallback(function(){ return -1
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) where JDWP yields the session; otherwise rate on the data reached |
 | **Attacker** | AM-11 physical unlocked with USB access; AM-03/AM-06 where adb-over-TCP is enabled |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0031 (Debugging); drozer `app.package.debuggable`, `exploit.jdwp.check`; Android's `android-debuggable` risk documentation |
 
 - **Test:** If the shipped build is debuggable, every RASP control is bypassable without root, without
@@ -1817,6 +1892,7 @@ dz> run exploit.jdwp.check
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the DevTools session yields the authenticated web session; otherwise rate on the content reached |
 | **Attacker** | AM-11 physical unlocked with USB/adb; AM-03 where another app can reach the abstract socket on an affected build |
 | **Applies to** | all apps with WebViews |
+| **Requires** | webview, device |
 | **Maps to** | MASTG-TECH-0031; Android's test/debug-features risk documentation; MASWE-0061 |
 
 - **Test:** This exposes the app's WebViews to Chrome DevTools over the adb socket — full DOM and JS
@@ -1845,6 +1921,7 @@ curl -s http://127.0.0.1:9222/json/version
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**); `insecure_os_firmware.hardcoded_password.privileged_user` (**P1**) for a shipped test credential; `broken_access_control.exposed_sensitive_android_intent` (**VARIES**) for the reachable debug Activity |
 | **Attacker** | AM-03 zero-permission local app where the debug component is exported; AM-11 otherwise |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | Android test/debug-features risk documentation; MASWE-0061 |
 
 - **Test:** Debug activities, staging endpoints, feature-flag overrides, "god mode" switches and test
@@ -1878,6 +1955,7 @@ adb shell am start -n com.target.app/.debug.DevToolsActivity
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) |
 | **Attacker** | AM-11 |
 | **Applies to** | all; the target of the test is explicitly the production build |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0263, MASTG-TEST-0264, MASTG-TEST-0265, MASTG-TECH-0009, MASWE-0061 (CWE-489, CWE-497, CWE-540, CWE-912, CWE-1295), MASVS-RESILIENCE-3, rule `mastg-android-strictmode` |
 
 - **Test:** "Leaving `StrictMode` enabled can expose sensitive implementation details in the logs." The
@@ -1995,6 +2073,7 @@ done | sort -t/ -k1 -n | head -20
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | backend-api, mitm |
 | **Maps to** | MASVS-RESILIENCE-1; the generalised form of D21-013 |
 
 - **Test:** The generalisation that catches what the integrity items miss: **any** decision the app makes
@@ -2032,6 +2111,7 @@ curl -i -X POST https://api.target/v1/transfer -H "Authorization: Bearer $TOK" \
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) at the ceiling; `broken_access_control.privilege_escalation` (**VARIES**) for the weakened control |
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API; every hardcoded endpoint in the APK is a candidate |
+| **Requires** | backend-api |
 | **Maps to** | the shadow/zombie-API class from the bug-hunting corpus — "a mobile app whose hardcoded backend calls look older than the current web app's" |
 
 - **Test:** The highest-value mobile-to-backend bridge, and it belongs in this chapter because the
@@ -2074,6 +2154,7 @@ done
 | **VRT** | `lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) for the absence |
 | **Attacker** | AM-01 (an emulator farm is a remote client) |
 | **Applies to** | MAS-R scoped engagements for the observation; anti-fraud-relevant apps for the escalation |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0351, MASWE-0053, MASTG-KNOW-0031, MASTG-BEST-0046, MASTG-TECH-0032, MASTG-TOOL-0009 (APKiD `anti_vm`); deprecated MASTG-TEST-0049; ATT&CK T1633 Virtualization/Sandbox Evasion, T1633.001 System Checks |
 
 - **Test:** Hook and trace the common emulator checks while running on an emulator. The observation is
@@ -2084,7 +2165,7 @@ done
 grep -rn 'Build\.FINGERPRINT\|Build\.MODEL\|Build\.MANUFACTURER\|Build\.PRODUCT\|Build\.HARDWARE\|Build\.TAGS\|ro\.kernel\.qemu\|goldfish\|ranchu\|sdk_gphone\|generic_x86' sources/
 apkid app.apk | grep anti_vm
 strace -p $(adb shell pidof com.target.app) 2>&1 | grep -E 'qemu|goldfish|ranchu|/proc/tty/drivers'
-frida -U -f com.target.app -l emulator_detect_hooks.js
+frida -D "$SERIAL" -f com.target.app -l emulator_detect_hooks.js
 ```
   Note the sophisticated variants ATT&CK documents, in case the app implements them and you misdiagnose a
   failure: sampling motion-sensor data, requiring a number of recorded steps before activating, and
@@ -2108,6 +2189,7 @@ frida -U -f com.target.app -l emulator_detect_hooks.js
 | **VRT** | n/a |
 | **Attacker** | AM-11 (shell access on the user's own device) |
 | **Applies to** | debuggable or shell-accessible devices; some toggles require the app to be debuggable or the build to be userdebug |
+| **Requires** | device |
 | **Maps to** | Android 12/15/16 behaviour-change documentation (each documents its own `am compat` change name); Android app-compatibility test/debug guide |
 
 - **Test:** The Android compatibility framework enables and disables individual behaviour changes **per

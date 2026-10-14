@@ -4,7 +4,7 @@
  "file": "D08-intent-redirection-and-pendingintent.md",
  "why": "Three separate bodies buy this class by name. Google's Mobile VRP lists \"Intent redirections leading to\nlaunching non-exported application components\" and \"Vulnerabilities caused by unsafe usage of pending\nintents\" in its *Additional vulnerability types in scope*; the Android & Google Devices programme buys\n\"Arbitrary launch of non-exported sensitive activities … or valid bypasses of Intent Redirect hardening\".\nGoogle Play has run an App Security Improvement campaign called **Intent Redirection** since 2019-05-16\n(`faqs/answer/9267555`) and **Implicit PendingIntent** since 2022-02-22 (`faqs/answer/10437428`) — meaning\nGoogle itself measures the base rate as high enough to warrant a store-wide remediation deadline. On\nHackerOne the same shape is #200427 (Slack, **Critical**, nested `extra_deep_link_intent` driving\n`CallActivity` to place a real call), #2289836 (MercadoLibre, **High 8.6**, chained to ATO and arbitrary\nfile read/delete), #1095633 (VK, Critical) and #272044 (Dropbox, $1000).\n\nThe base rate is the reason to start here. Oversecured's published figure is **more than 80% of apps**\ncarry some form of the nested-Intent forward. That is not a claim you can make about any other domain in\nthis checklist. The corollary is that the *finding* is never the forward — the forward is a primitive.\nWhat separates a P1 from an unrated `exposed_sensitive_android_intent` is which non-exported component you\nland on and what comes back across the sandbox boundary. Pick the target component by sink quality, not by\nname: a WebView that already carries the session, a `FileProvider` with a `<root-path>`, an admin screen\nthat performs a state change without re-auth.\n\nThe honest caveat is version drift. Android 16 (API 36) hardens nested-Intent launches **by default for\nall apps**, and Android 14 made the blank-base mutable `PendingIntent` throw. Neither kills the class — 16\nships an explicit opt-out (`removeLaunchSecurityProtection()`), 14's check is satisfied by\n`setPackage(context.packageName)` which leaves the component fillable — but both will be used to close your\nreport unless you ran the PoC on two API levels yourself and said so in the first paragraph. A redirection\nreport with no stated platform version is a report the vendor closes for free.",
  "crux": "**Does any attacker-reachable entry point in this app hand a `Intent`, `Uri`, `Bundle` or `PendingIntent` that the attacker fully or partially controls to a framework call that executes with the app's own UID — and if so, which non-exported component, private provider URI or held runtime permission does that reach that the attacker cannot reach directly?**",
- "applicability": "",
+ "applicability": "D08 has three halves with separate preconditions — the redirection sinks, the PendingIntent tokens and the URI-grant surface. Run the four counts below (two minutes), settle each half from them, and never settle the domain as a whole from one of them. Framework method names survive R8; androidx names and constants do not (see the R8 survival rule under Items), which is why every pattern here is a framework method or a manifest attribute.\n\n```bash\nSRC=\"$DEC/jadx/sources\"; MAN=\"$DEC/AndroidManifest.merged.xml\"\nX='^(android|androidx|kotlin|kotlinx|com/google/android/material)/'\n# 1. redirection half — extractor sites in app/SDK code (framework packages excluded)\ngrep -rlE 'getParcelableExtra[(]|getParcelable[(]|getSerializableExtra[(]|parseUri[(]|unmarshall[(]|readParcelable[(]|getExtras[(][)][.]get[(]|getIntentSender[(]|startIntentSender' \"$SRC\" \\\n  | sed \"s#^$SRC/##\" | grep -vE \"$X\" | tee \"$E/logs/D08-probe-extractors.txt\" | wc -l\n# 2. PendingIntent half — creations in app/SDK code\ngrep -rlE 'PendingIntent[.]get(Activity|Activities|Broadcast|Service|ForegroundService)[(]' \"$SRC\" \\\n  | sed \"s#^$SRC/##\" | grep -vE \"$X\" | tee \"$E/logs/D08-probe-pi.txt\" | wc -l\n# 3. attacker-reachable entry points (exported components, deep links)\nawk -F, 'NR==1{for(i=1;i<=NF;i++) if($i==\"exported\") c=i} NR>1 && $c==\"true\"' inventory/components.csv | wc -l\ntail -n +2 inventory/deeplinks.csv | wc -l\n# 4. grant half — a grantable authority, and dangerous content permissions the victim holds\ngrep -cE 'grantUriPermissions=\"true\"|<grant-uri-permission' \"$MAN\"\ngrep -oE 'android.permission.(READ_CONTACTS|READ_SMS|READ_CALL_LOG|READ_CALENDAR|READ_MEDIA_IMAGES|READ_EXTERNAL_STORAGE)' \"$MAN\" | sort -u\n```\n\nDecision rules (record all six numbers in `logs/D08-probe.txt` with the commands):\n\n- **Redirection half n/a** (D08-001…D08-036, D08-053…D08-061, D08-067…D08-070) only when count 1 = 0 **and** count 3 = 0 exported components **and** 0 deep links. A launcher activity is exported, so this is rare; normally the half applies and only the per-item greps close it. Note text: `D08 redirection/grant delivery n/a: 0 extractor sites outside framework packages (logs/D08-probe-extractors.txt) and no exported component or deep link (inventory/components.csv exported=0, inventory/deeplinks.csv 0 rows); no attacker-reachable entry point exists for a nested Intent, an intent: string or a URI grant.`\n- **PendingIntent half n/a** (D08-037…D08-052) only when count 2 = 0 at rest **and** the D08-003 runtime census over every screen, notification and widget logged 0 `PendingIntent.get*` creations (SDK-created tokens count). Note text: `D08 PendingIntent half n/a: 0 PendingIntent creations outside framework packages (logs/D08-probe-pi.txt) and the D08-003 census (logs/D08-003.txt) logged 0 creations at runtime; no token exists to acquire.`\n- **Grant half n/a** (D08-010…D08-012, D08-052…D08-055, D08-068) when count 4 = 0 **and** the permission list is empty. Note text: `D08 grant items n/a: no provider is grantable (grantUriPermissions absent, no <grant-uri-permission> child) and the app holds no dangerous content permission; a forwarded or filled grant flag has nothing to bind to.` If the permission list is non-empty, D08-034 and D08-058 still apply even with count 4 = 0.\n- D08-062…D08-066 are never n/a; they apply to whatever the other halves produce.",
  "triage": "1. **Census the unparcel→launch sinks** (D08-001). Two greps produce the entire candidate set; everything\n   else in this chapter is a variant of what those greps return.\n2. **Run the two-API-level control** (D08-004) before spending an hour on a PoC that Android 16 blocks.\n3. **Classic nested-Intent forward to a non-exported activity** (D08-007). Highest base rate, cheapest\n   proof, and the paired `Permission Denial`/success screenshot is what triagers accept.\n4. **Attach the grant flags** (D08-010 → D08-012). The grant *is* the payload; you do not need the target\n   component to be interesting once the victim is granting you its own `FileProvider`.\n5. **`setResult(RESULT_OK, getIntent())`** (D08-033). One grep, and it defeats `exported=\"false\"` on\n   providers entirely, plus re-delegates dangerous permissions the victim holds.\n6. **`Intent.parseUri` / `intent://` sinks** (D08-022 → D08-026). Same bug, but reachable from a link,\n   which moves the attacker model from AM-03 to AM-02 and the severity with it.\n7. **Mutable PendingIntent with a blank or package-only base** (D08-037, D08-038). Slower to prove because\n   you need an acquisition path, but it is the one class Google buys under its own name.\n8. **The apparent-fix bypasses** (D08-013 → D08-018). Test these *after* you find a sanitiser, because a\n   present-but-permissive `IntentSanitizer` is worse than none and stops further review.\n9. **Parcel/Bundle smuggling** (D08-027 → D08-032). Lowest base rate, highest ceiling, and no manifest\n   analysis will find it.\n10. **The grant-issuing side** (D08-053 → D08-058). Slowest to reach, but it is where the persistable,\n    reboot-surviving exfiltration channel lives.\n11. **Discipline items** (D08-062 → D08-066) last, but before you write anything.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"Exported activity forwards an Intent\" with no reached component that the caller could not reach directly | The VRT node is `broken_access_control.exposed_sensitive_android_intent`, **priority null** — it is rated on what it exposes, and this exposes nothing new | Land it on a component that is `exported=\"false\"`, or on one whose extras drive an action (D08-007), or attach grant flags (D08-010) |\n| A `StrictMode` `UnsafeIntentLaunchViolation` in logcat | A detector firing is a pointer, not an exploit; on its own it is Low and most programmes take it as informational | Weaponise the exact frame it names — the violation then belongs in the report as corroboration, never as the finding (D08-002) |\n| `FLAG_MUTABLE` present in the code | Mutability is mandatory for direct reply and legitimate in several APIs; the flag alone says nothing | The base Intent has no `ComponentName`, **or** the named component consumes `getData()`/`getExtras()` from the delivered intent, **and** you can show an acquisition path (D08-037, -038, -044) |\n| A mutable PendingIntent that never leaves the process, or is only handed to `AlarmManager` | No acquisition path — a token you cannot obtain is not a capability | Show it on a notification, a widget, a slice, an AIDL return or an Intent extra, and demonstrate the acquisition (D08-040, -045, -046, -047) |\n| PendingIntent records read out of `adb shell dumpsys activity intents` | `dumpsys` needs shell or root; AM-12 is not an attack | Obtain the same token from an app UID — a notification listener, a widget host, or an exported component that hands it out |\n| A redirect proved only with `adb shell am start` | `shell` is uid 2000 and holds privileges no installed app has; the finding has not established AM-03 | Re-prove from a zero-permission attacker APK and commit its manifest (D08-064) |\n| A nested-Intent PoC that fails on Android 16 | That is the platform mitigation, not an application fix — and it is the vendor's favourite way to close the report | Run both API levels (D08-004), report it as an application bug with the platform mitigation noted; if the app calls `removeLaunchSecurityProtection()` it is a finding at full severity on every version (D08-019) |\n| The app crashes when you send a malformed nested Intent or an unexpected Parcelable type | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, and it is a self-inflicted local crash | The crash is persistent (crash-on-launch, D04/D19), or the `BadParcelableException` is evidence of a type instantiated before the check, which you then turn into the mismatch finding (D08-028, -029) |\n| `grantUriPermissions=\"true\"` on a `FileProvider` | Mandatory for the class — without it the provider throws | The path scope is over-broad (D07), or a redirector issues a grant to your UID (D08-010 → -012) |\n| `getCreatorPackage()` appearing in the code | Defensive logging and telemetry use it legitimately | The value reaches an `if` that gates a privileged action (D08-041) — read the branch, not the call |\n| `Intent.parseUri` on a string the app itself built (an internal round-trip, `toUri()` then `parseUri()`) | Not attacker-controlled; it is a serialisation convenience | The string reaches `parseUri` from a deep link, a WebView URL, a push payload, a QR code or an extra (D08-022 → -026) |\n| `IntentSanitizer` present, strict allow-list, `sanitizeByThrowing` | The documented mitigation, correctly applied | `allowAnyComponent()`, `allowHistoryStackFlags()`, or the log-and-continue `sanitize(intent, logger)` form (D08-018) |\n| A URI grant your app already had, re-granted | You granted yourself access to your own data | The grant is to a URI under the **victim's** authority, verified by the same read failing before the redirect (D08-063) |\n| \"The internal WebView opened\" with no control over its URL or its origin | A screen appearing is not impact; this is where most redirection reports stall | Control the loaded URL (D10), reach a bridge method, or read a `file://`/`content://` from that origin |\n| Redirection into a component that immediately re-checks the session and bounces to login | The auth control held; you crossed the export boundary, not the auth boundary | Find the component that does **not** re-check — that is question 4 of the pre-severity gate (D08-065) |\n| A persistable grant you obtained but never used after a reboot | The claim \"survives reboot\" is exactly the kind of unverified half-link that gets a Critical downgraded | Reboot the device and read the URI again, with `dumpsys activity permissions` before and after (D08-012) |\n| `EXTRA_REFERRER` present in the code | Analytics reads it constantly and harmlessly | It feeds an authorisation decision (D08-060) |",
  "joins": "- **D08 × D07 — the paths XML and the forwarder.** Nobody reads `res/xml/file_paths.xml` and\n  `startActivity(getIntent().getParcelableExtra(...))` in the same sitting. The XML decides what a grant\n  *reaches*; the forwarder decides *who gets one*. Separately they are a configuration note and a\n  \"component forwards an intent\". Joined, they are\n  `content://com.target.app.fileprovider/root/data/data/com.target.app/shared_prefs/auth.xml` read by a\n  zero-permission app. Do the D08-006 census **before** you build any PoC — it picks your target URI for\n  you, and it is why `exported=\"false\"` on a provider is never a ruled-out basis on its own.\n- **D08 × D10 — the forwarder and the session-bearing WebView.** The WebView reviewer enumerates bridges\n  and origins; the IPC reviewer enumerates exported components. Neither asks which **non-exported**\n  activity hosts a WebView that already carries the user's cookies. That activity is the highest-value\n  redirect target in most apps: the redirect supplies the URL, the WebView supplies the session, and the\n  finding converts from an unrated intent exposure into token theft. Pick the redirect target by sink\n  quality, not by the word \"Admin\" in its class name.\n- **D08 × D09 — the deep link is what changes the attacker model.** The same `parseUri` sink is AM-03 when\n  it is reached from an extra and AM-02 when it is reached from a link in a browser or a message. The deep\n  link reviewer tests for open redirect and XSS in the `url` parameter and never pastes\n  `intent:#Intent;component=...;end` into it. That one payload moves severity by a whole band because it\n  removes the \"attacker must already have an app installed\" objection (D08-022, -024, -026).\n- **D08 × D24 — the notification drawer is the PendingIntent acquisition layer.** The PendingIntent\n  reviewer reads the builder; the notification reviewer reads the content. The join is a\n  `NotificationListenerService` that harvests `contentIntent`/`actions[i].actionIntent` and re-sends them:\n  it converts \"the app creates a mutable PendingIntent\" from a code observation into a confused deputy with\n  a working acquisition path, and it is the documented vector on Google's own page (D08-040, -041).\n- **D08 × D17 — the write flag and the loader.** `FLAG_GRANT_WRITE_URI_PERMISSION` is usually reported as\n  \"write access to app data\", which most programmes rate Medium. Enumerate `DexClassLoader`,\n  `PathClassLoader`, `System.load`, `createPackageContext` and the plugin directories **first**, choose the\n  write destination to match, and the same primitive is the top-paying category on the programme. This is\n  the Oversecured Google-app chain shape: redirection → provider write → code load.\n- **D08 × D03 — the permission the victim holds is the permission you inherit.** The manifest reviewer\n  lists `READ_CONTACTS`, `READ_SMS`, `READ_CALL_LOG` and moves on; the redirection reviewer aims at the\n  app's own providers. Aim instead at the **system** provider the victim has permission for\n  (`content://com.android.contacts/data`) and the echo or the grant re-delegates a dangerous permission you\n  never requested (D08-034). The manifest's permission list is a menu of what the confused deputy can fetch.\n- **D08 × D05/D13 — the exported receiver on the OTP screen.** D05 tests exported receivers for injection;\n  D13 tests OTP flows for brute force. Neither tests the GMS SMS User Consent receiver as an\n  *arbitrary-Intent-launch gadget* that exists **only while the OTP screen is up** — which is also the\n  moment the app's private storage holds the freshest session material (D08-061). The BAL precondition on\n  API 34+ makes it \"captures on the next login\", not \"unconditional\"; say that yourself before the triager\n  does.\n- **D08 × D15 — where the redirect lands is often an older API surface.** An internal route reached through\n  a forwarder or an internal WebView frequently calls a backend version the current web client no longer\n  uses, with weaker authorisation and more field exposure. Diff the two **behaviourally**, not by response\n  shape: a version difference alone is informational; the weakened control is the finding. Take the\n  redirect's destination URL off-device and replay it against the current API version to see which checks\n  are missing.\n- **D08 × D23 — replay and idempotency.** The payments reviewer tests the checkout flow in the UI; the\n  PendingIntent reviewer greps `FLAG_ONE_SHOT`. Joined: a payment-confirmation PendingIntent without\n  `FLAG_ONE_SHOT` whose backend has no idempotency key produces N charges from one user tap, and the\n  `filterEquals()` collision (D08-043) produces the charge against the *wrong* order (D08-042, -050).\n- **D08 × D06 — PendingIntents handed out over AIDL.** A bound service's `Bundle` return value is reviewed\n  for the data it carries and never for the *capabilities* it carries. An `IBinder` or a `PendingIntent`\n  under an unexpected key is a live capability crossing a trust boundary in a container everyone treats as\n  a dictionary (D08-030, -047).\n- **D08 × D11 — reachability is what converts storage into a finding.** An unencrypted token in\n  `shared_prefs` is P5 by VRT and explicitly out of scope at several programmes. The grant or the echo is\n  what makes it a P1 read. File the **access** as the bug and the storage as the payload, never the other\n  way round.\n- **D08 × D02 — the vulnerable component is often not the client's.** The merged manifest contains the\n  activities that dependencies contributed, and the client's own SAST never looked at them. Run the\n  redirection sweep scoped to non-app packages (D08-005): the EngageLab class was an exported SDK activity\n  calling `parseUri(..., URI_ALLOW_UNSAFE)` in 50M+ installs, and the fix was a dependency bump — which\n  also changes who owns the report.",
@@ -83,8 +83,12 @@
     "AM-12"
    ],
    "applies_to": "device API >= 31; `detectAll()` implies it for apps targeting Android 12",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, api>=31",
+   "requires_tags": [
+    "device",
+    "frida",
+    "api>=31"
+   ],
    "maps_to": "`guide/components/intents-filters#DetectUnsafeIntentLaunches`; `about/versions/12/behavior-changes-12`; `about/versions/15/behavior-changes-15`; MASTG-TECH-0043; rule `mastg-android-strictmode`",
    "record": "",
    "legacy_meta": {},
@@ -110,7 +114,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The platform ships a runtime detector for exactly this class: it fires when the app unparcels a\nnested intent from a delivered intent's extras and immediately launches a component with it. Use it to\nfind the sinks your grep missed and to confirm the ones it found.",
-   "how": "Inject the policy at process start with Frida (works on non-debuggable builds too):\n```javascript\n// d08_strictmode.js\nJava.perform(function () {\n  var B  = Java.use('android.os.StrictMode$VmPolicy$Builder');\n  var SM = Java.use('android.os.StrictMode');\n  SM.setVmPolicy(B.$new().detectUnsafeIntentLaunch().penaltyLog().build());\n  console.log('[+] detectUnsafeIntentLaunch armed');\n});\n```\n```bash\nfrida -U -f com.target.app -l d08_strictmode.js --no-pause\nadb logcat -c && adb logcat -s StrictMode:* | tee /tmp/d08_strictmode.log\n# platform-side alternative on a debuggable build:\nadb shell am compat enable DETECT_UNSAFE_INTENT_LAUNCH com.target.app\n```\nThen exercise every exported entry point from D08-001 with `am start`/`am broadcast` and every deep link.",
+   "how": "Inject the policy at process start with Frida (works on non-debuggable builds too):\n```javascript\n// d08_strictmode.js\nJava.perform(function () {\n  var B  = Java.use('android.os.StrictMode$VmPolicy$Builder');\n  var SM = Java.use('android.os.StrictMode');\n  SM.setVmPolicy(B.$new().detectUnsafeIntentLaunch().penaltyLog().build());\n  console.log('[+] detectUnsafeIntentLaunch armed');\n});\n```\n```bash\nfrida -D \"$SERIAL\" -f com.target.app -l d08_strictmode.js\nadb logcat -c && adb logcat -s StrictMode:* | tee /tmp/d08_strictmode.log\n# platform-side alternative on a debuggable build:\nadb shell am compat enable DETECT_UNSAFE_INTENT_LAUNCH com.target.app\n```\nThen exercise every exported entry point from D08-001 with `am start`/`am broadcast` and every deep link.",
    "proof": "`StrictMode policy violation: android.os.strictmode.UnsafeIntentLaunchViolation` in logcat,\nwith a stack frame naming the forwarding method and class. That frame is the exact line to weaponise.",
    "escalation": "Straight into D08-007 / D08-008. The violation on its own is Low and not reportable —\nreport the exploited redirect, cite the violation as corroboration.",
    "ruled_out_when": "Every exported entry point and every registered deep-link URI has been driven with\nthe policy armed and no `UnsafeIntentLaunchViolation` fired, **and** you can show the policy was actually\ninstalled (the `[+] armed` line plus one deliberately-triggered violation from your own stub as a\npositive control). An absent violation with no positive control proves nothing."
@@ -130,8 +134,11 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TECH-0043; MASTG-TEST-0381 (the hook is the MASTG-TEST-0030 legacy snippet); drozer `parcelable` extra type and `android.intent.extra.INTENT` (verified in `src/drozer/android.py`)",
    "record": "",
    "legacy_meta": {},
@@ -158,7 +165,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Static analysis misses reflective launches, SDK code obfuscated past your greps, and\nPendingIntents built by libraries. Hook the framework, not the app.",
-   "how": "```javascript\n  // d08_census.js\n  Java.perform(function () {\n    var Act = Java.use('android.app.Activity');\n    Act.startActivity.overload('android.content.Intent').implementation = function (i) {\n      console.log('[startActivity] from ' + this.$className + ' -> ' + i.toString());\n      var c = i.getComponent();\n      if (c !== null) console.log('    component=' + c.flattenToString());\n      console.log('    flags=0x' + (i.getFlags() >>> 0).toString(16) + ' data=' + i.getDataString());\n      return this.startActivity(i);\n    };\n    var I = Java.use('android.content.Intent');\n    I.getParcelableExtra.overload('java.lang.String').implementation = function (k) {\n      var v = this.getParcelableExtra(k);\n      console.log('[getParcelableExtra] key=' + k + ' -> ' + v);\n      return v;\n    };\n    var PI = Java.use('android.app.PendingIntent');\n    ['getActivity','getActivities','getService','getForegroundService','getBroadcast'].forEach(function (m) {\n      if (!PI[m]) return;\n      PI[m].overloads.forEach(function (o) {\n        o.implementation = function () {\n          var a = [].slice.call(arguments), intent = a[2], flags = a[3];\n          var IMMUTABLE = 0x04000000, MUTABLE = 0x02000000, ONESHOT = 0x40000000, UPDATE = 0x08000000;\n          console.log('[PendingIntent.' + m + '] rc=' + a[1] +\n            ' flags=0x' + (flags >>> 0).toString(16) +\n            ' immutable=' + ((flags & IMMUTABLE) !== 0) +\n            ' mutable='   + ((flags & MUTABLE)   !== 0) +\n            ' oneshot='   + ((flags & ONESHOT)   !== 0) +\n            ' update='    + ((flags & UPDATE)    !== 0) +\n            ' intent=' + (intent ? intent.toString() : 'null'));\n          return o.apply(this, a);\n        };\n      });\n    });\n  });\n```\n```bash\nfrida -U -f com.target.app -l d08_census.js --no-pause | tee /tmp/d08_runtime.log\nadb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # live PendingIntent records\n```",
+   "how": "```javascript\n  // d08_census.js\n  Java.perform(function () {\n    var Act = Java.use('android.app.Activity');\n    Act.startActivity.overload('android.content.Intent').implementation = function (i) {\n      console.log('[startActivity] from ' + this.$className + ' -> ' + i.toString());\n      var c = i.getComponent();\n      if (c !== null) console.log('    component=' + c.flattenToString());\n      console.log('    flags=0x' + (i.getFlags() >>> 0).toString(16) + ' data=' + i.getDataString());\n      return this.startActivity(i);\n    };\n    var I = Java.use('android.content.Intent');\n    I.getParcelableExtra.overload('java.lang.String').implementation = function (k) {\n      var v = this.getParcelableExtra(k);\n      console.log('[getParcelableExtra] key=' + k + ' -> ' + v);\n      return v;\n    };\n    var PI = Java.use('android.app.PendingIntent');\n    ['getActivity','getActivities','getService','getForegroundService','getBroadcast'].forEach(function (m) {\n      if (!PI[m]) return;\n      PI[m].overloads.forEach(function (o) {\n        o.implementation = function () {\n          var a = [].slice.call(arguments), intent = a[2], flags = a[3];\n          var IMMUTABLE = 0x04000000, MUTABLE = 0x02000000, ONESHOT = 0x40000000, UPDATE = 0x08000000;\n          console.log('[PendingIntent.' + m + '] rc=' + a[1] +\n            ' flags=0x' + (flags >>> 0).toString(16) +\n            ' immutable=' + ((flags & IMMUTABLE) !== 0) +\n            ' mutable='   + ((flags & MUTABLE)   !== 0) +\n            ' oneshot='   + ((flags & ONESHOT)   !== 0) +\n            ' update='    + ((flags & UPDATE)    !== 0) +\n            ' intent=' + (intent ? intent.toString() : 'null'));\n          return o.apply(this, a);\n        };\n      });\n    });\n  });\n```\n```bash\nfrida -D \"$SERIAL\" -f com.target.app -l d08_census.js | tee /tmp/d08_runtime.log\nadb shell dumpsys activity intents | sed -n '/com.target.app/,/^$/p'   # live PendingIntent records\n```",
    "proof": "Runtime log lines showing (a) a `startActivity` whose component you supplied, and (b)\n`PendingIntent` creations with `immutable=false` and a base intent whose `toString()` has no `cmp=`.\nThose two lines are the exploitable shapes for D08-007 and D08-037.",
    "escalation": "Feeds every item in this chapter; the flag decode also settles D08-042 and D08-043.",
    "ruled_out_when": "The app was driven through every screen, deep link and notification with the hooks\ninstalled, every `PendingIntent.get*` line shows `immutable=true` **and** a `cmp=` in the base intent,\nand no `startActivity` line carries a component sourced from an extra."
@@ -178,8 +185,11 @@
     "AM-12"
    ],
    "applies_to": "every nested-intent, `parseUri` and `Parcel.unmarshall` finding",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=36",
+   "requires_tags": [
+    "device",
+    "api>=36"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-all` — \"Android 16 provides default security against general `Intent` redirection attacks…\"; `privacy-and-security/risks/intent-redirection` (Android 16 by-default hardening)",
    "record": "",
    "legacy_meta": {},
@@ -220,8 +230,12 @@
     "AM-08"
    ],
    "applies_to": "all; especially apps embedding wallet, payment, push, ads or analytics SDKs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver"
+   ],
    "maps_to": "Microsoft Security Blog 2026-04-09 on EngageLab EngageSDK — vulnerable exported `MTCommonActivity` \"automatically added to the merged manifest\", vulnerable ≤ 4.5.4, fixed 5.2.1 (2025-11-03), 50M+ installs; Google Play ASI \"Intent Redirection\" campaign (2019-05-16); MASWE-0032",
    "record": "",
    "legacy_meta": {},
@@ -267,8 +281,10 @@
     "AM-03"
    ],
    "applies_to": "all; `<provider>` default for `android:grantUriPermissions` is `\"false\"`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-KNOW-0117 (\"`android:grantUriPermissions`: allows temporary, URI-scoped access grants\"); MASTG-TEST-0250 Note 2 — grants let other apps access URIs \"even though restrictions such as `permission` attributes, or `android:exported=\\\"false\\\"` are set\"; MASTG-TEST-0357; rule `mastg-android-fileprovider-broad-scope`; drozer `app.provider.info` `Grant Uri Permissions:` field",
    "record": "",
    "legacy_meta": {},
@@ -317,8 +333,11 @@
     "AM-03"
    ],
    "applies_to": "all; Android 16 hardens by default (run D08-004)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "`privacy-and-security/risks/intent-redirection` — impact per the page: \"Execute internal features in the vulnerable app\" and \"Access private components like unexported ContentProvider objects\"; MASWE-0032 (CWE-927, CWE-940); CWE-926; H1 #200427 (Slack, Critical), #2289836 (MercadoLibre, High 8.6), #1095633 (VK), #951691; EDB 38170 (Facebook for Android 1.8.1, `LoginActivity` → `FacebookWebViewActivity`); Ostorlab KB `INTENT_REDIRECTION` (MASVS_CODE_4, MSTG_PLATFORM_2, M4 2024)",
    "record": "",
    "legacy_meta": {},
@@ -372,8 +391,11 @@
     "AM-03"
    ],
    "applies_to": "all; implicit **service** binding has been illegal since Android 5, so an implicit `bindService` is both a crash and a LEGACY pattern",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-service, exported-receiver",
+   "requires_tags": [
+    "exported-service",
+    "exported-receiver"
+   ],
    "maps_to": "MASWE-0032; ATT&CK T1624.001 Broadcast Receivers; CVE-2023-44121 (LG ThinQ, exported receiver action `com.lge.lms.things.notification.ACTION`)",
    "record": "",
    "legacy_meta": {},
@@ -422,8 +444,12 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver"
+   ],
    "maps_to": "MASWE-0032 (CWE-927); Oversecured \"Android: Access to app protected components\" — remediation line \"Developers should never redirect Intents in full\"",
    "record": "",
    "legacy_meta": {},
@@ -471,8 +497,12 @@
     "AM-03"
    ],
    "applies_to": "all; precondition is a provider with `android:grantUriPermissions=\"true\"` or a `<grant-uri-permission>` child (D08-006)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, exported-activity, deeplink",
+   "requires_tags": [
+    "provider",
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "`risks/intent-redirection` — the mitigation list names exactly the four flags to strip: `FLAG_GRANT_READ_URI_PERMISSION`, `FLAG_GRANT_WRITE_URI_PERMISSION`, `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`, `FLAG_GRANT_PREFIX_URI_PERMISSION`; MASTG-TEST-0250 Note 2; MASTG-KNOW-0117; drozer flag map `GRANT_READ_URI_PERMISSION 0x00000001`, `GRANT_WRITE_URI_PERMISSION 0x00000002`; H1 #272044 (Dropbox, $1000); Oversecured \"Android: Access to app protected components\" §2–3",
    "record": "",
    "legacy_meta": {},
@@ -521,8 +551,12 @@
     "AM-03"
    ],
    "applies_to": "all; requires the same grant precondition as D08-010",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, exported-activity, deeplink",
+   "requires_tags": [
+    "provider",
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "`risks/intent-redirection` flag-sanitisation list; MASTG-KNOW-0117",
    "record": "",
    "legacy_meta": {},
@@ -567,8 +601,12 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, exported-activity, deeplink",
+   "requires_tags": [
+    "provider",
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "`risks/intent-redirection` flag-sanitisation list; Microsoft EngageLab analysis — the PoC sets `FLAG_GRANT_PERSISTABLE_URI_PERMISSION`, `FLAG_GRANT_READ_URI_PERMISSION`, `FLAG_GRANT_WRITE_URI_PERMISSION` together; ATT&CK T1409 Stored Application Data, T1533 Data from Local System",
    "record": "",
    "legacy_meta": {},
@@ -617,8 +655,13 @@
     "AM-03"
    ],
    "applies_to": "all — this is the case that defeats the most commonly deployed fix",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver",
+    "deeplink"
+   ],
    "maps_to": "Ostorlab KB `INTENT_REDIRECTION` (rated High; MASVS_CODE_4, MSTG_PLATFORM_2, M4 2024); `risks/intent-redirection` (`IntentSanitizer` recommends `allowComponent` **plus** `allowData` **plus** `allowType`)",
    "record": "",
    "legacy_meta": {},
@@ -662,8 +705,13 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver",
+    "deeplink"
+   ],
    "maps_to": "Ostorlab KB `INTENT_REDIRECTION`; `risks/intent-redirection` \"Common Mistakes to Avoid\"",
    "record": "",
    "legacy_meta": {},
@@ -709,8 +757,13 @@
     "AM-03"
    ],
    "applies_to": "all. **Chrome blocks intent selectors**; most in-app WebViews and Firefox do not — so test inside the target's own WebView, not in Chrome",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver",
+    "deeplink"
+   ],
    "maps_to": "Oversecured \"Android: Access to app protected components\" §4 — the complete mitigation is `addCategory(BROWSABLE)` **plus** `setComponent(null)` **plus** `setSelector(null)`; Oversecured \"Android deep link vulnerabilities\" §3; AOSP `content/Intent.java` (`setSelector`)",
    "record": "",
    "legacy_meta": {},
@@ -752,8 +805,13 @@
     "AM-03"
    ],
    "applies_to": "all; at targetSdk 34+ implicit intents reach only exported components — which is precisely why the app may have exported the component to keep the pattern working",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver",
+    "deeplink"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` — implicit intents are delivered only to exported components; use an explicit intent with `intent.package = context.packageName`; Google Play ASI \"Implicit Internal Intent\" campaign (2021-06-22); MASTG-TEST-0372; rule `mastg-android-implicit-intent-internal-communication`",
    "record": "",
    "legacy_meta": {},
@@ -800,8 +858,13 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver",
+    "deeplink"
+   ],
    "maps_to": "`risks/intent-redirection` — `androidx.core.content.IntentSanitizer` with `allowComponent`, `allowData`, `allowType`, `sanitizeByThrowing`; MASWE-0032",
    "record": "",
    "legacy_meta": {},
@@ -844,8 +907,13 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver",
+    "deeplink"
+   ],
    "maps_to": "`risks/intent-redirection` (`androidx.core.content.IntentSanitizer`, `sanitizeByThrowing`)",
    "record": "",
    "legacy_meta": {},
@@ -931,8 +999,10 @@
     "AM-03"
    ],
    "applies_to": "targetSdk 36+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36",
+   "requires_tags": [
+    "targetsdk>=36"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-16` — \"Safer Intents\", `android:intentMatchingFlags` with values `enforceIntentFilter`, `none`, `allowNullAction`",
    "record": "",
    "legacy_meta": {},
@@ -974,8 +1044,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "`risks/intent-redirection` (the sanitisation step includes checking and clearing flags); AOSP `content/Intent.java` flag constants; `FLAG_DEBUG_LOG_RESOLUTION = 0x00000008`",
    "record": "",
    "legacy_meta": {},
@@ -1124,8 +1197,10 @@
     "AM-09"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview",
+   "requires_tags": [
+    "webview"
+   ],
    "maps_to": "Oversecured \"Android: Access to app protected components\" §4; Google Mobile VRP class \"Cross-app scripting\" — \"Apps that load untrusted URLs from other apps into their WebViews that match a certain form (e.g., `javascript:` or `file:///path/to/private`) allow malicious JavaScript code execution\"; MASWE-0032; CVE-2024-26131 (Element Android)",
    "record": "",
    "legacy_meta": {},
@@ -1220,8 +1295,10 @@
     "AM-09"
    ],
    "applies_to": "all apps with push, in-app messaging or remote-config-driven routing",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "push",
+   "requires_tags": [
+    "push"
+   ],
    "maps_to": "Microsoft EngageLab analysis (the `n_intent_uri` JSON field); MASWE-0032; MASWE-0029",
    "record": "",
    "legacy_meta": {},
@@ -1268,8 +1345,10 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "Oversecured \"Android: Access to app protected components\" §5 — exact shape `deeplink://handle/?param=<base64>` → `parcel.unmarshall` → `startActivity((Intent) parcel.readParcelable(...))`; H1 #2289836 (MercadoLibre, High 8.6) for the same-impact class; MASWE-0050",
    "record": "",
    "legacy_meta": {},
@@ -1502,8 +1581,12 @@
     "AM-03"
    ],
    "applies_to": "`targetSdk < 33` is where the untyped getters are the default idiom; from API 33 the typed `getSerializableExtra(String, Class)` exists and its absence at a hit is the finding",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver"
+   ],
    "maps_to": "`risks/unsafe-deserialization` (CVE-2014-7911 `ObjectInputStream`/Android < 5.0, look-ahead `ObjectInputFilter` mitigation); rule `mastg-android-object-deserialization`; MASWE-0050 (CWE-502)",
    "record": "",
    "legacy_meta": {},
@@ -1552,8 +1635,10 @@
     "AM-03"
    ],
    "applies_to": "all. `android:grantUriPermissions=\"true\"` on a non-exported provider is what makes the victim's **own** providers reachable this way; the `<provider>` default for that attribute is `\"false\"`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "Oversecured \"Gaining access to arbitrary Content Providers\" — the four vectors (direct intent return, implicit-intent interception with `priority=\"999\"`, `onActivityResult` substitution, permission capture via a `READ_CONTACTS`-holding app) and the remediation line \"Developers should never redirect Intents in full\"; H1 #272044 (Dropbox, \"Android - Access of some not exported content providers\", $1000); MASTG-KNOW-0117; CWE-926",
    "record": "",
    "legacy_meta": {},
@@ -1605,8 +1690,11 @@
     "AM-03"
    ],
    "applies_to": "all apps that hold a dangerous permission — contacts, SMS, call log, calendar, media",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "Oversecured \"Gaining access to arbitrary Content Providers\" vector 4 (permission capture via a permission-holding app); ATT&CK T1409 Stored Application Data; `risks/content-resolver` (`belongsToCurrentApplication()`, `isExported()`, `checkUriPermission()` are the documented validators whose absence is the bug)",
    "record": "",
    "legacy_meta": {},
@@ -1654,8 +1742,10 @@
     "AM-03"
    ],
    "applies_to": "all apps that call `ACTION_GET_CONTENT`, `ACTION_OPEN_DOCUMENT`, `ACTION_PICK`, `IMAGE_CAPTURE`, or any share/import flow",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0375 (Missing Validation of Data Returned from Implicit Intents), MASWE-0050 (CWE-20, CWE-22, CWE-73, CWE-345), MASTG-KNOW-0138 (URI Schemes in Android Intent Results), MASTG-KNOW-0025, MASTG-BEST-0057, MASTG-TECH-0043",
    "record": "",
    "legacy_meta": {},
@@ -1714,8 +1804,10 @@
     "AM-03"
    ],
    "applies_to": "all apps that accept shared files",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`risks/untrustworthy-contentprovider-provided-filename` — **CWE-73: External Control of Filename or Path**, impact listed as \"Malicious code execution — overwrite application executables or DEX files\"; MASTG-KNOW-0138 (the `File(dir, name)` → `../lib-main/lib.so` example); MASTG-TEST-0375; MASWE-0050",
    "record": "",
    "legacy_meta": {},
@@ -1830,8 +1922,10 @@
     "AM-04"
    ],
    "applies_to": "targetSdk 34+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` — \"Mutable pending intents with unspecified component/package throw an exception\"; the documented \"SUCCEEDS\" example is `setPackage(context.packageName)`; `risks/pending-intent`; compat change `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT` (id `236704164L`)",
    "record": "",
    "legacy_meta": {},
@@ -1875,8 +1969,10 @@
     "AM-03"
    ],
    "applies_to": "targetSdk 34+ (Android 14)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14`; `risks/pending-intent`; compat change `BLOCK_MUTABLE_IMPLICIT_PENDING_INTENT` (id `236704164L`) blocks creating a mutable PendingIntent wrapping an implicit intent for apps targeting U/API 34+",
    "record": "",
    "legacy_meta": {},
@@ -1920,8 +2016,10 @@
     "AM-04"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-KNOW-0024 — \"a malicious application with `android.permission.BIND_NOTIFICATION_LISTENER_SERVICE` can bind to the notification listener service and retrieve the pending intent\"; MASTG-TEST-0381, MASTG-TEST-0315; `risks/sender-of-pending-intents` (names `NotificationListenerService` as *the* acquisition vector); ATT&CK T1517 Access Notifications; H1 #1161401 (Nextcloud, Low 1.3, $250 — the \"Download complete\" notification's implicit PendingIntent, re-sent with `packageName` and `clipData` set, inheriting `com.nextcloud.client`'s CONTACTS permission)",
    "record": "",
    "legacy_meta": {},
@@ -2255,8 +2353,12 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, exported-service, exported-receiver",
+   "requires_tags": [
+    "exported-activity",
+    "exported-service",
+    "exported-receiver"
+   ],
    "maps_to": "`risks/pending-intent`; `risks/sender-of-pending-intents`; Oversecured Samsung category \"PendingIntent Hijacking\" (IDs 167, 178, 179, 180); AOSP \"AIDL overview\"",
    "record": "",
    "legacy_meta": {},
@@ -2307,8 +2409,10 @@
     "AM-08"
    ],
    "applies_to": "targetSdk 34+ for the sender opt-in, 35+ for the creator opt-in; `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE` is available from SDK 36; `IntentSender.sendIntent()` sender opt-in is documented as arriving at API 37+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34",
+   "requires_tags": [
+    "targetsdk>=34"
+   ],
    "maps_to": "`guide/components/activities/background-starts` (`setPendingIntentBackgroundActivityStartMode()` sender opt-in at API 34+, `setPendingIntentCreatorBackgroundActivityStartMode()` creator opt-in at API 35+, `MODE_BACKGROUND_ACTIVITY_START_ALLOW_IF_VISIBLE` recommended at SDK 36+, `StrictMode.VmPolicy.Builder().detectBlockedBackgroundActivityLaunch()`, the `realCallingPackage`/`callingPackage` log fields); `about/versions/14/behavior-changes-14`; `about/versions/15/behavior-changes-15` — \"PendingIntent creators block background activity launches by default\"",
    "record": "",
    "legacy_meta": {},
@@ -2353,8 +2457,10 @@
     "AM-04"
    ],
    "applies_to": "targetSdk 31+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31",
+   "requires_tags": [
+    "targetsdk>=31"
+   ],
    "maps_to": "`about/versions/12/behavior-changes-12` — trampoline restriction, the exact logcat string `Indirect notification activity start (trampoline) from PACKAGE_NAME, this should be avoided for performance reasons.`, and the `NOTIFICATION_TRAMPOLINE_BLOCK` compat change",
    "record": "",
    "legacy_meta": {},
@@ -2398,8 +2504,10 @@
     "AM-04"
    ],
    "applies_to": "all apps with in-app payment, transfer, top-up or subscription confirmation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "payments",
+   "requires_tags": [
+    "payments"
+   ],
    "maps_to": "`risks/pending-intent`; AOSP `PendingIntent.java`",
    "record": "",
    "legacy_meta": {},
@@ -2446,8 +2554,11 @@
     "AM-12"
    ],
    "applies_to": "Android 15+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=35",
+   "requires_tags": [
+    "device",
+    "api>=35"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-15` — the system cancels all pending intents when an app enters the stopped state; `ApplicationStartInfo.wasForceStopped()`",
    "record": "",
    "legacy_meta": {},
@@ -2486,8 +2597,10 @@
     "AM-04"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0381; MASTG-KNOW-0117; `risks/pending-intent`; ATT&CK T1635 Steal Application Access Token",
    "record": "",
    "legacy_meta": {},
@@ -2542,8 +2655,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-KNOW-0117; MASTG-TEST-0357; `risks/content-resolver`; ATT&CK T1409",
    "record": "",
    "legacy_meta": {},
@@ -2592,8 +2707,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-TEST-0374 (References to Implicit Intents Carrying Sensitive Extras), rule `mastg-android-implicit-intent-leaking-extras`; `risks/intent-redirection`; ATT&CK T1635.001 URI Hijacking — ATT&CK's detection guidance explicitly says to \"encourage explicit intents over implicit ones\" and \"verify destination app signing certificates during application vetting\"",
    "record": "",
    "legacy_meta": {},
@@ -2642,8 +2759,10 @@
     "AM-03"
    ],
    "applies_to": "all; the grant dies on target-app uninstall — state that in the report",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "`risks/pending-intent` and `risks/sender-of-pending-intents` cover the grant-transfer direction; MASTG-KNOW-0117; ATT&CK T1533",
    "record": "",
    "legacy_meta": {},
@@ -2689,8 +2808,10 @@
     "AM-03"
    ],
    "applies_to": "Android 15+ (API 35) for the attribute; the underlying confused deputy works on all versions, which is why its absence on a modern app is worth calling out",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`guide/topics/manifest/activity-element` (`android:requireContentUriPermissionFromCaller` values and the three enforced Intent fields); `about/versions/15/features` (`Context.checkContentUriPermissionFull()`, `ComponentCaller`)",
    "record": "",
    "legacy_meta": {},
@@ -2735,8 +2856,10 @@
     "AM-03"
    ],
    "applies_to": "Android 15+ for the APIs; the `onNewIntent` gap is universal and applies to any caller check",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`about/versions/15/features` (`ComponentCaller`, `Context.checkContentUriPermissionFull()`); `risks/intent-redirection` (\"Checking `getCallingActivity()` returns non-null\" listed as a common mistake; attackers can supply null)",
    "record": "",
    "legacy_meta": {},
@@ -2781,8 +2904,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "`risks/content-resolver` — the documented validators `belongsToCurrentApplication()`, `isExported()` and `wasGrantedPermission()`, whose absence is the bug; MASTG-KNOW-0117",
    "record": "",
    "legacy_meta": {},
@@ -2828,8 +2954,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`risks/intent-redirection` \"Common Mistakes to Avoid\" — relying on `getCallingActivity()` returning non-null (\"Malicious apps can supply null\"), and assuming `checkCallingPermission()` throws when it returns an `int`; `risks/access-control-to-exported-components`",
    "record": "",
    "legacy_meta": {},
@@ -2874,8 +3002,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, deeplink",
+   "requires_tags": [
+    "exported-activity",
+    "deeplink"
+   ],
    "maps_to": "drozer `android.intent.extra.REFERRER` (verified in the extras list in `src/drozer/android.py`); `risks/access-control-to-exported-components`",
    "record": "",
    "legacy_meta": {},
@@ -2918,8 +3049,10 @@
     "AM-03"
    ],
    "applies_to": "any app using GMS SMS User Consent or SMS autofill — typically OTP, login and card-3DS screens. The BAL constraint applies **API 34+**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`developers.google.com/identity/sms-retriever/user-consent/request` × `risks/intent-redirection`; CVE-2021-4438 (React Native SMS User Consent)",
    "record": "",
    "legacy_meta": {},

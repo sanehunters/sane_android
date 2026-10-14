@@ -66,6 +66,38 @@ MASTG-TEST-0368 for the recoverable fraud threshold) and the rest is business-lo
 server — and where the server does decide, does it independently re-derive the amount, the payer identity
 and the uniqueness of the receipt, or does it echo what the client sent?**
 
+## Applicability probe
+
+Run once, before any item, from `$E` with `$DEC=$E/decompiled`. The domain applies when ANY of probes 1–4 hits; D23-062 (billable SMS/call actions) is gated by probe 2's permission line on its own and can apply when the rest of the chapter does not. Log every command and its output to `$E/logs/D23-probe.txt`.
+
+```bash
+S=$DEC/jadx/sources; M=$DEC/apktool/AndroidManifest.xml
+# 1. billing / entitlement SDK or vocabulary in the code
+ls -d $S/com/android/billingclient $S/com/revenuecat $S/com/adapty $S/io/qonversion $S/io/purchasely 2>/dev/null
+grep -rlE 'BillingClient|queryPurchasesAsync|purchaseToken|isPremium|entitlement|paywall' $S | head -5
+# 2. PSP / wallet SDK, HCE service, billable permission in the manifest (and PSP packages in code)
+grep -oE 'com\.(stripe|braintree|adyen|razorpay|payu|checkout|cashfree|juspay|paypal|worldpay|phonepe|paytm)[a-z.]*|gms\.wallet|HostApduService|BIND_NFC_SERVICE|android\.permission\.(SEND_SMS|CALL_PHONE)' $M | sort -u
+grep -rlE 'PaymentsClient|HostApduService|upi://|savePasses' $S | head -3
+# 3. money-shaped routes in the endpoint inventory
+grep -ciE 'pay|order|checkout|cart|wallet|balance|subscri|billing|entitle|promo|coupon|refund|redeem|gift|credit' inventory/endpoints.csv
+# 4. payment-shaped deep links and exported surfaces
+grep -ciE 'pay|checkout|billing|upi|wallet|redeem|subscri' inventory/deeplinks.csv inventory/components.csv
+# 5. purchase vocabulary in resources (supporting signal only)
+grep -ciE 'premium|subscribe|upgrade to|unlock|buy now|add to cart|pay now|top ?up' $DEC/apktool/res/values/strings.xml
+# 6. hardware gate for D23-059..061, per lab device
+for d in $(adb devices | awk 'NR>1 && $2=="device"{print $1}'); do echo "$d hce=$(adb -s $d shell -n pm has-feature android.hardware.nfc.hce)"; done
+```
+
+Then decide, and record `app_facts.payments`:
+
+- **Applies (full):** probes 1 or 2 hit → `app_facts.payments=true`; run D23-001 first. Sub-blocks: billing D23-002..020 (probe 1), checkout/ledger D23-021..027 and D23-042..051 (probe 3 > 0), hand-off/callback D23-028..041 (probe 2 PSP or probe 4 > 0), NFC/HCE D23-059..061 (HostApduService in probe 2 AND some device prints `hce=true`; otherwise mark those three rows `blocked:hardware`, never n/a), D23-062 (SEND_SMS/CALL_PHONE in probe 2, or any exported surface that consumes an entitlement).
+- **Applies (delegated):** probes 1–2 are empty but the proxy shows money hosts whose requests originate in another package (User-Agent / auth owner differs from the target) → `app_facts.payments=delegated:<package>`; run D23-067 and re-home or `blocked:scope` the rows.
+- **n/a:** all of probes 1–4 are empty and probe 5 is 0. The model writes exactly:
+
+> `D23 n/a — no billing/entitlement SDK or vocabulary in $DEC/jadx/sources (probe 1 empty), no PSP/wallet SDK, HCE service or SEND_SMS/CALL_PHONE in the manifest (probe 2 empty), 0 money-shaped rows in inventory/endpoints.csv (probe 3) and 0 in deeplinks.csv/components.csv (probe 4), strings.xml has no purchase vocabulary (probe 5 = 0); D23-062 settled separately as n/a (no billable permission, no entitlement-consuming exported surface). Proxy log shows no money host under any package. Log: $E/logs/D23-probe.txt.`
+
+A partial n/a (for example probe 1 empty but probe 3 > 0) is written per sub-block with the probe number that cleared it, never for the whole domain.
+
 ## Triage order
 
 1. **Provisioning first: a funded/KYC account and a second account of the same role.** Almost every item
@@ -105,7 +137,7 @@ and the uniqueness of the receipt, or does it echo what the client sent?**
   follows is a test of one row in this table.
 - **How:** One static sweep, one proxy sweep, one table.
 ```bash
-S=jadx_out/sources
+S=$DEC/jadx/sources
 # 1. billing / entitlement decision points
 grep -rnE 'BillingClient|PurchasesUpdatedListener|queryPurchasesAsync|acknowledgePurchase|consumeAsync|verifyPurchase|getOriginalJson|getSignature\(\)|base64EncodedPublicKey|BASE64_PUBLIC_KEY' $S
 grep -rniE 'isPremium|isPro|isSubscribed|hasSubscription|hasPurchased|entitlement|unlockFeature|tier|plan\b|paywall' $S
@@ -140,6 +172,7 @@ PY
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the embedded key itself is `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**, CWE-347) |
 | **Attacker** | AM-12 to discover, AM-01 to exploit once the forged receipt is accepted by the backend |
 | **Applies to** | any app with Google Play Billing or a custom receipt flow |
+| **Requires** | payments, backend-api, mitm, frida, root |
 | **Maps to** | MASWE-0011 (Improper Verification of Cryptographic Signature), MASWE-0004 (hardcoded key), MASWE-0050, MASWE-0057 (CWE-471); MASTG-TECH-0043; MASVS-AUTH-1; Google Play Billing security guidance — **"Do not verify signatures on the device"**; Google ASI campaign *Google Play Billing interception* (started 2016-07-28, `faqs/answer/7054270`) |
 
 - **Test:** The single most common billing defect. The app RSA-verifies the purchase payload against a
@@ -148,7 +181,7 @@ PY
   Google, but whoever controls the client controls the verifier.
 - **How:**
 ```bash
-S=jadx_out/sources
+S=$DEC/jadx/sources
 grep -rnE 'Signature\.getInstance\("SHA1withRSA"|verifyPurchase|Security\.verify|BASE64_PUBLIC_KEY|
 base64EncodedPublicKey|getOriginalJson|getSignature\(\)|INAPP_PURCHASE_DATA|INAPP_DATA_SIGNATURE' $S -B6 -A10
 # is a server ever consulted on the same code path?
@@ -185,6 +218,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-12 locally; the reportable form is AM-01 once the server accepts it |
 | **Applies to** | all apps with paid tiers, trials, quotas or role flags |
+| **Requires** | payments, backend-api, device, root |
 | **Maps to** | **MASTG-TEST-0338** (References to Storage Integrity Check APIs — its own attack scenario is "resets a trial counter or flips a 'premium' flag"), MASWE-0057 (CWE-471), MASTG-KNOW-0036, MASTG-BEST-0066, MASTG-TECH-0008; MASVS-RESILIENCE-2; Mobile Top 10 2024 M7/M3 |
 
 - **Test:** Find the storage key that decides the gate, flip it, restart cold, and then make a
@@ -222,6 +256,7 @@ android heap print fields <hashcode>
 | **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) for the enabler; rate on the consequence via `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-11 physical unlocked; AM-12 for convenience |
 | **Applies to** | `android:allowBackup="true"` (the default) and `≤ Android 11`; **`[DEGRADED]` on Android 12+**, where `adb backup` no longer covers app data for non-debuggable apps — say so rather than claiming a universal route |
+| **Requires** | payments, device, targetsdk<31, legacy |
 | **Maps to** | MASTG-TECH-0008; MASWE-0057; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the store itself |
 
 - **Test:** The value of this item is not the flip — it is removing root from the PoC. A triager who sees
@@ -254,6 +289,7 @@ adb restore new.ab && adb shell am force-stop com.target.app
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) when premium gates other users' data; `broken_access_control.privilege_escalation` (**VARIES**) for the revenue case |
 | **Attacker** | AM-01 |
 | **Applies to** | all freemium/subscription apps |
+| **Requires** | payments, backend-api, two-accounts |
 | **Maps to** | API5:2023 Broken Function Level Authorization, API3:2023; MASWE-0018 (CWE-862); MASVS-AUTH-1; H1 #175490 (Shopify — the *server* accepted the state the client claimed) is the nearest disclosed calibration point |
 
 - **Test:** Every local-unlock item in this chapter terminates here. Strip the app out of the loop
@@ -287,6 +323,7 @@ curl -s https://api.target/v1/entitlements -H "Authorization: Bearer $FREE_TOKEN
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the concurrent variant is `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | any app whose backend accepts a client-supplied receipt |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | Google Play Billing security guidance — the documented flow requires the backend to "maintain a record of all `purchaseToken` values" and reject a repeat; MASWE-0009 (missing replay protection); WSTG-BUSL-02 Test Ability to Forge Requests |
 
 - **Test:** Buy one consumable or subscription with your own test account, capture the verification call,
@@ -323,6 +360,7 @@ curl -s https://api.target/v1/entitlements -H "Authorization: Bearer $T" | jq '.
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) — the token is an object identifier being redeemed outside its owner |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | any app with Play Billing or a receipt-based entitlement |
+| **Requires** | payments, backend-api, mitm, two-accounts |
 | **Maps to** | Google Play Billing security guidance (send token to backend → verify uniqueness → call the Developer API → check `obfuscatedAccountId` → grant only if `PURCHASED`); `Purchases.products:get`, `Purchases.subscriptionsv2:get`; API3:2023 |
 
 - **Test:** One legitimate purchase entitling unlimited accounts. This is the shape that turns a billing
@@ -355,6 +393,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (**VARIES**, CWE-325) as the closest honest node; file with D23-007 as the consumer |
 | **Attacker** | AM-05 |
 | **Applies to** | Play Billing integrations |
+| **Requires** | payments, backend-api, mitm, two-accounts |
 | **Maps to** | Google Play Billing security guidance — `setObfuscatedAccountId()`, `setObfuscatedProfileId()` and the eligibility-check step |
 
 - **Test:** The documented fraud signal is that the purchase carries an app-side account identifier the
@@ -362,8 +401,8 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
   to compare and a token bought under any Google account is indistinguishable from any other.
 - **How:**
 ```bash
-grep -rnE 'setObfuscatedAccountId|setObfuscatedProfileId|obfuscatedAccountId|obfuscatedExternalAccountId' jadx_out/sources
-grep -rn -A15 'BillingFlowParams.newBuilder' jadx_out/sources | grep -iE 'Obfuscated|setProductDetailsParamsList'
+grep -rnE 'setObfuscatedAccountId|setObfuscatedProfileId|obfuscatedAccountId|obfuscatedExternalAccountId' $DEC/jadx/sources
+grep -rn -A15 'BillingFlowParams.newBuilder' $DEC/jadx/sources | grep -iE 'Obfuscated|setProductDetailsParamsList'
 ```
   Then, if the setter *is* present, check the other half — that the backend actually compares it:
 ```bash
@@ -389,6 +428,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | any backend that takes both a receipt and a `productId`/`sku` from the client |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | API3:2023 (property-level trust of a client-supplied `productId`); WSTG-BUSL-03 Test Integrity Checks |
 
 - **Test:** The backend is supposed to read the product from Google's verification response. Many read it
@@ -397,8 +437,8 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 - **How:**
 ```bash
 # enumerate the catalogue from the client first
-grep -rnoE '"(sku|productId|product_id|basePlanId|offerId)"\s*:\s*"[a-z0-9_.\-]+"' jadx_out/sources | sort -u
-grep -rnoE '\b(premium|pro|plus|lifetime|annual|monthly|yearly|tier[0-9])[a-z0-9_.\-]*' jadx_out/res/values/*.xml | sort -u
+grep -rnoE '"(sku|productId|product_id|basePlanId|offerId)"\s*:\s*"[a-z0-9_.\-]+"' $DEC/jadx/sources | sort -u
+grep -rnoE '\b(premium|pro|plus|lifetime|annual|monthly|yearly|tier[0-9])[a-z0-9_.\-]*' $DEC/jadx/res/values/*.xml | sort -u
 # then substitute
 curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $T" \
   -d "{\"purchaseToken\":\"$CHEAP_TOKEN\",\"productId\":\"premium_lifetime\"}"
@@ -422,6 +462,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (**VARIES**, CWE-347) |
 | **Attacker** | AM-01 |
 | **Applies to** | backends that accept a client-assembled receipt envelope (`signedData` + `signature`) rather than a bare `purchaseToken` |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | MASWE-0011; Google Play Billing security guidance (server-to-server verification with the Developer API is the only verification that counts) |
 
 - **Test:** If the request carries `signedData`/`signature`, find out whether the server actually uses
@@ -452,6 +493,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 (the attacker is the purchaser) |
 | **Applies to** | Play Billing apps that call `acknowledgePurchase` from the client |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | Google Play Billing security guidance — purchases not acknowledged within three days are auto-refunded, and acknowledgement is to be performed server-side; `Purchases.products:acknowledge`, `Purchases.subscriptions:acknowledge` |
 
 - **Test:** Acknowledge locally, grant locally, and never let the acknowledgement reach Google. The user
@@ -459,7 +501,7 @@ curl -i -X POST https://api.target/v1/billing/verify -H "Authorization: Bearer $
   automatic refund path that the vendor's reconciliation may never see.
 - **How:**
 ```bash
-grep -rnE 'acknowledgePurchase|AcknowledgePurchaseParams|isAcknowledged\(\)|consumeAsync|ConsumeParams' jadx_out/sources -A6
+grep -rnE 'acknowledgePurchase|AcknowledgePurchaseParams|isAcknowledged\(\)|consumeAsync|ConsumeParams' $DEC/jadx/sources -A6
 ```
   Complete a real purchase with the acknowledgement request dropped at the proxy (or with the device
   offline immediately after `onPurchasesUpdated`), then check the entitlement daily.
@@ -481,6 +523,7 @@ grep -rnE 'acknowledgePurchase|AcknowledgePurchaseParams|isAcknowledged\(\)|cons
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | subscription and IAP apps |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | Google Play `Orders:refund` with `revoke=true` and the **Voided Purchases API**; WSTG-BUSL-06 Circumvention of Work Flows; API6:2023 |
 
 - **Test:** Whether a completed refund or chargeback removes the entitlement, and whether the grant is
@@ -510,6 +553,7 @@ curl -s https://api.target/v1/entitlements -H "Authorization: Bearer $T" | jq '.
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (**P4**) where the trial burns a metered third-party resource |
 | **Attacker** | AM-01 |
 | **Applies to** | any app with a free trial, a free-credit grant or a usage quota |
+| **Requires** | payments, backend-api, device |
 | **Maps to** | API6:2023 Unrestricted Access to Sensitive Business Flows; MASWE-0018; Mobile Top 10 2024 M3; MASTG-TEST-0338 (the trial-counter attack scenario) |
 
 - **Test:** The "you already used your trial" guard is usually local state or an install-scoped
@@ -526,7 +570,7 @@ curl -i -X POST https://api.target/v1/trial/start -H "Authorization: Bearer $T" 
 ```
   Record which identifier the trial is keyed on:
 ```bash
-grep -rnE 'ANDROID_ID|Secure\.getString|randomUUID|installationId|FirebaseInstallations|getId\(\)|AdvertisingIdClient' jadx_out/sources -A4
+grep -rnE 'ANDROID_ID|Secure\.getString|randomUUID|installationId|FirebaseInstallations|getId\(\)|AdvertisingIdClient' $DEC/jadx/sources -A4
 ```
 - **Proof:** A second (and third) trial active on the **same account identity**, read back from the
   server, with the sequence of clears that produced it.
@@ -544,6 +588,7 @@ grep -rnE 'ANDROID_ID|Secure\.getString|randomUUID|installationId|FirebaseInstal
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-11 physical unlocked, scaling to AM-01 once the identifier generation is understood |
 | **Applies to** | Android 5+ for multi-user; **Private Space is Android 15+**; OEM dual-app/clone features are vendor-specific — name the OEM and the feature in the report |
+| **Requires** | payments, backend-api, device, two-accounts |
 | **Maps to** | MASWE-0057; MASTG-TECH-0008; the multi-user/Private Space impact surface |
 
 - **Test:** If a trial, free credit, referral bonus or device-limited licence is keyed on an install-scoped
@@ -576,6 +621,7 @@ done
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-12 to set up, AM-01 to prove |
 | **Applies to** | all frameworks; the cross-platform stores are the common case (AsyncStorage, `shared_preferences`, PlayerPrefs, MMKV) |
+| **Requires** | payments, device, root |
 | **Maps to** | MASWE-0057 (CWE-471); MASTG-TECH-0008; Mobile Top 10 2024 M7 |
 
 - **Test:** Many apps cache the entitlement with an expiry and only re-check on a schedule. Editing the
@@ -606,6 +652,7 @@ adb shell "run-as com.target.app cat shared_prefs/com.target.app.v2.playerprefs.
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | all subscription apps |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | WSTG-BUSL-06 Circumvention of Work Flows; API6:2023; MASWE-0018 |
 
 - **Test:** The lifecycle states — active, cancelled, in grace, on hold, paused, expired — are a state
@@ -636,6 +683,7 @@ curl -i -X PUT  https://api.target/v1/subscription        -H "Authorization: Bea
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) — the one Android-native node rated on what it exposes |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | **targetSdk < 31**: components with intent-filters are exported by default. **Android 14 (targetSdk 34+)** mandates `RECEIVER_EXPORTED`/`RECEIVER_NOT_EXPORTED` on runtime registration — check registration sites as well as the manifest |
+| **Requires** | payments, exported-receiver, deeplink, device |
 | **Maps to** | MASVS-PLATFORM; `risks/insecure-broadcast-receiver`; `risks/access-control-to-exported-components`; CWE-927 |
 
 - **Test:** Entitlement refresh is frequently plumbed through a broadcast or a callback `PendingIntent`.
@@ -643,7 +691,7 @@ curl -i -X PUT  https://api.target/v1/subscription        -H "Authorization: Bea
   billing library could reach it.
 - **How:**
 ```bash
-grep -rn -i 'premium\|entitlement\|subscription\|purchase\|isPro\|billing\|license' jadx_out/sources \
+grep -rn -i 'premium\|entitlement\|subscription\|purchase\|isPro\|billing\|license' $DEC/jadx/sources \
   | grep -iE 'receiver|onReceive|registerReceiver|PendingIntent|IntentFilter'
 grep -n -B4 -A12 '<receiver' out/AndroidManifest.xml | grep -iE 'billing|purchase|licen[sc]e|entitle|premium'
 adb shell am broadcast -a com.target.app.PURCHASE_UPDATED --ez premium true --es sku pro_yearly
@@ -667,6 +715,7 @@ adb shell am start -a android.intent.action.VIEW -d "targetapp://unlock?tier=pre
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | **targetSdk < 17**: providers are exported by default — state this explicitly if it applies. Otherwise any provider with `android:exported="true"` or a `grantUriPermissions` path |
+| **Requires** | payments, provider, device |
 | **Maps to** | CWE-927; `risks/content-resolver`; MASWE-0057 |
 
 - **Test:** Where the entitlement lives in a database fronted by a provider, the flip does not need root
@@ -698,6 +747,7 @@ adb shell content insert --uri content://com.target.app.provider/entitlements \
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `broken_access_control.privilege_escalation` (**VARIES**) for the consequence |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | apps still shipping the legacy `IabHelper`/direct-bind path — **LEGACY**; the modern Play Billing Library binds explicitly, so verify which one is in the APK before writing anything. **targetSdk < 30** also grants free package visibility, which makes the malicious service easier to place |
+| **Requires** | payments, device, legacy, targetsdk<30 |
 | **Maps to** | Google ASI campaign *Google Play Billing interception* (started 2016-07-28, `faqs/answer/7054270`) — the stated remediation is literally `Intent.setPackage("com.android.vending")`; CWE-927 |
 
 - **Test:** Binding the billing service with an implicit intent lets any installed app answer instead of
@@ -705,9 +755,9 @@ adb shell content insert --uri content://com.target.app.provider/entitlements \
   an attacker "bypass the Play store billing system and access items that have not been purchased".
 - **How:**
 ```bash
-grep -rn 'InAppBillingService.BIND\|com.android.vending.billing' jadx_out/sources -B8 -A6
-grep -rn 'IabHelper\|bindService(' jadx_out/sources | head
-grep -rn 'setPackage("com.android.vending")\|setComponent(' jadx_out/sources      # the fix, if present
+grep -rn 'InAppBillingService.BIND\|com.android.vending.billing' $DEC/jadx/sources -B8 -A6
+grep -rn 'IabHelper\|bindService(' $DEC/jadx/sources | head
+grep -rn 'setPackage("com.android.vending")\|setComponent(' $DEC/jadx/sources      # the fix, if present
 ```
   Attacker service, in a package with no permissions:
 ```xml
@@ -733,6 +783,7 @@ grep -rn 'setPackage("com.android.vending")\|setComponent(' jadx_out/sources    
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps that claim Play-install enforcement or paid-app licensing |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | Play Integrity verdicts — `accountDetails.appLicensingVerdict` ∈ {`LICENSED`, `UNLICENSED`, `UNEVALUATED`}, where `LICENSED` means "User installed/updated app from Google Play"; the Integrity overview's rule that all decisions are made server-side; MASVS-RESILIENCE-3 |
 
 - **Test:** Where the app uses the licensing verdict at all, check that it is read from a **server-decoded
@@ -741,7 +792,7 @@ grep -rn 'setPackage("com.android.vending")\|setComponent(' jadx_out/sources    
 - **How:**
 ```bash
 grep -rnE 'IntegrityManager|StandardIntegrityManager|requestIntegrityToken|appLicensingVerdict|
-LICENSED|UNLICENSED|UNEVALUATED|decodeIntegrityToken|PiracyChecker|LicenseChecker|LicenseValidator' jadx_out/sources -A8
+LICENSED|UNLICENSED|UNEVALUATED|decodeIntegrityToken|PiracyChecker|LicenseChecker|LicenseValidator' $DEC/jadx/sources -A8
 ```
   If the verdict string appears anywhere in client code paths that gate features, the decision is local.
   Then check the fail-open branch: force `requestIntegrityToken` to throw and see whether the gate opens.
@@ -761,13 +812,14 @@ LICENSED|UNLICENSED|UNEVALUATED|decodeIntegrityToken|PiracyChecker|LicenseChecke
 | **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (**P2**) for the modification class; argue **P1** where the modified order settles and goods ship |
 | **Attacker** | AM-01 |
 | **Applies to** | all commerce apps; cross-platform builds are over-represented because the shared business logic runs on-device |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | **T1641.001** Transmitted Data Manipulation; API3:2023; WSTG-BUSL-03 Test Integrity Checks; Mobile Top 10 2024 M7 |
 
 - **Test:** Find every money field the client *names* in a request and change it. The enabling condition
   is that the client sends it; the bug is that the server honours it.
 - **How:**
 ```bash
-S=jadx_out/sources
+S=$DEC/jadx/sources
 grep -rnoE '"(amount|total|price|unitPrice|subtotal|grandTotal|finalCustomerAmount|finalPrice|creditsToDeduct|
 discount|couponValue|walletAmount|payable|fee|shipping)"' $S | sort | uniq -c | sort -rn
 # cross-platform bundles carry the same names in plaintext:
@@ -794,6 +846,7 @@ curl -s https://api.target/v1/orders/$ORDER -H "Authorization: Bearer $T" | jq '
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); **P1** argued when the credit becomes withdrawable money |
 | **Attacker** | AM-01 |
 | **Applies to** | commerce and wallet backends |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | T1641 Data Manipulation; API3:2023; WSTG-BUSL-03 |
 
 - **Test:** Cart endpoints validate "is it a number" and nothing else. The false-positive trap is
@@ -829,6 +882,7 @@ curl -s https://api.target/v1/wallet/balance -H "Authorization: Bearer $T"
 | **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (**P2**), argued up on the settled delta |
 | **Attacker** | AM-01 |
 | **Applies to** | multi-currency checkouts and multi-currency wallets |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | T1641.001; API3:2023; WSTG-BUSL-03 |
 
 - **Test:** The server stores the price in one currency but accepts a client-supplied `currency`
@@ -862,6 +916,7 @@ curl -s -X POST https://api.target/v1/checkout -H "Authorization: Bearer $T" \
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | multi-step checkouts — the norm in mobile, where the payment sheet is a separate screen from the cart |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | WSTG-BUSL-03; API6:2023 |
 
 - **Test:** Begin with a cheap cart, capture the priced total from step 1, add expensive items, then
@@ -892,6 +947,7 @@ curl -s https://api.target/v1/orders/$O | jq '.total,.items'
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | any app with tipping, donations, round-up, wallet top-up or a custom-amount payment |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | T1641; API3:2023; WSTG-BUSL-03 |
 
 - **Test:** Free-amount inputs get materially less validation than the cart because there is no catalogue
@@ -919,6 +975,7 @@ curl -s https://api.target/v1/wallet/balance -H "Authorization: Bearer $T"
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | fintech, gaming, marketplace and ticketing apps |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | **MASTG-TEST-0368**; MASWE-0059 (CWE-693); MASVS-RESILIENCE-3; API6:2023 Unrestricted Access to Sensitive Business Flows; Mobile Top 10 2024 M7 |
 
 - **Test:** Two findings in one sweep. First, whether min/max/daily/monthly limits are enforced anywhere
@@ -926,7 +983,7 @@ curl -s https://api.target/v1/wallet/balance -H "Authorization: Bearer $T"
   the decompile or from a backend-pushed config, so transactions can be crafted to sit just under them.
 - **How:**
 ```bash
-S=jadx_out/sources
+S=$DEC/jadx/sources
 grep -rnE 'MAX_|MIN_|LIMIT|maxAmount|minAmount|dailyLimit|monthlyLimit|perTxnLimit|trialDays|discountPct' $S -B4 -A4 | head -60
 grep -rniE 'threshold|risk_?score|velocity|max_?amount|daily_?limit|attempt|suspicious|allowlist|whitelist|blocklist' $S | head -40
 grep -rnE '\b(10000|5000|2000|1000|500|100)\b' $S | grep -iE 'amount|limit|max|threshold' | head -20
@@ -958,6 +1015,7 @@ curl -i -X POST https://api.target/v1/wallet/withdraw -H "Authorization: Bearer 
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); **P1** argued where goods ship with no payment captured |
 | **Attacker** | AM-01 |
 | **Applies to** | payments and commerce backends with a multi-endpoint order flow |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | WSTG-BUSL-06 Circumvention of Work Flows; API6:2023; disclosed precedents: double payout via mishandled payment-provider transaction states — withdrawing money without the funds being deducted (H1 #307239, $10,000); modifying in-flight data to a payment provider to generate wallet balance (H1 #1295844, $7,500) |
 
 - **Test:** `cart -> payment -> fulfilment`, each at a separate endpoint. The state machine enforces the
@@ -994,6 +1052,7 @@ adb shell am start -a android.intent.action.VIEW \
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927) for the local trigger; `broken_authentication_and_session_management.authentication_bypass` (**P1**) where the forged return completes a payment that never happened |
 | **Attacker** | AM-02 remote one click (a web page can fire the scheme); AM-03 locally |
 | **Applies to** | every app that hands off to a PSP app, a bank app or a browser and returns via a deep link or `onActivityResult` |
+| **Requires** | payments, deeplink, mitm, device |
 | **Maps to** | CWE-927; `risks/unsafe-use-of-deeplinks`; CVE-2025-12080 (intent injection reaching a billable action); WSTG-BUSL-02 |
 
 - **Test:** After the hand-off, the app learns the outcome from a return URI or an activity result. If it
@@ -1001,7 +1060,7 @@ adb shell am start -a android.intent.action.VIEW \
 - **How:**
 ```bash
 grep -rnE 'onActivityResult|RESULT_OK|paymentStatus|txnStatus|verifySignature|checksum|
-returnUrl|callbackUrl|redirectUrl|shouldOverrideUrlLoading|handleRedirect' jadx_out/sources | grep -iE 'pay|txn|order|checkout'
+returnUrl|callbackUrl|redirectUrl|shouldOverrideUrlLoading|handleRedirect' $DEC/jadx/sources | grep -iE 'pay|txn|order|checkout'
 grep -n -A12 '<data android:scheme' out/AndroidManifest.xml | grep -iE 'pay|callback|return|checkout'
 # forge it
 adb shell am start -a android.intent.action.VIEW \
@@ -1026,6 +1085,7 @@ printf '<script>location="targetapp://payment/callback?status=success&orderId=%s
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | Stripe, Braintree, Adyen, Razorpay, PayU, Checkout.com, Cashfree, Juspay and similar drop-in SDKs |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | API3:2023; WSTG-BUSL-02; MASWE-0018 |
 
 - **Test:** The SDK hands the client a success object. The correct design waits for the server-confirmed
@@ -1033,7 +1093,7 @@ printf '<script>location="targetapp://payment/callback?status=success&orderId=%s
 - **How:**
 ```bash
 grep -rnE 'onPaymentSuccess|onPaymentError|confirmPayment|handleNextAction|PaymentIntentResult|
-setPaid|markOrderPaid|onActivityResult.*[Pp]ay|PaymentResultListener' jadx_out/sources -A8
+setPaid|markOrderPaid|onActivityResult.*[Pp]ay|PaymentResultListener' $DEC/jadx/sources -A8
 curl -s -X POST https://api.target/v1/orders/$O/confirm -H "Authorization: Bearer $T" \
   -d '{"payment_intent":"pi_fake_123","status":"succeeded"}' -i
 curl -s https://api.target/v1/orders/$O -H "Authorization: Bearer $T" | jq '.status,.paid,.total'
@@ -1061,6 +1121,7 @@ Il2Cpp.perform(() => {
 | **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**) for the concurrent form; `broken_access_control.privilege_escalation` (**VARIES**) for the sequential form |
 | **Attacker** | AM-01 if the webhook endpoint is reachable and the body replayable; AM-09 malicious backend/CDN in the hostile-PSP framing |
 | **Applies to** | any webhook consumer — the norm in mobile payment backends |
+| **Requires** | payments, backend-api |
 | **Maps to** | MASWE-0009 (missing replay protection); WSTG-BUSL-02; API6:2023 |
 
 - **Test:** The backend verifies the PSP signature and never records whether it has already processed that
@@ -1094,6 +1155,7 @@ curl -i -X POST https://api.target/v1/transfers -H "Authorization: Bearer $T" \
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | all apps that store payment instruments |
+| **Requires** | payments, backend-api, two-accounts |
 | **Maps to** | API1:2023-class object-level authorization (filed as BAC/IDOR); WSTG-BUSL-02; cross-user billing/subscription parameter tampering precedent H1 #394329 ($8,000) |
 
 - **Test:** Two questions. Is the saved-card token scoped to its owning account server-side? And is a
@@ -1125,6 +1187,7 @@ curl -s https://api.target/v1/payment-methods/$((ID-1)) -H "Authorization: Beare
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-01 |
 | **Applies to** | banking, wallet, brokerage and any app with a per-transaction biometric/PIN/OTP confirmation |
+| **Requires** | payments, backend-api, biometric, mitm |
 | **Maps to** | **MASWE-0023** ("Step-Up Not Bound to the Action: implementing a re-authentication challenge that is not tied to the specific transaction being approved, so a single approval can be reused for a different or modified action"; mitigation "Bind the Challenge to the Action … (e.g. transaction signing)"), MASWE-0025 (Lack of Non-Repudiation for Critical Actions), MASWE-0009; **MASTG-TEST-0327** (event-bound vs crypto-bound biometrics — the client-side half); MASVS-AUTH-1 |
 
 - **Test:** Capture the artefact the app sends after the user approves, then replay it against a
@@ -1135,7 +1198,7 @@ curl -s https://api.target/v1/payment-methods/$((ID-1)) -H "Authorization: Beare
 ```bash
 # what does the approval carry?
 grep -rnE 'BiometricPrompt|CryptoObject|setUserAuthenticationRequired|signature|nonce|challenge|
-transactionSigning|attestation' jadx_out/sources -A6 | grep -iE 'pay|transfer|txn|confirm'
+transactionSigning|attestation' $DEC/jadx/sources -A6 | grep -iE 'pay|transfer|txn|confirm'
 # replay against modified parameters
 curl -i -X POST https://api.target/v1/transfers -H "Authorization: Bearer $T" \
   -d '{"to":"ATTACKER","amount":5000,"approval":"<captured artefact>"}'
@@ -1170,6 +1233,7 @@ Java.perform(function(){
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (**VARIES**, CWE-325); the consequence files as `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-03 local app with a driving primitive; AM-12 to demonstrate |
 | **Applies to** | **Android 9+ for Protected Confirmation, and it is hardware-dependent** — say so; the underlying finding (an on-device attacker can drive the authorisation path) applies everywhere |
+| **Requires** | payments, biometric, device, api>=28 |
 | **Maps to** | AOSP security-model §4.3.8 — apps "can tie usage of a key stored in Keymint or Strongbox to the user confirming that they have seen a message displayed on the screen by pushing a physical button … even a full kernel compromise (without user cooperation) cannot lead to creating these signed confirmations"; Keystore tags `TAG_TRUSTED_CONFIRMATION_REQUIRED`, `TAG_TRUSTED_USER_PRESENCE_REQUIRED`; MASWE-0025 |
 
 - **Test:** Whether the "confirm payment" step is a plain dialog plus an ordinary key, or a TEE-displayed
@@ -1177,7 +1241,7 @@ Java.perform(function(){
 - **How:**
 ```bash
 grep -rnE 'ConfirmationPrompt|ConfirmationCallback|setUserConfirmationRequired|
-TRUSTED_CONFIRMATION|setUserAuthenticationRequired|setInvalidatedByBiometricEnrollment' jadx_out/sources
+TRUSTED_CONFIRMATION|setUserAuthenticationRequired|setInvalidatedByBiometricEnrollment' $DEC/jadx/sources
 adb shell pm list features | grep -i confirmation
 ```
   Then drive the authorisation code path from Frida or from an IPC entry point with no user interaction
@@ -1199,6 +1263,7 @@ adb shell pm list features | grep -i confirmation
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) for the completed unauthorised transaction; the overlay component alone is `mobile_security_misconfiguration.tapjacking` (**P5**) and must never be the headline |
 | **Attacker** | AM-04 local app with one common permission (the accessibility grant is user-facing and social-engineered; say so) |
 | **Applies to** | banking, wallet and brokerage apps |
+| **Requires** | payments, biometric, device |
 | **Maps to** | **MASWE-0040** ("High-Risk Flows Fully Automatable: designing sensitive flows (e.g. payments) so that they can be completed entirely through programmatic UI interaction without any additional verification"; mitigation "Add Friction to High-Risk Flows: require verification that UI automation cannot satisfy (e.g. biometric-bound confirmation)"), MASWE-0039; **MASTG-TEST-0340**; ATT&CK **T1516** Input Injection (ATT&CK's own example: "Mimicking user clicks to commit fraud (e.g., stealing from PayPal accounts)"; detection DET0612/AN1666 — "programmatic clicks, global actions, or text insertion into another app's active UI, especially when those actions occur without matching user touch interaction", strengthened when "followed by target-app navigation, form submission, transaction progression, or network activity"), T1417.002, T1453 |
 
 - **Test:** Whether the payment confirmation can be completed end to end by programmatic UI interaction.
@@ -1232,6 +1297,7 @@ adb shell screenrecord --time-limit 90 /sdcard/poc.mp4 && adb pull /sdcard/poc.m
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-01 |
 | **Applies to** | apps taking card payments under EU/UK/IN SCA regimes, and any app with a step-up WebView |
+| **Requires** | payments, webview, backend-api, mitm |
 | **Maps to** | MASWE-0023 (step-up not bound to the action); WSTG-BUSL-02; API3:2023 |
 
 - **Test:** Card step-up is almost always a `WebView` on Android. Two questions: does the app decide
@@ -1241,8 +1307,8 @@ adb shell screenrecord --time-limit 90 /sdcard/poc.mp4 && adb pull /sdcard/poc.m
 - **How:**
 ```bash
 grep -rniE 'threeDS|3ds|acsUrl|challengeUrl|ChallengeActivity|returnUrl|termUrl|cres|transStatus|
-shouldOverrideUrlLoading|handleRedirect|onAuthenticationSuccess' jadx_out/sources -A6
-grep -rnE 'setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs|setJavaScriptEnabled' jadx_out/sources
+shouldOverrideUrlLoading|handleRedirect|onAuthenticationSuccess' $DEC/jadx/sources -A6
+grep -rnE 'setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs|setJavaScriptEnabled' $DEC/jadx/sources
 # assert success locally without completing the challenge
 adb shell am start -a android.intent.action.VIEW -d 'targetapp://3ds/return?status=Y&transStatus=Y'
 curl -s -X POST https://api.target/v1/payments/$P/3ds-result -H "Authorization: Bearer $T" \
@@ -1265,6 +1331,7 @@ curl -s -X POST https://api.target/v1/payments/$P/3ds-result -H "Authorization: 
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the `PAN_ONLY` half is `insecure_data_transport.cleartext_transmission_of_sensitive_data` (**VARIES**, CWE-319) only if it also leaves unprotected — otherwise rate on the integration defect |
 | **Attacker** | AM-01 |
 | **Applies to** | apps taking Google Pay |
+| **Requires** | payments, backend-api |
 | **Maps to** | Google Pay `WalletConstants.ENVIRONMENT_TEST` / `ENVIRONMENT_PRODUCTION`, `PaymentDataRequest`, `IsReadyToPayRequest`, `tokenizationSpecification`, `allowedAuthMethods` ∈ {`PAN_ONLY`, `CRYPTOGRAM_3DS`}; API3:2023 |
 
 - **Test:** The Google Pay request is assembled on the device — gateway and merchant parameters, allowed
@@ -1275,7 +1342,7 @@ curl -s -X POST https://api.target/v1/payments/$P/3ds-result -H "Authorization: 
 ```bash
 grep -rnE 'PaymentsClient|Wallet\.getPaymentsClient|WalletConstants\.(ENVIRONMENT_TEST|ENVIRONMENT_PRODUCTION)|
 PaymentDataRequest|IsReadyToPayRequest|allowedAuthMethods|PAN_ONLY|CRYPTOGRAM_3DS|
-gatewayMerchantId|tokenizationSpecification|TransactionInfo|setTotalPrice' jadx_out/sources -A6
+gatewayMerchantId|tokenizationSpecification|TransactionInfo|setTotalPrice' $DEC/jadx/sources -A6
 # and on the wire: does the server charge the client-supplied totalPrice, or re-derive it from the cart?
 ```
 - **Proof:** `ENVIRONMENT_TEST` present in a **release** APK (extract from the store-distributed artefact,
@@ -1295,6 +1362,7 @@ gatewayMerchantId|tokenizationSpecification|TransactionInfo|setTotalPrice' jadx_
 | **VRT** | `cryptographic_weakness.key_reuse.inter_environment` (**P2**) where a sandbox key is live against production; otherwise `broken_access_control.privilege_escalation` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps with a PSP integration |
+| **Requires** | payments, backend-api |
 | **Maps to** | API3:2023; WSTG-BUSL-03 |
 
 - **Test:** Whether the production build can be steered onto the PSP's sandbox — by a shipped test key, a
@@ -1303,10 +1371,10 @@ gatewayMerchantId|tokenizationSpecification|TransactionInfo|setTotalPrice' jadx_
 - **How:**
 ```bash
 grep -rnE 'rzp_test_|pk_test_|sk_test_|sandbox|SANDBOX|TEST_MODE|isTestMode|ENVIRONMENT_TEST|
-api\.sandbox\.|sandbox\.paypal|test\.adyen|apitest\.' jadx_out/sources jadx_out/res jadx_out/assets
-grep -rniE 'BuildConfig\.(DEBUG|FLAVOR|BUILD_TYPE)' jadx_out/sources | grep -iE 'pay|psp|billing|env'
+api\.sandbox\.|sandbox\.paypal|test\.adyen|apitest\.' $DEC/jadx/sources $DEC/jadx/res $DEC/jadx/assets
+grep -rniE 'BuildConfig\.(DEBUG|FLAVOR|BUILD_TYPE)' $DEC/jadx/sources | grep -iE 'pay|psp|billing|env'
 # is the switch reachable at runtime?
-grep -rnE 'remoteConfig|getBoolean\("(test|sandbox|debug)' jadx_out/sources -A4
+grep -rnE 'remoteConfig|getBoolean\("(test|sandbox|debug)' $DEC/jadx/sources -A4
 ```
   Then, using **only the PSP's documented test instruments and your own account**, attempt an order on the
   production host. Do not use any real card; the RoE from D23-062 governs this item.
@@ -1326,6 +1394,7 @@ grep -rnE 'remoteConfig|getBoolean\("(test|sandbox|debug)' jadx_out/sources -A4
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) |
 | **Attacker** | AM-01 (anyone who downloads the APK) |
 | **Applies to** | any app embedding a payment provider's credential |
+| **Requires** | payments |
 | **Maps to** | CWE-798; public research summarised in the corpus — of ~13,000 apps analysed, ~250 used the Razorpay API and around 5% exposed both `key_id` and `key_secret`, sufficient to access transaction information and payment ids **and to carry out refunds**, framed as developer misuse rather than a provider flaw; Ostorlab's classification that Stripe and payment-related credentials must be server-delegated, never embedded |
 
 - **Test:** Key **ids** are usually fine; **secrets** are not. Separate the two before writing anything,
@@ -1334,7 +1403,7 @@ grep -rnE 'remoteConfig|getBoolean\("(test|sandbox|debug)' jadx_out/sources -A4
 ```bash
 grep -rnoE 'sk_(live|test)_[A-Za-z0-9]{16,}|rzp_(live|test)_[A-Za-z0-9]{10,}|pk_(live|test)_[A-Za-z0-9]{16,}|
 key_secret|BraintreeClientToken|ADYEN_[A-Z_]*KEY|checkout_secret|-----BEGIN (RSA|EC|PRIVATE)' \
-  jadx_out/sources jadx_out/res jadx_out/assets apktool_out | sort -u
+  $DEC/jadx/sources $DEC/jadx/res $DEC/jadx/assets $DEC/apktool | sort -u
 # liveness, read-only, once:
 curl -s https://api.stripe.com/v1/balance -u "$SK:" | head -c 300
 curl -s -u "$KEY_ID:$KEY_SECRET" 'https://api.razorpay.com/v1/payments?count=1' | head -c 300
@@ -1358,16 +1427,17 @@ curl -s -u "$KEY_ID:$KEY_SECRET" 'https://api.razorpay.com/v1/payments?count=1' 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) if it authenticates alone; `...\|for_internal_asset` (**P3**) if it reaches only an internal asset |
 | **Attacker** | AM-01 |
 | **Applies to** | all payment-integrated apps, especially card-vault/tokenisation integrations |
+| **Requires** | payments |
 | **Maps to** | CWE-798; HackerOne Platform Standards on leaked credentials — hackers "should NOT test their validity beyond authenticating and then immediately deauthenticating" |
 
 - **Test:** A `grep` hit is the *start*. Its value comes from tracing **which client sends it** and **what
   the endpoint does**. Two structural facts settle the band, and both come from code.
 - **How:**
 ```bash
-grep -rnE 'Basic [A-Za-z0-9+/=]{16,}' jadx_out/sources base_apktool/res base_apktool/assets
+grep -rnE 'Basic [A-Za-z0-9+/=]{16,}' $DEC/jadx/sources base_apktool/res base_apktool/assets
 # (1) which OkHttp client carries it, and does that client add ANY identity interceptor?
-grep -rn -B10 -A10 '<the literal>' jadx_out/sources
-grep -rn 'OkHttpClient.Builder()\|addInterceptor(\|addNetworkInterceptor(' jadx_out/sources
+grep -rn -B10 -A10 '<the literal>' $DEC/jadx/sources
+grep -rn 'OkHttpClient.Builder()\|addInterceptor(\|addNetworkInterceptor(' $DEC/jadx/sources
 # (2) what shape are the endpoints?  write-in/status-out is the dangerous shape:
 #     tokenize(pan, ...) -> {status}      recache(token, cvv) -> {status}
 ```
@@ -1393,6 +1463,7 @@ grep -rn 'OkHttpClient.Builder()\|addInterceptor(\|addNetworkInterceptor(' jadx_
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); **P1** argued where the bridge moves money on the victim's session |
 | **Attacker** | AM-02 remote one click |
 | **Applies to** | apps with in-app payment WebViews; **minSdk < 17** additionally exposes the `addJavascriptInterface` reflection path |
+| **Requires** | payments, webview, js-bridge, targetsdk<17, legacy |
 | **Maps to** | CWE-927; MASVS-PLATFORM; disclosed calibration: a bridge proxying authenticated API calls in an exchange app — note that the platform initially rated it low and the researcher had to contest it, settling at CVSS 4.3, so **lead with the money, not the mechanism** |
 
 - **Test:** Payment bridges (`initiateTxn`, `getTxnParams`, `pay`, `signTransaction`) reachable from a
@@ -1402,8 +1473,8 @@ grep -rn 'OkHttpClient.Builder()\|addInterceptor(\|addNetworkInterceptor(' jadx_
   the per-call origin guard on **every variant** — the common defect is a guard on the main frame only,
   with a cross-origin iframe reaching the same object.
 ```bash
-grep -rn 'addJavascriptInterface\|@JavascriptInterface\|WebViewAssetLoader\|shouldInterceptRequest' jadx_out/sources -A10
-grep -rniE 'initiateTxn|getTxnParams|startPayment|requestPayment|signTransaction|getAuthToken' jadx_out/sources
+grep -rn 'addJavascriptInterface\|@JavascriptInterface\|WebViewAssetLoader\|shouldInterceptRequest' $DEC/jadx/sources -A10
+grep -rniE 'initiateTxn|getTxnParams|startPayment|requestPayment|signTransaction|getAuthToken' $DEC/jadx/sources
 ```
 ```html
 <iframe src="https://target-allowlisted.example/"></iframe>
@@ -1426,6 +1497,7 @@ grep -rniE 'initiateTxn|getTxnParams|startPayment|requestPayment|signTransaction
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | **targetSdk < 31**: `PendingIntent` mutability is unenforced, so a mutable implicit `PendingIntent` is the default hazard — state the level |
+| **Requires** | payments, exported-activity, exported-receiver, exported-service, device |
 | **Maps to** | `risks/pending-intent`; AOSP `PendingIntent.java`; CWE-927 |
 
 - **Test:** Two defects, both against the payment flow specifically: a missing `FLAG_ONE_SHOT` on a
@@ -1433,9 +1505,9 @@ grep -rniE 'initiateTxn|getTxnParams|startPayment|requestPayment|signTransaction
   misrouting — confirming order A charges order B.
 - **How:**
 ```bash
-grep -rn -B10 'PendingIntent\.get\(Activity\|Broadcast\|Service\)' jadx_out/sources \
+grep -rn -B10 'PendingIntent\.get\(Activity\|Broadcast\|Service\)' $DEC/jadx/sources \
   | grep -inE 'pay|order|checkout|charge|transfer|confirm|refund'
-grep -rn 'FLAG_ONE_SHOT\|FLAG_IMMUTABLE\|FLAG_MUTABLE\|FLAG_UPDATE_CURRENT' jadx_out/sources
+grep -rn 'FLAG_ONE_SHOT\|FLAG_IMMUTABLE\|FLAG_MUTABLE\|FLAG_UPDATE_CURRENT' $DEC/jadx/sources
 ```
   Then capture the `PendingIntent` from an exported surface and fire it N times, and separately create two
   orders and observe whether the second confirmation lands on the first order.
@@ -1454,6 +1526,7 @@ grep -rn 'FLAG_ONE_SHOT\|FLAG_IMMUTABLE\|FLAG_MUTABLE\|FLAG_UPDATE_CURRENT' jadx
 | **VRT** | `server_security_misconfiguration.no_rate_limiting_on_form.registration` is **not** the right node; file as `broken_access_control.privilege_escalation` (**VARIES**) and carry the rating with the face value × discovery rate |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps with promo, voucher, referral or gift codes |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | H1 **#125707** (Uber — promotion-code enumeration and brute force in a mobile app, Medium, **$3,000**); API6:2023; WSTG-BUSL-05 |
 
 - **Test:** The mobile promo endpoint frequently lacks the rate limiting on the web equivalent, and the
@@ -1493,6 +1566,7 @@ wc -l /tmp/promo.out          # never trust a loop you did not count
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) for the sequential form; `server_security_misconfiguration.race_condition` (**VARIES**) for the parallel form |
 | **Attacker** | AM-01 |
 | **Applies to** | commerce and fintech |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | disclosed: a fee discount redeemable many times (H1 **#1849626**, **$5,000**); redeeming gift cards multiple times (H1 **#759247**); WSTG-BUSL-05; API6:2023 |
 
 - **Test:** No server-side idempotency on a single-use benefit. **Run ten sequential redemptions before
@@ -1529,6 +1603,7 @@ seq 1 20 | xargs -P20 -I{} curl -s -o /dev/null -w '%{http_code} ' -X POST \
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | any app with a referral, invite or "refer a friend" credit |
+| **Requires** | payments, backend-api, mitm, two-accounts |
 | **Maps to** | WSTG-BUSL-05; API6:2023; the referral self-redemption pattern in the business-logic corpus |
 
 - **Test:** Three variants, cheapest first: make yourself your own referrer; claim the bonus on both sides
@@ -1542,7 +1617,7 @@ curl -i -X POST https://api.target/v1/signup -H 'Content-Type: application/json'
 curl -s https://api.target/v1/wallet/balance -H "Authorization: Bearer $T"
 # 3. does the bonus key on the account, the device, or the install?
 grep -rnE 'referr|invite|ANDROID_ID|AdvertisingIdClient|FirebaseInstallations|installReferrer|
-InstallReferrerClient|getInstallReferrer' jadx_out/sources -A4
+InstallReferrerClient|getInstallReferrer' $DEC/jadx/sources -A4
 ```
   The Play Install Referrer is a client-readable, client-forwardable value — check whether the server
   takes attribution from it.
@@ -1563,6 +1638,7 @@ InstallReferrerClient|getInstallReferrer' jadx_out/sources -A4
 | **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all stateful money and incentive endpoints — coupon redemption, gift-card burn, wallet withdrawal, refund, top-up confirmation, one-time top-ups, binder-exposed local redemption paths |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | PortSwigger *Smashing the state machine* (single-packet attack; predict collisions, probe with synchronised batches against a sequential baseline, isolate to two requests, automate retries); disclosed: gift cards redeemed multiple times (H1 **#759247**), limit-bypass races (H1 **#2110030** $3,000; **#1438052** $5,000; **#1520931** $4,000; **#2078571** $2,480; **#119657** $2,000); WSTG-BUSL-05 |
 
 - **Test:** Check-then-act windows on any "you may do this once" control. The discipline is what makes it
@@ -1610,6 +1686,7 @@ curl -s "https://api.target/v1/transactions?limit=50" -H "Authorization: Bearer 
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-01 |
 | **Applies to** | all apps with points, credits, wallet balance or in-app currency |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | T1641 Data Manipulation; API3:2023; WSTG-BUSL-03 |
 
 - **Test:** Point ledgers are a bolt-on and lack the invariants the money ledger has. Four probes:
@@ -1648,6 +1725,7 @@ Java.perform(function() {
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); the concurrent burn is `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01, frequently unauthenticated |
 | **Applies to** | apps selling or accepting gift cards, vouchers or stored-value codes |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | H1 **#759247** (redeeming gift cards multiple times); WSTG-BUSL-05; API6:2023 |
 
 - **Test:** "Check balance" and "redeem" are usually unauthenticated or lightly authenticated and return
@@ -1681,6 +1759,7 @@ wc -l /tmp/gc.out
 | **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**); argued **P1** on the settled delta |
 | **Attacker** | AM-01 |
 | **Applies to** | all wallet, payout and fintech apps. Keep amounts trivial, fund the balance yourself, and restore state |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | PortSwigger *Smashing the state machine* — limit overrun; WSTG-BUSL-05; disclosed: double payout via mishandled payment-provider transaction states — withdrawing money without the funds being deducted (H1 **#307239**, $10,000); modifying in-flight data to generate wallet balance (H1 **#1295844**, $7,500) |
 
 - **Test:** The mobile-specific version of the classic overdraft race, hitting endpoints (in-app top-up,
@@ -1719,6 +1798,7 @@ for a in -100 0 0.001 99999999 1e9; do curl -s -o /dev/null -w "$a:%{http_code} 
 | **VRT** | `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | all commerce apps with a self-service refund or cancellation |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | WSTG-BUSL-06; API6:2023; the `paid -> refunded while goods remain delivered` transition |
 
 - **Test:** Refund an order twice, cancel after fulfilment, and race a refund against the fulfilment job.
@@ -1746,6 +1826,7 @@ curl -i -X POST https://api.target/v1/orders/$O/refund  -H "Authorization: Beare
 | **VRT** | n/a (a kill gate for a claim that would otherwise be filed as `server_security_misconfiguration.race_condition`) |
 | **Attacker** | n/a |
 | **Applies to** | any payments backend fronted by GraphQL |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | the FP gate in the business-logic corpus: most reference implementations (Apollo, GraphQL-Ruby, Graphene) resolve aliases **sequentially** within one request |
 
 - **Test:** 100 aliases of `redeemCoupon` all returning `success:true` is commonly misreported as a
@@ -1774,6 +1855,7 @@ curl -s https://api.target/graphql -H "Authorization: Bearer $T" \
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (**P1**) where a step reaches another user's object |
 | **Attacker** | AM-05 |
 | **Applies to** | in-app wallets, gift/red-packet features, P2P transfers, split bills, escrow |
+| **Requires** | payments, backend-api, mitm, two-accounts |
 | **Maps to** | H1 **#753280** (Razer — "Multiple vulnerabilities chained to allow 'RedPacket' money to be stolen by a 3rd party", **$1,000**), **#757095** (**$1,000**), **#754044** (IDOR on the same feature's logs, **$500**); API5:2023 |
 
 - **Test:** These features chain several API calls, and the authorisation is usually checked only at the
@@ -1806,6 +1888,7 @@ curl -i -X POST https://api.target/v1/redpacket/000000/claim -H "Authorization: 
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); the completed transfer is `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-02 remote one click; AM-03 locally |
 | **Applies to** | apps that construct or consume payment URIs (`upi://pay?...`, wallet schemes, bank-app schemes) and apps that register an intent-filter for them. **targetSdk < 30** gives free package visibility, which makes discovering the installed handler trivial |
+| **Requires** | payments, deeplink, device |
 | **Maps to** | CWE-927; `risks/unsafe-use-of-deeplinks`; disclosed calibration: a "send all" transaction reachable from a `tx_amount=(all)` URI (H1 **#3648638**, Medium 6.5) |
 
 - **Test:** Three separate questions, and they are different bugs. (1) Does the app **emit** a payment URI
@@ -1815,7 +1898,7 @@ curl -i -X POST https://api.target/v1/redpacket/000000/claim -H "Authorization: 
 - **How:**
 ```bash
 grep -rnE 'upi://|"pa"|"pn"|"am"|"tn"|"tr"|"mc"|"cu"|Uri\.parse\(.*pay|ACTION_VIEW.*pay|
-createChooser|setPackage\(.*(gpay|phonepe|paytm|bhim)' jadx_out/sources -A6
+createChooser|setPackage\(.*(gpay|phonepe|paytm|bhim)' $DEC/jadx/sources -A6
 grep -n -A12 '<data android:scheme' out/AndroidManifest.xml | grep -iE 'upi|pay|wallet|bank'
 adb shell dumpsys package d | sed -n '/upi/,/^$/p'                 # who else claims the scheme
 # emit side: can an external input reach the payee/amount?
@@ -1843,6 +1926,7 @@ adb shell am start -a android.intent.action.VIEW \
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (**P1**) |
 | **Attacker** | AM-02 (a poisoned QR code in the physical world, or a link) |
 | **Applies to** | payment apps with QR, NFC tag or deep-link initiated payments |
+| **Requires** | payments, device |
 | **Maps to** | H1 **#126784** ("Sending payments via QR code does not require confirmation"); MASWE-0040; MASWE-0025 |
 
 - **Test:** Generate a payment QR encoding an attacker payee and amount, scan it in the app, and record
@@ -1873,6 +1957,7 @@ adb pull /sdcard/qr.mp4
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-02 |
 | **Applies to** | wallets, payment apps, and any app whose consent prompt names a counterparty |
+| **Requires** | payments, device, mitm |
 | **Maps to** | H1 **#1751333** (MetaMask — confirmation attributing a request to a trusted origin, **High 7.1**), **#1941767** (Medium 4.7); MASWE-0025 (Lack of Non-Repudiation for Critical Actions) |
 
 - **Test:** Compare, field by field, what the prompt displays against what the transaction body contains.
@@ -1902,6 +1987,7 @@ jq '{payee:.payee, amount:.amount, origin:.origin, memo:.memo}' confirm.json
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) where a transaction exists server-side with no confirmation; otherwise a UI defect |
 | **Attacker** | AM-01 (the victim is the user; the defect is the app's) |
 | **Applies to** | **targetSdk 35+** (edge-to-edge is enforced by default) and **targetSdk 36+** (predictive back default) — state the level |
+| **Requires** | payments, device, targetsdk>=35 |
 | **Maps to** | Android 15 behaviour changes (edge-to-edge enforced); Android 16 behaviour changes (predictive back default); MASWE-0025 |
 
 - **Test:** Two platform defaults that developers have not re-tested their payment screens against. Is the
@@ -1932,6 +2018,7 @@ curl -s "https://api.target/v1/transactions?limit=5" -H "Authorization: Bearer $
 | **VRT** | rate on the regression found: `broken_authentication_and_session_management.authentication_bypass` (**P1**), `broken_access_control.idor\|*`, or `server_security_misconfiguration.race_condition` (**VARIES**) |
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API — and a mobile build is the number-one source of old-version endpoints |
+| **Requires** | payments, backend-api |
 | **Maps to** | the shadow/zombie-API method (behavioural diff, not response-shape diff); API9:2023-class improper inventory management, filed on the regression |
 
 - **Test:** The hardcoded backend calls in an APK are frequently an **older** API version than the current
@@ -1942,7 +2029,7 @@ curl -s "https://api.target/v1/transactions?limit=5" -H "Authorization: Bearer $
 - **How:**
 ```bash
 # 1. what version does the app call?
-grep -rnoE 'https?://[A-Za-z0-9.\-]+/(api/)?(v[0-9]+|beta|legacy|internal)/[A-Za-z0-9/_\-]*' jadx_out/sources | sort -u
+grep -rnoE 'https?://[A-Za-z0-9.\-]+/(api/)?(v[0-9]+|beta|legacy|internal)/[A-Za-z0-9/_\-]*' $DEC/jadx/sources | sort -u
 # 2. which other versions are live?
 for v in v1 v2 v3 v4 beta alpha internal legacy old 2022-01-01 2023-01-01 2024-01-01; do
   curl -s -o /dev/null -w "%{http_code} /api/$v/billing/verify\n" "https://$TARGET/api/$v/billing/verify"
@@ -1975,6 +2062,7 @@ done
 | **VRT** | n/a (a kill gate for `broken_authentication_and_session_management.authentication_bypass`) |
 | **Attacker** | n/a |
 | **Applies to** | every auth-bypass claim made against a payment, billing or wallet route |
+| **Requires** | payments, backend-api |
 | **Maps to** | the layer-ordering trap in the triage-validation corpus — the highest-confidence false positive in the whole auth-bypass class |
 
 - **Test:** A `400 "field X is required"` from an unauthenticated request does **not** prove you passed
@@ -2009,6 +2097,7 @@ curl -s -X POST https://api.target/v1/billing/verify -H 'Content-Type: applicati
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**, CWE-200) for the exposure; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (**P4**) if it lands on shared storage |
 | **Attacker** | AM-11 physical unlocked, AM-04 for the logcat/shared-storage routes on older API levels |
 | **Applies to** | all payment apps |
+| **Requires** | payments, device, root |
 | **Maps to** | CWE-312; MASTG-TECH-0009 (system log inspection); MASTG-TECH-0008 |
 
 - **Test:** Whether the PAN, CVV or expiry is stored, logged, autocompleted, screenshot-able or left in
@@ -2017,8 +2106,8 @@ curl -s -X POST https://api.target/v1/billing/verify -H 'Content-Type: applicati
 ```bash
 P=com.target.app
 adb logcat -c    # clear first, then drive the payment screen
-grep -rn 'cardNumber\|cvv\|cvc\|expiry\|\bpan\b' jadx_out/sources | head -40
-grep -rn 'autofillHints\|importantForAutofill\|inputType' jadx_out/res/layout/*.xml | grep -i card
+grep -rn 'cardNumber\|cvv\|cvc\|expiry\|\bpan\b' $DEC/jadx/sources | head -40
+grep -rn 'autofillHints\|importantForAutofill\|inputType' $DEC/jadx/res/layout/*.xml | grep -i card
 adb logcat -d | grep -E '[0-9]{13,19}'
 adb shell "su 0 find /data/data/$P -type f -newermt '-10 minutes'" | while read f; do
   adb shell "su 0 strings '$f'" | grep -E '\b[0-9]{13,19}\b'; done
@@ -2044,6 +2133,7 @@ adb shell "su 0 find /data/data/$P -type f -newermt '-10 minutes'" | while read 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**, CWE-200) for the emitted identifier; `broken_access_control.privilege_escalation` (**VARIES**) where the app acts on the frame |
 | **Attacker** | AM-10 physical locked (a reader presented to a locked device) |
 | **Applies to** | **Android 15+ HCE apps** — `NfcAdapter.setObserveModeEnabled()`, `HostApduService.processPollingFrames()`, `CardEmulation.registerPollingLoopPatternFilterForService()` |
+| **Requires** | payments, physical, api>=35 |
 | **Maps to** | Android 15 features documentation (Observe Mode, polling-frame pre-authentication, polling-loop pattern filters) |
 
 - **Test:** Android 15 lets an app listen to a reader's polling frames without responding, and act on them
@@ -2051,7 +2141,7 @@ adb shell "su 0 find /data/data/$P -type f -newermt '-10 minutes'" | while read 
   AID, emit a card identifier, or decide to authenticate automatically?
 - **How:**
 ```bash
-grep -rn 'setObserveModeEnabled\|processPollingFrames\|registerPollingLoopPatternFilterForService\|PollingFrame' jadx_out/sources -A8
+grep -rn 'setObserveModeEnabled\|processPollingFrames\|registerPollingLoopPatternFilterForService\|PollingFrame' $DEC/jadx/sources -A8
 adb shell dumpsys nfc | grep -iE 'observe|polling|routing|AID'
 ```
   Present a reader (or an NFC emulator) against a locked device and capture the APDU exchange.
@@ -2071,6 +2161,7 @@ adb shell dumpsys nfc | grep -iE 'observe|polling|routing|AID'
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269) |
 | **Attacker** | AM-03 local app that holds or acquires the role |
 | **Applies to** | **Android 15+** — the Wallet role replaces the old NFC default contactless payment setting and routes payment AIDs to the role holder |
+| **Requires** | payments, physical, api>=35 |
 | **Maps to** | Android 15 features documentation ("New system role replacing NFC default contactless payment setting. Routes NFC payment AIDs to the Wallet role holder. Users manage via Settings > Apps > Default Apps") |
 
 - **Test:** An app that assumes it is the default payment handler because of the legacy setting, or that
@@ -2079,7 +2170,7 @@ adb shell dumpsys nfc | grep -iE 'observe|polling|routing|AID'
 ```bash
 adb shell cmd role get-role-holders android.app.role.WALLET
 adb shell dumpsys nfc | grep -i 'preferred\|default\|wallet'
-grep -rn 'ROLE_WALLET\|isDefaultServiceForCategory\|CardEmulation\|setPreferredService' jadx_out/sources -A6
+grep -rn 'ROLE_WALLET\|isDefaultServiceForCategory\|CardEmulation\|setPreferredService' $DEC/jadx/sources -A6
 ```
 - **Proof:** The target app still presenting itself as the payment handler in its own UI while
   `cmd role get-role-holders` names a different package — user-visible ambiguity about which app will
@@ -2098,6 +2189,7 @@ grep -rn 'ROLE_WALLET\|isDefaultServiceForCategory\|CardEmulation\|setPreferredS
 | **VRT** | `broken_access_control.privilege_escalation` (**VARIES**, CWE-269); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (**VARIES**) for harvested card data |
 | **Attacker** | AM-10 physical locked for the relay/skim case; AM-03 for a competing registration |
 | **Applies to** | wallet, transit, access-control and loyalty apps with an HCE service |
+| **Requires** | payments, physical, exported-service |
 | **Maps to** | `risks/insecure-machine-to-machine` (NFC cloned intent-filters; mitigation `NdefRecord.createApplicationRecord()` / Android Application Records; and "Lack of NDEF Message Validation" — validate TNF, record structure and magic bytes before dispatch); the EMV relay research summarised in the corpus (PPSE `325041592E5359532E4444463031` = `2PAY.SYS.DDF01`; EMV AIDs `A0000000031010`, `A0000000041010`, `A00000002501`) |
 
 - **Test:** Three checks against the app's own configuration. Does the AID service set
@@ -2108,8 +2200,8 @@ grep -rn 'ROLE_WALLET\|isDefaultServiceForCategory\|CardEmulation\|setPreferredS
 ```bash
 grep -n 'HostApduService\|android.nfc.cardemulation\|BIND_NFC_SERVICE' out/AndroidManifest.xml -A8
 cat out/res/xml/apduservice.xml 2>/dev/null      # category="payment", requireDeviceUnlock, AID list
-grep -rn 'processCommandApdu' jadx_out/sources -A25
-grep -rn 'NdefRecord\|NdefMessage\|createApplicationRecord\|getTnf\|getType' jadx_out/sources -B4 -A8
+grep -rn 'processCommandApdu' $DEC/jadx/sources -A25
+grep -rn 'NdefRecord\|NdefMessage\|createApplicationRecord\|getTnf\|getType' $DEC/jadx/sources -B4 -A8
 adb shell dumpsys nfc | sed -n '/AID/,/^$/p'
 ```
 - **Proof:** A malformed or replayed APDU accepted by `processCommandApdu` producing a privileged response
@@ -2129,6 +2221,7 @@ adb shell dumpsys nfc | sed -n '/AID/,/^$/p'
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (**VARIES**, CWE-927); `sensitive_data_exposure.disclosure_of_secrets.pay_per_use_abuse` (**P4**) where the abused resource is a metered third-party service rather than the user's own bill |
 | **Attacker** | AM-03 zero-permission local app (the confused deputy holds the permission, not the attacker) |
 | **Applies to** | apps holding `SEND_SMS`, `CALL_PHONE`, or any entitlement/credit-consuming action reachable by IPC |
+| **Requires** | exported-activity, exported-receiver, exported-service, deeplink, device |
 | **Maps to** | ATT&CK **T1643** Generate Traffic from Victim (on Android `SEND_SMS` "is required, and user consent is necessary for premium-rate SMS recipients"; MazarBOT "can send messages to premium-rate numbers"; Judy "uses infected devices to generate fraudulent clicks on advertisements"), **T1582** SMS Control, **T1616** Call Control, T1660; CVE-2025-12080 (intent injection) |
 
 - **Test:** Any exported surface that sends SMS/MMS, dials, consumes an entitlement, or triggers a
@@ -2137,9 +2230,9 @@ adb shell dumpsys nfc | sed -n '/AID/,/^$/p'
 - **How:**
 ```bash
 aapt2 dump permissions base.apk | grep -E 'SEND_SMS|CALL_PHONE|READ_PHONE_STATE'
-grep -rn 'SmsManager.getDefault|sendTextMessage|sendMultipartTextMessage|ACTION_CALL|Intent.ACTION_SENDTO' jadx_out/sources -B6
+grep -rn 'SmsManager.getDefault|sendTextMessage|sendMultipartTextMessage|ACTION_CALL|Intent.ACTION_SENDTO' $DEC/jadx/sources -B6
 # can the destination come from outside?
-grep -rn -B8 'sendTextMessage(' jadx_out/sources | grep -iE 'getIntent|getQueryParameter|getStringExtra|remoteConfig|fcm|onReceive'
+grep -rn -B8 'sendTextMessage(' $DEC/jadx/sources | grep -iE 'getIntent|getQueryParameter|getStringExtra|remoteConfig|fcm|onReceive'
 drozer> run app.broadcast.send --component com.target.app com.target.app.SmsReceiver --extra string to "+15550001111"
 adb shell am start -a android.intent.action.VIEW -d 'targetapp://sms?to=%2B15550001111&body=x'
 ```
@@ -2160,6 +2253,7 @@ adb shell am start -a android.intent.action.VIEW -d 'targetapp://sms?to=%2B15550
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every engagement that touches a payment surface |
+| **Requires** | payments |
 | **Maps to** | HackerOne Platform Standards on leaked credentials — "should NOT test their validity beyond authenticating and then immediately deauthenticating"; NIST SP 800-115 Appendix B §1.2 (Scope), §1.3 (Assumptions and Limitations) |
 
 - **Test:** Settle in writing, before Gate 1: sandbox PSP keys? test cards? is any real card or real
@@ -2196,6 +2290,7 @@ B-03 D23 payments      PSP sandbox keys           client       2026-09-03  09-05
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter with a state change |
+| **Requires** | payments |
 | **Maps to** | MASTG-TECH-0009 (system log inspection); the evidence-hygiene corpus (five-screenshot state-change pattern, HAR sanitising, PII split) |
 
 - **Test:** A money finding needs pre-state, the bug, post-state and the out-of-band side effect. Triagers
@@ -2240,6 +2335,7 @@ grep -i 'authorization\|"cookie"' out.sanitized.har | head -20
 | **VRT** | n/a (it governs every Critical/High in this chapter) |
 | **Attacker** | n/a |
 | **Applies to** | every payment finding you are about to call Critical |
+| **Requires** | payments |
 | **Maps to** | the pre-severity gate and retraction discipline in the triage-validation corpus; Bugcrowd VRT README — "Varies" is not a licence to guess, a `null`-priority path is filed with your CVSS vector and your impact proof |
 
 - **Test:** Write the draft Critical title, then substitute **the Critical claim** for "the bug" in each
@@ -2277,6 +2373,7 @@ grep -i 'authorization\|"cookie"' out.sanitized.har | head -20
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | every multi-finding payment engagement — which is most of them, because these bugs come in chains |
+| **Requires** | payments |
 | **Maps to** | the submission-order strategy in the reporting corpus; Bugcrowd's "one fix = one bounty" convention |
 
 - **Test:** A consumer report references the primitives' ids, which only exist once the primitives are

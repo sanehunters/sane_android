@@ -4,7 +4,7 @@
  "file": "D01-recon-and-surface-mapping.md",
  "why": "It mostly does not pay directly. Read the Bugcrowd VRT honestly: there is no \"good recon\" node, and the entire mobile branch it would otherwise land in is P5. An exported-component inventory, a host list, a framework fingerprint, an obfuscation verdict — every one of those is evidence, not a finding, and a report whose headline is an inventory gets triaged as Informational. The corpus is unanimous on this: \"report it only as the evidence table backing a concrete finding\".\n\nThere are three real exceptions, and they are the reason this chapter exists rather than being a preamble. First, **the superseded artefact**. Secrets removed in the current build are frequently still live server-side, and the old APK on APKMirror is the only place the value survives; a credential recovered from build N-3 that still authenticates today is `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` at P1. Second, **the shadow API** — the single highest-value structural idea in a mobile engagement. A mobile app's hardcoded backend calls are frequently an *older* API version than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure; when the old version is missing the current version's authorisation check, that is `broken_authentication_and_session_management.authentication_bypass` or `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers`, both P1. Third, **the OTA channel**: an app with expo-updates or CodePush is not running the code in the APK, and if the update payload is not code-signed and signature-enforced, a network position is remote code execution.\n\nThe rest of the chapter's value is negative and it is enormous. The corpus records the same three failure modes over and over: a tester who pulled only `base.apk` and concluded there was no native or Flutter surface; a tester who ran jadx on a Flutter or Hermes app, found a thin shell, and wrote \"no findings\" — a false negative with perfectly accurate citations; and a tester who spent an engagement on an APK whose JS was superseded by an OTA bundle days earlier. Missing a split is the difference between finding and not finding the entire native surface. Misclassifying the framework silently zeroes D10, D11, D12, D15 and D19. Not establishing `targetSdkVersion` invalidates the \"Applies to\" line of every other finding you write. There is no base rate published for this; the base rate that matters is that these three mistakes are each individually capable of producing a clean report on a vulnerable app.\n\nOne commercial note, because it changes what you write. In bug-bounty mode the inventory is never a deliverable. In a signed-SoW pentest the inventory **is** part of what the client bought — a coverage register that says \"214 declared components, 9 exported, here is the disposition of each\" is what justifies the fee on a clean report. Decide the mode before you write, and when the instruction is ambiguous default to bug-bounty discipline: it is the stricter of the two, and you can relax later, whereas the reverse gets findings retracted at delivery.",
  "crux": "**Am I analysing the bytes that are actually executing on a current device, in the runtime that actually holds the logic — and for every host, route and component I recovered from those bytes, can I name which attacker model reaches it and which version of the backend answers?**",
- "applicability": "",
+ "applicability": "D01 applies to every engagement — the probe never returns n/a for the whole domain. Its job is to fix, in `engagement.json`, the facts the `Requires` tags of this chapter key on (`target.framework`, `app_facts.has_native`, `app_facts.http_stack`, `app_facts.ota_channel`, `target.targetSdk/minSdk`, `authorisation.scope` for the backend) and to catch the two failures that silently cap every later domain: a missing split and the wrong artefact. Run it after P1 acquisition and before any item; paste the five outputs into `logs/D01-probe.txt`.\n\n```bash\n# 1. artefact set — one line per split; the two counts MUST be equal\nadb -s \"$SERIAL\" shell pm path \"$PKG\" | tee -a \"$E/logs/D01-probe.txt\" | wc -l;  ls \"$E\"/apk/*.apk | wc -l\n# 2. framework + native markers, ONE archive per unzip call (a second .apk argument is a member pattern, not an archive)\nfor a in \"$E\"/apk/*.apk; do printf '%6d %s\\n' \"$(unzip -Z1 \"$a\" | tee -a \"$E/logs/D01-probe-list.txt\" | wc -l)\" \"$a\"; done\ngrep -cE 'libflutter\\.so|libapp\\.so' \"$E/logs/D01-probe-list.txt\";  grep -cE 'index\\.android\\.bundle|libhermes' \"$E/logs/D01-probe-list.txt\"\ngrep -cE 'assets/(www|public)/|capacitor\\.config' \"$E/logs/D01-probe-list.txt\";  grep -cE 'libil2cpp\\.so|global-metadata\\.dat|assemblies/|libassemblies\\.' \"$E/logs/D01-probe-list.txt\";  grep -c '\\.so$' \"$E/logs/D01-probe-list.txt\"\n# 3. targetSdk / minSdk from two sources (apktool drops <uses-sdk>; badging is authoritative)\naapt2 dump badging \"$E/apk/base.apk\" | grep -E \"^(package|sdkVersion|targetSdkVersion)\";  adb -s \"$SERIAL\" shell dumpsys package \"$PKG\" | grep -E 'targetSdk|minSdk|versionCode'\n# 4. HTTP stack and OTA markers in the decompiled tree (jadx tree at $DEC/jadx, apktool tree at $DEC/apktool)\ngrep -rlE 'retrofit2\\.|okhttp3\\.|org\\.chromium\\.net\\.|io\\.grpc\\.|com\\.android\\.volley|io\\.ktor' \"$DEC/jadx/sources\" | grep -oE 'retrofit2|okhttp3|org/chromium|io/grpc|volley|ktor' | sort | uniq -c\ngrep -cE 'expo\\.modules\\.updates|codepush|CODE_SIGNING|DexClassLoader' \"$DEC/apktool/AndroidManifest.xml\" \"$DEC/apktool/res/values/strings.xml\" 2>/dev/null\n# 5. the inventory rows the Requires tags key on\nwc -l \"$E\"/inventory/components.csv \"$E\"/inventory/deeplinks.csv 2>/dev/null;  cut -d, -f1 \"$E/inventory/components.csv\" | sort | uniq -c\n```\n\nWrite the results into `engagement.json` (`target.framework` ∈ {native, flutter, react-native, hermes, cordova, capacitor, unity, xamarin, kmp}; `app_facts.has_native` = step-2 `.so` count > 0; `app_facts.http_stack` from step 4; `app_facts.ota_channel` = step-4 count > 0). Then mark item groups, never the domain, with these exact note texts:\n\n- `n/a — D01-025..027: target.framework != react-native (probe step 2: 0 index.android.bundle/libhermes entries across N archives; logs/D01-probe-list.txt)`\n- `n/a — D01-028: target.framework != flutter (probe step 2: 0 libflutter/libapp entries across N archives)`\n- `n/a — D01-029: no assets/www or assets/public in any of N archives (probe step 2)`\n- `n/a — D01-030: no libil2cpp/global-metadata and no assemblies blob in any of N archives (probe step 2)`\n- `n/a — D01-031: DEX-strings KMP test 0 with the androidx/compose control >0 (D01-022 How)`\n- `n/a — D01-044/045/046/050: inventory/components.csv has no provider / listener service / FGS / receiver row (probe step 5, per-kind counts reconciled against the merged manifest)`\n- `n/a — D01-046: targetSdk <34 (probe step 3)`\n- `n/a — D01-048: inventory/deeplinks.csv empty and no BROWSABLE filter in the merged manifest`\n- `n/a — D01-058..060: no retrofit2 classes (probe step 4: stack = <name>); route map taken from the <stack> branch of D01-058/D01-063 instead`\n- `n/a — D01-065 / D01-066: no GraphQL / gRPC artefacts (probe step 4 and D01-065/066 greps all 0)`\n- `n/a — D01-076: 0 .so entries across N archives (probe step 2) and no third-package code in /proc/<pid>/maps (D01-032)`\n- `n/a — D01-058..075: authorisation.scope excludes the backend (programme policy sentence quoted, date read)`\n- `blocked — D01-033 / D01-062 / D01-074: lab lacks <mitm|frida|root> (scripts/doctor.sh --json)` and `blocked — D01-054: probe lacks a getService step (tools issue)`\n\nEvery other D01 item applies to every app; D01-001..009, -022, -035, -056, -078..080 are never n/a.",
  "triage": "1. **Pull every split and hash them** (D01-001…003). Everything downstream is wrong if the artefact set is wrong, and it costs ninety seconds.\n2. **Fingerprint the framework** (D01-022). This branches the entire plan. A Flutter or Hermes app analysed as native yields a thin-shell review and misses the router, the WebView config and the API auth entirely.\n3. **Establish min/targetSdk and version currency** (D01-006, -008). These gate roughly a dozen vulnerability classes and are the most common cause of a valid finding being closed as non-current.\n4. **Determine which binary is executing** (D01-032). On an OTA app, everything after this point is either real or a study of dead code.\n5. **Build the endpoint and host inventory** (D01-058, -063, -064). This is the input to the highest-severity work in the whole engagement — D15's authz sweep — and to the two P1 items in this chapter.\n6. **Run the version and channel diffs** (D01-067, -068, -069, -070). Highest severity available from recon alone, and nobody else on the programme is doing it.\n7. **Build the merged-manifest component inventory and reconcile it against `dumpsys`** (D01-035, -037). Lower yield per hour than the API work but it is the coverage floor: an untested exported component is where the Highs hide.\n8. **Mine the superseded builds and the OSINT surface** (D01-010, -014, -018). Cheap, asynchronous, and occasionally the whole engagement.\n9. **Sweep the device-local surfaces** (D01-053, -055). The debuggable sweep and the listening-socket sweep are the two cheapest High-yield device checks that exist.\n10. **Close the register and run the discipline gates last** (D01-038, -078, -079, -080). This is what converts \"we looked at the app\" into a defensible set of positives and negatives.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"The app is not obfuscated / R8 is not enabled\" | `lack_of_binary_hardening.lack_of_obfuscation` is **P5**. Obfuscation is not a security control and its absence harms nobody | Nothing on its own. Report the secret, route or logic you recovered — the readability is context in that finding, never the finding |\n| \"The app exports N components\" (a count, with no reachability verdict) | An inventory is the map, not the territory. Triage reads a bare count as Informational | One named component, reached from a zero-permission PoC app, performing a privileged action — then it is `broken_access_control.exposed_sensitive_android_intent` (null), rated on what it exposes |\n| \"The APK contains hardcoded URLs including staging hosts\" | A string is not a host. MASTG-TEST-0233 is explicit that HTTP URLs in a binary do not mean they are used | The host resolving, answering with the app's API, and accepting a production token or serving production data (D01-071) |\n| \"The APK contains an API key\" | Most client-side keys are public by design and package-plus-signature restricted. `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` is **P5** | A live authenticated response from the provider using that key, from a clean host (D01-064). An OAuth `client_secret` in a mobile app specifically is on the never-submit list |\n| \"An expired JWT is hardcoded in the binary\" | An expired token authenticates nothing | The claim names, the `alg`, and the `/v1/*` paths around it are reconnaissance-grade — file it as the internal-API-surface map at Medium, or fold it into the endpoint inventory. If the HS256 secret is also recoverable, that is a different, Critical finding |\n| \"The app allows backup / `android:allowBackup=\"true\"`\" | `mobile_security_misconfiguration.auto_backup_allowed_by_default` is **P5** | Only as a chain: backup extraction yielding a session token that authenticates → D11 then `broken_authentication_and_session_management.authentication_bypass` (P1) |\n| \"No certificate pinning\" discovered during host inventory | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` is **P5**, and AM-07 (network attacker with a trusted CA) is a tester convenience, not an attacker | Only where the programme prices MitM (D01-019) and only against a **first-party** host that demonstrably carries session tokens (D01-063). Otherwise it is harness setup, not a finding |\n| \"drozer reports 0 exported components\" | drozer is `[DEGRADED]` on API 29+ and its own agent needs `<queries>` on `targetSdk >= 30`; a zero is frequently a package-visibility artefact | Reconcile with the merged manifest and `dumpsys` resolver tables (D01-035, D01-037). Agreement between three sources is the negative; a lone drozer zero is not |\n| \"The app runs on an emulator / root detection is absent\" | `lack_of_binary_hardening.lack_of_jailbreak_detection` is **P5** and AM-12 (your own rooted device) is not an attack | Nothing. Use the rooted device for discovery, then re-prove every finding on a stock device with a zero-permission APK, `adb shell am`/`content`, or a `network_security_config` that already trusts user CAs |\n| \"Version N of the API exists alongside version N+1\" | A version difference alone is **Informational** — that is the explicit rule | A behavioural regression on the old path: weaker auth, absent throttling, accepted payloads, or extra fields (D01-068) |\n| \"GraphQL introspection is enabled\" / \"gRPC server reflection is enabled\" | Introspection alone is on the never-submit list; reflection alone is Low | An operation or RPC discovered through it that is unauthenticated or over-privileged for your identity (D15) |\n| \"The app requests `QUERY_ALL_PACKAGES`\" | A manifest declaration is a policy question, not an exploit | The enumerated list captured leaving the device in a request body, correlated with an account identifier and a named recipient (D01-043) |\n| \"The app opens a loopback socket\" | Binding is not a vulnerability | An unauthenticated request from a second process or host returning app-private bytes or accepting a file write (D01-053) |\n| \"The signing certificate is self-signed / valid for 30 years\" | Every Android release certificate is self-signed; long validity is required by Play | A mismatch between the artefact you tested and the store artefact, or a `knownSigner` allow-list containing a key the target no longer controls (D01-004, D01-005) |",
  "joins": "These are pairs of surfaces that separate people review separately, whose JOIN is the bug.\n\n- **Config splits × the secret sweep (D01-001 × D01-064 → D18).** Almost every secret sweep in the wild runs against `base.apk`. Native libraries and whole feature modules live in `split_config.*` and `split_feature_*`, and `apkleaks` on base alone never sees them. The join is: a signing key or cloud credential that exists **only** in the arm64 split, in an app whose vendor SAST scans the bundle's base module. Also check both ABIs — a vulnerable `.so` may ship only to `armeabi-v7a`, i.e. to the oldest and most-at-risk device population.\n- **Superseded builds × the live backend (D01-010 × D01-067 → D15).** Nobody joins \"APKMirror has builds N-1 through N-12\" with \"the backend still routes `/v1/`\". The vendor's mental model is that removing a key from the client retired it, and that deprecating an API version removed it. Each half is separately boring; the join is a credential from build N-3 authenticating against a version the current client never calls, which is P1 twice over.\n- **`<queries>` × the caller-verification code path (D01-042 × D03/D06).** Manifest reviewers read `<queries>` as a compatibility declaration. Code reviewers read `checkSignatures` call sites without knowing which peers matter. The join — a `<queries><package>` entry whose peer is resolved by **name only**, with no `GET_SIGNING_CERTIFICATES` comparison anywhere on the call path — is a squattable trust anchor, and it is only visible if the same person holds both halves.\n- **Merged-manifest SDK delta × the URI-grant primitive (D01-036 × D08/D07).** The app vendor does not know the component exists; the SDK vendor does not know it is exported in this host app. An exported SDK proxy activity plus `FLAG_GRANT_READ_URI_PERMISSION` handling is the EngageLab shape — persistent read/write grants over the host app's private storage, at 50M+ installs. Neither party reviews the join.\n- **Process topology × the WebView renderer (D01-041 × D10/D11).** A \"`:webview` process\" is presented internally as isolation. It shares the UID and the data directory unless `isolatedProcess` was also set. The join makes any renderer compromise reach the token store — and it is the specific claim (\"our payment WebView runs isolated\") that makes it reportable.\n- **Foreground-service types × an exported starter (D01-046 × D06).** The FGS type table is read as a compliance chore; the exported-service list is read as an IPC chore. `android:foregroundServiceType=\"microphone\"` on a service an unprivileged app can `startForegroundService()` is remote-triggered background mic capture, and neither list alone says that.\n- **Package enumeration × the RASP blocklist (D01-043 × D21).** The installed-app enumeration is written up as a privacy issue; the root/Frida detection is written up as a hardening note. They are usually the **same code**: the enumeration exists to feed a competitor/security-app blocklist, and reading that blocklist tells you exactly which branch to flip to disable the RASP.\n- **Deep-link `<data>` cross-product × the App Links verdict (D01-048 × D09/D13).** Testers enumerate schemes; separately, someone checks `assetlinks.json`. The join — a synthetic `scheme × host` combination that reaches a handler which skips the validation applied to the canonical `https` form, on a host whose App Links verification failed — is how a password-reset token reaches an arbitrary installed app.\n- **Dialer secret codes × the environment switch (D01-049 × D22/D14).** Secret codes are treated as an OEM curiosity. Environment switchers are treated as a debug-build artefact. A `*#*#code#*#*` receiver in a production build that flips the backend to staging or disables pinning joins them into a physical-access MitM primitive with no permission and no UI trail.\n- **OTA channel × the network position (D01-032/-033 × D14/D17).** The OTA channel is a release-engineering concern; pinning is a network concern. The join is that an unsigned or unenforced update payload fetched over an unpinned channel is `server_side_injection.remote_code_execution_rce` (P1) — and it is invisible to anyone who only analysed the APK, because the APK is not what runs.\n- **App instances × entitlement counting (D01-052 × D23/D13).** Nobody tests the work profile, the Private Space copy and the OEM clone as *separate installs of the same account*. A trial or device-binding scheme that counts installs is defeated by a feature the platform ships, and the vendor's own compat documentation warns that work-profile logic breaks on Private Space.\n- **In-process OkHttp tap × the packet capture (D01-062 × D01-074 × D15).** Proxy-only testers miss non-proxied HTTP; packet-capture-only testers see destinations but not bodies. Running both and taking the three-way set difference — proxy log, Frida tap, pcap destinations — names exactly which stack is unproxied and which endpoints nobody has ever tested.\n- **Feature matrix × the coverage register (D01-057 × D01-038).** Component coverage and feature coverage are different axes, and an engagement can be complete on one and empty on the other. A component with a TESTED-CLEAN status that appears in no feature row was tested in isolation and never driven with real state; a feature with no component row was never bound to code at all.",
@@ -31,8 +31,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "All app-bundle-delivered apps, i.e. effectively every Play-distributed app since Play's AAB requirement",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0145, MASTG-TECH-0003, MASTG-TOOL-0004, MASTG-TOOL-0018",
    "record": "",
    "legacy_meta": {},
@@ -219,8 +221,10 @@
     "AM-02"
    ],
    "applies_to": "Any app distributed through Play App Signing — the default for AAB uploads",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "MASTG-TECH-0172; `pm get-app-links`; Digital Asset Links `sha256_cert_fingerprints`",
    "record": "",
    "legacy_meta": {},
@@ -307,8 +311,11 @@
     "AM-03"
    ],
    "applies_to": "API 30+ devices receiving Google Play system updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=30",
+   "requires_tags": [
+    "device",
+    "api>=30"
+   ],
    "maps_to": "`SdkExtensions.getExtensionVersion()`, `SdkExtensions.AD_SERVICES`, `android:minExtensionVersion`",
    "record": "",
    "legacy_meta": {},
@@ -329,7 +336,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Modular APIs (Photo Picker, `ad_services`) ship via Google Play system updates and exist on *older* OS versions through SDK Extensions. \"We're on Android 11 so feature X can't exist\" is often wrong — for the developer and for you.",
-   "how": "```bash\nadb shell getprop | grep build.version.extensions\n# [build.version.extensions.r]: [3]  [build.version.extensions.s]: [3]  [build.version.extensions.t]: [3]\ngrep -rn 'SdkExtensions.getExtensionVersion(\\|SdkExtensions.AD_SERVICES' jadx_out/sources\ngrep -n 'minExtensionVersion' out/AndroidManifest.xml\n```",
+   "how": "```bash\nadb shell getprop | grep build.version.extensions\n# [build.version.extensions.r]: [3]  [build.version.extensions.s]: [3]  [build.version.extensions.t]: [3]\ngrep -rn 'SdkExtensions.getExtensionVersion(\\|SdkExtensions.AD_SERVICES' $DEC/jadx/sources\ngrep -n 'minExtensionVersion' out/AndroidManifest.xml\n```",
    "proof": "`build.version.extensions.r >= 2` on an Android 11/12 device proves `ACTION_PICK_IMAGES` is live there, so the app's \"legacy storage permission fallback\" branch is reachable on a device the developer assumed was modern.",
    "escalation": "→ D11 (a compiled-in `READ_EXTERNAL_STORAGE` branch that is still reachable), → D22 (behaviour-change reasoning).",
    "ruled_out_when": "`getprop | grep build.version.extensions` returns nothing (pre-API-30 image) or the app contains no `getExtensionVersion` / `minExtensionVersion` gate at all, so no branch is version-selected."
@@ -347,8 +354,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "All bug-bounty and VRP engagements",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Google Mobile VRP non-qualifying \"Vulnerabilities that do not work on the latest available operating system version\"; Android & Google Devices \"must reproduce on the latest publicly available build\"; Samsung, Xiaomi, Uber and Meta version-currency exclusions",
    "record": "",
    "legacy_meta": {},
@@ -386,8 +395,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "All; acutely for weekly release trains and any OTA-updatable app",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`dumpsys package` fields `versionName` / `versionCode` / `lastUpdateTime`",
    "record": "",
    "legacy_meta": {},
@@ -521,8 +532,10 @@
     "AM-11"
    ],
    "applies_to": "All. Android blocks in-place downgrade, so the precondition is uninstall-then-install — state that in the report, it sets the severity",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "CWE-494; `apksigner verify --print-certs`",
    "record": "",
    "legacy_meta": {},
@@ -548,7 +561,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An attacker who can uninstall-then-install can plant an older, **legitimately signed** build whose bug the vendor already fixed. The question is whether the *server* still serves that client. A fix that only exists in the current client is not a fix.",
-   "how": "```bash\n# certs MUST match, or you are testing a repack, not a rollback\napksigner verify --print-certs old.apk     | grep -i sha-256\napksigner verify --print-certs current.apk | grep -i sha-256\n\nadb uninstall com.target.app && adb install old.apk\n# exercise the API with the old client's headers\ncurl -s -o /dev/null -w '%{http_code}\\n' \\\n  -H 'X-App-Version: 3.1.0' -H 'User-Agent: <old UA>' \\\n  -H \"Authorization: Bearer $TOKEN\" https://api.target.example/v1/profile\n\n# does a minimum-client gate exist at all?\ngrep -rniE 'minSupportedVersion|force.?update|minimum_version|versionCode *<' jadx_out/sources\n```",
+   "how": "```bash\n# certs MUST match, or you are testing a repack, not a rollback\napksigner verify --print-certs old.apk     | grep -i sha-256\napksigner verify --print-certs current.apk | grep -i sha-256\n\nadb uninstall com.target.app && adb install old.apk\n# exercise the API with the old client's headers\ncurl -s -o /dev/null -w '%{http_code}\\n' \\\n  -H 'X-App-Version: 3.1.0' -H 'User-Agent: <old UA>' \\\n  -H \"Authorization: Bearer $TOKEN\" https://api.target.example/v1/profile\n\n# does a minimum-client gate exist at all?\ngrep -rniE 'minSupportedVersion|force.?update|minimum_version|versionCode *<' $DEC/jadx/sources\n```",
    "proof": "The old client authenticating and transacting — HTTP 200 on a call the current client also makes — with no `426`, `403` or force-upgrade screen, paired with the already-fixed bug reproducing under the old build.",
    "escalation": "Resurrects any previously-patched client-side finding; combine with D08/D10 items the vendor believes are closed. → D15 for the server-side half.",
    "ruled_out_when": "The backend returns a force-upgrade response (`426`, or a JSON `min_version` gate) to the old client's version headers before any business call succeeds, and the gate is enforced server-side rather than rendered client-side — verify by stripping the version header entirely and confirming the gate still fires."
@@ -569,8 +582,10 @@
     "AM-09"
    ],
    "applies_to": "All; especially Play Feature Delivery, CodePush-style OTA and plugin architectures",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "CWE-494; MASTG-TECH-0003",
    "record": "",
    "legacy_meta": {},
@@ -596,7 +611,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Some apps unpack or download components after first launch. The on-device state can contain code the store artefact does not.",
-   "how": "```bash\nadb shell pm list packages -f | grep -i com.target.app\nadb pull /data/app/~~xxxx==/com.target.app-yyyy==/base.apk ondevice.apk\nshasum -a 256 ondevice.apk store/base.apk\n\n# code written AFTER install\nadb shell run-as com.target.app find . \\\n  \\( -name '*.dex' -o -name '*.jar' -o -name '*.so' -o -name '*.apk' \\) -newer lib -ls\nadb shell run-as com.target.app ls -la code_cache files\nadb shell ls -lZ /data/app/*/com.target.app*/oat/arm64/\ngrep -rn 'DexClassLoader\\|PathClassLoader\\|InMemoryDexClassLoader\\|System.load(' jadx_out/sources\n```",
+   "how": "```bash\nadb shell pm list packages -f | grep -i com.target.app\nadb pull /data/app/~~xxxx==/com.target.app-yyyy==/base.apk ondevice.apk\nshasum -a 256 ondevice.apk store/base.apk\n\n# code written AFTER install\nadb shell run-as com.target.app find . \\\n  \\( -name '*.dex' -o -name '*.jar' -o -name '*.so' -o -name '*.apk' \\) -newer lib -ls\nadb shell run-as com.target.app ls -la code_cache files\nadb shell ls -lZ /data/app/*/com.target.app*/oat/arm64/\ngrep -rn 'DexClassLoader\\|PathClassLoader\\|InMemoryDexClassLoader\\|System.load(' $DEC/jadx/sources\n```",
    "proof": "A `.dex`/`.jar`/`.so` under the app data dir with an mtime after install time whose contents are not in the store APK, plus the `DexClassLoader` call site that loads it.",
    "escalation": "→ D17 dynamic code loading. If the path is group-writable or on external storage, it is a plant-and-execute primitive; if the fetch is over a channel you can influence, it is remote code delivery.",
    "ruled_out_when": "`run-as ... find -newer` returns only caches and databases, no code-loading API appears in the decompiled tree, and the on-device `base.apk` hash equals the store artefact's."
@@ -1099,8 +1114,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "React Native apps; Hermes is the RN default from 0.70",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "MASTG-TOOL-0104 (hermes-dec); facebook/hermes `BytecodeFileFormat.h`",
    "record": "",
    "legacy_meta": {},
@@ -1144,8 +1161,10 @@
     "AM-01"
    ],
    "applies_to": "React Native / Hermes, all versions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "MASTG-TOOL-0104 (hermes-dec); facebook/hermes `BytecodeFileFormat.h` (`stringCount`, `overflowStringCount`, `stringStorageSize`)",
    "record": "",
    "legacy_meta": {},
@@ -1192,8 +1211,10 @@
     "AM-02"
    ],
    "applies_to": "React Native (Metro), both Hermes and plain-JS bundles",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "hermes-decomp `modules`/`deps`/`extract`; react-native-decompiler `--unpackOnly`",
    "record": "",
    "legacy_meta": {},
@@ -1234,8 +1255,10 @@
     "AM-01"
    ],
    "applies_to": "Flutter release (AOT) Android builds; Blutter is **arm64 only**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter",
+   "requires_tags": [
+    "flutter"
+   ],
    "maps_to": "MASTG-TECH-0156 (Reverse Engineering Flutter Applications), MASTG-TOOL-0116 (blutter); CWE-321, CWE-798",
    "record": "",
    "legacy_meta": {},
@@ -1284,8 +1307,11 @@
     "AM-01"
    ],
    "applies_to": "Cordova, Ionic (Cordova or Capacitor), Capacitor",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, capacitor",
+   "requires_tags": [
+    "cordova",
+    "capacitor"
+   ],
    "maps_to": "Capacitor `CapConfig.java` (`capacitor.config.json`), `PluginManager.java` (`capacitor.plugins.json`), Cordova `ConfigXmlParser.java` (`res/xml/config.xml`); MASTG-TOOL-0011",
    "record": "",
    "legacy_meta": {},
@@ -1329,8 +1355,11 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "Unity IL2CPP builds; Xamarin.Android and .NET MAUI",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "unity, xamarin",
+   "requires_tags": [
+    "unity",
+    "xamarin"
+   ],
    "maps_to": "Il2CppDumper (Unity 5.3–2022.2); Zygisk-Il2CppDumper; frida-il2cpp-bridge (Unity 5.3.0–6000.3.x); pyxamstore; `0xFAB11BAF` metadata constant; `XABA` assembly-store magic",
    "record": "",
    "legacy_meta": {},
@@ -1373,8 +1402,10 @@
     "AM-06"
    ],
    "applies_to": "Kotlin Multiplatform / Compose Multiplatform Android targets",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "kmp",
+   "requires_tags": [
+    "kmp"
+   ],
    "maps_to": "no external identifier verified — method only",
    "record": "",
    "legacy_meta": {},
@@ -1445,7 +1476,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "For any app with over-the-air code delivery, the running JS or DEX is not the one in the APK. Analysing the APK alone can mean an entire engagement spent on dead code. Compare **content identity**, never file size.",
-   "how": "```bash\n# markers\ngrep -rn 'expo.modules.updates' out/AndroidManifest.xml\ngrep -rn 'dev.expo.updates.prefs\\|CODE_SIGNING_CERTIFICATE' out/AndroidManifest.xml\nadb shell run-as \"$PKG\" ls files/.expo-internal/ databases/updates.db 2>/dev/null\ngrep -rn 'CodePushConfig\\|codepush' out/assets/ jadx_out/sources | head\ngrep -rn 'DexClassLoader\\|InMemoryDexClassLoader' jadx_out/sources\n\n# content identity\nunzip -p base.apk assets/index.android.bundle > /tmp/embedded.bundle\nadb shell \"su 0 cp /data/data/$PKG/files/.expo-internal/<hash> /data/local/tmp/ota.bundle; \\\n           su 0 chmod 644 /data/local/tmp/ota.bundle\"\nadb pull /data/local/tmp/ota.bundle /tmp/ota.bundle\npython3 - <<'PY'\nimport struct\nfor p in ('/tmp/embedded.bundle','/tmp/ota.bundle'):\n    d = open(p,'rb').read(64)\n    print(p, 'ver', struct.unpack('<I', d[8:12])[0],\n          'sourceHash', d[12:32].hex(),\n          'functions', struct.unpack('<I', d[40:44])[0])\nPY\n```\nAlso compare the app's self-reported build string (User-Agent, analytics payload) against the installed `versionName`.",
+   "how": "```bash\n# markers\ngrep -rn 'expo.modules.updates' out/AndroidManifest.xml\ngrep -rn 'dev.expo.updates.prefs\\|CODE_SIGNING_CERTIFICATE' out/AndroidManifest.xml\nadb shell run-as \"$PKG\" ls files/.expo-internal/ databases/updates.db 2>/dev/null\ngrep -rn 'CodePushConfig\\|codepush' out/assets/ $DEC/jadx/sources | head\ngrep -rn 'DexClassLoader\\|InMemoryDexClassLoader' $DEC/jadx/sources\n\n# content identity\nunzip -p base.apk assets/index.android.bundle > /tmp/embedded.bundle\nadb shell \"su 0 cp /data/data/$PKG/files/.expo-internal/<hash> /data/local/tmp/ota.bundle; \\\n           su 0 chmod 644 /data/local/tmp/ota.bundle\"\nadb pull /data/local/tmp/ota.bundle /tmp/ota.bundle\npython3 - <<'PY'\nimport struct\nfor p in ('/tmp/embedded.bundle','/tmp/ota.bundle'):\n    d = open(p,'rb').read(64)\n    print(p, 'ver', struct.unpack('<I', d[8:12])[0],\n          'sourceHash', d[12:32].hex(),\n          'functions', struct.unpack('<I', d[40:44])[0])\nPY\n```\nAlso compare the app's self-reported build string (User-Agent, analytics payload) against the installed `versionName`.",
    "proof": "Differing Hermes `sourceHash` or function count between the embedded and on-device bundle; or a self-reported version that differs from `versionName` — observed case: APK 5.67.0, executing OTA bundle 5.67.1.",
    "escalation": "→ D01-033 (is the channel signed?) and D17 (dynamic code loading). Re-base **all** logic analysis on the on-device bundle and say so in the report's AFFECTED VERSION line.",
    "ruled_out_when": "No updates marker in the manifest, no `.expo-internal`/`updates.db`/CodePush directory under the app's data dir, no `DexClassLoader` call site, **and** the on-device bundle's `sourceHash` equals the APK's. All four."
@@ -1466,8 +1497,10 @@
     "AM-09"
    ],
    "applies_to": "Any app with an OTA code channel confirmed by D01-032",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "CWE-494 (Download of Code Without Integrity Check); `expo.modules.updates.CODE_SIGNING_CERTIFICATE`, `CODE_SIGNING_METADATA`",
    "record": "",
    "legacy_meta": {},
@@ -1494,7 +1527,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An OTA channel delivers executable code. If the payload is not code-signed, or the signature is configured but not *enforced*, an attacker who controls the update host — or who sits on the network for an unpinned manifest fetch — executes code inside the app.",
-   "how": "```bash\ngrep -rn 'expo.modules.updates.CODE_SIGNING_CERTIFICATE\\|CODE_SIGNING_METADATA' out/AndroidManifest.xml\ngrep -rn 'EXPO_UPDATE_URL\\|expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH' out/AndroidManifest.xml\ngrep -rn 'codePushPublicKey\\|CodePush.*publicKey' out/res/values/*.xml jadx_out/sources\n# is the manifest/bundle fetch itself pinned?\ncat out/res/xml/network_security_config.xml 2>/dev/null\n\n# behavioural test: serve a modified bundle from a host you control\n#  1. point the update URL at your server (hosts file / DNS / proxy rewrite)\n#  2. serve a bundle with one changed string\n#  3. relaunch and look for your string on screen or in logcat\nadb logcat -c && adb shell am force-stop \"$PKG\" && adb shell monkey -p \"$PKG\" 1\nadb logcat -d | grep -iE 'expo-updates|codepush|signature|verif'\n```",
+   "how": "```bash\ngrep -rn 'expo.modules.updates.CODE_SIGNING_CERTIFICATE\\|CODE_SIGNING_METADATA' out/AndroidManifest.xml\ngrep -rn 'EXPO_UPDATE_URL\\|expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH' out/AndroidManifest.xml\ngrep -rn 'codePushPublicKey\\|CodePush.*publicKey' out/res/values/*.xml $DEC/jadx/sources\n# is the manifest/bundle fetch itself pinned?\ncat out/res/xml/network_security_config.xml 2>/dev/null\n\n# behavioural test: serve a modified bundle from a host you control\n#  1. point the update URL at your server (hosts file / DNS / proxy rewrite)\n#  2. serve a bundle with one changed string\n#  3. relaunch and look for your string on screen or in logcat\nadb logcat -c && adb shell am force-stop \"$PKG\" && adb shell monkey -p \"$PKG\" 1\nadb logcat -d | grep -iE 'expo-updates|codepush|signature|verif'\n```",
    "proof": "The absence of `CODE_SIGNING_CERTIFICATE` in the manifest **plus** the app rendering your modified bundle after relaunch. A configured-but-unenforced signature shows as the app loading an unsigned or wrongly-signed bundle with only a warning in logcat.",
    "escalation": "→ D17 (dynamic code loading as the primary write-up), → D14 (if the fetch is also unpinned, the network position is enough). This is the item that turns \"the app uses OTA updates\" from a note into a Critical.",
    "ruled_out_when": "`CODE_SIGNING_CERTIFICATE` and `CODE_SIGNING_METADATA` are present, the channel host is pinned in `network_security_config.xml`, **and** a deliberately re-signed or unsigned bundle is rejected at launch (logcat shows the verification failure and the app falls back to the embedded bundle). The behavioural half is mandatory — configuration alone is not the negative."
@@ -1542,7 +1575,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "R8 renames identifiers; it does **not** remove data flows, and it does not rewrite string values inside runtime-visible annotations or resources. Build the map from stable anchors, then read the classes and trace callers.",
-   "how": "```bash\nS=jadx_out/sources\n# framework API names survive\ngrep -rn 'addJavascriptInterface\\|setJavaScriptEnabled\\|setAllowUniversalAccessFromFileURLs\\|onReceivedSslError' $S\ngrep -rn 'openFile\\|getHost\\|startActivity\\|grantUriPermission\\|Cipher.getInstance\\|Runtime.getRuntime().exec' $S\ngrep -rl '@JavascriptInterface' $S\ngrep -rn 'System.loadLibrary\\|DexClassLoader\\|getSerializableExtra' $S\n# Retrofit annotation VALUES survive minification verbatim\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\\(\"[^\"]+\"\\)' $S | sort -u\n# Gson @SerializedName becomes @c(\"…\") — the field names are still there\ngrep -rhoE '@c\\(\"[^\"]*\"\\)' $S | sort -u | head -50\n# manifest class names are never renamed\ngrep -oE 'android:name=\"[^\"]+\"' out/AndroidManifest.xml | sort -u\n```",
+   "how": "```bash\nS=$DEC/jadx/sources\n# framework API names survive\ngrep -rn 'addJavascriptInterface\\|setJavaScriptEnabled\\|setAllowUniversalAccessFromFileURLs\\|onReceivedSslError' $S\ngrep -rn 'openFile\\|getHost\\|startActivity\\|grantUriPermission\\|Cipher.getInstance\\|Runtime.getRuntime().exec' $S\ngrep -rl '@JavascriptInterface' $S\ngrep -rn 'System.loadLibrary\\|DexClassLoader\\|getSerializableExtra' $S\n# Retrofit annotation VALUES survive minification verbatim\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\\(\"[^\"]+\"\\)' $S | sort -u\n# Gson @SerializedName becomes @c(\"…\") — the field names are still there\ngrep -rhoE '@c\\(\"[^\"]*\"\\)' $S | sort -u | head -50\n# manifest class names are never renamed\ngrep -oE 'android:name=\"[^\"]+\"' out/AndroidManifest.xml | sort -u\n```",
    "proof": "Anchor hits resolving to concrete method bodies in jadx even when class names are `C19575i`-style; a deduplicated route list produced from an app whose class graph is entirely mangled.",
    "escalation": "Anchor hits become the source list for every source→sink trace in D04–D10; the route list feeds D15. If `mapping.txt` is available (ask — see D01-020 Q13), retrace stack traces and re-derive real names.",
    "ruled_out_when": "The app is not Java/Kotlin at all (D01-022 routed it to Flutter/RN/Unity/Xamarin) — in which case this item does not apply and the D19 technique replaces it. \"jadx produced mangled names\" is never the negative."
@@ -1676,8 +1709,10 @@
     "AM-03"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0160, -0161, -0162, -0163, MASTG-KNOW-0020, MASTG-TOOL-0004; Google's vulnerability-classes guidance: \"Look at manifest file **and** for `Context.registerReceiver` calls\"",
    "record": "",
    "legacy_meta": {},
@@ -1706,7 +1741,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The manifest is the declared surface; the package manager is the effective one. Context-registered receivers, activity-aliases, runtime-enabled components (`setComponentEnabledSetting`) and provider authorities created at runtime appear only on-device.",
-   "how": "```bash\nadb shell dumpsys package \"$PKG\" > recon/dumpsys-package.txt\nawk '/^Activity Resolver Table:/{s=1} /^Receiver Resolver Table:/{s=0} s'  recon/dumpsys-package.txt\nawk '/^Receiver Resolver Table:/{s=1} /^Service Resolver Table:/{s=0} s'   recon/dumpsys-package.txt\nawk '/^Service Resolver Table:/{s=1} /^Domain verification status:/{s=0} s' recon/dumpsys-package.txt\ngrep -i 'Provider{' recon/dumpsys-package.txt\nadb shell dumpsys activity providers  | grep -A5 \"$PKG\"\nadb shell dumpsys activity broadcasts | grep -i \"$PKG\"\ngrep -rn 'registerReceiver(\\|setComponentEnabledSetting\\|PendingIntent.get' jadx_out/sources\n```\nCapture the intents you will never see statically (post-login flows, push payloads, QR scans, chained proxies):\n```bash\npython3 -m intent_monitor --database ./iris.db monitor --device-id <device-id>\npython3 -m intent_monitor --database ./iris.db list --target-package \"$PKG\"\npython3 -m intent_monitor --database ./iris.db list --scheme https --host example.com\n```",
+   "how": "```bash\nadb shell dumpsys package \"$PKG\" > recon/dumpsys-package.txt\nawk '/^Activity Resolver Table:/{s=1} /^Receiver Resolver Table:/{s=0} s'  recon/dumpsys-package.txt\nawk '/^Receiver Resolver Table:/{s=1} /^Service Resolver Table:/{s=0} s'   recon/dumpsys-package.txt\nawk '/^Service Resolver Table:/{s=1} /^Domain verification status:/{s=0} s' recon/dumpsys-package.txt\ngrep -i 'Provider{' recon/dumpsys-package.txt\nadb shell dumpsys activity providers  | grep -A5 \"$PKG\"\nadb shell dumpsys activity broadcasts | grep -i \"$PKG\"\ngrep -rn 'registerReceiver(\\|setComponentEnabledSetting\\|PendingIntent.get' $DEC/jadx/sources\n```\nCapture the intents you will never see statically (post-login flows, push payloads, QR scans, chained proxies):\n```bash\npython3 -m intent_monitor --database ./iris.db monitor --device-id <device-id>\npython3 -m intent_monitor --database ./iris.db list --target-package \"$PKG\"\npython3 -m intent_monitor --database ./iris.db list --scheme https --host example.com\n```",
    "proof": "A component present in a `dumpsys` resolver table but absent from the decompiled manifest's exported set, or a recorded runtime intent whose action/data/extras shape you could not derive statically and which reproduces on replay.",
    "escalation": "→ D05 (runtime receivers), → D06, → D08 (redirection into non-exported components). A runtime-registered receiver with no permission is reachable by `am broadcast` while the app is foregrounded.",
    "ruled_out_when": "The resolver-table entry set equals your merged-manifest exported set, there is no `registerReceiver` call with a null broadcast permission, and no `setComponentEnabledSetting` call site enables a component post-install. Runtime-trace output is a discovery aid, not proof of external reachability — confirm each with an app-external replay."
@@ -1724,8 +1759,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "All, mandatory on signed-SoW engagements; optional in bounty mode",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`apkanalyzer manifest print` / `manifest permissions`; drozer `app.package.attacksurface`",
    "record": "",
    "legacy_meta": {},
@@ -1871,8 +1908,10 @@
     "AM-09"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "developer.android.com \"Processes and threads\": components in the same app default to one process; a colon prefix creates an app-private process; \"Different applications can share the same process if they have the same Linux user ID and are signed with the same certificate\"",
    "record": "",
    "legacy_meta": {},
@@ -1947,7 +1986,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Since `targetSdk 30` an app must declare which packages it can see, so `<queries>` is a free, machine-readable map of the app's trust relationships — companion apps, authenticators, wallets, SSO brokers, MDM agents. Then determine **how** the app trusts each one: a package-name comparison is defeated by squatting the name on a device where the real peer is absent; only a signing-certificate comparison is sound.",
-   "how": "```bash\nxmllint --format out/AndroidManifest.xml | sed -n '/<queries>/,/<\\/queries>/p'\ngrep -n 'QUERY_ALL_PACKAGES\\|forceQueryable' out/AndroidManifest.xml\nadb shell dumpsys package queries                 # forceQueryable set + per-UID visibility\n\ngrep -rnE 'setPackage\\(|resolveActivity\\(|queryIntentActivities\\(|getPackageInfo\\(|bindService\\(' jadx_out/sources | head -50\ngrep -rnE 'checkSignatures|GET_SIGNING_CERTIFICATES|GET_SIGNATURES|hasSigningCertificate|getPackagesForUid|getCallingPackage' jadx_out/sources\nfrida-trace -U -f \"$PKG\" -j 'android.content.pm.PackageManager!resolve*' \\\n                          -j 'android.content.pm.PackageManager!queryIntent*'\n```",
+   "how": "```bash\nxmllint --format out/AndroidManifest.xml | sed -n '/<queries>/,/<\\/queries>/p'\ngrep -n 'QUERY_ALL_PACKAGES\\|forceQueryable' out/AndroidManifest.xml\nadb shell dumpsys package queries                 # forceQueryable set + per-UID visibility\n\ngrep -rnE 'setPackage\\(|resolveActivity\\(|queryIntentActivities\\(|getPackageInfo\\(|bindService\\(' $DEC/jadx/sources | head -50\ngrep -rnE 'checkSignatures|GET_SIGNING_CERTIFICATES|GET_SIGNATURES|hasSigningCertificate|getPackagesForUid|getCallingPackage' $DEC/jadx/sources\nfrida-trace -U -f \"$PKG\" -j 'android.content.pm.PackageManager!resolve*' \\\n                          -j 'android.content.pm.PackageManager!queryIntent*'\n```",
    "proof": "A `<queries><package android:name=\"com.bank.mobile\"/>` entry paired with a call site that resolves that package by **name only** — `contains()` / `startsWith()` / a string equality on `getCallingPackage()` — with no `checkSignatures` or `GET_SIGNING_CERTIFICATES` comparison anywhere in the call path.",
    "escalation": "→ D06 (bind-service peer impersonation), → D08 (implicit-intent hijack of a declared flow), → D17 (`createPackageContext` on a squatted peer). Also note the inverse: an app reading `PackageInfo.signatures` instead of `GET_SIGNING_CERTIFICATES` accepts a rotated-away v3 historical key → D03.",
    "ruled_out_when": "Every `<queries><package>` peer is resolved with a signing-certificate comparison on the call path, or the app declares no `<queries>` and no `QUERY_ALL_PACKAGES` on `targetSdk >= 30` and makes no cross-package call at all. **If you are writing the attacker PoC, remember your own APK needs `<queries>` for the target** — without it `getContentResolver().query()` and `resolveActivity()` return null on Android 11+ and you will record a false negative:\n```xml\n<queries><package android:name=\"com.target.app\"/></queries>\n```\nBuild once without and once with, and diff — the delta proves the block, not the target's hardening, was the blocker."
@@ -1997,7 +2036,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Does the app hold `QUERY_ALL_PACKAGES` or enumerate `PackageManager` broadly, **and does that inventory leave the device**? An installed-app list is a durable cross-app fingerprint and a sensitive-inference vector (health, dating, finance, political apps). Enumeration alone is informational; enumeration **plus egress** is the finding.",
-   "how": "```bash\naapt2 dump permissions base.apk | grep -i QUERY_ALL_PACKAGES\nsed -n '/<queries>/,/<\\/queries>/p' out/AndroidManifest.xml\ngrep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|pm list packages' jadx_out/sources\n```\n```javascript\nJava.perform(function () {\n  var PM = Java.use('android.app.ApplicationPackageManager');\n  PM.getInstalledPackages.overload('int').implementation = function (f) {\n    var r = this.getInstalledPackages(f);\n    console.log('[T1418] getInstalledPackages -> ' + r.size());\n    console.log(Java.use('android.util.Log')\n      .getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return r;\n  };\n});\n```\nInstall a control package first (`com.example.canary`), then search every proxied body for that exact string.",
+   "how": "```bash\naapt2 dump permissions base.apk | grep -i QUERY_ALL_PACKAGES\nsed -n '/<queries>/,/<\\/queries>/p' out/AndroidManifest.xml\ngrep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|pm list packages' $DEC/jadx/sources\n```\n```javascript\nJava.perform(function () {\n  var PM = Java.use('android.app.ApplicationPackageManager');\n  PM.getInstalledPackages.overload('int').implementation = function (f) {\n    var r = this.getInstalledPackages(f);\n    console.log('[T1418] getInstalledPackages -> ' + r.size());\n    console.log(Java.use('android.util.Log')\n      .getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return r;\n  };\n});\n```\nInstall a control package first (`com.example.canary`), then search every proxied body for that exact string.",
    "proof": "The Frida hook firing with a caller frame inside a third-party SDK package **and** a captured request body containing the package-name array — verified by searching for your canary package name, not by eyeballing. Count-matching between the hook's `size=` and the array length is the corroboration.",
    "escalation": "→ D18 (which SDK received it), → D20 (consent/disclosure finding), → D21 (the same enumeration is usually the app's root/Frida/competitor-detection routine — read its blocklist, that list gates a RASP branch you can flip). Combine with D20 identifiers to build a cross-app fingerprint.",
    "ruled_out_when": "The app declares a targeted `<queries>` block rather than `QUERY_ALL_PACKAGES`, the enumeration hook never fires outside a user-initiated share sheet, or the list is truncated to the declared peers and unlinked from any account identifier in every captured body. State which."
@@ -2017,8 +2056,10 @@
     "AM-03"
    ],
    "applies_to": "Any app using AndroidX App Startup, Firebase, WorkManager or `androidx.core.content.FileProvider`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "developer.android.com App Startup (`${applicationId}.androidx-startup`, documented `android:exported=\"false\"`); MASTG-TEST-0355; CWE-927",
    "record": "",
    "legacy_meta": {},
@@ -2065,8 +2106,10 @@
     "AM-03"
    ],
    "applies_to": "All. Declaration-side issue, independent of targetSdk",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-service",
+   "requires_tags": [
+    "exported-service"
+   ],
    "maps_to": "MASWE-0018 (Lack of Authentication or Authorization on App Components); MASVS-PLATFORM-1; CWE-862",
    "record": "",
    "legacy_meta": {},
@@ -2114,8 +2157,11 @@
     "AM-03"
    ],
    "applies_to": "`targetSdk >= 34` (Android 14+) for the declaration requirement",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-service, targetsdk>=34",
+   "requires_tags": [
+    "exported-service",
+    "targetsdk>=34"
+   ],
    "maps_to": "developer.android.com foreground service types table: `camera`/`FOREGROUND_SERVICE_CAMERA`, `microphone`/`FOREGROUND_SERVICE_MICROPHONE`, `location`, `health`, `mediaProjection`, `connectedDevice`, `dataSync`, `mediaProcessing`, `remoteMessaging`, `shortService`, `specialUse`, `systemExempted`",
    "record": "",
    "legacy_meta": {},
@@ -2210,8 +2256,10 @@
     "AM-02"
    ],
    "applies_to": "All. `autoVerify=\"true\"` App Links exist from API 23; from Android 12 (API 31) unverified web links no longer default to the app at all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "MASTG-TECH-0172 (Listing Deep Links), MASTG-TEST-0393, MASVS-PLATFORM-1; H1 #1667998 (KAYAK, Critical 9.3), #328486 (Zomato), #583987 (Periscope, $1540)",
    "record": "",
    "legacy_meta": {},
@@ -2377,7 +2425,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "These are components the attacker triggers by *touching the phone with hardware*, and they are frequently un-permissioned because the platform, not another app, delivers the intent. No generic manifest sweep catches them as a class.",
-   "how": "```bash\ngrep -nE 'android.hardware.usb.action.USB_(DEVICE|ACCESSORY)_ATTACHED' out/AndroidManifest.xml -B6 -A6\ngrep -nE 'android.nfc.action.(NDEF|TECH|TAG)_DISCOVERED'                out/AndroidManifest.xml -B6 -A6\nls out/res/xml/ | grep -iE 'device_filter|accessory_filter|nfc_tech|apduservice|aid'\ncat out/res/xml/device_filter.xml out/res/xml/accessory_filter.xml 2>/dev/null\ngrep -rnE 'BLUETOOTH_(CONNECT|SCAN|ADVERTISE)|REQUEST_COMPANION|CompanionDeviceManager' \\\n     out/AndroidManifest.xml jadx_out/sources\ngrep -rnE 'openAccessory|openDevice|UsbManager|BluetoothGattServer|connectGatt|onCharacteristicWrite' jadx_out/sources\nadb shell dumpsys package \"$PKG\" | grep -A5 USB_DEVICE_ATTACHED\nadb shell dumpsys bluetooth_manager | grep name:\n```",
+   "how": "```bash\ngrep -nE 'android.hardware.usb.action.USB_(DEVICE|ACCESSORY)_ATTACHED' out/AndroidManifest.xml -B6 -A6\ngrep -nE 'android.nfc.action.(NDEF|TECH|TAG)_DISCOVERED'                out/AndroidManifest.xml -B6 -A6\nls out/res/xml/ | grep -iE 'device_filter|accessory_filter|nfc_tech|apduservice|aid'\ncat out/res/xml/device_filter.xml out/res/xml/accessory_filter.xml 2>/dev/null\ngrep -rnE 'BLUETOOTH_(CONNECT|SCAN|ADVERTISE)|REQUEST_COMPANION|CompanionDeviceManager' \\\n     out/AndroidManifest.xml $DEC/jadx/sources\ngrep -rnE 'openAccessory|openDevice|UsbManager|BluetoothGattServer|connectGatt|onCharacteristicWrite' $DEC/jadx/sources\nadb shell dumpsys package \"$PKG\" | grep -A5 USB_DEVICE_ATTACHED\nadb shell dumpsys bluetooth_manager | grep name:\n```",
    "proof": "The XML filter files printed, plus `dumpsys package` confirming the filter is registered on the device. For a BLE companion, enumerate custom GATT services *and* standard characteristics (Generic Access / Device Name `0x2a00`) for leaked SSIDs, PSKs, IPs, ports or tokens.",
    "escalation": "→ D25 (auto-launch on attach, auto-granted accessory permission, accessory-supplied match strings). A proximity/file-transfer stack that stacks BLE discovery, WiFi Direct, a control socket and a pull-based HTTP download must be audited end to end: send dummy key material through any ECDH/RSA/AES step and continue in plaintext — a receiver that still acks after a fake key exchange, or that reports `DownloadFinished` while the victim UI stays empty, is a zero-click file drop.",
    "ruled_out_when": "No accessory filter XML, no NFC dispatch action, no `CompanionDeviceManager` call and no GATT server in the decompiled tree. Absence of the XML files alone is not enough — a runtime-registered `BroadcastReceiver` for `USB_DEVICE_ATTACHED` does not appear in the manifest, so check the code too."
@@ -2398,8 +2446,10 @@
     "AM-11"
    ],
    "applies_to": "Android 5+ for multi-user; Android 15+ for Private Space; OEM clone features vary",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "developer.android.com Android 15 Private Space — \"the private space uses a separate user profile\", \"apps in the private space are installed as separate copies\", plus the compat warning about apps whose work-profile logic assumes any non-main copy is a work-profile copy",
    "record": "",
    "legacy_meta": {},
@@ -2442,8 +2492,10 @@
     "AM-06"
    ],
    "applies_to": "All. Not blocked by package visibility or scoped storage",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "CVE-2019-6447 (ES File Explorer 4.1.9.7.4, EDB 50070); AirDroid unauthenticated upload (EDB 37504); WiFi Baby Monitor ports 8257/8258 (EDB 44242); Ftp Server 1.32 (EDB 44852, 46464); CWE-306",
    "record": "",
    "legacy_meta": {},
@@ -2490,8 +2542,10 @@
     "AM-03"
    ],
    "applies_to": "All; yield is highest on OEM ROMs (MediaTek, Qualcomm, OnePlus, Samsung vendor services). `service_manager find` denial granularity is per-app-domain from Android 9 / targetSdk 28",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "AOSP Binder IPC (`/dev/binder`, AIDL interfaces); AOSP SELinux `service_contexts`; AOSP AIDL-for-HALs `<hal format=\"aidl\">…<fqname>`; CWE-862",
    "record": "",
    "legacy_meta": {},
@@ -2520,7 +2574,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`/dev/binder` is the universal trust boundary between an app and everything privileged, and AIDL performs no access control of its own. Enumerate the registered services, then determine which the app's SELinux domain and permissions actually let it `getService()` and call — reachability from *inside the target UID* is what matters, not the global list.",
-   "how": "```bash\nadb shell service list      # framework AIDL services on /dev/binder\nadb shell dumpsys -l\nadb shell cmd -l            # services exposing a shell command surface\nfrida -U -n \"$PKG\" -e '\nJava.perform(function(){\n  var SM = Java.use(\"android.os.ServiceManager\");\n  SM.listServices().forEach(function(n){\n    var b = SM.getService(n);\n    console.log((b ? \"REACHABLE \" : \"denied    \") + n);\n  });\n});'\nadb shell dmesg | grep -i avc | tail -40\n# vendor-declared, non-AOSP services live here\nadb shell cat /vendor/etc/vintf/manifest.xml\nadb shell ls /vendor/etc/vintf/manifest/\nadb shell lshal 2>/dev/null | head -50\n# probe transaction codes on a reachable service\nadb shell 'for i in $(seq 1 50); do printf \"[+] %2d -> \" $i; service call <svc> $i 2>/dev/null | head -1; done'\n```",
+   "how": "```bash\nadb shell service list      # framework AIDL services on /dev/binder\nadb shell dumpsys -l\nadb shell cmd -l            # services exposing a shell command surface\nfrida -D \"$SERIAL\" -n \"$PKG\" -e '\nJava.perform(function(){\n  var SM = Java.use(\"android.os.ServiceManager\");\n  SM.listServices().forEach(function(n){\n    var b = SM.getService(n);\n    console.log((b ? \"REACHABLE \" : \"denied    \") + n);\n  });\n});'\nadb shell dmesg | grep -i avc | tail -40\n# vendor-declared, non-AOSP services live here\nadb shell cat /vendor/etc/vintf/manifest.xml\nadb shell ls /vendor/etc/vintf/manifest/\nadb shell lshal 2>/dev/null | head -50\n# probe transaction codes on a reachable service\nadb shell 'for i in $(seq 1 50); do printf \"[+] %2d -> \" $i; service call <svc> $i 2>/dev/null | head -1; done'\n```",
    "proof": "A list where `getService()` returns a non-null `IBinder` from inside the target UID; `denied` lines correspond to `avc: denied { find }` in `dmesg`. For a vendor service, a transaction that returns a normal `Parcel` (not `Parcel(00000000 00000000)`) and not a `SecurityException`, whose `Stub.onTransact()` implementation — decompiled from `/system/framework`, `/system_ext` or `/vendor` — has no `enforceCallingOrSelfPermission()` / `isPermissionAllowed()` / `uid == 1000` gate.",
    "escalation": "→ D25 (OEM privileged surfaces; this is the classic Samsung/Xiaomi VRP shape), → D06 (a Binder method accepting a `ParcelFileDescriptor` plus a raw `byte[]` is the VPN-bypass confused-deputy shape), → D26 (`fuzzService` target), → D17 (Parcel-mismatch privilege escalation). Also cross-reference `/apex` module versions: `adb shell ls -l /apex | grep '@'` and `cmd package list packages --apex-only --show-versioncode` — a stale Conscrypt or Media module is a real exposure window on a fleet the client controls (D14/D16).",
    "ruled_out_when": "Every non-AOSP entry in `/vendor/etc/vintf/manifest.xml` is registered on `/dev/vndbinder` (vendor↔vendor only, not app-reachable), and every service the Frida sweep marks REACHABLE is a standard framework service whose transactions all return `SecurityException` to `untrusted_app`. An AOSP/Pixel image will legitimately have few or no non-AOSP entries — say so."
@@ -2541,8 +2595,10 @@
     "AM-11"
    ],
    "applies_to": "All API levels. The single cheapest high-yield device sweep that exists",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "drozer `app.package.debuggable`; `dumpsys package … flags=…DEBUGGABLE`; CWE-489-class exposure (no ID verified in corpus — cite the flag itself)",
    "record": "",
    "legacy_meta": {},
@@ -2589,8 +2645,10 @@
     "AM-12"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "CVSS v3.1 AV/PR metrics; AOSP local-vs-proximal-vs-remote definitions; HackerOne Platform Standards self-sign-up rule (\"If self-sign-up is possible, and no other privileges are required, set Privileges Required to None\")",
    "record": "",
    "legacy_meta": {},
@@ -2626,8 +2684,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "no external identifier verified — method only",
    "record": "",
    "legacy_meta": {},
@@ -2670,8 +2730,10 @@
     "AM-05"
    ],
    "applies_to": "Java/Kotlin apps using Retrofit — the dominant Android HTTP stack. **Zero hits is a stack signal, not a clean result**: re-run D01-022",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "MASTG-TECH-0022 (Information Gathering – Network Communication), MASTG-TECH-0019; OWASP API9:2023, API1:2023",
    "record": "",
    "legacy_meta": {},
@@ -2700,7 +2762,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "R8 renames classes and methods but **does not rewrite the string values inside runtime-visible annotations** — Retrofit needs those strings at runtime to build the request line, so `@GET(\"v2/users/{id}/wallet\")` survives minification verbatim even when the interface becomes `a.b.c`. Recover every route, then isolate the ones whose path embeds a client-supplied object identifier.",
-   "how": "```bash\njadx -d jadx_out --no-debug-info base.apk       # plus every split_config.*.apk\nS=jadx_out/sources\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\\(\"[^\"]+\"\\)' $S | sort -u > endpoints.txt\ngrep -rhoE '@HTTP\\([^)]*\\)' $S | sort -u                       # the @HTTP form hides the verb\ngrep -rnE '@(GET|POST|PUT|DELETE|PATCH)\\(\"' $S | sed 's#^jadx_out/sources/##' | sort -u\nwc -l endpoints.txt\n# decompiler choked? the strings are still in the DEX pool\nunzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api)/' | sort -u\n\n# IDOR shortlist: routes with a path parameter\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH)\\(\"[^\"]*\\{[^\"]*\\}[^\"]*\"\\)' $S | sort -u > idor_candidates.txt\ngrep -iE 'bank|card|payment|wallet|refund|order|address|invoice|kyc|document|profile|user|account|ticket|booking' idor_candidates.txt\n```\nFor each candidate, read the enclosing interface method to see whether an auth header is attached (`@Header(\"Authorization\")`) or applied globally by an interceptor (D01-061).",
+   "how": "```bash\njadx -d $DEC/jadx --no-debug-info base.apk       # plus every split_config.*.apk\nS=$DEC/jadx/sources\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\\(\"[^\"]+\"\\)' $S | sort -u > endpoints.txt\ngrep -rhoE '@HTTP\\([^)]*\\)' $S | sort -u                       # the @HTTP form hides the verb\ngrep -rnE '@(GET|POST|PUT|DELETE|PATCH)\\(\"' $S | sed 's#^$DEC/jadx/sources/##' | sort -u\nwc -l endpoints.txt\n# decompiler choked? the strings are still in the DEX pool\nunzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api)/' | sort -u\n\n# IDOR shortlist: routes with a path parameter\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH)\\(\"[^\"]*\\{[^\"]*\\}[^\"]*\"\\)' $S | sort -u > idor_candidates.txt\ngrep -iE 'bank|card|payment|wallet|refund|order|address|invoice|kyc|document|profile|user|account|ticket|booking' idor_candidates.txt\n```\nFor each candidate, read the enclosing interface method to see whether an auth header is attached (`@Header(\"Authorization\")`) or applied globally by an interceptor (D01-061).",
    "proof": "A deduplicated `endpoints.txt` of concrete route templates (e.g. `1.0/payment-aggregator/users/bank-details/{userId}`), plus a table of `METHOD · PATH · ID-PARAM · OWNER-OF-ID · AUTH-SOURCE`. The map is only *proved* when at least one route from it appears in intercepted traffic returning 200 with the expected JSON.",
    "escalation": "Path-parameter routes go straight into the two-account BOLA sweep (D15); body models feed the mass-assignment list; every host found feeds D01-063.",
    "ruled_out_when": "The app is confirmed non-Retrofit by D01-022 (then use D01-063's framework paths instead), or `endpoints.txt` is populated and every path-parameter route is a GUID-shaped identifier already covered by a tested D15 row. Zero grep hits on a Java/Kotlin app is never a negative — it means you have the wrong stack or the wrong splits."
@@ -2720,8 +2782,10 @@
     "AM-05"
    ],
    "applies_to": "All Retrofit apps; the same idea applies to Volley and Ktor builders, where keys appear as plain string literals",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API3:2023 Broken Object Property Level Authorization; PortSwigger \"Finding hidden parameters\"",
    "record": "",
    "legacy_meta": {},
@@ -2767,8 +2831,10 @@
     "AM-09"
    ],
    "applies_to": "All; particularly apps with white-label or tenant-specific hosts, or an \"environment switcher\" shipped to production",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API10:2023 Unsafe Consumption of APIs; MASVS-AUTH-1; CWE-918-adjacent (no ID verified in corpus — cite the behaviour)",
    "record": "",
    "legacy_meta": {},
@@ -2814,8 +2880,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "All OkHttp-based apps — includes Retrofit, Coil and Firebase transports",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "MASVS-AUTH-1; MASTG-TEST-0217 (same OkHttp/Retrofit configuration surface)",
    "record": "",
    "legacy_meta": {},
@@ -2862,8 +2930,11 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "All OkHttp apps. The class is `okhttp3.*` when shaded normally; minified builds may relocate it",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, frida",
+   "requires_tags": [
+    "backend-api",
+    "frida"
+   ],
    "maps_to": "MASTG-TEST-0238 (Runtime Use of Network APIs — `[dynamic, hooks]`, a placeholder test in MASTG beta; this is the technique it describes)",
    "record": "",
    "legacy_meta": {},
@@ -2889,7 +2960,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Capture full request/response pairs from inside the process. This is immune to pinning, to proxy-unaware clients and to `Proxy.NO_PROXY` clients. Use it to **complete** the endpoint map, not to replace the proxy — the value is the set difference.",
-   "how": "```javascript\n// frida -U -p <pid> -l okhttp_tap.js\nJava.perform(function () {\n  var Buffer = Java.use(\"com.android.okhttp.okio.Buffer\");\n  var Interceptor = Java.use(\"okhttp3.Interceptor\");\n  var Tap = Java.registerClass({\n    name: \"okhttp3.TapInterceptor\", implements: [Interceptor],\n    methods: { intercept: function (chain) {\n        var req = chain.request();\n        console.log(\"[REQ] \" + req.method() + \" \" + req.url() + \"\\n\" + req.headers());\n        var body = req.body();\n        if (body && body.contentLength() > 0) { var b = Buffer.$new(); body.writeTo(b); console.log(b.readString()); }\n        var res = chain.proceed(req);\n        console.log(\"[RES] \" + res.code() + \"\\n\" + res.headers());\n        return res;\n    }}});\n  var B = Java.use(\"okhttp3.OkHttpClient$Builder\");\n  var tap = Tap.$new();\n  B.build.implementation = function () { this.interceptors().add(tap); return this.build(); };\n});\n```\nIf the class is relocated, resolve it first: `Java.enumerateLoadedClasses` filtered on `Interceptor`. Then:\n```bash\ncomm -23 <(grep -oE 'https?://[^ ]+' frida_tap.log | sort -u) \\\n         <(grep -oE 'https?://[^ ]+' burp_sitemap.txt | sort -u)\n```",
+   "how": "```javascript\n// frida -D \"$SERIAL\" -p <pid> -l okhttp_tap.js\nJava.perform(function () {\n  var Buffer = Java.use(\"com.android.okhttp.okio.Buffer\");\n  var Interceptor = Java.use(\"okhttp3.Interceptor\");\n  var Tap = Java.registerClass({\n    name: \"okhttp3.TapInterceptor\", implements: [Interceptor],\n    methods: { intercept: function (chain) {\n        var req = chain.request();\n        console.log(\"[REQ] \" + req.method() + \" \" + req.url() + \"\\n\" + req.headers());\n        var body = req.body();\n        if (body && body.contentLength() > 0) { var b = Buffer.$new(); body.writeTo(b); console.log(b.readString()); }\n        var res = chain.proceed(req);\n        console.log(\"[RES] \" + res.code() + \"\\n\" + res.headers());\n        return res;\n    }}});\n  var B = Java.use(\"okhttp3.OkHttpClient$Builder\");\n  var tap = Tap.$new();\n  B.build.implementation = function () { this.interceptors().add(tap); return this.build(); };\n});\n```\nIf the class is relocated, resolve it first: `Java.enumerateLoadedClasses` filtered on `Interceptor`. Then:\n```bash\ncomm -23 <(grep -oE 'https?://[^ ]+' frida_tap.log | sort -u) \\\n         <(grep -oE 'https?://[^ ]+' burp_sitemap.txt | sort -u)\n```",
    "proof": "Request lines and bodies printed for hosts that never appeared in the proxy log. That delta is itself the finding — \"traffic bypasses the system proxy\" — and the missing half of your endpoint inventory.",
    "escalation": "Every endpoint only visible here goes into the D15 authz sweep. Combine with D01-074 (packet-level diff) to catch the channels OkHttp never carries.",
    "ruled_out_when": "The in-process tap's host set is a subset of the proxy's host set across a full feature walk-through (D01-057). If the tap prints nothing at all, you attached to the wrong process (check `android:process`, D01-041) — that is a harness failure, not a negative."
@@ -2939,7 +3010,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Extract every URL and host embedded in DEX, native libs, resources and assets, then classify first-party (developer-controlled, in scope) versus third-party — MASTG explicitly refuses to fail a pinning test on a third-party domain. Then confirm which of them the app *actually contacts*: MASTG-TEST-0233 warns that \"the presence of HTTP URLs alone does not necessarily mean they are actively used\".",
-   "how": "```bash\napktool d -f -o out base.apk\njadx --no-src -d jadx_out base.apk\ngrep -rIoE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' out/ jadx_out/ | sort -u > urls.txt\nunzip -o base.apk -d raw >/dev/null\nstrings -a raw/lib/*/*.so raw/assets/* 2>/dev/null | grep -oE 'https?://[^\"'\\'' <>]+' >> urls.txt\nrabin2 -zz raw/lib/arm64-v8a/libnative-lib.so | grep -iE 'http|api\\.|\\.com'\nawk -F/ '{print $3}' urls.txt | sort -u > apk_hosts.txt\ngrep -rn 'BASE_URL\\|API_URL\\|ENDPOINT' jadx_out/sources | head -40\ngrep -rn 'http' out/res/values/strings.xml\n\n# framework paths — the endpoint map is NOT in the DEX on these stacks\nstrings -n 6 raw/lib/arm64-v8a/libapp.so | grep -E '^/?(api|v[0-9])/|https?://' | sort -u   # Flutter\nunzip -p base.apk assets/index.android.bundle | grep -aoE 'https?://[^\"'\\'']+' | sort -u     # RN plain JS\nhermes-decomp strings ext/assets/index.android.bundle | grep -aiE 'https?://|/api/'          # RN Hermes\n\n# remote WebView bundles carry mobile-only endpoints that are in no DEX\ncat webview_urls.txt | subjs | tee js.txt\npython3 linkfinder.py -i https://cdn.example.com/app.bundle.js -o cli\ncat js.txt | xargs -n1 -I{} sh -c 'curl -s {} | grep -oE \"\\\"/(api|v[0-9])/[A-Za-z0-9_/-]+\\\"\"' | sort -u\n\n# xref each first-party host to a real network call site\ngrep -rn 'HttpURLConnection\\|OkHttpClient\\|Retrofit.Builder().baseUrl' jadx_out/sources\n```",
+   "how": "```bash\napktool d -f -o out base.apk\njadx --no-src -d $DEC/jadx base.apk\ngrep -rIoE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' out/ $DEC/jadx/ | sort -u > urls.txt\nunzip -o base.apk -d raw >/dev/null\nstrings -a raw/lib/*/*.so raw/assets/* 2>/dev/null | grep -oE 'https?://[^\"'\\'' <>]+' >> urls.txt\nrabin2 -zz raw/lib/arm64-v8a/libnative-lib.so | grep -iE 'http|api\\.|\\.com'\nawk -F/ '{print $3}' urls.txt | sort -u > apk_hosts.txt\ngrep -rn 'BASE_URL\\|API_URL\\|ENDPOINT' $DEC/jadx/sources | head -40\ngrep -rn 'http' out/res/values/strings.xml\n\n# framework paths — the endpoint map is NOT in the DEX on these stacks\nstrings -n 6 raw/lib/arm64-v8a/libapp.so | grep -E '^/?(api|v[0-9])/|https?://' | sort -u   # Flutter\nunzip -p base.apk assets/index.android.bundle | grep -aoE 'https?://[^\"'\\'']+' | sort -u     # RN plain JS\nhermes-decomp strings ext/assets/index.android.bundle | grep -aiE 'https?://|/api/'          # RN Hermes\n\n# remote WebView bundles carry mobile-only endpoints that are in no DEX\ncat webview_urls.txt | subjs | tee js.txt\npython3 linkfinder.py -i https://cdn.example.com/app.bundle.js -o cli\ncat js.txt | xargs -n1 -I{} sh -c 'curl -s {} | grep -oE \"\\\"/(api|v[0-9])/[A-Za-z0-9_/-]+\\\"\"' | sort -u\n\n# xref each first-party host to a real network call site\ngrep -rn 'HttpURLConnection\\|OkHttpClient\\|Retrofit.Builder().baseUrl' $DEC/jadx/sources\n```",
    "proof": "A ranked host list where each first-party host has at least one xref reaching a network API — you can name the class and method that dials it — and where at least one FQDN is absent from passive subdomain enumeration yet answers `httprobe`. Hosts appearing in one extractor and not another point at a second HTTP stack (Volley, Ktor, a native library, a WebView) that you have not yet instrumented.",
    "escalation": "Drives D14 pinning scope, D15 API testing scope and D18 SDK/cloud scope. Each mobile-only host is the least-tested surface in the programme; a mobile-only host serving private data over a GET with the auth token in the query string, indexed by a search engine, is the Grab #221558 shape.",
    "ruled_out_when": "Every host in `apk_hosts.txt` is either (a) already in the programme's published web scope with an existing tested status, or (b) a third-party SDK endpoint documented in D01-075, and no host appears in the binary that is absent from the proxy log after a full feature walk-through."
@@ -3009,8 +3080,10 @@
    "attacker": "n/a (tester method)",
    "attacker_ids": [],
    "applies_to": "GraphQL backends",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "PortSwigger GraphQL API vulnerabilities (finding endpoints and schema discovery without introspection); OWASP API5:2023",
    "record": "",
    "legacy_meta": {},
@@ -3030,7 +3103,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If the backend is GraphQL, the client ships either the operation documents (Apollo codegen) or only their SHA-256 hashes (Automatic Persisted Queries). Both give you the operation inventory without introspection — including admin and internal mutations the mobile UI never calls but the endpoint still serves.",
-   "how": "```bash\nunzip -l base.apk | grep -iE '\\.graphql|\\.gql|graphql'\ngrep -rn 'operationName\\|__typename\\|mutation \\|query \\|subscription ' $S | head -50\ngrep -rnE '\"[0-9a-f]{64}\"' $S | grep -i 'persist\\|hash\\|apq\\|query' | head    # APQ sha256Hash values\ngrep -rn 'com/apollographql' jadx_out/resources 2>/dev/null | head\ngrep -rn 'OPERATION_DOCUMENT\\|QUERY_DOCUMENT' $S | head\n```",
+   "how": "```bash\nunzip -l base.apk | grep -iE '\\.graphql|\\.gql|graphql'\ngrep -rn 'operationName\\|__typename\\|mutation \\|query \\|subscription ' $S | head -50\ngrep -rnE '\"[0-9a-f]{64}\"' $S | grep -i 'persist\\|hash\\|apq\\|query' | head    # APQ sha256Hash values\ngrep -rn 'com/apollographql' $DEC/jadx/resources 2>/dev/null | head\ngrep -rn 'OPERATION_DOCUMENT\\|QUERY_DOCUMENT' $S | head\n```",
    "proof": "The recovered document text, then that exact operation replayed against `/graphql` returning `data` rather than a `PersistedQueryNotFound` error.",
    "escalation": "→ D15 (per-operation authz). Operation names reveal admin and internal mutations the mobile UI never calls. If you only have hashes, you still need the document — obtain it from introspection, field suggestions, or the registered-operations error message.",
    "ruled_out_when": "No GraphQL artefacts in any split and no `/graphql` endpoint in the host inventory; or the APQ allow-list rejects every operation you did not recover from the client, with a `PersistedQueryNotFound` on each. Record the rejection."
@@ -3050,8 +3123,10 @@
     "AM-01"
    ],
    "applies_to": "Apps bundling `io.grpc` / `grpc-okhttp` / Cronet+gRPC",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API9:2023, API5:2023; protobuf.dev encoding guide (wire-type table); nccgroup blackboxprotobuf",
    "record": "",
    "legacy_meta": {},
@@ -3093,8 +3168,10 @@
     "AM-01"
    ],
    "applies_to": "All; especially apps with a long tail of unforced updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API9:2023 (\"Running multiple versions of an API … expands the attack surface\"), API1:2023; CWE-862",
    "record": "",
    "legacy_meta": {},
@@ -3144,8 +3221,10 @@
     "AM-01"
    ],
    "applies_to": "Any versioned API. This is the highest-value mobile-to-backend bridge there is",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API9:2023 Improper Inventory Management; OWASP Mobile M8; CWE-862",
    "record": "",
    "legacy_meta": {},
@@ -3196,8 +3275,10 @@
     "AM-05"
    ],
    "applies_to": "Any target with both a web and a mobile client",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API3:2023 (excessive data exposure), API9:2023",
    "record": "",
    "legacy_meta": {},
@@ -3246,8 +3327,10 @@
     "AM-05"
    ],
    "applies_to": "All; especially backends retrofitted onto an existing web app",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API5:2023 Broken Function Level Authorization; CWE-862",
    "record": "",
    "legacy_meta": {},
@@ -3295,8 +3378,10 @@
     "AM-01"
    ],
    "applies_to": "All. Check the **release** APK, never a debug build",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API9:2023 (the documented scenario: a beta environment lacking rate limiting → password-reset brute force); OWASP Mobile M8",
    "record": "",
    "legacy_meta": {},
@@ -3321,7 +3406,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Release builds routinely carry the full host inventory including staging, UAT and regional shards. Staging backends are the classic API9 finding: same data, weaker controls. Find them even when the release build no longer names them.",
-   "how": "```bash\ngrep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' out/res out/assets jadx_out/sources \\\n  | sed 's#\\(https\\?://[^/]*\\).*#\\1#' | sort | uniq -c | sort -rn | head -60\ngrep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'\ngrep -riE 'staging|uat|dev-|preprod|\\.local|internal|qa\\.' urls.txt\ncat out/res/values/strings.xml | grep -i http\n# certificate-transparency and internet-wide pivots for hosts the build no longer names\n# Censys:  443.https.tls.certificate.parsed.extensions.subject_alt_name.dns_name:example.com\n# plus:    \"Example Inc\" + internal        (internal-CA certs)\nfor h in $(cat candidate_hosts.txt); do\n  printf '%s ' \"$h\"\n  curl -s -o /dev/null -w '%{http_code}\\n' -H \"Authorization: Bearer $PROD_TOKEN\" \"https://$h/v1/me\"\ndone\n```",
+   "how": "```bash\ngrep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' out/res out/assets $DEC/jadx/sources \\\n  | sed 's#\\(https\\?://[^/]*\\).*#\\1#' | sort | uniq -c | sort -rn | head -60\ngrep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'\ngrep -riE 'staging|uat|dev-|preprod|\\.local|internal|qa\\.' urls.txt\ncat out/res/values/strings.xml | grep -i http\n# certificate-transparency and internet-wide pivots for hosts the build no longer names\n# Censys:  443.https.tls.certificate.parsed.extensions.subject_alt_name.dns_name:example.com\n# plus:    \"Example Inc\" + internal        (internal-CA certs)\nfor h in $(cat candidate_hosts.txt); do\n  printf '%s ' \"$h\"\n  curl -s -o /dev/null -w '%{http_code}\\n' -H \"Authorization: Bearer $PROD_TOKEN\" \"https://$h/v1/me\"\ndone\n```",
    "proof": "A non-production hostname present in the release APK that answers a request signed with a **production** token — 200 with real data rather than 401 — or that accepts registration with no verification. The finding is the control gap, evidenced by a live response.",
    "escalation": "Test the staging host with the production account token; if it accepts it, every control gap there becomes a production account risk → D15. Staging usually shares a cloud project or bucket with production → D18. A staging host reachable only by an internal CNAME is also a subdomain-takeover candidate: `server_security_misconfiguration.misconfigured_dns.subdomain_takeover` (P3).",
    "ruled_out_when": "Every non-production host in the release build fails to resolve, or resolves to an isolated environment that rejects the production token with 401 **and** contains only synthetic data (confirmed by a marker account you created there, not by assumption). An empty parked page is a Low at most."
@@ -3341,8 +3426,10 @@
     "AM-05"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API8:2023 Security Misconfiguration; CWE-200",
    "record": "",
    "legacy_meta": {},
@@ -3389,8 +3476,10 @@
     "AM-01"
    ],
    "applies_to": "Spec-publishing APIs; any versioned mobile API with history",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API9:2023; CVE-2018-25031 (Swagger UI ≤ 4.1.2 spec injection); CVE-2023-38337 (`rswag` directory traversal); H1 #3124103 (U.S. DoD Swagger UI Injection, May 2025), #1656650 (reflected XSS via `url=`)",
    "record": "",
    "legacy_meta": {},
@@ -3435,8 +3524,11 @@
     "AM-05"
    ],
    "applies_to": "All; mandatory for messaging, dispatch and IoT companion apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0236 (notes the same limitation, points at Burp-Non-HTTP-Extension / MASTG-TOOL-0078)",
    "record": "",
    "legacy_meta": {},
@@ -3484,8 +3576,10 @@
     "AM-08"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP API10:2023 Unsafe Consumption of APIs; CWE-200",
    "record": "",
    "legacy_meta": {},
@@ -3532,8 +3626,10 @@
     "AM-02"
    ],
    "applies_to": "All apps shipping `lib/`; especially image, PDF, document and media viewers, Unity and Flutter",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native",
+   "requires_tags": [
+    "native"
+   ],
    "maps_to": "CVE-2025-27363 (FreeType OOB write parsing TrueType GX / variable font subglyphs, actively exploited, Android May 2025 bulletin), CVE-2023-4863 (libwebp OOB write), CVE-2025-64505 (libpng), CVE-2019-7317 (libpng 1.6.36), CVE-2025-5915 (libarchive < 3.8.0), CVE-2022-3970 (libtiff `TIFFReadRGBATileExt`)",
    "record": "",
    "legacy_meta": {},
@@ -3557,7 +3653,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A bundled vulnerable parser is only a finding if app-supplied data reaches it. Bundled libraries are patched on the app vendor's schedule, not the OS's — an app can ship a library the platform fixed a year ago. **Reachability is the finding; presence is not.**",
-   "how": "```bash\nunzip -o base.apk split_config.*.apk 'lib/*' -d libs/\nfor so in libs/lib/*/*.so; do\n  echo \"== $so\"\n  strings -a \"$so\" | grep -Eio '(freetype|libwebp|libpng|libjpeg|openssl|libavc|libhevc|sqlite|ffmpeg|libvpx|libarchive|tiff)[ -/_]?[0-9]+\\.[0-9]+(\\.[0-9]+)?' | sort -u\ndone\n# SDK/dex-level inventory with version markers that survive R8\npython3 android_lib_detector.py base.apk --verbose --csv libs.csv\nunzip -p base.apk 'META-INF/*.version' 2>/dev/null | head -50\n\n# ABIs can differ — the vulnerable build may ship only to armeabi-v7a\napkeep -a \"$PKG\" -o 'arch=arm64-v8a' ./a64\napkeep -a \"$PKG\" -o 'arch=armeabi-v7a' ./a32\nfor f in ./a64/*.apk ./a32/*.apk; do echo \"== $f\"; unzip -l \"$f\" | grep '\\.so$'; done\n\n# with source access: what the build INTENDED, including silent BoM substitutions\n./gradlew :app:dependencies --configuration releaseRuntimeClasspath > deps.txt\n./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency okhttp\ngrep -nE '\\-> [0-9]' deps.txt | head -50          # arrows mark version substitutions\n\n# then PROVE reachability\nnm -D --defined-only libs/lib/arm64-v8a/libfoo.so | grep -i 'Java_'\nfrida -U -f \"$PKG\" -l - <<'JS'\nProcess.enumerateModules().forEach(m => {\n  if (/freetype|webp|png|jpeg|avc|hevc|archive|tiff/i.test(m.name))\n    console.log(m.name, m.base, m.size);\n});\nJS\n```",
+   "how": "```bash\nunzip -o base.apk split_config.*.apk 'lib/*' -d libs/\nfor so in libs/lib/*/*.so; do\n  echo \"== $so\"\n  strings -a \"$so\" | grep -Eio '(freetype|libwebp|libpng|libjpeg|openssl|libavc|libhevc|sqlite|ffmpeg|libvpx|libarchive|tiff)[ -/_]?[0-9]+\\.[0-9]+(\\.[0-9]+)?' | sort -u\ndone\n# SDK/dex-level inventory with version markers that survive R8\npython3 android_lib_detector.py base.apk --verbose --csv libs.csv\nunzip -p base.apk 'META-INF/*.version' 2>/dev/null | head -50\n\n# ABIs can differ — the vulnerable build may ship only to armeabi-v7a\napkeep -a \"$PKG\" -o 'arch=arm64-v8a' ./a64\napkeep -a \"$PKG\" -o 'arch=armeabi-v7a' ./a32\nfor f in ./a64/*.apk ./a32/*.apk; do echo \"== $f\"; unzip -l \"$f\" | grep '\\.so$'; done\n\n# with source access: what the build INTENDED, including silent BoM substitutions\n./gradlew :app:dependencies --configuration releaseRuntimeClasspath > deps.txt\n./gradlew :app:dependencyInsight --configuration releaseRuntimeClasspath --dependency okhttp\ngrep -nE '\\-> [0-9]' deps.txt | head -50          # arrows mark version substitutions\n\n# then PROVE reachability\nnm -D --defined-only libs/lib/arm64-v8a/libfoo.so | grep -i 'Java_'\nfrida -D \"$SERIAL\" -f \"$PKG\" -l - <<'JS'\nProcess.enumerateModules().forEach(m => {\n  if (/freetype|webp|png|jpeg|avc|hevc|archive|tiff/i.test(m.name))\n    console.log(m.name, m.base, m.size);\n});\nJS\n```",
    "proof": "A version string strictly below the fixed release **and** a demonstrated path where attacker-supplied bytes — a file handed over a share intent, a deep link, a downloaded avatar — reach that module, confirmed by an `Interceptor.attach` on the JNI entry printing your marker bytes. From source, a `deps.txt` line such as `com.squareup.okhttp3:okhttp:4.12.0 -> 4.9.3 (*)` proves the declared safe version was not the shipped one, which defeats a \"we already pinned it\" rebuttal.",
    "escalation": "→ D16 (build an ASan harness against the app's own `.so`), → D17 (supply-chain finding with a concrete exploit), → D02 (dependency verification as a build-process finding).",
    "ruled_out_when": "Every recovered library version is at or above its advisory-fixed release across **every** ABI split, or the library exposes no `Java_` JNI entry point and the Frida module sweep shows it is never loaded during a full feature walk-through. Note the drozer `app.package.native` caveat verbatim — it \"only checks for libraries that are bundled inside the package APK\", so a zero there is not a negative; confirm with `/proc/<pid>/maps`."
@@ -3577,8 +3673,11 @@
     "AM-05"
    ],
    "applies_to": "All; especially fintech, mobility, marketplace and gaming apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "ATT&CK T1627.001 Geofencing, T1422.001 Internet Connection Discovery; no VRT-specific node",
    "record": "",
    "legacy_meta": {},

@@ -59,6 +59,46 @@ of that line each item sits on before you run it, and say so in the report.
 **Is there a key, nonce, salt or signature that some component still trusts, which I can reproduce either
 from the public APK or from code running in the app's own UID — and what does the server do when I use it?**
 
+## Applicability probe
+
+Run once, before opening any D12 item. `$E` = engagement dir, `$APK` = the base APK, `$DEC` = `$E/decompiled` (START.md §6).
+
+```bash
+# 1. First-party crypto call sites, jadx + smali cross-check — zero in BOTH is the only clean negative
+grep -rlE 'javax\.crypto\.|java\.security\.(MessageDigest|Signature|KeyStore|KeyPairGenerator|KeyFactory|SecureRandom)|android\.security\.keystore\.' "$DEC/jadx/sources" \
+  | grep -vE '/(okhttp3|okio|retrofit2|kotlin|kotlinx|androidx|com/google/(android/gms|crypto/tink|firebase|protobuf)|org/bouncycastle|org/conscrypt|io/grpc)/' | wc -l
+grep -rlE 'Ljavax/crypto/|Landroid/security/keystore/|Ljava/security/(MessageDigest|Signature|KeyStore);' "$DEC"/apktool/smali* \
+  | grep -vE '/(okhttp3|androidx|kotlin|com/google|org/bouncycastle)/' | wc -l
+# 2. Framework markers that make a DEX-only negative unsound (D12-003 route)
+unzip -l "$APK" | grep -ciE 'index\.android\.bundle|libhermes|libapp\.so|libflutter\.so|libil2cpp\.so|global-metadata|assemblies|www/'
+# 3. Shipped key material, tokens, and the item-group markers
+unzip -l "$APK" | grep -ciE '\.(p12|pfx|jks|bks|pem|key|der)$|service-account|credentials\.json'
+grep -rhoE 'eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.' "$DEC" 2>/dev/null | sort -u | wc -l
+for k in 'KeyGenParameterSpec|AndroidKeyStore' 'BiometricPrompt|setUserAuthenticationRequired' 'setAttestationChallenge|getCertificateChain|1\.3\.6\.1\.4\.1\.11129\.2\.1\.17' \
+         'x-signature|x-sign|HmacSHA|Mac\.getInstance' 'Jwts\.|jsonwebtoken|HS256' 'net\.sqlcipher|SupportFactory' 'setKeySetId|OfflineLicenseHelper' \
+         'E2eeContactKeysManager' 'KeyStoreManager|grantKeyAccess' 'PublicKeyCredential|Fido2ApiClient' 'code_verifier|codeVerifier'; do
+  printf '%-72s %s\n' "$k" "$(grep -rlE "$k" "$DEC/jadx/sources" | wc -l)"; done
+# 4. Inventory and manifest gates
+wc -l < "$E/inventory/endpoints.csv"
+grep -oE 'android:(targetSdkVersion|minSdkVersion)="[0-9]+"' "$DEC/apktool/AndroidManifest.xml"
+```
+
+**Decision.**
+
+| Probe result | Verdict |
+|---|---|
+| (1) jadx = 0 **and** smali = 0, (2) = 0, (3) key files = 0, JWT = 0, every marker row = 0 | **Domain n/a** except D12-001, D12-003 and D12-079, which record the counts. |
+| (1) = 0 but (2) > 0 | Domain **applies** through D12-003 → D12-008 / 009 / 010 / 011; a DEX negative is not a result. |
+| (1) > 0 | Domain **applies**. Gate the groups: D12-048..D12-061 need the `KeyGenParameterSpec|AndroidKeyStore` row > 0 **or** a non-empty D12-004 alias table — if both are 0 and sensitive operations are brokered to another package over binder (D11-009), mark 048..061 n/a naming the delegate; D12-062..D12-069 need the attestation row > 0; D12-044..D12-047 need JWT > 0 in the package or on the wire; D12-037 the `code_verifier` row or a D09 OAuth flow; D12-073 the sqlcipher row; D12-074 the DRM row; D12-075 `E2eeContactKeysManager` (API 35+); D12-059 `KeyStoreManager` (API 36+); D12-084 the FIDO row; D12-018/022/040..046/063..069/076/083/084 additionally need `backend-api` in scope. |
+
+**n/a note the model writes (whole domain):**
+
+`D12 n/a — probe YYYY-MM-DD: first-party crypto call sites jadx=0 smali=0 (filters: okhttp3/androidx/kotlin/gms/tink/bouncycastle); framework markers=0 (the DEX is the whole app); key-shaped files=0; JWT strings=0; Keystore/biometric/attestation/signing/sqlcipher/DRM/E2EE/KeyStoreManager/FIDO marker rows all 0; endpoints.csv=<N> rows. Recorded D12-001 (census table), D12-003 (no framework markers), D12-079. Re-open the domain if the P5 D12-002 hook prints any [KEY]/[CIPHER] line or P6 captures a signed, HMAC'd or encrypted request body.`
+
+**n/a note for the Keystore block only (delegated keys):**
+
+`D12-048..D12-061 n/a — D12-004 aliases()=0 after full exercise and static KeyGenParameterSpec/AndroidKeyStore=0; key use is delegated to <delegate package> over binder (D11-009 / D15 'requests originate elsewhere'); delegate alias count <n> recorded as context only, measured in the delegate's process with positive control alias <alias>; delegate not in programme scope.`
+
 ## Triage order
 
 1. **The transformation and key-provenance census** (D12-001, D12-002). One `Cipher.getInstance` frequency
@@ -179,7 +219,7 @@ Java.perform(function () {
 });
 ```
 ```bash
-frida -U -f com.target.app -l crypto.js --no-pause
+frida -D "$SERIAL" -f com.target.app -l crypto.js
 # broad trace first if you do not know where to look
 frida-trace -U -f com.target.app -j 'javax.crypto.*!*' -j 'java.security.*!*' -o crypto.log
 ```
@@ -202,6 +242,7 @@ frida-trace -U -f com.target.app -j 'javax.crypto.*!*' -j 'java.security.*!*' -o
 | **VRT** | n/a (method — prevents a wrong negative) |
 | **Attacker** | AM-12 (harness) |
 | **Applies to** | React Native, Flutter, Cordova/Ionic/Capacitor, Unity, Xamarin/MAUI, KMP |
+| **Requires** | flutter, react-native, hermes, cordova, capacitor, unity, xamarin, kmp |
 | **Maps to** | MASTG-TOOL-0116 (blutter), MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks) |
 
 - **Test:** On cross-platform builds the key derivation, the storage-key names and the transformation live
@@ -374,6 +415,7 @@ curl -v --cert client.pem https://mtls.api.target/v1/whoami
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if the certificate alone authenticates; otherwise `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) |
 | **Attacker** | AM-11 / AM-08 (in-process), then AM-01 with the extracted identity |
 | **Applies to** | apps doing PKCS#12-backed mTLS with a runtime-derived store password |
+| **Requires** | frida, device, backend-api |
 | **Maps to** | HackTricks `android-anti-instrumentation-and-ssl-pinning-bypass.md` — mTLS client certificate extraction from live keystore reloads |
 
 - **Test:** The common pattern — generate a keypair, store the key and the issued client certificate in a
@@ -417,6 +459,7 @@ openssl pkcs12 -export -out client-cert.pfx -inkey privateKey.key -in cert.pem  
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter, Unity IL2CPP, Xamarin/MAUI, any framework with a native blob |
+| **Requires** | native, flutter, unity, xamarin |
 | **Maps to** | IQCrafter Flutter study (RSA keys recovered at `0x85bb0` and `0x9f486` in `libapp.so`, end-to-end signature replay against production) |
 
 - **Test:** DEX-oriented secret scanners never look in the native blob. Sweep it statically and then at
@@ -429,7 +472,7 @@ grep -rna -- '-----BEGIN' out/assemblies/out/*.dll
 grep -a -n -- '-----BEGIN' out_dir/pp.txt      # blutter object-pool dump
 ```
 ```bash
-frida -U -f com.target.app -q -e "
+frida -D "$SERIAL" -f com.target.app -q -e "
 var m = Process.getModuleByName('libapp.so');
 // '-----BEGIN'
 Memory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {
@@ -456,6 +499,7 @@ Memory.scan(m.base, m.size, '2f 61 70 69 2f', {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the key protects user data across the install base |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter release builds — **including `--obfuscate`, which does not touch constants** |
+| **Requires** | flutter |
 | **Maps to** | reversethat.app DroidPass analysis; MASTG-TOOL-0116 (blutter) |
 
 - **Test:** Dart AOT stores small integer constants tagged (Smi): `actual = raw >> 1`. A key built
@@ -490,6 +534,7 @@ grep -nE 'fromCharCodes|sha256|utf8|IV_SALT|AES|CBC|PKCS7|GCM' out_dir/asm/*.txt
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cryptographic_weakness.broken_cryptography.use_of_broken_cryptographic_primitive` (P3) for the mode/algorithm half |
 | **Attacker** | AM-01 |
 | **Applies to** | Unity IL2CPP, Unity Mono, Xamarin, .NET MAUI |
+| **Requires** | unity, xamarin |
 | **Maps to** | Il2CppDumper (`DummyDll` restored assemblies, `dump.cs`), pyxamstore (`unpack` → DLLs) |
 
 - **Test:** In IL2CPP `dump.cs` and in restored `.dll`s the crypto is plain C#. This is the fastest path to
@@ -516,6 +561,7 @@ ilspycmd out/assemblies/out/App.dll | grep -nE 'Aes|key|IV|Rfc2898|CipherMode' |
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when it reads or writes other tenants' data; `.pay_per_use_abuse` (P4) when it is only billing-scoped; `.intentionally_public_sample_or_invalid` (P5) when it is a publishable key |
 | **Attacker** | AM-01 |
 | **Applies to** | React Native, Cordova/Ionic/Capacitor, any bundle-shipping framework |
+| **Requires** | react-native, hermes, cordova, capacitor |
 | **Maps to** | MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks) |
 
 - **Test:** "Public" bundle keys are frequently privileged in practice: Firebase server keys, Algolia admin
@@ -1173,6 +1219,7 @@ grep -rnE 'BuildConfig\.(DEBUG|FLAVOR|BUILD_TYPE)|staging|\.dev\.|sandbox' out/s
 | **VRT** | `cryptographic_weakness.key_reuse.intra_environment` (**P5** as a bare observation); rate the consequence — `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when it decrypts other users' data you can reach |
 | **Attacker** | AM-01 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | sec-88 checklist §23 "Check if cryptographic keys are reused"; MASTG "Storing a Key" |
 
 - **Test:** Determine whether the key is per-install or baked in. A shared key converts any single-device
@@ -1352,6 +1399,7 @@ Java.perform(function () {
 | **VRT** | `cryptographic_weakness.insufficient_entropy.small_seed_space_in_prng` (P4); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) via the value it authorises |
 | **Attacker** | AM-03 (needs the restart primitive) then AM-01 |
 | **Applies to** | all apps that seed a generator at process start |
+| **Requires** | device, frida |
 | **Maps to** | the Samsung Galaxy Store chain, bug 4: the challenge integer came from `new Random(System.currentTimeMillis())` at app start, and a forced restart collapsed the seed space to a ±200 ms window |
 
 - **Test:** A time-seeded generator is only as strong as your uncertainty about the seed. If you can force
@@ -1390,6 +1438,7 @@ for seed in range(lo, hi + 1):
 | **VRT** | `cryptographic_weakness.insufficient_entropy.predictable_prng_seed` (P4); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) once you exchange the code |
 | **Attacker** | AM-02 (needs the code-interception step from D09) |
 | **Applies to** | apps doing Authorization Code + PKCE natively (RFC 8252) |
+| **Requires** | oauth |
 | **Maps to** | H1 #824931 (Grammarly, Medium 6.5, CWE "Use of Cryptographically Weak PRNG"; the fix was "moving from PRNG to `SecureRandom`") |
 
 - **Test:** PKCE only protects the code if the verifier is unguessable. A predictable verifier means a
@@ -1704,6 +1753,7 @@ jwt_tool <token> -X k -pk public.pem      # re-signs the edited payload as HS256
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | all JWT-based auth the app participates in |
+| **Requires** | backend-api, mitm |
 | **Maps to** | `hunt-jwt-crypto`; `hunt-ato` Path 6(d); `hunt-api-misconfig` §12; missing/improper signature or claim validation (hackerone.com/reports/1760403; hackerone.com/reports/1040786, $10,000) |
 
 - **Test:** Four header-level forgeries, all free to try against the token the app carries, plus the claim
@@ -1866,6 +1916,7 @@ adb logcat -d | grep -iE 'UserNotAuthenticated|KeyPermanentlyInvalidated|signed'
 | **VRT** | `cryptographic_weakness.insecure_implementation.missing_cryptographic_step` (varies); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-11 physical unlocked (a borrowed, shared or stolen-while-unlocked device) |
 | **Applies to** | **API 24+** |
+| **Requires** | device, physical, biometric |
 | **Maps to** | MASWE-0022 (Crypto Keys Not Invalidated on New Biometric Enrollment); `developer.android.com/identity/sign-in/biometric-auth` ("ensures the key becomes unusable if the user enrols new biometric credentials"); `privacy-and-security/keystore` ("By default, keys supporting only biometric credentials are invalidated when new biometrics are enrolled") |
 
 - **Test:** The default invalidates a biometric-bound key on new enrolment. Setting it `false` means an
@@ -2008,6 +2059,7 @@ Java.perform(function () {
 | **VRT** | `cryptographic_weakness.insecure_key_generation.insufficient_key_space` (P3) is the nearest crypto-native slot; realistically this is an assurance/claim-accuracy finding rated by what the claim gates |
 | **Attacker** | AM-11 with a device that lacks StrongBox |
 | **Applies to** | **Android 9 (API 28)+**; StrongBox optional from Android 10 for device-unique attestation |
+| **Requires** | device, physical |
 | **Maps to** | `developer.android.com/privacy-and-security/keystore` — check `PackageManager.FEATURE_STRONGBOX_KEYSTORE` first; `setIsStrongBoxBacked(true)` "throws `StrongBoxUnavailableException` if the algorithm/key size isn't supported"; StrongBox properties (own CPU, secure storage, TRNG, tamper resistance, secure timer) and supported algorithms (RSA 2048, AES 128/256, ECDSA/ECDH P-256, HMAC-SHA256, Triple DES); AOSP security-model §4.3.8 (StrongBox as TRH, first shipped on Pixel 3 / Titan M) |
 
 - **Test:** Read the `catch` block. Apps commonly fall back to a *software* key while the UI continues to
@@ -2133,6 +2185,7 @@ grep -rn 'setRandomizedEncryptionRequired' out/sources/ -B6 -A6
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what it exposes); exit to `broken_authentication_and_session_management.authentication_bypass` (P1) or `sensitive_data_exposure.disclosure_of_secrets.*` |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | all |
+| **Requires** | device, frida, biometric |
 | **Maps to** | AOSP security-model §4.3.8, verbatim: "only storing and using keys in TEE or TRH does not completely solve the problem … if an attacker gains access to the low-level interfaces for communicating directly with Keymint or Strongbox, they can use it as an oracle for cryptographic operations that require the private key. This is the reason why keys can be authentication bound and/or require user presence verification." |
 
 - **Test:** Key material can be perfectly protected while the *capability* is fully delegated. Find every
@@ -2170,6 +2223,7 @@ adb shell content call --uri content://com.target.app.crypto --method decrypt --
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the shared key signs authentication assertions; `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) otherwise |
 | **Attacker** | AM-08 / AM-03 (the grantee) |
 | **Applies to** | **Android 16 (API 36)+**. New enough that essentially no public checklist covers it — grep for it on every Android-16-targeting app |
+| **Requires** | api>=36, device, frida |
 | **Maps to** | `developer.android.com/about/versions/16/features` — `KeyStoreManager`, `grantKeyAccess(String, int)`, `revokeKeyAccess(String, int)`, "Share access to Android Keystore keys with other apps" |
 
 - **Test:** Any grant widens the key's trust boundary. A grant to a UID the app does not control, or a
@@ -2206,6 +2260,7 @@ adb shell dumpsys package | grep -B2 "userId=<uid>"      # resolve the uid to a 
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (**P5**) as filed naively — rate the consequence instead |
 | **Attacker** | AM-08/AM-03 with an in-process or read primitive |
 | **Applies to** | all; Jetpack Security's `EncryptedSharedPreferences` is **deprecated as of 1.1.0** and Google advises against it in new apps |
+| **Requires** | frida, device |
 | **Maps to** | MASWE-0003, MASWE-0016; the D12-004 alias table |
 
 - **Test:** "It uses `EncryptedSharedPreferences`" is not an answer. Encrypted-at-rest is defeated by any
@@ -2238,6 +2293,7 @@ Java.perform(function () {
 | **VRT** | `cryptographic_weakness.incomplete_cleanup_of_keying_material` (**P5**, CWE-459); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (varies); `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (P4) |
 | **Attacker** | AM-11 / AM-03 with a read primitive |
 | **Applies to** | all, especially E2EE messaging and vault apps |
+| **Requires** | device, frida |
 | **Maps to** | H1 #1189168 (Nextcloud, "Android app does not clear end to end encryption keys", **$100**) against H1 #1189162 (Nextcloud, "End to end encryption public key is not properly verified", **$1,500**) — the verification failure is worth fifteen times the hygiene failure |
 
 - **Test:** Keys, passphrases and wrapped blobs that survive an explicit logout. This is P5 on its own;
@@ -2448,6 +2504,7 @@ curl -s -X POST https://api.target/v1/provision -H 'Content-Type: application/js
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the relayed attestation gates enrolment |
 | **Attacker** | AM-11/AM-12 for the relay, AM-01 for the consequence |
 | **Applies to** | apps that treat an Android Keystore X.509 attestation chain as a device-integrity boolean |
+| **Requires** | backend-api, mitm, physical |
 | **Maps to** | HackTricks `play-integrity-attestation-bypass.md` "Hardware Attestation Clean-Device Relay", citing the Quarkslab research and demo repository, Guardsquare's key-attestation relay work, and the AOSP key/ID attestation docs |
 
 - **Test:** The extension proves that *some* acceptable TEE/StrongBox generated the leaf key for that
@@ -2490,6 +2547,7 @@ grep -rn 'attestationApplicationId\|\[709\]\|709' out/sources/ | head        # d
 | **VRT** | `cryptographic_weakness.use_of_expired_cryptographic_key_or_cert` (P4) for accepting expired RKP chains; `.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies) |
 | **Attacker** | AM-01 |
 | **Applies to** | attestation verifiers; device-side behaviour differs on **Android 15** (RKP optional) versus **Android 16** (RKP only, factory keys phased out) |
+| **Requires** | backend-api, mitm |
 | **Maps to** | `developer.android.com/privacy-and-security/security-key-attestation` — a new EC-based root certificate signs attestation chains starting **1 February 2026**, alongside the existing root with `SERIALNUMBER=f92009e853b6b045` (valid 2022-03-20 to 2042-03-15); "Android 15+: RKP support is optional. Android 16+: Only RKP is supported; factory keys are phased out"; "RKP certificates must have validity periods checked"; "Pre-2021 devices have attestation keys with expired certificates, but remain trustworthy unless in the CRL" |
 
 - **Test:** Two moving parts. A verifier that pins only the old root is about to break; a verifier that
@@ -2580,6 +2638,7 @@ Java.perform(function () {
 | **VRT** | `cryptographic_weakness.broken_cryptography.use_of_vulnerable_cryptographic_library` (P4); `using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) if you cannot show reachability |
 | **Attacker** | AM-06/AM-09 |
 | **Applies to** | all apps shipping native TLS/crypto |
+| **Requires** | native |
 | **Maps to** | Google Play "Remediation for Bad OpenSSL Versions" — **OpenSSL 1.1.1b through 1.1.1h** flagged as defective (ARMv8.3 PAC misuse causing runtime crashes), **resolved in 1.1.1i**; remediation is to update to 1.1.1i+ or use Java crypto (`HttpsURLConnection`) instead of the native interface, and updating the security provider alone does **not** fix it; the page names Agora RTM SDK, Alibaba, Amazon Chime SDK and Cocos2d-x as indirect embedders. Google's ASI programme also ran an OpenSSL campaign (from 2016-03-31) covering logjam, **CVE-2015-3194** and **CVE-2014-0224**, plus GnuTLS (2015-10-13), libpng and libjpeg-turbo (2016-06-16), and libupnp / **CVE-2015-8540** (2016-02-08). SQLCipher's bundled crypto has carried **CVE-2023-3446, CVE-2024-2511, CVE-2024-4741, CVE-2024-5535** (the last against OpenSSL 1.1.1q as used by SQLCipher 4.5.2) |
 
 - **Test:** Extract the version string from the binary, not from the wrapper's version number — the
@@ -2624,6 +2683,7 @@ var m = Process.getModuleByName('libagora-rtc-sdk.so');
 | **VRT** | rate the recovered plaintext: `sensitive_data_exposure.disclosure_of_secrets.*`, or `broken_authentication_and_session_management.authentication_bypass` (P1) if a session is inside |
 | **Attacker** | AM-03 with a read primitive; AM-01 if the passphrase is a constant shared across installs |
 | **Applies to** | apps using `android-database-sqlcipher` / `androidx-database-sqlcipher` |
+| **Requires** | device |
 | **Maps to** | cross-reference to D11; the passphrase derivation is the D12 half |
 
 - **Test:** The encryption is only as strong as the passphrase source. A literal, a device-id derivation or
@@ -2655,6 +2715,7 @@ SQL
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_guid` (P4) as filed literally; realistically rated as content/entitlement theft by the program |
 | **Attacker** | AM-05 another user of the same app / AM-11 |
 | **Applies to** | apps with offline download of DRM-protected media (Widevine `cenc` API 19+, `cbcs` API 25+) |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/media/media3/exoplayer/drm` — `MediaItem.DrmConfiguration.Builder`, `setKeySetId(byte[])`, `DefaultDrmSessionManager`, `setMultiSession()` |
 
 - **Test:** Media3/ExoPlayer offline playback stores a licence key-set id alongside the downloaded media.
@@ -2683,6 +2744,7 @@ adb shell run-as com.target.app sh -c "sqlite3 databases/exoplayer_internal.db '
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies) |
 | **Attacker** | AM-09 malicious backend / AM-08 |
 | **Applies to** | **Android 15+** apps using the API |
+| **Requires** | api>=35 |
 | **Maps to** | `developer.android.com/about/versions/15/features` — `E2eeContactKeysManager`, "OS-level API for storing cryptographic public keys with platform contacts integration for centralized key management and verification" |
 
 - **Test:** For a messaging app the verification UX and the key-change handling *are* the security
@@ -2707,6 +2769,7 @@ adb shell dumpsys contacts | grep -i 'e2ee\|contact_keys' 2>/dev/null
 | **VRT** | `cryptographic_weakness.insufficient_verification_of_data_authenticity.cryptographic_signature` (varies); `cryptographic_weakness.insecure_key_generation.insufficient_key_stretching` (varies) for the passphrase half |
 | **Attacker** | AM-09 / AM-05 |
 | **Applies to** | messaging, file-sync and vault apps claiming end-to-end encryption |
+| **Requires** | backend-api, mitm, two-accounts |
 | **Maps to** | H1 #1189162 (Nextcloud, "End to end encryption public key is not properly verified on Desktop and Android", **$1,500**); H1 #2546437 (Rocket.Chat, "The initial E2EE password generated by Rocket.Chat mobile can be recovered in a practical timescale") |
 
 - **Test:** Two halves, and the verification half pays fifteen times what the hygiene half pays. Does the

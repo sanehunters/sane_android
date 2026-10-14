@@ -54,6 +54,37 @@ unlocked-device attacker is Medium; only root reaches it, and it is Low or infor
 write it, without root — and if the answer is "none", is there any value in the backup set that the app
 trusts on next launch?**
 
+## Applicability probe
+
+D11 always applies — every app persists state — so the probe never yields a whole-domain `n/a`. It decides (a) which **reader** exists, which fixes the ceiling of every item, and (b) which **blocks** apply. Run it once after P3 inventory, before any item, and paste the output into `logs/D11-probe.txt`.
+
+```bash
+# 1. Reader: is there a non-root read path on the shipped build? (decides AVD-only vs stock-device chapter)
+adb shell run-as "$PKG" id 2>&1 | head -1          # 'uid=...' => debuggable: non-root path + D02-029; 'not debuggable' => reads need root/AVD, proofs need a D07/D08/D10 primitive or backup
+# 2. Backup posture (D11-051..058)
+grep -oE 'android:(allowBackup|fullBackupContent|dataExtractionRules|backupAgent|hasFragileUserData)="[^"]*"' $DEC/apktool/AndroidManifest.xml; ls $DEC/apktool/res/xml/ 2>/dev/null | grep -iE 'backup|extraction'
+# 3. Shared-storage block (D11-041..050)
+grep -oE '(WRITE_EXTERNAL_STORAGE|MANAGE_EXTERNAL_STORAGE|READ_MEDIA_[A-Z_]+|requestLegacyExternalStorage="true")' $DEC/apktool/AndroidManifest.xml | sort -u; grep -rlE 'getExternalFilesDir|MediaStore\.|Environment\.DIRECTORY_' $DEC/jadx/sources/ | wc -l
+# 4. Store-specific items (D11-014..018, 023, 029..032, 075)
+grep -rlE 'androidx\.datastore|io\.realm|com\.couchbase|com\.tencent\.mmkv|net\.(sqlcipher|zetetic)|CodePush|expo\.modules\.updates|com\.google\.firebase|androidx\.appsearch|androidx\.security\.crypto' $DEC/jadx/sources/ | grep -oE '(androidx\.datastore|io\.realm|com\.couchbase|com\.tencent\.mmkv|net\.(sqlcipher|zetetic)|CodePush|expo\.modules\.updates|com\.google\.firebase|androidx\.appsearch|androidx\.security\.crypto)' | sort | uniq -c
+# 5. Readers from the inventory + delegation (D11-035, D11-074)
+grep -ciE 'provider' inventory/components.csv; grep -c . inventory/webviews.csv; grep -oE '<package android:name="[^"]+"' $DEC/apktool/AndroidManifest.xml | head
+```
+
+Decision table — write the probe line number and its output into every `n/a`/`blocked` row:
+
+- Probe 1 prints `uid=` on the release build → the whole chapter runs non-root; also file D02-029. Otherwise every read-side item needs `root` (AVD) and every *proof* needs a named primitive (D11-001).
+- Probe 2: no `allowBackup="false"` and no rule excluding `shared_prefs|databases` → D11-051..058 apply. `allowBackup="false"` **and** both `<cloud-backup>`/`<device-transfer>` sections excluding everything → D11-051, 053, 055, 057 `n/a`; D11-052 still runs (D2D may ignore the flag); D11-054/056 `n/a` only after a `bmgr backupnow` produces an empty set.
+- Probe 3: zero permissions, zero API hits → D11-042..050 `n/a`; D11-041's dynamic diff still runs once (the share-sheet MediaStore pre-write needs no permission).
+- Probe 4: zero hits for a library → its item is `n/a` (`androidx.datastore`→D11-014, `mmkv`→D11-015, `io.realm`→D11-016, `couchbase`→D11-017, `sqlcipher|zetetic`→D11-023, `CodePush|expo-updates`→D11-029, `firebase`→D11-032/069, `appsearch`→D11-075, `security.crypto` absent→D11-012 `n/a`, D11-013 only for the framework plugins). `engagement.json target.framework` decides D11-018/029/030.
+- Probe 5: no provider rows → D11-035's exported-provider half `n/a`; no WebView rows → D11-031 `n/a`; a `<queries>` entry naming a platform/vendor-core package → run D11-074 before any negative.
+
+n/a note the model writes (one line, in `coverage/items.csv` notes):
+`n/a — D11-<nnn>: probe <n> <date>: <command> → <output/count>; <store|permission|rule> absent in $DEC (jadx <ver>, apktool <ver>); re-run if an OTA bundle (D11-029) or a new split changes the set.`
+Example: `n/a — D11-016: probe 4 2026-10-14: grep io.realm → 0 files; no Realm dependency.`
+
+blocked note: `blocked — D11-<nnn>: stock device + release build; local-transport pull needs root — run on the AVD or prove via D2D (D11-054)` or `blocked — D11-<nnn>: sensitive store delegated to <package> (D11-074); outside authorisation.scope`.
+
 ## Triage order
 
 1. **`adb shell run-as $PKG id`.** One command decides whether the whole chapter needs root. If it works on
@@ -88,6 +119,7 @@ trusts on next launch?**
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) — this item exists to get you **out** of that node |
 | **Attacker** | AM-03 / AM-04 / AM-11; explicitly **not** AM-12 |
 | **Applies to** | all — this is the gate for every other item in the chapter |
+| **Requires** | device |
 | **Maps to** | VRT baseline vector `AV:P/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N`; CWE-312; MASWE-0001 |
 
 - **Test:** Before writing anything, answer in one sentence: *which actor, holding what, reads this file?*
@@ -126,6 +158,7 @@ adb logcat -s POC:E -d
 | **VRT** | n/a (enabler) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0008; AOSP "Application Sandbox" (UID + per-app SELinux categories) |
 
 - **Test:** Enumerate every way a non-root principal reaches `/data/data/$PKG` on this target, and record a
@@ -159,6 +192,7 @@ adb shell run-as $PKG find . -type f ! -perm 600 -exec ls -l {} \;
 | **VRT** | n/a here; the debuggable flag itself is filed in D02 |
 | **Attacker** | AM-11 physical unlocked with ADB authorised; AM-03 if a shell-broker app is present |
 | **Applies to** | `android:debuggable="true"` builds, and all packages on `userdebug`/`eng` images |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0008; AOSP `run-as` semantics |
 
 - **Test:** One command tells you whether root is needed for the whole chapter. On a shipped debuggable
@@ -191,6 +225,7 @@ for f in $(adb shell run-as $PKG find "$dir" -type f); do adb exec-out run-as $P
 | **VRT** | n/a (enabler) |
 | **Attacker** | AM-03 once paired with a reader |
 | **Applies to** | all; mandatory on any app using Couchbase Lite, Realm, MMKV or DataStore |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0008; MASTG-KNOW-0040 (Realm), MASTG-KNOW-0142 (Android DataStore) |
 
 - **Test:** `databases/` and `shared_prefs/` are two of roughly a dozen places a modern app writes. Couchbase
@@ -229,6 +264,7 @@ strings pulled/files/*.cblite | grep -iE 'pass|token|card|cvv|secret|auth|bearer
 | **VRT** | n/a (enabler) |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0207, MASTG-TECH-0008, MASTG-TECH-0002, MASWE-0001, MASTG-KNOW-0041, MASTG-BEST-0050 |
 
 - **Test:** Snapshot the data directory, exercise every sensitive flow typing **unique random markers**, snapshot
@@ -270,6 +306,7 @@ grep -rl "$(printf "$M" | xxd -p | tr -d '\n' | sed 's/../\\x&/g')" a/
 | **VRT** | n/a (accuracy gate) |
 | **Attacker** | n/a |
 | **Applies to** | all; critical on R8-minified builds |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-TEST-0287 (the `putString` hook is the write-path evidence) |
 
 - **Test:** A field in a model class proves nothing about storage. R8 keeps Gson-annotated dead fields, and
@@ -412,6 +449,7 @@ grep -rn 'NativeModules\.' assets/index.android.bundle | sort -u | head -40
 | **VRT** | n/a (accuracy gate) |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | mechanism (false-positive discipline) |
 
 - **Test:** Shell array loops and `for f in $(adb shell ...)` pipelines fail silently — a device path with a
@@ -451,6 +489,7 @@ print(f"scanned {len(files)} files, {hits} hits")
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_data_storage.server_side_credentials_storage.plaintext` (P4, CWE-256) when it is a password rather than a token |
 | **Attacker** | AM-03 only via a reach primitive; AM-11 with ADB; **AM-12 is not an attack** |
 | **Applies to** | all — **CURRENT** |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0287, MASTG-KNOW-0036, MASWE-0001, CWE-312; H1 #44727 (Vine, $140), H1 #1142918 (Nextcloud, Medium) |
 
 - **Test:** Establish three things and no more: (a) the write site, (b) the resolved filename, (c) the storage
@@ -491,6 +530,7 @@ curl -i -H "Authorization: Bearer <token>" https://api.target.tld/v1/me
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) — argue up on the internal-inconsistency axis |
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | apps that ship `androidx.security.crypto` at all |
+| **Requires** | device |
 | **Maps to** | MASWE-0001; MASTG-KNOW-0036 |
 
 - **Test:** The strongest version of the plaintext-prefs argument is not "you should encrypt" — it is "you
@@ -523,6 +563,7 @@ adb shell run-as $PKG head -5 shared_prefs/*.xml
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the data; the key-management half belongs to D12 |
 | **Attacker** | AM-11 physical unlocked; AM-03 only with in-process code execution |
 | **Applies to** | apps using `androidx.security.crypto`, `flutter_secure_storage`, `react-native-keychain`, `react-native-encrypted-storage`, Capacitor secure-storage plugins |
+| **Requires** | device, frida |
 | **Maps to** | MASWE-0001; `KeyGenParameterSpec.setUserAuthenticationRequired` |
 
 - **Test:** "It uses Keystore" is not the finding. The finding is whether the Keystore key is (a) bound to
@@ -571,6 +612,7 @@ Java.perform(function () {
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) |
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | apps using `androidx.datastore` |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0306 (**status: placeholder** — no published procedure), MASTG-KNOW-0142, MASWE-0001 |
 
 - **Test:** DataStore is the modern replacement for SharedPreferences and is *not* encrypted by default. Its
@@ -602,6 +644,7 @@ adb exec-out run-as $PKG cat files/datastore/settings.preferences_pb | protoc --
 | **Attacker** | AM-03 with a reach primitive; AM-04 for the logcat path on older builds |
 | **Maps to** | **CVE-2024-21668** — `react-native-mmkv` on Android **before 2.11.0** logged the optional encryption key to Android logs; fixed in 2.11.0 |
 | **Applies to** | apps bundling Tencent MMKV or `react-native-mmkv` |
+| **Requires** | device |
 
 - **Test:** MMKV keeps its files under `files/mmkv/` (one file per instance plus a `.crc`), not in
   `databases/` or `shared_prefs/`. It is unencrypted unless an instance is created with a crypt key — and on
@@ -632,6 +675,7 @@ adb logcat -d | grep -iE 'mmkv.*key|encryption key'
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the data class |
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | apps using `io.realm` |
+| **Requires** | device |
 | **Maps to** | MASTG-KNOW-0040 (Realm Databases), MASWE-0001, CWE-312 |
 
 - **Test:** Realm is invisible to every SQLite tool and is omitted by most checklists. By default the file is
@@ -661,6 +705,7 @@ strings default.realm | grep -iE 'token|bearer|@|passw|card|[0-9]{10,}' | head -
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) |
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | apps using Couchbase Lite (common in retail, field-service and offline-first apps) |
+| **Requires** | device |
 | **Maps to** | mechanism (observed; no external identifier) |
 
 - **Test:** `.cblite`/`.cblite2` files (with their `-wal` and `-shm` siblings) sit in `files/`, outside every
@@ -689,6 +734,7 @@ grep -rn 'com\.couchbase\|CouchbaseLite\|DatabaseConfiguration\|setEncryptionKey
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the store; file the outcome instead when a token replays |
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | React Native, Cordova/Capacitor, Flutter, Unity, Xamarin/MAUI apps |
+| **Requires** | device, flutter, react-native, hermes, cordova, capacitor, unity, xamarin |
 | **Maps to** | MASTG-TECH-0142 (Inspecting WebView Storage) for the Cordova/Capacitor WebView stores |
 
 - **Test:** Each framework has a default key/value store in a predictable file. Because the storage **key
@@ -731,6 +777,7 @@ grep -aiE 'token|jwt|refresh|session|pin|password|card|otp' bundle.strings | sor
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the read; the write side files as the code-execution outcome it produces |
 | **Attacker** | AM-03 |
 | **Applies to** | **LEGACY** — the Java constants throw `SecurityException` from **targetSdk 24**. Still current via `File.setReadable/setWritable`, `chmod` and native `open(..., 0666)` on every version, and files created by an older version of the app persist with the old mode after upgrade. |
+| **Requires** | device |
 | **Maps to** | MASWE-0001, CWE-276; MobSF `android_world_writable` (CWE-276), `android_world_readable`, `android_world_read_write`; mobsfscan `world_readable`, `world_writeable`, `android_kotlin_world_read_write` |
 
 - **Test:** Grep the constants *and the numeric modes* — obfuscated call sites pass `1`, `2` or `3` rather
@@ -765,6 +812,7 @@ adb shell ls -l /data/data/$PKG 2>&1        # from an unprivileged shell — exp
 | **VRT** | file the outcome: `broken_authentication_and_session_management.authentication_bypass` (P1) for a role/gate flip, or the D17 code-execution node |
 | **Attacker** | AM-03 with an existing directory-write or file-create primitive |
 | **Applies to** | all apps that keep an authorisation, entitlement or integrity value in SharedPreferences — verify the rename behaviour empirically on the target API level |
+| **Requires** | device, root |
 | **Maps to** | `SharedPreferencesImpl` backup-file semantics; Microsoft **Dirty Stream** (the Xiaomi File Manager step that overwrote `com.mi.android.globalFileexprorer_preferences.xml` to defeat a hash check) |
 
 - **Test:** `SharedPreferencesImpl` writes `<name>.xml.bak` and, on the next load, **renames a present `.bak`
@@ -802,6 +850,7 @@ adb shell run-as $PKG cat shared_prefs/Prefs.xml
 | **VRT** | outcome-rated; many programmes exclude IAP bypass — check the policy first |
 | **Attacker** | AM-11 physical unlocked; AM-03 with a write primitive |
 | **Applies to** | apps with a paid tier, subscription or unlockable feature that works offline |
+| **Requires** | device |
 | **Maps to** | MASWE-0006; Google Play Billing security guidance ("the less business logic on the device, the more secure") |
 
 - **Test:** Local booleans and strings that gate paid functionality — `premium_status`, `lifetime_purchase`,
@@ -832,6 +881,7 @@ adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES, CWE-459) for the residue; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-03 with a reach primitive; AM-05 for the post-delete residue |
 | **Applies to** | all; MASTG-TEST-0304/0305 are placeholders — the commands below are the working equivalent |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0304, MASTG-TEST-0305 (both **status: placeholder**), MASTG-KNOW-0037 (SQLite), MASWE-0001; CVE-2018-11242 (MakeMyTrip 7.2.4, EDB 44690) |
 
 - **Test:** Pull every `.db` and its `-wal`, `-shm` and `-journal` siblings. Two findings live here: the live
@@ -865,6 +915,7 @@ strings app.db-wal | grep -iE 'token|@|bearer|[0-9]{12,19}'
 | **VRT** | `insecure_os_firmware.hardcoded_password.non_privileged_user` (**P2**, CWE-259) for the embedded key; `insecure_data_storage...on_internal_storage` (P5) for the data |
 | **Attacker** | AM-03 with a reach primitive; the key itself needs only the APK |
 | **Applies to** | all apps using SQLCipher / `net.sqlcipher` / Room `SupportFactory` |
+| **Requires** | device |
 | **Maps to** | MASTG-KNOW-0038 (SQLCipher), CWE-321 (Hard-coded Cryptographic Key); Google's "Embedded cryptography secrets" class |
 
 - **Test:** The framework `getWritableDatabase()` / `getReadableDatabase()` overloads take **no** argument.
@@ -906,6 +957,7 @@ sqlite> SELECT * FROM users;
 | **VRT** | outcome-rated: `broken_authentication_and_session_management.authentication_bypass` (P1) when it rewrites an auth/entitlement table |
 | **Attacker** | AM-03 chained to any arbitrary-file-**create** primitive |
 | **Applies to** | all apps using raw SQLite (i.e. almost all; Room does not change the on-disk journal behaviour) |
+| **Requires** | device |
 | **Maps to** | EDB 43189 (Gmail) and EDB 43353 (Outlook for Android), both Project Zero — "It is possible to modify a EmailProviderBody database using this bug by placing a journal file in the databases directory" |
 
 - **Test:** This is the reason an "arbitrary file *create*" primitive (not overwrite) is still High/Critical.
@@ -937,6 +989,7 @@ sqlite> SELECT * FROM users;
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); argue up on the FBE-bypass axis |
 | **Attacker** | AM-10 physical locked (pre-unlock code-execution or forensic image); AM-11 |
 | **Applies to** | Android 7.0+ (FBE). **LEGACY:** FDE-era devices have no CE/DE split |
+| **Requires** | device, root |
 | **Maps to** | `source.android.com/docs/security/features/encryption/file-based` (CE "accessible only after the user unlocks"; DE "available both during Direct Boot and after"); AOSP security-model paper §4.4 |
 
 - **Test:** Data written via `createDeviceProtectedStorageContext()` lands in `/data/user_de/<user>/<pkg>/`
@@ -972,6 +1025,7 @@ adb shell dumpsys user | grep -i unlocked
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES) |
 | **Attacker** | AM-03 with a reach primitive; AM-05 for cross-account bleed |
 | **Applies to** | all; acute on apps with KYC/document scan, chat media, or an HTTP cache |
+| **Requires** | device |
 | **Maps to** | MASTG-KNOW-0042; MASWE-0002; CWE-459 |
 
 - **Test:** Do not stop at `shared_prefs` and `databases`. `cache/`, `code_cache/`, `no_backup/`, the OkHttp
@@ -1001,6 +1055,7 @@ adb shell run-as $PKG ls -laR cache/image_manager_disk_cache 2>/dev/null    # Gl
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) when the secret grants access to a public asset; `...for_internal_asset` (P3) otherwise |
 | **Attacker** | AM-01 (the APK is public; no device needed) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | ivrodriguez "Tips for Mobile Bug Bounty Hunting" (search the bundle for non-image files); H1 #351555 (Cloudinary api secret in Android app), H1 #753868 |
 
 - **Test:** This is storage the attacker reads *from the APK*, with no device at all — the closest this
@@ -1034,6 +1089,7 @@ strings -a out/lib/*/*.so classes*.dex | grep -E '^[-[:alnum:]]{36}$'     # UUID
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); file the replay outcome instead |
 | **Attacker** | AM-03 with a reach primitive |
 | **Applies to** | all apps embedding social-login, chat, analytics or push SDKs |
+| **Requires** | device |
 | **Maps to** | Oversecured SDK-security post ("SDKs storing user identifiers, device fingerprints, session tokens and telemetry in SharedPreferences or unencrypted SQLite"); historical Facebook SDK v3.15.0 access-token-on-disk case (treat as historical, not a live CVE) |
 
 - **Test:** Find what the *SDK* wrote, not what the app wrote. Exercise the SDK flows (social login, open
@@ -1064,6 +1120,7 @@ adb shell run-as $PKG ls -la databases/ files/ no_backup/
 | **VRT** | outcome-rated; the analysis value is Support |
 | **Attacker** | AM-03 (read); AM-09 malicious CDN (the substitution attack, in D17) |
 | **Applies to** | React Native apps with CodePush or expo-updates |
+| **Requires** | react-native, hermes |
 | **Maps to** | `CodePushConstants.java` (`CODE_PUSH_FOLDER_PREFIX = "CodePush"`, `STATUS_FILE = "codepush.json"`, `DEFAULT_JS_BUNDLE_NAME = "index.android.bundle"`, `BUNDLE_JWT_FILE = ".codepushrelease"`) |
 
 - **Test:** OTA frameworks cache downloaded JS and assets on disk. That cache is (a) a second copy of the
@@ -1095,6 +1152,7 @@ adb shell run-as $PKG ls -laR files/.expo-internal/ 2>/dev/null
 | **VRT** | outcome-rated; often IAP/economy scope — check the programme |
 | **Attacker** | AM-11 physical unlocked; AM-03 with a write primitive |
 | **Applies to** | Unity Android games |
+| **Requires** | device, unity |
 | **Maps to** | Il2CppDumper `dump.cs` (locate the `PlayerPrefs` calls); MASWE-0006 |
 
 - **Test:** Unity games persist currency, entitlements and progression in `PlayerPrefs`
@@ -1121,6 +1179,7 @@ adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
 | **VRT** | outcome-rated: `broken_authentication_and_session_management.authentication_bypass` (P1) / `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-03 with a reach primitive; AM-02 via a bridge file-read |
 | **Applies to** | any app with a WebView carrying a logged-in web session |
+| **Requires** | device, webview |
 | **Maps to** | MASTG-TECH-0142 (Inspecting WebView Storage) |
 
 - **Test:** Testers grep `shared_prefs` and stop. The WebView keeps its own SQLite cookie store, including
@@ -1154,6 +1213,7 @@ adb shell run-as $PKG cat databases/webview.db 2>/dev/null
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5) for the cache; the open-database outcome is D18 |
 | **Attacker** | AM-03 (read); AM-01 for the resulting open-database test |
 | **Applies to** | apps using Firebase / Firestore / RTDB |
+| **Requires** | device, firebase |
 | **Maps to** | MASTG-KNOW-0039 (Firebase Real-time Databases), MASTG-TECH-0008 |
 
 - **Test:** Beyond the four standard directories, enumerate library-specific stores. A Firebase config here
@@ -1181,6 +1241,7 @@ grep -iE 'firebase_database_url|firebase_url|project_id|storage_bucket' out/res/
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES); escalates via `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-05 another user of the same app; AM-11 device handed on/borrowed |
 | **Applies to** | all; weight up for apps with an in-app account switcher or a kiosk/shared-device mode |
+| **Requires** | device, two-accounts |
 | **Maps to** | MASWE-0024 (Sensitive Data Accessible After Session Termination); AOSP threat [T.P4] |
 
 - **Test:** Nobody tests what logout leaves *on disk* — which is what the next person to pick up a family
@@ -1216,6 +1277,7 @@ adb shell run-as $PKG sqlite3 app_webview/Default/Cookies 'select host_key,name 
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if the session resumes without re-auth |
 | **Attacker** | AM-11 physical unlocked, device handed on or sold |
 | **Applies to** | all; check AccountManager, cloud backup and Keystore-alias persistence |
+| **Requires** | device |
 | **Maps to** | AOSP rule ④ (uninstall is not factory reset); MASWE-0024 |
 
 - **Test:** Verify that reinstalling does not restore a session — via cloud backup, via an account left in
@@ -1243,6 +1305,7 @@ adb uninstall $PKG && adb install app.apk
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); `broken_access_control.exposed_sensitive_android_intent` (VARIES) if the provider is exported |
 | **Attacker** | AM-05 cross-account on a shared device; AM-03 if the provider is exported |
 | **Applies to** | any app with a search box that remembers queries |
+| **Requires** | device |
 | **Maps to** | mechanism; `android.content.SearchRecentSuggestionsProvider` |
 
 - **Test:** Search boxes in marketplace, health, banking and messaging apps persist recent queries locally
@@ -1271,6 +1334,7 @@ adb shell content query --uri content://$PKG.SuggestionProvider/search_suggest_q
 | **VRT** | outcome-rated: `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) or a business-logic node |
 | **Attacker** | AM-11 physical unlocked; AM-03 with a write primitive; AM-03 if the queue lands in shared storage |
 | **Applies to** | offline-first apps: delivery, field service, notes, banking drafts, retail POS |
+| **Requires** | device, backend-api |
 | **Maps to** | mechanism; `WorkSpec.input` (WorkManager) |
 
 - **Test:** Offline-first apps serialise pending mutations to disk — a Room "outbox" table, a JSON queue, a
@@ -1303,6 +1367,7 @@ adb shell svc wifi enable
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5) / `...on_external_storage` (P4); `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES) |
 | **Attacker** | AM-05 (next user); AM-03 (shared storage) |
 | **Applies to** | apps with chat, support chat or user-to-user media |
+| **Requires** | device, two-accounts |
 | **Maps to** | mechanism; MASWE-0024 |
 
 - **Test:** Two failures: a message deleted "for everyone" server-side remains on the recipient's disk, and
@@ -1330,6 +1395,7 @@ adb shell run-as $PKG sqlite3 databases/chat.db 'select _id,body,deleted,attachm
 | **VRT** | outcome-rated; the storage-adjacent node is `insecure_data_storage...on_internal_storage` (P5) |
 | **Attacker** | AM-04 accessibility-service abuser (banking-trojan model); AM-11 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | MobSF `android_hiddenui` (CWE-919, masvs storage-7); MASWE-0036 / MASWE-0040 |
 
 - **Test:** `setVisibility(View.GONE | INVISIBLE)` does not clear the value — it stays in the view
@@ -1356,6 +1422,7 @@ grep -io 'text="[^"]*"' ui.xml | head -40
 | **VRT** | `insecure_data_storage.screen_caching_enabled` (**P5**) |
 | **Attacker** | AM-11 physical unlocked; AM-04 screen-recording/casting app |
 | **Applies to** | all; Android 15 adds automatic screenshare protection for sensitive fields, narrowing it |
+| **Requires** | device |
 | **Maps to** | MobSF `android_prevent_screenshot`; mindedsecurity `MSTG-STORAGE-9` (`$P1 & 8192 == 0`); MASWE-0038; VRT `insecure_data_storage.screen_caching_enabled` (P5) |
 
 - **Test:** Without `FLAG_SECURE`, the OS writes a task-snapshot to disk when the app backgrounds, and the
@@ -1384,6 +1451,7 @@ adb shell run-as $PKG ls -l /data/system_ce/0/snapshots/ 2>/dev/null       # roo
 | **VRT** | `insecure_os_firmware.failure_to_remove_sensitive_artifacts_from_disk` (VARIES, CWE-459) |
 | **Attacker** | AM-11 physical unlocked; AM-05 |
 | **Applies to** | all apps using SQLite/Room, plus external download residue |
+| **Requires** | device |
 | **Maps to** | CWE-459; hackwithsingh sec-14-25 (WAL residue, journal residue, deleted-record unallocated space) |
 
 - **Test:** A SQLite `DELETE` marks pages free but does not zero them; the `-wal`, `-shm` and `-journal`
@@ -1413,6 +1481,7 @@ adb shell find /sdcard/Download -newermt '-1 day' -type f 2>/dev/null
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (**P4**, CWE-312, baseline `AV:P/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:N`) |
 | **Attacker** | AM-03 zero-permission (legacy/scoped edges); AM-04 with `READ_MEDIA_*` |
 | **Applies to** | all; scoped storage (targetSdk 29+, enforced 30) narrows cross-app reads — prove empirically |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0200, MASTG-TEST-0201, MASTG-TEST-0202, MASWE-0002, MASTG-KNOW-0042, MASTG-DEMO-0002; VRT `...on_external_storage` (P4) |
 
 - **Test:** External storage is world-readable to any app holding the storage permission and survives
@@ -1460,6 +1529,7 @@ Java.perform(function () {
 | **VRT** | `insecure_data_storage...on_external_storage` (P4); the permission over-request is a D03 note |
 | **Attacker** | AM-03; AM-04 |
 | **Applies to** | **targetSdk 29** legacy opt-out; **targetSdk 30+** the opt-out is ignored |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/about/versions/11/privacy/storage`; AOSP security-model paper Table 3 (Android 10/11 scoped storage) |
 
 - **Test:** External storage is user-controlled data. Establish whether the app holds All-Files access,
@@ -1491,6 +1561,7 @@ adb shell find /sdcard -newer /sdcard -type f 2>/dev/null | head -40
 | **VRT** | `insecure_data_storage...on_external_storage` (P4) on affected versions |
 | **Attacker** | AM-03 |
 | **Applies to** | **LEGACY** — Android 10 and below only |
+| **Requires** | device, api<=29, legacy |
 | **Maps to** | `developer.android.com/about/versions/11/privacy/storage` ("Android 11+: Apps cannot access other apps' data directories on internal storage, even if the target app has made files world-readable (API 27 or lower)"); SAF restricted-directory list |
 
 - **Test:** Determine whether the tested platform still permits reading another app's
@@ -1519,6 +1590,7 @@ adb shell ls /sdcard/Android/data/$PKG/ 2>&1
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the path leak; MASWE-0002 for the write |
 | **Attacker** | AM-03 (other apps create the MediaStore rows) |
 | **Applies to** | API 29+ scoped storage; on API 29 `requestLegacyExternalStorage` re-enables the old behaviour |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/training/data-storage/shared/media` (quoted guidance on `DATA`, `RELATIVE_PATH`, `IS_PENDING`, `setRequireOriginal`, `ACCESS_MEDIA_LOCATION`); MASWE-0002 |
 
 - **Test:** Two separate bugs. (1) The app **returns** `MediaStore.MediaColumns.DATA` to a caller or logs
@@ -1546,6 +1618,7 @@ adb shell content query --uri content://media/external/images/media --projection
 | **VRT** | MASWE-0050; outcome-rated if the planted file is later parsed/loaded |
 | **Attacker** | AM-03 |
 | **Applies to** | API 29+ apps that insert into MediaStore with a name/subdir derived from remote or IPC data |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/training/data-storage/shared/media`; MASWE-0050 |
 
 - **Test:** When the app inserts into MediaStore using a filename or subdirectory derived from remote or
@@ -1577,6 +1650,7 @@ adb shell content query --uri content://media/external/file --projection _displa
 | **VRT** | outcome-rated: `server_side_injection.remote_code_execution_rce` (P1) analogue for in-app code execution; file the closest accurate node and request the severity |
 | **Attacker** | AM-04 (storage permission); AM-03 where the app uses a public collection or another app holds `MANAGE_EXTERNAL_STORAGE` |
 | **Applies to** | strongest below targetSdk 30; still applies where the app deliberately uses a public collection |
+| **Requires** | device |
 | **Maps to** | T1638 Adversary-in-the-Middle (ATT&CK's Man-in-the-Disk description), T1407 Download New Code at Runtime, T1544; MASTG-KNOW-0042 |
 
 - **Test:** Does the app load a config, a DEX/JAR/SO, an update file, or a signature-verification input from
@@ -1605,6 +1679,7 @@ while :; do cp evil.json /sdcard/Android/data/$PKG/files/config.json; done
 | **VRT** | outcome-rated: `server_side_injection.file_inclusion.local` (P1) analogue for the write-to-load chain |
 | **Attacker** | AM-02 (a crafted archive delivered via share/download); AM-03 with a co-installed helper |
 | **Applies to** | targetSdk 34+ has default protection; the class is universal below it (**LEGACY** test on <34) |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/about/versions/14/behavior-changes-14` (`ZipException` on `..`/leading `/`; `dalvik.system.ZipPathValidator.clearCallback()` opt-out); H1 #859469 (LINE, Medium 5.4, $475), H1 #1378889 (Slack, High 8.1, $3500) |
 
 - **Test:** Any unzip routine that uses `ZipEntry.getName()` as a path writes outside the target directory
@@ -1644,6 +1719,7 @@ adb shell run-as $PKG ls shared_prefs/
 | **VRT** | outcome-rated: `server_side_injection.file_inclusion.local` (P1) analogue |
 | **Attacker** | AM-02 remote one-click (no malicious app needed) |
 | **Applies to** | any download/save path that takes the filename from a server header or a `content://` provider without sanitising it |
+| **Requires** | device |
 | **Maps to** | H1 #1377748 (Evernote, High, "2 click Remote Code execution"), H1 #1362313 (Evernote sibling, `_display_name` from a `content://` provider); H1 #288955 (IRCCloud, High) for the `getLastPathSegment()` percent-decode variant |
 
 - **Test:** Download code that takes the filename from the server's `Content-Disposition` header, or from a
@@ -1680,6 +1756,7 @@ grep -rnE 'Content-Disposition|getLastPathSegment\(\)|OpenableColumns|DISPLAY_NA
 | **VRT** | outcome-rated: `server_side_injection.file_inclusion.local` (P1) analogue |
 | **Attacker** | AM-03 (a symlink in a shared directory); AM-02 via a `file://` share |
 | **Applies to** | all; the `StrictMode` LAX bypass defeats "we're on targetSdk 30, `file://` can't reach us" |
+| **Requires** | device, legacy, targetsdk<28 |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/content-resolver` (the five-step fstat/lstat validation algorithm; explicit mention of symlinks and race conditions); Oversecured "theft of arbitrary files" (`file://` vector, `FileUriExposedException` at targetSdk >= 18, and the `StrictMode.setVmPolicy(...LAX)` bypass); H1 #288955 (IRCCloud, symlink + `shared_prefs/prefs.xml` -> `session_key`) |
 
 - **Test:** If the app validates a path *string* and then opens it later, swap the path for a symlink in
@@ -1714,6 +1791,7 @@ ln -s /data/data/com.target.app/shared_prefs/auth.xml /sdcard/Download/benign.jp
 | **VRT** | `insecure_data_storage...on_external_storage` (P4) if world-readable; otherwise a privacy finding |
 | **Attacker** | AM-11; AM-03 if the directory is world-readable |
 | **Applies to** | apps that capture photos/video/screenshots (support tools, KYC, document scan) |
+| **Requires** | device |
 | **Maps to** | T1628.003 Conceal Multimedia Files (ATT&CK marks this "Do Not Mitigate" at platform level — `.nomedia` is legitimate, so it is a pure app-behaviour finding) |
 
 - **Test:** If the app captures imagery and hides it from the Gallery with a `.nomedia` file or a
@@ -1737,6 +1815,7 @@ grep -rnE '\.nomedia|MediaScannerConnection|MediaStore\.MediaColumns\.IS_PENDING
 | **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) for the flag; file the extracted-and-replayed credential instead |
 | **Attacker** | AM-11 physical unlocked with ADB; AM-11 with the user's backup account |
 | **Applies to** | all; `dataExtractionRules` is the targetSdk 31+ form, `fullBackupContent` the pre-31 form — an app targeting 12+ needs both |
+| **Requires** | device, root |
 | **Maps to** | MASTG-TEST-0009, MASTG-TEST-0216, MASTG-TEST-0262, MASTG-TECH-0127, MASTG-TECH-0128, MASWE-0006, MASTG-KNOW-0050, MASTG-BEST-0004; VRT `auto_backup_allowed_by_default` (P5); H1 #1225158 (Zivver, $0 — the flag was the whole report) |
 
 - **Test:** `allowBackup="true"` (or unset, which defaults true) is **not** a finding. Auto Backup always
@@ -1781,6 +1860,7 @@ pax -r < app.tar   # star -x also works; GNU tar and 7-Zip FAIL (abe writes dir 
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5) for the store; escalates via `broken_authentication_and_session_management.authentication_bypass` (P1) on restore |
 | **Attacker** | AM-11 physical (device resale, repair shop, coerced migration) |
 | **Applies to** | targetSdk >= 31; check the pre-31 `fullBackupContent` too |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/guide/topics/data/autobackup` (the `<cloud-backup>` / `<device-transfer>` schema and the rule that a missing section means fully enabled); `developer.android.com/guide/topics/data/testingbackup`; MASWE-0006, MASTG-TEST-0009 |
 
 - **Test:** Android 12+ `dataExtractionRules` splits `<cloud-backup>` from `<device-transfer>`, and **if a
@@ -1820,6 +1900,7 @@ adb shell bmgr transport com.google.android.gms/.backup.BackupTransportService
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) for a PIN/gate flip; business-logic node for entitlement |
 | **Attacker** | AM-11 physical unlocked |
 | **Applies to** | same `[DEGRADED ≤A11 / bmgr on 12+]` gating as D11-051 |
+| **Requires** | device, root |
 | **Maps to** | MASTG-TECH-0128; MASWE-0006 |
 
 - **Test:** Flip a value in the backup set and restore it, then show the app honouring the tampered value.
@@ -1854,6 +1935,7 @@ adb shell pm uninstall --user 0 $PKG && adb install-multiple -t --user 0 base.ap
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-11 physical unlocked (a backup file plus an attacker device/emulator) |
 | **Applies to** | all apps that persist a device-bound secret and set `allowBackup` effectively true |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/guide/topics/data/autobackup` (`onRestoreFinished()` semantics; restore occurs before first launch); MASWE-0006, MASWE-0024 |
 
 - **Test:** Apps that must not restore a device-bound secret usually store an identifier
@@ -1891,6 +1973,7 @@ adb -s B logcat -s TargetApp | grep -iE 'restore|device id|mismatch'
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); file the replay/restore outcome |
 | **Attacker** | AM-11 (backup); AM-03 via FileProvider self-grant |
 | **Applies to** | all; acute where the app ships a custom `BackupAgent` |
+| **Requires** | device |
 | **Maps to** | MASWE-0006; `onFullBackup` / `FullBackupDataOutput` |
 
 - **Test:** Apps frequently duplicate the session into a plain file — e.g. `files/session_backup_payload`
@@ -1919,6 +2002,7 @@ strings pulled/files/* | grep -iE 'eyJ|bearer|access_token|refresh'
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) via the credential-capture outcome; the pinning bypass is a D14 join |
 | **Attacker** | AM-11 physical unlocked |
 | **Applies to** | all apps with `allowBackup` effectively true that read config from storage |
+| **Requires** | device, root |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/backup-best-practices`; MASWE-0006, MASWE-0050; restore semantics ("Restore happens after APK installation but before user can launch app") |
 
 - **Test:** The high-value inversion of "is my token backed up". Look for values in backed-up storage the
@@ -1957,6 +2041,7 @@ adb shell am force-stop $PKG && adb shell monkey -p $PKG 1
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); file the extracted-and-replayed token |
 | **Attacker** | AM-11 physical unlocked with ADB |
 | **Applies to** | all apps embedding SDKs; `allowBackup` defaults true unless set false |
+| **Requires** | device, root |
 | **Maps to** | MASWE-0006; mechanism |
 
 - **Test:** If `allowBackup` is not false, SDK-written token files leave the device in cloud/adb/D2D backups
@@ -1984,6 +2069,7 @@ grep -REi 'shared_prefs|databases' loot/ | grep -iE 'token|refresh|session'
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | device, root |
 | **Maps to** | `developer.android.com/guide/topics/data/testingbackup` (every command below is quoted from that page) |
 
 - **Test:** Most teams never test backup because the rig is fiddly, so they silently skip the highest-ceiling
@@ -2023,6 +2109,7 @@ adb shell bmgr transport com.google.android.gms/.backup.BackupTransportService
 | **VRT** | `mobile_security_misconfiguration.clipboard_enabled` (**P5**, baseline `AV:L/AC:H/PR:N/UI:R/S:C/C:L/I:N/A:N`); `external_behavior.system_clipboard_leak.shared_links` (P5) |
 | **Attacker** | AM-04 foreground app / IME / accessibility service (post-29); AM-03 background read (**LEGACY** < 29) |
 | **Applies to** | all; the VRT flattened the sensitive/non-sensitive children into one P5 parent — it will not entertain a "but it was sensitive content" argument on category grounds |
+| **Requires** | device |
 | **Maps to** | MASWE-0030 (CWE-200, CWE-668); MASTG-KNOW (clipboard); VRT `clipboard_enabled` (P5); `ClipDescription.EXTRA_IS_SENSITIVE` (API 33+; string key `"android.content.extra.IS_SENSITIVE"` on 32 and below) |
 
 - **Test:** An app that copies (or lets the user copy) a password, OTP, card number, recovery phrase or
@@ -2069,6 +2156,7 @@ Log.e("PoC", cm.getPrimaryClip().getItemAt(0).getText().toString());
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the transmission; the read itself is P5 |
 | **Attacker** | AM-08 (the target app, or an SDK inside it, is the reader — the app is misbehaving; tested from the defender's side) |
 | **Applies to** | Android 12+ (the toast makes a silent-launch read detectable) |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/about/versions/12/behavior-changes-all` (toast `"APP pasted from your clipboard."`; `getPrimaryClipDescription()` does not trigger it) |
 
 - **Test:** Since Android 12 the first `getPrimaryClip()` against another app's clip raises a toast. An app
@@ -2105,6 +2193,7 @@ Java.perform(function () {
 | **VRT** | outcome-rated; MASWE-0036, CWE-524. No dedicated VRT node — argue Medium for a payment/auth credential |
 | **Attacker** | AM-05 (the cached suggestion surfaces in any app on the shared device); AM-04 (malicious IME) |
 | **Applies to** | all; Jetpack Compose uses `KeyboardOptions` / `SecureTextField` |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0258, MASTG-TEST-0316, MASWE-0036, MASTG-KNOW-0055, MASTG-BEST-0019, LEGACY-ID MASTG-TEST-0006 (deprecated); mobsfscan `android_sensitive_input_keyboard_cache` |
 
 - **Test:** A field that is not a non-caching input type has its contents learned by the IME dictionary and
@@ -2137,6 +2226,7 @@ adb shell ls -l /data/data/com.google.android.inputmethod.latin/databases/ 2>/de
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (VARIES); the base observation is not a finding |
 | **Attacker** | AM-04 (a `READ_LOGS`-holding OEM preload); AM-08 (a log-shipping SDK); AM-11 (ADB) |
 | **Applies to** | Cross-app `READ_LOGS` is **LEGACY (pre-Android 4.1)** for ordinary apps — state the reader |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0203, MASTG-TEST-0231, MASWE-0005 (CWE-532); T1533; also MASTG-TEST-0263/0264/0265 (StrictMode left on in production, MASWE-0061) |
 
 - **Test:** "The app logs to logcat" is not a finding — since Android 4.1 apps read only their own logs. It
@@ -2176,6 +2266,7 @@ Java.perform(function () {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets` (VARIES) only if it leaks a secret |
 | **Attacker** | AM-11; AM-04 |
 | **Applies to** | all; check ORM debug logging too |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0263, MASTG-TEST-0264, MASTG-TEST-0265, MASWE-0061 (CWE-489/497/540) |
 
 - **Test:** `StrictMode` left on in production emits implementation detail (SQL, file paths, thread policy
@@ -2200,6 +2291,7 @@ adb logcat --pid=$(adb shell pidof -s $PKG) | grep -iE 'StrictMode|SQL|query'
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); file the token replay |
 | **Attacker** | AM-11; AM-03 with `GET_ACCOUNTS` / same-signature access |
 | **Applies to** | apps using `AccountManager.addAccountExplicitly` / `setAuthToken` |
+| **Requires** | device |
 | **Maps to** | T1635 Steal Application Access Token; `AccountManager.getAuthToken` |
 
 - **Test:** `AccountManager` stores account credentials and auth tokens in `/data/system_ce/<user>/accounts_ce.db`
@@ -2236,6 +2328,7 @@ Java.perform(function () {
 | **VRT** | outcome-rated; `insecure_data_storage...on_external_storage` (P4) if the crossing is via shared storage |
 | **Attacker** | AM-05 (the personal-profile instance reading the work instance's state) |
 | **Applies to** | Android 5.0+ work profiles; Android 15+ Private Space |
+| **Requires** | device, enterprise |
 | **Maps to** | AOSP security-model paper §4.3.3 (profiles have separate storage encryption keys; cross-profile communication is gated by user opt-in) and §5 (Enterprise); Private Space (`android.os.usertype.profile.PRIVATE`, `ACCESS_HIDDEN_PROFILES` + `ROLE_HOME`) |
 
 - **Test:** If the app is deployed into a work profile or Private Space, verify it does not write shared
@@ -2265,6 +2358,7 @@ grep -rnE 'INTERACT_ACROSS_PROFILES|CrossProfileApps|getUserHandle\(|UserManager
 | **VRT** | `cryptographic_weakness.incomplete_cleanup_of_keying_material` (P5) for the residue; file the outcome the recovered key enables |
 | **Attacker** | AM-12 own rooted device (not an attack on its own) or AM-04 debuggable/instrumentable build |
 | **Applies to** | all; most impactful on wallets, password managers and banking apps |
+| **Requires** | device, root, frida |
 | **Maps to** | MASTG-TEST-0011 (deprecated), MASTG-KNOW-0051 (Process Memory), MASTG-TECH-0044, MASTG-TOOL-0106 (Fridump), MASTG-TOOL-0036 (r2frida), MASTG-TOOL-0129 (rabin2) |
 
 - **Test:** Values the app decrypts only in memory (keys, PANs, tokens, mnemonics) are recoverable from the
@@ -2304,6 +2398,7 @@ SELECT * FROM byte[] b WHERE toString(b).matches(".*1\.2\.840\.113549\.1\.1\.1.*
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); the key-usage half is D12 |
 | **Attacker** | AM-12 rooted / AM-04 instrumentable — feeds D12 |
 | **Applies to** | all |
+| **Requires** | device, frida |
 | **Maps to** | MASTG-KNOW-0051; WithSecure `android-keystore-audit` `tracer-cipher.js` |
 
 - **Test:** The Keystore is the right place for key material, but apps store plaintext data there or use the
@@ -2313,7 +2408,7 @@ SELECT * FROM byte[] b WHERE toString(b).matches(".*1\.2\.840\.113549\.1\.1\.1.*
 ```bash
 objection --gadget $PKG explore
 > android keystore list
-frida -U -f $PKG -l tracer-cipher.js     # WithSecure android-keystore-audit
+frida -D "$SERIAL" -f $PKG -l tracer-cipher.js     # WithSecure android-keystore-audit
 ```
 - **Proof:** The tracer printing plaintext passed into `Cipher` with a key whose parameters show no
   `setUserAuthenticationRequired`, or a Keystore entry whose value is itself the secret in clear.
@@ -2354,6 +2449,7 @@ cat out/res/values/strings.xml | grep -iE 'staging|internal|test\.|\.dev|debug_u
 | **VRT** | `insecure_data_storage...on_internal_storage` (P5); file the token replay |
 | **Attacker** | AM-11; AM-03 with a reach primitive |
 | **Applies to** | apps using WorkManager, Firebase Installations, FCM |
+| **Requires** | device |
 | **Maps to** | mechanism; `androidx.work.workdb`; `files/PersistedInstallation.json` |
 
 - **Test:** Testers stop at `shared_prefs`, `databases` and `files/*.xml`. Two under-checked token homes: the
@@ -2437,6 +2533,7 @@ adb shell run-as $PKG find . -iname '*installation*' -o -iname '*fcm*' -o -iname
 | **VRT** | outcome-rated: `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) / `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-01 remote (the endpoint is reachable once you have the token/host) |
 | **Applies to** | any app whose local store or bundle holds a hardcoded backend host/version |
+| **Requires** | backend-api |
 | **Maps to** | claude-bughunter "Shadow API — the mobile-to-backend bridge" (D15/D01) |
 
 - **Test:** A mobile app's hardcoded backend calls — recovered from `shared_prefs`, a bundled config, a
@@ -2471,6 +2568,7 @@ curl -i -H "Authorization: Bearer <token>" https://api.target.tld/v3/users/123  
 | **VRT** | n/a (methodology) |
 | **Attacker** | n/a |
 | **Applies to** | any D11 item that replays a stored/queued/tampered request against the backend |
+| **Requires** | backend-api |
 | **Maps to** | claude-bughunter "layer-ordering trap" (D13/D15) |
 
 - **Test:** When you replay a recovered token (D11-011), a tampered offline-queue mutation (D11-036) or a

@@ -46,6 +46,33 @@ lint check for it (`BinderGetCallingInMainThread`) and almost no community Andro
 **For every method behind this app's exported binder: does it check *who* is calling — on the thread the
 transaction actually arrives on — or does it only validate *what* is being asked?**
 
+## Applicability probe
+
+D06 covers anything that answers a binder transaction or an Intent delivered to a `Service`, **in either direction** — the app as server (D06-001..041, 045..069) and the app as client or socket owner (D06-042..044, 070..074). Run these five before opening any item; they decide the whole domain and set the `Requires` facts (`exported-service`, `device`, `frida`, `root`).
+
+```bash
+E=BugBountyTarget/<Target>_<DDMMYYYY>; DEC="$E/decompiled"; PKG=$(jq -r .target.package "$E/engagement.json")
+# 1. services the system actually resolves (merged view) versus the decoded base manifest — a delta is a split/AAR service
+adb shell dumpsys package "$PKG" | awk '/^Service Resolver Table:/{s=1} /^Provider Resolver Table:/{s=0} s' | grep -c "$PKG/"
+grep -c '<service' "$DEC/apktool/AndroidManifest.xml"
+# 2. the inventory's own count: total services, exported services
+python3 -c 'import csv,sys; r=[x for x in csv.DictReader(open(sys.argv[1])) if x["type"]=="service"]; print("services", len(r), "exported", sum(x["exported"]=="true" for x in r))' "$E/inventory/components.csv"
+# 3. client-side binds and started services — D06-042..044 and D06-084 apply even with zero exported services
+grep -rlE '\b(bindService|bindIsolatedService|startService|startForegroundService)\(' "$DEC/jadx/sources" | wc -l
+# 4. local listeners and VPN — D06-070/072 apply regardless of the manifest
+grep -rlE 'new ServerSocket\(|LocalServerSocket\(|extends VpnService|NanoHTTPD|embeddedServer\(' "$DEC/jadx/sources" | wc -l
+# 5. framework-bound and foreground-typed services — D06-035..041, D06-046..058
+grep -cE 'foregroundServiceType|android\.permission\.BIND_[A-Z_]+|android\.service\.|android\.accessibilityservice|MediaBrowserService|CarAppService|gms\.wearable|HOST_APDU_SERVICE|CredentialProviderService' "$DEC/apktool/AndroidManifest.xml"
+```
+
+**Decision.** Any non-zero answer to 1, 2, 3, 4 or 5 means the domain applies; set `app_facts.has_exported_service` from probe 2 so `exported-service`-tagged items resolve. If probe 2 reports `exported 0` but probes 3–5 are non-zero, mark the server-side range n/a and keep the client/socket/listener items.
+
+**n/a note (whole domain)** — write exactly:
+`D06 n/a — dumpsys Service Resolver Table has 0 entries for <pkg> and $DEC/apktool/AndroidManifest.xml declares 0 <service>; inventory/components.csv has 0 type=service rows; 0 bindService/startService/startForegroundService call sites and 0 ServerSocket/LocalServerSocket/VpnService classes in $DEC/jadx/sources; 0 BIND_*/foregroundServiceType declarations. Probe run <date> against build <versionName> (<versionCode>) on <device/API>. Re-run after any split or dynamic-feature install.`
+
+**n/a note (server-side range only)** — write exactly:
+`D06-001..041, D06-045..046, D06-053..069, D06-082, D06-085..086 n/a — components.csv shows <n> services, 0 exported (dumpsys resolver table agrees: <n> entries, none exported); D06-042..044, D06-047..049, D06-057, D06-070..081, D06-084, D06-087 still apply. Probe run <date>, build <versionName>.`
+
 ## Triage order
 
 1. **Recover the method table for every exported bound service first.** Everything below depends on
@@ -81,6 +108,7 @@ transaction actually arrives on — or does it only validate *what* is being ask
 | **VRT** | n/a — coverage method |
 | **Attacker** | n/a |
 | **Applies to** | All; mandatory for any app shipped as an AAB (split APKs are the norm) |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0161 (Enumerating Services) |
 
 - **Test:** Services contributed by AAR dependencies and by feature/config splits appear in the installed
@@ -128,6 +156,7 @@ wc -l recon/services.tsv; grep -c '<service' recon/service-resolver.txt
 | **VRT** | n/a — inventory; `broken_access_control.exposed_sensitive_android_intent` (null) only once a reached action is demonstrated |
 | **Attacker** | AM-03 |
 | **Applies to** | All. **targetSdk < 31 (LEGACY):** a `<service>` with an `<intent-filter>` and no explicit `android:exported` is exported by default. From targetSdk 31 the attribute is mandatory, so `implicit-*` rows in your register mean you mis-parsed the manifest — re-check against `dumpsys`. |
+| **Requires** | device |
 | **Maps to** | MASTG-TEST-0365, MASTG-TECH-0161, MASTG-TOOL-0015 (drozer `app.service.info`), MASTG-KNOW-0133 |
 
 - **Test:** For each service, record three independent facts: is it start-reachable, is it bind-reachable,
@@ -162,6 +191,7 @@ objection -g com.target.app explore -c "android hooking list services"
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when a method takes another user's id; `broken_access_control.privilege_escalation` (null) otherwise |
 | **Attacker** | AM-04 (holds the bind permission) or AM-05 (second account) |
 | **Applies to** | All bound services with a manifest permission |
+| **Requires** | exported-service, two-accounts |
 | **Maps to** | MASTG-TEST-0365, MASTG-KNOW-0133, MASWE-0018 (CWE-862, CWE-863) |
 
 - **Test:** The manifest permission is enforced by the system at `Context.startService()`,
@@ -192,6 +222,7 @@ Log.i("POC", String.valueOf(svc.getOrders(B_ACCOUNT_ID)));
 | **VRT** | n/a — method |
 | **Attacker** | n/a |
 | **Applies to** | All; services in a separate process are the usual pattern for a remote interface |
+| **Requires** | exported-service, device, frida |
 | **Maps to** | MASTG-KNOW-0133 (`android:process`, "common for services that expose a remote interface to other apps"), MASTG-TECH-0043, MASTG-TOOL-0001 |
 
 - **Test:** A service in a separate process serves its binder transactions from that PID. Hooks attached
@@ -202,7 +233,7 @@ Log.i("POC", String.valueOf(svc.getOrders(B_ACCOUNT_ID)));
 ```bash
 grep -n 'android:process' base_apktool/AndroidManifest.xml
 adb shell ps -A | grep com.target.app        # expect com.target.app and com.target.app:remote
-frida -U -n "com.target.app:remote" -l hook.js
+frida -D "$SERIAL" -n "com.target.app:remote" -l hook.js
 # confirm which PID actually holds the service
 adb shell dumpsys activity services com.target.app | grep -E 'ProcessRecord|app=|pid='
 ```
@@ -221,6 +252,7 @@ adb shell dumpsys activity services com.target.app | grep -E 'ProcessRecord|app=
 | **VRT** | n/a — precondition control |
 | **Attacker** | Governs whether AM-02 can be claimed at all |
 | **Applies to** | All |
+| **Requires** | exported-service |
 | **Maps to** | H1 #258460 (Quora) — the researcher's own published correction |
 
 - **Test:** A service is reachable by an Instant App **only** when `android:visibleToInstantApps="true"`.
@@ -245,6 +277,7 @@ adb shell dumpsys package com.target.app | grep -i 'instant'
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what is exposed) |
 | **Attacker** | AM-03 |
 | **Applies to** | All; any targetSdk — the intent filter *is* the export, so the targetSdk 31 explicit-export rule does not close these |
+| **Requires** | exported-service |
 | **Maps to** | H1 #146179 (ownCloud — `AccountAuthenticatorService` and `FileSyncService` both `exported="true"`), MASTG-TEST-0365, MASWE-0018 |
 
 - **Test:** Several service types are bound by the framework and therefore must be exported:
@@ -276,6 +309,7 @@ grep -rnE 'extends AbstractAccountAuthenticator|getAuthToken\(|addAccount\(|KEY_
 | **VRT** | n/a — method |
 | **Attacker** | n/a |
 | **Applies to** | All apps exposing bound services |
+| **Requires** | exported-service |
 | **Maps to** | MASTG-TECH-0161 ("you first need to identify the inputs it expects … the methods of an AIDL interface"), MASTG-TECH-0023, MASTG-KNOW-0020 (Binder) |
 
 - **Test:** drozer cannot craft a parcel for an AIDL interface. You must recover the method table from the
@@ -308,6 +342,7 @@ grep -rn 'Landroid/os/IInterface;\|asInterface\|TRANSACTION_' out/smali/ | grep 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when a method returns a token that authenticates an internet-facing API; `broken_access_control.privilege_escalation` (null) otherwise |
 | **Attacker** | AM-03 |
 | **Applies to** | All; highest yield on OEM system services and on companion-app interfaces |
+| **Requires** | exported-service |
 | **Maps to** | MASTG-TEST-0365 ("Determine whether the service verifies the caller's permission at runtime … before processing sensitive requests"), MASTG-BEST-0052, MASWE-0018 |
 
 - **Test:** Per-method asymmetry is the norm, not the exception. Interfaces check the caller in one or two
@@ -348,6 +383,7 @@ PY
 | **VRT** | n/a — method; prevents a confident false negative |
 | **Attacker** | n/a |
 | **Applies to** | Dagger/Hilt/tiktok-DI codebases — i.e. most large modern apps, and all Google first-party apps |
+| **Requires** | exported-service |
 | **Maps to** | MASTG-TECH-0023 (Reviewing Decompiled Java Code) |
 
 - **Test:** An exported `Foo_Service extends <obfuscated>` whose constructor is `super(SomeInterface.class)`
@@ -375,6 +411,7 @@ grep -rn 'Provider<.*Handler>\|@Provides\|get()\s*{\s*return new ' out/sources |
 | **VRT** | `broken_access_control.privilege_escalation` (null) — rated on the transaction reached |
 | **Attacker** | AM-03 |
 | **Applies to** | Apps exposing AIDL services; requires a Frida-capable harness (D26) |
+| **Requires** | exported-service, device, frida |
 | **Maps to** | MASTG-TECH-0042 (Getting Loaded Classes and Methods Dynamically), MASTG-TECH-0043 (Method Hooking), MASTG-TOOL-0001 |
 
 - **Test:** Static recovery misses obfuscated and dynamically registered stubs. Hook the binder entry point
@@ -382,7 +419,7 @@ grep -rn 'Provider<.*Handler>\|@Provides\|get()\s*{\s*return new ' out/sources |
   accepted and what UID the service believes is calling.
 - **How:**
 ```js
-// frida -U -n "com.target.app:remote" -l ontransact.js
+// frida -D "$SERIAL" -n "com.target.app:remote" -l ontransact.js
 Java.perform(function () {
   Java.enumerateLoadedClasses({
     onMatch: function (name) {
@@ -419,6 +456,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | All Android versions with `service call`; essential when the interface is obfuscated and the method table is unrecoverable |
+| **Requires** | exported-service, device |
 | **Maps to** | CVE-2026-0047 ("Phase 1: Confirming the Bug"), CWE-280 |
 
 - **Test:** Call each transaction code with no or garbage arguments and read *which* exception comes back.
@@ -468,6 +506,7 @@ assert rows == hi - lo + 1, "loop ate results"
 | **VRT** | `broken_access_control.privilege_escalation` (null); `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) or higher on what is returned |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 9+ (hidden-API blocklist era). The bypass property holds because the blocklist is an ART-level check that does not exist at the binder layer. |
+| **Requires** | device, oem-scope |
 | **Maps to** | CVE-2026-0047, CWE-280; MHL "CVE-2026-0047: Stealing Screenshots from Every App with Zero Permissions", PoC `github.com/mobilehackinglab/CVE-2026-0047-poc`; ATT&CK T1575 |
 
 - **Test:** Where a system-service (or app-service) method is not reachable from the SDK, call it by
@@ -500,6 +539,7 @@ try {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the dumped data is rendered UI containing credentials or OTP screens |
 | **Attacker** | AM-03 |
 | **Applies to** | AOSP/system-app and OEM assessments; also any app service that exposes a diagnostic method over binder |
+| **Requires** | device, oem-scope |
 | **Maps to** | CVE-2026-0047, CWE-280 ("Improper Handling of Insufficient Permissions or Privileges") |
 
 - **Test:** Services expose dozens of diagnostic methods over binder, and each is a separate place the
@@ -531,6 +571,7 @@ enforceCallingOrSelfPermission(android.Manifest.permission.DUMP,
 | **VRT** | n/a — prevents a false negative on a Critical |
 | **Attacker** | n/a |
 | **Applies to** | All `dumpsys`-shaped binder APIs and any AIDL method taking a `ParcelFileDescriptor` |
+| **Requires** | device, oem-scope |
 | **Maps to** | CVE-2026-0047 PoC, "The critical implementation detail is pipe management" |
 
 - **Test:** Any dump-style API that writes to a `ParcelFileDescriptor` writes **synchronously**. If the
@@ -564,6 +605,7 @@ Log.i("POC", "bytes=" + sink.size());
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when a method returns a token; `broken_authentication_and_session_management.authentication_bypass` (P1) when it mints or validates auth material; `broken_access_control.exposed_sensitive_android_intent` (null) for the primitive itself |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service |
 | **Maps to** | MASTG-TEST-0365, MASWE-0018 (CWE-306, CWE-749, CWE-862), MASVS-PLATFORM-1, Mobile Top 10 2024 M3; Oversecured "Vulnerabilities that lead to account takeover in banking and fintech mobile apps", item 7 (AIDL Interface Abuse); H1 #384257 (Zomato, Low, $300 — "leakage of access token of the user that leads to account takeover") |
 
 - **Test:** AIDL adds no authentication of its own. A service that reads its arguments but never calls
@@ -604,6 +646,7 @@ Log.i("POC", "getToken -> " + svc.getToken());
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) — a total authorisation bypass on the IPC surface |
 | **Attacker** | AM-03 |
 | **Applies to** | All. Android ships the lint check `BinderGetCallingInMainThread` ("Incorrect usage of getCallingUid() or getCallingPid()") — its presence in the build config is worth checking too. |
+| **Requires** | exported-service, frida |
 | **Maps to** | Android Lint `BinderGetCallingInMainThread`; `android.os.Binder` (local calls return your own UID/PID; `getCallingUidOrThrow()` exists to fail closed when there is no remote caller); MASWE-0018 |
 
 - **Test:** `Binder.getCallingUid()` is only meaningful while the current thread is executing an incoming
@@ -646,6 +689,7 @@ Java.perform(function () {
 | **VRT** | `broken_access_control.privilege_escalation` (null) — "a permission check that does not fail closed is a complete access-control bypass" |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service |
 | **Maps to** | Google `privacy-and-security/risks/intent-redirection` "Common Mistakes to Avoid" (assuming `checkCallingPermission()` throws exceptions instead of returning integers); MASTG-TEST-0365; MASWE-0018 |
 
 - **Test:** Three distinct failure shapes, all of which grep as "a check is present":
@@ -680,6 +724,7 @@ grep -rnE 'getCallingUid|checkCalling' out/sources/ -A30 | grep -nE 'openFileOut
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service |
 | **Maps to** | `android.os.Binder.clearCallingIdentity()` / `restoreCallingIdentity(long)`; Google `privacy-and-security/security-tips` (Binder/Messenger section); MASWE-0018 |
 
 - **Test:** `clearCallingIdentity()` resets the identity of the incoming IPC on the current thread and
@@ -711,6 +756,7 @@ grep -rn 'clearCallingIdentity' out/sources/ -A20 | grep -nE 'getCallingUid|chec
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service |
 | **Maps to** | Google `privacy-and-security/risks/intent-redirection` "Common Mistakes to Avoid" (relying on `getCallingActivity()` returning non-null); MASWE-0018 |
 
 - **Test:** Teams port the Activity-era habit into services and providers. `getCallingActivity()` returns
@@ -736,6 +782,7 @@ grep -rnE 'getCallingActivity\(\)|getCallingPackage\(\)' out/sources/ | grep -vE
 | **VRT** | `broken_access_control.privilege_escalation` (null); escalates to `broken_authentication_and_session_management.authentication_bypass` (P1) if the impersonated peer's methods mint auth material |
 | **Attacker** | AM-03 |
 | **Applies to** | All. The `<queries>` requirement at **targetSdk ≥ 30** makes hardcoded peer package names much more common, so the pattern is growing. |
+| **Requires** | exported-service |
 | **Maps to** | Google `privacy-and-security/risks/sender-of-pending-intents` ("You should always check if the calling package has the expected signature, as sideloaded packages can have package names overlapping with ones from the Play Store"); `risks/insecure-machine-to-machine`; MASWE-0018 (CWE-926) |
 
 - **Test:** The correct pattern is `Binder.getCallingUid()` inside the transaction, then
@@ -767,6 +814,7 @@ grep -rnE 'checkSignatures|GET_SIGNING_CERTIFICATES|GET_SIGNATURES|signingInfo|h
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 (with a shared-UID sibling) or AM-08 |
 | **Applies to** | All; the exposure is real wherever the vendor ships a `sharedUserId` family |
+| **Requires** | exported-service |
 | **Maps to** | Google "Permission-based access control to exported components" (the mitigation snippet uses `getNameForUid(callingUid)` compared against a hardcoded name — a pattern that must be paired with a signature check); MASWE-0018 |
 
 - **Test:** `getPackagesForUid()` can return **multiple** packages, and `getNameForUid()` returns a
@@ -796,6 +844,7 @@ adb shell pm list packages -U | awk -F: '{print $NF}' | sort | uniq -d   # UIDs 
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | All, but overwhelmingly a system/OEM-service finding. In a client app, look for it in any service doing its own caller authorisation. |
+| **Requires** | exported-service |
 | **Maps to** | CVE-2017-13236 (`getpidcon` permission bypass in the KeyStore service, EDB 43996); CVE-2017-13209 (hardware service manager arbitrary service replacement due to `getpidcon`, EDB 43513); CVE-2019-2023 (`getpidcon()` in hardware binder ServiceManager permits ACL bypass, EDB 46504); EDB 40381 |
 
 - **Test:** PID-based caller identification is racy: the caller can exit and have its PID reused before the
@@ -823,6 +872,7 @@ grep -rnE 'Binder\.getCallingUid\(\)|checkCallingPermission|enforceCallingPermis
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when the crossing yields another user's data |
 | **Attacker** | AM-03 inside a work profile / Private Space / OEM clone, or AM-05 |
 | **Applies to** | Android 5+ multi-user. Note that by default a second user cannot see user 0's packages — so prove whether your bind actually crossed; if it did not, test the **clone / work-profile** variant instead (same profile group, different UID). |
+| **Requires** | exported-service, device |
 | **Maps to** | Google Android & Google Devices programme in-scope impact "Cross-user sensitive data access"; MASWE-0018 |
 
 - **Test:** Everything else in this chapter binds from user 0. A work profile, Private Space or OEM-clone
@@ -854,6 +904,7 @@ grep -rnE 'getCallingUid|getCallingPackage|checkSignatures|getPackagesForUid' ou
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 (the relaying app holds nothing) |
 | **Applies to** | All |
+| **Requires** | exported-service |
 | **Maps to** | Google "Permission-based access control to exported components" (recommends `enforceCallingPermission()` and per-method `Binder.getCallingUid()` validation); `android.os.Binder.linkToDeath`/`isBinderAlive` (binder handles are first-class transferable objects); MASWE-0018 |
 
 - **Test:** `onBind()` runs once per *service*, not once per client: a second client bound to an
@@ -889,6 +940,7 @@ IMyAidl.Stub.asInterface(h).privilegedMethod();
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the surviving session is an authenticated one |
 | **Attacker** | AM-03 |
 | **Applies to** | All services that keep per-client state keyed to a binder token |
+| **Requires** | exported-service |
 | **Maps to** | `android.os.Binder.linkToDeath(DeathRecipient, int)`, `isBinderAlive()`; MASWE-0018 |
 
 - **Test:** Servers commonly register a `DeathRecipient` to drop a client's session when the client process
@@ -917,6 +969,7 @@ adb shell am force-stop com.poc.a
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 (requests the permission) or AM-04 |
 | **Applies to** | All apps defining a custom permission to guard a service |
+| **Requires** | exported-service |
 | **Maps to** | MASTG-TEST-0365, MASWE-0018; cross-reference D03 |
 
 - **Test:** A `<service android:permission="com.target.app.BIND_SYNC">` looks protected in the register.
@@ -946,6 +999,7 @@ adb install poc.apk && adb shell dumpsys package com.poc.attacker | grep -A10 'r
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on the action); `insecure_os_firmware.command_injection` (P1) if the service shells out |
 | **Attacker** | AM-03 |
 | **Applies to** | All. `startService` from the background is restricted on API 26+ — use `startForegroundService` semantics or bind instead; a refusal there is a platform limitation, not app hardening. |
+| **Requires** | exported-service, frida |
 | **Maps to** | MASTG-TEST-0365, MASTG-TECH-0161, MASTG-TOOL-0015 (drozer `app.service.start` / `app.service.stop`); CVE-2015-7889 / EDB 38558 (Samsung `QuickReplyService`, action `com.samsung.android.email.intent.action.QUICK_REPLY_BACKGROUND`, no permission, composed and sent the victim's message to any address the caller named) |
 
 - **Test:** Exported services *started* rather than bound execute `onStartCommand` with the attacker's
@@ -978,6 +1032,7 @@ drozer> run app.service.start --component com.target.app com.target.app.SyncServ
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the exfiltrated bearer token; `broken_access_control.exposed_sensitive_android_intent` (null) for the reach |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service, frida |
 | **Maps to** | MASWE-0018; ATT&CK T1635 (Steal Application Access Token); Mobile Top 10 2024 M3 |
 
 - **Test:** An exported service that takes a URL or host from the caller and fetches it with the app's own
@@ -1008,6 +1063,7 @@ adb shell am startservice -n com.target.app/.FetchService --es url "http://<your
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the exfiltrated file contains session cookies or credentials |
 | **Attacker** | AM-03 |
 | **Applies to** | All; library-contributed services are the usual source, so this needs the merged manifest (D06-001) |
+| **Requires** | exported-service, frida |
 | **Maps to** | H1 #258460 (Quora, Medium — "It's really serious vulnerability which allows to takeover accounts"); B3nac index "Steal files due to exported services"; MASWE-0018 (CWE-306) |
 
 - **Test:** Upload-helper libraries (`net.gotev.uploadservice`, WorkManager wrappers, custom sync
@@ -1050,6 +1106,7 @@ startService(intent);
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | All apps whose bound interface accepts a path, filename or URL |
+| **Requires** | exported-service, frida |
 | **Maps to** | Oversecured TikTok — `com.ss.android.socialbase.downloader.downloader.IndependentProcessDownloadService` exposing `tryDownload()` (URL, filename, path) → wrote `/data/user/0/com.zhiliaoapp.musically/app_lib/libuserinfo.so`, loaded on restart; CWE-73 (External Control of Filename or Path); MASWE-0050 |
 
 - **Test:** The highest-severity shape in this domain. An unguarded AIDL method that downloads or copies
@@ -1087,6 +1144,7 @@ Object svc = stub.getMethod("asInterface", IBinder.class).invoke(null, binder);
 | **VRT** | `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) when it durably disables a control; P5 when it is transient |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service, frida |
 | **Maps to** | drozer `app.service.stop` — "Formulate an Intent to stop a service, and deliver it to another application"; MASTG-TOOL-0015 |
 
 - **Test:** The inverse of D06-027. An exported, unguarded RASP/integrity/heartbeat/sync service can be
@@ -1114,6 +1172,7 @@ adb shell dumpsys activity services com.target.app     # before and after
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when a `what` code reaches a credential-validation branch; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when a reply carries a token |
 | **Attacker** | AM-03 |
 | **Applies to** | Apps exposing `Messenger`/`Handler`-based services |
+| **Requires** | exported-service, frida |
 | **Maps to** | MASTG-TEST-0365, MASTG-TECH-0161 (shows the `--bundle-as-obj` form verbatim), MASTG-TEST-0029 (deprecated; source of the Sieve `AuthService` `MSG_SET /*6345*/`, `TYPE_KEY /*7452*/` walkthrough), MASTG-TOOL-0015 |
 
 - **Test:** A `Messenger`'s real attack surface is the set of `msg.what` codes its `handleMessage`
@@ -1151,6 +1210,7 @@ dz> run app.service.send com.target.app com.target.app.CommandService --msg 1 0 
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | Every app exposing an exported `Messenger` |
+| **Requires** | exported-service, frida |
 | **Maps to** | Google `privacy-and-security/security-tips`: "If you are creating an interface that requires authentication and/or access controls, you must explicitly add those controls as code in the `Binder` or `Messenger` interface"; Android Lint `BinderGetCallingInMainThread`; MASWE-0018 |
 
 - **Test:** `Messenger` is Binder underneath, but the transaction is `send(Message)` and the framework then
@@ -1193,6 +1253,7 @@ Java.perform(function () {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the reply carries a token; otherwise `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | Apps whose `Messenger` protocol replies to `msg.replyTo` |
+| **Requires** | exported-service, frida |
 | **Maps to** | Google bound-service model; MASWE-0018; MASWE-0036 |
 
 - **Test:** Two consequences of `replyTo`. First, the service sends its results to a `Messenger` the
@@ -1229,6 +1290,7 @@ for (int what = 0; what <= 64; what++) {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null — rate on the capture); `broken_access_control.privilege_escalation` (null) for the permission-model bypass |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk 34+** (mandatory `android:foregroundServiceType`). The platform blocks background starts for while-in-use types unless the app is visible or exempt, so the PoC must start from a visible-app state or an exempt path — **record which, because it changes the severity.** |
+| **Requires** | exported-service, device, targetsdk>=34 |
 | **Maps to** | `develop/background-work/services/fgs/service-types` (type ↔ permission table); `about/versions/14/behavior-changes-14`; ATT&CK T1541 (Foreground Persistence), T1513 (Screen Capture); MASWE-0018 |
 
 - **Test:** At targetSdk 34 each FGS type maps to a capability. If any exported component — service,
@@ -1258,6 +1320,7 @@ adb logcat -d | grep -i 'ForegroundServiceStartNotAllowedException'
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) when the work is sensor or PII collection |
 | **Attacker** | AM-12 for the observation; the *finding* is a privacy/disclosure one about the app itself |
 | **Applies to** | targetSdk 34+ |
+| **Requires** | targetsdk>=34 |
 | **Maps to** | `develop/background-work/services/fgs/service-types` (`specialUse` requires `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" …/>`, reviewed by Play); ATT&CK T1541 |
 
 - **Test:** `specialUse` is the catch-all apps reach for to keep a persistent background process. The
@@ -1284,6 +1347,7 @@ adb shell dumpsys activity services com.target.app | grep -iE 'type=|isForegroun
 | **VRT** | `broken_access_control.privilege_escalation` (null) — background-execution restriction bypass |
 | **Attacker** | n/a (app-configuration finding) |
 | **Applies to** | targetSdk 34+ |
+| **Requires** | targetsdk>=34 |
 | **Maps to** | `develop/background-work/services/fgs/service-types` (`systemExempted` qualifying-conditions list: demo mode, Device Owner, Profile Owner, Emergency role, Device Admin, `SCHEDULE_EXACT_ALARM`/`USE_EXACT_ALARM`, or a VPN app) |
 
 - **Test:** `systemExempted` is reserved and permitted only under specific conditions. An ordinary app
@@ -1309,6 +1373,7 @@ adb shell dumpsys activity services com.target.app | grep -i 'type='
 | **VRT** | `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) when the starved task is a revocation or policy refresh |
 | **Attacker** | AM-06 / AM-09 (needs to slow the app's own endpoint) |
 | **Applies to** | `shortService`: targetSdk 34+. The 6-hour `dataSync`/`mediaProcessing` cap: **targetSdk 35+ (Android 15).** |
+| **Requires** | device, root, targetsdk>=34 |
 | **Maps to** | `develop/background-work/services/fgs/service-types` (`shortService` ~3-minute limit, `Service.onTimeout(int, int)`, not sticky, cannot start other FGSs, ANR on overrun); `about/versions/15/behavior-changes-15` (6-hour cumulative cap per 24 h, `FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING`, `FGS_INTRODUCE_TIME_LIMITS`) |
 
 - **Test:** Two budgets, one attack. `shortService` runs ~3 minutes from `startForeground()` and ANRs on
@@ -1342,6 +1407,7 @@ adb logcat -d | grep -iE 'did not stop within its timeout|ANR in|ForegroundServi
 | **VRT** | `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) when a security control fails to re-arm |
 | **Attacker** | n/a for the restriction; the fallback is rated on its own shape |
 | **Applies to** | **targetSdk 35+ (Android 15)** |
+| **Requires** | device, root, targetsdk>=35 |
 | **Maps to** | `about/versions/15/behavior-changes-15` — `FGS_BOOT_COMPLETED_RESTRICTIONS` (blocks `dataSync`, `camera`, `mediaPlayback`, `phoneCall`, `mediaProjection`, `microphone` FGS types from a `BOOT_COMPLETED` receiver) and `FGS_SAW_RESTRICTIONS` (`SYSTEM_ALERT_WINDOW` exemption now requires a **visible** `TYPE_APPLICATION_OVERLAY` window; `View.getWindowVisibility()`, `View.onWindowVisibilityChanged(int)`) |
 
 - **Test:** Two Android 15 changes break patterns apps depended on. An app that re-armed a protective
@@ -1371,6 +1437,7 @@ adb logcat -d | grep ForegroundServiceStartNotAllowedException
 | **VRT** | `broken_access_control.privilege_escalation` (null) — a permission-model bypass with a privacy payload |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 10+ for while-in-use semantics; Android 12+ for background FGS-launch restrictions. **Cite the API level you proved it on.** |
+| **Requires** | device, api>=31 |
 | **Maps to** | Google Android & Google Devices in-scope impact, "Activity & Intent Spoofing" — "unprivileged background Foreground Service (FGS) launches to gain while-in-use permissions"; "While-In-Use (WIU) Abuse: Retaining sensitive WIU/One-Time permissions past process death or reboot, or launching services from background with undesired access to sensitive WIU permissions"; ATT&CK T1541 |
 
 - **Test:** Whether an unprivileged app can cause the target to start a foreground service **from the
@@ -1505,6 +1572,7 @@ grep -rnE 'hasSigningCertificate|checkSignatures|GET_SIGNING_CERTIFICATES' out/s
 | **VRT** | `broken_access_control.privilege_escalation` (null) — a delegated background activity launch |
 | **Attacker** | AM-03 (the peer) or AM-08 |
 | **Applies to** | **targetSdk 34+** |
+| **Requires** | targetsdk>=34 |
 | **Maps to** | `about/versions/14/behavior-changes-14` (`Context.BIND_ALLOW_ACTIVITY_STARTS`); `guide/components/activities/background-starts` |
 
 - **Test:** Android 14 requires the *binder* to opt in with `BIND_ALLOW_ACTIVITY_STARTS` before a bound
@@ -1531,6 +1599,7 @@ grep -rn 'bindService(' out/sources/ | grep -v getPackageName   # correlate the 
 | **VRT** | `broken_access_control.privilege_escalation` (null); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) on what the RPCs return |
 | **Attacker** | AM-03 |
 | **Applies to** | Google/GMS-family apps and anything using grpc-binder |
+| **Requires** | exported-service |
 | **Maps to** | Local senior-researcher corpus, gRPC-over-binder section; MASWE-0018 |
 
 - **Test:** A `<service android:exported="true">` with `<action android:name="grpc.io.action.BIND"/>` and
@@ -1566,6 +1635,7 @@ grep -rn 'getSecurityPolicy\|Provider<.*SecurityPolicy>\|@Provides.*SecurityPoli
 | **VRT** | `broken_access_control.privilege_escalation` (null) — rated on what the callback accepts |
 | **Attacker** | AM-03 |
 | **Applies to** | All. Declaration-side issue, independent of targetSdk. |
+| **Requires** | exported-service |
 | **Maps to** | MASWE-0018 (Lack of Authentication or Authorization on App Components); MASVS-PLATFORM; Oversecured banking write-up "AIDL Interface Abuse — service exposes AIDL interface performing auth operations without validating calling UID/package" |
 
 - **Test:** This is "validates the action but never the caller" in its purest form. A listener service is
@@ -1609,6 +1679,7 @@ grep -rnE 'Binder\.getCallingUid|getCallingPackage|getPackagesForUid|checkCallin
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when screen scrape plus gesture injection completes a transaction |
 | **Attacker** | AM-04 (the user must enable the service — a single user action, not an exploit) |
 | **Applies to** | All. `accessibilityDataSensitive` is **Android 16+**; `android:filterTouchesWhenObscured="true"` implicitly enables it. |
+| **Requires** | device |
 | **Maps to** | `guide/topics/ui/accessibility/service` (`canRetrieveWindowContent`, `canPerformGestures`, `dispatchGesture`, `AccessibilityNodeInfo.performAction`); `privacy-and-security/risks/tapjacking`; ATT&CK T1513 (Screen Capture), T1516 (Input Injection), T1663 (Remote Access Software); MASWE-0039 |
 
 - **Test:** Two directions. (a) If the *target* ships an `AccessibilityService`, check the declaration and
@@ -1645,6 +1716,7 @@ AccessibilityNodeInfo root = getRootInActiveWindow();
 | **VRT** | `broken_authentication_and_session_management.two_fa_bypass` (P3) at the VRT default; request P1 `authentication_bypass` when the captured OTP completes an account takeover end to end |
 | **Attacker** | AM-04 (the user grants notification access) |
 | **Applies to** | All |
+| **Requires** | device |
 | **Maps to** | AOSP `NotificationListenerService.java` (permission, `SERVICE_INTERFACE`, `onNotificationPosted`, `getActiveNotifications`, `cancelNotification`, `snoozeNotification`); `reference/android/service/notification/NotificationListenerService` (`Notification.extras`, `EXTRA_TEXT`, `contentIntent`); `privacy-and-security/risks/sender-of-pending-intents` (names the listener as the acquisition vector); ATT&CK T1517 (Access Notifications), T1636.004 (SMS Messages); MASWE-0037; MASTG-TEST-0005 |
 
 - **Test:** Once enabled, a listener receives `onNotificationPosted(StatusBarNotification)` for **every**
@@ -1679,6 +1751,7 @@ public void onNotificationPosted(StatusBarNotification sbn) {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-04 (the user enables a third-party autofill or accessibility consumer) |
 | **Applies to** | API 26+ |
+| **Requires** | device, api>=26 |
 | **Maps to** | `identity/autofill/autofill-services` (`AssistStructure` traversal, `IMPORTANT_FOR_AUTOFILL_YES/NO/AUTO`, `setDataIsSensitive()`, `BIND_AUTOFILL_SERVICE`, action `android.service.autofill.AutofillService`); MASWE-0036, MASWE-0040, MASWE-0019 |
 
 - **Test:** An enabled `AutofillService` receives an `AssistStructure` — the full view hierarchy of the
@@ -1705,6 +1778,7 @@ adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml && grep -o 
 | **VRT** | `broken_access_control.bypass_of_password_confirmation.change_password` (P4) shape for a state toggle; rate higher via `broken_access_control.privilege_escalation` (null) when the tile performs a financial or data-revealing action |
 | **Attacker** | AM-10 (physical access, device locked) — check the programme's rules before spending time here |
 | **Applies to** | API 24+ for `TileService`; the `startActivityAndCollapse(PendingIntent)` form is API 34+ |
+| **Requires** | device, physical, api>=24 |
 | **Maps to** | `develop/ui/views/quicksettings-tiles` — "Your tile may display on top of the lock screen on locked devices", with `isLocked()`/`isSecure()`/`unlockAndRun(Runnable)` as the required guards; MASWE-0023 (Step-Up Authentication Not Implemented) |
 
 - **Test:** A Quick Settings tile can be tapped on the lock screen. A tile that performs a privileged
@@ -1735,6 +1809,7 @@ adb shell uiautomator dump /sdcard/lock.xml && adb pull /sdcard/lock.xml
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); `broken_access_control.privilege_escalation` (null) for an unauthenticated state change |
 | **Attacker** | AM-03 |
 | **Applies to** | Apps shipping AndroidX Slices — declining in prevalence, so almost never reviewed |
+| **Requires** | provider |
 | **Maps to** | `guide/slices/getting-started` (provider XML, `android.app.slice.category.SLICE`, `onBindSlice`); MASWE-0036 |
 
 - **Test:** The documented setup exports the provider (`android:exported="true"` with
@@ -1763,6 +1838,7 @@ adb shell content query --uri 'content://com.target.app/hello'
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the handler exfiltrates the cached session token |
 | **Attacker** | AM-03 |
 | **Applies to** | All apps shipping a home-screen widget |
+| **Requires** | exported-receiver |
 | **Maps to** | `develop/ui/views/appwidgets` (the receiver is declared `android:exported="true"` with the `APPWIDGET_UPDATE` filter); `privacy-and-security/risks/insecure-broadcast-receiver`; MASWE-0018 |
 
 - **Test:** An `AppWidgetProvider` is a `BroadcastReceiver` that **must** be exported so the system can
@@ -1792,6 +1868,7 @@ adb shell dumpsys appwidget | grep -A10 com.target.app
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) when media ids are directly fetchable |
 | **Attacker** | AM-03 |
 | **Applies to** | All apps with media playback; **any targetSdk** — the intent filter *is* the export, so the targetSdk 31 explicit-export rules do not close it |
+| **Requires** | exported-service, legacy, targetsdk<30 |
 | **Maps to** | `guide/topics/media-apps/audio-app/building-a-mediabrowserservice` — action `android.media.browse.MediaBrowserService`; "If the method returns null, the connection is refused"; "(Optional) Control the level of access for the specified package name. You'll need to write your own logic to do this"; `PackageValidator` in the `android/uamp` sample; MASWE-0018 |
 
 - **Test:** Any app with audio or video playback that supports Android Auto, Wear, Assistant or system
@@ -1836,6 +1913,7 @@ mb.connect();
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); `broken_access_control.privilege_escalation` (null) for the command channel |
 | **Attacker** | AM-03 |
 | **Applies to** | Any app shipping an Android for Cars integration (categories `androidx.car.app.category.NAVIGATION` / `.POI` / `.IOT` / `.WEATHER`) |
+| **Requires** | exported-service, legacy, targetsdk<30 |
 | **Maps to** | `training/cars/apps` — the docs name `createHostValidator()` and `HostValidator.ALLOW_ALL_HOSTS_VALIDATOR` and explicitly warn to validate the binding host; MASWE-0018 |
 
 - **Test:** An Android Auto integration exposes `CarAppService` with
@@ -1868,6 +1946,7 @@ bindService(i, conn, Context.BIND_AUTO_CREATE);
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when a path carries a "user authenticated" claim the phone trusts |
 | **Attacker** | AM-03 |
 | **Applies to** | Any app with a Wear OS companion. The Data Layer is Android-phone-only, so the path set is often *less* tested than the main app's API. |
+| **Requires** | exported-service, legacy, targetsdk<30 |
 | **Maps to** | `training/wearables/data/data-layer` and `.../data/messages` (`DataClient`, `MessageClient`, `WearableListenerService`, `sendMessage(nodeId, path, data)`); MASWE-0018, MASWE-0032 |
 
 - **Test:** The Wear Data Layer delivers `DataItem`s and messages addressed by **path** (`/sync`, `/auth`,
@@ -1897,6 +1976,7 @@ grep -rnE 'onMessageReceived|onDataChanged|getSourceNodeId|getPath\(\)|Capabilit
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) |
 | **Attacker** | AM-03 when the bind permission is missing; otherwise the finding is the data the targets disclose |
 | **Applies to** | **LEGACY — deprecated at API 30**, superseded by sharing shortcuts / `ShortcutManager` Direct Share. Live only where the app still declares it. |
+| **Requires** | exported-service, legacy, targetsdk<30 |
 | **Maps to** | Local senior-researcher corpus, "privileged listener/service surfaces — validated action, unvalidated caller"; MASWE-0018, MASWE-0036 |
 
 - **Test:** A `ChooserTargetService` returns Direct Share targets to the system chooser. Two questions:
@@ -1963,6 +2043,7 @@ adb shell dumpsys package providers | grep androidx-startup
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | All apps using `JobScheduler` or WorkManager (which contributes `SystemJobService`) |
+| **Requires** | exported-service |
 | **Maps to** | `reference/android/app/job/JobScheduler` (`BIND_JOB_SERVICE`, `setPersisted` + `RECEIVE_BOOT_COMPLETED`, `setExtras` persisted vs `setTransientExtras` in-memory); `about/versions/14/behavior-changes-14` (`ACCESS_NETWORK_STATE` now required for `setRequiredNetworkType()`/`setRequiredNetwork()` or `SecurityException`; ANR on `onStartJob`/`onStopJob` overrun); MASWE-0018 |
 
 - **Test:** `JobScheduler` requires `android:permission="android.permission.BIND_JOB_SERVICE"` on the
@@ -1989,6 +2070,7 @@ adb shell dumpsys jobscheduler | grep -A15 com.target.app
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when a live token is recovered from the persisted input; `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) for the storage fact alone |
 | **Attacker** | AM-03 only once the reach is proved (see the escalation); AM-11/AM-12 for the observation |
 | **Applies to** | All apps using WorkManager |
+| **Requires** | root |
 | **Maps to** | `topic/libraries/architecture/workmanager` (SQLite persistence and the injected components); MASTG-TEST-0007 |
 
 - **Test:** WorkManager persists work in an internal SQLite database that survives reboot, and its manifest
@@ -2048,6 +2130,7 @@ adb shell dumpsys alarm | grep -A5 com.target.app
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | Any app declaring `android:process` or using multiprocess WorkManager |
+| **Requires** | exported-service, frida |
 | **Maps to** | Corpus note that the `androidx/work/multiprocess/RemoteWorkerService` reference page did not render — **verify the class's declaration in the merged manifest of the app under test rather than citing documented behaviour**; michalbednarski/ReparcelBug2 (CVE-2021-0928) and TheLastBundleMismatch (CVE-2023-45777) for the mismatch class |
 
 - **Test:** Multiprocess WorkManager exposes a bound service so one process can enqueue work in another.
@@ -2075,6 +2158,7 @@ grep -rln 'implements Parcelable' out/sources/ | xargs grep -ln 'catch'
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | **LEGACY** — deprecated in favour of `WorkManager`; live wherever an app still ships a `JobIntentService` subclass |
+| **Requires** | exported-service, frida |
 | **Maps to** | Local senior-researcher corpus (exported `WorkManager`/`JobIntentService` entry points listed among the privileged listener surfaces); MASWE-0018 |
 
 - **Test:** `JobIntentService.enqueueWork(context, cls, jobId, intent)` hands the service an `Intent` that
@@ -2102,6 +2186,7 @@ adb shell am startservice -n com.target.app/.MyJobIntentService --es url https:/
 | **VRT** | `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (P4) when a "revoke"/"logout" call can be dropped; `broken_access_control.privilege_escalation` (null) when the dropped call is a lock or entitlement revocation |
 | **Attacker** | AM-03 (must be able to interpose, typically via D06-042) or AM-08 |
 | **Applies to** | All |
+| **Requires** | exported-service, frida |
 | **Maps to** | AOSP "Binder threading" — one-way calls return immediately; ordering is guaranteed only within a single interface; the driver reserves a separate async area. `android.os.Binder.FLAG_ONEWAY`. |
 
 - **Test:** A `oneway` call returns immediately and the caller learns nothing about success. Security-
@@ -2139,6 +2224,7 @@ Java.perform(function () {
 | **VRT** | `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (P3) for the availability effect; `broken_access_control.privilege_escalation` (null) when the exception path is a fail-open branch |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service, frida |
 | **Maps to** | `android.os.TransactionTooLargeException` javadoc: "The Binder transaction buffer has a limited fixed size, currently 1MB, which is shared by all transactions in progress for the process… this exception can be thrown when there are many transactions in progress even when most of the individual transactions are of moderate size." |
 
 - **Test:** The transaction buffer is a fixed ~1 MB region **shared by all in-flight transactions of a
@@ -2173,6 +2259,7 @@ adb logcat | grep -E 'TransactionTooLarge|!!! FAILED BINDER TRANSACTION'
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) for a sandbox-crossing read; `server_side_injection.remote_code_execution_rce` (P1) when the FD is writable and the file is later loaded |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service, frida |
 | **Maps to** | AOSP "Binder IPC" (a `Parcel` carries active objects — binder references and file descriptors); `ParcelFileDescriptor` as the standard AIDL FD carrier; MASTG-TEST-0007 |
 
 - **Test:** A service returning a `ParcelFileDescriptor` hands the caller a kernel FD with whatever access
@@ -2200,6 +2287,7 @@ adb shell ls -l /proc/$(adb shell pidof com.poc.attacker)/fd/
 | **VRT** | `broken_access_control.privilege_escalation` (null); Critical when it turns a validated object into a different one after the boundary |
 | **Attacker** | AM-03 |
 | **Applies to** | Any app that passes its own `Parcelable`s across a process boundary — a `:remote` service, multiprocess WorkManager, widget `RemoteViews`, or AIDL |
+| **Requires** | exported-service, frida |
 | **Maps to** | michalbednarski/ReparcelBug2 — **CVE-2021-0928** ("a `writeToParcel`/`createFromParcel` serialization mismatch in `OutputConfiguration`"); michalbednarski/LeakValue — **CVE-2022-20452**; michalbednarski/TheLastBundleMismatch — **CVE-2023-45777** (bypass of Android 13's Lazy Bundle mitigation because `AccountManagerService.checkKeyIntent()` used the untyped `bundle.getParcelable(KEY_INTENT)`); MASWE-0050 |
 
 - **Test:** It is the `Parcelable` implementation's responsibility to ensure `createFromParcel` reads the
@@ -2235,6 +2323,7 @@ grep -rn 'createFromParcel' out/sources/ -A25 | grep -nE 'catch\s*\(|readList\(|
 | **VRT** | n/a standalone — it modifies the rating of a memory-safety finding |
 | **Attacker** | n/a |
 | **Applies to** | Android 4.1+ |
+| **Requires** | native |
 | **Maps to** | `guide/topics/manifest/service-element` (`isolatedProcess`); AOSP security-model paper Table 2 (Android 4.1): "Isolated process: Apps may run services in a process with no Android permissions and access to only two binder services. For example, the Chrome browser runs its renderer in an isolated process", mitigating [T.A3][T.A2][T.A5][T.A6][T.A7]; SELinux `isolated_app` domain |
 
 - **Test:** `android:isolatedProcess="true"` is the correct container for parsing untrusted input (media,
@@ -2264,6 +2353,7 @@ adb shell ps -AZ | grep -E 'isolated_app|com.target.app'
 | **VRT** | n/a — this gate stops an over-rated report |
 | **Attacker** | n/a |
 | **Applies to** | Android 8+ (multiple binder contexts, introduced with Treble); the AIDL-HAL variant is Android 11+ and OEM/vendor images only |
+| **Requires** | device, oem-scope |
 | **Maps to** | AOSP "Binder IPC": `/dev/binder` = framework/app AIDL, `/dev/hwbinder` = framework↔vendor and vendor↔vendor HIDL, `/dev/vndbinder` = vendor↔vendor AIDL with its own `vndservicemanager`; contexts are isolated so "binder nodes passed through a specific context are accessible only within that same context"; `ProcessState::initWithDriver("/dev/vndbinder")`. AOSP "AIDL for HALs": `@VintfStability` + `stability: "vintf"`; `vts_treble_vintf_vendor_test` verifies frozen interfaces "are frozen at a known released version… both sides of the interface agree on the exact definition". |
 
 - **Test:** Apps talk on `/dev/binder` **only**. A "vulnerability" in a HIDL or vendor-AIDL HAL is an
@@ -2297,6 +2387,7 @@ adb shell cat /vendor/etc/vintf/manifest.xml | grep -A4 '<hal format="aidl"'
 | **VRT** | `broken_access_control.privilege_escalation` (null); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) when the race duplicates a ledger entry |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | exported-service, device |
 | **Maps to** | `guide/components/processes-and-threads` — "`IBinder` methods execute in a thread pool, not the UI thread"; ContentProvider `query/insert/delete/update/getType` "are called from a pool of threads… must be implemented as thread-safe"; AOSP "Binder threading" (per-process shared threadpool, reentrancy on the same binder thread for nested calls) |
 
 - **Test:** Incoming binder calls are dispatched on a pool of threads. Any service that validates and then
@@ -2328,6 +2419,7 @@ for (int i = 0; i < 5000; i++) { final int k = i; ex.submit(() -> svc.redeem(k %
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when bound to `0.0.0.0` and serving data or commands to the LAN; `broken_access_control.privilege_escalation` (null) for localhost-only |
 | **Attacker** | AM-03 for localhost; **AM-06** for a `0.0.0.0` bind |
 | **Applies to** | All. Frequently a leftover from React Native / Flutter debug tooling — cross-check D19. |
+| **Requires** | device |
 | **Maps to** | MASWE-0018 mode "Binding a local web service or open port that accepts connections without authentication" (CWE-306, CWE-749); MASTG-TECH-0028 (Get Open Connections); MASVS-PLATFORM-1; Mobile Top 10 2024 M3/M8 |
 
 - **Test:** Debug bridges, RN dev servers, WebView-backing local servers and SDK IPC channels all bind
@@ -2358,6 +2450,7 @@ grep -rnE 'new ServerSocket\(|LocalServerSocket\(|NanoHTTPD|ktor|embeddedServer|
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-04 (the user completes the pairing flow) |
 | **Applies to** | Android 11+ (wireless debugging pairing). Boundaries still apply: shell cannot read `/data/user/0/<pkg>`, and shell permissions are trimmed by release and by OEM. |
+| **Requires** | device, enterprise |
 | **Maps to** | HackTricks `shizuku-privileged-api.md`; ATT&CK T1626 (Abuse Elevation Control Mechanism) |
 
 - **Test:** Whether the target app, or any app on a managed fleet, brokers privileged binder calls through
@@ -2391,6 +2484,7 @@ cmd connectivity set-package-networking-enabled false com.example.agent
 | **VRT** | `broken_access_control.privilege_escalation` (null); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for the redirected traffic |
 | **Attacker** | AM-06 for a LAN-reachable listener; AM-09 for the VPN case |
 | **Applies to** | All |
+| **Requires** | device |
 | **Maps to** | ATT&CK T1604 (Proxy Through Victim — "On Android specifically, attackers can use the `Proxy` API to establish SOCKS proxy connections or interact with raw sockets directly"; Exobot S0522 "can open a SOCKS proxy connection through the compromised device"); T1638 (Adversary-in-the-Middle — "a malicious application may register itself as a VPN client, effectively redirecting device traffic to adversary-owned resources"); T1428 (Exploitation of Remote Services); DressCode S0300 "general purpose tunnel"; mitigation M1012 |
 
 - **Test:** Does the app open a listening socket, relay traffic, or register a `VpnService`? Either turns
@@ -2447,6 +2541,7 @@ adb shell dumpsys media_projection
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the cast payload carries a reusable account token; `broken_access_control.privilege_escalation` (null) for a signed-URL entitlement bypass |
 | **Attacker** | AM-06 (same LAN) |
 | **Applies to** | Apps integrating the Google Cast SDK or remote playback |
+| **Requires** | device, mitm |
 | **Maps to** | No external identifier verified in this session — cite the captured traffic, not a standard. |
 
 - **Test:** Cast-enabled apps hand a receiver device a media URL and, frequently, an auth token or signed

@@ -60,6 +60,34 @@ primitive and code execution. The last part is what stops the over-claim that ge
 there, and does the code that consumes them compute a size, an index or a lifetime from those same bytes
 without checking it?**
 
+## Applicability probe
+
+Run once at the start of P3, before Triage order 1. Three counts decide the domain; a silent loop is not a negative, so every command prints a number.
+
+```bash
+# 1. any .so in base OR any split? (apktool decodes base only — the splits are where the libraries live)
+for a in "$E"/apk/*.apk; do unzip -l "$a" | grep -E '\.so$'; done | tee "$E/logs/D16-probe-so.txt" | wc -l
+ls "$E"/apk/*.apk | wc -l                                            # must match `adb -s "$SERIAL" shell pm path "$PKG" | wc -l`
+
+# 2. JNI declarations, loaders and foreign-package code loaders in the decompiled tree
+grep -rlE '\bnative\b [^;=]*\(|System\.(load|loadLibrary)\(|android_dlopen_ext|DynamiteModule|createPackageContext\(' "$DEC/jadx/sources" | tee "$E/logs/D16-probe-jni.txt" | wc -l
+
+# 3. manifest attributes that shape the domain
+grep -oE 'android:(extractNativeLibs|memtagMode|gwpAsanMode|allowNativeHeapPointerTagging|isolatedProcess|debuggable)="[^"]*"' "$DEC/apktool/AndroidManifest.xml" | sort -u
+
+# 4. runtime: app-owned or anonymous ELF mappings after exercising the main flows (catches memfd, packers, modules mapped from another package)
+PID=$(adb -s "$SERIAL" shell pidof -s "$PKG")
+adb -s "$SERIAL" shell cat /proc/$PID/maps | grep -E '\.so|memfd:' | awk '{print $6}' | grep -vE '^/(system|apex|vendor|product|system_ext)/' | sort -u | tee "$E/logs/D16-probe-maps.txt" | wc -l
+
+# 5. which attacker surfaces can feed native code — scopes D16-031/035 (exported components) and D16-037 (deep links)
+awk -F, 'NR>1 && tolower($0) ~ /true/' "$E/inventory/components.csv" | wc -l
+tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
+```
+
+**Decision.** The domain applies (set `app_facts.has_native=true`) when count 1 > 0 **or** count 2 > 0 **or** count 4 > 0. If the only `.so` files are framework runtimes (`libflutter.so`, `libhermes.so`, `libapp.so`, the React Native core set) with no app- or plugin-specific `Java_*` export, the domain still applies but D16-003..D16-005 settle per D16-003's Ruled-out-when and D16-041 becomes the entry item (tag the framework). D16-014, D16-038, D16-042 and D16-054 are platform-side and are settled on every app regardless.
+
+**n/a note (verbatim shape):** `D16 n/a — no native code: 0 .so entries across <N> APKs (base + splits, logs/D16-probe-so.txt); 0 native declarations / System.load* / dlopen call sites in $DEC/jadx/sources (logs/D16-probe-jni.txt); 0 app-owned or anonymous ELF mappings in /proc/<pid>/maps after exercising <login, main flow, feature X> on <serial, build fingerprint> (logs/D16-probe-maps.txt). Framework runtimes only: <none | libflutter/libhermes → D19>. Platform items D16-014/038/042/054 settled separately.`
+
 ## Triage order
 
 1. **Pull every ABI split and list the `.so` files** (D16-001, D16-002). Native libraries live in
@@ -173,6 +201,7 @@ without checking it?**
 | **VRT** | n/a (enabler; the reachable entry point is the finding) |
 | **Attacker** | n/a (mapping) |
 | **Applies to** | all apps shipping `lib/*/*.so` |
+| **Requires** | native |
 | **Maps to** | MASTG-TECH-0140 (Obtaining Debugging Information and Symbols), MASTG-TECH-0157, MASTG-TOOL-0003 (nm), MASTG-TOOL-0129 (rabin2), MASTG-TOOL-0028 (radare2); ATT&CK T1575 |
 
 - **Test:** `Java_<pkg>_<Class>_<method>` exports are the exact set of native functions the managed layer can
@@ -210,6 +239,7 @@ without checking it?**
 | **VRT** | n/a (enabler; this is the single largest false-negative source in native enumeration) |
 | **Attacker** | n/a (mapping) |
 | **Applies to** | all apps with native code; universal in obfuscated and packed builds |
+| **Requires** | native |
 | **Maps to** | MASTG-TECH-0035 (JNI Tracing), MASTG-TECH-0034 (Native Code Tracing), MASTG-TOOL-0107 (jnitrace), MASTG-TOOL-0001; ATT&CK T1575 |
 
 - **Test:** A library that calls `RegisterNatives()` inside `JNI_OnLoad` binds native methods at runtime.
@@ -218,12 +248,12 @@ without checking it?**
 - **How:**
   ```bash
   strings -a libs/lib/arm64-v8a/libtarget.so | grep -n 'RegisterNatives'
-  frida-trace -U -f com.target.app -i 'RegisterNatives' -i 'JNI_OnLoad' -i 'dlopen*' --no-pause
+  frida-trace -U -f com.target.app -i 'RegisterNatives' -i 'JNI_OnLoad' -i 'dlopen*'
   ```
   Read the struct array directly — `JNINativeMethod` is `{const char* name; const char* signature; void* fnPtr;}`,
   so 3 pointers per entry:
   ```javascript
-  // frida -U -f com.target.app -l regnatives.js --no-pause
+  // frida -D "$SERIAL" -f com.target.app -l regnatives.js
   const RN = Module.getExportByName(null, 'RegisterNatives') ||
              Module.findExportByName('libart.so', '_ZN3art3JNI15RegisterNativesEP7_JNIEnvP7_jclassPK15JNINativeMethodi');
   Interceptor.attach(RN, {
@@ -263,6 +293,7 @@ without checking it?**
 | **VRT** | n/a (enabler; this table is what scopes every other item in the chapter) |
 | **Attacker** | n/a (it assigns the attacker model to each row) |
 | **Applies to** | all apps shipping native code |
+| **Requires** | native |
 | **Maps to** | MASTG-KNOW-0005 (Memory Corruption Bugs), MASWE-0050 (CWE-20); `developer.android.com/privacy-and-security/risks/use-of-native-code`; ATT&CK T1575 |
 
 - **Test:** For every native entry point, answer one question: **what attacker-controlled data reaches it,
@@ -306,6 +337,7 @@ without checking it?**
 | **VRT** | `using_components_with_known_vulnerabilities.outdated_software_version` (**P5**) alone — escalates into the memory-safety items only with a demonstrated path |
 | **Attacker** | AM-02 / AM-09 for the decoder classes once reachability is shown |
 | **Applies to** | all apps with `lib/*/*.so`; Maven-coordinate SCA cannot see any of this |
+| **Requires** | native |
 | **Maps to** | MASWE-0044 (Dependencies with Known Vulnerabilities, CWE-1395/CWE-1357); VRT `using_components_with_known_vulnerabilities`; LibRARIAN version-identification methodology |
 
 - **Test:** Native libraries are the least-patched part of an Android app and are invisible to dependency
@@ -352,6 +384,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.runtime_instrumentation_based` (**P5**) if you file the RASP observation alone — file it under D21 instead, or as context |
 | **Attacker** | AM-12 (your own instrumentation is being blocked); AM-03 when the constructor itself parses attacker data |
 | **Applies to** | apps with commercial packers/RASP; any library with a C++ static initialiser that touches external state |
+| **Requires** | native |
 | **Maps to** | MASTG-TECH-0034 (Native Code Tracing), MASTG-TOOL-0001; MASVS-RESILIENCE-3; ATT&CK T1575, T1617 |
 
 - **Test:** ELF constructors in `.init_array` run at `dlopen` time — **before `JNI_OnLoad`** and long before
@@ -367,7 +400,7 @@ without checking it?**
   ```
   Observe them at runtime, and get control if they block you:
   ```bash
-  frida-trace -U -f com.target.app -i 'JNI_OnLoad' -i 'android_dlopen_ext' --no-pause
+  frida-trace -U -f com.target.app -i 'JNI_OnLoad' -i 'android_dlopen_ext'
   ```
   To regain early instrumentation on an ARM64 ELF: locate the `.init_array` VA range, compute the constructor
   address from the RELATIVE relocation landing in it, remove the auto-run tags so the loader skips
@@ -392,6 +425,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) standalone |
 | **Attacker** | n/a (rating input) |
 | **Applies to** | all apps shipping `.so`; the check is per-binary and per-NDK, never per-OS-version |
+| **Requires** | native |
 | **Maps to** | MASTG-TEST-0222, MASTG-TEST-0223, MASTG-TECH-0115 (Obtaining Compiler-Provided Security Features), MASTG-KNOW-0006 (Binary Protection Mechanisms), MASWE-0045; MASVS-CODE-3/4 |
 
 - **Test:** The mitigation timeline is per-release **and** per-NDK. An app's own `.so` built with an old NDK
@@ -461,6 +495,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) alone; cite it inside `server_side_injection.remote_code_execution_rce` (P1) when you use it |
 | **Attacker** | AM-03 / AM-02, whichever reaches the write primitive |
 | **Applies to** | any `.so` with `GNU_RELRO` but no `BIND_NOW` |
+| **Requires** | native |
 | **Maps to** | MASTG-KNOW-0006, MASWE-0045; MASVS-CODE-3 |
 
 - **Test:** `GNU_RELRO` alone marks only the non-PLT relocations read-only. Without `BIND_NOW` the GOT stays
@@ -495,6 +530,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) |
 | **Attacker** | n/a (rating input) |
 | **Applies to** | **LEGACY** as a mitigation finding: Android has required PIE for dynamically linked executables since **Android 5.0 (API 21)**, and Clang builds PIE by default |
+| **Requires** | native |
 | **Maps to** | MASTG-TEST-0222 (Position Independent Code (PIC) Not Enabled — frontmatter `deprecated_since: 21`), MASTG-TECH-0115, MASWE-0045; MASVS-CODE-3 |
 
 - **Test:** Check the ELF type on every shipped library. On a modern build a non-PIE result is almost never
@@ -524,6 +560,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) |
 | **Attacker** | n/a (rating input) |
 | **Applies to** | all apps shipping native code; NDK builds get canaries by default, hand-rolled build systems often do not |
+| **Requires** | native |
 | **Maps to** | MASTG-TEST-0223 (Stack Canaries Not Enabled), MASTG-TECH-0115, MASTG-TECH-0157, MASTG-TOOL-0129, MASWE-0045; MASVS-CODE-3/4; Mobile Top 10 2024 M7 |
 
 - **Test:** Count references to `__stack_chk_fail` in each library. Then throw out the four documented false
@@ -561,6 +598,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) |
 | **Attacker** | n/a (rating input) |
 | **Applies to** | all native code; the platform has shipped `FORTIFY_SOURCE=1` since Android 4.2 and `=2` since 4.4, but that governs *platform* binaries, not the app's |
+| **Requires** | native |
 | **Maps to** | MASTG-TECH-0115, MASTG-KNOW-0006, MASWE-0045 |
 
 - **Test:** `_FORTIFY_SOURCE` replaces `memcpy`/`strcpy`/`sprintf` with `__memcpy_chk`-style variants that
@@ -594,6 +632,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_exploit_mitigations` (**P5**) |
 | **Attacker** | n/a (rating input) |
 | **Applies to** | all; XN/NX has been enforced since Android 2.3, so a marked-executable stack is a build defect |
+| **Requires** | native |
 | **Maps to** | MASTG-KNOW-0006, MASWE-0045; MASTG-TECH-0044 (Process Exploration) |
 
 - **Test:** Two separate questions. Statically: is `GNU_STACK` marked `RWE` (or absent)? Dynamically: does
@@ -632,6 +671,7 @@ without checking it?**
 | **VRT** | n/a (this is the evidence for the D16-053 layer list) |
 | **Attacker** | n/a |
 | **Applies to** | all; the answers are per-OS-version and per-device, and they change the severity of every memory finding in the chapter |
+| **Requires** | device |
 | **Maps to** | AOSP security-model Tables 4–5 (platform mitigations); `source.android.com/docs/security/enhancements`; MASTG-TECH-0044 |
 
 - **Test:** Before rating anything, record which platform-side mitigations the *device under test* enforces.
@@ -668,6 +708,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_obfuscation` (**P5**) standalone |
 | **Attacker** | n/a (reconnaissance) |
 | **Applies to** | all apps shipping native code |
+| **Requires** | native |
 | **Maps to** | MASTG-TEST-0288 (Debugging Symbols in Native Binaries), MASTG-TECH-0140, MASTG-KNOW-0008, MASTG-TOOL-0003 (nm), MASTG-TOOL-0129 (rabin2), MASTG-TOOL-0028 (radare2), MASWE-0061 (CWE-489, CWE-497, CWE-540, CWE-912, CWE-1295); MASVS-RESILIENCE-3 |
 
 - **Test:** Unstripped `.so` files expose function names, variable names and source-file references, which
@@ -704,6 +745,7 @@ without checking it?**
 | **VRT** | n/a standalone; `using_components_with_known_vulnerabilities.outdated_software_version` (P5) or D17's path once you identify the swapped binary |
 | **Attacker** | n/a (recon); AM-09 if the compat remedy downloads a replacement `.so` |
 | **Applies to** | **Android 15+** devices with 16 KB pages; NDK apps must support 16 KB page sizes. `android:pageSizeCompat` needs the Android 16 SDK |
+| **Requires** | native, api>=35 |
 | **Maps to** | `developer.android.com/about/versions/15/behavior-changes-all` (16 KB page size support required for NDK apps); `developer.android.com/about/versions/16/behavior-changes-all` (`android:pageSizeCompat`); AOSP "16 KB page size support" |
 
 - **Test:** A 16 KB-aligned library shows `0x4000` alignment on its LOAD segments; 4 KB shows `0x1000`. Mixed
@@ -738,6 +780,7 @@ without checking it?**
 | **VRT** | n/a as a technique; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the trace recovers a live backend credential |
 | **Attacker** | AM-12 for the trace (evidence tool); the finding is what the trace reveals |
 | **Applies to** | all apps with bundled `.so` |
+| **Requires** | native, device, frida |
 | **Maps to** | MASTG-TECH-0035 (JNI Tracing), MASTG-TECH-0034 (Native Code Tracing), MASTG-TECH-0033 (Method Tracing), MASTG-TOOL-0107 (jnitrace), MASTG-TOOL-0001 (Frida), MASTG-TOOL-0037 (RMS) |
 
 - **Test:** Every JNI function receives the `JNIEnv*` interface pointer. Tracing calls through it reveals the
@@ -785,6 +828,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with demonstrated execution; `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) for a reliable crash only |
 | **Attacker** | AM-03 / AM-02 / AM-01 per the D16-005 row |
 | **Applies to** | any JNI entry taking `(byte[], int, int)`, `(ByteBuffer, int)`, a `long` size, or a `String` it copies into a fixed buffer |
+| **Requires** | native |
 | **Maps to** | MASTG-KNOW-0005, MASWE-0050 (CWE-20), MASTG-TECH-0018 (Disassembling Native Code), MASTG-TECH-0024 (Reviewing Disassembled Native Code); CWE-787, CWE-125; ATT&CK T1575 |
 
 - **Test:** Java bounds-checks arrays; C does not. The classic defect is a JNI method that receives a buffer
@@ -830,6 +874,7 @@ without checking it?**
 | **VRT** | n/a |
 | **Attacker** | n/a (methodology) |
 | **Applies to** | every app where a Java wrapper validates before calling a native method |
+| **Requires** | native |
 | **Maps to** | MASWE-0050; the general layer-ordering discipline (cf. D13/D15) |
 
 - **Test:** Two symmetrical mistakes live here. (1) **False negative:** you send an oversized length, the
@@ -875,6 +920,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; **P3** for a reliable crash; nothing at all for an unreached sink |
 | **Attacker** | AM-03 / AM-02 per the D16-005 row |
 | **Applies to** | all apps with native code processing untrusted input |
+| **Requires** | native |
 | **Maps to** | MASTG-KNOW-0005, MASTG-TECH-0018, MASTG-TECH-0024, MASTG-TOOL-0033 (Ghidra), MASTG-TOOL-0030 (Angr), MASTG-TOOL-0152 (lldb), MASWE-0050; CWE-787, CWE-122 |
 
 - **Test:** Enumerate the classic overflow-prone imports, then — and only then — determine whether any of
@@ -914,6 +960,7 @@ without checking it?**
 | **VRT** | `insecure_os_firmware.command_injection` (**P1**, CWE-77) or `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | AM-03 / AM-02 |
 | **Applies to** | all; native shell-outs are common in media SDKs, log uploaders and updater components |
+| **Requires** | device, native |
 | **Maps to** | ATT&CK T1623.001 (Unix Shell — detection analytic AN1657 names the observables: "Runtime or ProcessBuilder invocation, spawn of sh/toybox/toolbox/su or equivalent shell process"), T1623 (analytic AN1741 for Android), T1575; CWE-77 |
 
 - **Test:** Does the app shell out at all — from Java or from native — and does any attacker-influenced
@@ -925,7 +972,7 @@ without checking it?**
   grep -rn 'Runtime;->exec\|ProcessBuilder' out/smali/ | head -30
   strings -a x/lib/*/*.so | grep -E '^/system/bin/(sh|toolbox|toybox)$|^popen$|^system$|sh -c' | sort -u
   nm -D x/lib/*/*.so | grep -E ' U (system|popen|execve|execl|fork)$'
-  frida-trace -U -f com.target.app -i 'execve' -i 'popen' -i 'system' --no-pause
+  frida-trace -U -f com.target.app -i 'execve' -i 'popen' -i 'system'
   ```
   Inject a separator through the reachable parameter and read the result back from inside the app's sandbox:
   ```bash
@@ -950,6 +997,7 @@ without checking it?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) when the recovered key authenticates to a production backend; `.for_internal_asset` (P3) for an internal-only one |
 | **Attacker** | AM-12 recovers it; the **impact** is AM-01 — anyone can then forge requests from outside the app |
 | **Applies to** | all apps that "moved the key into C++" |
+| **Requires** | native, device, frida |
 | **Maps to** | MASTG-TECH-0035, MASTG-TOOL-0107, MASTG-TOOL-0001; CWE-798; VRT `sensitive_data_exposure.disclosure_of_secrets` |
 
 - **Test:** "Native = protected" is false. A key in `libnative.so` is no harder to recover than one in
@@ -999,6 +1047,7 @@ without checking it?**
 | **VRT** | `lack_of_binary_hardening.lack_of_jailbreak_detection` (**P5**) / `.runtime_instrumentation_based` (**P5**) — this is the P5 ceiling stated plainly |
 | **Attacker** | AM-12 (the bypass is on your own device) |
 | **Applies to** | apps shipping `libtoolChecker`-style detection natives, commercial RASP, or native TLS pinning |
+| **Requires** | native, device, frida |
 | **Maps to** | MASVS-RESILIENCE-3; MASTG-TECH-0034, MASTG-TOOL-0036 (r2frida); Mobile Top 10 2024 M7 |
 
 - **Test:** Do not report "root detection can be bypassed" — that is P5 by definition. The only question worth
@@ -1044,6 +1093,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; **P3** for a reliable crash |
 | **Attacker** | AM-01 / AM-02 for a decoder fed by a delivered file; AM-03 when the Java API that sets the sizes is reachable cross-app |
 | **Applies to** | any allocation or loop bound computed from two attacker-controlled 32-bit values |
+| **Requires** | native |
 | **Maps to** | CWE-190; CVE-2025-48595 (SQLite lookaside, CWE-190, CVSS 8.4, CISA KEV, fixed in SQLite 3.44.5 by `if( sz>65528 ) sz = 65528;`), CVE-2026-0006 (CVSS 9.8, CWE-190/CWE-122/CWE-347), CVE-2026-0049, CVE-2022-3970 (libtiff), CVE-2026-65346 (ImageIO `_CGImageCreateByScaling`); MASTG-KNOW-0005 |
 
 - **Test:** Any allocation size or loop bound computed as `a * b` where both values come from attacker data.
@@ -1091,6 +1141,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; **P3** crash-only |
 | **Attacker** | AM-01 (0-click font/image/document paths) / AM-02 |
 | **Applies to** | any file-derived value cast to `short`/`int16_t`/`FT_Short`/`s16` before being used as a count or size |
+| **Requires** | native |
 | **Maps to** | CWE-197, CWE-191; CVE-2025-27363 (FreeType ≤ 2.13.0; fixed in 2.13.1 with an `FT_OUTLINE_POINTS_MAX - 4` bound plus `FT_QNEW_ARRAY`; Android May 2025 bulletin; actively exploited); MASTG-KNOW-0005 |
 
 - **Test:** The rule, verbatim from the research that found it: *"Any time you see `(short)` or `(int16_t)` on
@@ -1122,6 +1173,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**); **P3** crash-only |
 | **Attacker** | AM-01 / AM-02 |
 | **Applies to** | any length check written as `(value + constant) <= limit` on an unsigned type |
+| **Requires** | native |
 | **Maps to** | CWE-190, CWE-191; CVE-2026-0006 (`oapv_assert_gv((pbu_size + 4) <= bs->size, …)`); MASTG-KNOW-0005 |
 
 - **Test:** The bound check itself is the bug. When `value` is attacker-supplied and near the type maximum,
@@ -1153,6 +1205,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | AM-01 (a file delivered by MMS/RCS, thumbnail, media scan) / AM-02 |
 | **Applies to** | any format that carries dimensions or counts in two places — container box vs bitstream header, info-parse vs decode-parse, IHDR vs IDAT, TIFF IFD vs strip data, DNG IFD vs opcode lists, MP4 `apvC` vs frame header |
+| **Requires** | native |
 | **Maps to** | CWE-787, CWE-122; CVE-2026-0006 (generator script `generate_overflow_mp4.py` in `github.com/mobilehackinglab/CVE-2026-0006-openapv-poc`); MASTG-KNOW-0005 |
 
 - **Test:** When a format declares the same quantity twice, check whether the code that **allocates** and the
@@ -1196,6 +1249,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) when the write is demonstrated; otherwise rate the read |
 | **Attacker** | AM-01 / AM-02 |
 | **Applies to** | any decoder that both reads attacker-sized input and writes attacker-sized output |
+| **Requires** | native |
 | **Maps to** | CWE-125 → CWE-787; CVE-2026-0006; MASTG-KNOW-0005 |
 
 - **Test:** If the same code reads a length from the input and writes that many bytes to an output buffer,
@@ -1227,6 +1281,7 @@ without checking it?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) if the leak yields a token/key; otherwise rate the disclosure |
 | **Attacker** | AM-01 / AM-02 / AM-09 |
 | **Applies to** | decoders that emit pixels, buffers or strings sized from attacker input; any `malloc` without a subsequent full initialisation |
+| **Requires** | native |
 | **Maps to** | CWE-908, CWE-125; CVE-2026-0006 (poison test), CVE-2026-20634 (canary allocator), CVE-2025-64505 (libpng quantize heap over-read); MASTG-KNOW-0005 |
 
 - **Test:** An out-of-bounds read is a Medium. An out-of-bounds read whose bytes reach the attacker is a heap
@@ -1269,6 +1324,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with control; **P3** otherwise |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | all native heap bugs |
+| **Requires** | native |
 | **Maps to** | CWE-416, CWE-415; CVE-2019-11932 (WhatsApp 2.19.216 GIF double-free, EDB 47515); MASTG-KNOW-0005 |
 
 - **Test:** A use-after-free giving `pc = 0` may be completely unexploitable if you cannot reallocate the
@@ -1309,6 +1365,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with control; **P3** for the arbitrary-free crash alone |
 | **Attacker** | **AM-03** — a zero-permission installed app; this is the cheapest attacker model in the whole chapter |
 | **Applies to** | any app with an exported component; **any exported component that reads a single extra deserialises the WHOLE Bundle** |
+| **Requires** | native, exported-activity, exported-service, exported-receiver, provider |
 | **Maps to** | CWE-416, CWE-502; MASWE-0050; MASTG-KNOW-0005; known gadgets `OpenSSLX509Certificate` and `com.android.internal.util.VirtualRefBasePtr(mNativePtr)` |
 
 - **Test:** A Java class that stores a native heap pointer in a **non-transient** `long` field, and passes it
@@ -1351,6 +1408,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | AM-02 / AM-03, whichever supplies the corruption |
 | **Applies to** | native C++ targets; **check `ro.build.version.sdk` first** — CFI (9.0+) and PAC-RET/BTI (14+) change what this argument is worth |
+| **Requires** | native |
 | **Maps to** | CWE-787, CWE-416; MASTG-TECH-0018, MASTG-TECH-0024, MASTG-TOOL-0033 (Ghidra), MASTG-TOOL-0152 (lldb) |
 
 - **Test:** GCC and Clang place the vftable pointer at **offset 0** of a polymorphic object, so overwriting
@@ -1387,6 +1445,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | any native code indexing an array with a value derived from attacker data |
+| **Requires** | native |
 | **Maps to** | CWE-787, CWE-190; MASTG-KNOW-0005; ATT&CK T1575 |
 
 - **Test:** A negative or unchecked index is an arbitrary write. Before writing shellcode or building a ROP
@@ -1430,6 +1489,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | native code on all Android versions (stack cookies have been the default since Android 1.5) |
+| **Requires** | native |
 | **Maps to** | MASTG-TEST-0223, MASTG-KNOW-0006, MASWE-0045; CWE-787 |
 
 - **Test:** `-fstack-protector` inserts a check in the **epilogue**. Corrupt something the function uses
@@ -1464,6 +1524,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; `application_level_denial_of_service_dos.high_impact_and_or_medium_difficulty` (**P3**) for a reliable controlled crash. Compare the band you are escaping: a pure **Java**-layer crash from the same vector is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, worth nothing |
 | **Attacker** | **AM-03** zero-permission local app (prove it from a real attacker APK, not from `adb`, which runs as the far-more-privileged shell UID) |
 | **Applies to** | any app whose D16-005 table has a row reachable from an exported activity, receiver, service or provider |
+| **Requires** | native, device, exported-activity, exported-service, exported-receiver, provider |
 | **Maps to** | MASTG-KNOW-0005, MASTG-TECH-0044; MASWE-0050; ATT&CK T1575, T1658; CWE-787 |
 
 - **Test:** Drive the exported entry point that reaches native code with oversized, negative, truncated and
@@ -1503,6 +1564,7 @@ without checking it?**
 | **VRT** | the parser bug's own path; delivery decides the multiplier (Meta: 0-click ×1, 1-click ×0.75, 2+ click ×0.5) |
 | **Attacker** | **AM-01** remote, no interaction |
 | **Applies to** | any image/video/font/document parser reachable from a file that lands on the device |
+| **Requires** | native, device |
 | **Maps to** | CVE-2026-0049 (Android 14–16), CVE-2026-0006 (MMS/email delivery of a ~1.2 KB MP4), CVE-2025-27363 (WhatsApp PDF auto-preview); ATT&CK T1658 |
 
 - **Test:** For any parser bug, establish the highest-privilege, least-interaction path that reaches it. The
@@ -1559,6 +1621,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; otherwise rate the crash |
 | **Attacker** | **AM-09** malicious backend/CDN; **AM-02** when the URL comes from a deep link or a scanned code |
 | **Applies to** | any app that loads remote images/media/fonts through a bundled decoder (Glide, Coil, Fresco, ExoPlayer/Media3, a custom `ImageDecoder` path) |
+| **Requires** | native, device |
 | **Maps to** | MASTG-KNOW-0005, MASWE-0050; CWE-787; ATT&CK T1658 |
 
 - **Test:** The prime remote surface is not a parser the app exposes — it is a decoder the app *calls* on
@@ -1599,6 +1662,7 @@ without checking it?**
 | **VRT** | n/a directly; it is the argument that an in-process memory bug is not merely "the app crashes" |
 | **Attacker** | AM-02 / AM-09 (shaders, textures, image decode reaching the GPU stack) |
 | **Applies to** | all; OpenGL, Vulkan, RenderScript, `android.hidl.memory@1.0` and the stable C mapper are documented same-process HALs. RenderScript is deprecated but the SP-HAL remains on many devices |
+| **Requires** | device |
 | **Maps to** | AOSP "HAL types" (SP-HALs are "a restricted set of wrapped interfaces controlled by Google that run directly within client processes"); AOSP linker-namespace `sphal` namespace; ATT&CK T1575 |
 
 - **Test:** Confirm that vendor code is mapped into the app's own process and that the process holds an open
@@ -1637,6 +1701,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | **AM-03** (a co-located app writing the file) or AM-09 (the app downloads it) |
 | **Applies to** | **API gate:** apps targeting **API 29+** cannot execute native code from the app's *internal* data storage — the external-storage and pre-29 variants remain live. Also check `android:extractNativeLibs`: with `extractNativeLibs="false"` (the AGP 3.6 / targetSdk-30-era default) libraries load uncompressed from the APK and there is no `lib-*/` directory to overwrite |
+| **Requires** | native |
 | **Maps to** | ATT&CK T1625.001 (System Runtime API Hijacking), T1407 (Download New Code at Runtime, mitigation M1006), T1575; CWE-829, CWE-494; H1 #1377748 (Evernote, High), #1115864 (Mattermost, High 7.8) |
 
 - **Test:** Find every loader and where it reads from. `System.load()` on an absolute path under the data
@@ -1689,6 +1754,7 @@ without checking it?**
 | **VRT** | n/a standalone; it is a portability *and* security observation |
 | **Attacker** | AM-12 to observe; the risk is vendor code executing inside the app sandbox |
 | **Applies to** | **API gate:** enforced from **targetSdk 24** — apps may only `dlopen()` allowlisted public libraries. **LEGACY: unrestricted below targetSdk 24** |
+| **Requires** | native, device |
 | **Maps to** | AOSP "Namespaces for native libraries" (`/system/etc/public.libraries.txt`, `/vendor/etc/public.libraries.txt`, `/system/etc/public.libraries-COMPANYNAME.txt`, `lib*COMPANYNAME.so` naming, `same_process_hal_file` SELinux label, CDD 3.1.1); AOSP "Linker namespace" (`default`/`sphal`/`vndk`/`rs`; `search.paths`/`permitted.paths`/`visible`) |
 
 - **Test:** An app that loads `/system/lib64/<private>.so` or a vendor library is either targeting an old SDK
@@ -1719,6 +1785,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) with execution; otherwise rate the crash |
 | **Attacker** | AM-02 / AM-03 depending on which bridge reaches the plugin |
 | **Applies to** | Flutter, React Native, Unity, Xamarin, Qt and Cordova builds — all of which ship third-party native plugins that do their own string and buffer handling |
+| **Requires** | native, flutter, react-native, unity, xamarin, cordova, capacitor |
 | **Maps to** | MASTG-TECH-0140, MASTG-TOOL-0107 (jnitrace), MASTG-TOOL-0129 (rabin2), MASTG-TOOL-0003 (nm); MASWE-0050 |
 
 - **Test:** A "managed" cross-platform app still has a native attack surface: every plugin ships a `.so` with
@@ -1766,6 +1833,7 @@ without checking it?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (**P1**) if a live token is scraped from memory and used; otherwise rate the disclosure |
 | **Attacker** | AM-03/AM-04 **only if** the app is debuggable; otherwise AM-12 (not an attack) |
 | **Applies to** | all. ATT&CK notes "Both Android and iOS lack legitimate process injection methods; it requires root access or vulnerability exploitation" — so on a stock device this is gated by the debuggable flag or by root |
+| **Requires** | device |
 | **Maps to** | ATT&CK T1631.001 (Ptrace System Calls), T1631, T1617 (Hooking); MASTG-TECH-0044; CWE-200 |
 
 - **Test:** Can another process attach to the app? The three conditions are the `android:debuggable` flag,
@@ -1778,7 +1846,7 @@ without checking it?**
   adb shell "su -c 'cat /proc/sys/kernel/yama/ptrace_scope'" 2>/dev/null
   aapt2 dump badging base.apk | grep -i debuggable
   grep -rnE 'prctl|PR_SET_DUMPABLE|ptrace|TracerPid' out/sources/ x/lib/*/*.so
-  frida -U -n com.target.app -e 'Process.enumerateModules().slice(0,5)'
+  frida -D "$SERIAL" -n com.target.app -e 'Process.enumerateModules().slice(0,5)'
   ```
   Scrape the heap for session material:
   ```javascript
@@ -1802,6 +1870,7 @@ without checking it?**
 | **VRT** | rate on the material exposed; `sensitive_data_exposure.disclosure_of_secrets.*` per what the key protects |
 | **Attacker** | AM-10/AM-11 (memory captured from a dump/hibernation image) or AM-12 with a core dump |
 | **Applies to** | **Android 14+**, all apps with native key handling |
+| **Requires** | native, api>=34 |
 | **Maps to** | `developer.android.com/about/versions/14/behavior-changes-all` ("Maximum memory lockable via `mlock()` reduced from 64 MB to 64 KB per process"); CWE-312 |
 
 - **Test:** Native code that `mlock`ed a key buffer to keep it out of swap and hibernation now fails for
@@ -1828,6 +1897,7 @@ without checking it?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | any app-reachable native parser you are authorised to fuzz; check the programme's scope before running anything against a vendor's production infrastructure |
+| **Requires** | native |
 | **Maps to** | MASTG-TECH-0037 (Symbolic Execution) as the alternative when the input space is narrow; MASTG-TOOL-0030 (Angr) |
 
 - **Test:** Pick the engine from what you actually have, not from fashion:
@@ -1867,6 +1937,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) via the bug it finds |
 | **Attacker** | AM-01/AM-02 per the delivery path |
 | **Applies to** | all apps shipping `.so` parsers, and any third-party library you can rebuild from source |
+| **Requires** | native |
 | **Maps to** | MASTG-KNOW-0005; CWE-787, CWE-125, CWE-190 |
 
 - **Test:** An out-of-bounds read does not always crash. ASan is the bug oracle that turns "it did not crash"
@@ -1918,6 +1989,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) |
 | **Attacker** | n/a (rating discipline) — the attacker model is whichever one reaches the *real* call path, never your harness |
 | **Applies to** | every memory-safety submission, at every programme in this corpus |
+| **Requires** | native |
 | **Maps to** | Google "Invalid Reports → Unreachable bugs"; Samsung ineligible list and downgrade factors; TikTok exploit requirement |
 
 - **Test:** A crash you produced by `dlopen`-ing a library and calling its internal functions directly is
@@ -1955,6 +2027,7 @@ without checking it?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | AArch64 Android `.so` with no source; vendor/firmware parsers (scope permitting — this is usually D25 work, not app-scope) |
+| **Requires** | native |
 | **Maps to** | MASTG-TOOL-0001 (Frida, for the Frida-mode backend) |
 
 - **Test:** Fork-per-execution in QEMU mode is the usual reason a campaign is "too slow to find anything".
@@ -2003,6 +2076,7 @@ without checking it?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | any ASan-built harness running against a firmware rootfs under QEMU |
+| **Requires** | native |
 | **Maps to** | n/a (setup) |
 
 - **Test:** A harness built with ASan against a firmware rootfs runs on **Bionic, not glibc** — it needs
@@ -2032,6 +2106,7 @@ without checking it?**
 | **VRT** | n/a; without this artefact a memory-safety claim will not triage at all |
 | **Attacker** | n/a |
 | **Applies to** | every crash finding in this chapter |
+| **Requires** | native, device |
 | **Maps to** | MASTG-TECH-0044; the AOSP tombstone format |
 
 - **Test:** "The app crashed" is not evidence. Collect the full tombstone with build fingerprint, faulting
@@ -2071,6 +2146,7 @@ without checking it?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | any fuzzing output; also the discipline that stops you filing 674 duplicates |
+| **Requires** | native |
 | **Maps to** | n/a (process) |
 
 - **Test:** A pile of crashes is not a set of findings. Convert every crash into a structured record and
@@ -2106,6 +2182,7 @@ without checking it?**
 | **VRT** | n/a; it is what makes the report a root-cause analysis rather than a crash dump — and at Google, a root-cause analysis plus a patch is a payout precondition |
 | **Attacker** | n/a |
 | **Applies to** | all memory-corruption work |
+| **Requires** | native |
 | **Maps to** | MASTG-TOOL-0152 (lldb for Android), MASTG-TECH-0024 |
 
 - **Test:** Work backwards from the crash to the first incorrect state transition. Two techniques pay:
@@ -2153,6 +2230,7 @@ without checking it?**
 | **VRT** | moves the finding to `application_level_denial_of_service_dos.*` instead of RCE |
 | **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | AOSP components built with UBSan/IntSan trapping; increasingly, app libraries too |
+| **Requires** | native |
 | **Maps to** | CVE-2026-0049 (the `libdng_sdk.so` case); AOSP IntSan/BoundSan |
 
 - **Test:** If UBSan ships in the release build, an integer overflow that would have been silent corruption
@@ -2183,6 +2261,7 @@ without checking it?**
 | **VRT** | it is what decides between `server_side_injection.remote_code_execution_rce` (P1) and a P3 crash |
 | **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | every memory-corruption finding, without exception |
+| **Requires** | native |
 | **Maps to** | MASTG-KNOW-0006; AOSP security-model Tables 4–5; `source.android.com/docs/security/test/*` (the AOSP sanitizer/CFI/Scudo/SCS suite) |
 
 - **Test:** Before writing a severity, walk the chain from your primitive to code execution and mark each
@@ -2225,6 +2304,7 @@ without checking it?**
 | **VRT** | it bounds what you may claim after `server_side_injection.remote_code_execution_rce` |
 | **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | all; SELinux has been enforcing since Android 4.4 |
+| **Requires** | native, device |
 | **Maps to** | AOSP SELinux concepts (`isolated_app`, `untrusted_app`, versioned `untrusted_app_NN` domains); AOSP device-policy guidance |
 
 - **Test:** Before writing "the attacker then gains root", "reads another app's data directory" or "installs
@@ -2259,6 +2339,7 @@ without checking it?**
 | **VRT** | n/a standalone; it moves the parser finding up or down one band |
 | **Attacker** | n/a (rating discipline) — inherits the attacker model of the underlying memory-safety item |
 | **Applies to** | Android 4.1+; the correct container for parsing untrusted input (media, archives, HTML, PDF, native decoders) |
+| **Requires** | native, device |
 | **Maps to** | AOSP security-model Table 2 ("Isolated process: Apps may run services in a process with no Android permissions and access to only two binder services"); `guide/topics/manifest/service-element` (isolatedProcess); SELinux `isolated_app` domain |
 
 - **Test:** A service declared `android:isolatedProcess="true"` runs with no Android permissions and almost
@@ -2290,6 +2371,7 @@ without checking it?**
 | **VRT** | it bounds the "needs an information leak" argument |
 | **Attacker** | AM-03 — "the attacker also has an app installed" is a realistic precondition, not a stretch |
 | **Applies to** | all Android |
+| **Requires** | native, device |
 | **Maps to** | AOSP zygote/ASLR behaviour; `kptr_restrict`/`dmesg_restrict` (Android 4.1+) |
 
 - **Test:** Two common over-credits. (1) **ASLR:** every app forks from the same zygote, so the library
@@ -2321,6 +2403,7 @@ without checking it?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (**P1**) only when you demonstrate execution; otherwise rate the primitive |
 | **Attacker** | AM-03 — a **zero-permission** app, which is what makes this valuable |
 | **Applies to** | any memory-safety bug reachable from a public Java/Android API |
+| **Requires** | native |
 | **Maps to** | CVE-2025-48595 (CWE-190, CVSS 8.4, CISA KEV "possible limited, targeted exploitation", Android June 2026 bulletin; Android 14, 15, 16, 16 QPR2 with SQLite < 3.44.5); ATT&CK T1575 |
 
 - **Test:** A memory-safety bug reachable from a public Java API is not "just a crash". It converts a managed
@@ -2357,6 +2440,7 @@ without checking it?**
 | **VRT** | n/a; it is what makes the severity survive triage |
 | **Attacker** | n/a |
 | **Applies to** | every finding in this chapter |
+| **Requires** | native |
 | **Maps to** | CVE-2026-28576, CVE-2025-5915, CVE-2026-65346 (negative-control examples) |
 
 - **Test:** Assemble five artefacts for every native finding, in this order — the native equivalent of the
@@ -2400,6 +2484,7 @@ without checking it?**
 | **VRT** | it is what decides whether you file P1 or P3 |
 | **Attacker** | n/a |
 | **Applies to** | every Critical or High in this chapter |
+| **Requires** | native |
 | **Maps to** | n/a (process) |
 
 - **Test:** Write the draft Critical title, then substitute **the Critical claim** — not the bug — into each
@@ -2436,6 +2521,7 @@ without checking it?**
 | **VRT** | it determines how many of the P1/P2 nodes you actually reach |
 | **Attacker** | n/a |
 | **Applies to** | any engagement where a native finding chains with another domain's primitive |
+| **Requires** | native |
 | **Maps to** | n/a (process) |
 
 - **Test:** A native chain in this chapter is usually three reports, not one: an IPC/deserialisation primitive

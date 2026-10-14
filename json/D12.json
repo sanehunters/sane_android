@@ -4,7 +4,7 @@
  "file": "D12-crypto-and-key-management.md",
  "why": "It pays because the entry ticket is free. Every other domain needs a victim, a link, a permission or a\nmalicious app on the device; this one needs the Play Store. A hardcoded `SecretKeySpec` is a shared secret\nwith the entire install base the moment the build ships, and the same is true of an HS256 signing secret, an\nmTLS client `.p12`, a Dart-embedded AES seed in `libapp.so`, or an Algolia admin key in a Hermes bundle.\nBugcrowd's own doctrine agrees with the shape: `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset`\nis **P1**, and a shipped APK is a publicly accessible asset. The IQCrafter Flutter study pulled two complete\n2048-bit RSA private keys out of `libapp.so` at offsets `0x85bb0` and `0x9f486` and then produced\nbyte-identical request signatures from a standalone Python client — that is a P1-shaped finding that never\ntouched a user.\n\nIt also fails more often than any other domain, and it fails for one reason: the grep hit gets submitted\ninstead of the consequence. The calibration points are unambiguous. ivrodriguez's first-ever mobile report\nwas a detailed, *correct* write-up of UUID-as-key-and-salt reuse with no authentication tag — closed **Not\napplicable** with the triager asking \"Can you show a proof of concept on how you can exploit this issue?\"\nMeesho used `AES/ECB` with a key equal to the first 16 characters of the access token and no IV or MAC — and\nit was still only **Low**, because the payloads were short identifiers, over TLS, under a key the server\nalready shared. Google's Mobile VRP lists \"Hardcoded API keys\" as flatly non-qualifying; Xiaomi, Spotify,\nGrab, Reddit and Basecamp all exclude recoverable app secrets by name, and Basecamp's exclusion carries the\nexact escape hatch you must aim for: *\"unless chained with a demonstrated cross-user impact that does not\nrequire physical device access.\"* Empirically, Reverb.com's hardcoded Cloudinary API-secret report paid **$0**\nat 96 upvotes; Zenly's overly-permissive-key report paid $750; 8x8 and Nord Security hardcoded-key reports\npaid $0. Compare that to Nextcloud #1189162 (E2EE public key *not verified*) at **$1,500** against #1189168\n(E2EE keys not cleared on logout) at **$100** — the verification failure was worth fifteen times the hygiene\nfailure. The base rate for \"I found a key\" is high; the base rate for \"I found a key that is worth money\" is\nlow, and the gap is entirely the decryption or the forgery you did with it.\n\nThe third reason to take this domain seriously is that it is the single most common source of *fabricated*\nfindings in mobile reporting. Three emulator artefacts — `KeyInfo.isInsideSecureHardware() == false`,\n`getSecurityLevel() == 0`, and auth-bound key generation throwing on a device with no lockscreen — are\nproperties of your harness, not of the app, and reporting them is the fastest way to have a report closed as\ninformative and your subsequent submissions read with suspicion. The emulator is authoritative for almost\nall crypto *misuse* (algorithm, mode, IV, key provenance, purpose bitmask, PRNG); it is authoritative for\nnothing about hardware backing, attestation chains, StrongBox or real biometric enrolment. Decide which side\nof that line each item sits on before you run it, and say so in the report.",
  "crux": "**Is there a key, nonce, salt or signature that some component still trusts, which I can reproduce either from the public APK or from code running in the app's own UID — and what does the server do when I use it?**",
- "applicability": "",
+ "applicability": "Run once, before opening any D12 item. `$E` = engagement dir, `$APK` = the base APK, `$DEC` = `$E/decompiled` (START.md §6).\n\n```bash\n# 1. First-party crypto call sites, jadx + smali cross-check — zero in BOTH is the only clean negative\ngrep -rlE 'javax\\.crypto\\.|java\\.security\\.(MessageDigest|Signature|KeyStore|KeyPairGenerator|KeyFactory|SecureRandom)|android\\.security\\.keystore\\.' \"$DEC/jadx/sources\" \\\n  | grep -vE '/(okhttp3|okio|retrofit2|kotlin|kotlinx|androidx|com/google/(android/gms|crypto/tink|firebase|protobuf)|org/bouncycastle|org/conscrypt|io/grpc)/' | wc -l\ngrep -rlE 'Ljavax/crypto/|Landroid/security/keystore/|Ljava/security/(MessageDigest|Signature|KeyStore);' \"$DEC\"/apktool/smali* \\\n  | grep -vE '/(okhttp3|androidx|kotlin|com/google|org/bouncycastle)/' | wc -l\n# 2. Framework markers that make a DEX-only negative unsound (D12-003 route)\nunzip -l \"$APK\" | grep -ciE 'index\\.android\\.bundle|libhermes|libapp\\.so|libflutter\\.so|libil2cpp\\.so|global-metadata|assemblies|www/'\n# 3. Shipped key material, tokens, and the item-group markers\nunzip -l \"$APK\" | grep -ciE '\\.(p12|pfx|jks|bks|pem|key|der)$|service-account|credentials\\.json'\ngrep -rhoE 'eyJ[A-Za-z0-9_-]{8,}\\.eyJ[A-Za-z0-9_-]{8,}\\.' \"$DEC\" 2>/dev/null | sort -u | wc -l\nfor k in 'KeyGenParameterSpec|AndroidKeyStore' 'BiometricPrompt|setUserAuthenticationRequired' 'setAttestationChallenge|getCertificateChain|1\\.3\\.6\\.1\\.4\\.1\\.11129\\.2\\.1\\.17' \\\n         'x-signature|x-sign|HmacSHA|Mac\\.getInstance' 'Jwts\\.|jsonwebtoken|HS256' 'net\\.sqlcipher|SupportFactory' 'setKeySetId|OfflineLicenseHelper' \\\n         'E2eeContactKeysManager' 'KeyStoreManager|grantKeyAccess' 'PublicKeyCredential|Fido2ApiClient' 'code_verifier|codeVerifier'; do\n  printf '%-72s %s\\n' \"$k\" \"$(grep -rlE \"$k\" \"$DEC/jadx/sources\" | wc -l)\"; done\n# 4. Inventory and manifest gates\nwc -l < \"$E/inventory/endpoints.csv\"\ngrep -oE 'android:(targetSdkVersion|minSdkVersion)=\"[0-9]+\"' \"$DEC/apktool/AndroidManifest.xml\"\n```\n\n**Decision.**\n\n| Probe result | Verdict |\n|---|---|\n| (1) jadx = 0 **and** smali = 0, (2) = 0, (3) key files = 0, JWT = 0, every marker row = 0 | **Domain n/a** except D12-001, D12-003 and D12-079, which record the counts. |\n| (1) = 0 but (2) > 0 | Domain **applies** through D12-003 → D12-008 / 009 / 010 / 011; a DEX negative is not a result. |\n| (1) > 0 | Domain **applies**. Gate the groups: D12-048..D12-061 need the `KeyGenParameterSpec|AndroidKeyStore` row > 0 **or** a non-empty D12-004 alias table — if both are 0 and sensitive operations are brokered to another package over binder (D11-009), mark 048..061 n/a naming the delegate; D12-062..D12-069 need the attestation row > 0; D12-044..D12-047 need JWT > 0 in the package or on the wire; D12-037 the `code_verifier` row or a D09 OAuth flow; D12-073 the sqlcipher row; D12-074 the DRM row; D12-075 `E2eeContactKeysManager` (API 35+); D12-059 `KeyStoreManager` (API 36+); D12-084 the FIDO row; D12-018/022/040..046/063..069/076/083/084 additionally need `backend-api` in scope. |\n\n**n/a note the model writes (whole domain):**\n\n`D12 n/a — probe YYYY-MM-DD: first-party crypto call sites jadx=0 smali=0 (filters: okhttp3/androidx/kotlin/gms/tink/bouncycastle); framework markers=0 (the DEX is the whole app); key-shaped files=0; JWT strings=0; Keystore/biometric/attestation/signing/sqlcipher/DRM/E2EE/KeyStoreManager/FIDO marker rows all 0; endpoints.csv=<N> rows. Recorded D12-001 (census table), D12-003 (no framework markers), D12-079. Re-open the domain if the P5 D12-002 hook prints any [KEY]/[CIPHER] line or P6 captures a signed, HMAC'd or encrypted request body.`\n\n**n/a note for the Keystore block only (delegated keys):**\n\n`D12-048..D12-061 n/a — D12-004 aliases()=0 after full exercise and static KeyGenParameterSpec/AndroidKeyStore=0; key use is delegated to <delegate package> over binder (D11-009 / D15 'requests originate elsewhere'); delegate alias count <n> recorded as context only, measured in the delegate's process with positive control alias <alias>; delegate not in programme scope.`",
  "triage": "1. **The transformation and key-provenance census** (D12-001, D12-002). One `Cipher.getInstance` frequency\n   table and one `SecretKeySpec` hook answer most of the domain in ten minutes, and the hook beats every\n   obfuscator because the key must exist in the clear at construction.\n2. **Framework check before any negative** (D12-003). On React Native, Flutter, Cordova or Unity a clean\n   `jadx/sources` crypto grep is a *false negative*, not a result. Dump the bundle or the native blob first.\n3. **Key provenance, hardest first** (D12-005 → D12-013). Hardcoded constant → shipped key file → native\n   blob → device-identifier derivation → outside-the-Keystore storage. Stop at the first one that decrypts\n   real data; that is the report.\n4. **What the key protects, and whether the server trusts it** (D12-041, D12-042, D12-043). A key that only\n   obfuscates local config is Low; the same key signing requests is where P1 lives. Test the *server*, not\n   the client.\n5. **The Keystore audit** (D12-004, then D12-048 → D12-061). Read `KeyGenParameterSpec` for every alias and\n   decide, per key, whether hardware backing is protecting *extraction* while leaving *use* wide open.\n6. **Randomness at a security sink only** (D12-033 → D12-038). Follow each `Random` hit forward with jadx\n   xrefs; a `Random` that shuffles a carousel is not a finding and filing it costs you credibility.\n7. **Attestation, if the app uses it at all** (D12-062 → D12-069). This is server-side work with the highest\n   ceiling in the chapter after key extraction, and almost nobody tests it.\n8. **Everything that is P5 on its own goes last** (IV reuse alone, intra-environment key reuse, predictable\n   salt, uncleared keying material). File them as chain fuel under a parent finding or leave them in the\n   Graveyard.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| `KeyInfo.isInsideSecureHardware() == false` / `getSecurityLevel() == 0` on an emulator | A property of the AVD's software Keystore, not of the app. Physical devices report `TrustedEnvironment`/`StrongBox` | The same measurement on a **physical device**, with the model named, on a key the app documents as hardware-backed (D12-056) |\n| `StrongBoxUnavailableException` on a device without `android.hardware.strongbox_keystore` | Documented behaviour of `setIsStrongBoxBacked(true)` on hardware that lacks StrongBox | The app's silent **software fallback** after the exception while the UI still claims hardware protection (D12-054) |\n| Auth-bound key generation throwing on your lockscreen-less test device | Keys with `setUserAuthenticationRequired(true)` cannot be generated without a secure lock — set a PIN (D12-078) | The **app's** fallback to an unprotected key on a real user's lock-less device (D12-053) |\n| \"The app uses `Cipher.getInstance(\"AES\")`\" with no reachable secret | A grep hit. MASTG-TEST-0350 requires the \"Further Validation\" step: confirm the encrypted data is sensitive | Identical ciphertext blocks on real user data, or a block-swap the server accepts (D12-014) |\n| `RSA/ECB/OAEPPadding` or `RSA/ECB/PKCS1Padding` reported as ECB mode | `ECB` is a JCA API placeholder for RSA; RSA does not use a block-cipher mode | Nothing — this is always a false positive. Do not file it |\n| MD5 or SHA-1 present anywhere in the app | Usually a cache key, ETag, dedup id or a third-party library's bookkeeping | The digest deciding an integrity or authentication outcome, with a passing forged input (D12-016) |\n| `new Random()` present anywhere in the app | MASTG-TEST-0204 requires the value to be \"used for security-relevant purposes\". UI jitter and shuffles are not | The predicted **next** value accepted by the app or server (D12-033) |\n| IV reuse with no demonstrated consequence | `cryptographic_weakness.insufficient_entropy.initialization_vector_reuse` = **P5** | Recovered plaintext (CTR XOR) or a forged GCM tag (D12-020), or a padding oracle built on it (D12-018) |\n| PRNG seed reuse with no demonstrated prediction | `.prng_seed_reuse` = **P5** | Seed recovery plus a first-attempt prediction the server accepts (D12-035, D12-036) |\n| Same key used for two purposes inside one environment | `cryptographic_weakness.key_reuse.intra_environment` = **P5** | The same key across **prod and staging** = `key_reuse.inter_environment` **P2** (D12-030), or a built cross-protocol attack |\n| Predictable salt on its own | `cryptographic_weakness.weak_hash.use_of_predictable_salt` = **P5** | Paired with a weak KDF and an executed offline brute force that recovers the plaintext (D12-026) |\n| E2EE or session keys not cleared on logout | `cryptographic_weakness.incomplete_cleanup_of_keying_material` = **P5**; Nextcloud paid $100 for exactly this | The **verification** failure beside it, which paid $1,500 at the same programme (D12-076) |\n| A hardcoded third-party API key (Maps, Sentry, Crashlytics, Firebase, Branch, Kinesis) | Google Mobile VRP: \"Hardcoded API keys\" flatly non-qualifying. Xiaomi, Spotify, Grab, Reddit exclude these by name. `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` = **P5** | The key returning **customer data** or performing a privileged action — then it is `disclosure_of_secrets.for_publicly_accessible_asset` **P1** (D12-011) |\n| An OAuth `client_secret` recovered from the mobile app | Never-submit. Public clients are not expected to hold a confidential secret; Xiaomi and Spotify name it out of scope explicitly | **PKCE non-enforcement** on the same flow is the reportable finding (D12-037), as is a weak `code_verifier` PRNG |\n| An expired JWT found in the binary | `sensitive_data_exposure.disclosure_of_secrets.sensitive_information_disclosed_jwt` = **P5** | Its claim shape and path inventory driving a shadow-API version diff or a secret-recovery forge (D12-047 → D12-043/D12-044) |\n| A named JCA provider (`getInstance(alg, \"BC\")`) | Often Informational under HackerOne rating; a compatibility issue as much as a security one | The bundled provider supplying a weak primitive the platform refuses, with the primitive shown in use (D12-070, D12-021) |\n| An embedded OpenSSL version string in a bundled `.so` | `using_components_with_known_vulnerabilities.outdated_software_version` = **P5** without reachability | A Frida hook showing the app routing crypto/TLS through that module, plus a specific advisory (D12-072) |\n| AES-128 reported as an insufficient key size | MASTG's AES-128 position is explicitly forward-looking (\"considering quantum computing attacks\") | RSA-1024 or below, EC below 224, or a 64-bit symmetric key (D12-025) |\n| A Frida hook bypassing the biometric prompt on your own rooted device | Triage reads this as \"root detection bypass\" and closes it; AM-12 is not an attacker | The **absence of key binding** shown by a null `CryptoObject` plus the secret released (D12-048) |\n| \"The app does not use StrongBox\" | A hardening observation, not a vulnerability, on a device class where StrongBox may not exist | Paired with a server that trusts a client-asserted hardware claim (D12-062 → D12-063) |\n| Certificate pinning absent or defeatable | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` / `.defeatable` = **P5**, and AM-07 (a trusted CA you installed) is a tester convenience, not an attacker | Belongs to D14 entirely; here it matters only as the means of capturing ciphertext for D12-018/D12-041 |\n| Data stored unencrypted on internal storage | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` = **P5**; SELinux confines `/data/data` per app and `MODE_WORLD_*` throws at API 24+ | A demonstrated read primitive from D07/D08, or the same data on external storage (P4) — and it is D11's finding, not D12's |",
  "joins": "- **D12 key provenance × D11 storage mode.** Everyone reviews \"is the data encrypted?\" and \"where is the\n  key?\" separately, and both pass in isolation: the store is `EncryptedSharedPreferences` and the key is in\n  `AndroidKeyStore`. The join is the master key's `KeyGenParameterSpec`: with `userAuthRequired=false` the\n  encryption is defeated by any in-process primitive, so the D11 \"encrypted at rest\" mitigation is void and\n  the D11 finding's severity should be recalculated. File the D12 key property as the primitive and attach\n  it to the storage report — that is the pairing that turns a P5 storage note into a rated finding.\n- **D12 Keystore-as-oracle × D05/D06/D07 exported components.** The IPC reviewer sees a receiver that takes\n  a string and returns a string, and rates it Low because \"it does not leak anything\". The crypto reviewer\n  sees a key with perfect hardware protection and rates it safe. Joined: the receiver is a decryption and\n  signing oracle driven by any zero-permission app on the device (AM-03), and hardware protection of the\n  *key* is irrelevant because the *capability* was exported. AOSP says this in its own security model and\n  almost no checklist tests it (D12-058).\n- **D12 hardcoded signing key × D12-043 shadow API × D15 business logic.** Three surfaces nobody joins. The\n  binary's base URL points at `/v1/`; the current web app uses `/v3/`. The reverser recovers the `/v3/`\n  signing scheme and spends a day on it — while `/v1/` never required a signature at all. Behaviourally\n  diff every versioned path the binary knows about, with and without the signing headers, before reversing\n  anything. This is the highest-yield structural move available in a mobile crypto review.\n- **D12 weak PRNG × D04/D05 restart primitive.** A time-seeded `java.util.Random` is theoretically\n  predictable and practically not — unless you can control *when* the process starts. The activity reviewer\n  has a crash or a launcher intent and calls it a P5 DoS; the crypto reviewer has a seed with an unknown\n  value. Joined, the seed space collapses to a few hundred milliseconds and the challenge becomes\n  predictable on the first attempt (D12-036; the Galaxy Store chain's bug 4).\n- **D12 key attestation × D21 root/RASP × D23 payments.** The RASP reviewer proves root detection can be\n  bypassed and gets told \"that requires a rooted device, out of scope\". The crypto reviewer sees an\n  attestation chain and assumes it is sound. Joined: the chain never binds to the session or the\n  transaction, so a clean-device relay produces genuine hardware attestation for a rooted attacker, and\n  every fraud control built on \"this is a real, locked device\" collapses — without breaking any\n  cryptography (D12-068).\n- **D12 auth-bound keys × the device's lock state.** Every checklist tests the key properties on a\n  PIN-protected device. Nobody tests the no-secure-lock device — which is exactly the device a thief has —\n  or the Smart Lock trusted-place device, where `setUnlockedDeviceRequired(true)` is satisfied while the\n  phone sits unattended on a desk. Two device states in which the standard recommendations silently do\n  nothing (D12-052, D12-053).\n- **D12 crypto census × D19 framework detection.** The single largest false-negative generator in this\n  domain is a clean `jadx/sources` crypto grep on a React Native or Flutter app. The framework reviewer\n  knows the app is RN; the crypto reviewer records \"no crypto misuse found\". Joined, the same grep over the\n  Hermes string table or the blutter object-pool dump returns the key, the storage-key names and the route\n  table (D12-003).\n- **D12 request signing × D14 pinning × D26 harness.** Pinning is P5 and worth nothing as a finding, but\n  without defeating it you never see the signed request body, and without the signed body you cannot run\n  the four-probe server-enforcement test that produces the actual P1. The join is procedural: D14 work is\n  the *cost* of the D12 finding, so budget it first and never file it as a finding of its own.\n- **D12 key reuse across installs × D18 backend multi-tenancy.** A shared key is P5 `intra_environment`\n  until you can reach another user's ciphertext. The backend reviewer has an endpoint that returns an\n  encrypted field for an arbitrary object id; the crypto reviewer has the key. Joined, you decrypt another\n  tenant's data with a key from the public APK — cross-user impact with no physical access, which is\n  precisely the exclusion escape hatch every program writes into its policy (D12-031).",
@@ -108,7 +108,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Do not reverse the key derivation. The key must exist in the clear at `SecretKeySpec.<init>`\nand the plaintext must exist in the clear at `Cipher.doFinal`, whatever the obfuscator did. Capture both.",
-   "how": "```javascript\n// crypto.js — covers all overloads, not just the single-argument ones\nJava.perform(function () {\n  function hex(b){ return Array.from(b).map(function(x){return ('0'+(x&0xff).toString(16)).slice(-2);}).join(''); }\n  function asc(b){ return Array.from(b).map(function(x){return String.fromCharCode(x&0xff);}).join(''); }\n  var ST = function(){ return Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()); };\n\n  Java.use('javax.crypto.spec.SecretKeySpec').$init.overload('[B','java.lang.String')\n    .implementation = function (k, a) {\n      console.log('[KEY] alg=' + a + ' len=' + k.length + ' hex=' + hex(k) + ' ascii=' + asc(k) + '\\n' + ST());\n      return this.$init(k, a); };\n\n  Java.use('javax.crypto.spec.IvParameterSpec').$init.overload('[B')\n    .implementation = function (iv) { console.log('[IV] ' + hex(iv)); return this.$init(iv); };\n\n  var G = Java.use('javax.crypto.spec.GCMParameterSpec');\n  G.$init.overload('int','[B').implementation = function (t, iv) {\n    console.log('[GCM] tagBits=' + t + ' ivLen=' + iv.length + ' iv=' + hex(iv)); return this.$init(t, iv); };\n\n  var C = Java.use('javax.crypto.Cipher');\n  C.getInstance.overload('java.lang.String').implementation = function (t) {\n    console.log('[CIPHER] ' + t + '\\n' + ST()); return this.getInstance(t); };\n  C.doFinal.overloads.forEach(function (o) {\n    o.implementation = function () {\n      var r = o.apply(this, arguments);\n      try { console.log('[DOFINAL ' + this.getAlgorithm() + '] out=' + asc(r)); } catch (e) {}\n      return r; }; });\n  C.update.overloads.forEach(function (o) {\n    o.implementation = function () { console.log('[UPDATE ' + this.getAlgorithm() + ']'); return o.apply(this, arguments); }; });\n});\n```\n```bash\nfrida -U -f com.target.app -l crypto.js --no-pause\n# broad trace first if you do not know where to look\nfrida-trace -U -f com.target.app -j 'javax.crypto.*!*' -j 'java.security.*!*' -o crypto.log\n```",
+   "how": "```javascript\n// crypto.js — covers all overloads, not just the single-argument ones\nJava.perform(function () {\n  function hex(b){ return Array.from(b).map(function(x){return ('0'+(x&0xff).toString(16)).slice(-2);}).join(''); }\n  function asc(b){ return Array.from(b).map(function(x){return String.fromCharCode(x&0xff);}).join(''); }\n  var ST = function(){ return Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()); };\n\n  Java.use('javax.crypto.spec.SecretKeySpec').$init.overload('[B','java.lang.String')\n    .implementation = function (k, a) {\n      console.log('[KEY] alg=' + a + ' len=' + k.length + ' hex=' + hex(k) + ' ascii=' + asc(k) + '\\n' + ST());\n      return this.$init(k, a); };\n\n  Java.use('javax.crypto.spec.IvParameterSpec').$init.overload('[B')\n    .implementation = function (iv) { console.log('[IV] ' + hex(iv)); return this.$init(iv); };\n\n  var G = Java.use('javax.crypto.spec.GCMParameterSpec');\n  G.$init.overload('int','[B').implementation = function (t, iv) {\n    console.log('[GCM] tagBits=' + t + ' ivLen=' + iv.length + ' iv=' + hex(iv)); return this.$init(t, iv); };\n\n  var C = Java.use('javax.crypto.Cipher');\n  C.getInstance.overload('java.lang.String').implementation = function (t) {\n    console.log('[CIPHER] ' + t + '\\n' + ST()); return this.getInstance(t); };\n  C.doFinal.overloads.forEach(function (o) {\n    o.implementation = function () {\n      var r = o.apply(this, arguments);\n      try { console.log('[DOFINAL ' + this.getAlgorithm() + '] out=' + asc(r)); } catch (e) {}\n      return r; }; });\n  C.update.overloads.forEach(function (o) {\n    o.implementation = function () { console.log('[UPDATE ' + this.getAlgorithm() + ']'); return o.apply(this, arguments); }; });\n});\n```\n```bash\nfrida -D \"$SERIAL\" -f com.target.app -l crypto.js\n# broad trace first if you do not know where to look\nfrida-trace -U -f com.target.app -j 'javax.crypto.*!*' -j 'java.security.*!*' -o crypto.log\n```",
    "proof": "A `[KEY]` line with the hex bytes and a `[CIPHER]` line naming the transformation, followed by\na `[DOFINAL]` line showing the corresponding plaintext. The MHL-captured shape is the target:\n`Algorithm: AES/ECB/PKCS5Padding`, `Key: 4d6f62696c65486173682e2e2e`, `Input: {\"user\":\"admin\",\"pin\":\"1234\"}` —\ntwo findings (recovered key, ECB mode) out of one trace.",
    "escalation": "The key feeds D12-005; the plaintext feeds D11 (decrypt the local store) and D15 (forge\nthe request body). A recovered request-signing key is the highest-value exit from this item.",
    "ruled_out_when": "Hooks are installed (prove it with a control line printed at attach) and exercising\nevery crypto-touching flow produces no `[KEY]`/`[CIPHER]` output — the crypto is native. Move to\n`Interceptor.attach` on `EVP_*`/`AES_*` exports in the app's `.so` (D16/D26). \"I ran the script and saw\nnothing\" without a control line is not a negative."
@@ -128,8 +128,17 @@
     "AM-12"
    ],
    "applies_to": "React Native, Flutter, Cordova/Ionic/Capacitor, Unity, Xamarin/MAUI, KMP",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter, react-native, hermes, cordova, capacitor, unity, xamarin, kmp",
+   "requires_tags": [
+    "flutter",
+    "react-native",
+    "hermes",
+    "cordova",
+    "capacitor",
+    "unity",
+    "xamarin",
+    "kmp"
+   ],
    "maps_to": "MASTG-TOOL-0116 (blutter), MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks)",
    "record": "",
    "legacy_meta": {},
@@ -341,8 +350,12 @@
     "AM-11"
    ],
    "applies_to": "apps doing PKCS#12-backed mTLS with a runtime-derived store password",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida, device, backend-api",
+   "requires_tags": [
+    "frida",
+    "device",
+    "backend-api"
+   ],
    "maps_to": "HackTricks `android-anti-instrumentation-and-ssl-pinning-bypass.md` — mTLS client certificate extraction from live keystore reloads",
    "record": "",
    "legacy_meta": {},
@@ -386,8 +399,13 @@
     "AM-01"
    ],
    "applies_to": "Flutter, Unity IL2CPP, Xamarin/MAUI, any framework with a native blob",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native, flutter, unity, xamarin",
+   "requires_tags": [
+    "native",
+    "flutter",
+    "unity",
+    "xamarin"
+   ],
    "maps_to": "IQCrafter Flutter study (RSA keys recovered at `0x85bb0` and `0x9f486` in `libapp.so`, end-to-end signature replay against production)",
    "record": "",
    "legacy_meta": {},
@@ -412,7 +430,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "DEX-oriented secret scanners never look in the native blob. Sweep it statically and then at\nruntime, because keys are often assembled at init rather than stored whole.",
-   "how": "```bash\nstrings -n 20 ext/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'\nstrings -n 20 ext/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'\ngrep -rna -- '-----BEGIN' out/assemblies/out/*.dll\ngrep -a -n -- '-----BEGIN' out_dir/pp.txt      # blutter object-pool dump\n```\n```bash\nfrida -U -f com.target.app -q -e \"\nvar m = Process.getModuleByName('libapp.so');\n// '-----BEGIN'\nMemory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {\n  onMatch: function(a){ console.log(a, Memory.readUtf8String(a, 96)); }, onComplete: function(){}});\n// '/api/'\nMemory.scan(m.base, m.size, '2f 61 70 69 2f', {\n  onMatch: function(a){ console.log('api', a, Memory.readUtf8String(a, 80)); }, onComplete: function(){}});\n\"\n```",
+   "how": "```bash\nstrings -n 20 ext/lib/arm64-v8a/libapp.so    | grep -a -n -- '-----BEGIN'\nstrings -n 20 ext/lib/arm64-v8a/libil2cpp.so | grep -a -n -- '-----BEGIN'\ngrep -rna -- '-----BEGIN' out/assemblies/out/*.dll\ngrep -a -n -- '-----BEGIN' out_dir/pp.txt      # blutter object-pool dump\n```\n```bash\nfrida -D \"$SERIAL\" -f com.target.app -q -e \"\nvar m = Process.getModuleByName('libapp.so');\n// '-----BEGIN'\nMemory.scan(m.base, m.size, '2d 2d 2d 2d 2d 42 45 47 49 4e', {\n  onMatch: function(a){ console.log(a, Memory.readUtf8String(a, 96)); }, onComplete: function(){}});\n// '/api/'\nMemory.scan(m.base, m.size, '2f 61 70 69 2f', {\n  onMatch: function(a){ console.log('api', a, Memory.readUtf8String(a, 80)); }, onComplete: function(){}});\n\"\n```",
    "proof": "A complete PEM private key extracted at a named offset, and a signature produced offline with\nit that the production API accepts (HTTP 200) — the signature replay is the finding, the PEM is the\nevidence.",
    "escalation": "→ D12-041/D12-043 (forge `X-Nonce`/`X-Timestamp`/`X-Signature` headers) → full D15 API\naccess without the app at all.",
    "ruled_out_when": "The `Memory.scan` runs over the loaded module after the app has exercised its signing\npath (prove the module was loaded and the scan completed) and finds no key material, and the static\n`strings` sweep of every `.so` and every assembly is clean. Note the module base and size in the record."
@@ -432,8 +450,10 @@
     "AM-01"
    ],
    "applies_to": "Flutter release builds — **including `--obfuscate`, which does not touch constants**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter",
+   "requires_tags": [
+    "flutter"
+   ],
    "maps_to": "reversethat.app DroidPass analysis; MASTG-TOOL-0116 (blutter)",
    "record": "",
    "legacy_meta": {},
@@ -478,8 +498,11 @@
     "AM-01"
    ],
    "applies_to": "Unity IL2CPP, Unity Mono, Xamarin, .NET MAUI",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "unity, xamarin",
+   "requires_tags": [
+    "unity",
+    "xamarin"
+   ],
    "maps_to": "Il2CppDumper (`DummyDll` restored assemblies, `dump.cs`), pyxamstore (`unpack` → DLLs)",
    "record": "",
    "legacy_meta": {},
@@ -524,8 +547,13 @@
     "AM-01"
    ],
    "applies_to": "React Native, Cordova/Ionic/Capacitor, any bundle-shipping framework",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, hermes, cordova, capacitor",
+   "requires_tags": [
+    "react-native",
+    "hermes",
+    "cordova",
+    "capacitor"
+   ],
    "maps_to": "MASTG-TOOL-0125 (apkleaks), MASTG-TOOL-0144 (gitleaks)",
    "record": "",
    "legacy_meta": {},
@@ -1533,8 +1561,10 @@
     "AM-01"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "sec-88 checklist §23 \"Check if cryptographic keys are reused\"; MASTG \"Storing a Key\"",
    "record": "",
    "legacy_meta": {},
@@ -1780,8 +1810,11 @@
     "AM-03"
    ],
    "applies_to": "all apps that seed a generator at process start",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "the Samsung Galaxy Store chain, bug 4: the challenge integer came from `new Random(System.currentTimeMillis())` at app start, and a forced restart collapsed the seed space to a ±200 ms window",
    "record": "",
    "legacy_meta": {},
@@ -1825,8 +1858,10 @@
     "AM-02"
    ],
    "applies_to": "apps doing Authorization Code + PKCE natively (RFC 8252)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth",
+   "requires_tags": [
+    "oauth"
+   ],
    "maps_to": "H1 #824931 (Grammarly, Medium 6.5, CWE \"Use of Cryptographically Weak PRNG\"; the fix was \"moving from PRNG to `SecureRandom`\")",
    "record": "",
    "legacy_meta": {},
@@ -2246,8 +2281,11 @@
     "AM-01"
    ],
    "applies_to": "all JWT-based auth the app participates in",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "`hunt-jwt-crypto`; `hunt-ato` Path 6(d); `hunt-api-misconfig` §12; missing/improper signature or claim validation (hackerone.com/reports/1760403; hackerone.com/reports/1040786, $10,000)",
    "record": "",
    "legacy_meta": {},
@@ -2444,8 +2482,12 @@
     "AM-11"
    ],
    "applies_to": "**API 24+**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, physical, biometric",
+   "requires_tags": [
+    "device",
+    "physical",
+    "biometric"
+   ],
    "maps_to": "MASWE-0022 (Crypto Keys Not Invalidated on New Biometric Enrollment); `developer.android.com/identity/sign-in/biometric-auth` (\"ensures the key becomes unusable if the user enrols new biometric credentials\"); `privacy-and-security/keystore` (\"By default, keys supporting only biometric credentials are invalidated when new biometrics are enrolled\")",
    "record": "",
    "legacy_meta": {},
@@ -2628,8 +2670,11 @@
     "AM-11"
    ],
    "applies_to": "**Android 9 (API 28)+**; StrongBox optional from Android 10 for device-unique attestation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, physical",
+   "requires_tags": [
+    "device",
+    "physical"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/keystore` — check `PackageManager.FEATURE_STRONGBOX_KEYSTORE` first; `setIsStrongBoxBacked(true)` \"throws `StrongBoxUnavailableException` if the algorithm/key size isn't supported\"; StrongBox properties (own CPU, secure storage, TRNG, tamper resistance, secure timer) and supported algorithms (RSA 2048, AES 128/256, ECDSA/ECDH P-256, HMAC-SHA256, Triple DES); AOSP security-model §4.3.8 (StrongBox as TRH, first shipped on Pixel 3 / Titan M)",
    "record": "",
    "legacy_meta": {},
@@ -2820,8 +2865,12 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, biometric",
+   "requires_tags": [
+    "device",
+    "frida",
+    "biometric"
+   ],
    "maps_to": "AOSP security-model §4.3.8, verbatim: \"only storing and using keys in TEE or TRH does not completely solve the problem … if an attacker gains access to the low-level interfaces for communicating directly with Keymint or Strongbox, they can use it as an oracle for cryptographic operations that require the private key. This is the reason why keys can be authentication bound and/or require user presence verification.\"",
    "record": "",
    "legacy_meta": {},
@@ -2869,8 +2918,12 @@
     "AM-08"
    ],
    "applies_to": "**Android 16 (API 36)+**. New enough that essentially no public checklist covers it — grep for it on every Android-16-targeting app",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=36, device, frida",
+   "requires_tags": [
+    "api>=36",
+    "device",
+    "frida"
+   ],
    "maps_to": "`developer.android.com/about/versions/16/features` — `KeyStoreManager`, `grantKeyAccess(String, int)`, `revokeKeyAccess(String, int)`, \"Share access to Android Keystore keys with other apps\"",
    "record": "",
    "legacy_meta": {},
@@ -2915,8 +2968,11 @@
     "AM-08"
    ],
    "applies_to": "all; Jetpack Security's `EncryptedSharedPreferences` is **deprecated as of 1.1.0** and Google advises against it in new apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida, device",
+   "requires_tags": [
+    "frida",
+    "device"
+   ],
    "maps_to": "MASWE-0003, MASWE-0016; the D12-004 alias table",
    "record": "",
    "legacy_meta": {},
@@ -2965,8 +3021,11 @@
     "AM-11"
    ],
    "applies_to": "all, especially E2EE messaging and vault apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "H1 #1189168 (Nextcloud, \"Android app does not clear end to end encryption keys\", **$100**) against H1 #1189162 (Nextcloud, \"End to end encryption public key is not properly verified\", **$1,500**) — the verification failure is worth fifteen times the hygiene failure",
    "record": "",
    "legacy_meta": {},
@@ -3287,8 +3346,12 @@
     "AM-12"
    ],
    "applies_to": "apps that treat an Android Keystore X.509 attestation chain as a device-integrity boolean",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm, physical",
+   "requires_tags": [
+    "backend-api",
+    "mitm",
+    "physical"
+   ],
    "maps_to": "HackTricks `play-integrity-attestation-bypass.md` \"Hardware Attestation Clean-Device Relay\", citing the Quarkslab research and demo repository, Guardsquare's key-attestation relay work, and the AOSP key/ID attestation docs",
    "record": "",
    "legacy_meta": {},
@@ -3328,8 +3391,11 @@
     "AM-01"
    ],
    "applies_to": "attestation verifiers; device-side behaviour differs on **Android 15** (RKP optional) versus **Android 16** (RKP only, factory keys phased out)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/security-key-attestation` — a new EC-based root certificate signs attestation chains starting **1 February 2026**, alongside the existing root with `SERIALNUMBER=f92009e853b6b045` (valid 2022-03-20 to 2042-03-15); \"Android 15+: RKP support is optional. Android 16+: Only RKP is supported; factory keys are phased out\"; \"RKP certificates must have validity periods checked\"; \"Pre-2021 devices have attestation keys with expired certificates, but remain trustworthy unless in the CRL\"",
    "record": "",
    "legacy_meta": {},
@@ -3470,8 +3536,10 @@
     "AM-09"
    ],
    "applies_to": "all apps shipping native TLS/crypto",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native",
+   "requires_tags": [
+    "native"
+   ],
    "maps_to": "Google Play \"Remediation for Bad OpenSSL Versions\" — **OpenSSL 1.1.1b through 1.1.1h** flagged as defective (ARMv8.3 PAC misuse causing runtime crashes), **resolved in 1.1.1i**; remediation is to update to 1.1.1i+ or use Java crypto (`HttpsURLConnection`) instead of the native interface, and updating the security provider alone does **not** fix it; the page names Agora RTM SDK, Alibaba, Amazon Chime SDK and Cocos2d-x as indirect embedders. Google's ASI programme also ran an OpenSSL campaign (from 2016-03-31) covering logjam, **CVE-2015-3194** and **CVE-2014-0224**, plus GnuTLS (2015-10-13), libpng and libjpeg-turbo (2016-06-16), and libupnp / **CVE-2015-8540** (2016-02-08). SQLCipher's bundled crypto has carried **CVE-2023-3446, CVE-2024-2511, CVE-2024-4741, CVE-2024-5535** (the last against OpenSSL 1.1.1q as used by SQLCipher 4.5.2)",
    "record": "",
    "legacy_meta": {},
@@ -3517,8 +3585,10 @@
     "AM-03"
    ],
    "applies_to": "apps using `android-database-sqlcipher` / `androidx-database-sqlcipher`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "cross-reference to D11; the passphrase derivation is the D12 half",
    "record": "",
    "legacy_meta": {},
@@ -3563,8 +3633,10 @@
     "AM-11"
    ],
    "applies_to": "apps with offline download of DRM-protected media (Widevine `cenc` API 19+, `cbcs` API 25+)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`developer.android.com/media/media3/exoplayer/drm` — `MediaItem.DrmConfiguration.Builder`, `setKeySetId(byte[])`, `DefaultDrmSessionManager`, `setMultiSession()`",
    "record": "",
    "legacy_meta": {},
@@ -3607,8 +3679,10 @@
     "AM-09"
    ],
    "applies_to": "**Android 15+** apps using the API",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35",
+   "requires_tags": [
+    "api>=35"
+   ],
    "maps_to": "`developer.android.com/about/versions/15/features` — `E2eeContactKeysManager`, \"OS-level API for storing cryptographic public keys with platform contacts integration for centralized key management and verification\"",
    "record": "",
    "legacy_meta": {},
@@ -3651,8 +3725,12 @@
     "AM-09"
    ],
    "applies_to": "messaging, file-sync and vault apps claiming end-to-end encryption",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "mitm",
+    "two-accounts"
+   ],
    "maps_to": "H1 #1189162 (Nextcloud, \"End to end encryption public key is not properly verified on Desktop and Android\", **$1,500**); H1 #2546437 (Rocket.Chat, \"The initial E2EE password generated by Rocket.Chat mobile can be recovered in a practical timescale\")",
    "record": "",
    "legacy_meta": {},

@@ -4,7 +4,7 @@
  "file": "D09-deeplinks-and-applinks.md",
  "why": "Three things make deep links the highest-yield mobile-native surface. First, the attacker model: a deep link\nis **AM-02**, remote with one click, which is the strongest model any purely client-side Android bug reaches.\nNothing else in the checklist converts a manifest line into \"any web page the victim visits\" for free.\nSecond, the base rate of a *correct* validator is low — Liu et al. (USENIX Security 2017, cited in the corpus)\nmeasured that **only two percent of Android apps shipping deep links passed full App Link verification**, and\nOversecured's own deep-link taxonomy exists because the same five bypasses keep working. Third, the payouts\nare real and public: KAYAK #1667998 (**Critical 9.3**, one-click ATO via `EXTRA_REDIRECT_URL`), Basecamp\n#1372667 (**High 8.7, $6,337**, `proceed_to` surviving the internal-URL check), Grab #401793\n(**High 7.1, $7,500** per Intigriti's write-up, deep link → WebView → `getGrabUser` bridge), TikTok #2417516\n(**High 8.1, CVE-2024-45240**), Zomato #532225 (High, $750), Periscope #583987 (Low, but **$1,540** — and the\niOS twin #805073 paid **$2,940**).\n\nBe honest about the other half. The *observation* that this domain most often produces is graveyard material.\nA missing `android:autoVerify=\"true\"` is not a finding: Bugcrowd's VRT has no node for it, Reddit's programme\nexcludes it by name (\"Deep links for Android missing `autoVerify=true` due to current Google limitation with\nAMP\"), and Starbucks excludes the whole class (\"Deeplink issues that require a victim user to interact with a\nlink or malicious app as part of the POC\"). Google's Mobile VRP prices it but discounts it hard — \"user must\nfollow a link\" is half the remote rate and \"user must install malicious app\" is **5%** of it, $15,000 against\n$300,000 at Tier 1. Shopify rated a complete magic-link ATO (#855618) **Low** because a malicious app was in\nthe precondition. The exception — the thing that moves you from the graveyard to P1 — is always the *sink* or\nthe *intercepted secret*, never the manifest attribute. And the single highest-leverage decision in the whole\ndomain is re-engineering the PoC so it fires from a plain web page rather than from an installed app: that one\nchange moves the Google VRP column from 5% to 50%.\n\nThe corollary for your engagement plan: in P3 you build the inventory, in P4 you read the router, and in P5\nyou fire it — but you do not chase a chain until P7. A deep-link primitive is cheap to confirm and expensive\nto weaponise; confirming twelve of them beats weaponising one.",
  "crux": "**Does any URI an attacker can put in front of the victim — a web link, a QR code, a push payload, another app's intent — reach a parser inside this app that hands attacker-controlled bytes to a sink that runs with the user's session, and is the entry point ownership-verified on the device or merely claimed in the manifest?**",
- "applicability": "",
+ "applicability": "Run these before loading any item; they decide whether the domain applies, and which half. `$DEC` = `$E/decompiled`, `$PKG`, `$SERIAL` and `$E` come from `engagement.json`. Paste the five outputs into `logs/D09-probe.txt`.\n\n```bash\nmkdir -p \"$E/logs/D09\"\n# 1. Manifest: any data-bearing intent filter at all — BROWSABLE or not (non-BROWSABLE VIEW and NDEF filters are AM-03/tag-reachable)\ngrep -cE 'android:scheme=' \"$DEC/apktool/AndroidManifest.xml\"\ngrep -cE 'android.intent.category.BROWSABLE|android.nfc.action.NDEF_DISCOVERED' \"$DEC/apktool/AndroidManifest.xml\"\ngrep -c 'android:autoVerify=\"true\"' \"$DEC/apktool/AndroidManifest.xml\"          # >0 → the App Links half (D09-014..025, -055) applies\n# 2. Inventory: the P3 row count (one row per scheme × authority × path)\ntail -n +2 \"$E/inventory/deeplinks.csv\" | wc -l\n# 3. Code-side routers and framework handoffs — the manifest can be empty and the domain still apply (emitted schemes, SDK routers, Flutter default-on)\ngrep -rlE 'getIntent\\(\\)\\.getData\\(\\)|onNewIntent|Intent\\.parseUri|getQueryParameter\\(|Linking\\.|flutter_deeplinking' \"$DEC/jadx/sources\" \"$DEC/apktool/AndroidManifest.xml\" 2>/dev/null | grep -vE '/(android|androidx|kotlin|com/google/android/material)/' | wc -l\ngrep -ac 'getInitialURL\\|addEventListener(\"url\"' \"$DEC/apktool/assets/index.android.bundle\" 2>/dev/null   # RN only\n# 4. On-device truth (the manifest lies about verification, never about existence)\nadb -s \"$SERIAL\" shell -n dumpsys package \"$PKG\" | sed -n '/Activity Resolver Table/,/Receiver Resolver/p' | grep -c 'Scheme:'\nadb -s \"$SERIAL\" shell -n pm get-app-links \"$PKG\" | grep -cE 'verified|legacy_failure|none|[0-9]{4}'      # API 31+; absent below\n```\n\nDecision:\n\n- **Domain applies** when any of (1), (2), (3) or (4) is non-zero. Tag the engagement `deeplink`; add `applink` when the autoVerify count is non-zero.\n- **App Links half n/a** (D09-014..025, D09-055, the `applink`-tagged rows) when the autoVerify count is 0 **and** no `http`/`https` scheme appears in (1) — write: `n/a — no http(s) intent filter and no autoVerify in the merged manifest (probe step 1 = 0/0); custom-scheme half still applies`.\n- **Framework items n/a** (D09-009/-010/-011/-047) when `target.framework` is not flutter/react-native/cordova/capacitor/kmp — write: `n/a — framework=<value>; no cross-language router`.\n- **Whole domain n/a** only when every count is zero. The note a model writes, verbatim shape:\n\n  `D09 n/a — merged manifest has 0 <data android:scheme> filters (BROWSABLE, VIEW or NDEF) and 0 autoVerify; inventory/deeplinks.csv has 0 rows; dumpsys Activity Resolver Table lists 0 schemes; jadx tree outside platform packages has 0 getData()/onNewIntent/parseUri/getQueryParameter consumers; framework=<none|value>, flutter_deeplinking_enabled absent, no Linking in the bundle. Counts and commands in logs/D09-probe.txt. D09-005 (emitted-but-unregistered schemes) still ran: emitted.txt count = <n>.`\n\n  D09-005 is never skipped by this probe — an app with no filters can still *emit* a scheme another app may claim.",
  "triage": "1. **`pm get-app-links` on the device** (D09-014). One command, and it decides whether every interception\n   item below is live or dead. Do it before you read a line of the manifest, because the manifest lies.\n2. **Census BROWSABLE filters and expand the `<data>` cross-product** (D09-001, D09-002). Two greps produce\n   the entire candidate set; the cross-product routinely reveals a scheme/host pair nobody intended.\n3. **Classify by ownership proof** (D09-006). Verified App Link, unverified https, custom scheme — three\n   different attacker stories and three different severities. Never mix them in one finding.\n4. **Trace the router to the sink** (D09-041). The route table is the artefact triagers want and the\n   prioritiser for everything that follows. Rank routes by sink: WebView first, payment second, file third.\n5. **`url=` → `loadUrl`** (D09-059, D09-060). The single most-paid shape in the corpus. If the WebView\n   attaches auth headers, the header dump *is* the finding — a screenshot of your page is not.\n6. **The host-validation bypass matrix** (D09-042 → D09-047). Run the whole matrix, not one payload; apps\n   harden one alias and forget the sibling.\n7. **Custom-scheme / unverified-host squat** (D09-026 → D09-031). Highest ceiling in the domain, but it\n   drags an installed-app precondition with it — build it only once you know a token travels that way.\n8. **Redirect-after-check and session-appending** (D09-061, D09-062). The two shapes that produced the\n   corpus's two biggest single payouts; both are one grep away.\n9. **Fire every route cold and cross-user** (D09-066 → D09-068). Cheap, and it is where the P1 IDOR is.\n10. **Framework handoffs** (D09-009 → D09-011, D09-047, D09-053). A Flutter or RN app looks like it has no\n    deep-link handling in Java, which is exactly why nobody tests it.\n11. **The exotic delivery vectors** (D09-035 → D09-039). Low base rate, but they remove the \"requires a\n    malicious app\" caveat from a finding you already have.\n12. **Discipline items** (D09-075 → D09-080) last, but before you write a word of the report.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| `android:autoVerify=\"true\"` missing on an `https` filter | The VRT has no node for it; Reddit excludes it by name (\"due to current Google limitation with AMP\"); on Android 12+ the link goes to the browser rather than to a chooser | A demonstrated interception of a token-bearing link by a stub app that registers the same host (D09-027), with `pm get-app-links` showing the state |\n| `pm get-app-links` shows `legacy_failure` and nothing else was tested | Configuration observation; no attacker has done anything | The same host receiving an OAuth code, magic link or reset token in your stub app, and that artefact redeemed (D09-024, D09-031) |\n| The app registers a custom scheme | Custom schemes are universal and expected on Android; their existence is not a defect | The scheme carries a credential, code or token, and you captured it during a real flow (D09-026) |\n| A disambiguation chooser appears when you install a competing app | That is the platform working as designed; it is the *mechanism*, not the impact | The user-selectable chooser leading to your app receiving a live secret, or your app being the only handler so no chooser appears at all |\n| `android:priority=\"999\"` in your PoC \"wins\" | Priority is documented as capped to 0 for `ACTION_VIEW`/`SEND`/`SENDTO`/`SEND_MULTIPLE` from a non-privileged app — the claim is refutable from the documentation (D09-032) | Report the win condition that actually applies: sole handler, chooser selection, or an existing user default |\n| A deep link crashes the app | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; Nextcloud #3399016 scored **0.0** | The crash invalidates the session or destroys stored state (Yelp #3829030, Low 3.3), or it is persistent crash-on-launch reachable from a plain web link (D09-073) |\n| Open redirect from a deep-link parameter, with nothing behind it | On the never-submit list as a standalone; `unvalidated_redirects_and_forwards.open_redirect.get_based` is P4 at best | The redirect target is an OAuth `redirect_uri`, or the app attaches its session headers to the redirected origin (D09-060), or the loaded origin reaches a JS bridge (D10) |\n| OAuth `client_secret` found hardcoded in the APK | Known and expected for a public client; `sensitive_data_exposure.sensitive_data_hardcoded.oauth_secret` is **P5** and the class is on the never-submit list | **PKCE non-enforcement** at the token endpoint is the reportable finding instead (D09-029) |\n| An enumerated list of schemes, hosts and paths | Inventory. Necessary, but it is the worksheet, not the report | Any row of it traced to a sink and fired (D09-041 onwards) |\n| A deep link opens an in-app screen the user could have reached anyway | No boundary crossed | The same route reached with **no session** (D09-067), with **another user's identifier** (D09-068), or performing an action with no confirmation (D09-066) |\n| `Intent.getData()` used without validation, sink unknown | Pattern-matching, not a finding; MASTG explicitly carves out apps that intentionally accept arbitrary values (a search scheme) | The traced sink: `loadUrl`, a file API, `parseUri`, a base-URL setter, or a state change |\n| A QR code containing a deep link is accepted by the scanner | Scanners accept codes; that is their function | The scanned URI reaching a sink with no confirmation that names the destination (D09-037) |\n| A deferred deep link from an attribution SDK routes the user | Attribution routing is the SDK's purpose | The SDK-supplied value reaching a privileged route or a WebView URL that the intent path validates and this path does not (D09-035) |\n| `enforceIntentFilter` absent on a pre-Android-16 target | The attribute does not exist below API 36 — its absence there is a platform limitation, not a defect | The app targets 36+ and a sibling app in the same family sets it (D09-053), or a component carries `intentMatchingFlags=\"none\"` inside a hardened application (D09-054) |\n| \"A malicious app could register this scheme\" with no PoC app built | Assertion, not evidence; and it is precisely the class Starbucks and Grab exclude | The stub app installed, the real flow run, the secret captured, and the secret redeemed |",
  "joins": "- **D09 (router) × D10 (bridge) — the single highest-yield join in mobile.** A deep link whose `url=` /\n  `web_view_url=` / `page=` parameter reaches `loadUrl` on a *bridged* WebView is the delivery half; the\n  token-returning `@JavascriptInterface` method is the payload half. Neither is filed alone. Nobody reviews\n  the deep-link route table and the bridge method inventory in the same sitting, which is exactly why the\n  Grab, Basecamp and TikTok reports exist. File the router primitive first (its id exists), then the bridge\n  finding as the consumer, then backfill (D09-080).\n- **D09 × D02/D03 (signing and manifest) — the fingerprint join.** The signer SHA-256 you capture once in\n  D02 is the input to three unrelated checks: the `assetlinks.json` comparison here (D09-015), the\n  `protectionLevel=\"signature\"` analysis in D03/D06, and the API-key restriction check in D18. The specific\n  trap nobody joins up: with **Play App Signing** the statement may list the *upload* key, so App Links fail\n  for every real user while passing on the developer's machine (D09-016) — and the same wrong fingerprint\n  silently unrestricts a Maps or Firebase key.\n- **D09 × D01/D18 (infrastructure) — the allow-list-decay join.** The app's trusted-host list and the org's\n  DNS inventory are owned by different teams and never compared. A lapsed registration or a dangling CNAME\n  inside the allow-list (D09-056) or inside `assetlinks.json` (D09-020) converts a *correct* validator into an\n  attacker-controlled origin with the app's headers attached. Static analysis structurally cannot find this;\n  only a WHOIS/DNS sweep of the extracted host list can.\n- **D09 × D24 (push/FCM) — the notification-trust join.** Routes gated on \"this came from a notification\"\n  are gated on a signature whose key is often in the APK (D09-039). Join it the other way too: a notification\n  listener with the user's grant reads a deep link **and its one-time token** out of `Notification.extras`,\n  then replays the route itself. The push team and the router team each assume the other validates.\n- **D09 × D13 (OAuth) × D10 (WebView allow-list) — the three-way.** (1) An unverified deep-link host is\n  claimable by an attacker app. (2) The in-app WebView's \"is this our domain\" classifier accepts a lookalike.\n  (3) The OAuth `redirect_uri` allow-list accepts a path or subdomain that one of the first two controls.\n  **Any two of the three is enough**, and each is owned by a different reviewer.\n- **D09 × D23 (payments) — the sentinel join.** The transfer model's reserved strings (`(all)`, `max`,\n  negative amounts) are reviewed as a business-logic surface, while the URI router is reviewed as an IPC\n  surface. The join is whether any URI parameter reaches a reserved value with a different parser than the\n  in-app form uses (D09-069) — Monero's case exactly.\n- **D09 × D15 (backend) — the shadow-API join.** The deep-link route table is the cheapest endpoint\n  inventory in the engagement, because each route names its call. The mobile app's hardcoded backend is\n  frequently an **older API version** than the current web app's, with weaker auth, weaker rate limits and\n  more field exposure. Diff behaviourally, not by response shape; the weakened control is the finding, a\n  version difference alone is Informational (D09-074). And when you replay an intercepted token, run the\n  layer-ordering control first (D09-077).\n- **D09 × D19 (cross-platform) — the two-parser join.** In Flutter and React Native the Java shell and the\n  Dart/JS router parse the same URI with different libraries. A Java reviewer sees a validator and closes the\n  surface; a framework reviewer sees a router and assumes the native side filtered. The bug lives in the\n  disagreement (D09-047), and `flutter_deeplinking_enabled` defaulting to **true** (D09-009) means the\n  handoff exists even when the Java side appears empty.\n- **D09 × D04 (task and UI redress) — the plausibility join.** A deep link that lands an attacker-controlled\n  screen inside the victim app's *task* (via `taskAffinity`/`singleTask`) makes the phishing surface wear the\n  app's own chrome and back stack. Neither surface is interesting alone; together, a link becomes a credible\n  credential-capture screen the user cannot distinguish from the real one.\n- **D09 × D20/D25 (physical and ambient delivery).** QR stickers (D09-037) and NFC tags (D09-038) deliver the\n  *same* router payload to a victim who would never tap a link — and from Android 16 an `http(s)` NFC tag\n  reaches ordinary App Link filters with no NFC declaration at all. The router review and the \"do we have a\n  scanner?\" question are never asked together.",
@@ -277,8 +277,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "MASTG-KNOW-0019; MASTG-TEST-0393; RFC 8252 (private-use URI schemes: \"multiple apps can typically register the same scheme, making it indeterminate as to which app will receive the authorization code\")",
    "record": "",
    "legacy_meta": {},
@@ -324,8 +326,11 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "Google Mobile VRP interaction tiers (\"user must follow a link\" = half the remote rate; \"user must install malicious app\" = 5% of it); MASTG-TECH-0173's own caveat about the disambiguation dialog",
    "record": "",
    "legacy_meta": {},
@@ -367,8 +372,11 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/risks/unsafe-use-of-deeplinks`; the `intent://…#Intent;…;end` grammar with `S.browser_fallback_url`",
    "record": "",
    "legacy_meta": {},
@@ -409,8 +417,11 @@
     "AM-03"
    ],
    "applies_to": "Flutter apps using the v2 embedding (`io.flutter.embedding.android.FlutterActivity`)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, flutter",
+   "requires_tags": [
+    "deeplink",
+    "flutter"
+   ],
    "maps_to": "Flutter `FlutterActivityLaunchConfigs.java` — `HANDLE_DEEPLINKING_META_DATA_KEY = \"flutter_deeplinking_enabled\"`, documented default **true**; `EXTRA_INITIAL_ROUTE = \"route\"`; MASTG-TECH-0172",
    "record": "",
    "legacy_meta": {},
@@ -460,8 +471,11 @@
     "AM-03"
    ],
    "applies_to": "React Native apps (`index.android.bundle`, Hermes or JSC)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, react-native",
+   "requires_tags": [
+    "deeplink",
+    "react-native"
+   ],
    "maps_to": "MASTG-TECH-0172, MASTG-TECH-0173; React Native `Linking.getInitialURL()` / `Linking.addEventListener('url', …)`",
    "record": "",
    "legacy_meta": {},
@@ -509,8 +523,12 @@
     "AM-02"
    ],
    "applies_to": "Cordova, Ionic, Capacitor",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, cordova, capacitor",
+   "requires_tags": [
+    "deeplink",
+    "cordova",
+    "capacitor"
+   ],
    "maps_to": "Cordova `WhitelistPlugin.java` (`<allow-navigation href=\"*\">` expands to `http://*/*`, `https://*/*` **and `data:*`**); Capacitor `Bridge.java` `allowedOriginRules` from `server.allowNavigation`; Capacitor `CapConfig.java` (`server.url`, `server.hostname`, `server.androidScheme`, `server.cleartext`)",
    "record": "",
    "legacy_meta": {},
@@ -555,8 +573,12 @@
     "AM-12"
    ],
    "applies_to": "all; requires a Frida-capable device (D26)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device, frida",
+   "requires_tags": [
+    "deeplink",
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TECH-0173 (Monitoring Deep Link Handlers at Runtime with Frida); MASTG-TOOL-0032 (Frida CodeShare — \"Android Deep Link Observer\", `@leolashkevych/android-deep-link-observer`); MASTG-DEMO-0152",
    "record": "",
    "legacy_meta": {},
@@ -583,7 +605,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Stop guessing parameter names. Observe every URI the app consumes *and constructs*, and — the\nwhole point — get the **caller** via a stack trace so you know which class to read in jadx.",
-   "how": "```javascript\n  // d09-observer.js\n  Java.perform(function () {\n    var Intent = Java.use('android.content.Intent');\n    var Uri    = Java.use('android.net.Uri');\n    var Log    = Java.use('android.util.Log');\n    var Exc    = Java.use('java.lang.Exception');\n\n    Intent.getData.implementation = function () {\n      var uri = this.getData();\n      var act = this.getAction() !== null ? this.getAction().toString() : '<null action>';\n      console.log('\\n[*] Intent.getData()  action=' + act);\n      try { console.log('[*] Activity: ' + this.getComponent().getClassName()); } catch (e) {}\n      if (uri !== null) {\n        console.log('    scheme:   ' + uri.getScheme());\n        console.log('    host:     ' + uri.getHost());\n        console.log('    path:     ' + uri.getPath());\n        console.log('    query:    ' + uri.getQuery());\n        console.log('    fragment: ' + uri.getFragment());\n      } else { console.log('[-] No data supplied.'); }\n      console.log(Log.getStackTraceString(Exc.$new()));   // the caller is the finding\n      return uri;\n    };\n\n    // the construction side — catches tokens the app EMITS (D09-005)\n    Intent.setData.overload('android.net.Uri').implementation = function (u) {\n      console.log('[*] Intent.setData: ' + u);\n      return this.setData(u);\n    };\n\n    Uri.getQueryParameter.implementation = function (k) {\n      var v = this.getQueryParameter(k);\n      console.log('[*] getQueryParameter(' + k + ') -> ' + v);\n      return v;\n    };\n  });\n```\n```bash\nfrida -U -f com.target.app -l d09-observer.js --no-pause\nadb shell am start -W -a android.intent.action.VIEW -d \"targetapp://load.html/?message=ok#part1\" com.target.app\n```",
+   "how": "```javascript\n  // d09-observer.js\n  Java.perform(function () {\n    var Intent = Java.use('android.content.Intent');\n    var Uri    = Java.use('android.net.Uri');\n    var Log    = Java.use('android.util.Log');\n    var Exc    = Java.use('java.lang.Exception');\n\n    Intent.getData.implementation = function () {\n      var uri = this.getData();\n      var act = this.getAction() !== null ? this.getAction().toString() : '<null action>';\n      console.log('\\n[*] Intent.getData()  action=' + act);\n      try { console.log('[*] Activity: ' + this.getComponent().getClassName()); } catch (e) {}\n      if (uri !== null) {\n        console.log('    scheme:   ' + uri.getScheme());\n        console.log('    host:     ' + uri.getHost());\n        console.log('    path:     ' + uri.getPath());\n        console.log('    query:    ' + uri.getQuery());\n        console.log('    fragment: ' + uri.getFragment());\n      } else { console.log('[-] No data supplied.'); }\n      console.log(Log.getStackTraceString(Exc.$new()));   // the caller is the finding\n      return uri;\n    };\n\n    // the construction side — catches tokens the app EMITS (D09-005)\n    Intent.setData.overload('android.net.Uri').implementation = function (u) {\n      console.log('[*] Intent.setData: ' + u);\n      return this.setData(u);\n    };\n\n    Uri.getQueryParameter.implementation = function (k) {\n      var v = this.getQueryParameter(k);\n      console.log('[*] getQueryParameter(' + k + ') -> ' + v);\n      return v;\n    };\n  });\n```\n```bash\nfrida -D \"$SERIAL\" -f com.target.app -l d09-observer.js\nadb shell am start -W -a android.intent.action.VIEW -d \"targetapp://load.html/?message=ok#part1\" com.target.app\n```",
    "proof": "The MASTG-TECH-0173 output shape — scheme, host, params, fragment — **plus** a stack frame naming\nthe file, class and method that consumed it (e.g. `WebViewActivity.kt`, `…WebViewActivity`, `onCreate`).\nThat frame is the jadx entry point for D09-041.",
    "escalation": "Every resolved handler becomes a D09-041 route-table row; every `setData` line carrying a\ntoken becomes a D09-005 candidate.",
    "ruled_out_when": "The hook fires and shows the URI being read and discarded (no downstream call), or the\napp never calls `getData()` for a fired link because the route is handled from `getIntent().getExtras()`\ninstead — in which case re-run the hook on `Intent.getStringExtra`. Instrumentation that produced no output\nis a harness failure, not a negative."
@@ -603,8 +625,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "repository harness `tools/07-deeplink-sweep.sh`; drozer `app.activity.start --data-uri`; MASTG-TECH-0173",
    "record": "",
    "legacy_meta": {},
@@ -650,8 +675,12 @@
     "AM-03"
    ],
    "applies_to": "App Links exist from Android 6.0 (API 23); `pm get-app-links` / `pm verify-app-links` require **Android 12 (API 31)+**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink, device, api>=31",
+   "requires_tags": [
+    "applink",
+    "device",
+    "api>=31"
+   ],
    "maps_to": "MASTG-TECH-0174 (Verifying App Link Website Association — documents the exact output shape and the \"Common Reasons Verification Fails\" list); MASTG-TEST-0393; MASWE-0029; `developer.android.com/training/app-links/verify-android-applinks` (compat change id **175408749** and the state vocabulary)",
    "record": "",
    "legacy_meta": {},
@@ -705,8 +734,10 @@
     "AM-03"
    ],
    "applies_to": "all apps declaring `autoVerify`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "MASTG-TECH-0174; `developers.google.com/digital-asset-links/v1/getting-started` (statement structure); MASTG-TEST-0393; MASTG-TOOL-0123 (apksigner)",
    "record": "",
    "legacy_meta": {},
@@ -757,8 +788,10 @@
     "AM-03"
    ],
    "applies_to": "every app distributed through Play with Play App Signing (the default for new apps since AAB-only publishing in August 2021)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "Play App Signing — upload key vs app signing key (support.google.com/googleplay/android-developer/answer/9842756); MASTG-TECH-0174",
    "record": "",
    "legacy_meta": {},
@@ -802,8 +835,10 @@
     "AM-03"
    ],
    "applies_to": "all apps declaring `autoVerify`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "MASTG-TECH-0174 \"Common Reasons Verification Fails\"; `developer.android.com/training/app-links/verify-android-applinks`",
    "record": "",
    "legacy_meta": {},
@@ -850,8 +885,10 @@
     "AM-08"
    ],
    "applies_to": "all apps declaring `autoVerify`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "`developers.google.com/digital-asset-links/v1/getting-started`; repository harness `tools/04-applink-verify.sh` (\"a `package_name` in assetlinks.json that is not the app -> over-broad trust\")",
    "record": "",
    "legacy_meta": {},
@@ -895,8 +932,10 @@
     "AM-08"
    ],
    "applies_to": "apps that have rotated a signing key, used Play key upgrade, or migrated between publishers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "repository harness `tools/04-applink-verify.sh` (\"a stale sha256 fingerprint (old signing key still trusted)\"); MASTG-TECH-0174",
    "record": "",
    "legacy_meta": {},
@@ -941,8 +980,10 @@
     "AM-02"
    ],
    "applies_to": "all apps with more than one declared host, especially wildcard hosts",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "repository harness `tools/04-applink-verify.sh` (\"an entry for a subdomain the vendor no longer controls -> takeover -> link hijack\"); Oversecured \"Domain Takeover via Expired Whitelist Entry\" (\"Static analysis cannot know that a domain has expired\")",
    "record": "",
    "legacy_meta": {},
@@ -987,8 +1028,12 @@
     "AM-03"
    ],
    "applies_to": "**LEGACY** — devices below Android 12 (API 31). State the app's `minSdkVersion` when reporting",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink, minsdk<31, legacy",
+   "requires_tags": [
+    "applink",
+    "minsdk<31",
+    "legacy"
+   ],
    "maps_to": "MASTG-TEST-0393 / MASTG-KNOW-0019, verbatim: \"a single non-verifiable link (for example, a missing `autoVerify`, an invalid Digital Asset Links file, or a custom URL scheme in a verified intent filter) can cause the system to skip verification for **all** of the app's App Links\"",
    "record": "",
    "legacy_meta": {},
@@ -1031,8 +1076,10 @@
     "AM-03"
    ],
    "applies_to": "**LEGACY** effect below API 31; the unverifiable scheme itself is current at every API level",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "MASTG-KNOW-0019; MASTG-TECH-0174; MASTG-TEST-0393",
    "record": "",
    "legacy_meta": {},
@@ -1076,8 +1123,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all; behaviour differs on Android 15 (API 35)+ versus Android 14 and lower",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink, device",
+   "requires_tags": [
+    "applink",
+    "device"
+   ],
    "maps_to": "`developer.android.com/training/app-links/verify-android-applinks` — Android 15+ periodically re-verifies in the background and an `assetlinks.json` change \"can take up to 7 days to propagate\"; Android 14 and lower do not re-verify periodically",
    "record": "",
    "legacy_meta": {},
@@ -1115,8 +1165,10 @@
     "AM-03"
    ],
    "applies_to": "any app using Branch (`*.app.link`), AppsFlyer (`*.onelink.me`), Adjust (`*.go.link`), Firebase Dynamic Links or a similar link-shortening/attribution service",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "H1 **#855618** (Shopify Arrive — magic-link ATO over an unverified Branch `app.link` domain, rated **Low** by the vendor despite full ATO)",
    "record": "",
    "legacy_meta": {},
@@ -1159,8 +1211,10 @@
     "AM-09"
    ],
    "applies_to": "apps using Credential Manager passkeys, or sharing credentials between an app and a website",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink",
+   "requires_tags": [
+    "applink"
+   ],
    "maps_to": "`developers.google.com/digital-asset-links/v1/getting-started` (both relation strings); `developer.android.com/identity/sign-in/credential-manager` (\"Passkeys are bound to your app's origin via assetlinks.json\")",
    "record": "",
    "legacy_meta": {},
@@ -1202,8 +1256,11 @@
     "AM-03"
    ],
    "applies_to": "all custom (non-http/https) schemes, every Android version. Custom schemes have **no** ownership verification and never have",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0393; MASWE-0029 (CWE-939, CWE-917); ATT&CK **T1635.001 URI Hijacking** (\"Applications regularly register URIs with the operating system to act as a response handler for various actions, such as logging into an app using an external account via single sign-on\"), mitigations M1013/M1006; Google Play ASI \"Scheme Hijacking\" campaign; MASTG-KNOW-0019 (\"Unlike iOS, Android provides no mechanism to identify which app sent the Intent\")",
    "record": "",
    "legacy_meta": {},
@@ -1263,8 +1320,11 @@
     "AM-03"
    ],
    "applies_to": "any `http`/`https` BROWSABLE filter whose host is **not** `verified` per D09-014",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0393; the corpus's password-reset hijack write-up (\"The reset domain does **not** publish an `assetlinks.json` file, and the official Android application does **not** define a matching `intent-filter`\"); H1 #855618",
    "record": "",
    "legacy_meta": {},
@@ -1312,8 +1372,11 @@
     "AM-03"
    ],
    "applies_to": "every app whose OAuth/OIDC `redirect_uri` is a private-use URI scheme rather than a claimed https redirect",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, deeplink",
+   "requires_tags": [
+    "oauth",
+    "deeplink"
+   ],
    "maps_to": "RFC 8252 (\"multiple apps can typically register the same scheme, making it indeterminate as to which app will receive the authorization code\"; native public clients MUST implement PKCE); ATT&CK T1635, T1635.001 (mitigation M1013: \"Implement Android App Links and iOS Universal Links for secure URI binding\" and \"Adopt PKCE … to prevent stolen authorization code misuse\"); Google Mobile VRP class \"Leaking OAuth tokens\"; Oversecured (\"For OAuth flows: always use App Links, never custom schemes\")",
    "record": "",
    "legacy_meta": {},
@@ -1364,8 +1427,11 @@
     "AM-03"
    ],
    "applies_to": "every mobile OAuth public client",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, deeplink",
+   "requires_tags": [
+    "oauth",
+    "deeplink"
+   ],
    "maps_to": "RFC 8252; draft-ietf-oauth-security-topics §2.1.1 (MUST use PKCE; MUST mitigate PKCE downgrade); the corpus's never-submit note: **\"OAuth `client_secret` in a mobile app\" is known and expected and must not be submitted — PKCE non-enforcement is the reportable finding instead**",
    "record": "",
    "legacy_meta": {},
@@ -1408,8 +1474,11 @@
     "AM-03"
    ],
    "applies_to": "apps doing Authorization Code + PKCE natively (RFC 8252)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oauth, deeplink",
+   "requires_tags": [
+    "oauth",
+    "deeplink"
+   ],
    "maps_to": "Google Mobile VRP auditing tip, verbatim: \"Implicit grant is always bad; If using Authz flow, check for PKCE use; If using PKCE, check that it is not predictable\"; the corpus's disclosed Superhuman/Grammarly \"Authorization Code with PKCE flow implementation vulnerability that allows account takeover\"",
    "record": "",
    "legacy_meta": {},
@@ -1453,8 +1522,12 @@
     "AM-03"
    ],
    "applies_to": "any app with emailed/SMS'd login links, invite links, or \"continue on your phone\" flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, backend-api, two-accounts",
+   "requires_tags": [
+    "deeplink",
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "MASTG risk `unsafe-use-of-deeplinks`, which cites H1 **#855618** \"Account Takeover via Magic Link Interception\"; H1 #855618 (Shopify Arrive)",
    "record": "",
    "legacy_meta": {},
@@ -1499,8 +1572,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "`guide/topics/manifest/intent-filter-element`, verbatim: \"In certain circumstances the requested priority is ignored and the value is capped to 0. This occurs when: A non-privileged application requests any priority >0. A privileged application requests a priority >0 for `ACTION_VIEW`, `ACTION_SEND`, `ACTION_SENDTO` or `ACTION_SEND_MULTIPLE`.\"",
    "record": "",
    "legacy_meta": {},
@@ -1539,8 +1614,11 @@
     "AM-03"
    ],
    "applies_to": "Android 12 (API 31)+ for resolution behaviour; the manifest issue is universal",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`developer.android.com/about/versions/12/behavior-changes-12` and `.../behavior-changes-all` (web intent resolution: a generic web intent resolves to the app only if the app is approved for that domain); **CVE-2024-45240** (TikTok Lynxview deep-link traversal, \"only exploitable by third-party applications\" on Android 12 and later)",
    "record": "",
    "legacy_meta": {},
@@ -1581,8 +1659,11 @@
     "AM-08"
    ],
    "applies_to": "custom schemes contributed by a shared SDK; **not** verified App Links",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "Google Play ASI \"Scheme Hijacking\" campaign (started 2018-11-15); Oversecured SDK-security post; ASI \"Embedded Facebook OAuth Token\" / \"Embedded Foursquare OAuth Token\" campaigns (both started 2016-09-28) for the adjacent hardcoded-credential case",
    "record": "",
    "legacy_meta": {},
@@ -1628,8 +1709,12 @@
     "AM-09"
    ],
    "applies_to": "all apps bundling Branch, AppsFlyer, Adjust, Kochava, Firebase Dynamic Links or a similar MMP",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, firebase, ads-sdk",
+   "requires_tags": [
+    "deeplink",
+    "firebase",
+    "ads-sdk"
+   ],
    "maps_to": "no external identifier verified for this exact path in the corpus — the corpus covers exported install-referrer *receivers*, not the deferred-deep-link callback. Report it on mechanism, with the SDK's own documentation as the reference",
    "record": "",
    "legacy_meta": {},
@@ -1675,8 +1760,10 @@
     "AM-01"
    ],
    "applies_to": "all; any targetSdk",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`com.android.installreferrer` / `InstallReferrerClient` / `ReferrerDetails`; no external vulnerability identifier verified in the corpus for the trusted-payload question",
    "record": "",
    "legacy_meta": {},
@@ -1721,8 +1808,11 @@
     "AM-02"
    ],
    "applies_to": "any app with a scanner: payments/UPI, ticketing, delivery, \"scan to pair\", loyalty, device onboarding",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`developers.google.com/ml-kit/vision/barcode-scanning/android` — `BarcodeScanning.getClient()`, `Barcode.getRawValue()`, `getValueType()`, `getUrl()`, `getWifi()`, `Barcode.FORMAT_QR_CODE`, and the permission-less \"Google code scanner\" module; the page carries **no validation guidance**, which is why most integrations pass the raw value through",
    "record": "",
    "legacy_meta": {},
@@ -1767,8 +1857,12 @@
     "AM-02"
    ],
    "applies_to": "NFC-capable devices. Pre-Android-16 the app must declare an NFC filter; **Android 16+** an `http(s)` tag triggers `ACTION_VIEW`, which reaches ordinary BROWSABLE/App-Link filters even if the app declares no NFC filter",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device, physical",
+   "requires_tags": [
+    "deeplink",
+    "device",
+    "physical"
+   ],
    "maps_to": "`developer.android.com/develop/connectivity/nfc/nfc` — dispatch priority `ACTION_NDEF_DISCOVERED` > `ACTION_TECH_DISCOVERED` > `ACTION_TAG_DISCOVERED`; AAR precedence (\"If no Activity matches the AAR, or multiple Activities handle the intent, start the application specified by the AAR… If the application isn't installed, launch Google Play to download it\"); \"Starting in Android 16, scanning NFC tags that store web links (URI scheme `http://` or `https://`) triggers `ACTION_VIEW` instead\"; `ACTION_TAG_DISCOVERED` is **deprecated starting Android 17 (API 37)**",
    "record": "",
    "legacy_meta": {},
@@ -1811,8 +1905,11 @@
     "AM-02"
    ],
    "applies_to": "apps that gate deep-link routes on a notification-origin signature",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, push",
+   "requires_tags": [
+    "deeplink",
+    "push"
+   ],
    "maps_to": "the corpus's worked example: a trampoline activity verifying a `pn_trust_sig` HMAC on links delivered via FCM, with the key resolvable from the APK",
    "record": "",
    "legacy_meta": {},
@@ -1858,8 +1955,11 @@
     "AM-04"
    ],
    "applies_to": "`ShortcutManager` from API 25+; the instant-app case applies to any app that ever shipped a Google Play Instant experience",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`developer.android.com/develop/ui/views/launch/shortcuts/managing-shortcuts` — there is **no limit on pinned shortcuts**, `updateShortcuts()` can update pinned shortcuts \"even after they're removed as dynamic shortcuts\", pinned shortcuts are restored automatically after reinstall, and `disableShortcuts()` is the retirement API; `developer.android.com/topic/google-play-instant/overview` (discontinuation and the restricted API/permission subset)",
    "record": "",
    "legacy_meta": {},
@@ -1903,8 +2003,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "MASTG-TEST-0394 (the extraction APIs); MASTG-TECH-0173 (runtime confirmation); MASWE-0029",
    "record": "",
    "legacy_meta": {},
@@ -1954,8 +2056,10 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "Google Mobile VRP class **\"Incorrect URL verification\"**, CWE-939 (Improper Authorization in Handler for Custom URL Scheme) — its remediation tip is literally \"Read and understand https://hackerone.com/reports/431002 — 'Golden techniques to bypass host validations in Android apps'\", and its auditing tip: \"Narrow it down to those that are used to branch between different code paths — Could be any part of the URL, not just the host name\"; Oversecured WebView checklist §2–3; MASTG risk `unsafe-uri-loading`",
    "record": "",
    "legacy_meta": {},
@@ -2003,8 +2107,10 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "MASTG risk `unsafe-uri-loading` (MASVS-CODE) and `cross-app-scripting`; Oversecured WebView checklist §3 (missing scheme check enabling `javascript:`/`file:`/`content:`); H1 **#3475626** (LinkedIn, **High 8.1** — the `javascript://` plus `#` trick)",
    "record": "",
    "legacy_meta": {},
@@ -2052,8 +2158,15 @@
     "AM-02"
    ],
    "applies_to": "**LEGACY** — the backslash form is documented as affecting **minSdkVersion ≤ 24** (Android 7.0 and below). The userinfo/suffix forms in D09-042 are version-independent; use `java.net.URI` divergence on minSdk 25+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, webview, device, frida, minsdk<25, legacy",
+   "requires_tags": [
+    "deeplink",
+    "webview",
+    "device",
+    "frida",
+    "minsdk<25",
+    "legacy"
+   ],
    "maps_to": "Oversecured WebView checklist §5 (\"affected Android 7.0 and below; fix is `minSdkVersion` 25+ or validate with `java.net.URI`\"); the corpus's host-validation-bypass reference (minSdk ≤ 24)",
    "record": "",
    "legacy_meta": {},
@@ -2098,8 +2211,11 @@
     "AM-03"
    ],
    "applies_to": "**LEGACY-leaning** — Oversecured notes API 28+ forbids internal-interface use \"but this can easily be bypassed\", and describes it as less relevant on Android 12+. Report only where you demonstrate it on the target's supported API range",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "Oversecured WebView checklist §4 and deep-link post (HierarchicalUri Bypass); the one-line fix is re-parsing: `Uri.parse(intent.getData().toString())`",
    "record": "",
    "legacy_meta": {},
@@ -2144,8 +2260,12 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device, frida",
+   "requires_tags": [
+    "deeplink",
+    "device",
+    "frida"
+   ],
    "maps_to": "Google Mobile VRP \"Incorrect URL verification\" auditing tip (\"Could be any part of the URL, not just the host name\"); the corpus's parser-differential method",
    "record": "",
    "legacy_meta": {},
@@ -2190,8 +2310,15 @@
     "AM-03"
    ],
    "applies_to": "React Native, Flutter, Cordova/Capacitor, KMP — any app where the URI crosses a language boundary",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, flutter, react-native, cordova, capacitor, kmp",
+   "requires_tags": [
+    "deeplink",
+    "flutter",
+    "react-native",
+    "cordova",
+    "capacitor",
+    "kmp"
+   ],
    "maps_to": "MASTG-TECH-0172, MASTG-TECH-0173; the corpus's cross-platform handoff method",
    "record": "",
    "legacy_meta": {},
@@ -2238,8 +2365,11 @@
     "AM-02"
    ],
    "applies_to": "all. `pathSuffix` and `pathAdvancedPattern` are **API 31+**; `<data android:query*>` and `android:fragment*` matchers are **API 35+**, so an app using them has a *narrower* filter on old devices — a behavioural split worth testing on both",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`guide/topics/manifest/data-element` — `.` matches any single character; `*` matches zero or more of the **immediately preceding** character and is greedy; `.*` matches any sequence and is **lazy**; there is **no backtracking**, a single forward pass. Documented non-matches: `\"abc.*xyz\"` does **not** match `\"abcpxqrxyz\"`; `\"a.*.c\"` does **not** match `\"abbbc\"`; `\"a*a\"` does **not** match `\"aaa\"`",
    "record": "",
    "legacy_meta": {},
@@ -2281,8 +2411,11 @@
     "AM-02"
    ],
    "applies_to": "all apps using `android:pathPrefix` to scope an App Link",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "H1 **#1087744** (Shopify, **Low 3.1**) — the verbatim reproduction is `am start -W -a android.intent.action.VIEW -d \"https://ravel17.myshopify.com/admin/collections/../../\"`; the same report's deeper form reached `/admin/collections/.../oauth/install_custom_app?client_id=…`",
    "record": "",
    "legacy_meta": {},
@@ -2325,8 +2458,11 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`guide/topics/manifest/data-element` — `scheme`, `host` and `mimeType` are **case-sensitive and must be lowercase** (unlike the RFCs); `*` in `host` matches zero or more characters and **must be the first character**; `*.google.com` is valid and matches `www.google.com`, `.google.com` and `developer.google.com`; `google.co.*` is **invalid**; Gowthams open-redirect research (ideographic full stop `%E3%80%82`)",
    "record": "",
    "legacy_meta": {},
@@ -2371,8 +2507,12 @@
     "AM-02"
    ],
    "applies_to": "**Android 15 (API 35)+**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device, api>=35",
+   "requires_tags": [
+    "deeplink",
+    "device",
+    "api>=35"
+   ],
    "maps_to": "`developer.android.com/about/versions/15/features` — `UriRelativeFilterGroup`, `UriRelativeFilter`, `<uri-relative-filter-group>`, including \"blocking/exclusion rules\"",
    "record": "",
    "legacy_meta": {},
@@ -2415,8 +2555,11 @@
     "AM-03"
    ],
    "applies_to": "**Android 16 (API 36)+** with `android:intentMatchingFlags` containing `allowNullAction`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=36",
+   "requires_tags": [
+    "device",
+    "api>=36"
+   ],
    "maps_to": "`developer.android.com/about/versions/16/behavior-changes-16` — `allowNullAction`, \"Intents Without Action Cannot Match Intent Filters\"; the documented logcat filter `tag=:PackageManager & (message:\"Intent does not match component's intent filter:\" | message:\"Access blocked:\")`",
    "record": "",
    "legacy_meta": {},
@@ -2460,8 +2603,11 @@
     "AM-03"
    ],
    "applies_to": "all; the attribute is **Android 16 (API 36)** opt-in, so its absence on older targets is a platform limitation rather than a defect — rate accordingly, and use sibling comparison",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`developer.android.com/about/versions/16/behavior-changes-16` (`android:intentMatchingFlags` values `none` / `enforceIntentFilter` / `allowNullAction`, settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>`, `<provider>`, component value overriding application value)",
    "record": "",
    "legacy_meta": {},
@@ -2507,8 +2653,12 @@
     "AM-03"
    ],
    "applies_to": "**Android 16 (API 36)+**, targetSdk 36",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=36, targetsdk>=36",
+   "requires_tags": [
+    "device",
+    "api>=36",
+    "targetsdk>=36"
+   ],
    "maps_to": "`developer.android.com/about/versions/16/behavior-changes-16` — `\"none\"` **disables all special matching rules and takes precedence**; the same logcat filter as D09-052",
    "record": "",
    "legacy_meta": {},
@@ -2554,8 +2704,11 @@
     "AM-02"
    ],
    "applies_to": "apps whose hosts report `verified` — this is the residual risk once interception is closed",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "applink, device",
+   "requires_tags": [
+    "applink",
+    "device"
+   ],
    "maps_to": "the corpus's ruled-out discipline (\"App Links path-scoped correctly\" is a negative worth keeping); MASTG-TECH-0174",
    "record": "",
    "legacy_meta": {},
@@ -2603,8 +2756,10 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "Oversecured \"Android deep link vulnerabilities\" §5 — Domain Takeover via Expired Whitelist Entry; verbatim: \"Static analysis cannot know that a domain has expired\"",
    "record": "",
    "legacy_meta": {},
@@ -2649,8 +2804,11 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, webview",
+   "requires_tags": [
+    "deeplink",
+    "webview"
+   ],
    "maps_to": "the corpus's Source_To_Sink case (Feb 2026), verbatim: \"anyone can create an S3 bucket and host content on `*.s3.amazonaws.com`. This wildcard trust effectively allows attacker-controlled content\" — the chain reached `window.nativeBridge.uploadFile()`",
    "record": "",
    "legacy_meta": {},
@@ -2693,8 +2851,11 @@
     "AM-02"
    ],
    "applies_to": "all apps that put a parameter **inside** the URL path (`https://api.target.example/v1/users/{username}`)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, backend-api",
+   "requires_tags": [
+    "deeplink",
+    "backend-api"
+   ],
    "maps_to": "HackTricks deep-link guidance (\"Parameters in path … you may be able to cause an Open Redirect …, account takeover …, and any other vuln\"); MASTG-TEST-0394's `myapp://open?path=../../data/sensitive.txt` archetype",
    "record": "",
    "legacy_meta": {},
@@ -2740,8 +2901,11 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, webview",
+   "requires_tags": [
+    "deeplink",
+    "webview"
+   ],
    "maps_to": "MASTG risk `unsafe-use-of-deeplinks`, verbatim: \"**Never** pass deep-link-derived URLs directly to `WebView.loadUrl()` without thorough validation\"; H1 **#401793** (Grab, High 7.1 — $7,500 per Intigriti), **#532225** (Zomato, High, $750), **#328486** (Zomato — evidence line \"All tokens were sent to Google page\"), **#424443** (PayPal, Medium 5.4), **#1087744** (Shopify, Low 3.1), **#1500614** (TikTok, High 8.3), **#2417516** (TikTok, High 8.1, **CVE-2024-45240**)",
    "record": "",
    "legacy_meta": {},
@@ -2789,8 +2953,11 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, webview",
+   "requires_tags": [
+    "deeplink",
+    "webview"
+   ],
    "maps_to": "Oversecured WebView checklist §1 and §13 (`CookieManager.setCookie(attackerControlledUrl, \"token=\" + getUserToken())`); Oversecured banking-ATO item 1",
    "record": "",
    "legacy_meta": {},
@@ -2835,8 +3002,11 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, webview",
+   "requires_tags": [
+    "deeplink",
+    "webview"
+   ],
    "maps_to": "H1 **#1372667** (Basecamp, **High 8.7, $6,337** — the highest-paid Android finding in the corpus); MASTG-TEST-0393 cites the same report as \"Able to steal bearer token from deep link\"",
    "record": "",
    "legacy_meta": {},
@@ -2882,8 +3052,10 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "H1 **#1667998** (KAYAK, **Critical 9.3**, CVSS `AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:N`, patched within 24 hours)",
    "record": "",
    "legacy_meta": {},
@@ -2926,8 +3098,11 @@
     "AM-02"
    ],
    "applies_to": "all; `file://` in `loadUrl` requires `setAllowFileAccess(true)`, which is the **default below API 30** and defaults to **false from targetSdk 30** — check the actual setting before claiming it",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, webview",
+   "requires_tags": [
+    "deeplink",
+    "webview"
+   ],
    "maps_to": "MASTG risk `webview-unsafe-file-inclusion`; the corpus's YesWeHack recon guide vulnerable shapes; H1 #2553411 for the write half",
    "record": "",
    "legacy_meta": {},
@@ -2972,8 +3147,11 @@
     "AM-02"
    ],
    "applies_to": "all; scoped storage (**API 29+**) narrows who can read `/sdcard`, but `/sdcard/Download/` remains broadly readable via the Downloads collection or `MANAGE_EXTERNAL_STORAGE` — say which applies on your test device",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "H1 **#2553411** (Basecamp, **Medium 5.5**, CWE Path Traversal)",
    "record": "",
    "legacy_meta": {},
@@ -3015,8 +3193,10 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "AOSP `content/Intent.java` — `parseUri`, `URI_INTENT_SCHEME`, `URI_ANDROID_APP_SCHEME`, `URI_ALLOW_UNSAFE`; MASTG risk `intent-redirection` (which names WebView-to-Intent conversion as a redirection source); the corpus's EngageLab push-SDK case (`processPlatformMessage()` → `n_intent_uri` → `parseUri()` with `URI_ALLOW_UNSAFE`, constant value 4)",
    "record": "",
    "legacy_meta": {},
@@ -3060,8 +3240,12 @@
     "AM-02"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, backend-api, device",
+   "requires_tags": [
+    "deeplink",
+    "backend-api",
+    "device"
+   ],
    "maps_to": "MASWE-0018 (CWE-306, CWE-862) — \"App-defined URI scheme, Android App Link, or iOS Universal Link triggers a sensitive action (e.g., password reset, fund transfer, account linking) without verifying that the request came from an authenticated or authorized source\"; MASVS-AUTH-3; H1 **#583987** (Periscope Android, Low, **$1,540**), **#805073** (Periscope iOS, **$2,940**), **#2139260** (Snapchat, **Medium 6.5** — `snapchat://call/start?…&calling_media=VIDEO&conversation_id=<id>` forced a video call that leaked the victim's surroundings); X/xAI \"Changing email address on Twitter for Android unsets 'Protect your Tweets'\" **$2,940**",
    "record": "",
    "legacy_meta": {},
@@ -3118,8 +3302,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "MASTG risk `unsafe-use-of-deeplinks` — \"Check internal state: verify preconditions before exposing sensitive functionality\"; MASWE-0018",
    "record": "",
    "legacy_meta": {},
@@ -3166,8 +3353,12 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, backend-api, two-accounts",
+   "requires_tags": [
+    "deeplink",
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "MASTG-TEST-0394 archetypes (`myapp://transfer?amount=-1`, `myapp://order/99999`); MASWE-0050",
    "record": "",
    "legacy_meta": {},
@@ -3218,8 +3409,11 @@
     "AM-02"
    ],
    "applies_to": "wallet, payment, entitlement and transfer flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, payments",
+   "requires_tags": [
+    "deeplink",
+    "payments"
+   ],
    "maps_to": "H1 **#3648638** (Monero, **Medium 6.5**, Business Logic Errors) — the QR path uses the strict backend parser but `monero://` deep links are parsed by a separate routine that forwards `tx_amount` raw, and the transfer model treats the literal `\"(all)\"` as \"send entire unlocked balance\"",
    "record": "",
    "legacy_meta": {},
@@ -3259,8 +3453,12 @@
     "AM-02"
    ],
    "applies_to": "all; very common in apps with a debug/QA switcher left compiled in",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, backend-api, mitm",
+   "requires_tags": [
+    "deeplink",
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "the corpus's security-model item — \"the app switching to a staging backend (visible in the proxy as a different Host header)\"",
    "record": "",
    "legacy_meta": {},
@@ -3305,8 +3503,11 @@
     "AM-02"
    ],
    "applies_to": "all; apps with a local HTTP/debug listener, a WebSocket bridge, or a \"sync with server\" flow",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, mitm",
+   "requires_tags": [
+    "deeplink",
+    "mitm"
+   ],
    "maps_to": "OWASP API7:2023 Server Side Request Forgery mapping in the corpus — \"A URL that the app passes to the backend (avatar import, webhook registration, PDF render) reachable from a deep link parameter\"",
    "record": "",
    "legacy_meta": {},
@@ -3352,8 +3553,12 @@
     "AM-11"
    ],
    "applies_to": "all. Note logcat has not been cross-app readable since **API 16** without `READ_LOGS`, so the logcat half alone is Low unless combined with a debuggable build (D03), an accessibility/ADB path, or an SDK that uploads it",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device, mitm",
+   "requires_tags": [
+    "deeplink",
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASWE-0001 family (logging of sensitive data); the corpus's deep-link logging items",
    "record": "",
    "legacy_meta": {},
@@ -3400,8 +3605,11 @@
     "AM-02"
    ],
    "applies_to": "all; wildcard-host intent filters (`android:host=\"*\"`) are the usual enabler",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "H1 **#3399016** (Nextcloud — scored **0.0**, crash only, session survived), **#3829030** (Yelp — **Low 3.3**, identical crash but the session was invalidated), **#859136** (Nextcloud, malformed-intent crash, **$0**), **#1058383** (LINE, **$0**)",
    "record": "",
    "legacy_meta": {},
@@ -3442,8 +3650,11 @@
     "AM-05"
    ],
    "applies_to": "every deep-link route that results in a backend call",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "the bug-hunting corpus's shadow-API method — \"a mobile app's hardcoded backend calls are frequently an OLDER API version than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Diff **behaviourally** across versions, not by response shape\"",
    "record": "",
    "legacy_meta": {},

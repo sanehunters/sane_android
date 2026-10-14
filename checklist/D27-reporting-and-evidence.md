@@ -54,6 +54,38 @@ already-submitted report. The conclusion survived; the credibility would not hav
 boundary being crossed — and does the title, the VRT node, the CVSS vector and the recorded evidence all
 say exactly that, with the unproven link named rather than hidden?**
 
+## Applicability probe
+
+D27 has no technical precondition: it applies to every engagement that has settled at least one row. The probe decides which **blocks** of the chapter are live — platform vocabulary (D27-012..015, D27-027), the executing-artefact rule (D27-004), the backend-evidence items (D27-038, D27-044, D27-052..056, D27-075, D27-077) and the device-capture items (D27-030..034, D27-039..042, D27-045) — not whether the domain is. Run it at the start of P8 and record the result with `scripts/mark.py` (`scripts/scope.py` named in docs/11 §4 does not exist).
+
+```bash
+# 1. Is there anything to report yet?  (settled rows, findings, parked hypotheses)
+awk -F, 'NR>1 && $0 ~ /,(finding|ruled-out|blocked),/' "$E/checklist-status.csv" | wc -l
+ls "$E"/findings/F-*.md "$E"/hypotheses/H-*.md 2>/dev/null | wc -l
+
+# 2. Which severity vocabulary does the programme run?  (Bugcrowd VRT block vs CVSS-only vs vendor ladder)
+python3 -c 'import json;a=json.load(open("'"$E"'/engagement.json"))["authorisation"];print(a.get("basis"),a.get("programme_url"))'
+
+# 3. Can the app replace its own code after install?  (D27-004 executing-artefact rule)
+grep -rlE 'CodePush|expo-updates|LiveUpdate|DexClassLoader|createPackageContext' "$DEC/jadx/sources" | head -3
+unzip -Z1 "$E"/apk/base.apk | grep -E 'index.android.bundle|flutter_assets|assets/www' | head -3
+
+# 4. Is a live backend in scope, and do two accounts exist?  (backend-evidence and cross-account items)
+python3 -c 'import json;e=json.load(open("'"$E"'/engagement.json"));print(e["authorisation"].get("scope"), len(e.get("accounts",[])))'
+
+# 5. Is a device attached for capture?  (D27-030..034, D27-039..042, D27-045)
+adb devices -l | awk 'NR>1 && $2=="device"' | wc -l
+```
+
+Decision:
+
+- Step 1 returns 0 and 0 → the domain is **blocked**, never n/a: `python3 scripts/mark.py $E D27 blocked --note "D27 blocked: 0 settled rows in checklist-status.csv and no findings/ or hypotheses/ files; re-run the probe at P8"`.
+- Step 2 shows a non-Bugcrowd programme → `python3 scripts/mark.py $E D27-012 n/a --note "D27-012..D27-015 n/a: programme is not on Bugcrowd (authorisation.programme_url=<host>); severity vocabulary is CVSS 3.1 (D27-017) / CVSS 4.0 (D27-019) / vendor ladder (D27-027)"` (repeat for D27-013, D27-014, D27-015). No vendor ladder published → the same form for D27-027.
+- Step 3 returns nothing on both lines → `python3 scripts/mark.py $E D27-004 n/a --note "no OTA or dynamic-code channel: grep for CodePush|expo-updates|LiveUpdate|DexClassLoader|createPackageContext in $DEC/jadx/sources returned 0 files and the APK carries no JS/Dart bundle; the shipped APK is the executing artefact"`.
+- Step 4 shows no backend in scope → for each of D27-038, D27-044, D27-052, D27-053, D27-054, D27-055, D27-056, D27-075: `python3 scripts/mark.py $E D27-0NN n/a --note "no backend in authorisation.scope; static-only evidence rules apply (D27-047)"`. Fewer than two accounts → D27-036, D27-037, D27-044, D27-077 are `blocked --note "needs: second tester-owned account (engagement.json.blockers)"`.
+- Step 5 returns 0 → D27-030, D27-031, D27-032, D27-033, D27-034, D27-039, D27-040, D27-041, D27-042, D27-045, D27-072 are `blocked --note "needs: a device for capture; evidence is source-derived per D27-047 until one is attached"`.
+- Everything else in D27 is always applicable; an item is never marked n/a for being 'client-only' or 'bounty-only' — compress per its own Ruled-out-when instead.
+
 ## Triage order
 
 1. **Run the pre-severity gate against the Critical claim, not the bug** (D27-022). It is the only step
@@ -190,6 +222,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | none — but omitting it produces a finding whose every `file:line` is accurate and whose conclusion is wrong |
 | **Attacker** | AM-08 / AM-09 (the SDK or backend that can change the executing code) |
 | **Applies to** | React Native with CodePush or expo-updates; Cordova/Capacitor live-update plugins; any app with `DexClassLoader`/`System.load` from a writable path |
+| **Requires** | react-native, hermes, cordova, capacitor, flutter |
 | **Maps to** | MASTG-TOOL-0104 (`file`-based engine identification), MASTG-TECH-0165; `CodePushConstants.DEFAULT_JS_BUNDLE_NAME`, `CODE_PUSH_FOLDER_PREFIX`, `STATUS_FILE`; expo `UpdatesConfiguration.kt` |
 
 - **Test:** For any app that can replace its own code after install, the APK you decompiled may not be the
@@ -336,7 +369,7 @@ say exactly that, with the unproven link named rather than hidden?**
   Find the control before you claim the bypass: grep for the **validator** and enumerate every call
   site — the unguarded sibling is the finding.
   ```bash
-  grep -rn 'isAllowedHost\|validateUrl\|checkOrigin\|ALLOWED_HOSTS' jadx_out/sources | tee validator-sites.txt
+  grep -rn 'isAllowedHost\|validateUrl\|checkOrigin\|ALLOWED_HOSTS' $DEC/jadx/sources | tee validator-sites.txt
   ```
 - **Proof:** The mitigation's code quoted alongside the residual gap. The corpus's own worked example: the
   first hypothesis was "JS bridges persist across cross-origin navigation"; reading
@@ -642,6 +675,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | every v3.1 vector claiming Scope: Changed |
+| **Requires** | device |
 | **Maps to** | FIRST CVSS v3.1 Scope definition; AOSP "Application Sandbox" (UID/SELinux as the security authority); Bugcrowd's own `clipboard_enabled` baseline, which uses `S:C` for a cross-app read |
 
 - **Test:** `S:C` means the impact crossed a **security authority**. On Android that authority is the UID
@@ -1098,6 +1132,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a — but the negative-control beat is what converts a demo into evidence |
 | **Attacker** | AM-03 |
 | **Applies to** | every dynamically demonstrable finding |
+| **Requires** | device |
 | **Maps to** | MHL's own shipped PoC assets (`read-contacts-poc.mp4` 489,883 B; `dng-crash.mp4` 638,354 B; `crash-apv.mp4` 13,097,642 B; `Steal-images.mp4` 2,465,779 B) — all muted, looping, `controls` present, embedded above the analysis; corpus four-beat differential PoC; MASTG-TOOL-0024 (Scrcpy) |
 
 - **Test:** Seven beats, in this order, in one continuous take per beat. Beats 4 and 5 are the two most
@@ -1149,6 +1184,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | every exfiltration, read-primitive or cross-account PoC |
+| **Requires** | device |
 | **Maps to** | Marker Discipline from the bug-hunting corpus (8+ random characters, search the baseline first) combined with the corpus's coherence requirement for recorded demos |
 
 - **Test:** Plant a unique, obviously synthetic value in the victim data **before** recording, so the
@@ -1186,6 +1222,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | all on-device capture |
+| **Requires** | device |
 | **Maps to** | `adb shell screenrecord` — **default and maximum time limit is 180 seconds** per invocation, no audio capture; MASTG-TECH-0009 (system log inspection) for the paired logcat |
 
 - **Test:** Capture on-device with no extra installs, then **verify the artefact before shipping it**. A
@@ -1223,6 +1260,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | any side-by-side terminal + device rendering; every recorded demo |
+| **Requires** | device |
 | **Maps to** | corpus PoC-video conventions (side-by-side, time-synchronised, 1920×1080, per-scene labelling); corpus coherence rule |
 
 - **Test:** Two failure modes sink composited evidence: a sync offset derived from the wrong transition,
@@ -1257,6 +1295,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a — without the label the finding is closed as "requires root" |
 | **Attacker** | AM-03 for the attack; AM-12 for the display device only |
 | **Applies to** | sandbox-violation findings where the bug yields no bytes to the attacker |
+| **Requires** | device, root |
 | **Maps to** | corpus root-for-evidence convention; the HackerOne, Bugcrowd, Xiaomi, Grab, Spotify and Google exclusions for root-only findings |
 
 - **Test:** When the primitive proves a read happened but returns nothing to the attacker, the *contents*
@@ -1291,6 +1330,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | AM-03 |
 | **Applies to** | every PoC against the operator's own data |
+| **Requires** | device |
 | **Maps to** | corpus evidence-grade lessons; the verbatim triage response received when a PoC was pointed at a harmless file: *"if you are able to read shared preferences with sensitive information … else the impact here is none"* |
 
 - **Test:** Pointing the primitive at a boring cache file to keep credentials out of the report reads to a
@@ -1321,6 +1361,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | AM-05 (another user of the same app) |
 | **Applies to** | every cross-account finding |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | the bug-hunting corpus's evidence-hygiene category split; HackerOne PII handling standards |
 
 - **Test:** The evidence must convince a triager and nothing more. Over-redaction destroys the proof of
@@ -1356,6 +1397,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | supports `broken_access_control.bypass_of_password_confirmation.change_password` (P4) and, where the change is another user's, the P1 IDOR nodes |
 | **Attacker** | AM-05 |
 | **Applies to** | password, email, MFA-enrolment and any other state-change finding |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | the bug-hunting corpus's evidence-hygiene §7 |
 
 - **Test:** A state change needs a pre-state, the bug, and a post-state — plus the out-of-band side
@@ -1389,6 +1431,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a — the risk here is a breach you caused while being paid to prevent them |
 | **Attacker** | n/a |
 | **Applies to** | every engagement with a live backend |
+| **Requires** | backend-api, mitm |
 | **Maps to** | NIST SP 800-115 Appendix B §5.3 (Data Handling), §6.6 ("captured data may include sensitive data that does not belong to the organization—or personal employee data, which may create privacy concerns") |
 
 - **Test:** A mitmproxy flow file holding thousands of production responses, a full `logcat` of a live
@@ -1444,6 +1487,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | Android 14+ for screenshot detection; Android 15+ for screen-share protections |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/about/versions/14/features/screenshot-detection` (`FLAG_SECURE` prevents capture); `developer.android.com/about/versions/15/behavior-changes-all` (Developer Options "Disable screen share protections", testing only) |
 
 - **Test:** `FLAG_SECURE` screens record as black, notification content is hidden during screen sharing on
@@ -1472,6 +1516,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | decides whether the finding lands at the P1 consumer node or is dropped entirely |
 | **Attacker** | AM-03 vs AM-12 — this item is what distinguishes them |
 | **Applies to** | every IPC, provider and file finding |
+| **Requires** | device |
 | **Maps to** | HackTricks content-protocol (`adb shell content …` runs as the `shell` UID, so always retest interesting findings from a normal app context); Shizuku privileged-API note (shell is UID 2000, root is UID 0; `Shizuku.getUid()` says which) |
 
 - **Test:** The single most common false-High in Android reports is a finding demonstrated only from `adb
@@ -1504,6 +1549,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a — this is what converts "I launched an activity" into "I bypassed an access-control boundary" |
 | **Attacker** | AM-03 |
 | **Applies to** | every dynamic claim, every access-control finding |
+| **Requires** | device |
 | **Maps to** | HackTricks drozer content-provider exploitation ("Test the protected backend URI directly from a no-permission app to confirm it is blocked … Send the same URI through the exported provider and compare the response"); MHL's negative-control examples (contacts SQLi → `IllegalArgumentException: Invalid token SELECT` with strict checks on; libarchive → "Bad RAR file data" on the fixed build; ImageIO → "Every crash reproduces … on 26.6.1 and is silently fixed on 26.6.2") |
 
 - **Test:** A positive alone is not proof. **Every dynamic claim needs its negative control in the same
@@ -1542,6 +1588,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | the difference between `broken_access_control.exposed_sensitive_android_intent` rated at P4 and rated on impact |
 | **Attacker** | AM-03 |
 | **Applies to** | every D04–D08 IPC finding |
+| **Requires** | device, provider, exported-activity, exported-service, exported-receiver |
 | **Maps to** | the Oversecured PoC style (attacker activity/provider/receiver with `android:priority="999"` and no permissions); YesWeHack programmes' third-party-app PoC requirement; the observation that "requires root" and "requires physical access" are the two commonest ways a technically valid mobile finding is closed |
 
 - **Test:** Triagers reproduce. An `adb`-only PoC is frequently dismissed as requiring ADB or physical
@@ -1613,6 +1660,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | supports the P1 IDOR and auth-bypass nodes |
 | **Attacker** | AM-05 |
 | **Applies to** | every auth, authorisation and API finding |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | H1 #202425 (Grab, Medium 4.3), #1343300 (Basecamp, High 7.7 — `GET /?exfiltration=USER_EMAIL@gmail.com` straight from the attacker's access log), #1241116 (Reddit, Critical — the bearer-token exchange) |
 
 - **Test:** Auth and API findings triage on the **difference** between the failure and the success
@@ -1650,6 +1698,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; the tombstone is what moves a crash toward memory safety instead |
 | **Attacker** | AM-02 / AM-03 depending on the delivery path |
 | **Applies to** | every crash and memory-safety finding |
+| **Requires** | device |
 | **Maps to** | MHL CVE-2026-0049 (production Android 15, `user/release-keys`), CVE-2026-0006 (`mediaswcodec`); Bugcrowd's evidence bar for native memory safety — a tombstone with the fault inside the app's own `.so` plus the triggering input |
 
 - **Test:** Collect the full tombstone with the build fingerprint, faulting thread name, signal, abort
@@ -1736,7 +1785,7 @@ say exactly that, with the unproven link named rather than hidden?**
   3 the STORAGE MODE        getSharedPreferences(name, 0)   // MODE_PRIVATE, unencrypted
   ```
   ```bash
-  grep -rn 'getSharedPreferences\|putString(\s*"' jadx_out/sources | grep -iE 'token|auth|session'
+  grep -rn 'getSharedPreferences\|putString(\s*"' $DEC/jadx/sources | grep -iE 'token|auth|session'
   ```
   State the environment blocker explicitly instead of faking evidence: "the device is a Play `user` build
   and cannot be rooted (`adbd cannot run as root`); the file's contents were therefore established from
@@ -1837,7 +1886,7 @@ say exactly that, with the unproven link named rather than hidden?**
 - **How:**
   ```bash
   # before writing "there is no X anywhere"
-  grep -rn '<X>' jadx_out/sources out/smali/ base_apktool/res/ | tee evidence/negatives/X.txt | wc -l
+  grep -rn '<X>' $DEC/jadx/sources out/smali/ base_apktool/res/ | tee evidence/negatives/X.txt | wc -l
 
   # before quoting a user-facing string, grep the EXECUTING bundle/resources for the literal
   grep -rn 'Verify your identity' base_apktool/res/values*/strings.xml
@@ -1882,8 +1931,8 @@ say exactly that, with the unproven link named rather than hidden?**
   ```
   ```bash
   # check 2, mechanically
-  grep -rn 'class .*Keychain\|class .*SecureStorage\|class .*CryptoManager' jadx_out/sources
-  grep -rn 'new .*Package()' jadx_out/sources | grep -i packagelist      # what is actually registered
+  grep -rn 'class .*Keychain\|class .*SecureStorage\|class .*CryptoManager' $DEC/jadx/sources
+  grep -rn 'new .*Package()' $DEC/jadx/sources | grep -i packagelist      # what is actually registered
   grep -rn 'NativeModules\.\|require(.*keychain' assets/*.bundle          # what the caller actually uses
   ```
 - **Proof:** The five check results recorded next to the finding, each with its command output.
@@ -1901,6 +1950,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | n/a |
 | **Applies to** | reflection, injection, cache poisoning, parameter pollution and out-of-band SSRF claims made through the mobile API |
+| **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's Marker Discipline; the recorded case — `X-Forwarded-Proto: javascript` appeared to reflect across multiple pages because the word `javascript` occurs naturally in SharePoint help-link hrefs |
 
 - **Test:** The injected marker must be unique and unmistakable, or your "reflection" is a word collision.
@@ -1931,6 +1981,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | AM-05 |
 | **Applies to** | every bypass claim made against the mobile backend |
+| **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's Body-Diff Rule; the recorded case — `Host: target.example:80@evil.example.com` returned 200 instead of the baseline 403, body byte-identical at 8,341 bytes both ways; the AWS ELB had normalised the Host and dropped the `@evil` portion. **Status-code-only claims are the most common rejected-as-N/A category on bug-bounty platforms** |
 
 - **Test:** A bypass claim requires a response **body** differential, not a status code. A 200 with a
@@ -1958,6 +2009,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | governs claims against `server_security_misconfiguration.no_rate_limiting_on_form.*` (P4) and username-enumeration nodes (P4) |
 | **Attacker** | AM-01 |
 | **Applies to** | timing oracles, user enumeration, rate-limit absence, race conditions |
+| **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's Statistical-Sample Rule; the recorded case — `Administrator` took 1,527 ms against a ~700 ms control on a single shot; n=80 interleaved across eight groups collapsed every group to mean 685–716 ms, σ 25–74 ms, and the finding was retracted |
 
 - **Test:** Single outliers are not signal; network jitter routinely produces 2x outliers, and a mobile
@@ -1995,6 +2047,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | n/a |
 | **Attacker** | AM-01 |
 | **Applies to** | every oracle or bypass claim |
+| **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's Server-Policy-vs-State rule; the recorded case — a `download.aspx` "file existence oracle" that was actually an extension blocklist: `.ashx`, `.asmx`, `.svc`, `.config` are always blocked regardless of whether the file exists |
 
 - **Test:** A server-side policy that always denies is not a state oracle. Establish whether the
@@ -2022,6 +2075,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | governs every claim at `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | every auth-bypass claim against an endpoint found in the APK |
+| **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's LAYER-ORDERING TRAP — described there as the single most transferable item in the repository; it applies equally to WAF and CDN layers, where an edge block is not an origin response |
 
 - **Test:** The highest-confidence false positive in the entire auth-bypass class. Many stacks put a
@@ -2096,6 +2150,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | none; filing one lands in the P5 hardening branch at best and damages the SNR at worst |
 | **Attacker** | AM-12 (own harness — not an attack) |
 | **Applies to** | every emulator-based engagement |
+| **Requires** | device |
 | **Maps to** | corpus never-report list; MASTG false-positive notes |
 
 - **Test:** Three observations are properties of the harness, not of the app. Re-test on a physical device
@@ -2644,6 +2699,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | the bypass's own node, rated on its own merits |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | every resolved report and every client retest |
+| **Requires** | device |
 | **Maps to** | H1 #1408692 bypassing #1142918 (Nextcloud, Low 2.3, $250); #479139 bypassing #447975 (New Relic, $500 after $750); #1377748 / #1362313 (Evernote); #377107 (ownCloud); #284346 "Download attachments with traversal path into any sdcard directory (**incomplete fix 106097**)"; NIST SP 800-115 §8.3 — verification requires "a **mirror copy of the original test**" |
 
 - **Test:** Two of the better payouts in the disclosed corpus came from re-testing a patched report rather
@@ -2760,6 +2816,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) for an auth regression; `broken_access_control.idor.*` (P1–P3) for a field-exposure or object-authz regression; `server_security_misconfiguration.no_rate_limiting_on_form.*` (P4) for a throttling regression |
 | **Attacker** | AM-01 (the old endpoint is reachable from anywhere) |
 | **Applies to** | any versioned backend behind a mobile client |
+| **Requires** | backend-api |
 | **Maps to** | the bug-hunting corpus's shadow-API material — "a mobile app whose hardcoded backend calls look older than the current web app's" is named there as the highest-value mobile-to-backend bridge |
 
 - **Test:** A mobile app's hardcoded backend calls are frequently an **older API version** than the
@@ -2844,6 +2901,7 @@ say exactly that, with the unproven link named rather than hidden?**
 | **VRT** | the authz node the mechanism supports — `broken_access_control.idor.*`, `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies, up to Critical) |
 | **Attacker** | AM-05 |
 | **Applies to** | every engagement touching production data |
+| **Requires** | backend-api, two-accounts |
 | **Maps to** | NIST SP 800-115 §6.6 ("captured data may include sensitive data that does not belong to the organization—or personal employee data, which may create privacy concerns") and Appendix B §5.3 (Data Handling), §3.2 (Incident Handling and Response) |
 
 - **Test:** Real users' data arrives unbidden — an IDOR returning a stranger's record, a misconfigured

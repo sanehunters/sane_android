@@ -4,7 +4,7 @@
  "file": "D18-cloud-and-sdk-config.md",
  "why": "It pays because the severity is decided on a server that is in scope, by an attacker model with no preconditions at all. A Firebase Realtime Database that answers `GET /.json` is read by anyone on the internet who has done nothing more than download a free app from Google Play — no device, no root, no proximity, no user interaction, no installed malicious app. Contrast the rest of the mobile surface, where the best exported-component finding still has to argue that a victim installed the attacker's app. Bugcrowd's VRT reflects this asymmetry exactly: the whole `mobile_security_misconfiguration` branch is P5, while `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` is P1 and `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` is P1. The corpus's disclosed-report base rate says the same thing from the other direction: the Firebase open-database finding is the single most repeated mobile-recon finding in the HackerOne set (Zego #1065134 High 7.5, Periscope #684099 Critical, MTN #1447751 / #1351326 / #1351329 / #1691888, MobiSystems #731724 for the Firestore variant), and the FCM server-key class alone earned one researcher a reported $30,000+ in aggregate across programs.\n\nIt also pays *badly* if you skip one step. The same grep that finds a P1 finds a P5 far more often. `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` is P5, and a Firebase Web API key, a Stripe publishable key, a correctly package-restricted Maps key and an analytics ingest key all live there. Reddit explicitly excludes Firebase keys as hardcoded secrets; Basecamp excludes hardcoded keys outright \"unless chained with a demonstrated cross-user impact that does not require physical device access\"; YesWeHack's Gojek program lists \"non important secrets (such as 3rd party secrets)\" as non-qualifying. So the restriction-verification gate in this chapter (D18-009 through D18-013) is not procedural politeness — it is the entire difference between the ceiling and the graveyard, and it costs one HTTP request per key.\n\nThe third reason it pays is that almost nobody on the client side owns it. The backend team wrote the rules; the mobile team shipped the config; the SDK vendor shipped a manifest entry that merged into the app without anyone reading it. Oversecured's SDK research and the EngageLab EngageSDK case (≤ v4.5.4, fixed in 5.2.1 on 2025-11-03, apps with 50M+ combined installs) exist precisely in that seam. The corpus is blunt that this is \"the highest £/hour class in mobile — and it is not a *mobile* bug at all; the APK is just where the config lives.\"",
  "crux": "For every backend identity the package contains — project id, bucket, identity-pool id, anon key, vendor API key — does it still do anything when it is used from a host that is not the app, by an identity that is not a legitimate user?",
- "applicability": "",
+ "applicability": "D18 has two halves. The cloud/backend-identity half (D18-001..-055, -068..-077) applies to any app that names a cloud project, bucket, BaaS or vendor key anywhere in the package; the SDK half (D18-056..-067) applies to any app that bundles a third-party SDK. Both are nearly always true, so the probe decides *which blocks* are n/a far more often than the whole domain. Run it against `$DEC` once, record the five counts, and write the block-level notes it produces.\n\n```bash\nMF=$DEC/apktool/AndroidManifest.xml; R=$DEC/apktool/res; A=$DEC/apktool/assets; S=$DEC/jadx/sources\n# 1. Google/Firebase project present? (strings written by the google-services plugin) and which Firebase SDKs actually have a consumer (registrars)\ngrep -cE 'google_app_id|google_api_key|firebase_database_url|google_storage_bucket|project_id' \"$R/values/strings.xml\"\ngrep -oE 'com\\.google\\.firebase\\.components:[A-Za-z0-9_.$]+' \"$MF\" | sed 's/.*://' | sort -u\n# 2. any cloud / BaaS / function host or identity-pool id anywhere in the package, native blobs and bundles included\ngrep -rhoE '[a-z0-9.-]+\\.(amazonaws\\.com|blob\\.core\\.windows\\.net|storage\\.googleapis\\.com|firebaseio\\.com|firebasedatabase\\.app|appspot\\.com|firebasestorage\\.app|supabase\\.co|cloudfunctions\\.net|run\\.app|back4app\\.com|parseapi\\.[a-z.]+|data\\.mongodb-api\\.com)|[a-z]{2}-[a-z]+-[0-9]:[0-9a-f-]{36}' \"$DEC\" | sort -u | tee inventory/cloud-hosts.txt | wc -l\n# 3. vendor-key prefix hits (the D18-004 set, counted — the sweep itself runs in D18-004)\ngrep -rhoE 'AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|sk_live_[A-Za-z0-9]{16,}|da2-[a-z0-9]{26}|mob-[0-9a-f-]{36}|os_v2_app_[a-z0-9_]{40,}|DefaultEndpointsProtocol=|\"type\": *\"service_account\"' \"$DEC\" | sort -u | wc -l\n# 4. third-party SDK inventory: manifest components outside the app's own package, and dex package prefixes\nPKG=$(grep -oE 'package=\"[^\"]+\"' \"$MF\" | head -1 | cut -d'\"' -f2)\ngrep -oE 'android:name=\"[a-z]+\\.[A-Za-z0-9_.]+\"' \"$MF\" | cut -d'\"' -f2 | grep -v \"^$PKG\" | awk -F. '{print $1\".\"$2\".\"$3}' | sort -u | tee inventory/sdk-prefixes.txt | wc -l\n# 5. the runtime-SDK block needs a device + proxy: record lab.mode (device/mitm/frida) from scripts/doctor.sh --json\n```\n\nDecision rules:\n- Probe 1 > 0 **or** any registrar listed → the `firebase` block (D18-001, -009..-034, -075) applies. The registrar list decides which data-plane items have a *consumer*; probe them regardless (they are internet-reachable) and record the consumer status in the identity table.\n- Probe 2 > 0 or probe 3 > 0 → the cloud-credential block (D18-002..-013, -035..-050, -055, -068, -073, -074, -076, -077) applies to the hosts and keys listed; each sub-block (AWS, Azure, BaaS, payments, media, search, push, flags) is n/a when no host/key of that class is in `inventory/cloud-hosts.txt` or the prefix count — name the class and the empty grep in the note.\n- Probe 4 > 0 → the SDK block (D18-006, -008, -046, -051..-054, -056..-067) applies; the vendor-specific rows (session replay -059, support chat -052..-054, attribution -062/-063, ads -064, identity verification -051, payments -047/-048) are n/a when `inventory/sdk-prefixes.txt` holds no prefix of that vendor class — paste the prefix list in the note.\n- Probe 5: with no device or no proxy, D18-057..-061, -065 are `blocked` (not n/a) with the missing capability named.\n- D18-069..-072 (gates) always apply to any probe issued anywhere in the engagement.\n\nWhole-domain n/a note (rare — only when every count is zero):\n\n`D18 n/a — no Google/Firebase strings or registrars (probe 1: 0 strings, no registrar), no cloud/BaaS/function host or identity-pool id in the full decompiled tree including lib/ and bundles (probe 2: 0; inventory/cloud-hosts.txt empty), no vendor-key prefix hit (probe 3: 0), and every manifest component is in the app's own package (probe 4: 0; inventory/sdk-prefixes.txt empty). Commands and counts as run against $DEC on <date>. D18-069..072 still apply to probes issued in other domains.`\n\nBlock-level n/a note template:\n\n`D18-<item range> n/a — <block name>: probe <n> returned 0 on $DEC (<command pasted>, count 0) and backend-identity.md has no row of kind <kind>; consumer check (registrar list / sdk-prefixes.txt) pasted.`",
  "triage": "1. **Extract the full backend-identity table first (D18-001 to D18-008).** Every later probe is parameterised by it, and half of it is not in `strings.xml` — it is in `assets/`, in `libapp.so`, in the JS bundle.\n2. **Run the restriction gate on every key before touching anything else (D18-009 to D18-013).** One request per key. It decides P1 versus P5 and stops you from writing a report that gets closed as \"public by design\".\n3. **Firebase Storage bucket listing (D18-021).** Cheapest high-signal probe in the domain: one unauthenticated `GET`, and a returned object list *is* the finding.\n4. **RTDB and Firestore reads (D18-014, D18-017).** Second cheapest, highest disclosed-report base rate, and the read result immediately tells you whether the write test is worth running.\n5. **The `request.auth != null` rule plus self-enrolment (D18-019, D18-020).** More common than fully open rules and strictly more serious, because it looks closed to a casual probe. This is the one a scanner never finds.\n6. **Cloud-credential scope checks (D18-035, D18-036, D18-038).** `sts get-caller-identity` is one call, non-mutating, and resolves a P1/nothing question immediately.\n7. **Object storage listing and write (D18-039, D18-040).** Writable beats readable by a full severity band; test both, always.\n8. **Vendor keys with a *read* API (D18-046 to D18-050).** Teams paste the management key where the ingest key belonged; the vendor's read endpoint is where you find out.\n9. **Cloud Functions and BaaS endpoints (D18-027, D18-044).** Admin-SDK code inside a callable ignores every security rule you just tested, so a hardened rules set means nothing here.\n10. **Remote Config and App Check (D18-023 to D18-026, D18-029).** Config leaks unreleased endpoints that feed D15, and App Check absence is the sentence that turns \"on-device only\" into \"remote\".\n11. **Support/chat and identity-verification SDKs (D18-051 to D18-054).** Under-tested, and support threads carry recovery correspondence.\n12. **Runtime SDK data flows and consent (D18-056 to D18-065).** These need a proxy and a device, so they come last; they are also where the privacy-band rating applies, which is materially lower at most vendors.\n13. **Discipline items (D18-068 to D18-072).** Run them continuously, not at the end.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"Hardcoded Google API key found in `strings.xml`\" | The APK is public by construction (AOSP security model rule ①: all static code and data in an APK is public). Firebase Web API keys are documented as embeddable; Reddit explicitly excludes them; Bugcrowd rates `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` P5. | Show the key authenticating from a host that is not the app and returning data or performing a billable/mutating operation — then it is `…for_publicly_accessible_asset` (P1) or `…pay_per_use_abuse` (P4). |\n| Maps key returning `REQUEST_DENIED` with \"Requests from this Android client are blocked\" | The key is package + SHA-1 restricted. The corpus is explicit that this is a ruled-out entry, not a Low. | Nothing, for that key. Move to D18-012 and find one that is not restricted, or show an IP-unrestricted key reaching a data API. |\n| `gcm_defaultSenderId` / `google_app_id` in the package | Client identifiers, required by the SDK. H1 #941590 rated a sender key **Low**; the server key in H1 #789370 was **Critical**. | A **server** key (`AAAA…:APA91b…`) or a service-account JSON, validated against the send endpoint using only a device token you own. |\n| Firestore/RTDB returning `{\"error\":\"Permission denied\"}` at the root | Rules are in force at that node. | A permissive child path (rules cascade downwards only — D18-016), an authenticated read with a self-minted identity (D18-019/-020), or a callable function that reads with admin credentials (D18-027). |\n| A public assets bucket that lists CSS, fonts and marketing images | Public by design; it is a CDN. | Object keys that identify users or documents (D18-043), anonymous **write** (D18-040), or a bucket the app loads code/config from. |\n| Stripe `pk_live_` publishable key, Braintree client token, analytics ingest write key | Documented public client credentials; the vendor's own model expects them in the client. | The same vendor's **secret**/management key (D18-047), or the ingest key accepted by the vendor's export/read API (D18-046). |\n| GraphQL introspection enabled on an AppSync endpoint | On the never-submit list on its own. | A query executed with the packaged key that returns records it should not — then it is the data finding, not the introspection. |\n| Wildcard `Access-Control-Allow-Origin` on a `*.appspot.com` host | A wildcard ACAO without a credential-exfil PoC is on the never-submit list, and a wildcard cannot be combined with credentials by browsers anyway. | A **reflected** origin plus `Access-Control-Allow-Credentials: true` on a path returning authenticated data, with a working cross-origin read (D18-030). |\n| \"This SDK is outdated (version X)\" | `using_components_with_known_vulnerabilities.outdated_software_version` is P5, and most of the named ASI library CVEs (Libpng, Libjpeg-turbo, OpenSSL logjam/CVE-2015-3194/CVE-2014-0224, Libupup CVE-2015-8540, Apache Cordova CVE-2015-5256/CVE-2015-1835/CVE-2014-3500/-3501/-3502, GnuTLS) are **LEGACY**. | A matched version string **plus** a demonstration that the vulnerable code path is reachable from app input (D18-067, -> D17). |\n| An SDK-declared component is exported | Exported and inert is not a finding — it is one of the corpus's named non-paying classes. | The three-artefact ownership proof of D18-067: it ships here, a zero-permission app reaches it, and the impact lands on *this* app's data. |\n| Remote Config contains feature flags | Flags are what Remote Config is for. | A credential in a value (D18-024), an internal/staging hostname that resolves (D18-023), or a value the client obeys for a security decision (D18-025). |\n| MobSF/AndroBugs flagged \"Firebase database found\" | Unverified scanner output is, per the corpus, the single fastest route to N/A and a damaged platform reputation. | The `.json` probe result — either the data (finding) or the permission-denied body (ruled-out entry). |\n| An AWS key that returns `InvalidClientTokenId` | Dead credential. | A live one, proved with `sts get-caller-identity` and its attached policy names — and nothing further. |\n| App Check not implemented | Medium at best standalone; it is a defence-in-depth control, and on its own it is not attacker-attainable harm. | Pair it with a rules or callable finding and write it as the missing-mitigation line that makes that finding remotely reachable rather than on-device only (D18-029). |\n| Session-replay SDK present in the package | Presence is inventory. | A canary typed into a sensitive field found in the decompressed upload payload, or visible in the vendor's replay (D18-059). |\n| Analytics SDK sends an advertising id | Pseudonymous identifier, the SDK's stated purpose, and most vendors run privacy at a much lower band anyway. | The identifier **joined to an account id**, an email, a phone number, precise location, or a session token — and transmitted before consent (D18-057, D18-058). |",
  "joins": "- **Merged manifest (D18-006/-066) × WebView configuration (D10).** Nobody reviews a third-party SDK's WebView. The Grab case (H1 #401793) is exactly this join: a *support SDK's* activity, reachable by deep link, hosting a WebView with `addJavascriptInterface` exposing `getGrabUser()`. The app team audited their own WebViews and the vendor audited theirs in isolation; the bridge lived in the seam. Enumerate every WebView **outside** the first-party package prefix and rate it by what its bridge methods return.\n- **Writable object storage (D18-040/-022) × dynamic code and content loading (D17/D02).** The storage test and the code-loading test are usually run by different people on different days. Join them: take the bucket you can write to and ask whether any path in it is a JS bundle, a config JSON, an OTA payload or an image the app renders in a WebView. A writable asset bucket that the app loads code from is remote code execution for every install, and is rated there — not as a storage misconfiguration.\n- **Remote Config (D18-023/-025) × certificate pinning (D14) × the shadow API (D18-068).** Pinning is P5 on its own and config is \"just flags\" on its own. Joined: a config value named `enforce_pinning` or `api_base_url` that the client obeys, fetched over a channel that is itself unpinned, means an AM-06 network attacker redirects authenticated traffic to a host of their choosing — and the staging host the config leaks is usually the weaker API version. Three P5-to-P4 observations compose into a remote finding.\n- **Firebase Auth self-enrolment (D18-020) × the app's own API (D15).** The project identity you minted for the rules test is frequently the *same* identity the app's backend trusts. Take the `idToken` from `accounts:signUp` and present it to the first-party API. Where the backend verifies the Firebase token but derives authorisation from a claim the client controls, an anonymous identity becomes an authenticated one on the real API.\n- **Push send credential (D18-031/-032) × the message handler (D18-034) × deep links (D09).** A server key is High as mass phishing. Joined with a handler that routes on message content and a deep link that reaches a sensitive route, the same credential is remote, zero-interaction navigation control over every install — the D09 chain without needing the victim to click anything.\n- **Crash reporter configuration (D18-060) × logcat findings (D20) × the OkHttp interceptor (D14).** Each is capped: logcat needs a local reader, `HttpLoggingInterceptor` is a code smell, the crash SDK is inventory. Joined, the interceptor writes the bearer token to logcat, the reporter attaches logcat to crash reports, and the token leaves the device to a third party — which removes the on-device reachability cap that limited the logcat finding.\n- **Cognito/identity-pool role scope (D18-036/-037) × object-key structure (D18-043) × the app's own IDOR surface (D15).** The role decides *whether* you can call S3; the key structure decides *whose* object you get. Testers usually stop at the role. Enumerate the per-identity prefix convention from the listing and then test the same substitution against the app's own download endpoint — the two surfaces frequently disagree about who owns an object.\n- **App Startup initialisers (D18-065) × backup and restore (D11).** An initialiser that reads a config or token from `SharedPreferences` before any gate, combined with permissive backup rules, means an attacker-supplied restore seeds the app's control plane before the lock screen is drawn. Neither surface is interesting alone.\n- **SDK-injected permissions (D18-066) × confused-deputy components (D05).** The permission an SDK merged in is exactly what an exported first-party receiver inherits. Cross the merged-manifest permission list against the exported-component list: an SDK-contributed `READ_PHONE_STATE` or location permission raises the ceiling of every confused-deputy primitive the app already had.",
@@ -33,8 +33,10 @@
     "AM-01"
    ],
    "applies_to": "All apps with a Firebase or Google Cloud SDK",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "MASTG-TECH-0007, MASTG-TECH-0019, MASTG-KNOW-0039, API8:2023",
    "record": "",
    "legacy_meta": {},
@@ -135,8 +137,18 @@
     "AM-01"
    ],
    "applies_to": "Flutter, React Native (Hermes), Unity IL2CPP/Mono, Xamarin/.NET MAUI, Kotlin Multiplatform, and any app with a custom `.so`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native, flutter, react-native, hermes, unity, xamarin, cordova, capacitor, kmp",
+   "requires_tags": [
+    "native",
+    "flutter",
+    "react-native",
+    "hermes",
+    "unity",
+    "xamarin",
+    "cordova",
+    "capacitor",
+    "kmp"
+   ],
    "maps_to": "MASTG-TOOL-0144 (gitleaks), MASTG-TOOL-0125 (Apkleaks), MASTG-TECH-0019",
    "record": "",
    "legacy_meta": {},
@@ -642,8 +654,10 @@
     "AM-01"
    ],
    "applies_to": "Apps with `firebase_database_url` in resources, or any `*.firebaseio.com` / `*.firebasedatabase.app` host in the package",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "MASTG-KNOW-0039 (Firebase Real-time Databases), MASWE-0004, CWE-306; Firebase insecure-rules documentation (`\".read\": true, \".write\": true`); ATT&CK T1481.002 (ATT&CK names Firebase directly as a C2 channel used by Mandrake, TERRACOTTA and VajraSpy S9006)",
    "record": "",
    "legacy_meta": {},
@@ -697,8 +711,10 @@
     "AM-01"
    ],
    "applies_to": "Every RTDB instance found, including ones that deny reads — read and write rules are independent",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase insecure-rules documentation; CWE-306",
    "record": "",
    "legacy_meta": {},
@@ -746,8 +762,10 @@
     "AM-01"
    ],
    "applies_to": "RTDB projects that deny the root",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase insecure-rules documentation — a parent `\".read\": true` at `/foo` **cannot** be revoked by `\".read\": false` at `/foo/bar`; rules cascade downwards only",
    "record": "",
    "legacy_meta": {},
@@ -792,8 +810,10 @@
     "AM-01"
    ],
    "applies_to": "Firestore projects — note the `.json` probe of D18-014 misses these entirely",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase insecure-rules documentation (`allow read, write: if true;`); API1:2023; H1 #731724 (MobiSystems — the REST calls below come from that report)",
    "record": "",
    "legacy_meta": {},
@@ -839,8 +859,10 @@
     "AM-01"
    ],
    "applies_to": "Firestore projects",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase insecure-rules documentation; H1 #731724",
    "record": "",
    "legacy_meta": {},
@@ -885,8 +907,11 @@
     "AM-05"
    ],
    "applies_to": "Firestore, RTDB and Cloud Storage projects that pass the unauthenticated probes",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase, two-accounts",
+   "requires_tags": [
+    "firebase",
+    "two-accounts"
+   ],
    "maps_to": "Firebase insecure-rules documentation — `if request.auth.uid != null` means \"any logged-in user can access all data belonging to other users\"; API1:2023",
    "record": "",
    "legacy_meta": {},
@@ -932,8 +957,10 @@
     "AM-01"
    ],
    "applies_to": "Firebase Auth projects",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase insecure-rules documentation (the `request.auth != null` case); API2:2023",
    "record": "",
    "legacy_meta": {},
@@ -973,8 +1000,10 @@
     "AM-01"
    ],
    "applies_to": "Apps with `google_storage_bucket` in resources or any `firebasestorage.googleapis.com` reference",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase insecure Storage rules (`allow read, write;` → \"any internet user can read or write to all files in the bucket\"); MASWE-0004",
    "record": "",
    "legacy_meta": {},
@@ -1023,8 +1052,10 @@
     "AM-01"
    ],
    "applies_to": "Firebase Storage projects",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase insecure Storage rules; CWE-306",
    "record": "",
    "legacy_meta": {},
@@ -1071,8 +1102,10 @@
     "AM-01"
    ],
    "applies_to": "Apps using Firebase Remote Config",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase Remote Config parameters documentation — \"Don't store confidential data in Remote Config parameter keys or values\"; values are cached on device; API8:2023",
    "record": "",
    "legacy_meta": {},
@@ -1120,8 +1153,10 @@
     "AM-12"
    ],
    "applies_to": "Apps using Remote Config or an equivalent flag service (LaunchDarkly, Optimizely, in-house)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase Remote Config documentation (\"Don't store confidential data in Remote Config parameter keys or values\" — end users can access these values); MASWE-0004",
    "record": "",
    "legacy_meta": {},
@@ -1169,8 +1204,11 @@
     "AM-09"
    ],
    "applies_to": "Apps that read a config value into a security decision",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "Firebase Remote Config value priority (fetched values outrank in-app defaults); API10:2023 Unsafe Consumption of APIs",
    "record": "",
    "legacy_meta": {},
@@ -1215,8 +1253,10 @@
     "AM-01"
    ],
    "applies_to": "Apps using Remote Config conditions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase Remote Config conditions (targeting by app version, platform, user property, country, random percentile)",
    "record": "",
    "legacy_meta": {},
@@ -1260,8 +1300,10 @@
     "AM-01"
    ],
    "applies_to": "Apps using Firebase callable functions, Lambda function URLs, API Gateway stages or Cloud Run",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API5:2023 Broken Function Level Authorization, API1:2023",
    "record": "",
    "legacy_meta": {},
@@ -1305,8 +1347,10 @@
     "AM-01"
    ],
    "applies_to": "Firebase Auth projects whose key is not application-restricted (D18-009)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "API2:2023",
    "record": "",
    "legacy_meta": {},
@@ -1350,8 +1394,10 @@
     "AM-01"
    ],
    "applies_to": "Apps using Firebase/GCP-backed services or the App Check custom-backend integration",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "`firebase.google.com/docs/app-check` — Play Integrity provider on Android; protects Cloud Firestore, Realtime Database, Cloud Storage, callable Cloud Functions, Firebase Authentication (Preview) and custom backends; debug providers are local-development-only",
    "record": "",
    "legacy_meta": {},
@@ -1394,8 +1440,10 @@
     "AM-02"
    ],
    "applies_to": "Firebase/GCP projects with an App Engine or Cloud Run surface on the same project",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase",
+   "requires_tags": [
+    "firebase"
+   ],
    "maps_to": "Firebase/App Engine default hostnames; API8:2023",
    "record": "",
    "legacy_meta": {},
@@ -1437,8 +1485,11 @@
     "AM-01"
    ],
    "applies_to": "FCM apps. **LEGACY:** the `Authorization: key=` server-key endpoint belongs to the legacy FCM HTTP API, superseded by the OAuth2/service-account HTTP v1 API — on a current project the modern equivalent is D18-032",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase, push",
+   "requires_tags": [
+    "firebase",
+    "push"
+   ],
    "maps_to": "Google ASI campaign \"Exposed Firebase Cloud Messaging Server Keys\" (started 2021-10-12, `support.google.com/faqs/topic/11015404`); H1 #789370 (Smule, Critical, CWE \"Use of Hard-coded Credentials\"); CWE-798",
    "record": "",
    "legacy_meta": {},
@@ -1486,8 +1537,11 @@
     "AM-01"
    ],
    "applies_to": "Any app whose package contains a `\"type\": \"service_account\"` JSON, in assets, raw resources, a native blob or a JS bundle",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase, push",
+   "requires_tags": [
+    "firebase",
+    "push"
+   ],
    "maps_to": "API8:2023; CWE-798; apkleaks `Google_Cloud_Platform_Service_Account` rule",
    "record": "",
    "legacy_meta": {},
@@ -1532,8 +1586,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "All FCM apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase, push",
+   "requires_tags": [
+    "firebase",
+    "push"
+   ],
    "maps_to": "H1 #941590 (Hostinger — GCM sender key, rated **Low**) versus H1 #789370 (Smule — server key, rated **Critical**)",
    "record": "",
    "legacy_meta": {},
@@ -1574,8 +1631,11 @@
     "AM-03"
    ],
    "applies_to": "Apps whose `FirebaseMessagingService` acts on message contents",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "push, device",
+   "requires_tags": [
+    "push",
+    "device"
+   ],
    "maps_to": "ATT&CK T1437.001 Web Protocols (ATT&CK names GCM/FCM/APNS as blend-in channels); ATT&CK T1481.002",
    "record": "",
    "legacy_meta": {},
@@ -1718,8 +1778,10 @@
     "AM-05"
    ],
    "applies_to": "Cognito user-pool + identity-pool apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "two-accounts",
+   "requires_tags": [
+    "two-accounts"
+   ],
    "maps_to": "Amazon Cognito identity pools documentation (per-identity-type IAM roles); API1:2023",
    "record": "",
    "legacy_meta": {},
@@ -2005,8 +2067,10 @@
     "AM-05"
    ],
    "applies_to": "Any storage surface whose listing succeeded, and any app that constructs object URLs client-side",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "two-accounts",
+   "requires_tags": [
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; MASWE-0004",
    "record": "",
    "legacy_meta": {},
@@ -2051,8 +2115,10 @@
     "AM-01"
    ],
    "applies_to": "Apps built on Supabase, Appwrite, PocketBase or any PostgREST-style BaaS",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API1:2023 (object-level authorisation delegated to policies that do not check ownership); API8:2023",
    "record": "",
    "legacy_meta": {},
@@ -2095,8 +2161,10 @@
     "AM-01"
    ],
    "applies_to": "Amplify/AppSync apps and any managed GraphQL endpoint whose key ships in the client",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API1:2023, API5:2023, API8:2023",
    "record": "",
    "legacy_meta": {},
@@ -2182,8 +2250,10 @@
     "AM-01"
    ],
    "applies_to": "Apps taking card/wallet payments outside Play Billing (Stripe, Braintree, Adyen, Razorpay, PayU, Checkout.com)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "payments",
+   "requires_tags": [
+    "payments"
+   ],
    "maps_to": "CWE-798; the Datafarm Flutter case (secret key found in `createPaymentIntent()` in the Dart assembly output; the validated account held customer payment-card details, names, addresses, phone numbers and **$3,112 in pending charges**)",
    "record": "",
    "legacy_meta": {},
@@ -2227,8 +2297,12 @@
     "AM-05"
    ],
    "applies_to": "Apps whose order state transitions on a PSP SDK callback rather than on a server-verified webhook",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "payments, backend-api, mitm",
+   "requires_tags": [
+    "payments",
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "API10:2023 Unsafe Consumption of APIs",
    "record": "",
    "legacy_meta": {},
@@ -2363,8 +2437,11 @@
     "AM-05"
    ],
    "applies_to": "Apps with third-party identity verification (Onfido, Sumsub, Veriff, Jumio, Persona and similar)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "two-accounts, mitm",
+   "requires_tags": [
+    "two-accounts",
+    "mitm"
+   ],
    "maps_to": "No external identifier verified in the corpus for this class; rate on demonstrated impact",
    "record": "",
    "legacy_meta": {},
@@ -2407,8 +2484,10 @@
     "AM-05"
    ],
    "applies_to": "Apps embedding Intercom, Zendesk Messaging, Freshchat, Helpshift or Salesforce Embedded Messaging",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "`developers.intercom.com/installing-intercom/android/identity-verification` — `Intercom.client().setUserHash(...)`, HMAC-SHA256 over the user id or email, the secret must live \"in a secure place on your app server\", and the API Auth Server returns **401** when the HMAC fails",
    "record": "",
    "legacy_meta": {},
@@ -2496,8 +2575,11 @@
     "AM-05"
    ],
    "applies_to": "Apps with embedded support chat",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview, mitm",
+   "requires_tags": [
+    "webview",
+    "mitm"
+   ],
    "maps_to": "H1 #401793 (Grab — a support activity's WebView with `addJavascriptInterface` exposing `getGrabUser()`, High 7.1: \"JS interfaces have no origin policies, so if you have the ability to run your own JS in the given WebView, you can access them\"); H1 #180349 (Zendesk Android SDK, unprotected `CREATE_REQUEST` broadcast)",
    "record": "",
    "legacy_meta": {},
@@ -2636,8 +2718,12 @@
     "AM-08"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, mitm",
+   "requires_tags": [
+    "device",
+    "frida",
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0319 (Runtime Use of SDK APIs Known to Handle Sensitive User Data), MASWE-0073, MASTG-TECH-0043, MASTG-TECH-0033, MASTG-TECH-0100; MASVS-PRIVACY-1/-3; Mobile Top 10 2024 M6; ATT&CK T1533, T1532, T1646",
    "record": "",
    "legacy_meta": {},
@@ -2676,7 +2762,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Hook the entry points found in D18-056 and capture the **argument values** plus a stack trace while exercising the app. Argument values are what turns \"potential\" into a finding.",
-   "how": "```bash\nfrida -U -f com.target.app -l sdk_hooks.js --no-pause\n```\n```javascript\nJava.perform(function () {\n  var Log = Java.use('android.util.Log'), Ex = Java.use('java.lang.Exception');\n  function trace(){ return Log.getStackTraceString(Ex.$new()).split('\\n').slice(1,6).join(' | '); }\n  var FA = Java.use('com.google.firebase.analytics.FirebaseAnalytics');\n  FA.setUserId.implementation = function (id) { console.log('[FA.setUserId] ' + id + '\\n  ' + trace()); return this.setUserId(id); };\n  FA.setUserProperty.implementation = function (k, v) { console.log('[FA.setUserProperty] ' + k + '=' + v + '\\n  ' + trace()); return this.setUserProperty(k, v); };\n  FA.logEvent.implementation = function (n, b) { console.log('[FA.logEvent] ' + n + ' ' + (b ? b.toString() : '') + '\\n  ' + trace()); return this.logEvent(n, b); };\n  // attribute every outbound request to its calling SDK\n  try {\n    var Call = Java.use('okhttp3.RealCall');\n    Call.execute.implementation = function () { console.log('[http] ' + this.request().url().toString() + '\\n  ' + trace()); return this.execute(); };\n  } catch (e) {}\n});\n```\n```bash\nfrida-trace -U -p $(adb shell pidof com.target.app) \\\n  -j '*analytics*!*/iu' -j '*firebase*!log*/i' -j '*appsflyer*!*/i' -o sdk.log\n```",
+   "how": "```bash\nfrida -D \"$SERIAL\" -f com.target.app -l sdk_hooks.js\n```\n```javascript\nJava.perform(function () {\n  var Log = Java.use('android.util.Log'), Ex = Java.use('java.lang.Exception');\n  function trace(){ return Log.getStackTraceString(Ex.$new()).split('\\n').slice(1,6).join(' | '); }\n  var FA = Java.use('com.google.firebase.analytics.FirebaseAnalytics');\n  FA.setUserId.implementation = function (id) { console.log('[FA.setUserId] ' + id + '\\n  ' + trace()); return this.setUserId(id); };\n  FA.setUserProperty.implementation = function (k, v) { console.log('[FA.setUserProperty] ' + k + '=' + v + '\\n  ' + trace()); return this.setUserProperty(k, v); };\n  FA.logEvent.implementation = function (n, b) { console.log('[FA.logEvent] ' + n + ' ' + (b ? b.toString() : '') + '\\n  ' + trace()); return this.logEvent(n, b); };\n  // attribute every outbound request to its calling SDK\n  try {\n    var Call = Java.use('okhttp3.RealCall');\n    Call.execute.implementation = function () { console.log('[http] ' + this.request().url().toString() + '\\n  ' + trace()); return this.execute(); };\n  } catch (e) {}\n});\n```\n```bash\nfrida-trace -U -p $(adb shell pidof com.target.app) \\\n  -j '*analytics*!*/iu' -j '*firebase*!log*/i' -j '*appsflyer*!*/i' -o sdk.log\n```",
    "proof": "A hook log line showing real PII or credential material handed to a third-party SDK method, with the stack trace naming the app class that supplied it, **and** the corresponding outbound request to the vendor host captured in the proxy. Both halves — the hook without the wire capture is weaker.",
    "escalation": "Combine with MASTG-TEST-0206 (undeclared PII on the wire) for the reportable \"collects and shares X without declaring it\" finding -> D20. If the exfiltrated field is an auth token, refile it as theft of sensitive data rather than privacy — at most vendors that is a materially higher band (Xiaomi, for example, runs a separate privacy table at High $500–$200 / Medium $200–$100 / Low $100–$50, well below its mobile security bands).",
    "ruled_out_when": "The captured arguments are pseudonymous install identifiers and screen names only, with no email, phone, account id joined to an advertising id, precise location, health/financial attribute or token — across a full feature sweep including login, payment and KYC. Name the flows you drove."
@@ -2696,8 +2782,11 @@
     "AM-08"
    ],
    "applies_to": "Apps serving EU/California users, or any app with a published privacy policy",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASWE-0078 (Inadequate or Ambiguous User Consent Mechanisms, CWE-358/CWE-359), MASWE-0073, MASVS-PRIVACY-1 (requires \"enforcing that third-party SDKs operate based on user consent, not by default or without it\" and preventing SDKs \"from ignoring consent signals or from collecting data before consent is confirmed\"), MASVS-PRIVACY-4; Mobile Top 10 2024 M6",
    "record": "",
    "legacy_meta": {},
@@ -2749,8 +2838,11 @@
     "AM-08"
    ],
    "applies_to": "Apps embedding UXCam, Smartlook, Clarity, FullStory, Glassbox, Contentsquare, Quantum Metric, LogRocket or similar",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASWE-0069 (Usage of Non-Privacy-Preserving Functionality); MASVS-PRIVACY-1",
    "record": "",
    "legacy_meta": {},
@@ -2794,8 +2886,11 @@
     "AM-08"
    ],
    "applies_to": "Apps with Crashlytics, Sentry, Bugsnag, Instabug, AppCenter or Datadog",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/risks/log-info-disclosure`; MASTG-TECH-0100; MASWE-0073",
    "record": "",
    "legacy_meta": {},
@@ -2841,8 +2936,12 @@
     "AM-08"
    ],
    "applies_to": "All; weight it up for apps carrying session-replay, attribution, chat-support, ad or crash SDKs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, mitm",
+   "requires_tags": [
+    "device",
+    "frida",
+    "mitm"
+   ],
    "maps_to": "AOSP security-model paper §4.3.4 — \"libraries that are embedded by an app are considered to be within the app's security boundary\"; the SDK Runtime (Android 13) is the only exception, giving ads SDKs \"a secondary bound application sandbox with a separate UID\", a separate SELinux policy and \"a very limited set of permissions\", and even there \"there is no security boundary between SDKs for the same app\"; `developer.android.com/privacy-and-security/risks/insecure-library`",
    "record": "",
    "legacy_meta": {},
@@ -2885,8 +2984,11 @@
     "AM-02"
    ],
    "applies_to": "Apps bundling Branch, AppsFlyer, Adjust or a similar attribution SDK",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink, device",
+   "requires_tags": [
+    "deeplink",
+    "device"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/risks/android-exported`; the Branch/AppsFlyer/Adjust deep-link manipulation class",
    "record": "",
    "legacy_meta": {},
@@ -2930,8 +3032,11 @@
     "AM-03"
    ],
    "applies_to": "Apps with an `INSTALL_REFERRER` receiver",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-receiver, device",
+   "requires_tags": [
+    "exported-receiver",
+    "device"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/risks/android-exported`, `.../access-control-to-exported-components`",
    "record": "",
    "legacy_meta": {},
@@ -2974,8 +3079,11 @@
     "AM-09"
    ],
    "applies_to": "Ad-supported apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "ads-sdk, device",
+   "requires_tags": [
+    "ads-sdk",
+    "device"
+   ],
    "maps_to": "Google ASI campaigns naming specific ad SDKs (\"Supersonic Ad SDK\", \"Vpon Ad SDK\", \"Airpush Ad SDK\", \"MoPub Ad SDK\", \"AdMarvel\", \"Vungle Ad SDK\", \"Vitamio Ad SDK\"); ATT&CK T1474.001",
    "record": "",
    "legacy_meta": {},
@@ -3022,8 +3130,11 @@
     "AM-09"
    ],
    "applies_to": "Any app using AndroidX App Startup",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "`developer.android.com/topic/libraries/app-startup` (initialisers declared as `<meta-data>` under `InitializationProvider`); MASWE-0069, MASWE-0078",
    "record": "",
    "legacy_meta": {},
@@ -3122,8 +3233,10 @@
     "AM-03"
    ],
    "applies_to": "All",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`developer.android.com/privacy-and-security/risks/android-exported`, `.../access-control-to-exported-components`; Oversecured's SDK research (its seven SDK vulnerability classes: intent redirection, WebView misconfiguration, insecure deep-link handlers, hardcoded secrets, insecure local storage, excessive permissions, cryptography failures); EngageLab EngageSDK ≤ v4.5.4 `MTCommonActivity` / `n_intent_uri` (Microsoft reported April 2025, fixed v5.2.1 on 2025-11-03; >50M installs; affected apps removed from Google Play); CVE-2020-8913 (Play Core); H1 #532836 / #1455987 (Exness, SurveyMonkey SDK), #258460 (Quora, gotev UploadService), #192886 (Mapbox SDK, Low, $1,000), #694053 (Lark, Medium, $1,000)",
    "record": "",
    "legacy_meta": {},
@@ -3169,8 +3282,10 @@
     "AM-01"
    ],
    "applies_to": "Any versioned API reached from the package, including the Remote Config and staging hosts found in D18-023 and D18-055",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API8:2023; the corpus names this \"the highest-value mobile→backend bridge\"",
    "record": "",
    "legacy_meta": {},

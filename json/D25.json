@@ -4,7 +4,7 @@
  "file": "D25-device-oem-and-privileged.md",
  "why": "It pays because the ordinary rules of mobile severity do not apply here. Everywhere else in this\nchecklist the VRT caps the native Android categories at P5 and you have to argue your way into a\nserver-side or access-control node. In `insecure_os_firmware` the taxonomy already agrees with you:\na hardcoded credential for a privileged user is P1 with the baseline vector `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:L`,\ncommand injection on the image is P1, local administrator on the default environment is P2, and\nover-permissioned credentials on storage is P2. Nothing in this chapter needs the escalation gymnastics\nthat D11 or D21 need. What it needs instead is authorisation.\n\nThe base rate is real and it is published. Oversecured's Samsung work recorded 176 vulnerabilities in\npreinstalled apps across 2022–2025 for $200k+ in Samsung bounties, on a fleet of 100M+ devices\npre-patch, and its named exemplars are all the same handful of shapes: `com.sec.factory.camera`, a\ndebug package left on production with system privileges and an unprotected receiver accepting test\ncommands, giving silent video recording; `WifiServiceImpl.semAddPublicDnsAddr()`, a DNS hijack from a\nzero-permission caller; the `themecenter` ThemeManager path traversal into arbitrary file write with\nsystem privileges; `com.sec.android.app.dexonpc`, an exported service giving screen capture without\nconsent. The 2021 Samsung set is a pattern library in itself — `DualDARInitService` (CVE-2021-25388),\n`com.android.managedprovisioning` (CVE-2021-25356), `KnoxSettingCheckLockTypeActivity` (CVE-2021-25391),\n`com.android.settings` in an `android.uid.system` package (CVE-2021-25393), `NotificationBnRReceiver`\n(CVE-2021-25392), `PhotoringReceiver` (CVE-2021-25397), `PermissionsRequestActivity` (CVE-2021-25390).\nThe same class is still producing CVEs: CVE-2026-20983 (Samsung Dialer, improper component export →\narbitrary activity launch with Dialer privileges), CVE-2026-21059 (Samsung Contacts → arbitrary file\ndelete at system privilege), CVE-2025-10184 (OnePlus OxygenOS telephony provider permission bypass).\nCWE-926 \"Improper Export of Android Application Components\" had 15 new CVEs recorded in 2026 alone at\nthe time the corpus was read. None of this is exotic. It is D04–D08 run against a package that happens\nto hold `INSTALL_PACKAGES`.\n\nBe honest about the other half. For a standard store-app engagement most of this chapter is graveyard,\nand the corpus says so repeatedly and in the vendors' own words: \"out of scope for most app-only bounty\nbriefs — check the brief before spending time here\". The three things that survive an app-only scope\nare (a) whether the *target app itself* ships as a preinstalled or privileged build somewhere, because\nthat turns every other chapter's finding up a band; (b) the accessory and companion surfaces the app\ndeclares in its own manifest — USB filters, GATT servers, `CarAppService`, `WearableListenerService`,\nCDM associations — which are app-owned and in scope by definition; and (c) the multi-user, work-profile\nand Private Space boundaries, which the Android & Google Devices programme buys explicitly\n(\"Multi-User & Private Space: Cross-user sensitive data access\") and which the corpus identifies as the\nweakest-covered attacker model in the entire public checklist literature. Everything else in this\nchapter is for a device programme, and belongs in the OEM's VRP rather than the app client's report.",
  "crux": "**Is the device, the OEM image, or a preinstalled build of this app in scope — and if only the app is, which of its own manifest-declared physical, companion and cross-user surfaces hands an attacker a channel that the phone UI and the lock screen never gate?**",
- "applicability": "",
+ "applicability": "This domain is never wholly n/a — D25-001, D25-004..008, D25-012, D25-024, D25-043, D25-046, D25-054, D25-065..066, D25-074 and D25-076..079 apply to every app. The probe decides the four **blocks** and writes a partial-n/a note for the rest. Run it once, before the triage order.\n\n```bash\n# 1. Scope: which surfaces the brief authorises (the clause itself goes in the note)\njq '.authorisation.scope' engagement.json          # look for: oem-scope / device image, enterprise (enrolled device), physical access, wear|auto|tv\n# 2. Is the target privileged on any device you hold?  (flag, not path — Mainline/updated system apps live in /data/app)\nadb -s $SERIAL shell dumpsys package $PKG | grep -E 'codePath=|pkgFlags=|privateFlags=|sharedUser'\n# 3. App-owned physical / companion / lock-screen / admin surfaces in the manifest and code\ngrep -cE 'android.hardware.usb.action|android.nfc.action|HostApduService|androidx.car.app.CarAppService|com.google.android.gms.wearable|showWhenLocked|BIND_DEVICE_ADMIN|BIND_ACCESSIBILITY_SERVICE|CompanionDeviceManager' $DEC/apktool/AndroidManifest.xml\ngrep -rlE 'BluetoothGattServer|CompanionDeviceManager|getWifi\\(\\)|INTERACT_ACROSS_PROFILES|CrossProfileApps' $DEC/jadx/sources | wc -l\n# 4. Hardware the physical block needs on THIS test device (false = blocked, never n/a)\nadb -s $SERIAL shell 'for f in android.hardware.nfc android.hardware.nfc.hce android.hardware.bluetooth_le android.hardware.usb.host android.hardware.usb.accessory android.software.managed_users; do echo \"$f=$(pm has-feature $f && echo true || echo false)\"; done; pm list users; pm get-max-users'\n```\n\nDecision table (all four read together):\n\n| Block | Items | Applies when |\n|---|---|---|\n| OEM / image / sepolicy / firmware | D25-002..003, D25-009..011, D25-016..023, D25-025, D25-027..029, D25-031, D25-035..042, D25-047..048, D25-052..053, D25-081 | step 1 names the device image or OEM scope, **or** step 2 shows `pkgFlags=[ SYSTEM` / a `priv_app` domain for the target (then only D25-008..015 and the re-rating apply, not the OEM inventory) |\n| Enterprise / managed device | D25-044 (fleet half), D25-068..073, D25-075, D25-082..083 | step 1 includes an enrolled device or the client's DPC / managed configuration |\n| Physical / accessory / companion | D25-049..050, D25-055..059, D25-061..062 (+ D25-063 when wear/auto/tv endpoints exist) | step 3 declares the surface **and** step 4 shows the feature on the test device; physical-access vector accepted per D25-001 |\n| Multi-user / Private Space | D25-065..067 | always (`pm list users` shows the capability); D25-067 needs API ≥ 35 |\n\nn/a note (write it into the tracker for every row the table excludes, verbatim shape):\n\n`D25 partial n/a — brief scopes the store build only (clause: \"<quoted scope text>\"); target is not preinstalled on any held device (pkgFlags has no SYSTEM, domain untrusted_app_NN on <fingerprint>) → OEM/image/firmware block D25-016..042/047/048/052/053/081 n/a; no enrolled device in scope → enterprise block D25-068..073/075/082/083 n/a; physical block limited to manifest-declared surfaces: <list or \"none\"> → remaining physical rows n/a. Hardware absent on <serial>: <features> → D25-<ids> BLOCKED (hardware), not n/a. Decided <date>, re-open if scope changes.`",
  "triage": "1. **Settle scope and routing** (D25-001). Thirty seconds of reading the brief decides whether the next\n   forty items are billable work or unauthorised testing. Nothing else here is safe to run first.\n2. **Is the target itself privileged anywhere?** (D25-008 → D25-013). One `pm list packages -s -f` and a\n   `dumpsys package`. If the answer is yes, every D04–D08 finding you already have goes up a band, and\n   you should re-rate them before writing anything else.\n3. **The app's own accessory and companion manifest surfaces** (D25-049, D25-050, D25-057, D25-058,\n   D25-061, D25-062). These are in scope on an app-only brief, they are almost never reviewed, and they\n   are reachable without the phone's UI or lock screen.\n4. **Cross-user, work-profile and Private Space reach** (D25-065 → D25-068). Explicitly bought impact,\n   cheap to test, and the corpus's weakest-covered model.\n5. **The device posture block** (D25-004) before any dynamic work, because a finding produced on a\n   permissive, unlocked, non-current device will be closed and you will not know why.\n6. **The device-wide debuggable sweep** (D25-014). The single cheapest high-yield sweep that exists on\n   an OEM handset: one loop, and `run-as` on a preinstalled package is the whole proof.\n7. **OEM system-app exported surface** (D25-016 → D25-022), on a device brief only. Run the D04–D08\n   battery against the non-AOSP inventory, not against AOSP packages.\n8. **SELinux honesty gates** (D25-026 → D25-031) *before* you write the word \"escalation\" anywhere. Most\n   \"arbitrary write → RCE\" claims die at policy, and dying in your own notes is free.\n9. **Firmware and kernel work** (D25-035 → D25-042) last, and only on an explicit device/firmware scope —\n   it is the most expensive work in the chapter and the most likely to be out of scope.\n10. **Reporting discipline** (D25-070 → D25-074) before submission, because this domain's findings are\n    the ones triagers most often bounce for vector vagueness and for shell-UID reachability claims.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"The bootloader on my test device is unlocked / `verifiedbootstate=orange`\" | You unlocked it. AM-12 is not an attacker. Samsung lists \"reports requiring enabling Developer Mode persistently on the device\" as an explicit downgrade factor | The **client's own deployment** requires an unlocked bootloader or a disabled Verified Boot to function (D25-042), or a production retail unit ships orange |\n| \"The device runs an old kernel / the security patch level is behind\" | Version disclosure with no demonstrated reachability. Every vendor excludes \"vulnerabilities that do not work on the latest available operating system version\" | A specific CVE in that kernel, reached from an app UID, with the reachability shown — then it is D16 with D25 context |\n| \"SELinux is permissive\" — on an emulator or a `userdebug` build | Expected on non-`user` builds. `permissive=1` on `userdebug` is the platform working as designed | A permissive domain on a **`user` build** of a retail device (D25-028), with a `neverallow` cited and the impact exercised |\n| \"`adb shell service call <vendor> N` returned data\" | The `shell` UID has permissions and an SELinux domain no app has. The corpus is explicit: always re-prove from an ordinary third-party app UID | The same transaction succeeding from a zero-permission PoC APK, with `ps -AZ` showing it in `untrusted_app_NN` (D25-005) |\n| \"`sesearch` shows an OEM `allow` rule that AOSP does not have\" | A policy rule is a capability, not a bug. An unexercised `allow` line is a hardening note | An app that uses the rule, fired, with the effect demonstrated (D25-027) |\n| \"There is an exported component in a preinstalled OEM app\" | Exported is intended behaviour; the finding is the unauthorised access it grants | The component driven from a zero-permission app to produce a privileged effect (D25-017) |\n| \"I found a root exploit / I rooted the device\" | Rooting your own device is not an attack on the app, and most programmes exclude root-required findings outright | The root was obtained **from an app UID** with no user interaction on a stock, locked, enforcing retail device |\n| \"The app's data is readable once I have root\" | Root defeats the sandbox by definition. Xiaomi, Grab and Spotify all exclude \"sensitive data stored in the app private directory\" | A non-root reader — a debuggable build (D25-014), a cross-user path (D25-066), or a backup/extraction path |\n| \"`allowBackup=\"true\"` on an OEM build\" | P5 everywhere and excluded by name at Google and Xiaomi; VRT `mobile_security_misconfiguration.auto_backup_allowed_by_default` = **P5** with a physical-vector, high-privilege CVSS baseline | The credential you actually extracted from the backup and replayed (D11/D13) |\n| \"Firmware is not encrypted\" | VRT `insecure_os_firmware.weakness_in_firmware_updates.firmware_is_not_encrypted` = **P5**. Obscurity was never the control | The update is not *integrity*-validated (D25-040), which is a different node at P3 and argues upward |\n| \"The OEM image contains 40 preinstalled apps with dangerous permissions\" | An inventory is not a finding, and the permission set is the OEM's product decision | One of them exporting a component that re-delegates the permission to a zero-permission caller (D25-009, D25-017) |\n| \"This OEM bug is Critical\" — filed against the app client | Wrong programme. It is the OEM's bug and the app client cannot fix it | Two artefacts: an environmental-risk note to the app client, and a separate report to the OEM's VRP (D25-001) |\n| \"Malformed USB/NFC/BLE input crashes the app\" | VRT `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**; Xiaomi, Grab and Spotify all exclude crash-only reports; \"a valid exploit must achieve arbitrary code execution, not just trigger an application crash\" | A controlled write with an attacker-controlled fault address, quoted from the tombstone (D25-049, D16) — or a persistent DoS requiring a factory reset |\n| \"A companion endpoint is on `/v1` while the web app uses `/v3`\" | A version difference alone is Informational. The bug is the delta, not the number | A behavioural regression on the older path — weaker auth, no throttling, wider field set — shown side by side (D25-063) |\n| \"The app has no jailbreak/root detection\" and \"the device has no lock screen set\" | `lack_of_binary_hardening.lack_of_jailbreak_detection` = **P5**; MASTG-TEST-0247 itself notes apps \"cannot force users to enable biometrics at the system level, only enforce their use within the app\" | The app stores auth-bound keys and never calls `isDeviceSecure()`/`canAuthenticate()`, on a financial or health app where a stolen unlocked device yields the account (MASWE-0017) — Medium, not High |\n| \"The device exposes MTP when plugged in\" | MTP is the modern default and is gated behind unlock on current builds | A data function reachable **while locked** that reaches a parser (D25-048, D25-052) |\n| \"Work data can be pasted into the personal profile\" | Cross-profile sharing is intended unless a restriction is configured | `DISALLOW_CROSS_PROFILE_COPY_PASTE` explicitly configured and the paste still succeeding (D25-068) |",
  "joins": "- **`privapp-permissions` enforcement (D25-010) × an exported component in the same package (D04–D08).**\n  Nobody reads the allowlist file and nobody re-rates an exported activity by the *permissions its\n  package actually holds*. The join is: `ro.control_privapp_permissions=log` means a privileged permission\n  was granted that the platform itself flagged as un-allowlisted, and the exported activity in that\n  package is now the delegation route to it. Neither half is a finding alone; together they are the OEM\n  escalation class.\n- **`sharedUserId` (D25-012) × the sibling's exported surface (D06/D07).** Reviewers audit the target's\n  own components and stop. The weakest app in the UID group defines the security of all of them — so the\n  right question is not \"is *this* app's provider exported\" but \"is any provider in this UID exported\",\n  and the answer is frequently yes in a package nobody in the engagement has opened. This is exactly the\n  Samsung SecSettings shape.\n- **USB `device_filter` auto-launch (D25-049) × the native parser behind it (D16).** USB is reviewed as a\n  permissions question (\"does the app ask for USB access?\") and native code is reviewed as a reachability\n  question (\"can an attacker reach this parser?\"). The join answers both at once: the platform *grants*\n  USB access automatically on filter match, so an attacker-built gadget with the declared VID/PID feeds\n  attacker-controlled bytes straight into the app's native parser with no network, no app install and no\n  permission prompt.\n- **Wear OS path routing (D25-062) × the authentication state machine (D13).** Auth reviewers test the\n  login screen, the OTP endpoint and the biometric gate. Nobody tests the `/auth`-prefixed Data Layer\n  path, because it is not a screen and not an HTTP endpoint. A phone app that enters an authenticated\n  state because a *message path* said so is an authentication bypass with no credential involved at all.\n- **Android Auto `ALLOW_ALL_HOSTS_VALIDATOR` (D25-061) × the account data the car templates render\n  (D15/D20).** The Auto integration is reviewed, if at all, as a UI feature. Bind it from an unprivileged\n  app and every template the app renders — trips, saved places, vehicle, payment method — is readable\n  without the phone UI, without the lock screen, and without a single permission.\n- **Cross-user reach (D25-066) × the `getCallingUid()` guard (D03/D06).** Every IPC reviewer checks that\n  the service interrogates the caller. Almost nobody checks that it compares\n  `UserHandle.getUserId(uid)` — so a *clone of the same app* in a work profile or a Private Space passes\n  a same-signature or same-UID check trivially. The join turns a correct-looking guard into a\n  cross-account data path.\n- **Preinstalled-app privilege (D25-008/D25-009) × the logcat leak (D20).** The standard closure for a\n  logcat finding is \"requires a privileged permission\". Enumerating the actual `READ_LOGS` holders on the\n  client's real device demographic (D25-015) converts that closure into a named attacker, which is the\n  single highest-leverage rewrite available for a whole class of D20 findings.\n- **Dialler secret code (D25-045) × the staging-backend switch (D14/D21).** Secret codes are catalogued as\n  a curiosity and pinning is tested as a transport question. A code that flips the app to a staging\n  backend or disables pinning is a complete MitM primitive that requires neither a proxy CA nor root — and\n  it can be fired as a broadcast, removing the physical precondition entirely.\n- **Instant-app remnants (D25-064) × the deep links that used to launch them (D09).** The client is dead,\n  so nobody looks. But the installed app still declares the URL patterns the instant experience used, and\n  those handlers were written for a permission-light, unauthenticated context. A live App Link into an\n  instant-era handler is an auth-skip nobody has tested since 2021.\n- **Device-policy restriction (D25-069) × the app's own screen-capture defences (D20).** The MDM\n  reviewer tests whether the policy is set; the app reviewer tests whether `FLAG_SECURE` is present. The\n  join is the app rendering a payment or PIN screen that honours neither, in a managed profile where the\n  client believes screen capture is disabled fleet-wide.",
@@ -76,8 +76,10 @@
     "AM-11"
    ],
    "applies_to": "device, STB, IVI and companion-hardware engagements",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope",
+   "requires_tags": [
+    "oem-scope"
+   ],
    "maps_to": "the senior-researcher corpus's device-attack-surface taxonomy (remote / network-adjacent / local / physical)",
    "record": "",
    "legacy_meta": {},
@@ -113,8 +115,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "device/OEM engagements",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope",
+   "requires_tags": [
+    "oem-scope"
+   ],
    "maps_to": "the senior-researcher corpus's surface-ranking method",
    "record": "",
    "legacy_meta": {},
@@ -1447,8 +1451,11 @@
     "AM-03"
    ],
    "applies_to": "OEM builds mostly; always verify from an app UID, never from `adb shell`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root",
+   "requires_tags": [
+    "device",
+    "root"
+   ],
    "maps_to": "AOSP system-property documentation (`ro.` set once by init and immutable; `persist.` survives reboot; `property_contexts` with `system_internal_prop` / `system_restricted_prop` / `system_vendor_config_prop` / `system_public_prop`; vendor prefixes `vendor.`, `persist.vendor.`, `ro.vendor.`, `odm.`, `ro.odm.`)",
    "record": "",
    "legacy_meta": {},
@@ -1621,8 +1628,11 @@
     "AM-01"
    ],
    "applies_to": "OEM/firmware research; not applicable to a pure app-scoped engagement",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, native",
+   "requires_tags": [
+    "oem-scope",
+    "native"
+   ],
    "maps_to": "CVE-2020-8899 (Samsung Qmage in `libhwui.so`, 0-click MMS); Mobile Hacking Lab's rediscovery write-up; AOSP AIDL/native fuzzing guidance",
    "record": "",
    "legacy_meta": {},
@@ -1664,8 +1674,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "any closed-source C++ target",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, native",
+   "requires_tags": [
+    "oem-scope",
+    "native"
+   ],
    "maps_to": "Mobile Hacking Lab \"Building a Shim Layer Around Skia (SkData + SkAndroidCodec)\"",
    "record": "",
    "legacy_meta": {},
@@ -1704,8 +1717,12 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "GKI and Android kernels shipping BTF",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, root, native",
+   "requires_tags": [
+    "oem-scope",
+    "root",
+    "native"
+   ],
    "maps_to": "Mobile Hacking Lab \"Porting ghostlock (CVE-2026-43499) to the Samsung Galaxy A17\", Step 1",
    "record": "",
    "legacy_meta": {},
@@ -1743,8 +1760,12 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Samsung KDP/RKP-era devices and OEM builds with exec restrictions; kernel-scope engagements only",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, root, native",
+   "requires_tags": [
+    "oem-scope",
+    "root",
+    "native"
+   ],
    "maps_to": "Mobile Hacking Lab's CVE-2026-43499 port (`github.com/mobilehackinglab/ghostlock-a17`, target SM-A175F, GKI 6.12.23, BZA5); its NX/UXN/PXN and DEFEX notes",
    "record": "",
    "legacy_meta": {},
@@ -1881,8 +1902,12 @@
     "AM-11"
    ],
    "applies_to": "rooted / OEM / firmware engagements only — out of scope for a store-app-only assessment; say so explicitly so the tester does not burn time",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, enterprise, device",
+   "requires_tags": [
+    "oem-scope",
+    "enterprise",
+    "device"
+   ],
    "maps_to": "ATT&CK T1398 Boot or Logon Initialization Scripts (these \"are part of the operating system and require device rooting or jailbreaking to access\"; OldBoot \"leverages elevated privileges to alter init scripts on the boot partition\"; FlexiSpy \"installs boot hooks into `/system/su.d`\"); T1645 Compromise Client Software Binary; T1625.001 System Runtime API Hijacking (Zen S0494 \"can replace `framework.jar`\"); mitigations M1004, M1002",
    "record": "",
    "legacy_meta": {},
@@ -1978,8 +2003,12 @@
     "AM-11"
    ],
    "applies_to": "kiosk, fleet, POS and enterprise deployments especially; consumer apps where the client ships a companion desktop tool",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "enterprise, physical, device",
+   "requires_tags": [
+    "enterprise",
+    "physical",
+    "device"
+   ],
    "maps_to": "ATT&CK T1458 (adversaries \"may utilize the physical connection of a device to a compromised or malicious charging station or PC to bypass application store requirements and install malicious applications directly\"; DualToy side-loads \"to both Android and iOS devices via a USB connection\"), mitigation M1012",
    "record": "",
    "legacy_meta": {},
@@ -2123,8 +2152,11 @@
     "AM-03"
    ],
    "applies_to": "device/OEM engagements",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, root",
+   "requires_tags": [
+    "oem-scope",
+    "root"
+   ],
    "maps_to": "the senior-researcher corpus's local-surface enumeration (`canhazaxs`, `/proc/net/unix`, netlink forging as the GingerBreak/Exploid shape)",
    "record": "",
    "legacy_meta": {},
@@ -2312,8 +2344,11 @@
     "AM-11"
    ],
    "applies_to": "all apps handling regulated or high-value data",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "physical, root",
+   "requires_tags": [
+    "physical",
+    "root"
+   ],
    "maps_to": "HackTricks android-physical-attacks, citing AOSP authentication / Gatekeeper / Weaver / KeyMint documentation",
    "record": "",
    "legacy_meta": {},
@@ -2358,8 +2393,11 @@
     "AM-10"
    ],
    "applies_to": "any engagement with a physical-access threat model; scope-gated — most programmes exclude it",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, physical",
+   "requires_tags": [
+    "oem-scope",
+    "physical"
+   ],
    "maps_to": "HackTricks android-physical-attacks; the iOS parallel worth citing in a cross-platform report is checkm8 for Boot ROM devices and CVE-2025-24200 as a USB Restricted Mode policy-enforcement bypass re-enabling USB data on a locked device",
    "record": "",
    "legacy_meta": {},
@@ -2404,8 +2442,12 @@
     "AM-11"
    ],
    "applies_to": "devices without a real Secure Element or Weaver path",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, root, physical",
+   "requires_tags": [
+    "oem-scope",
+    "root",
+    "physical"
+   ],
    "maps_to": "HackTricks android-physical-attacks \"Biometric TA AuthToken forgery\", citing the DarkNavy research",
    "record": "",
    "legacy_meta": {},
@@ -2544,8 +2586,11 @@
     "AM-10"
    ],
    "applies_to": "apps registering `HostApduService`; Android 15+ for observe mode and polling-frame handling",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "payments, device",
+   "requires_tags": [
+    "payments",
+    "device"
+   ],
    "maps_to": "`HostApduService.processPollingFrames()`, `CardEmulation.registerPollingLoopPatternFilterForService()` and the Android 15 observe-mode APIs; `res/xml/apduservice.xml` AID registration",
    "record": "",
    "legacy_meta": {},
@@ -2636,8 +2681,10 @@
     "AM-10"
    ],
    "applies_to": "apps that expose a `BluetoothGattServer`. Android 16's improved bond-loss handling changes bond-removal UX but not this",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "physical",
+   "requires_tags": [
+    "physical"
+   ],
    "maps_to": "the BLE overview's app-layer-security requirement; MASWE-0018",
    "record": "",
    "legacy_meta": {},
@@ -2688,8 +2735,10 @@
     "AM-10"
    ],
    "applies_to": "apps using CDM; `CompanionDeviceManager#removeBond(int)` is Android 16+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "physical",
+   "requires_tags": [
+    "physical"
+   ],
    "maps_to": "`developer.android.com/about/versions/16/behavior-changes-16` (`CompanionDeviceManager#removeBond(int)`; monitor `BluetoothDevice#ACTION_BOND_STATE_CHANGED`); `developer.android.com/about/versions/16/behavior-changes-all` — \"Companion apps no longer notified of discovery timeouts\": companion apps now receive `RESULT_USER_REJECTED` instead of `RESULT_DISCOVERY_TIMEOUT`, which changes the error handling your PoC will see on API 36+",
    "record": "",
    "legacy_meta": {},
@@ -2758,7 +2807,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A scanner that supports the Wi-Fi barcode type (`WIFI:T:WPA;S:…;P:…;;`) can offer to join a\nnetwork from a scanned code. The attacker chooses the SSID and PSK and therefore the DNS and the\ngateway — a scan becomes a network-position attack delivered by a sticker.",
-   "how": "```bash\ngrep -rnE 'getWifi\\(\\)|Barcode\\.TYPE_WIFI|WifiNetworkSuggestion|WifiNetworkSpecifier|addNetwork|enableNetwork|WifiManager' jadx_out/sources\nqrencode -o wifi.png 'WIFI:T:WPA;S:AttackerAP;P:Passw0rd123;;'\n# scan it, then:\nadb shell dumpsys wifi | grep -iE 'SSID|Suggestion'\n```",
+   "how": "```bash\ngrep -rnE 'getWifi\\(\\)|Barcode\\.TYPE_WIFI|WifiNetworkSuggestion|WifiNetworkSpecifier|addNetwork|enableNetwork|WifiManager' $DEC/jadx/sources\nqrencode -o wifi.png 'WIFI:T:WPA;S:AttackerAP;P:Passw0rd123;;'\n# scan it, then:\nadb shell dumpsys wifi | grep -iE 'SSID|Suggestion'\n```",
    "proof": "The device joining, or offering a one-tap join to, the attacker's SSID directly from the scan\n— screen-record the scan-to-join, then show the app's subsequent traffic traversing the attacker's\ngateway.",
    "escalation": "Network position plus any unpinned host is the D14 MitM chain with the hardest part\n(getting the position) solved by the app itself.",
    "ruled_out_when": "The scanner restricts `getValueType()` to the formats the feature needs, or the app\nnever calls a Wi-Fi join API with scanned values. Check `setBarcodeFormats()` — an unrestricted scanner\nthat nonetheless ignores `TYPE_WIFI` in its handler is a true negative; say which."
@@ -2778,8 +2827,10 @@
     "AM-03"
    ],
    "applies_to": "any app shipping an Android for Cars integration (categories `androidx.car.app.category.NAVIGATION` / `.POI` / `.IOT` / `.WEATHER`)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "auto",
+   "requires_tags": [
+    "auto"
+   ],
    "maps_to": "`developer.android.com/training/cars/apps` — the docs name `createHostValidator()` and `HostValidator.ALLOW_ALL_HOSTS_VALIDATOR` and explicitly warn to validate the binding host; MASWE-0018",
    "record": "",
    "legacy_meta": {},
@@ -2827,8 +2878,10 @@
     "AM-10"
    ],
    "applies_to": "any app with a Wear OS companion. The Data Layer is Android-phone-only, so the path set is often *less* tested than the main API",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "wear",
+   "requires_tags": [
+    "wear"
+   ],
    "maps_to": "`developer.android.com/training/wearables/data/data-layer` and `.../data/messages` (`DataClient`, `MessageClient`, `WearableListenerService`, `sendMessage(nodeId, path, data)`); MASWE-0018, MASWE-0032; CVE-2025-12080 (intent abuse in Google Messages for Wear OS, patched May 2025) as evidence the form factor is a live surface",
    "record": "",
    "legacy_meta": {},
@@ -2874,8 +2927,13 @@
     "AM-05"
    ],
    "applies_to": "apps with Wear, Auto, TV, widget or Tile companions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "wear, auto, tv, backend-api",
+   "requires_tags": [
+    "wear",
+    "auto",
+    "tv",
+    "backend-api"
+   ],
    "maps_to": "the shadow-API method from the bug-hunting corpus: a mobile client's hardcoded backend calls are frequently an *older* API version than the current web app uses, with weaker auth, weaker rate limits, weaker validation and more field exposure. **Diff behaviourally, not by response shape. A version difference alone is Informational; the weakened control is the finding**",
    "record": "",
    "legacy_meta": {},
@@ -2918,8 +2976,10 @@
     "AM-02"
    ],
    "applies_to": "**LEGACY client, live server.** Google Play Instant is discontinued — as of December 2025 instant apps cannot be published and the Play services Instant APIs stop working. Any app that ever shipped an instant experience",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "`developer.android.com/topic/google-play-instant/overview` (discontinuation timeline; `InstantApps.isInstantApp()`; the restricted API and permission subset); H1 #258460 (Quora) — the researcher's own published correction is the caution to heed: \"services can be accessed by Instant Apps only in case when `android:visibleToInstantApps` flag is enabled\"",
    "record": "",
    "legacy_meta": {},
@@ -2964,8 +3024,10 @@
     "AM-11"
    ],
    "applies_to": "Android 5+ for multi-user; Android 15+ for Private Space; OEM clone features vary",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`developer.android.com/about/versions/15/features#private-space` — \"The private space uses a separate user profile\", \"Apps in the private space are installed as separate copies from any apps in the main space\", and the explicit compatibility warning about apps \"with work profile logic that assume any installed copies of their app that aren't in the main profile are in the work profile\"",
    "record": "",
    "legacy_meta": {},
@@ -3009,8 +3071,10 @@
     "AM-05"
    ],
    "applies_to": "Android 5+ multi-user; Private Space Android 15+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Android & Google Devices in-scope impact, verbatim: \"**Multi-User & Private Space:** Cross-user sensitive data access, or unlocking Private Space without the designated lock factor\"; Samsung High: \"Bypass Operating System protections including access memory or file contents across application, user, or profile boundaries\"",
    "record": "",
    "legacy_meta": {},
@@ -3056,8 +3120,11 @@
     "AM-11"
    ],
    "applies_to": "Android 15+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=35",
+   "requires_tags": [
+    "device",
+    "api>=35"
+   ],
    "maps_to": "`developer.android.com/about/versions/15/behavior-changes-all` (private space as a separate user profile; launcher requirements `ROLE_HOME`, `ACCESS_HIDDEN_PROFILES`, `getLauncherUserInfo()`, `requestQuietModeEnabled()`, `ACTION_PROFILE_AVAILABLE`/`ACTION_PROFILE_UNAVAILABLE`; app stores must declare `android.intent.category.APP_MARKET`); `developer.android.com/about/versions/15/features`",
    "record": "",
    "legacy_meta": {},

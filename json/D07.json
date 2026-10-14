@@ -4,7 +4,7 @@
  "file": "D07-contentproviders-and-fileprovider.md",
  "why": "Providers pay because the platform's whole confidentiality story for app data is `/data/data/<pkg>` being\nmode `0700` from `targetSdkVersion >= 24`. A traversal in `openFile()` or an injectable `selection` does\nnot weaken that boundary — it walks through the one door the platform deliberately left in it. That is why\nthe same bug that would be \"information disclosure\" on a web target is an app-sandbox escape here, and why\n`server_side_injection.file_inclusion.local` (P1) is a defensible analogue rather than a stretch. Oversecured\nstate that more than 90% of the apps they analyse contain provider implementation errors of varying\ncriticality; that is a base rate for *defects*, not for payable findings, and the gap between the two is the\nwhole craft of this chapter.\n\nThe domain is not mostly graveyard, but its graveyard is unusually seductive. \"Exported ContentProvider\"\nfired by MobSF on an app targeting SDK 34 with an explicit `signature`-level `readPermission` is noise. The\n`targetSdk < 17` default-export rule is noise on anything shipped this decade. `<root-path>` in a paths XML\nwith no exported provider and no grant primitive is a configuration observation, not a finding. Nextcloud\nrate same-device provider bugs Low (#291764 Low 0.9 / $150; #242727 Low / $75; #518669 Low 0.9 / $100)\nbecause their published threat model discounts a malicious app on the same device entirely — so check the\nprogramme's carve-out *before* you spend a day here, because the identical bug is Medium 4.2 at ownCloud\n(#1650264, GHSL-2022-059) and High 7.8 at Mattermost (#1115864) once it reaches code execution.\n\nThe exception that makes the domain worth the day is direction. Almost every public checklist tests the\nprovider *outbound* — query it, traverse it, inject it. The highest-paying provider bugs of the last three\nyears ran *inbound*: the victim app queried the attacker's provider for `OpenableColumns.DISPLAY_NAME` and\nused the returned string as a filename (Microsoft's Dirty Stream: Xiaomi File Manager\n`com.mi.android.globalFileexplorer` 1B+ installs, vulnerable V1-210567; WPS Office `cn.wps.moffice_eng`\n500M+ installs, vulnerable 16.8.1), or it resolved a `content://` URI an attacker handed it and read its own\nprivate file under its own UID. Google's Mobile VRP is explicit that arbitrary file write only pays its top\ntier when you demonstrate the code execution — the write alone underpays. Plan for the write-then-load\nchain from the start, not as an afterthought.",
  "crux": "**Does any caller outside this app's UID reach a provider method that either resolves a caller-controlled string into a filesystem path or concatenates a caller-controlled string into SQL — and if the answer is no, can the app itself be made to call that method on the attacker's behalf?**",
- "applicability": "",
+ "applicability": "Run once per engagement, after P2 has populated `$DEC` and `inventory/` has been generated **with `--all`** (without it `components.csv` omits non-exported providers that carry no grant — D07-056 and D07-065 still need them). `SERIAL` and `PKG` come from `engagement.json`.\n\n```bash\n# 1. declared providers in the MERGED manifest (SDK-contributed providers included)\ngrep -c '<provider' \"$DEC/apktool/AndroidManifest.xml\"\ngrep -oE 'android:authorities=\"[^\"]+\"' \"$DEC/apktool/AndroidManifest.xml\" | sed 's/.*=\"//; s/\"//' | tr ';' '\\n' | sort -u | tee logs/D07-authorities.txt\n# 2. inventory rows must match the manifest count\nawk -F, '$2==\"provider\"' inventory/components.csv | wc -l\n# 3. any FileProvider paths XML at all\ngrep -c 'FILE_PROVIDER_PATHS' \"$DEC/apktool/AndroidManifest.xml\"; ls \"$DEC\"/apktool/res/xml/ 2>/dev/null | grep -ci path\n# 4. the INBOUND direction — applies even with zero providers\ngrep -rlE 'getContentResolver\\(\\)\\.(openInputStream|openOutputStream|openFileDescriptor|openAssetFileDescriptor|query)\\(|OpenableColumns|DocumentsContract\\.getDocumentId|EXTRA_STREAM' \"$DEC/jadx/sources\" | wc -l\n# 5. runtime provider table (device; shell UID is discovery only)\nadb -s \"$SERIAL\" shell dumpsys package providers | grep -F -A2 \"$PKG\" | tee logs/D07-probe.txt\n```\n\n**Decision.** (1) > 0 → every outbound item applies to every authority, exported or not (D07-001..053, D07-056..061, D07-065..073, plus the NEW getType/Bundle-form/DocumentsProvider items); the `Requires: provider` tag is satisfied. (1) = 0 **and** (4) = 0 → the whole domain is n/a except the mechanics items D07-074..076, which are untouched. (1) = 0 and (4) > 0 → only the inbound items apply: D07-054, D07-055, D07-062, D07-063, D07-064. A mismatch between (1) and (2) is a `blocked` state (regenerate the inventory with `--all`), never a reason to proceed on the shorter list.\n\n**n/a note text (whole domain):**\n`D07 n/a — merged manifest declares 0 <provider> elements (grep -c '<provider' $DEC/apktool/AndroidManifest.xml = 0, logs/D07-probe.txt) and $DEC/jadx/sources contains no ContentResolver open*/query call, OpenableColumns, DocumentsContract or EXTRA_STREAM use (grep -rl … | wc -l = 0). D07-074..076 are mechanics and stay untouched. Re-run this probe if a later build or a merged SDK manifest adds a provider.`\n\n**n/a note text (outbound only):**\n`D07 outbound n/a — 0 <provider> elements in the merged manifest (logs/D07-probe.txt); inbound items D07-054/055/062/063/064 apply (N URI-consuming sinks found) and are settled on their own rows.`",
  "triage": "1. **Enumerate authorities from the merged manifest and the runtime provider table, then hit each one with\n   `content query` / `read` / `call`.** Five minutes, needs no code, and it partitions the whole domain into\n   reachable and unreachable before you read a line of decompiled source.\n2. **Test `call()` on every authority, including ones whose `query` was denied.** The framework applies no\n   permission check specific to `call()`, and it is addressed by method name rather than URI, so every\n   `<path-permission>` and `UriMatcher` guard in the app misses it. Highest reward-per-minute in the domain.\n   Then widen it: `openTypedAssetFile`, `getStreamTypes`, `bulkInsert` and `applyBatch` are overrides the\n   CLI cannot reach at all (D07-018, D07-019), so they survive every shell-driven sweep ever run on the app.\n3. **Build the PoC app with `<queries>` before you trust any app-UID negative** (D07-008). A caller\n   targeting SDK 30+ cannot see an undeclared package, and that failure is indistinguishable from a closed\n   provider. Getting this wrong turns findings into ruled-out entries silently, at the start of the day.\n4. **Decide file-backed vs SQLite-backed per authority before you fuzz.** An exported authority that resolves\n   but returns nothing to `query` is an `openFile` provider; sending it SQLi payloads wastes an hour.\n5. **Traversal, with `/proc/version` as the canary, before anything sensitive.** Unambiguous positive,\n   harmless payload, clean PoC. Escalate to `shared_prefs`/`databases` only after the canary lands.\n6. **`selection`, then `projection`, then `sortOrder`, then the write verbs' `selection`.** In that order:\n   the error message from the first one hands you the table name, the column count and the provider's own\n   paren wrapper, which makes the other three cheap.\n7. **`grantUriPermissions` on every provider, exported or not.** This is the item that decides whether a\n   `exported=\"false\"` provider is a true negative or a D08 chain waiting for a redirector.\n8. **The paths XML.** One `cat`, and it sets the blast radius of every grant bug you find later.\n9. **Reverse the inbound direction: `OpenableColumns.DISPLAY_NAME`, `EXTRA_STREAM`, `onActivityResult`.**\n   Slowest to set up (you must ship a hostile provider) and the highest ceiling. Start it early enough that\n   the build is ready when you need it.\n10. **Proxying sinks — `getContentResolver()` calls *inside* provider methods, and `Uri.parse(getQueryParameter(...))`.**\n   Rare, and Critical when present.\n11. **Everything else.** Slices, cloud media, persistable-grant retention, authority collisions.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"Exported ContentProvider\" flagged by a scanner on an app targeting SDK 34 with an explicit `signature`-level `readPermission` | The permission gate holds; export is a design decision, not a defect | Show the protectionLevel is `normal`/`dangerous` (D07-014), or a path variant that bypasses the gate (D07-022) |\n| The `targetSdk < 17` default-export rule fired on a modern app | The default has been `false` since Android 4.2; MobSF gates it on `min_sdk < 17` and reports anyway | The manifest genuinely declares `targetSdkVersion < 17`, quoted from `aapt dump badging` |\n| `grantUriPermissions=\"true\"` on a `FileProvider` | Mandatory for the class — without it the provider throws `SecurityException: Provider must grant uri permissions` | The **path scope** is over-broad (D07-057) or a grant reaches an attacker (D07-024/-022) |\n| `<root-path>` present, provider not exported, no grant path, no URI sink in the app | A configuration observation with no reachable caller; it is a blast-radius multiplier waiting for a primitive | Any of: the provider is exported, a redirector issues grants (D08), or the app opens attacker URIs (D07-056) |\n| Sensitive data found in `/data/data/<pkg>` via `run-as` or root | AM-12 is not an attack, and the VRT prices it at P5 (`insecure_data_storage...on_internal_storage`). Xiaomi, Grab and Spotify all list app-private storage explicitly out of scope; Google: \"Access to non-sensitive internal files of another app also does not qualify\" | Pair it with a provider read, traversal or grant that a non-root third party can use, and refile as the **access** bug with the data as the payload |\n| `adb shell content query` returns rows but the same query from a PoC app throws `SecurityException` | `shell` is uid 2000 and holds permissions no third-party app has | Reproduce from an app UID (D07-007). If it only works from `shell`, it is an artefact |\n| drozer `scanner.provider.traversal` / `scanner.provider.injection` reporting \"Not Vulnerable\" | One payload against one file, and a single-error-string oracle respectively | The manual matrix (D07-032) or the `1=1`/`1=0` body diff (D07-049) plus a source-level check |\n| `/etc/hosts` canary failing | Some OEM SELinux policies block it outright; the scanner's only oracle silently reads empty | Re-run with `/proc/version`, which is readable on API 30+, and state the policy caveat |\n| A provider crash from a malformed URI or a null extra | VRT `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**, and it is a self-inflicted local crash | The crash is a memory-safety primitive in native provider code, or it is persistent (crash-on-launch) — then it is a D19/D04 finding, not D07 |\n| Unbounded `insert` growing the app's database (\"flood the provider\") | App-local availability loss with no confidentiality impact; most programmes rate it Low or out of scope | The provider backs a critical-path service **and** the programme buys availability — quote the before/after `du -sh` figures and the failure state |\n| Provider SQL injection reachable only through the app's own UI | You are injecting into your own database, as your own user | The same concatenation is reachable through an **exported** provider's `selection`/`projection`/`sortOrder`, i.e. attacker-controlled by any installed app |\n| A `MediaStore` / `Downloads` row returned to your own app | Those providers are designed to be readable; the platform's `SecurityException` on cross-owner reads is the control working | A cross-*owner* read succeeding, or a signed URL in a row that replays off-device (D07-071) |\n| `takePersistableUriPermission` present in the app's code | Defensive use is normal SAF practice | The app **hands out** persistable grants and never revokes them, and you still read after reboot and after the user deleted the item (D07-027) |",
  "joins": "- **D07 × D08 — the paths XML and the redirector.** Nobody reads `res/xml/file_paths.xml` and\n  `startActivity(getIntent().getParcelableExtra(...))` in the same sitting. The XML decides what a grant\n  reaches; the redirector decides who gets one. Individually: a config note and a \"component forwards an\n  intent\". Joined: `content://<pkg>.fileprovider/root/data/data/<pkg>/shared_prefs/auth.xml` read by a\n  zero-permission app. This is the single highest-yield join in the chapter, and it is the reason\n  `exported=\"false\"` is never a ruled-out basis on its own (D07-025).\n- **D07 × D03 — the provider line and the permission line.** A provider guarded by\n  `com.target.app.permission.READ_DATA` reads as protected in the manifest review, and the\n  `<permission android:protectionLevel=\"normal\">` two hundred lines above reads as unremarkable in the\n  permission review. Join them and the guard is auto-granted to any app that asks (D07-014).\n- **D07 × D17 — the write primitive and the loader.** A traversal that honours `\"w\"` is Medium on its own\n  and the Google Mobile VRP says so explicitly. Enumerate `System.load`/`DexClassLoader`/plugin directories\n  *first*, choose the destination to match, and the same primitive is the VRP's top-paying category\n  (D07-035, D07-062).\n- **D07 × D15 — provider rows as the backend's keys.** Object ids, share tokens and API version strings sit\n  in provider rows, and the mobile client's API version is usually older than the web app's. The local read\n  is Low at a programme that discounts same-device apps; the forged public share URL from the same token is\n  a remote finding at the same programme (H1 #518669). Always take the row off-device (D07-070).\n- **D07 × D10 — `setAllowContentAccess` is on by default.** A WebView that loads any untrusted content can\n  `XMLHttpRequest` a `content://` URI. The WebView reviewer tests XSS and origins; the provider reviewer\n  tests `adb shell content`. Neither tests the provider *from inside the WebView*, which is where the\n  app's own authority is reachable without any IPC at all (MASTG-TEST-0250).\n- **D07 × D09 — deep-link parameters that name a URI.** `targetapp://share?file=...` and\n  `?uri=content://...` are tested for open redirect and XSS and never for a `content://` or `file://`\n  payload aimed at the app's own provider. That is the AM-02 delivery route into D07-056 and D07-059.\n- **D07 × D11 — reachability is what converts storage into a finding.** An unencrypted token in\n  `shared_prefs` is P5 by VRT and explicitly out of scope at several programmes. The provider traversal is\n  the thing that makes it a P1 read. File the access as the bug and the storage as the payload — never the\n  other way round.\n- **D07 × D05/D13 — the telephony provider and the OTP.** A blind `update()` oracle on an OEM provider that\n  shares a database file with `sms` (CVE-2025-10184) reads OTP bodies with no `READ_SMS`. The SMS reviewer\n  looks at the receiver and the permission; the provider reviewer looks at the columns. The join is\n  account takeover on every service that uses SMS 2FA.\n- **D07 × D02 — the merged manifest is where the SDK's provider lives.** The app's own source contains no\n  `FileProvider`, so the source reviewer records a negative; the merged manifest contains three, each with\n  its own paths XML written by a vendor the client has never audited (D07-003).\n- **D07 × D19/D04 — the side-effecting `call()` and the crash surface.** A `call()` method table\n  (D07-017) is simultaneously the richest authorisation-bypass surface and the best-shaped fuzzing corpus\n  in the app. Enumerate once, use twice.",
@@ -84,8 +84,11 @@
     "AM-03"
    ],
    "applies_to": "`targetSdkVersion < 17` only — **LEGACY**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk<17, legacy",
+   "requires_tags": [
+    "targetsdk<17",
+    "legacy"
+   ],
    "maps_to": "MASTG-TEST-0355; MobSF `exported_provider` family (`ANDROID_4_2_LEVEL = 17`)",
    "record": "",
    "legacy_meta": {},
@@ -125,8 +128,11 @@
     "AM-03"
    ],
    "applies_to": "all; especially apps with bundled SDKs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0163",
    "record": "",
    "legacy_meta": {},
@@ -215,8 +221,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0148, MASTG-TEST-0356, MASWE-0018",
    "record": "",
    "legacy_meta": {},
@@ -268,8 +277,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "the layer-ordering trap (an error from a layer in front of the auth check does not prove you passed the auth check)",
    "record": "",
    "legacy_meta": {},
@@ -312,8 +324,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0148 (the `content` command \"executes in the context of the shell user\")",
    "record": "",
    "legacy_meta": {},
@@ -353,8 +368,11 @@
     "AM-03"
    ],
    "applies_to": "any PoC/attacker app whose own `targetSdkVersion >= 30`, running on Android 11+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "package visibility — free below targetSdk 30, filtered at 30+; MASTG-TECH-0148 (the `content` command runs as `shell`)",
    "record": "",
    "legacy_meta": {},
@@ -398,8 +416,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "the Shell-Loop Ban — zsh array expansion fails silently and the output still looks complete",
    "record": "",
    "legacy_meta": {},
@@ -437,8 +458,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "the ruled-out register (`templates/ruled-out-table.md`)",
    "record": "",
    "legacy_meta": {},
@@ -479,8 +503,12 @@
     "AM-03"
    ],
    "applies_to": "Android 5+ multi-user; Private Space Android 15+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device, api>=35",
+   "requires_tags": [
+    "provider",
+    "device",
+    "api>=35"
+   ],
    "maps_to": "Google's Android & Google Devices scope: \"Multi-User & Private Space: Cross-user sensitive data access\"",
    "record": "",
    "legacy_meta": {},
@@ -522,8 +550,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-TEST-0355; `guide/topics/manifest/provider-element`",
    "record": "",
    "legacy_meta": {},
@@ -571,8 +601,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "`guide/topics/manifest/provider-element` (readPermission/writePermission take precedence over permission)",
    "record": "",
    "legacy_meta": {},
@@ -615,8 +647,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-TEST-0355; D03 permission model",
    "record": "",
    "legacy_meta": {},
@@ -663,8 +697,10 @@
     "AM-03"
    ],
    "applies_to": "all providers overriding `call()`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "QARK `INSECURE_FUNCTIONS_NAMES = (\"call\",)` — \"The framework does no permission checking on this entry into the content provider besides the basic ability for the application to get access to the provider at all\"; drozer `app.provider.call`",
    "record": "",
    "legacy_meta": {},
@@ -711,8 +747,10 @@
     "AM-03"
    ],
    "applies_to": "all providers that authorise by path",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "`guide/topics/providers/content-provider-creating`; `guide/topics/manifest/provider-element` (`<path-permission>` is path-scoped)",
    "record": "",
    "legacy_meta": {},
@@ -755,8 +793,10 @@
     "AM-03"
    ],
    "applies_to": "all providers overriding `call()`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "drozer `app.provider.call`; MASTG-TECH-0148",
    "record": "",
    "legacy_meta": {},
@@ -799,8 +839,11 @@
     "AM-03"
    ],
    "applies_to": "all; probe from a PoC app, because `adb shell content` cannot reach most of these",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "QARK `INSECURE_FUNCTIONS_NAMES = (\"call\",)` — \"The framework does no permission checking on this entry into the content provider besides the basic ability for the application to get access to the provider at all\" — generalised to the rest of the overridable surface; MASTG-TECH-0148",
    "record": "",
    "legacy_meta": {},
@@ -832,7 +875,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`adb shell content` gives you `query`, `insert`, `update`, `delete`, `call`, `read`, `write`\nand `gettype`. `ContentProvider` exposes more overridable methods than that across Binder, and every\noverride is a separate piece of the app's code that another process can execute: `getType`,\n`getStreamTypes`, `openTypedAssetFile`, `bulkInsert`, `applyBatch`, `refresh`,\n`canonicalize`/`uncanonicalize` and `checkUriPermission`. `call()` is the famous case (D07-015) and it\nis not the only one. Do not assume the provider-level permission covers the whole surface — determine it\n**empirically, per method**, because the answer depends on the platform version and on what the override\nitself does before it reaches the data.",
-   "how": "Enumerate what the app actually overrides, then probe each override from a PoC app:\n```bash\ngrep -rnE 'public [A-Za-z<>\\[\\]]+ (getType|getTypeAnonymous|getStreamTypes|openTypedAssetFile|bulkInsert|applyBatch|refresh|canonicalize|uncanonicalize|checkUriPermission)\\(' jadx_out/sources/\n# an override that is NOT in this list is the framework's base implementation - note that and move on\n```\n```java\nContentResolver cr = getContentResolver();\nUri u = Uri.parse(\"content://com.target.app.provider/items\");\ntry { Log.i(\"poc\",\"getType=\"      + cr.getType(u)); }                                   catch (Throwable t){ Log.i(\"poc\",\"getType \"+t); }\ntry { Log.i(\"poc\",\"streamTypes=\"  + Arrays.toString(cr.getStreamTypes(u,\"*/*\"))); }     catch (Throwable t){ Log.i(\"poc\",\"streamTypes \"+t); }\ntry { Log.i(\"poc\",\"typedAsset=\"   + cr.openTypedAssetFileDescriptor(u,\"*/*\",null)); }   catch (Throwable t){ Log.i(\"poc\",\"typedAsset \"+t); }\ntry { Log.i(\"poc\",\"canonical=\"    + cr.canonicalize(u)); }                              catch (Throwable t){ Log.i(\"poc\",\"canonical \"+t); }\ntry { Log.i(\"poc\",\"refresh=\"      + cr.refresh(u,null,null)); }                         catch (Throwable t){ Log.i(\"poc\",\"refresh \"+t); }\n```\nRecord each result — success, `SecurityException`, `UnsupportedOperationException`, null — in the same\nper-authority table you built for D07-005, and classify the exception by layer with D07-006.",
+   "how": "Enumerate what the app actually overrides, then probe each override from a PoC app:\n```bash\ngrep -rnE 'public [A-Za-z<>\\[\\]]+ (getType|getTypeAnonymous|getStreamTypes|openTypedAssetFile|bulkInsert|applyBatch|refresh|canonicalize|uncanonicalize|checkUriPermission)\\(' $DEC/jadx/sources/\n# an override that is NOT in this list is the framework's base implementation - note that and move on\n```\n```java\nContentResolver cr = getContentResolver();\nUri u = Uri.parse(\"content://com.target.app.provider/items\");\ntry { Log.i(\"poc\",\"getType=\"      + cr.getType(u)); }                                   catch (Throwable t){ Log.i(\"poc\",\"getType \"+t); }\ntry { Log.i(\"poc\",\"streamTypes=\"  + Arrays.toString(cr.getStreamTypes(u,\"*/*\"))); }     catch (Throwable t){ Log.i(\"poc\",\"streamTypes \"+t); }\ntry { Log.i(\"poc\",\"typedAsset=\"   + cr.openTypedAssetFileDescriptor(u,\"*/*\",null)); }   catch (Throwable t){ Log.i(\"poc\",\"typedAsset \"+t); }\ntry { Log.i(\"poc\",\"canonical=\"    + cr.canonicalize(u)); }                              catch (Throwable t){ Log.i(\"poc\",\"canonical \"+t); }\ntry { Log.i(\"poc\",\"refresh=\"      + cr.refresh(u,null,null)); }                         catch (Throwable t){ Log.i(\"poc\",\"refresh \"+t); }\n```\nRecord each result — success, `SecurityException`, `UnsupportedOperationException`, null — in the same\nper-authority table you built for D07-005, and classify the exception by layer with D07-006.",
    "proof": "A method that executes the provider's own code — a non-null MIME string, a stream-type array,\na file descriptor, a canonicalised URI — returned for a caller whose `query()` on the *same* URI is\ndenied. The pair of outputs side by side is the finding, and it has exactly the shape triage already\naccepts for `call()`.",
    "escalation": "`openTypedAssetFile` is the highest-value of these: it hands back a *file* handle through\na MIME-negotiation path that an `openFile`-focused traversal review skips entirely — take any hit\nstraight into D07-028 and the encoding matrix in D07-032. A `getType` that performs a database\nlookup is an existence oracle over the provider's row space; iterate ids and keep the ones whose answer\ndiffers from the miss case (D07-053), then take the ids off-device to D15.",
    "ruled_out_when": "The DEX contains no override for any of these methods — the framework's base\nimplementations return null, throw `UnsupportedOperationException`, or loop the CRUD verbs you have\nalready tested, so there is no additional app code behind them — **or** every override throws the same\nAMS-layer `Permission Denial` as `query()` from an app UID with `<queries>` declared. Quote the grep\noutput showing the absent overrides; \"I only ran `adb shell content`\" is not a negative for this item,\nbecause the CLI cannot reach most of this surface."
@@ -852,8 +895,11 @@
     "AM-03"
    ],
    "applies_to": "providers that override `bulkInsert()` or `applyBatch()`; requires a PoC app — the CLI has no batch verb",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0148 (the CLI's verb set), MASWE-0018; the \"batch operations are atomic and consistent\" checklist line that no public methodology actually tests",
    "record": "",
    "legacy_meta": {},
@@ -883,7 +929,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The `content` CLI has no batch verb, so an override of `bulkInsert()` or `applyBatch()` is a\nwrite path that every shell-driven sweep in this chapter misses by construction. Two distinct bugs live\nthere. First, an override routinely hand-rolls its own transaction and SQL handling — a **second,\nun-reviewed copy** of the concatenation you already tested in `insert()`/`update()`. Second,\n`applyBatch()` takes an `ArrayList<ContentProviderOperation>` in which *each operation carries its own\nURI, values, selection and selectionArgs*; a provider that validates \"the\" URI once on entry and then\nloops the operations can be handed a batch whose later operations point somewhere else entirely.",
-   "how": "Confirm the overrides exist, then build a batch whose operations disagree with each other:\n```bash\ngrep -rnA30 'public int bulkInsert(\\|public ContentProviderResult\\[\\] applyBatch(' jadx_out/sources/\ngrep -rn 'beginTransaction\\|setTransactionSuccessful\\|yieldIfContendedSafely' jadx_out/sources/ | grep -i 'provider'\n```\n```java\nArrayList<ContentProviderOperation> ops = new ArrayList<>();\n// operation 0: the path the provider expects to be asked about\nops.add(ContentProviderOperation.newInsert(Uri.parse(\"content://com.target.app.provider/public\"))\n        .withValue(\"name\",\"probe7x2k9qd\").build());\n// operation 1: a different path, and a selection that is a separate injection sink\nops.add(ContentProviderOperation.newUpdate(Uri.parse(\"content://com.target.app.provider/account\"))\n        .withSelection(\"1=1\", null).withValue(\"role\",\"admin\").build());\nContentProviderResult[] r = getContentResolver().applyBatch(\"com.target.app.provider\", ops);\nLog.i(\"poc\", Arrays.toString(r));   // per-operation results: which ones actually applied?\n\nContentValues a = new ContentValues(); a.put(\"name\",\"probe7x2k9qd\");\nint n = getContentResolver().bulkInsert(Uri.parse(\"content://com.target.app.provider/items\"),\n                                        new ContentValues[]{a, a});\nLog.i(\"poc\",\"bulkInsert rows=\" + n);\n```",
+   "how": "Confirm the overrides exist, then build a batch whose operations disagree with each other:\n```bash\ngrep -rnA30 'public int bulkInsert(\\|public ContentProviderResult\\[\\] applyBatch(' $DEC/jadx/sources/\ngrep -rn 'beginTransaction\\|setTransactionSuccessful\\|yieldIfContendedSafely' $DEC/jadx/sources/ | grep -i 'provider'\n```\n```java\nArrayList<ContentProviderOperation> ops = new ArrayList<>();\n// operation 0: the path the provider expects to be asked about\nops.add(ContentProviderOperation.newInsert(Uri.parse(\"content://com.target.app.provider/public\"))\n        .withValue(\"name\",\"probe7x2k9qd\").build());\n// operation 1: a different path, and a selection that is a separate injection sink\nops.add(ContentProviderOperation.newUpdate(Uri.parse(\"content://com.target.app.provider/account\"))\n        .withSelection(\"1=1\", null).withValue(\"role\",\"admin\").build());\nContentProviderResult[] r = getContentResolver().applyBatch(\"com.target.app.provider\", ops);\nLog.i(\"poc\", Arrays.toString(r));   // per-operation results: which ones actually applied?\n\nContentValues a = new ContentValues(); a.put(\"name\",\"probe7x2k9qd\");\nint n = getContentResolver().bulkInsert(Uri.parse(\"content://com.target.app.provider/items\"),\n                                        new ContentValues[]{a, a});\nLog.i(\"poc\",\"bulkInsert rows=\" + n);\n```",
    "proof": "A follow-up `content query` showing the row written by the batch's **second** operation, on a\npath whose stand-alone `content update` was denied — or `bulkInsert` accepting a `ContentValues` that\nsingle-row `insert` rejects, which proves the two paths validate differently. Report the\n`ContentProviderResult[]` array: it tells the triager exactly which operations applied.",
    "escalation": "The per-operation `withSelection` string is an injection sink in its own right — take a\nhit to D07-042 and run the blind boolean oracle through the batch path. A flipped entitlement or role\ncolumn goes to D23; a poisoned row that the app later renders goes to D10.",
    "ruled_out_when": "Neither method is overridden in the DEX. The base `ContentProvider.bulkInsert()`\nloops `insert()` and the base `applyBatch()` applies each operation through the same\n`insert`/`update`/`delete` you have already tested, so the permission and validation behaviour is\nidentical by construction and there is no second code path to attack. Quote the absence of both\noverrides from the grep above — do **not** record a negative on the basis that the CLI had no batch verb."
@@ -903,8 +949,11 @@
     "AM-03"
    ],
    "applies_to": "providers declaring `<path-permission>`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "`guide/topics/manifest/provider-element` (`path`, `pathPrefix`, `pathPattern`, `pathSuffix`, `pathAdvancedPattern`)",
    "record": "",
    "legacy_meta": {},
@@ -946,8 +995,11 @@
     "AM-03"
    ],
    "applies_to": "all providers doing path-based authorisation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0355 (the Sieve example); HackTricks `drozer-tutorial/exploiting-content-providers.md` — \"the path `/Keys/` is accessible ... which is not protected due to a mistake by the developer, who secured `/Keys` but declared `/Keys/`\"",
    "record": "",
    "legacy_meta": {},
@@ -991,8 +1043,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "sec-88 \"Content Provider Hacking\" Case 1 (permission bypass by appending `/////`); MASTG-TECH-0163",
    "record": "",
    "legacy_meta": {},
@@ -1036,8 +1091,10 @@
     "AM-03"
    ],
    "applies_to": "providers that authorise on the caller's identity",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "AOSP `ContentProvider.java` javadoc: `getCallingPackage()` — \"The returned package will have been verified to belong to the calling UID\"; `getCallingPackageUnchecked()` — \"will have **not** been verified\"",
    "record": "",
    "legacy_meta": {},
@@ -1079,8 +1136,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "`guide/topics/manifest/provider-element`: if `\"true\"`, permission is grantable to any data in the provider, overriding the other permission attributes; if `\"false\"`, only the subsets in `<grant-uri-permission>` may be granted",
    "record": "",
    "legacy_meta": {},
@@ -1125,8 +1184,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "Oversecured \"Gaining access to arbitrary Content Providers\"; `risks/intent-redirection`",
    "record": "",
    "legacy_meta": {},
@@ -1171,8 +1232,11 @@
     "AM-04"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASWE-0018 (CWE-940) — \"over-broad or persistable URI permission grants ... where one-time, scoped sharing would suffice\"; `content/Intent.java` grant flag constants",
    "record": "",
    "legacy_meta": {},
@@ -1221,8 +1285,11 @@
     "AM-04"
    ],
    "applies_to": "all with SAF / share flows",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASWE-0018; `takePersistableUriPermission`; HackTricks `intent-injection.md` (`0x43` = READ `0x1` + WRITE `0x2` + PERSISTABLE `0x40`)",
    "record": "",
    "legacy_meta": {},
@@ -1266,8 +1333,11 @@
     "AM-03"
    ],
    "applies_to": "all providers implementing any `open*` method",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0159; MASWE-0050; `risks/path-traversal`; CVE-2025-48636 (`openFile` of `BugreportContentProvider.java`, read+write of unauthorised files, CVSS 8.4); CVE-2024-43089 and CVE-2023-35670 (MediaProvider `openFile` traversal)",
    "record": "",
    "legacy_meta": {},
@@ -1319,8 +1389,11 @@
     "AM-03"
    ],
    "applies_to": "all — every Android version",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Oversecured \"Content Providers and the potential weak spots they can have\" (§Path Traversal via Uri Decoding) and \"Android security checklist: theft of arbitrary files\"; the Google app `CommonContentProvider` case; MASWE-0050",
    "record": "",
    "legacy_meta": {},
@@ -1368,8 +1441,11 @@
     "AM-03"
    ],
    "applies_to": "all file-backed providers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "drozer `scanner.provider.traversal`, `app.provider.read`",
    "record": "",
    "legacy_meta": {},
@@ -1409,8 +1485,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "drozer `app.provider.read`/`download` error shape: `java.io.FileNotFoundException: No files supported by provider at content://...`",
    "record": "",
    "legacy_meta": {},
@@ -1453,8 +1532,11 @@
     "AM-03"
    ],
    "applies_to": "all file-backed providers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "drozer `scanner/provider/traversal.py` source (one fixed payload); Oversecured file-theft checklist",
    "record": "",
    "legacy_meta": {},
@@ -1499,8 +1581,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "drozer `scanner/provider/traversal.py`, read directly: it calls `contentResolver().read(uri + \"/../../../../../../../../../../../../../../../../etc/hosts\")` and flags the URI **only** if the returned data is non-empty",
    "record": "",
    "legacy_meta": {},
@@ -1541,8 +1626,11 @@
     "AM-03"
    ],
    "applies_to": "all providers implementing `openFile`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Oversecured \"Permission Mismatch in File Access\" / \"Incorrect Permission Declaration\"; `guide/topics/manifest/provider-element`",
    "record": "",
    "legacy_meta": {},
@@ -1586,8 +1674,11 @@
     "AM-03"
    ],
    "applies_to": "providers whose `open*` honours a write mode",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "CVE-2025-48636; Oversecured `TheftOverwriteProvider` (OVAA); Google Mobile VRP: \"Path traversal / zip path traversal vulnerabilities leading to arbitrary file write\" — and the explicit rule that \"if you do not demonstrate this [ACE] in your report, the reward amount will not reflect this\"",
    "record": "",
    "legacy_meta": {},
@@ -1633,8 +1724,11 @@
     "AM-03"
    ],
    "applies_to": "providers using `openFileHelper()` or a `_data`-style path column",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "HackTricks `content-protocol.md` (seeding MediaStore's `_data` column and reading it back); MASTG-TECH-0148",
    "record": "",
    "legacy_meta": {},
@@ -1682,8 +1776,12 @@
     "AM-04"
    ],
    "applies_to": "providers that canonicalise once and open later",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device, root",
+   "requires_tags": [
+    "provider",
+    "device",
+    "root"
+   ],
    "maps_to": "`risks/content-resolver` (documented symlink-targeting and check/open race); Google VRP remediation tip: \"Verify that the canonical path ... right before doing file operations ... Watch out for TOCTOU issues. Symlinks can change at any time.\"",
    "record": "",
    "legacy_meta": {},
@@ -1728,8 +1826,11 @@
     "AM-03"
    ],
    "applies_to": "all SQLite-backed providers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0339, MASTG-TEST-0025, MASWE-0050 (CWE-89, CWE-20), MASTG-KNOW-0117, rule `mastg-android-sql-injection-contentprovider.yml`, MASTG-TOOL-0110; H1 #291764 (Nextcloud, Low 0.9, $150), #1650264 (ownCloud, Medium 4.2, GHSL-2022-059), #887968 (Mail.ru `ru.mail.data.contact.ContactsProvider`), #143280 (Mail.ru, $250)",
    "record": "",
    "legacy_meta": {},
@@ -1783,8 +1884,11 @@
     "AM-03"
    ],
    "applies_to": "all SQLite-backed providers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0339; drozer `scanner.provider.injection` classification `Injection in Projection`; sec-88 \"Content Provider Hacking\" §2 Case 1",
    "record": "",
    "legacy_meta": {},
@@ -1829,8 +1933,11 @@
     "AM-03"
    ],
    "applies_to": "all SQLite-backed providers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0339; `risks/sql-injection`",
    "record": "",
    "legacy_meta": {},
@@ -1875,8 +1982,11 @@
     "AM-03"
    ],
    "applies_to": "providers whose `UriMatcher` routes a `*` wildcard segment into SQL",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0339 and rule `mastg-android-sql-injection-contentprovider.yml` (the exact shape: a variable from `Uri.getPathSegments().get(...)` reaching `SQLiteQueryBuilder.appendWhere()`); MASTG-KNOW-0117; H1 #1650264 / GHSL-2022-059",
    "record": "",
    "legacy_meta": {},
@@ -1923,8 +2033,11 @@
     "AM-03"
    ],
    "applies_to": "exported providers with `writePermission` absent",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "**CVE-2025-10184** (OnePlus OxygenOS Telephony provider permission bypass); HackTricks `drozer-tutorial/exploiting-content-providers.md`, `android-checklist.md`; H1 #1650264 (GHSL-2022-059)",
    "record": "",
    "legacy_meta": {},
@@ -1970,8 +2083,11 @@
     "AM-03"
    ],
    "applies_to": "any provider that AND-glues the caller's selection onto its own scope constraint",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "**CVE-2026-28576** (Android 17 Contacts Provider), GHSA-ph86-9mcx-3p6r (CVSS v4 10.0 per GitHub's advisory; High in the Android bulletin), PoC `github.com/mobilehackinglab/CVE-2026-28576-poc`; **CVE-2022-20518** (`MmsSmsProvider.java`, \"possible access to restricted tables due to SQL injection\", OSV `PUB-A-224770203`)",
    "record": "",
    "legacy_meta": {},
@@ -2015,8 +2131,11 @@
     "AM-03"
    ],
    "applies_to": "Android builds exposing the compat change; `am compat` itself is Android 10+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "CVE-2026-28576 \"The Patched Behavior\"; compat change `ENFORCE_STRICT_SQL_CHECKS` id `484953293`, `enableAfterTargetSdk=\"36\"`; `SQLiteQueryBuilder.setStrictGrammar()`",
    "record": "",
    "legacy_meta": {},
@@ -2057,8 +2176,11 @@
     "AM-03"
    ],
    "applies_to": "apps declaring two or more providers over one database file",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Oversecured content-providers post (§SQL Injection via Selection Parameters); H1 #518669",
    "record": "",
    "legacy_meta": {},
@@ -2102,8 +2224,11 @@
     "AM-03"
    ],
    "applies_to": "providers with more than two `UriMatcher` arms",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "H1 #518669 (Nextcloud, Low 0.9, $100) — the caller check runs for `ROOT_DIRECTORY`/`SINGLE_FILE`/`DIRECTORY` but the projection-map restriction is applied only when `mUriMatcher.match(uri) == ROOT_DIRECTORY`",
    "record": "",
    "legacy_meta": {},
@@ -2147,8 +2272,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "drozer `scanner/provider/injection.py` source: it issues `query(uri, projection=[\"'\"])` and `query(uri, selection=\"'\")` and marks the URI vulnerable **only** if the exception text contains `\"unrecognized token\"`; reports under `Injection in Projection:` / `Injection in Selection:`",
    "record": "",
    "legacy_meta": {},
@@ -2188,8 +2316,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "drozer `auxiliary.webcontentresolver` — \"Start a Web Service interface to Content Providers. This allows you to use web application testing capabilities and tools to test content providers.\"",
    "record": "",
    "legacy_meta": {},
@@ -2230,8 +2361,11 @@
     "AM-03"
    ],
    "applies_to": "every blind or boolean provider claim",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "the Body-Diff Rule (a byte-identical result is not a bypass) and the Statistical-Sample Rule (n>=10 interleaved trials, >=2 sigma)",
    "record": "",
    "legacy_meta": {},
@@ -2271,8 +2405,11 @@
     "AM-03"
    ],
    "applies_to": "every provider write or \"my data appeared in the app\" claim",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Marker Discipline — 8+ character random markers, and search the BASELINE for the marker first",
    "record": "",
    "legacy_meta": {},
@@ -2315,8 +2452,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Oversecured content-providers post (§Proxying to Unintended Providers: \"Developers should avoid proxying requests to other providers\"); `risks/content-resolver`",
    "record": "",
    "legacy_meta": {},
@@ -2359,8 +2499,11 @@
     "AM-03"
    ],
    "applies_to": "apps holding a dangerous permission and exposing a provider",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Oversecured Class #6/#31 provider-to-provider proxying; T1636 Protected User Data (.001–.005)",
    "record": "",
    "legacy_meta": {},
@@ -2408,8 +2551,11 @@
     "AM-03"
    ],
    "applies_to": "image, avatar, thumbnail and document-preview providers",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "HackTricks \"Exported provider as a confused deputy\"; the Google Messages `AvatarContentProvider` contacts bypass (fixed 2026-06-12, rewarded through the Mobile VRP)",
    "record": "",
    "legacy_meta": {},
@@ -2455,8 +2601,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`risks/content-resolver` (MASVS-PLATFORM) — the documented variants: fully attacker-controlled `file://`, partially controlled with traversal, a `file://` to an attacker-controlled symlink, and a check/open race; H1 #876192 \"Cookie steal through content Uri\", #288955 \"[IRCCloud Android] Theft of arbitrary files leading to token leakage\", #161710 \"Possible to steal any protected files on Android\"",
    "record": "",
    "legacy_meta": {},
@@ -2499,8 +2647,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`guide/components/intents-filters` data-test rules, quoted: an intent passes the URI test if \"it has a `content:` or `file:` URI and the filter does not specify a URI format. In other words, a component is presumed to support `content:` and `file:` data if its filter lists *only* a MIME type.\"",
    "record": "",
    "legacy_meta": {},
@@ -2544,8 +2694,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Oversecured file-theft checklist: \"It's important to note that they do not necessarily need to be exported. Android only checks rights when an attempt is made to access data, but the vulnerable app will be receiving access to one of its resources, and no restrictions will come into play.\"",
    "record": "",
    "legacy_meta": {},
@@ -2589,8 +2742,10 @@
     "AM-03"
    ],
    "applies_to": "all apps declaring a FileProvider",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-TEST-0357, MASTG-TECH-0159, rule `mastg-android-fileprovider-broad-scope.yml`, MASWE-0018 (CWE-939, CWE-940), MASWE-0002; `risks/file-providers` — \"Do not use `<root-path>` in the configuration ... could enable an attacker to access sensitive information stored in databases or overwrite the application's native libraries\"; AndroidX `FileProvider.java` `TAG_ROOT_PATH` -> `\"/\"`; H1 #1161401 (Nextcloud, Low 1.3, $250); Oversecured TikTok `<root-path name=\"name\" path=\"\" />`",
    "record": "",
    "legacy_meta": {},
@@ -2648,8 +2803,11 @@
     "AM-04"
    ],
    "applies_to": "apps declaring `<external-path>`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0357; `risks/file-providers` — `<external-path>` should be avoided \"unless you have explicitly verified that the information being stored/shared is not sensitive. Never store PII using this element\"; MASTG-KNOW-0042 (external storage, `owner_package_name` attribution)",
    "record": "",
    "legacy_meta": {},
@@ -2699,8 +2857,10 @@
     "AM-03"
    ],
    "applies_to": "all apps calling `getUriForFile`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-TEST-0357 — \"Determine whether `FileProvider.getUriForFile()` is called with attacker-controlled input (for example, values derived from URI query parameters or user input)\"; MASTG-TECH-0159, MASTG-KNOW-0138",
    "record": "",
    "legacy_meta": {},
@@ -2748,8 +2908,10 @@
     "AM-03"
    ],
    "applies_to": "CURRENT AndroidX FileProvider",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "AndroidX `FileProvider.java` canonicalisation; triage-pushback discipline (concede the unreachable half)",
    "record": "",
    "legacy_meta": {},
@@ -2791,8 +2953,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all FileProviders",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "MASTG-TEST-0250, MASTG-TEST-0357 — `android:grantUriPermissions` **must** be `true` for a FileProvider by definition, otherwise it throws `SecurityException: Provider must grant uri permissions`",
    "record": "",
    "legacy_meta": {},
@@ -2836,8 +3000,10 @@
     "AM-03"
    ],
    "applies_to": "every app with a share target, attachment, file-import or \"open with\" flow",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`risks/untrustworthy-contentprovider-provided-filename` — **CWE-73: External Control of Filename or Path**, MASVS-CODE; MASWE-0050; Microsoft \"Dirty Stream\" (2024-05-01): Xiaomi File Manager `com.mi.android.globalFileexplorer` 1B+ installs (vulnerable V1-210567, fixed V1-210593), WPS Office `cn.wps.moffice_eng` 500M+ installs (vulnerable 16.8.1, fixed 17.0.0), 4B+ installs total; H1 #1115864 (Mattermost, High 7.8), #1362313 / #1377748 (Evernote, same root cause)",
    "record": "",
    "legacy_meta": {},
@@ -2884,8 +3050,10 @@
     "AM-03"
    ],
    "applies_to": "apps calling `startActivityForResult` with `ACTION_PICK` / `ACTION_GET_CONTENT` / `IMAGE_CAPTURE` / `CROP`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Oversecured \"theft of arbitrary files\" Class #13 and the 7-vector list; H1 #288955, #161710",
    "record": "",
    "legacy_meta": {},
@@ -2931,8 +3099,10 @@
     "AM-03"
    ],
    "applies_to": "apps with restore, import or migration flows that accept tree/document URIs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "HackTricks `android-applications-basics.md` \"DocumentProvider restore/import path traversal\"; H1 #859469 (LINE Android, ZIP extract traversal, $475), #284346",
    "record": "",
    "legacy_meta": {},
@@ -2974,8 +3144,11 @@
     "AM-03"
    ],
    "applies_to": "all — **including providers declared `exported=\"false\"`**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "Oversecured Class #8; T1641 Data Manipulation",
    "record": "",
    "legacy_meta": {},
@@ -3020,8 +3193,10 @@
     "AM-04"
    ],
    "applies_to": "apps shipping AndroidX Slices",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "`guide/slices/getting-started` (the documented provider XML with `android.app.slice.category.SLICE`); MASWE-0036",
    "record": "",
    "legacy_meta": {},
@@ -3065,8 +3240,10 @@
     "AM-03"
    ],
    "applies_to": "apps implementing or consuming a cloud media provider",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider",
+   "requires_tags": [
+    "provider"
+   ],
    "maps_to": "`training/data-storage/shared/photopicker` (cloud media providers), `guide/topics/providers/cloud-media-provider`",
    "record": "",
    "legacy_meta": {},
@@ -3110,8 +3287,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0356, MASWE-0018; Google Mobile VRP \"Theft of sensitive data\": \"Insecurely designed app internals like content providers or activities that can be manipulated to expose sensitive data\", CWE-359; H1 #242727 (Nextcloud, bcrypt hashes of password-protected shares, Low, $75), #331302 (Nextcloud, `content://org.nextcloud/arbitrary_data` holding E2EE private keys), #272044 (Dropbox, $1,000); CVE-2019-14339 (Canon PRINT 2.5.5, EDB 47321)",
    "record": "",
    "legacy_meta": {},
@@ -3164,8 +3344,11 @@
     "AM-03"
    ],
    "applies_to": "apps with both a metadata provider and a file/thumbnail/cache provider",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "H1 #534541 (Nextcloud, Low 3.4, $100), #489105 (the prior thumbnail issue) — `DiskLruImageCacheFileProvider` should not have been exported",
    "record": "",
    "legacy_meta": {},
@@ -3211,8 +3394,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, backend-api",
+   "requires_tags": [
+    "provider",
+    "backend-api"
+   ],
    "maps_to": "the shadow/zombie-API discipline — old versions stay reachable without receiving the same fixes, and **mobile builds are the number-one source of old-version endpoints**; H1 #518669 (a provider-recovered share token forged a working public URL)",
    "record": "",
    "legacy_meta": {},
@@ -3256,8 +3442,10 @@
     "AM-03"
    ],
    "applies_to": "apps using `DownloadManager`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`reference/android/app/DownloadManager` — `Request.setDestinationInExternalPublicDir()`, `Request.addRequestHeader()`, `COLUMN_LOCAL_URI`, `Request.setVisibleInDownloadsUi()`",
    "record": "",
    "legacy_meta": {},
@@ -3302,8 +3490,10 @@
     "AM-04"
    ],
    "applies_to": "Scoped storage from Android 10 (API 29); `requestLegacyExternalStorage` ignored at targetSdk 30+; `READ_EXTERNAL_STORAGE` has no effect from Android 13 (API 33); `OWNER_PACKAGE_NAME` redaction from Android 14",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-KNOW-0042, MASTG-TEST-0202, MASTG-TEST-0254, MASTG-TOOL-0004; `about/versions/14/behavior-changes-all` (`OWNER_PACKAGE_NAME` redaction, `QUERY_ALL_PACKAGES`)",
    "record": "",
    "legacy_meta": {},
@@ -3352,8 +3542,11 @@
     "AM-03"
    ],
    "applies_to": "apps using AndroidX App Startup or any fixed-authority initialiser",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "provider, device",
+   "requires_tags": [
+    "provider",
+    "device"
+   ],
    "maps_to": "`topic/libraries/app-startup` (authority format `${applicationId}.androidx-startup`, `android:exported=\"false\"`). **The collision behaviour itself is unverified — do not report it as fact without running the experiment.**",
    "record": "",
    "legacy_meta": {},

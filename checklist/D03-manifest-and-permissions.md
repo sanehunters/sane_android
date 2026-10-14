@@ -24,6 +24,32 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 
 **Is there any component whose only access control is a permission string that a zero-permission app can obtain — by declaring it, by defining it first, or because nobody ever defined it — and if the string does hold, does the code behind it interrogate the *caller* rather than itself?**
 
+## Applicability probe
+
+D03 is never n/a as a whole — every APK has a manifest and every finding in the repository is bound to its targetSdk/minSdk pair (D03-002). The probe decides which **families** of items apply and writes the n/a rows for the rest. Run it once after P2 decompile, against the merged, decoded manifest.
+
+```bash
+M=$DEC/apktool/AndroidManifest.xml; SRC=$DEC/jadx/sources
+# 1. Version pair and the merged-manifest sanity check (D03-001, D03-002) — always run
+grep -oE '(minSdkVersion|targetSdkVersion)="[0-9]+"' "$M" | tr '\n' ' '; ls $E/decompiled/apktool/*/AndroidManifest.xml 2>/dev/null | wc -l   # >1 means splits: every split must be decoded
+# 2. Custom-permission family (D03-008..D03-023, D03-032): non-platform strings DEFINED and ENFORCED
+grep -oE 'android:(permission|readPermission|writePermission)="[^"]+"' "$M" | cut -d'"' -f2 | grep -v '^android\.permission\.' | sort -u | wc -l   # enforced (non-platform)
+grep -cE '<permission(-tree)?\b' "$M"                                                                                                     # defined
+# 3. Enforcement-site family (D03-024..D03-031, D03-033..D03-037, D03-040..D03-045): reachable components exist
+python3 scripts/inventory.py --all >/dev/null; awk -F, 'NR>1 && ($4=="true" || $4=="unknown")' inventory/components.csv | cut -d, -f2 | sort | uniq -c   # exported rows per type
+grep -rlE 'check(Self|Calling|CallingOrSelf)?Permission\(|enforceCalling|getCallingUid\(|clearCallingIdentity\(' $SRC | wc -l               # enforcement call sites
+# 4. Attribute families (D03-038, -039, -046, -056..-058, -060..-065, -067..-073, -075): which flags and elements are present at all
+grep -oE 'android:(allowBackup|debuggable|testOnly|sharedUserId|sharedUserMaxSdkVersion|directBootAware|process|isolatedProcess|intentMatchingFlags|dataExtractionRules|fullBackupContent|backupAgent|restoreAnyVersion|requestLegacyExternalStorage|allowUntrustedActivityEmbedding|foregroundServiceType)="[^"]*"' "$M" | sort | uniq -c
+grep -oE '<(queries|activity-alias|path-permission|grant-uri-permission|uses-native-library|attribution|property|permission-tree|protected-broadcast)\b' "$M" | sort | uniq -c
+grep -oE 'android.permission.(BIND_DEVICE_ADMIN|BIND_ACCESSIBILITY_SERVICE|SYSTEM_ALERT_WINDOW|MANAGE_EXTERNAL_STORAGE|QUERY_ALL_PACKAGES|REQUEST_INSTALL_PACKAGES|USE_EXACT_ALARM|USE_FULL_SCREEN_INTENT|ACCESS_BACKGROUND_LOCATION|NEARBY_WIFI_DEVICES|CALL_PHONE|ANSWER_PHONE_CALLS)|android.permission.health\.[A-Z_]+|SMS_DELIVER|SECRET_CODE|USB_DEVICE_ATTACHED|USB_ACCESSORY_ATTACHED|NDEF_DISCOVERED|accountType|expo.modules.updates|CodePush' "$M" | sort | uniq -c
+```
+
+Decision rule: a family applies when its probe line prints at least one row; D03-001..D03-007, D03-054, D03-055 and D03-076 always apply. Probe 2 = `0 / 0` → D03-008..D03-023 and D03-032 are n/a. Probe 3 = no exported/unknown rows and 0 call sites → D03-024..D03-031 and D03-033..D03-045 are n/a (D03-040 stays if `registerReceiver` appears in `$SRC`). Each attribute/element/permission absent from probe 4 → the item named for it is n/a. `oem-scope` absent → D03-066 and D03-NEW-C are n/a. The n/a note a model writes in coverage.csv, verbatim shape:
+
+`D03-0NN | n/a | probe 2026-10-14: merged manifest ($M, N splits decoded) defines 0 and enforces 0 non-platform permission strings; attribute <name> absent; inventory/components.csv --all has 0 exported rows of type <type> — family not present on this build (versionCode V, targetSdk T)`
+
+Never write n/a for a family on the strength of `grep exported="true"` alone (D03-003), and never for the whole domain.
+
 ## Triage order
 
 1. **Merged manifest + minSdk/targetSdk.** Everything downstream is version-gated; getting the pair wrong produces both false positives and false negatives and is the single most common reason an Android report is rejected.
@@ -54,7 +80,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
   ```bash
   apktool d -f base.apk -o out/           # binary manifest -> XML
   xmllint --format out/AndroidManifest.xml > merged.xml
-  jadx --no-src -d jadx_out base.apk      # second opinion: out/resources/AndroidManifest.xml
+  jadx --no-src -d $DEC/jadx base.apk      # second opinion: out/resources/AndroidManifest.xml
   aapt2 dump xmltree base.apk --file AndroidManifest.xml | head -80   # raw; exported="true" prints as 0xffffffff
   # if you have the source tree, attribute each entry:
   ./gradlew :app:processReleaseManifest
@@ -542,6 +568,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-08 (a partner or rotated-away key holder) |
 | **Applies to** | **Android 12+** for the `knownSigner` level. **LEGACY note, and it runs the other way:** on older platforms the same manifest resolves to plain `signature`, which is *stricter* — the newer device is the weaker one. |
+| **Requires** | api>=31 |
 | **Maps to** | `developer.android.com/guide/topics/manifest/permission-element` — `"knownSigner"`: *"granted only if requesting app is signed with an allowed certificate (listed as known signer). Automatically granted without user notification"*; `PROTECTION_FLAG_KNOWN_SIGNER` = 0x8000 in `PermissionInfo` |
 
 - **Test:** A `knownSigner` permission is granted to any app whose signing certificate appears in a hard-coded allow-list — not only to apps with the target's current signature. Enumerate the list: any party holding one of those keys, including a now-deprecated partner or a rotated-away old key, can take the permission silently.
@@ -591,6 +618,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android 12+ |
+| **Requires** | api>=31 |
 | **Maps to** | `PROTECTION_INTERNAL` = 4 in `PermissionInfo`; AOSP `Permissions.md` — *"**internal**: no-op protection, useful with protection flags"* |
 
 - **Test:** `internal` is a no-op *base* protection that exists only to be combined with flags (`role`, `privileged`, `installer`, `verifier`, ...). An `internal`-only permission with no useful flag is not a control at all. Decode any permission whose base level reads `internal` and identify the flag that is supposed to be doing the gating.
@@ -612,6 +640,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when the surface leaks internal config |
 | **Attacker** | AM-11 (physical unlocked / ADB), AM-08 via a compromised MDM or desktop helper |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | `PROTECTION_FLAG_DEVELOPMENT` = 0x20 in `PermissionInfo`; AOSP `Permissions.md` lists `development` among the "optional flags [that] modify protection levels" and documents `adb shell pm grant <package> <permission>` |
 
 - **Test:** A permission carrying the `development` flag can be granted from the shell with `pm grant` even though it is signature-protected. If the target uses one as the access control for a debug or diagnostic surface, anyone with adb takes it.
@@ -634,6 +663,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-02 (one user tap to change the role holder) |
 | **Applies to** | Android 10+ (RoleManager) |
+| **Requires** | api>=29 |
 | **Maps to** | `PROTECTION_FLAG_ROLE` = 0x4000 in `PermissionInfo`; AOSP `Permissions.md` on role-protected permissions "tied to system roles for better granularity" and `DefaultPermissionGrantPolicy` pre-grants to "predefined categories (browser, SMS app)" |
 
 - **Test:** A `role`-flagged permission is granted to whichever app currently holds a system Role — default SMS app, default dialer, home/launcher, assistant. If the target's security model assumes only itself can hold the permission, taking the role is the bypass, and role acquisition is a user-visible but very low-friction flow.
@@ -912,6 +942,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | exported-activity |
 | **Maps to** | `developer.android.com/guide/topics/manifest/activity-alias-element` — *"with the exception of `targetActivity`, `<activity-alias>` attributes are a subset of `<activity>` attributes. For attributes in the subset, none of the values set for the target carry over to the alias"*, and the alias's `android:permission` *"supplants any permission set for the target activity itself"*; MASTG-TECH-0160 — *"activity aliases have their own `android:exported`, `android:permission`, and intent filters, so review them separately from the target activity"* |
 
 - **Test:** An alias can be `exported="true"` with no `android:permission` while its `targetActivity` is `exported="false"` and permission-protected. Tooling and developers both routinely skip aliases.
@@ -936,6 +967,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk 31+.** LEGACY below 31, where the *absence* of the attribute on an intent-filtered component is the bug instead (see D03-003). |
+| **Requires** | targetsdk>=31 |
 | **Maps to** | `developer.android.com/about/versions/12/behavior-changes-12#exported` — *"safer component exporting ... app cannot install on Android 12+ devices without this attribute"*; `developer.android.com/privacy-and-security/risks/android-exported` (MASVS-PLATFORM) |
 
 - **Test:** Since Android 12 an intent-filtered component cannot install without an explicit `android:exported`. The pre-12 bug class ("forgot to set it") is dead on modern targets; the live class is "wrote `true` to make the build pass, on a component that was never meant to be public". Demand a cross-app justification for every `true`.
@@ -961,6 +993,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | QARK plugin `qark/plugins/manifest/android_path.py` — *"`android:path` means that the permission applies to the exact path declared in `android:path`. This expression does not protect the sub-directories"* |
 
 - **Test:** `android:path` matches the **exact** path only. A provider whose permission is scoped with `android:path` leaves every child URI ungated.
@@ -984,6 +1017,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | `developer.android.com/guide/topics/manifest/provider-element` (`<path-permission>` is path-scoped and takes precedence over the provider-level permission; `<grant-uri-permission>` names the URI subsets grantable when `grantUriPermissions="false"`); MobSF `improper_provider_permission` (raised for `pathPrefix="/"`, `path="/"`, `path="*"`) |
 
 - **Test:** Two halves. (a) Any path **not** matched by a `<path-permission>` falls back to the provider-level permission — and if that is absent, to nothing. Path matching supports `path`, `pathPrefix`, `pathPattern`, `pathSuffix`, `pathAdvancedPattern`; normalisation variants slip past them. (b) `<grant-uri-permission android:pathPrefix="/">` (or `path="/"`, `pathPattern="*"`) converts a narrow, single-URI grant into whole-provider access for anyone who receives any grant.
@@ -1010,6 +1044,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | Oversecured, "Content Providers and the potential weak spots they can have" — weakness #3, permission declaration mismatches |
 
 - **Test:** Splitting `android:readPermission` and `android:writePermission` creates a gap: a provider that declares only a read permission accepts `insert`/`update`/`delete` from any app. It gets worse when the implementation ignores the requested access mode.
@@ -1054,6 +1089,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) as the storage node — file it as the *reachability at a lower unlock state*, chaining to `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if it is a live credential |
 | **Attacker** | AM-10 (physical locked — this is the whole point) |
 | **Applies to** | all; default is `"false"` on activities, services, receivers and providers |
+| **Requires** | device, root |
 | **Maps to** | `developer.android.com/guide/topics/manifest/{activity,service,receiver,provider}-element` (`android:directBootAware`) |
 
 - **Test:** A Direct-Boot-aware component can run before the user unlocks and can only touch *device-protected* storage during Direct Boot. A `directBootAware` component that reads credentials therefore implies those credentials live outside the file-based-encryption credential key.
@@ -1112,6 +1148,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 (broadcast it programmatically) / AM-02 (social-engineer the user into dialling) |
 | **Applies to** | all; yield is highest on OEM/carrier builds |
+| **Requires** | exported-receiver |
 | **Maps to** | drozer `scanner.misc.secretcodes`; HackTricks drozer tutorial |
 
 - **Test:** A `SECRET_CODE` receiver exposes app functionality to anyone who can type `*#*#<code>#*#*` into the dialler — usually engineering menus, log dumps or factory-test screens. It is also reachable as an ordinary broadcast.
@@ -1134,6 +1171,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); the crash-only case is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) |
 | **Attacker** | AM-03 (forge the intent from an app) / AM-10–AM-11 (present the physical device or tag) |
 | **Applies to** | apps declaring `USB_DEVICE_ATTACHED`, `USB_ACCESSORY_ATTACHED` or `NDEF_DISCOVERED` |
+| **Requires** | exported-activity |
 | **Maps to** | `developer.android.com/develop/connectivity/usb/host` (the `<action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"/>` + `<meta-data>` pattern); `developer.android.com/develop/connectivity/nfc/nfc` (the three dispatch actions); `developer.android.com/privacy-and-security/risks/android-exported` |
 
 - **Test:** An activity carrying these filters **must** be exported — the system delivers the intent — and usually carries no `android:permission`. Testers skip them because they look like hardware plumbing, but a zero-permission app can `am start` them with forged extras.
@@ -1182,6 +1220,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | **Android 16 (API 36)+.** Settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>`, `<provider>`. |
+| **Requires** | api>=36, targetsdk>=36 |
 | **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` — values `enforceIntentFilter` / `none` / `allowNullAction`; the documented logcat filter is `tag:PackageManager & (message:"Intent does not match component's intent filter:" | message:"Access blocked:")` |
 
 - **Test:** Three sub-cases. (a) `intentMatchingFlags="none"` **disables all special matching rules and takes precedence** — a component carrying it is explicitly de-hardened. (b) `allowNullAction` re-permits action-less intents. (c) A manifest can set `enforceIntentFilter` on `<application>` and look hardened while one externally reachable component sets `none`, restoring pre-16 behaviour for that component only — that component is then the single surviving entry point on an otherwise hardened app.
@@ -1206,6 +1245,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.privilege_escalation` (null); rate on the control the gate protects |
 | **Attacker** | AM-03 |
 | **Applies to** | **targetSdk 30+ only.** Below 30 these calls are unfiltered and the gate works — this is a bug that *appears* when the app raises its target SDK, which is why it survives old checklists. |
+| **Requires** | targetsdk>=30 |
 | **Maps to** | `developer.android.com/training/package-visibility` (filtering of `queryIntentActivities`, `getPackageInfo`, `getInstalledApplications`, and service binding); MASWE-0047 (Using Non-Standard APIs for Security-Critical Functionality) |
 
 - **Test:** A very common modern pattern: the app decides whether a competitor, clone, root manager, overlay app or official companion is present using `resolveActivity()`, `queryIntentActivities()`, `getPackageInfo()` or `getInstalledApplications()`, and takes the *secure* branch only when the result is non-empty. Since targetSdk 30 those APIs are filtered and return null/empty for packages not covered by `<queries>`. An attacker that simply stays outside the app's `<queries>` declaration forces the "nothing found" branch. The inverse also holds: a check that treats "nothing else resolves" as proof of safety is defeated by an attacker who *does* declare a matching filter.
@@ -1229,6 +1269,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) for the collection half; no dedicated node for the precondition half — file it with the parent finding |
 | **Attacker** | AM-03 / AM-08 |
 | **Applies to** | **targetSdk 30+.** Free package visibility below 30 (LEGACY) — on those targets this is not a finding. |
+| **Requires** | targetsdk>=30 |
 | **Maps to** | `developer.android.com/training/package-visibility`; MobSF/Play policy treatment of `QUERY_ALL_PACKAGES` as a restricted permission |
 
 - **Test:** Two opposite uses. (a) The app holds `QUERY_ALL_PACKAGES` or a wildcard `<queries><intent>` block and ships the installed-app list off-device — undisclosed device fingerprinting, and worse when the list feeds a targeting decision ("if bank app installed, change behaviour"). (b) **For your own PoC:** declaring `<queries><package android:name="com.target.app"/>` requires no user consent and no permission, and it is what defeats the triager's "the attacker cannot discover the component" objection.
@@ -1256,6 +1297,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `mobile_security_misconfiguration.tapjacking` (**P5**) when the failed-open control is an overlay guard — escalate through what the disabled defence permits |
 | **Attacker** | AM-11 (to set the op) / AM-08 |
 | **Applies to** | all; app-op modes are per-UID for security-relevant ops and per-package otherwise |
+| **Requires** | device |
 | **Maps to** | AOSP `AppOps.md` — modes `MODE_DEFAULT` / `MODE_ALLOWED` / `MODE_FOREGROUND` / `MODE_IGNORED` (*"deny access without throwing exceptions"*) / `MODE_ERRORED` (*"throw a `SecurityException` on access"*); *"certain permissions like `SYSTEM_ALERT_WINDOW` and `WRITE_SETTINGS` use the appop protection flag"*; shell syntax `appops set [--user USER_ID] PACKAGE OP MODE`, `appops get`, `appops reset`; AOSP `Permissions.md` checker flow (`MODE_ALLOWED` -> `PERMISSION_GRANTED`, `MODE_IGNORED` -> `PERMISSION_DENIED`, `MODE_DEFAULT` -> fall back to the grant state); `PROTECTION_FLAG_APPOP` = 0x40 |
 
 - **Test:** For `appop`-flagged permissions (`SYSTEM_ALERT_WINDOW`, `WRITE_SETTINGS`, `MANAGE_EXTERNAL_STORAGE`, `REQUEST_INSTALL_PACKAGES`, `SCHEDULE_EXACT_ALARM`) the manifest declaration is necessary but the real decision lives in the app-op state, and a denial is **silent** — it does not throw. An app that checks only `checkSelfPermission()` mis-handles the revoked case; more importantly, a *security control* built on such a permission can be disabled by setting the op to `ignore`.
@@ -1282,6 +1324,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) |
 | **Attacker** | n/a — this is a client-behaviour finding against the user's own stated choice |
 | **Applies to** | Android 10+ for the location tri-state; Android 11+ for camera/mic and one-time permissions |
+| **Requires** | device, api>=29 |
 | **Maps to** | AOSP `Permissions.md` — *"foreground: app-op mode is `MODE_ALLOWED`; background: app-op mode switches to `MODE_IGNORED`; `ACCESS_BACKGROUND_LOCATION` keeps the mode at `MODE_ALLOWED`"*; AOSP security-model paper §4.3.2 on the third state granting access *"only when an app is in the foreground, i.e. when it either has a visible activity or runs a foreground service with permanent notification"*; ATT&CK T1541 Foreground Persistence, T1430 |
 
 - **Test:** The platform implements "while in use" by flipping the app-op to `MODE_IGNORED` on backgrounding — it does **not** throw. Test what the app does with the resulting empty data: silently uploading a stale or default value, or escalating to a foreground service purely to keep the op at `MODE_ALLOWED`.
@@ -1306,6 +1349,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-08 / AM-09 (the installer is the third party making the decision) |
 | **Applies to** | Android 10+ |
+| **Requires** | device, api>=29 |
 | **Maps to** | AOSP `Permissions.md` — `RESTRICTION_UPGRADE_EXEMPT` (*"whitelisted during P→Q upgrade"*), `RESTRICTION_INSTALLER_EXEMPT` (*"whitelisted by installer via `PackageInstaller.SessionParams.setWhitelistedRestrictedPermissions()`"*), `RESTRICTION_SYSTEM_EXEMPT`; `source.android.com/docs/core/permissions/runtime_perms` — *"hard restrictions: apps can't be granted permissions that aren't allowlisted"*, and allowlisting *"occurs during installation or upgrade, not through user action"* |
 
 - **Test:** Hard-restricted permissions (the SMS and Call Log classes) cannot be granted without an allow-list entry, and the allow-list is set by the **installer**, not the user. On an engagement covering an app store or enterprise installer, `setWhitelistedRestrictedPermissions()` is an access-control decision made by a third party on the user's behalf.
@@ -1327,6 +1371,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `broken_access_control.privilege_escalation` (null) if it yields a capability the user cannot revoke |
 | **Attacker** | n/a — this is a multi-party-authorisation violation, not an attack |
 | **Applies to** | Android 6.0+ |
+| **Requires** | device, api>=23 |
 | **Maps to** | AOSP `Permissions.md` flags `USER_SET`, `USER_FIXED` (*"permanently denied; future requests denied without UI"*), `SYSTEM_FIXED` (*"required for normal device operation; user cannot revoke"*), `GRANTED_BY_DEFAULT` (*"pre-granted via `DefaultPermissionGrantPolicy`"*); `source.android.com/docs/core/permissions/runtime_perms` — OEMs may pre-grant for default handlers but *"pre-installed apps cannot bypass the runtime model — users retain revocation rights"* |
 
 - **Test:** `GRANTED_BY_DEFAULT` means `DefaultPermissionGrantPolicy` pre-granted it with no user interaction; `SYSTEM_FIXED` means the user cannot revoke it. A third-party app holding either is anomalous and normally means an OEM pre-grant.
@@ -1351,6 +1396,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); `privacy_concerns.unnecessary_data_collection.wifi_ssid_password` (P4) when SSID/credential material is collected |
 | **Attacker** | n/a — client-behaviour finding |
 | **Applies to** | targetSdk 33+ (Android 13+) |
+| **Requires** | targetsdk>=33 |
 | **Maps to** | `developer.android.com/about/versions/13/behavior-changes-13` — `NEARBY_WIFI_DEVICES` in the `NEARBY_DEVICES` group, and `android:usesPermissionFlags="neverForLocation"` |
 
 - **Test:** Android 13 introduced `NEARBY_WIFI_DEVICES` so apps can do Wi-Fi work without `ACCESS_FINE_LOCATION`. The `neverForLocation` assertion is what stops the results being location data. An app that declares the permission **without** the flag and then ships BSSIDs or scan results off-device is deriving location under a permission the user was told is not location.
@@ -1381,6 +1427,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies); escalates to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-08 |
 | **Applies to** | Android 11+ (API 30) for the callback; `<attribution android:tag>` required for targetSdk 31+ |
+| **Requires** | frida, api>=30 |
 | **Maps to** | `developer.android.com/guide/topics/data/audit-access` — `AppOpsManager.OnOpNotedCallback`, `onNoted(SyncNotedAppOp)`, `onSelfNoted`, `onAsyncNoted(AsyncNotedAppOp)`, `setOnOpNotedCallback(mainExecutor, cb)`, `SyncNotedAppOp.op` / `.attributionTag`, `AsyncNotedAppOp.getMessage()`, and `<attribution android:tag="sharePhotos" android:label="@string/..."/>` |
 
 - **Test:** Two findings from one hook. (a) Who inside the process actually reads the protected data — the app, or a bundled SDK? (b) Does the app attribute reads honestly? An app that runs everything under the default (`null`) attribution, or under a misleading tag, gives the user's Privacy Dashboard an inaccurate account of why data was accessed.
@@ -1448,6 +1495,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | none (evidence discipline) |
 | **Attacker** | n/a |
 | **Applies to** | all; `android:maxSdkVersion` on `<uses-permission>` is honoured at install time, and several platform permissions are split, replaced or dropped by API level |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0126 (listing app permissions), MASTG-TOOL-0124 (aapt2), MASTG-TOOL-0004 (adb); AOSP `Permissions.md` (the per-package grant record and its flags); `/etc/permissions/platform.xml` permission-to-GID mapping |
 
 - **Test:** `aapt2 d permissions` prints the **requested** set. What the app *holds on the device you are testing* is a different, usually smaller set: a `<uses-permission android:maxSdkVersion="28">` is not granted above API 28, `WRITE_EXTERNAL_STORAGE` is inert from API 29, `READ_EXTERNAL_STORAGE` is superseded by the granular `READ_MEDIA_*` family at API 33, and any runtime permission never prompted for is simply `granted=false`. Every re-delegation, confused-deputy and privacy claim in this chapter says "the app holds X" — prove it from the grant record, not from the manifest.
@@ -1623,6 +1671,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) for the FSI phishing surface |
 | **Attacker** | AM-01/AM-09 (a push payload) for the FSI case |
 | **Applies to** | `USE_EXACT_ALARM` Android 13+; `SCHEDULE_EXACT_ALARM` default-deny for new installs from **Android 14**; the FSI restriction applies at **targetSdk 34+**, the capability check is Android 14+ |
+| **Requires** | api>=33 |
 | **Maps to** | `developer.android.com/about/versions/13/features` (`USE_EXACT_ALARM` auto-granted, restricted to alarm/timer/calendar apps); `developer.android.com/about/versions/14/behavior-changes-all` (`SCHEDULE_EXACT_ALARM` no longer pre-granted; compat flag `REQUIRE_EXACT_ALARM_PERMISSION`); `developer.android.com/about/versions/14/behavior-changes-14` (`USE_FULL_SCREEN_INTENT`, `NotificationManager.canUseFullScreenIntent()`, `Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`, *"limits this to calling and alarm apps"*) |
 
 - **Test:** (a) `USE_EXACT_ALARM` is granted automatically and is restricted to alarm/timer and calendar apps; an app declaring it to dodge the user-grantable `SCHEDULE_EXACT_ALARM` prompt is abusing an auto-grant. (b) `USE_FULL_SCREEN_INTENT` held by a non-calling, non-alarm app lets it raise a full-screen UI over the lock screen — a phishing surface, and a severe one when the FSI target is attacker-influenced through a deep link or push payload.
@@ -1677,6 +1726,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies), escalating to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) once the captured data egresses to a named host |
 | **Attacker** | AM-08 (the SDK doing it inside the app); n/a where it is first-party behaviour |
 | **Applies to** | the background-sensor cut-off is **Android 9+**; a declared `foregroundServiceType` is mandatory from **Android 10 (API 29)** and tightened again in Android 14; camera/microphone status indicators arrived in **Android 12** |
+| **Requires** | device, api>=29 |
 | **Maps to** | ATT&CK T1541 Foreground Persistence — apps *"can retain sensor access by running in the foreground, using Android's `startForeground()` API method"*, and *"the only requirement is displaying a persistent notification, which malicious actors can spoof to appear legitimate"*; Mandrake *"uses transparent notifications to hide foreground service activity"*. Also T1429 Audio Capture, T1512 Video Capture, T1430 Location Tracking |
 
 - **Test:** `startForeground()` is the documented way to keep sensor access after Android 9 cut background sensors off, so the foreground-service type list in the merged manifest is a capability declaration. Enumerate the declared types, then check whether the app holds camera, microphone or location while its UI is not visible — and whether the notification it must post actually tells the user which sensor is live.
@@ -1704,6 +1754,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (varies) for the collection; through the history endpoint, `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) up to `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-05 (another user of the same app) for the escalation; n/a for the collection half |
 | **Applies to** | `ACCESS_BACKGROUND_LOCATION` as a separate grant is **Android 10+**. Below that, "always" was implicit with fine location — **LEGACY**, and worth stating when `targetSdk < 29` |
+| **Requires** | device |
 | **Maps to** | ATT&CK T1430 Location Tracking — *"`ACCESS_BACKGROUND_LOCATION` permission in an application's manifest will allow applications to request location access even when the application is running in the background"*, and on Android 10 and up users *"cannot simply select 'Allow all the time'; they must navigate to settings"*; T1627.001 Geofencing; mitigation M1006 |
 
 - **Test:** Declaring the permission is not the finding, and neither is the app polling — both are privacy observations that most programmes price low. The finding this item exists to produce is the **read** side: the endpoint that serves the resulting history, keyed by an identifier another user can guess. Test the collection to establish that a history exists, then leave this domain immediately.
@@ -1774,6 +1825,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_access_control.privilege_escalation` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | preloaded / OEM / carrier apps only |
+| **Requires** | oem-scope |
 | **Maps to** | MASTG-KNOW-0017 (the risk-scored permission table, sourced from the Uraniborg "Device Preloaded App Risks Scoring Metrics" paper), MASTG-TEST-0364/-0365/-0366, MASWE-0018 |
 
 - **Test:** For preloaded or OEM apps in scope, enumerate the `signature` / `signatureOrSystem` / privileged permissions they hold and treat each as an attack-surface multiplier: an exported component in such an app is a path to those capabilities.
@@ -1829,6 +1881,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**, CWE-919, baseline vector `AV:P/AC:L/PR:H/UI:N/S:U/C:H/I:N/A:N`). Lead instead with `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) escalated by the acquisition path, or `broken_authentication_and_session_management.authentication_bypass` (P1) once the replayed token returns the victim's data. |
 | **Attacker** | AM-11 (physical unlocked + ADB) for the local path; AM-09/AM-05 for the cloud-restore path |
 | **Applies to** | Auto Backup from Android 6.0 (API 23). **LEGACY:** `adb backup` is deprecated, gutted on Android 12+ and dead on many OEM builds — prove the extraction on an in-scope OS/device or the report closes as unreproducible. The `bmgr` local-transport route below does **not** need `android:debuggable`. |
+| **Requires** | device, physical |
 | **Maps to** | MASTG-TEST-0262 (static), MASTG-TEST-0216 (empirical restore), MASTG-TECH-0127, MASTG-TECH-0128; MASWE-0006 (CWE-212, CWE-313); MASVS-STORAGE-2; MobSF `app_allowbackup` / `allowbackup_not_set`; H1 **#12617** (account hijacking via ADB backup); drozer `app.package.backup` |
 
 - **Test:** `allowBackup="true"` (and the attribute missing, which defaults to true) is not a finding. The finding is a file in the extracted archive holding a credential, and the replay of that credential against the production API. Bugcrowd's baseline vector is `AV:P` — physical — which is exactly why the flag alone caps at P5; the way above P5 is to remove the physical precondition.
@@ -1860,6 +1913,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) escalated by the acquisition path; `broken_authentication_and_session_management.authentication_bypass` (P1) on replay |
 | **Attacker** | AM-05 / AM-11 |
 | **Applies to** | `android:dataExtractionRules` on **API 31+ (Android 12+)**; `android:fullBackupContent` is the pre-31 equivalent and both are commonly present |
+| **Requires** | api>=31 |
 | **Maps to** | MASTG-TEST-0262, MASWE-0006, MASVS-STORAGE-2 |
 
 - **Test:** Read the referenced rules file, not the attribute. `allowBackup="true"` with a rules file that excludes `databases/` and `shared_prefs/` is **not** a finding. Conversely, `dataExtractionRules` defines `<cloud-backup>` and `<device-transfer>` as independent sections — an app can exclude the token store from one and not the other, and D2D transfer is the channel with no physical-access precondition.
@@ -1889,6 +1943,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `mobile_security_misconfiguration.auto_backup_allowed_by_default` (**P5**) covers the flag only. The finding is what the restored value changes: `broken_access_control.privilege_escalation` (null) for an entitlement flip, `broken_authentication_and_session_management.authentication_bypass` (P1) for an app-lock or PIN bypass |
 | **Attacker** | AM-11 (physical, unlocked, with developer mode enabled) |
 | **Applies to** | all; the `adb backup` / `adb restore` path is heavily restricted from Android 12 and dead on many OEM builds — demonstrate on an in-scope device or do not file. Samsung's programme explicitly downgrades reports that require persistently enabling developer mode |
+| **Requires** | device, physical |
 | **Maps to** | `developer.android.com/guide/topics/manifest/application-element` — `android:backupAgent`, `android:restoreAnyVersion`, `android:fullBackupOnly`, `android:killAfterRestore`; MASWE-0006; MASTG-TEST-0216, MASTG-TECH-0127, MASTG-TECH-0128 |
 
 - **Test:** Everyone reads the backup in one direction. The other direction is where the severity is: extract, **edit**, restore, and see which of the app's own client-side decisions the restored data controls — a `premium=true` flag, a failed-PIN counter, a stored API host, a "biometric enrolled" boolean, a cached entitlement, an onboarding-complete marker that skips KYC. `android:restoreAnyVersion="true"` additionally allows an **older** archive to be restored over a newer install, which re-introduces whatever the newer version fixed. A custom `android:backupAgent` means the include/exclude rules are not the whole story — read its `onRestore`/`onRestoreFile` implementation.
@@ -1928,6 +1983,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5 as the storage node) escalated by the no-root acquisition path; `broken_authentication_and_session_management.authentication_bypass` (P1) once the recovered token authenticates |
 | **Attacker** | AM-11 (physical unlocked with USB debugging) |
 | **Applies to** | all. Play blocks debuggable uploads, so this is found most often in enterprise, sideloaded, pre-prod and OEM channels — check every distribution channel in scope, not just the store build. |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/android-debuggable`; MobSF `app_in_test_mode` for `testOnly`; drozer `app.package.debuggable` |
 
 - **Test:** A debuggable release lets any local principal attach JDWP, read and rewrite live memory, and `run-as` the package regardless of device root state. `testOnly="true"` means the release pipeline shipped a test artefact — Google's own description is that it *"may expose functionality or data outside of itself that would cause a security hole"*.
@@ -1957,6 +2013,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) is the wrong node for a local load — file the local case under `broken_access_control.privilege_escalation` (null) with the code-execution impact stated, or `client_side_injection.binary_planting.privilege_escalation` (P3) where the planting shape fits |
 | **Attacker** | AM-03 / AM-04 (write the file), AM-09 (if the blob is downloaded) |
 | **Applies to** | Allow-list enforcement at **targetSdk 24+**; the `<uses-native-library>` manifest declaration is required from **API 31+**. LEGACY: `targetSdk < 24` can still `dlopen` private platform libraries for backward compatibility. |
+| **Requires** | native |
 | **Maps to** | `developer.android.com/about/versions/12/behavior-changes-12` (`<uses-native-library>` required for targetSdk 31+); AOSP "Namespaces for native libraries"; `/system/etc/public.libraries.txt`; CDD 3.1.1 |
 
 - **Test:** From API 31 an app must declare native libraries it loads from outside its own APK. An app that instead `System.load()`s an absolute path outside its APK is loading either a vendor/OEM blob or a file it wrote at runtime — and if that path is writable by anything other than the app's own UID, it is direct native code execution in the app's sandbox.
@@ -1982,6 +2039,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when an attacker-controllable update channel delivers executable content |
 | **Attacker** | AM-09 (malicious backend/CDN) / AM-06 |
 | **Applies to** | React Native + Expo, Flutter, CodePush-enabled RN apps |
+| **Requires** | flutter, react-native, cordova, capacitor |
 | **Maps to** | MASTG-TECH-0141 (Inspecting the Merged AndroidManifest), MASTG-TECH-0150; expo `UpdatesConfiguration.kt`; flutter `FlutterActivityLaunchConfigs.java`; `CodePush.java` / `docs/setup-android.md` |
 
 - **Test:** Each cross-platform framework stores security-relevant configuration as `<meta-data>` in the merged manifest. These are routinely missed because they look like build plumbing, and they are the fastest route to a Critical in a cross-platform app.
@@ -2017,6 +2075,7 @@ Everything else in this chapter — appops, package visibility, backup rules, `i
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) / `broken_access_control.idor.*` (P1–P3) / `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) — file the *weakened control*, never the version difference |
 | **Attacker** | AM-01 |
 | **Applies to** | any versioned API |
+| **Requires** | backend-api |
 | **Maps to** | Claude-BugHunter `hunt-shadow-api` Stages 1 & 3; the corpus calls this *"the highest-value mobile→backend bridge in the repo"* |
 
 - **Test:** The manifest and its `<meta-data>` / `strings.xml` references are the first place an engagement learns which backend the app talks to — and a mobile app's hardcoded backend calls are frequently an **older API version** than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Harvest the hosts here, then diff **behaviourally**, not by response shape.

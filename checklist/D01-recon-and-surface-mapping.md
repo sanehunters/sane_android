@@ -24,6 +24,44 @@ One commercial note, because it changes what you write. In bug-bounty mode the i
 
 **Am I analysing the bytes that are actually executing on a current device, in the runtime that actually holds the logic — and for every host, route and component I recovered from those bytes, can I name which attacker model reaches it and which version of the backend answers?**
 
+## Applicability probe
+
+D01 applies to every engagement — the probe never returns n/a for the whole domain. Its job is to fix, in `engagement.json`, the facts the `Requires` tags of this chapter key on (`target.framework`, `app_facts.has_native`, `app_facts.http_stack`, `app_facts.ota_channel`, `target.targetSdk/minSdk`, `authorisation.scope` for the backend) and to catch the two failures that silently cap every later domain: a missing split and the wrong artefact. Run it after P1 acquisition and before any item; paste the five outputs into `logs/D01-probe.txt`.
+
+```bash
+# 1. artefact set — one line per split; the two counts MUST be equal
+adb -s "$SERIAL" shell pm path "$PKG" | tee -a "$E/logs/D01-probe.txt" | wc -l;  ls "$E"/apk/*.apk | wc -l
+# 2. framework + native markers, ONE archive per unzip call (a second .apk argument is a member pattern, not an archive)
+for a in "$E"/apk/*.apk; do printf '%6d %s\n' "$(unzip -Z1 "$a" | tee -a "$E/logs/D01-probe-list.txt" | wc -l)" "$a"; done
+grep -cE 'libflutter\.so|libapp\.so' "$E/logs/D01-probe-list.txt";  grep -cE 'index\.android\.bundle|libhermes' "$E/logs/D01-probe-list.txt"
+grep -cE 'assets/(www|public)/|capacitor\.config' "$E/logs/D01-probe-list.txt";  grep -cE 'libil2cpp\.so|global-metadata\.dat|assemblies/|libassemblies\.' "$E/logs/D01-probe-list.txt";  grep -c '\.so$' "$E/logs/D01-probe-list.txt"
+# 3. targetSdk / minSdk from two sources (apktool drops <uses-sdk>; badging is authoritative)
+aapt2 dump badging "$E/apk/base.apk" | grep -E "^(package|sdkVersion|targetSdkVersion)";  adb -s "$SERIAL" shell dumpsys package "$PKG" | grep -E 'targetSdk|minSdk|versionCode'
+# 4. HTTP stack and OTA markers in the decompiled tree (jadx tree at $DEC/jadx, apktool tree at $DEC/apktool)
+grep -rlE 'retrofit2\.|okhttp3\.|org\.chromium\.net\.|io\.grpc\.|com\.android\.volley|io\.ktor' "$DEC/jadx/sources" | grep -oE 'retrofit2|okhttp3|org/chromium|io/grpc|volley|ktor' | sort | uniq -c
+grep -cE 'expo\.modules\.updates|codepush|CODE_SIGNING|DexClassLoader' "$DEC/apktool/AndroidManifest.xml" "$DEC/apktool/res/values/strings.xml" 2>/dev/null
+# 5. the inventory rows the Requires tags key on
+wc -l "$E"/inventory/components.csv "$E"/inventory/deeplinks.csv 2>/dev/null;  cut -d, -f1 "$E/inventory/components.csv" | sort | uniq -c
+```
+
+Write the results into `engagement.json` (`target.framework` ∈ {native, flutter, react-native, hermes, cordova, capacitor, unity, xamarin, kmp}; `app_facts.has_native` = step-2 `.so` count > 0; `app_facts.http_stack` from step 4; `app_facts.ota_channel` = step-4 count > 0). Then mark item groups, never the domain, with these exact note texts:
+
+- `n/a — D01-025..027: target.framework != react-native (probe step 2: 0 index.android.bundle/libhermes entries across N archives; logs/D01-probe-list.txt)`
+- `n/a — D01-028: target.framework != flutter (probe step 2: 0 libflutter/libapp entries across N archives)`
+- `n/a — D01-029: no assets/www or assets/public in any of N archives (probe step 2)`
+- `n/a — D01-030: no libil2cpp/global-metadata and no assemblies blob in any of N archives (probe step 2)`
+- `n/a — D01-031: DEX-strings KMP test 0 with the androidx/compose control >0 (D01-022 How)`
+- `n/a — D01-044/045/046/050: inventory/components.csv has no provider / listener service / FGS / receiver row (probe step 5, per-kind counts reconciled against the merged manifest)`
+- `n/a — D01-046: targetSdk <34 (probe step 3)`
+- `n/a — D01-048: inventory/deeplinks.csv empty and no BROWSABLE filter in the merged manifest`
+- `n/a — D01-058..060: no retrofit2 classes (probe step 4: stack = <name>); route map taken from the <stack> branch of D01-058/D01-063 instead`
+- `n/a — D01-065 / D01-066: no GraphQL / gRPC artefacts (probe step 4 and D01-065/066 greps all 0)`
+- `n/a — D01-076: 0 .so entries across N archives (probe step 2) and no third-package code in /proc/<pid>/maps (D01-032)`
+- `n/a — D01-058..075: authorisation.scope excludes the backend (programme policy sentence quoted, date read)`
+- `blocked — D01-033 / D01-062 / D01-074: lab lacks <mitm|frida|root> (scripts/doctor.sh --json)` and `blocked — D01-054: probe lacks a getService step (tools issue)`
+
+Every other D01 item applies to every app; D01-001..009, -022, -035, -056, -078..080 are never n/a.
+
 ## Triage order
 
 1. **Pull every split and hash them** (D01-001…003). Everything downstream is wrong if the artefact set is wrong, and it costs ninety seconds.
@@ -47,6 +85,7 @@ One commercial note, because it changes what you write. In bug-bounty mode the i
 | **VRT** | n/a — coverage control; a missed split silently caps the whole engagement |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | All app-bundle-delivered apps, i.e. effectively every Play-distributed app since Play's AAB requirement |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0145, MASTG-TECH-0003, MASTG-TOOL-0004, MASTG-TOOL-0018 |
 
 - **Test:** Confirm you have `base.apk` **and** every `split_config.*` / `split_feature_*`. Native libraries live in the ABI split, not in base; feature modules carry whole activities and sometimes the payment or admin code.
@@ -162,6 +201,7 @@ adb shell pm list permissions -f | grep -A3 -i knownSigner
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what the hijacked link exposes) when the mismatch breaks App Links |
 | **Attacker** | AM-02 remote one click (victim taps a link that falls back to a chooser) |
 | **Applies to** | Any app distributed through Play App Signing — the default for AAB uploads |
+| **Requires** | applink |
 | **Maps to** | MASTG-TECH-0172; `pm get-app-links`; Digital Asset Links `sha256_cert_fingerprints` |
 
 - **Test:** With Play App Signing the developer signs the bundle with the **upload key** and Google re-signs the delivered APKs with the **app signing key**. Every conclusion that depends on the certificate — `signature` permissions, `checkSignatures`, App Links, Maps/OAuth key restrictions, an SDK allow-list — is wrong if you only inspected the client's local build.
@@ -212,6 +252,7 @@ aapt2 dump badging base.apk | grep -E 'sdkVersion|targetSdkVersion|compileSdkVer
 | **VRT** | n/a standalone; the reachable legacy branch it exposes is rated in its own domain |
 | **Attacker** | AM-03 zero-permission local app (reaching a code path the developer believed dead) |
 | **Applies to** | API 30+ devices receiving Google Play system updates |
+| **Requires** | device, api>=30 |
 | **Maps to** | `SdkExtensions.getExtensionVersion()`, `SdkExtensions.AD_SERVICES`, `android:minExtensionVersion` |
 
 - **Test:** Modular APIs (Photo Picker, `ad_services`) ship via Google Play system updates and exist on *older* OS versions through SDK Extensions. "We're on Android 11 so feature X can't exist" is often wrong — for the developer and for you.
@@ -219,7 +260,7 @@ aapt2 dump badging base.apk | grep -E 'sdkVersion|targetSdkVersion|compileSdkVer
 ```bash
 adb shell getprop | grep build.version.extensions
 # [build.version.extensions.r]: [3]  [build.version.extensions.s]: [3]  [build.version.extensions.t]: [3]
-grep -rn 'SdkExtensions.getExtensionVersion(\|SdkExtensions.AD_SERVICES' jadx_out/sources
+grep -rn 'SdkExtensions.getExtensionVersion(\|SdkExtensions.AD_SERVICES' $DEC/jadx/sources
 grep -n 'minExtensionVersion' out/AndroidManifest.xml
 ```
 - **Proof:** `build.version.extensions.r >= 2` on an Android 11/12 device proves `ACTION_PICK_IMAGES` is live there, so the app's "legacy storage permission fallback" branch is reachable on a device the developer assumed was modern.
@@ -234,6 +275,7 @@ grep -n 'minExtensionVersion' out/AndroidManifest.xml
 | **VRT** | n/a — but staleness is a blanket disqualifier that voids an otherwise valid P1 |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | All bug-bounty and VRP engagements |
+| **Requires** | device |
 | **Maps to** | Google Mobile VRP non-qualifying "Vulnerabilities that do not work on the latest available operating system version"; Android & Google Devices "must reproduce on the latest publicly available build"; Samsung, Xiaomi, Uber and Meta version-currency exclusions |
 
 - **Test:** Every major programme requires reproduction on current software. A perfect exploit against last quarter's build is unpayable everywhere. Establish currency before you spend the week, not after.
@@ -258,6 +300,7 @@ Then compare `versionName`/`versionCode` against the live store listing. Record 
 | **VRT** | n/a — dispute-prevention control |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | All; acutely for weekly release trains and any OTA-updatable app |
+| **Requires** | device |
 | **Maps to** | `dumpsys package` fields `versionName` / `versionCode` / `lastUpdateTime` |
 
 - **Test:** Clients ship during your window. Without a freeze, half a report can describe code that no longer exists — the fastest route to every finding being disputed.
@@ -350,6 +393,7 @@ diff -rq v1/lib v2/lib
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the old build contains an already-patched auth or crypto bug you can re-run live; otherwise rate as the resurrected class |
 | **Attacker** | AM-02 remote one click (user sideloads from a mirror) / AM-11 physical unlocked |
 | **Applies to** | All. Android blocks in-place downgrade, so the precondition is uninstall-then-install — state that in the report, it sets the severity |
+| **Requires** | backend-api |
 | **Maps to** | CWE-494; `apksigner verify --print-certs` |
 
 - **Test:** An attacker who can uninstall-then-install can plant an older, **legitimately signed** build whose bug the vendor already fixed. The question is whether the *server* still serves that client. A fix that only exists in the current client is not a fix.
@@ -366,7 +410,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   -H "Authorization: Bearer $TOKEN" https://api.target.example/v1/profile
 
 # does a minimum-client gate exist at all?
-grep -rniE 'minSupportedVersion|force.?update|minimum_version|versionCode *<' jadx_out/sources
+grep -rniE 'minSupportedVersion|force.?update|minimum_version|versionCode *<' $DEC/jadx/sources
 ```
 - **Proof:** The old client authenticating and transacting — HTTP 200 on a call the current client also makes — with no `426`, `403` or force-upgrade screen, paired with the already-fixed bug reproducing under the old build.
 - **Escalation:** Resurrects any previously-patched client-side finding; combine with D08/D10 items the vendor believes are closed. → D15 for the server-side half.
@@ -380,6 +424,7 @@ grep -rniE 'minSupportedVersion|force.?update|minimum_version|versionCode *<' ja
 | **VRT** | n/a standalone; escalates to `server_side_injection.remote_code_execution_rce` (P1) via D17 when the fetch channel is influenceable |
 | **Attacker** | AM-06 network attacker no trusted CA / AM-09 malicious backend or CDN |
 | **Applies to** | All; especially Play Feature Delivery, CodePush-style OTA and plugin architectures |
+| **Requires** | device |
 | **Maps to** | CWE-494; MASTG-TECH-0003 |
 
 - **Test:** Some apps unpack or download components after first launch. The on-device state can contain code the store artefact does not.
@@ -394,7 +439,7 @@ adb shell run-as com.target.app find . \
   \( -name '*.dex' -o -name '*.jar' -o -name '*.so' -o -name '*.apk' \) -newer lib -ls
 adb shell run-as com.target.app ls -la code_cache files
 adb shell ls -lZ /data/app/*/com.target.app*/oat/arm64/
-grep -rn 'DexClassLoader\|PathClassLoader\|InMemoryDexClassLoader\|System.load(' jadx_out/sources
+grep -rn 'DexClassLoader\|PathClassLoader\|InMemoryDexClassLoader\|System.load(' $DEC/jadx/sources
 ```
 - **Proof:** A `.dex`/`.jar`/`.so` under the app data dir with an mtime after install time whose contents are not in the store APK, plus the `DexClassLoader` call site that loads it.
 - **Escalation:** → D17 dynamic code loading. If the path is group-writable or on external storage, it is a plant-and-execute primitive; if the fetch is over a channel you can influence, it is remote code delivery.
@@ -725,6 +770,7 @@ python malfixer.py /path/to/app.apk --output-dir /path/to/output
 | **VRT** | n/a — prerequisite for every RN static finding |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | React Native apps; Hermes is the RN default from 0.70 |
+| **Requires** | react-native |
 | **Maps to** | MASTG-TOOL-0104 (hermes-dec); facebook/hermes `BytecodeFileFormat.h` |
 
 - **Test:** React Native ships either a plain-JS Metro bundle or Hermes bytecode. The two need completely different toolchains, and the HBC version number decides which tools can parse it at all.
@@ -758,6 +804,7 @@ PY
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the table yields a live credential; otherwise Support |
 | **Attacker** | AM-01 remote no interaction (for a recovered credential) |
 | **Applies to** | React Native / Hermes, all versions |
+| **Requires** | react-native |
 | **Maps to** | MASTG-TOOL-0104 (hermes-dec); facebook/hermes `BytecodeFileFormat.h` (`stringCount`, `overflowStringCount`, `stringStorageSize`) |
 
 - **Test:** Verify your decompiler actually supports the app's HBC version instead of silently producing garbage. This is the number-one reason RN apps get written up as "not analysable". Even when nothing supports the version, the string table is a flat blob you can always recover.
@@ -794,6 +841,7 @@ hermes-decomp strings ext/assets/index.android.bundle     # resolves table order
 | **VRT** | n/a standalone; the reachable vulnerable dependency is rated in D17 |
 | **Attacker** | AM-02 remote one click (input reaching the vulnerable JS package) |
 | **Applies to** | React Native (Metro), both Hermes and plain-JS bundles |
+| **Requires** | react-native |
 | **Maps to** | hermes-decomp `modules`/`deps`/`extract`; react-native-decompiler `--unpackOnly` |
 
 - **Test:** A Metro bundle is a map of numbered modules (`__d(factory, moduleId, deps)`). Recovering it gives a de-facto SBOM for the JS half of the app — including vulnerable or abandoned npm packages that no DEX-based SCA tool will ever see.
@@ -819,6 +867,7 @@ grep -rhoE '"version" *: *"[0-9][^"]*"' output/ | sort -u
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when an asymmetric private key or request-signing secret is recovered |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | Flutter release (AOT) Android builds; Blutter is **arm64 only** |
+| **Requires** | flutter |
 | **Maps to** | MASTG-TECH-0156 (Reverse Engineering Flutter Applications), MASTG-TOOL-0116 (blutter); CWE-321, CWE-798 |
 
 - **Test:** In Flutter release builds every string constant, class name and crypto parameter used by the app is reachable from the AOT snapshot's object pool — including in `--obfuscate` builds, where names are mangled but constants are not.
@@ -846,6 +895,7 @@ strings -n 8 ext/lib/arm64-v8a/libapp.so | grep -aiE 'https?://|BEGIN .*PRIVATE 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the bundle yields live backend credentials; Medium when it only reveals internal topology |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | Cordova, Ionic (Cordova or Capacitor), Capacitor |
+| **Requires** | cordova, capacitor |
 | **Maps to** | Capacitor `CapConfig.java` (`capacitor.config.json`), `PluginManager.java` (`capacitor.plugins.json`), Cordova `ConfigXmlParser.java` (`res/xml/config.xml`); MASTG-TOOL-0011 |
 
 - **Test:** For Cordova/Ionic/Capacitor, all application logic ships as readable (sometimes minified) web assets. Treat `assets/www/` or `assets/public/` as a web-application source drop — and check whether they shipped the `.map` files by accident.
@@ -873,6 +923,7 @@ find out/assets -name '*.map' -o -name '*.js.map'
 | **VRT** | n/a — enabler; the findings it unlocks (client-side entitlement, hardcoded keys) are rated in D12/D23 |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | Unity IL2CPP builds; Xamarin.Android and .NET MAUI |
+| **Requires** | unity, xamarin |
 | **Maps to** | Il2CppDumper (Unity 5.3–2022.2); Zygisk-Il2CppDumper; frida-il2cpp-bridge (Unity 5.3.0–6000.3.x); pyxamstore; `0xFAB11BAF` metadata constant; `XABA` assembly-store magic |
 
 - **Test:** Both stacks compile the real logic away from the DEX. Unity IL2CPP ships `global-metadata.dat` next to `libil2cpp.so`; Xamarin/MAUI ships .NET IL assemblies whose **location changed at .NET 9** — a tester who only knows the old layout concludes "there's nothing here".
@@ -916,6 +967,7 @@ Then decompile the `.dll` set with ILSpy / AvaloniaILSpy / dnSpy / dotPeek.
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the shared key is live; `server_security_misconfiguration.insecure_ssl.certificate_error` (P5) for the TLS half — report the TLS defect through D14 with a demonstrated interception |
 | **Attacker** | AM-01 for the key; AM-06 network attacker for the trust-manager defect |
 | **Applies to** | Kotlin Multiplatform / Compose Multiplatform Android targets |
+| **Requires** | kmp |
 | **Maps to** | no external identifier verified — method only |
 
 - **Test:** KMP compiles shared Kotlin to normal JVM bytecode on Android, so the shared module *is* in the DEX — but secrets are injected through `expect`/`actual` plus Gradle-generated files and land in `BuildConfig` or a generated constants class that a "grep the manifest" pass misses entirely.
@@ -950,8 +1002,8 @@ grep -rn 'HttpClient(' out/sources | head        # ktor engine + any trustManage
 grep -rn 'expo.modules.updates' out/AndroidManifest.xml
 grep -rn 'dev.expo.updates.prefs\|CODE_SIGNING_CERTIFICATE' out/AndroidManifest.xml
 adb shell run-as "$PKG" ls files/.expo-internal/ databases/updates.db 2>/dev/null
-grep -rn 'CodePushConfig\|codepush' out/assets/ jadx_out/sources | head
-grep -rn 'DexClassLoader\|InMemoryDexClassLoader' jadx_out/sources
+grep -rn 'CodePushConfig\|codepush' out/assets/ $DEC/jadx/sources | head
+grep -rn 'DexClassLoader\|InMemoryDexClassLoader' $DEC/jadx/sources
 
 # content identity
 unzip -p base.apk assets/index.android.bundle > /tmp/embedded.bundle
@@ -980,6 +1032,7 @@ Also compare the app's self-reported build string (User-Agent, analytics payload
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when an unsigned or unenforced channel plus a network or backend position yields code execution |
 | **Attacker** | AM-06 network attacker no trusted CA (if the manifest fetch is also unpinned) / AM-09 malicious backend or CDN |
 | **Applies to** | Any app with an OTA code channel confirmed by D01-032 |
+| **Requires** | mitm |
 | **Maps to** | CWE-494 (Download of Code Without Integrity Check); `expo.modules.updates.CODE_SIGNING_CERTIFICATE`, `CODE_SIGNING_METADATA` |
 
 - **Test:** An OTA channel delivers executable code. If the payload is not code-signed, or the signature is configured but not *enforced*, an attacker who controls the update host — or who sits on the network for an unpinned manifest fetch — executes code inside the app.
@@ -987,7 +1040,7 @@ Also compare the app's self-reported build string (User-Agent, analytics payload
 ```bash
 grep -rn 'expo.modules.updates.CODE_SIGNING_CERTIFICATE\|CODE_SIGNING_METADATA' out/AndroidManifest.xml
 grep -rn 'EXPO_UPDATE_URL\|expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH' out/AndroidManifest.xml
-grep -rn 'codePushPublicKey\|CodePush.*publicKey' out/res/values/*.xml jadx_out/sources
+grep -rn 'codePushPublicKey\|CodePush.*publicKey' out/res/values/*.xml $DEC/jadx/sources
 # is the manifest/bundle fetch itself pinned?
 cat out/res/xml/network_security_config.xml 2>/dev/null
 
@@ -1015,7 +1068,7 @@ adb logcat -d | grep -iE 'expo-updates|codepush|signature|verif'
 - **Test:** R8 renames identifiers; it does **not** remove data flows, and it does not rewrite string values inside runtime-visible annotations or resources. Build the map from stable anchors, then read the classes and trace callers.
 - **How:**
 ```bash
-S=jadx_out/sources
+S=$DEC/jadx/sources
 # framework API names survive
 grep -rn 'addJavascriptInterface\|setJavaScriptEnabled\|setAllowUniversalAccessFromFileURLs\|onReceivedSslError' $S
 grep -rn 'openFile\|getHost\|startActivity\|grantUriPermission\|Cipher.getInstance\|Runtime.getRuntime().exec' $S
@@ -1119,6 +1172,7 @@ grep -nE 'ADDED from .*\.aar' app/build/outputs/logs/manifest-merger-release-rep
 | **VRT** | n/a standalone; the delta is where the paying bugs live (Mobile VRP explicitly rewards redirection into non-exported components) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | All |
+| **Requires** | device |
 | **Maps to** | MASTG-TECH-0160, -0161, -0162, -0163, MASTG-KNOW-0020, MASTG-TOOL-0004; Google's vulnerability-classes guidance: "Look at manifest file **and** for `Context.registerReceiver` calls" |
 
 - **Test:** The manifest is the declared surface; the package manager is the effective one. Context-registered receivers, activity-aliases, runtime-enabled components (`setComponentEnabledSetting`) and provider authorities created at runtime appear only on-device.
@@ -1131,7 +1185,7 @@ awk '/^Service Resolver Table:/{s=1} /^Domain verification status:/{s=0} s' reco
 grep -i 'Provider{' recon/dumpsys-package.txt
 adb shell dumpsys activity providers  | grep -A5 "$PKG"
 adb shell dumpsys activity broadcasts | grep -i "$PKG"
-grep -rn 'registerReceiver(\|setComponentEnabledSetting\|PendingIntent.get' jadx_out/sources
+grep -rn 'registerReceiver(\|setComponentEnabledSetting\|PendingIntent.get' $DEC/jadx/sources
 ```
 Capture the intents you will never see statically (post-login flows, push payloads, QR scans, chained proxies):
 ```bash
@@ -1151,6 +1205,7 @@ python3 -m intent_monitor --database ./iris.db list --scheme https --host exampl
 | **VRT** | n/a — coverage-proof artefact |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | All, mandatory on signed-SoW engagements; optional in bounty mode |
+| **Requires** | device |
 | **Maps to** | `apkanalyzer manifest print` / `manifest permissions`; drozer `app.package.attacksurface` |
 
 - **Test:** A ruled-out register records disproven *hypotheses*. A coverage register enumerates every component the app declares and assigns each a tested status. Without it you cannot answer "did you test all of them?" and the client cannot tell a clean component from an unvisited one.
@@ -1230,6 +1285,7 @@ adb shell run-as com.sibling.app ls -la /data/data/com.target.app/shared_prefs
 | **VRT** | n/a standalone; the false isolation claim is what you report, rated on what the compromised process then reaches |
 | **Attacker** | AM-09 malicious backend or CDN (renderer compromise), AM-08 |
 | **Applies to** | All |
+| **Requires** | device |
 | **Maps to** | developer.android.com "Processes and threads": components in the same app default to one process; a colon prefix creates an app-private process; "Different applications can share the same process if they have the same Linux user ID and are signed with the same certificate" |
 
 - **Test:** A single APK can span several Linux processes, but each `android:process` value is a separate address space sharing **one UID** — so a WebView renderer, a "sandboxed" plugin process and the main process all read the same `/data/data` unless the app also used `isolatedProcess`.
@@ -1266,8 +1322,8 @@ xmllint --format out/AndroidManifest.xml | sed -n '/<queries>/,/<\/queries>/p'
 grep -n 'QUERY_ALL_PACKAGES\|forceQueryable' out/AndroidManifest.xml
 adb shell dumpsys package queries                 # forceQueryable set + per-UID visibility
 
-grep -rnE 'setPackage\(|resolveActivity\(|queryIntentActivities\(|getPackageInfo\(|bindService\(' jadx_out/sources | head -50
-grep -rnE 'checkSignatures|GET_SIGNING_CERTIFICATES|GET_SIGNATURES|hasSigningCertificate|getPackagesForUid|getCallingPackage' jadx_out/sources
+grep -rnE 'setPackage\(|resolveActivity\(|queryIntentActivities\(|getPackageInfo\(|bindService\(' $DEC/jadx/sources | head -50
+grep -rnE 'checkSignatures|GET_SIGNING_CERTIFICATES|GET_SIGNATURES|hasSigningCertificate|getPackagesForUid|getCallingPackage' $DEC/jadx/sources
 frida-trace -U -f "$PKG" -j 'android.content.pm.PackageManager!resolve*' \
                           -j 'android.content.pm.PackageManager!queryIntent*'
 ```
@@ -1294,7 +1350,7 @@ Build once without and once with, and diff — the delta proves the block, not t
 ```bash
 aapt2 dump permissions base.apk | grep -i QUERY_ALL_PACKAGES
 sed -n '/<queries>/,/<\/queries>/p' out/AndroidManifest.xml
-grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|pm list packages' jadx_out/sources
+grep -rnE 'getInstalledPackages|getInstalledApplications|queryIntentActivities|pm list packages' $DEC/jadx/sources
 ```
 ```javascript
 Java.perform(function () {
@@ -1321,6 +1377,7 @@ Install a control package first (`com.example.canary`), then search every proxie
 | **VRT** | n/a standalone; High once paired with a grant primitive — rate through `broken_access_control.exposed_sensitive_android_intent` (null) in D08 |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | Any app using AndroidX App Startup, Firebase, WorkManager or `androidx.core.content.FileProvider` |
+| **Requires** | provider |
 | **Maps to** | developer.android.com App Startup (`${applicationId}.androidx-startup`, documented `android:exported="false"`); MASTG-TEST-0355; CWE-927 |
 
 - **Test:** Modern apps ship several providers nobody on the team authored — `androidx.startup.InitializationProvider`, FileProvider variants, Firebase init providers, `ProfileInstallerInitializer` — merged in from AARs and invisible in the app's own source tree. Separately, the FileProvider's `<meta-data>` points at an XML file defining which directories are shareable; over-broad roots turn any URI-grant primitive into a full private-storage read.
@@ -1347,6 +1404,7 @@ grep -rn 'Landroid/net/Uri;->parse' out/smali/ | head
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what the callback accepts and returns) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | All. Declaration-side issue, independent of targetSdk |
+| **Requires** | exported-service |
 | **Maps to** | MASWE-0018 (Lack of Authentication or Authorization on App Components); MASVS-PLATFORM-1; CWE-862 |
 
 - **Test:** Apps shipping an AccessibilityService, NotificationListenerService, AutofillService, TileService, CarAppService or WearableListenerService expose a *system-bound* component. The bug is never "it exists" — it is that the component is declared **without** its matching `android:permission` guard, so any third-party app can `bindService()` and drive the callback directly. The docs are explicit that the bind permission "strictly enforces that only the system can bind to your service".
@@ -1373,6 +1431,7 @@ bindService(new Intent().setComponent(new ComponentName(
 | **VRT** | n/a standalone; High once chained to an exported or implicit start — rate via `broken_access_control.exposed_sensitive_android_intent` (null) in D06 |
 | **Attacker** | AM-03 zero-permission local app (starting the FGS) |
 | **Applies to** | `targetSdk >= 34` (Android 14+) for the declaration requirement |
+| **Requires** | exported-service, targetsdk>=34 |
 | **Maps to** | developer.android.com foreground service types table: `camera`/`FOREGROUND_SERVICE_CAMERA`, `microphone`/`FOREGROUND_SERVICE_MICROPHONE`, `location`, `health`, `mediaProjection`, `connectedDevice`, `dataSync`, `mediaProcessing`, `remoteMessaging`, `shortService`, `specialUse`, `systemExempted` |
 
 - **Test:** From `targetSdk 34` every FGS must declare `android:foregroundServiceType`, and each type requires a specific `FOREGROUND_SERVICE_*` permission plus, for some, a runtime permission. The manifest therefore hands you the list of sensitive capabilities the app can hold while backgrounded.
@@ -1420,6 +1479,7 @@ adb shell am start -n "$PKG/<targetClass>" --es <extra> <value>
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on what the hijacked link carries); a one-time credential delivered to an arbitrary app is `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-02 remote one click |
 | **Applies to** | All. `autoVerify="true"` App Links exist from API 23; from Android 12 (API 31) unverified web links no longer default to the app at all |
+| **Requires** | deeplink |
 | **Maps to** | MASTG-TECH-0172 (Listing Deep Links), MASTG-TEST-0393, MASVS-PLATFORM-1; H1 #1667998 (KAYAK, Critical 9.3), #328486 (Zomato), #583987 (Periscope, $1540) |
 
 - **Test:** Three things testers routinely miss. (a) `<data>` elements inside one `<intent-filter>` are merged **combinatorially**, not pairwise — a filter declaring `scheme=https host=www.example.com` and `scheme=app host=open.my.app` accepts four URLs, and the two synthetic combinations frequently reach handlers that skip the validation applied to the "real" scheme. (b) Filters with `pathPattern` or `mimeType` only are separately reachable entry points. (c) Whether App Links actually verified is a runtime fact, not a manifest attribute.
@@ -1521,8 +1581,8 @@ grep -nE 'android.nfc.action.(NDEF|TECH|TAG)_DISCOVERED'                out/Andr
 ls out/res/xml/ | grep -iE 'device_filter|accessory_filter|nfc_tech|apduservice|aid'
 cat out/res/xml/device_filter.xml out/res/xml/accessory_filter.xml 2>/dev/null
 grep -rnE 'BLUETOOTH_(CONNECT|SCAN|ADVERTISE)|REQUEST_COMPANION|CompanionDeviceManager' \
-     out/AndroidManifest.xml jadx_out/sources
-grep -rnE 'openAccessory|openDevice|UsbManager|BluetoothGattServer|connectGatt|onCharacteristicWrite' jadx_out/sources
+     out/AndroidManifest.xml $DEC/jadx/sources
+grep -rnE 'openAccessory|openDevice|UsbManager|BluetoothGattServer|connectGatt|onCharacteristicWrite' $DEC/jadx/sources
 adb shell dumpsys package "$PKG" | grep -A5 USB_DEVICE_ATTACHED
 adb shell dumpsys bluetooth_manager | grep name:
 ```
@@ -1538,6 +1598,7 @@ adb shell dumpsys bluetooth_manager | grep name:
 | **VRT** | n/a — recon; converts D13 device-binding and D23 entitlement items from "unverified" to "demonstrated" |
 | **Attacker** | AM-05 another user of the same app / AM-11 physical unlocked |
 | **Applies to** | Android 5+ for multi-user; Android 15+ for Private Space; OEM clone features vary |
+| **Requires** | device |
 | **Maps to** | developer.android.com Android 15 Private Space — "the private space uses a separate user profile", "apps in the private space are installed as separate copies", plus the compat warning about apps whose work-profile logic assumes any non-main copy is a work-profile copy |
 
 - **Test:** Most checklists assume one install per device. In reality the app may exist as user 0, a work profile (user 10+), a Private Space profile, an OEM "dual app" clone and a guest instance — each with its own data dir, its own FCM token and its own session. Any device-binding or entitlement scheme that counts installs is then wrong.
@@ -1564,6 +1625,7 @@ adb shell pm create-user gap && adb shell pm install --user 10 -r base.apk
 | **VRT** | `server_security_misconfiguration.exposed_portal.admin_portal` (P1) when the listener serves an unauthenticated admin/file surface; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when it returns app-private bytes |
 | **Attacker** | AM-06 network attacker no trusted CA (LAN) for a `0.0.0.0` bind; AM-03 zero-permission local app for a loopback bind — local sockets have **no permission model** |
 | **Applies to** | All. Not blocked by package visibility or scoped storage |
+| **Requires** | device |
 | **Maps to** | CVE-2019-6447 (ES File Explorer 4.1.9.7.4, EDB 50070); AirDroid unauthenticated upload (EDB 37504); WiFi Baby Monitor ports 8257/8258 (EDB 44242); Ftp Server 1.32 (EDB 44852, 46464); CWE-306 |
 
 - **Test:** Apps ship local HTTP servers — Wi-Fi transfer, casting/DLNA, WebRTC pairing, leftover RN dev servers. A `0.0.0.0` bind is reachable by anyone on the network; a loopback bind is still reachable by **any other app on the device**. Baseline first, then launch, then diff.
@@ -1595,6 +1657,7 @@ curl -s "http://<device-ip>:59777//data/data/com.target.app/shared_prefs/prefs.x
 | **VRT** | `broken_access_control.privilege_escalation` (null) when an app-reachable vendor service exposes an ungated privileged transaction |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | All; yield is highest on OEM ROMs (MediaTek, Qualcomm, OnePlus, Samsung vendor services). `service_manager find` denial granularity is per-app-domain from Android 9 / targetSdk 28 |
+| **Requires** | device |
 | **Maps to** | AOSP Binder IPC (`/dev/binder`, AIDL interfaces); AOSP SELinux `service_contexts`; AOSP AIDL-for-HALs `<hal format="aidl">…<fqname>`; CWE-862 |
 
 - **Test:** `/dev/binder` is the universal trust boundary between an app and everything privileged, and AIDL performs no access control of its own. Enumerate the registered services, then determine which the app's SELinux domain and permissions actually let it `getService()` and call — reachability from *inside the target UID* is what matters, not the global list.
@@ -1603,7 +1666,7 @@ curl -s "http://<device-ip>:59777//data/data/com.target.app/shared_prefs/prefs.x
 adb shell service list      # framework AIDL services on /dev/binder
 adb shell dumpsys -l
 adb shell cmd -l            # services exposing a shell command surface
-frida -U -n "$PKG" -e '
+frida -D "$SERIAL" -n "$PKG" -e '
 Java.perform(function(){
   var SM = Java.use("android.os.ServiceManager");
   SM.listServices().forEach(function(n){
@@ -1631,6 +1694,7 @@ adb shell 'for i in $(seq 1 50); do printf "[+] %2d -> " $i; service call <svc> 
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) at minimum; `broken_authentication_and_session_management.authentication_bypass` (P1) when `run-as` yields a session token that authenticates |
 | **Attacker** | AM-03 zero-permission local app (JDWP attach needs no permission) / AM-11 physical unlocked |
 | **Applies to** | All API levels. The single cheapest high-yield device sweep that exists |
+| **Requires** | device |
 | **Maps to** | drozer `app.package.debuggable`; `dumpsys package … flags=…DEBUGGABLE`; CWE-489-class exposure (no ID verified in corpus — cite the flag itself) |
 
 - **Test:** Debuggable *release* builds still ship — staging/QA APKs published to the store by mistake, OEM preinstalls, SDK-injected builds. A successful `run-as` **is** the proof.
@@ -1659,6 +1723,7 @@ adb jdwp                                  # JDWP-attachable pids
 | **VRT** | n/a — this artefact sets the severity of everything else, and its absence is why shell-UID and root-required findings get downgraded |
 | **Attacker** | all of AM-01…AM-12 (that is the point) |
 | **Applies to** | All |
+| **Requires** | device |
 | **Maps to** | CVSS v3.1 AV/PR metrics; AOSP local-vs-proximal-vs-remote definitions; HackerOne Platform Standards self-sign-up rule ("If self-sign-up is possible, and no other privileges are required, set Privileges Required to None") |
 
 - **Test:** A component × exported × permission table does not say **who** can reach each row. Fill the attacker column by *attempting reach*, and record the literal failure string for every blocked cell — the negative is evidence too.
@@ -1698,6 +1763,7 @@ adb shell dumpsys package com.poc.attacker | sed -n '/requested permissions/,/in
 | **VRT** | n/a — coverage control; it is how whole features avoid being tested at all |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | All |
+| **Requires** | device |
 | **Maps to** | no external identifier verified — method only |
 
 - **Test:** A "complete" component sweep and a "complete" endpoint list can both be finished without ever having exercised KYC, gift cards or offline sync. Bind each user-visible feature to the component, endpoint and storage that implement it; every later domain consumes this table.
@@ -1728,16 +1794,17 @@ done
 | **VRT** | n/a — recon. The routes it produces become `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) in D15 |
 | **Attacker** | n/a (tester method); the resulting BOLA is AM-05 |
 | **Applies to** | Java/Kotlin apps using Retrofit — the dominant Android HTTP stack. **Zero hits is a stack signal, not a clean result**: re-run D01-022 |
+| **Requires** | backend-api |
 | **Maps to** | MASTG-TECH-0022 (Information Gathering – Network Communication), MASTG-TECH-0019; OWASP API9:2023, API1:2023 |
 
 - **Test:** R8 renames classes and methods but **does not rewrite the string values inside runtime-visible annotations** — Retrofit needs those strings at runtime to build the request line, so `@GET("v2/users/{id}/wallet")` survives minification verbatim even when the interface becomes `a.b.c`. Recover every route, then isolate the ones whose path embeds a client-supplied object identifier.
 - **How:**
 ```bash
-jadx -d jadx_out --no-debug-info base.apk       # plus every split_config.*.apk
-S=jadx_out/sources
+jadx -d $DEC/jadx --no-debug-info base.apk       # plus every split_config.*.apk
+S=$DEC/jadx/sources
 grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\("[^"]+"\)' $S | sort -u > endpoints.txt
 grep -rhoE '@HTTP\([^)]*\)' $S | sort -u                       # the @HTTP form hides the verb
-grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' $S | sed 's#^jadx_out/sources/##' | sort -u
+grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\("' $S | sed 's#^$DEC/jadx/sources/##' | sort -u
 wc -l endpoints.txt
 # decompiler choked? the strings are still in the DEX pool
 unzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api)/' | sort -u
@@ -1759,6 +1826,7 @@ For each candidate, read the enclosing interface method to see whether an auth h
 | **VRT** | n/a standalone; `broken_access_control.privilege_escalation` (null) when the recovered parameter changes an authorisation outcome |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | All Retrofit apps; the same idea applies to Volley and Ktor builders, where keys appear as plain string literals |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API3:2023 Broken Object Property Level Authorization; PortSwigger "Finding hidden parameters" |
 
 - **Test:** Enumerate every field name the client is *capable* of sending. `@Query`, `@QueryMap`, `@Field`, `@FieldMap`, `@Part`, `@Header`, `@Path` annotation values also survive R8, and routinely include parameters the UI never exercises: debug flags, `includeDeleted`, `asUser`, `channel`, `role`, `storeId`.
@@ -1785,6 +1853,7 @@ Any `@QueryMap Map<String,String>` is an **arbitrary-parameter channel** — the
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the token you capture yields a usable session |
 | **Attacker** | AM-09 malicious backend or CDN (the host comes from a server response) / AM-02 remote one click (from a deep link) |
 | **Applies to** | All; particularly apps with white-label or tenant-specific hosts, or an "environment switcher" shipped to production |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API10:2023 Unsafe Consumption of APIs; MASVS-AUTH-1; CWE-918-adjacent (no ID verified in corpus — cite the behaviour) |
 
 - **Test:** Retrofit's `@Url` lets the *caller* supply the whole URL, and `Retrofit.Builder().baseUrl(...)` can take a runtime value. If any of those originates from a server response, a deep link, remote config or `SharedPreferences`, the app will issue **authenticated** requests to an attacker-chosen host.
@@ -1817,6 +1886,7 @@ Java.perform(function () {
 | **VRT** | n/a — enabler. Without it, "the token doesn't work from curl" is an unproven claim and every D15 finding stalls |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | All OkHttp-based apps — includes Retrofit, Coil and Firebase transports |
+| **Requires** | backend-api |
 | **Maps to** | MASVS-AUTH-1; MASTG-TEST-0217 (same OkHttp/Retrofit configuration surface) |
 
 - **Test:** Determine exactly how the app authenticates every request, because you must reproduce it byte-for-byte when you drive the API from outside the app. The logic lives in `okhttp3.Interceptor` implementations and in `okhttp3.Authenticator` (the 401-refresh hook).
@@ -1840,12 +1910,13 @@ Read each `intercept(Chain)` body: it shows the full header set (`Authorization`
 | **VRT** | n/a for the tap; the **delta** is what gets rated, and an endpoint visible only here is by definition untested by anyone who relied on a proxy |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | All OkHttp apps. The class is `okhttp3.*` when shaded normally; minified builds may relocate it |
+| **Requires** | backend-api, frida |
 | **Maps to** | MASTG-TEST-0238 (Runtime Use of Network APIs — `[dynamic, hooks]`, a placeholder test in MASTG beta; this is the technique it describes) |
 
 - **Test:** Capture full request/response pairs from inside the process. This is immune to pinning, to proxy-unaware clients and to `Proxy.NO_PROXY` clients. Use it to **complete** the endpoint map, not to replace the proxy — the value is the set difference.
 - **How:**
 ```javascript
-// frida -U -p <pid> -l okhttp_tap.js
+// frida -D "$SERIAL" -p <pid> -l okhttp_tap.js
 Java.perform(function () {
   var Buffer = Java.use("com.android.okhttp.okio.Buffer");
   var Interceptor = Java.use("okhttp3.Interceptor");
@@ -1888,13 +1959,13 @@ comm -23 <(grep -oE 'https?://[^ ]+' frida_tap.log | sort -u) \
 - **How:**
 ```bash
 apktool d -f -o out base.apk
-jadx --no-src -d jadx_out base.apk
-grep -rIoE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' out/ jadx_out/ | sort -u > urls.txt
+jadx --no-src -d $DEC/jadx base.apk
+grep -rIoE 'https?://[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+' out/ $DEC/jadx/ | sort -u > urls.txt
 unzip -o base.apk -d raw >/dev/null
 strings -a raw/lib/*/*.so raw/assets/* 2>/dev/null | grep -oE 'https?://[^"'\'' <>]+' >> urls.txt
 rabin2 -zz raw/lib/arm64-v8a/libnative-lib.so | grep -iE 'http|api\.|\.com'
 awk -F/ '{print $3}' urls.txt | sort -u > apk_hosts.txt
-grep -rn 'BASE_URL\|API_URL\|ENDPOINT' jadx_out/sources | head -40
+grep -rn 'BASE_URL\|API_URL\|ENDPOINT' $DEC/jadx/sources | head -40
 grep -rn 'http' out/res/values/strings.xml
 
 # framework paths — the endpoint map is NOT in the DEX on these stacks
@@ -1908,7 +1979,7 @@ python3 linkfinder.py -i https://cdn.example.com/app.bundle.js -o cli
 cat js.txt | xargs -n1 -I{} sh -c 'curl -s {} | grep -oE "\"/(api|v[0-9])/[A-Za-z0-9_/-]+\""' | sort -u
 
 # xref each first-party host to a real network call site
-grep -rn 'HttpURLConnection\|OkHttpClient\|Retrofit.Builder().baseUrl' jadx_out/sources
+grep -rn 'HttpURLConnection\|OkHttpClient\|Retrofit.Builder().baseUrl' $DEC/jadx/sources
 ```
 - **Proof:** A ranked host list where each first-party host has at least one xref reaching a network API — you can name the class and method that dials it — and where at least one FQDN is absent from passive subdomain enumeration yet answers `httprobe`. Hosts appearing in one extractor and not another point at a second HTTP stack (Volley, Ktor, a native library, a WebView) that you have not yet instrumented.
 - **Escalation:** Drives D14 pinning scope, D15 API testing scope and D18 SDK/cloud scope. Each mobile-only host is the least-tested surface in the programme; a mobile-only host serving private data over a GET with the auth token in the query string, indexed by a search engine, is the Grab #221558 shape.
@@ -1956,6 +2027,7 @@ Diff `urlgrep.txt` against `endpoints.txt` from D01-058: paths in one and not th
 | **VRT** | n/a — recon; enables the GraphQL authz tests in D15. GraphQL introspection alone is on the never-submit list |
 | **Attacker** | n/a (tester method) |
 | **Applies to** | GraphQL backends |
+| **Requires** | backend-api |
 | **Maps to** | PortSwigger GraphQL API vulnerabilities (finding endpoints and schema discovery without introspection); OWASP API5:2023 |
 
 - **Test:** If the backend is GraphQL, the client ships either the operation documents (Apollo codegen) or only their SHA-256 hashes (Automatic Persisted Queries). Both give you the operation inventory without introspection — including admin and internal mutations the mobile UI never calls but the endpoint still serves.
@@ -1964,7 +2036,7 @@ Diff `urlgrep.txt` against `endpoints.txt` from D01-058: paths in one and not th
 unzip -l base.apk | grep -iE '\.graphql|\.gql|graphql'
 grep -rn 'operationName\|__typename\|mutation \|query \|subscription ' $S | head -50
 grep -rnE '"[0-9a-f]{64}"' $S | grep -i 'persist\|hash\|apq\|query' | head    # APQ sha256Hash values
-grep -rn 'com/apollographql' jadx_out/resources 2>/dev/null | head
+grep -rn 'com/apollographql' $DEC/jadx/resources 2>/dev/null | head
 grep -rn 'OPERATION_DOCUMENT\|QUERY_DOCUMENT' $S | head
 ```
 - **Proof:** The recovered document text, then that exact operation replayed against `/graphql` returning `data` rather than a `PersistedQueryNotFound` error.
@@ -1979,6 +2051,7 @@ grep -rn 'OPERATION_DOCUMENT\|QUERY_DOCUMENT' $S | head
 | **VRT** | `broken_access_control.privilege_escalation` (null) for an unauthenticated or over-privileged admin RPC; exposed server reflection alone is Low |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | Apps bundling `io.grpc` / `grpc-okhttp` / Cronet+gRPC |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API9:2023, API5:2023; protobuf.dev encoding guide (wire-type table); nccgroup blackboxprotobuf |
 
 - **Test:** gRPC traffic is invisible to a naive HTTP proxy and is often the *entire* API for newer apps. Recover the fully qualified service and method names, then call the service directly. Protobuf bodies are self-describing enough to edit blind — each field is `(field_number << 3) | wire_type`, and the wire type says how many bytes to consume, so unknown fields can always be skipped.
@@ -2011,6 +2084,7 @@ For bodies with no schema, install the Blackbox Protobuf Burp extension (or its 
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the old version answers without the current version's control; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when it leaks objects |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | All; especially apps with a long tail of unforced updates |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API9:2023 ("Running multiple versions of an API … expands the attack surface"), API1:2023; CWE-862 |
 
 - **Test:** Mobile backends accumulate versions because old installs must keep working, and the old version is the one with the original, weaker authorisation code. An authorisation control that exists only in the current version is not a control.
@@ -2050,6 +2124,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'X-App-Version: 3.1.0' -H 'User-Age
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the old path bypasses auth entirely; `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) to `...modify_view_...iterable_object_identifiers` (P1) for field exposure and object access; `server_security_misconfiguration.no_rate_limiting_on_form.login` (P4) for a throttling regression |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | Any versioned API. This is the highest-value mobile-to-backend bridge there is |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API9:2023 Improper Inventory Management; OWASP Mobile M8; CWE-862 |
 
 - **Test:** A mobile app's hardcoded backend calls are frequently an **older** API version than the current web app uses — with weaker auth, weaker rate limits, weaker input validation and more field exposure. **The bug is the delta, and the delta must be behavioural**, not a difference in response shape. A version difference alone is **Informational**; the *weakened control* is the finding.
@@ -2091,6 +2166,7 @@ Anything but `404` / connection-refused means live. Then, per operation:
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) up to `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) for a bulk-sync endpoint returning a tenant's records |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | Any target with both a web and a mobile client |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API3:2023 (excessive data exposure), API9:2023 |
 
 - **Test:** Mobile clients frequently get endpoints the web app does not expose — bulk sync, device registration, offline reconciliation, "get everything since timestamp". Those endpoints have had far fewer eyes and routinely return more data per call.
@@ -2117,6 +2193,7 @@ For every mobile-only route ask: does it take a filter or scope parameter, does 
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `broken_access_control.privilege_escalation` (null) when a low-privilege identity reaches an admin operation |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | All; especially backends retrofitted onto an existing web app |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API5:2023 Broken Function Level Authorization; CWE-862 |
 
 - **Test:** The same business object is usually exposed by three or more front doors — `www.` with a web session cookie, `m.`/mobile-web, `api.`/`mapi.`/`gw.` with the app's bearer, plus GraphQL — and only one of them enforces the check. Authorisation middleware is frequently per-service.
@@ -2149,12 +2226,13 @@ Also re-run every recovered route (D01-063) against every newly discovered host 
 | **VRT** | `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) for the exposure alone; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null) or `broken_authentication_and_session_management.authentication_bypass` (P1) when the staging host serves production data or accepts production credentials |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | All. Check the **release** APK, never a debug build |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API9:2023 (the documented scenario: a beta environment lacking rate limiting → password-reset brute force); OWASP Mobile M8 |
 
 - **Test:** Release builds routinely carry the full host inventory including staging, UAT and regional shards. Staging backends are the classic API9 finding: same data, weaker controls. Find them even when the release build no longer names them.
 - **How:**
 ```bash
-grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' out/res out/assets jadx_out/sources \
+grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' out/res out/assets $DEC/jadx/sources \
   | sed 's#\(https\?://[^/]*\).*#\1#' | sort | uniq -c | sort -rn | head -60
 grep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'
 grep -riE 'staging|uat|dev-|preprod|\.local|internal|qa\.' urls.txt
@@ -2179,6 +2257,7 @@ done
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for an internal-topology or stack-trace leak; High via `broken_access_control.privilege_escalation` (null) when the switch disables an authorisation check |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | All |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API8:2023 Security Misconfiguration; CWE-200 |
 
 - **Test:** Mobile backends carry `?debug=1`, `?test=true`, `X-Debug: 1` switches that dump stack traces, SQL or internal IDs — and the client is where the switch names are written down. Also search the decompiled tree for `develop`, `debug`, `fake`, `test` as *method and class* name substrings, not just as strings.
@@ -2203,6 +2282,7 @@ curl -s -H "Authorization: Bearer $TOK" -H 'X-Debug: 1' 'https://api.example.com
 | **VRT** | follows the regression found, up to `broken_authentication_and_session_management.authentication_bypass` (P1). An exposed spec alone is `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) at best |
 | **Attacker** | AM-01 remote no interaction |
 | **Applies to** | Spec-publishing APIs; any versioned mobile API with history |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API9:2023; CVE-2018-25031 (Swagger UI ≤ 4.1.2 spec injection); CVE-2023-38337 (`rswag` directory traversal); H1 #3124103 (U.S. DoD Swagger UI Injection, May 2025), #1656650 (reflected XSS via `url=`) |
 
 - **Test:** A deprecated version's OpenAPI spec often stays indexed after the live link is removed, and old app builds pinned `/v1/` that the backend never decommissioned — predating the authorisation middleware added in `/v3/`.
@@ -2239,6 +2319,7 @@ Also check Swagger UI's `?configUrl=` / `?url=` parameters if a UI is exposed: a
 | **VRT** | the delta is a testability observation (Low); a WebSocket that accepts commands for another user's device is `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) or higher |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | All; mandatory for messaging, dispatch and IoT companion apps |
+| **Requires** | device, mitm |
 | **Maps to** | MASTG-TEST-0236 (notes the same limitation, points at Burp-Non-HTTP-Extension / MASTG-TOOL-0078) |
 
 - **Test:** WebSockets, MQTT, XMPP and raw TLS sockets carry authenticated commands in many apps — chat, ride-hailing dispatch, IoT control — and are completely absent from an HTTP-proxy-only test. Frames are rarely re-authorised per message.
@@ -2265,6 +2346,7 @@ comm -23 pcap_dsts.txt proxy_dsts.txt
 | **VRT** | rating follows the data class exposed — `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (null); `server_security_misconfiguration.misconfigured_dns.subdomain_takeover` (P3) for a dangling record |
 | **Attacker** | AM-08 malicious third-party SDK / AM-01 for a takeover |
 | **Applies to** | All |
+| **Requires** | backend-api |
 | **Maps to** | OWASP API10:2023 Unsafe Consumption of APIs; CWE-200 |
 
 - **Test:** Analytics, crash, CDN, attribution and feature-flag endpoints are often in scope by virtue of holding the client's data. For each, determine what the app *sends* it — token? user id? PII? — and whether the endpoint is world-readable. The smallest vendor on the list is usually the one without pinning, without auth, or with a dangling DNS record.
@@ -2290,6 +2372,7 @@ for h in $(cat sdk_hosts.txt); do printf '%s -> ' "$h"; dig +short CNAME "$h"; d
 | **VRT** | n/a standalone; the memory-corruption finding is rated in D16. Presence alone is `lack_of_binary_hardening.lack_of_exploit_mitigations`-adjacent (P5) — do not report it that way |
 | **Attacker** | AM-02 remote one click (attacker-supplied font, image, archive or avatar) |
 | **Applies to** | All apps shipping `lib/`; especially image, PDF, document and media viewers, Unity and Flutter |
+| **Requires** | native |
 | **Maps to** | CVE-2025-27363 (FreeType OOB write parsing TrueType GX / variable font subglyphs, actively exploited, Android May 2025 bulletin), CVE-2023-4863 (libwebp OOB write), CVE-2025-64505 (libpng), CVE-2019-7317 (libpng 1.6.36), CVE-2025-5915 (libarchive < 3.8.0), CVE-2022-3970 (libtiff `TIFFReadRGBATileExt`) |
 
 - **Test:** A bundled vulnerable parser is only a finding if app-supplied data reaches it. Bundled libraries are patched on the app vendor's schedule, not the OS's — an app can ship a library the platform fixed a year ago. **Reachability is the finding; presence is not.**
@@ -2316,7 +2399,7 @@ grep -nE '\-> [0-9]' deps.txt | head -50          # arrows mark version substitu
 
 # then PROVE reachability
 nm -D --defined-only libs/lib/arm64-v8a/libfoo.so | grep -i 'Java_'
-frida -U -f "$PKG" -l - <<'JS'
+frida -D "$SERIAL" -f "$PKG" -l - <<'JS'
 Process.enumerateModules().forEach(m => {
   if (/freetype|webp|png|jpeg|avc|hevc|archive|tiff/i.test(m.name))
     console.log(m.name, m.base, m.size);
@@ -2335,6 +2418,7 @@ JS
 | **VRT** | `broken_access_control.privilege_escalation` (null) when the gate is regulatory and bypassing it completes a transaction; Medium otherwise |
 | **Attacker** | AM-05 another user of the same app |
 | **Applies to** | All; especially fintech, mobility, marketplace and gaming apps |
+| **Requires** | backend-api, device |
 | **Maps to** | ATT&CK T1627.001 Geofencing, T1422.001 Internet Connection Discovery; no VRT-specific node |
 
 - **Test:** Commercial apps ship features to some markets only — UPI/PIX/wallet top-up, regional KYC tiers, age gates, price tiers, cash on delivery, regulated lending. If your device reports `en-US` you never render them, so you never test them — yet the endpoints are live for everyone. The question is whether the gate is client-side.

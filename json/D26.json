@@ -4,7 +4,7 @@
  "file": "D26-instrumentation-and-tooling.md",
  "why": "It does not pay directly, and any chapter that pretends otherwise is selling you a P5. Bugcrowd prices\nruntime instrumentation at P5 with an all-zero impact vector; Google's Mobile VRP excludes \"attacks that\nrequire a rooted device\"; Xiaomi, Grab and Spotify exclude \"runtime hacking exploits using tools like\nFrida/Appmon\" by name. If your report contains the sentence \"we were able to attach Frida and bypass the\nroot check\", you have written an invoice for nothing.\n\nWhat this domain pays for is **defensible negatives and unwasted days**. Two failure modes dominate real\nengagements and both are harness defects wearing a finding's clothes. The first: on API 34+ the trust\nstore moved into the updatable Conscrypt APEX, so pushing a CA to `/system/etc/security/cacerts`\nsucceeds, `chmod` succeeds, and nothing is trusted — the app then fails TLS on *every* host, which looks\nexactly like pinning. Testers report \"the app pins all traffic\" and the entire network and API section of\nthe engagement is never done. The second: a Frida hook placed on an abstract framework class\n(`android.webkit.WebSettings`, `android.content.Context`, `SharedPreferences$Editor`) records nothing,\nbecause the concrete type is `ContentSettingsAdapter`, `ContextImpl`, `SharedPreferencesImpl$EditorImpl`.\nZero events reads as \"the app never enables file access\" and the D10 finding is silently dropped. Neither\nfailure produces an error message. Both produce a clean-looking report.\n\nThe corpus gives one hard base rate worth carrying: drozer's `scanner.provider.injection` probes a\n**single** `'` character and flags a result only when the resulting exception text contains\n`unrecognized token`; `scanner.provider.traversal` fires **one** fixed payload — sixteen `../` levels at\n`/etc/hosts` — and treats a non-empty read as its only oracle. Every provider that catches its own\nexception, or wraps it, or that is traversable to a path other than `/etc/hosts`, is reported \"Not\nVulnerable\". That is not a tool quirk; it is the reason the highest-paid provider findings in the\ndisclosed-report corpus (H1 #291764, #242727) were all confirmed by a *manual* `app.provider.query` or\n`adb shell content query` after the scanner had been run. The honest summary of this chapter is: it is\nmostly graveyard, and the exception is that it decides whether the other twenty-six chapters are true.",
  "crux": "**Before I write \"not vulnerable\" anywhere in this report: has this exact instrument produced a positive result on this exact device in this session — and if the answer is \"the tool printed nothing\", what is my positive control?**",
- "applicability": "",
+ "applicability": "D26 is not a target domain: it decides whether every other chapter's *dynamic* negative is admissible. It is never wholly n/a — D26-063, D26-067..072 and D26-078 apply to a code-review-only engagement — but its device, root, interception, native and cross-platform blocks each switch off on a measurable fact. Run these five checks at P1 and write the matching note into `engagement.json.domains_na` (partial) before any other domain's dynamic row is settled.\n\n```bash\n# 1. device lane: none => static-only engagement\nadb devices -l | grep -vE '^List|^$' | tee \"$E/lab/devices.txt\"; export SERIAL=${SERIAL:-$(awk 'NR==1{print $1}' \"$E/lab/devices.txt\")}\nadb -s \"$SERIAL\" shell id; adb -s \"$SERIAL\" shell getprop ro.build.version.sdk; adb -s \"$SERIAL\" shell getprop ro.build.type\n# 2. root + interception + instrumentation reachable? (doctor.sh needs bash>=4; the three lines are the macOS fallback)\nbash scripts/doctor.sh --json 2>/dev/null | jq -c '{device,root,frida,mitm}' || true\nadb -s \"$SERIAL\" root 2>&1 | head -1; frida-ps -D \"$SERIAL\" 2>&1 | head -1; adb -s \"$SERIAL\" shell settings get global http_proxy\n# 3. the static chain exists at the canonical paths\nls \"$E\"/apk/*.apk | wc -l; ls -d \"$DEC/jadx/sources\" \"$DEC/apktool\" 2>&1\n# 4. native and cross-platform gates for D26-058..061\nunzip -l \"$E/apk/base.apk\" | grep -cE ' lib/[^/]+/.*\\.so$'; apkid \"$E/apk/base.apk\" 2>/dev/null | grep -iE 'packer|anti_|compiler' | head -5\nunzip -l \"$E\"/apk/*.apk | grep -ciE 'flutter_assets|libapp\\.so|index\\.android\\.bundle|assets/www/|il2cpp|assemblies'\n# 5. the inventory the rest of the chapter's conversions (D26-065/066) will be proved against\ngrep -c . \"$E\"/inventory/components.csv \"$E\"/inventory/deeplinks.csv \"$E\"/inventory/webviews.csv 2>/dev/null\n```\n\nDecision and the exact n/a note to write:\n\n- **No device at all** (`adb devices` empty): `D26 partial n/a — static-only engagement (adb devices empty, doctor device=false). Dynamic items D26-001..017, D26-028, D26-030..038, D26-041..061, D26-064..066, D26-073..074, D26-077, D26-079 n/a; D26-018..027, D26-029, D26-039..040, D26-062..063, D26-067..072, D26-075..076, D26-078 still apply. Every dynamic negative in other domains is recorded as BLOCKED (B-nn), never as clean.`\n- **Device but `adb root` refused** (`adbd cannot run as root in production builds`): `D26-004..007, D26-057, D26-083 n/a — no root (image <variant>/<build.type>); D26-008 (NSC repack) and D26-009 (gadget) are mandatory substitutes and the report's Limitations names the cost.`\n- **Device API ≤ 33**: `D26-005..007 n/a — API <sdk> uses the legacy /system trust store; D26-004 applies.` **API ≥ 34**: `D26-004 n/a — API <sdk>: Conscrypt APEX store; D26-005/006 mandatory.`\n- **No `.so` in any split and no packer line**: `D26-058..061 n/a — the APK ships no native libraries (unzip count 0, APKiD: no packer/anti_* entries).`\n- **No cross-platform runtime markers**: `D26-060 n/a — framework=native-android (no flutter_assets/libapp.so, index.android.bundle, assets/www, il2cpp, assemblies).`\n- **Single tester, single device** (`SANE_WORKER` unset, one worker): `D26-081 n/a — one worker owns <serial> for the session.`\n- **No physical device**: `D26-013 n/a — emulator-only lab; D26-014's 'not covered — no hardware' rows are the coverage limitation.`\n\nAnything else: D26 applies in full. The probe's own outputs (`devices.txt`, the `id`/`sdk`/`build.type` triple, the frida-ps line) are the first three lines of `lab/harness-baseline-YYYYMMDD.txt` (D26-001).",
  "triage": "1. **Run the harness acceptance script and keep the output** (D26-001). Every hour billed before this\n   passes is an hour whose results may be void. The control-app TLS line is the load-bearing one.\n2. **Lock Frida client/server/ABI versions and fire a control hook** (D26-010, D26-011). A version skew\n   presents as \"the app blocks instrumentation\", which is a fabricated resilience finding.\n3. **Get the trust store right for the device's API level** (D26-004, D26-005, D26-006). This one decision\n   gates D14, D15, D18, D20 and D24 completely. Verify from *inside* the app's mount namespace.\n4. **Pull the complete split set** (D26-018) before any static tool runs. A base-only analysis silently\n   drops whole feature modules and every ABI-specific `.so`.\n5. **Fingerprint the binary** (D26-023) before budgeting. APKiD tells you in three seconds whether the\n   next three days are jadx reading or Blutter/Il2Cpp recovery, and it names the `.so` implementing the\n   root check you will need to hook.\n6. **Run the rule-set sweeps once, early** (D26-024, D26-025, D26-026, D26-027) and treat the output as a\n   worklist, never as findings. The only sweep hit that has a severity of its own is a secret the remote\n   service actually honours (D26-024).\n7. **Stand up drozer and record the agent's own permission set** (D26-030) before running a single\n   scanner. A module that returns nothing because the agent lacks a permission is not a negative result.\n8. **Calibrate every scanner against a known-vulnerable control** (D26-063, D26-033) before the first\n   \"Not Vulnerable\" line enters the ruled-out register.\n9. **Then instrument** (D26-041 → D26-056), obeying the three correctness rules: abstract classes record\n   nothing, `Java.choose` beats setter interception, and silence is never a negative.\n10. **Apply the false-positive gate to every candidate** (D26-067 → D26-073) before anything is promoted\n    out of Candidate. This is where retractions are prevented, and a retraction costs more than three\n    real findings earn.\n11. **Convert off AM-12 last** (D26-065, D26-066). A finding that only exists on your rooted device is a\n    P5 until it is re-derived from an unprivileged app UID on a stock device.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"Frida attaches to the app / the app has no anti-instrumentation\" | `lack_of_binary_hardening.runtime_instrumentation_based` = **P5**, all-zero impact vector. AM-12 is not an attacker model, and Google, Xiaomi, Grab and Spotify all exclude \"runtime hacking exploits using tools like Frida/Appmon\" by name | The credential the hook extracted, proved to authenticate a *different* user or to work off the device — filed in D13/D15, not here |\n| \"objection disabled SSL pinning in five minutes\" | `mobile_security_misconfiguration.ssl_certificate_pinning.defeatable` = **P5**. The bypass is the method, never the finding | The data the decrypted channel revealed, or the server accepting a request the app would never send — filed in D14/D15 |\n| \"The APK can be repackaged and re-signed so I injected the gadget\" | The repackaged app attacks only its own installer. This is your patch, not the vendor's defect | A distribution channel you can poison so the repacked build reaches **other** users — that is D17 |\n| \"`isInsideSecureHardware()` returns false\" on an AVD | The emulator's keystore is software-backed. A harness artefact (D26-014) | The same observation on a **physical** device, or the server accepting a software-rooted attestation chain for a hardware-gated action — D12/D21 |\n| \"Play Integrity returns an empty verdict on my device\" | Rooted and emulated devices produce an empty verdict by design | The **server** accepting a request carrying no verdict at all, or one bound to nothing — D21 |\n| \"`adb backup` produced an empty archive\" | Android 12+ excludes app data from `adb backup` unless `android:debuggable=\"true\"`. An expected default | Data extracted through `bmgr` + the local or D2D transport, which is the current technique — D11 |\n| \"drozer reported no exported components\" | On `targetSdk >= 31` every component with an intent-filter must declare `android:exported`, so this is the **platform default**. On `targetSdk >= 30` the agent also needs `QUERY_ALL_PACKAGES` or it sees a truncated view | The merged manifest and `dumpsys package` resolver tables read by hand, showing a component drozer could not see — D03/D04 |\n| \"`scanner.provider.injection` says Not Vulnerable\" | It probes a single `'` and flags only on `unrecognized token` in the exception text. Any provider that catches or rewraps its exception reads clean | A manual `app.provider.query --projection \"'\"` and a `UNION SELECT`, plus a traversal to a path other than `/etc/hosts` — D07 (D26-033) |\n| \"MobSF/mobsfscan/semgrep produced 60 findings\" | Scanner output is a hypothesis list. Submitting it raw is the fastest route to duplicate-or-N/A on every platform, and on a mature programme the easy hits are already filed | Each hit reproduced by hand with the observable its owning chapter names, and the guard the rule could not see recorded for the ones that fall away |\n| \"The app is not obfuscated / APKiD found no packer\" | `lack_of_binary_hardening.lack_of_obfuscation` = **P5**. MASVS is explicit that the absence of MAS-R measures does not inherently introduce a vulnerability | The business rule you read out of the decompile — a fraud threshold, a velocity limit, an allowlist of privileged account ids — D21/D23 |\n| \"`adb root` is refused: `adbd cannot run as root in production builds`\" | A property of `user` builds and of `google_apis_playstore` images. A harness fact | Nothing. Record it in the methodology and pick a `google_apis` image (D26-003) |\n| \"The system CA push to `/system/etc/security/cacerts` succeeded but TLS still fails on every host\" | On API 34+ that directory is ignored at runtime; this is the classic false \"the app pins everything\" | Per-host TLS failure **after** the Conscrypt APEX bind and the zygote `nsenter` are verified from inside the app's namespace (D26-005, D26-006) — then it really is pinning, and it is still P5 |\n| \"I can read `/data/data/<pkg>/shared_prefs/auth.xml` as root\" | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` = **P5**; the sandbox holds against everyone except the device owner | The token authenticating a **different** account from your own machine, or a non-root path to the same bytes (backup, exported provider, debuggable build) — D11 |\n| \"The app sets `FLAG_SECURE` so I had to strip it to record the PoC\" | The app behaving correctly. `insecure_data_storage.screen_caching_enabled` = P5 even when it is absent | Nothing about the flag. The finding is whatever the recorded screen shows — D20/D27 |\n| \"`dozermapper/dozer` is a mobile pentest tool\" | It is a Java Bean-to-Java Bean mapper with no Android-security relevance. The Android tool is **drozer** | Nothing. Fix the citation (D26-040) |\n| \"`adb shell monkey` crashed the app 40 times\" | A crude crash-fuzzer with no security signal, and `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5** anyway | A crash reachable from a **third-party app's** crafted Intent that corrupts state or persists (a crash loop that survives restart) — D04/D17, and still rated on impact |\n| \"A tool printed nothing, therefore the app is clean\" | The four documented silent-zero sources (abstract class, R8 rename, init-time path, narrow scanner probe) each produce exactly this output | A positive control fired in the same session, cited next to the negative in the ruled-out register (D26-063) |\n| \"I bypassed the client-side premium check with `hooking set return_value`\" | A client-side gate flipped on your own device. The UI changing proves nothing | The **subsequent API calls** succeeding server-side — D23/D15, with a body diff (D26-069) |\n| \"The mobile app uses `/v1` and the website uses `/v3`\" | A version difference alone is Informational | The **weakened control** on the older path: unauthenticated read, cross-account object access, absent rate limit, mass-assignable field, extra exposed fields — D15 (D26-076) |\n| \"Response timing differed by 800 ms for a valid username\" | A single outlier. Network jitter routinely produces 2x outliers | n >= 10 interleaved trials showing the suspect group's mean >= 2 sigma above control, with the distribution in the report (D26-070) |\n| \"The request returned 200 instead of 403 with my header\" | Status-code-only claims are the most common rejected-as-N/A category. A byte-identical body is not a bypass | A body differential after normalisation, with the changed content identified (D26-069) |\n| \"Cydia Substrate / Xposed / AndroidSSLTrustKiller / QARK did not work\" | All DEAD on modern Android (D26-062). A failed legacy technique is not evidence the app is secure | Nothing from the failure. Re-test with the current tool and report what *that* shows |",
  "joins": "- **The harness acceptance script x the pinning conclusion (D26-001/D26-005 x D14 x D15).** Nobody\n  reviews the lab build and the network findings together, because one is \"setup\" and the other is\n  \"results\". The join is the single highest-value one in this chapter: a CA bind that never reached the\n  zygote's mount namespace makes *every* host fail TLS, which is reported as \"the app pins all traffic\",\n  which closes the entire D15 API section as untestable. One line in an acceptance script — a control app\n  that is known not to pin, decrypting — separates a real pinning finding from a dead lab. Run it before\n  any network conclusion is written, and put its timestamp in the report.\n- **The `frida-trace` zero-match x the split set x dynamic loading (D26-047/D26-018 x D17 x D19).** The\n  instrumentation reviewer reads \"Started tracing 0 functions\" as \"the class does not exist\"; the\n  acquisition reviewer pulled only `base.apk`; the supply-chain reviewer never hears about either. The\n  join is mechanical and it finds a whole hidden code path: a pattern that matches zero on `-f` and N on\n  `-p`, against an app whose `pm path` returned four lines, is a class that lives in a feature split or a\n  runtime class loader — which is exactly the code that ships outside the reviewed artefact.\n- **The scanner's \"Not Vulnerable\" x the provider inventory x the file-read primitive (D26-033 x D07 x\n  D11).** The IPC reviewer runs `scanner.provider.injection` and moves on; the storage reviewer\n  inventories `shared_prefs` and rates a plaintext token P5 because it needs root. Neither is a finding\n  alone. The join is the intersection: a provider the scanner dismissed, manually probed with\n  `app.provider.download content://<auth>/x/../../../../data/data/<pkg>/shared_prefs/auth.xml`, converts\n  the P5 storage observation into a zero-permission remote read of another user's session token. The\n  scanner's own source is the reason nobody looks — one quote, one payload, one oracle.\n- **The mobile client's endpoint list x the web client's endpoint list (D26-076 x D15 x D01).** The mobile\n  team and the web team ship against the same backend and are reviewed by different people in different\n  engagements. The join is to put both clients through **one** proxy project and diff behaviourally: the\n  app's hardcoded `/v1` path routinely predates the site's `/v3`, and the controls added at v2 and v3 were\n  never backported. This produces P1s from a harness step, and it needs no device compromise at all —\n  once you have the endpoint list, the probes run from `curl`.\n- **The instrumentation job list x the evidence bundle (D26-050 x D27 x D21).** The tester knows which\n  hooks were loaded; the triager reading the report does not. A screenshot of a premium feature unlocked,\n  captured while `root-detection-disable` and a return-value override were both installed, is\n  indistinguishable from a real server-side authorisation flaw — and indistinguishable from a fabrication.\n  `jobs list` pasted next to the screenshot is what makes the evidence legible, and it is also what forces\n  the tester to notice that the finding is client-side only.\n- **The `FLAG_SECURE` strip x the screenshot-control review (D26-051 x D20 x D27).** The evidence engineer\n  strips the flag to record a PoC; the privacy reviewer separately tests whether sensitive screens are\n  protected. If the two never talk, the report can simultaneously contain a screenshot of a screen the\n  report also claims is protected. Run the capture **twice** — once with the strip, once without — and let\n  the black frame be the positive evidence for the D20 control while the stripped frame carries the PoC.\n- **The device-capability matrix x the payments and identity scope (D26-014 x D12 x D13 x D23).** Scoping\n  happens in week zero; the discovery that StrongBox, real biometrics and NFC cannot be exercised on the\n  emulator happens in week two. The join is to run the matrix **at kickoff** against the feature list, so\n  every hardware-dependent row becomes a priced physical-device lane or a named coverage limitation in the\n  SoW — rather than a silently skipped class, or worse, an emulator artefact reported as a finding.\n- **APKiD's `anti_root` line x the resilience chapter's hook list (D26-023 x D21 x D16).** The recon pass\n  runs APKiD and records \"RootBeer present\" as an informational line; the resilience pass separately\n  writes a generic root bypass. The join is that APKiD names the **exact `.so`**, which turns a generic\n  `fridantiroot` script into a targeted `Interceptor.attach` on one export, and — more importantly — tells\n  the native reviewer which library is worth an hour of Ghidra. The same line also tells you the check is\n  native, so a Java-only hook set will silently fail to bypass it.",
@@ -129,8 +129,10 @@
     "AM-12"
    ],
    "applies_to": "emulator-based labs; Apple Silicon hosts especially",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TOOL-0021 (Magisk) as the fallback route",
    "record": "",
    "legacy_meta": {},
@@ -173,8 +175,13 @@
     "AM-07"
    ],
    "applies_to": "devices at API ≤ 33. **targetSdk < 24** apps trust user CAs and need none of this — if traffic decrypts from the *user* store, that is a D14 finding, record it",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root, mitm, api<=33",
+   "requires_tags": [
+    "device",
+    "root",
+    "mitm",
+    "api<=33"
+   ],
    "maps_to": "MASTG-TECH-0011 (Setting Up an Interception Proxy), MASTG-TECH-0010 (Basic Network Monitoring/Sniffing), MASTG-TOOL-0077 (Burp Suite), MASTG-TOOL-0097 (mitmproxy), MASTG-TOOL-0079 (ZAP); ATT&CK T1638, T1632",
    "record": "",
    "legacy_meta": {},
@@ -327,8 +334,12 @@
     "AM-12"
    ],
    "applies_to": "API 34+ builds whose Conscrypt implements the check; must be set **before** the app's first TLS use, hence spawn mode",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, api>=34",
+   "requires_tags": [
+    "device",
+    "frida",
+    "api>=34"
+   ],
    "maps_to": "Conscrypt `SystemCertificateSource`, quoted in the OverrideSysPropModule README: `if ((System.getProperty(\"system.certs.enabled\") != null) && (System.getProperty(\"system.certs.enabled\")).equals(\"true\")) { return new File(System.getenv(\"ANDROID_ROOT\") + \"/etc/security/cacerts\"); }`",
    "record": "",
    "legacy_meta": {},
@@ -351,7 +362,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Where namespace surgery is impractical, flip the app's own Conscrypt source back to\n`$ANDROID_ROOT/etc/security/cacerts` from inside the process.",
-   "how": "```javascript\n  // frida -U -f com.target.app -l certs.js --no-pause\n  Java.perform(function () {\n    var S = Java.use('java.lang.System');\n    S.setProperty('system.certs.enabled', 'true');\n    console.log('[+] system.certs.enabled = ' + S.getProperty('system.certs.enabled'));\n  });\n```\nCombine with a populated `/system/etc/security/cacerts` (D26-005 steps 1–3).",
+   "how": "```javascript\n  // frida -D \"$SERIAL\" -f com.target.app -l certs.js\n  Java.perform(function () {\n    var S = Java.use('java.lang.System');\n    S.setProperty('system.certs.enabled', 'true');\n    console.log('[+] system.certs.enabled = ' + S.getProperty('system.certs.enabled'));\n  });\n```\nCombine with a populated `/system/etc/security/cacerts` (D26-005 steps 1–3).",
    "proof": "The property reading back as `true`, and the app's TLS traffic appearing in the proxy with no\n`nsenter` step performed.",
    "escalation": "-> D14, D15.",
    "ruled_out_when": "The property reads back `true` and TLS still fails on every host — then the\nlegacy directory was never populated (steps 1–3), or this Conscrypt build does not implement the check\nand D26-005 is the only route. Note that this path requires code execution in the process, so it is\nstrictly weaker evidence than a system-store install: any finding captured under it must say so."
@@ -371,8 +382,11 @@
     "AM-07"
    ],
    "applies_to": "stock non-rooted handsets; apps that do **not** verify their own signature",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, mitm",
+   "requires_tags": [
+    "device",
+    "mitm"
+   ],
    "maps_to": "MASTG-TECH-0004 (Repackaging Apps), MASTG-TECH-0039 (Repackaging & Re-Signing), MASTG-TECH-0011, MASTG-TOOL-0011 (Apktool), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TOOL-0123 (apksigner)",
    "record": "",
    "legacy_meta": {},
@@ -453,7 +467,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Embed the Frida gadget in the APK so instrumentation works with no device compromise, which\nmaterially changes how the resulting finding is rated.",
-   "how": "```bash\n  objection patchapk --source target.apk            # or: objection patchapk -s target.apk -a arm64\n  adb install -r target.objection.apk\n  objection explore\n  # manual equivalent:\n  apktool d -o out target.apk\n  cp frida-gadget-<ver>-android-arm64.so out/lib/arm64-v8a/libgadget.so\n  # add  System.loadLibrary(\"gadget\")  to the Application/first-Activity <clinit> smali\n  apktool b -o patched.apk out\n  java -jar uber-apk-signer.jar -a patched.apk --out signed\n  adb install signed/patched-aligned-debugSigned.apk\n  frida -U -n Gadget -l script.js\n```",
+   "how": "```bash\n  objection patchapk --source target.apk            # or: objection patchapk -s target.apk -a arm64\n  adb install -r target.objection.apk\n  objection explore\n  # manual equivalent:\n  apktool d -o out target.apk\n  cp frida-gadget-<ver>-android-arm64.so out/lib/arm64-v8a/libgadget.so\n  # add  System.loadLibrary(\"gadget\")  to the Application/first-Activity <clinit> smali\n  apktool b -o patched.apk out\n  java -jar uber-apk-signer.jar -a patched.apk --out signed\n  adb install signed/patched-aligned-debugSigned.apk\n  frida -D \"$SERIAL\" -n Gadget -l script.js\n```",
    "proof": "The patched app pausing at launch until the Frida client connects, then hooks firing — on a\nstock, non-rooted device. Say exactly that in the report.",
    "escalation": "Combine with `bmgr` backup extraction (D11/D03) and `run-as` on debuggable builds (D02):\nthree no-root data paths that convert P5 storage observations into findings with a real attacker model.",
    "ruled_out_when": "The app refuses to run after repacking (self-signature check or integrity\nattestation). Prefer frida-server on a rooted emulator wherever possible: **repackaging re-signs the app,\nwhich destroys the existing signed-in session and invalidates every self-signature check**, and losing a\nhard-won authenticated session mid-engagement is a real cost."
@@ -501,7 +515,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "A version or ABI mismatch fails in ways that look exactly like target hardening — attach\nhangs, `frida-ps -U` lists nothing, or scripts load and silently never fire. Assert equality, then fire\na hook that *cannot* be absent in a running app.",
-   "how": "```bash\n  adb shell getprop ro.product.cpu.abi           # must match the frida-server build\n  HOST=$(frida --version)\n  adb push frida-server-${HOST}-android-arm64 /data/local/tmp/frida-server\n  adb shell \"chmod 755 /data/local/tmp/frida-server\"\n  adb shell \"su -c '/data/local/tmp/frida-server &'\"\n  DEV=$(adb shell /data/local/tmp/frida-server --version | tr -d '\\r')\n  [ \"$HOST\" = \"$DEV\" ] || { echo \"VERSION MISMATCH host=$HOST device=$DEV — fix before testing\"; exit 1; }\n  frida-ps -Uai | head\n  # positive control: a hook that cannot be absent\n  frida -U -n com.target.app -q -e '\n  Java.perform(function(){\n    var L = Java.use(\"android.util.Log\");\n    L.i.overload(\"java.lang.String\",\"java.lang.String\").implementation = function(a,b){\n      console.log(\"[CTRL] Log.i \" + a); return this.i(a,b); };\n    console.log(\"[CTRL] hook installed\");\n  });'\n```",
+   "how": "```bash\n  adb shell getprop ro.product.cpu.abi           # must match the frida-server build\n  HOST=$(frida --version)\n  adb push frida-server-${HOST}-android-arm64 /data/local/tmp/frida-server\n  adb shell \"chmod 755 /data/local/tmp/frida-server\"\n  adb shell \"su -c '/data/local/tmp/frida-server &'\"\n  DEV=$(adb shell /data/local/tmp/frida-server --version | tr -d '\\r')\n  [ \"$HOST\" = \"$DEV\" ] || { echo \"VERSION MISMATCH host=$HOST device=$DEV — fix before testing\"; exit 1; }\n  frida-ps -Uai | head\n  # positive control: a hook that cannot be absent\n  frida -D \"$SERIAL\" -n com.target.app -q -e '\n  Java.perform(function(){\n    var L = Java.use(\"android.util.Log\");\n    L.i.overload(\"java.lang.String\",\"java.lang.String\").implementation = function(a,b){\n      console.log(\"[CTRL] Log.i \" + a); return this.i(a,b); };\n    console.log(\"[CTRL] hook installed\");\n  });'\n```",
    "proof": "`[CTRL] hook installed` followed by at least one `[CTRL] Log.i` line within seconds of\ntouching the app. **No control output means the instrument is broken and every negative from this\nsession is void.**",
    "escalation": "Record the control-hook output path in the ruled-out register next to every dynamic\nnegative, so each negative carries its own proof of instrument validity (-> D27).",
    "ruled_out_when": "Versions match, the control hook fires, and the *target's* hook still does not — only\nthen is \"the app resists instrumentation\" a hypothesis worth pursuing in D21. Note the failure is\nsymmetrical: a running frida-server is also exactly ATT&CK T1623.001's \"spawn of sh/toybox/toolbox/su or\nequivalent shell process\", so expect the app's RASP to see it."
@@ -563,8 +577,10 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Google Mobile VRP reporting guidance (device/build in text, not screenshots; warn about emulators and rooted devices); AOSP severity modifiers (unlocked bootloader / Developer Mode -> \"No higher than Low\")",
    "record": "",
    "legacy_meta": {},
@@ -605,8 +621,10 @@
     "AM-12"
    ],
    "applies_to": "Android 11+ physical devices",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "physical",
+   "requires_tags": [
+    "physical"
+   ],
    "maps_to": "`adb pair` / `adb connect`; `settings put global http_proxy`; MASTG-TOOL-0004 (adb), MASTG-TOOL-0024 (Scrcpy)",
    "record": "",
    "legacy_meta": {},
@@ -1336,8 +1354,11 @@
     "AM-12"
    ],
    "applies_to": "apps with a local PIN, passcode, licence or entitlement comparison; Android 5+ for the auto-Frida path",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TOOL-0002 (MobSF (Android)), MASTG-TECH-0043 (Method Hooking), MASTG-TECH-0042 (Getting Loaded Classes and Methods Dynamically)",
    "record": "",
    "legacy_meta": {},
@@ -1416,7 +1437,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "With R8 renaming, grepping for an SDK's class name fails. Anchor on the three things R8 does\n**not** rename — string constants, resource identifiers and native symbols — then hook the obfuscated\nname you recovered.",
-   "how": "```bash\n  # anchor 1: string constants the SDK logs or sends\n  grep -rn '\"n_intent_uri\"\\|\"split_id\"\\|\"customOutputUri\"\\|\"mv://\"\\|\"/stlog\"' out/sources/\n  # anchor 2: resource ids (never renamed)\n  grep -rn \"R.string\\.\\|R.layout\\.\" out/sources/ | grep -iE 'crop|zendesk|intercom|engage'\n  apktool d -f apk/base.apk -o out2 && grep -rn \"crop_\\|zui_\\|intercom_\" out2/res/values/*.xml | head\n  # anchor 3: JNI exports\n  nm -D --defined-only apk_extracted/lib/arm64-v8a/*.so | grep ' T Java_'\n  # anchor 4: dex symbol presence, per split\n  for d in $(unzip -Z1 apk/base.apk 'classes*.dex'); do unzip -p apk/base.apk \"$d\" > /tmp/$d; done\n  dexdump -d /tmp/classes*.dex > /tmp/dump.txt\n  grep -c \"Lcom/vendor/sdk/\" /tmp/dump.txt\n  # then hook by the obfuscated name the anchor gave you\n  frida -U -f com.target.app -l hook.js --no-pause\n```",
+   "how": "```bash\n  # anchor 1: string constants the SDK logs or sends\n  grep -rn '\"n_intent_uri\"\\|\"split_id\"\\|\"customOutputUri\"\\|\"mv://\"\\|\"/stlog\"' out/sources/\n  # anchor 2: resource ids (never renamed)\n  grep -rn \"R.string\\.\\|R.layout\\.\" out/sources/ | grep -iE 'crop|zendesk|intercom|engage'\n  apktool d -f apk/base.apk -o out2 && grep -rn \"crop_\\|zui_\\|intercom_\" out2/res/values/*.xml | head\n  # anchor 3: JNI exports\n  nm -D --defined-only apk_extracted/lib/arm64-v8a/*.so | grep ' T Java_'\n  # anchor 4: dex symbol presence, per split\n  for d in $(unzip -Z1 apk/base.apk 'classes*.dex'); do unzip -p apk/base.apk \"$d\" > /tmp/$d; done\n  dexdump -d /tmp/classes*.dex > /tmp/dump.txt\n  grep -c \"Lcom/vendor/sdk/\" /tmp/dump.txt\n  # then hook by the obfuscated name the anchor gave you\n  frida -D \"$SERIAL\" -f com.target.app -l hook.js\n```",
    "proof": "An obfuscated class (`a.b.c.d`) tied to a known SDK by a string or resource anchor, plus a\nFrida hook on that obfuscated name producing the expected behaviour.",
    "escalation": "-> D17 and D18 (SDK reachability: \"is this vulnerable library actually entered, with what\narguments, from where\"), D16 (native entry points).",
    "ruled_out_when": "No anchor of any of the four kinds resolves to the library, *and* the runtime class\nenumeration (`Java.enumerateLoadedClasses`, D26-048) does not list it after the feature is exercised.\nA failed `grep` for the class name alone rules out nothing."
@@ -1720,8 +1741,11 @@
     "AM-12"
    ],
    "applies_to": "all; `cmd content` needs ADB from Android 8.0+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, provider",
+   "requires_tags": [
+    "device",
+    "provider"
+   ],
    "maps_to": "MASTG-TECH-0148 (Interacting with Android ContentProviders), MASTG-TOOL-0004 (adb); H1 #242727 (Nextcloud, $75), #518669, #534541",
    "record": "",
    "legacy_meta": {},
@@ -1770,8 +1794,11 @@
     "AM-04"
    ],
    "applies_to": "apps deployed on managed or corporate handsets, or that talk to a host reachable only from the device's network",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, backend-api",
+   "requires_tags": [
+    "device",
+    "backend-api"
+   ],
    "maps_to": "drozer-modules `meatballs1/auxillary/port_forward.py`",
    "record": "",
    "legacy_meta": {},
@@ -1814,8 +1841,10 @@
     "AM-11"
    ],
    "applies_to": "any shipped build carrying `android:debuggable=\"true\"`. **API gate:** on `targetSdk >= 31` a debuggable release build is unambiguously a developer choice; Android 12 also excludes app data from `adb backup` **unless** `android:debuggable=\"true\"`, which makes the flag doubly valuable",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "drozer `app.package.debuggable`, `exploit/jdwp/check.py`; MASTG-TOOL-0019 (jdb), MASTG-TECH-0031 (Debugging), MASTG-TECH-0040 (Waiting for the Debugger); CWE-489",
    "record": "",
    "legacy_meta": {},
@@ -1974,7 +2003,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Spawning catches `Application.onCreate`-time behaviour — key derivation, pinning setup, root\nchecks, anti-tamper — that attaching misses entirely. Attaching is the only way to hook classes loaded\nby a lazily-initialised class loader. Decide, do not default.",
-   "how": "```bash\n  frida-ps -Uai                                  # -a applications only, -i include all installed\n  frida-ps -U -j                                 # JSON\n  frida-ps -Ua                                   # running apps\n  frida -U -f com.target.app -l hook.js          # spawn, gated (paused until you resume)\n  frida -U -f com.target.app -l hook.js --no-pause\n  frida -U -N com.target.app -l hook.js          # attach by identifier\n  frida -U -n \"com.target.app:remote\" -l hook.js # attach to a separate-process service\n  frida -U -p 12345 -l hook.js                   # attach by PID\n  frida -U -W 'com.target.*' -l hook.js          # await a spawn matching PATTERN\n  frida -H 127.0.0.1:27042 -N com.target.app     # remote frida-server\n  frida -U -f com.target.app -l a.js -l b.js --runtime=v8 --debug\n  frida-kill -U <pid>\n```\nOther verified `application.py` flags: `-D/--device`, `-R/--remote`, `--certificate`, `--origin`,\n`--token`, `--keepalive-interval`, `--device-option`, `--stun-server`, `--relay`,\n`-F/--attach-frontmost`, `--stdio`, `--aux`, `--realm`, `--exceptor`, `--squelch-crash`,\n`-O/--options-file`.",
+   "how": "```bash\n  frida-ps -Uai                                  # -a applications only, -i include all installed\n  frida-ps -U -j                                 # JSON\n  frida-ps -Ua                                   # running apps\n  frida -D \"$SERIAL\" -f com.target.app -l hook.js          # spawn, gated (paused until you resume)\n  frida -D \"$SERIAL\" -f com.target.app -l hook.js\n  frida -D \"$SERIAL\" -N com.target.app -l hook.js          # attach by identifier\n  frida -D \"$SERIAL\" -n \"com.target.app:remote\" -l hook.js # attach to a separate-process service\n  frida -D \"$SERIAL\" -p 12345 -l hook.js                   # attach by PID\n  frida -D \"$SERIAL\" -W 'com.target.*' -l hook.js          # await a spawn matching PATTERN\n  frida -H 127.0.0.1:27042 -N com.target.app     # remote frida-server\n  frida -D \"$SERIAL\" -f com.target.app -l a.js -l b.js --runtime=v8 --debug\n  frida-kill -U <pid>\n```\nOther verified `application.py` flags: `-D/--device`, `-R/--remote`, `--certificate`, `--origin`,\n`--token`, `--keepalive-interval`, `--device-option`, `--stun-server`, `--relay`,\n`-F/--attach-frontmost`, `--stdio`, `--aux`, `--realm`, `--exceptor`, `--squelch-crash`,\n`-O/--options-file`.",
    "proof": "`frida-ps -Uai` listing the target with a PID. **A hook that prints on `-f` but not on `-p`\nproves the sink executes before you can attach** — that delta is itself evidence for an early-boot code\npath worth reviewing, not a failure.",
    "escalation": "-> D12 (key material captured at `onCreate`), D14 (pinning setup), D21 (RASP\ninitialisation), D13 (session bootstrap).",
    "ruled_out_when": "The same hook produces output under **both** `-f` and `-p` and still misses the\nvalue you expect — then the code path is not the one you think, and the next step is D26-046 (wide\ntracing) rather than another overload. Two hard constraints to carry: **`frida -f` spawns the app\nitself, so you cannot also deliver an external Intent to that launch** (use spawn gating —\n`device.enable_spawn_gating()` + `on('spawn-added')` -> attach -> resume — or attach with `-p` and invoke\nthe parsing method directly); and **killing `frida -f` kills the app**, so attach with `-p` whenever the\napp must survive the session."
@@ -2453,7 +2482,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "`FLAG_SECURE` blocks screenshots, remote displays and recents snapshots — including the\nevidence a triager needs. Strip it at runtime for capture, and say in the report that you did.",
-   "how": "```javascript\n  // frida -U -f com.target.app -l disable-flag-secure.js --no-pause\n  Java.perform(function () {\n    var LP = Java.use('android.view.WindowManager$LayoutParams');\n    var FLAG_SECURE = LP.FLAG_SECURE.value;          // 0x00002000\n    var Window = Java.use('android.view.Window');\n    var Activity = Java.use('android.app.Activity');\n    function strip(v) { return v & (~FLAG_SECURE); }\n    Window.setFlags.overload('int','int').implementation = function (f, m) {\n      return this.setFlags.call(this, strip(f), strip(m)); };\n    Window.addFlags.implementation = function (f) { return this.addFlags.call(this, strip(f)); };\n    Window.setAttributes.implementation = function (a) {\n      a.flags.value = strip(a.flags.value); return this.setAttributes.call(this, a); };\n    Activity.onResume.implementation = function () {\n      this.onResume(); var self = this;\n      Java.scheduleOnMainThread(function () {\n        try { self.getWindow().clearFlags(FLAG_SECURE); } catch (e) {} });\n    };\n  });\n```\n```bash\nadb exec-out screencap -p > evidence/F-007/01.png\nadb shell screenrecord --bit-rate 8000000 --time-limit 180 /sdcard/poc.mp4 && adb pull /sdcard/poc.mp4\nscrcpy --record poc.mp4\n```\nHook **every** overload that can re-apply the flag (`setFlags`, `addFlags`, `setAttributes`) and clear\nit again after each `onResume` so Dialogs and Fragments inherit the unlocked state. React Native and\nFlutter apps create nested windows — also hook `android.app.Dialog` or walk\n`getWindow().peekDecorView()` if black frames persist.",
+   "how": "```javascript\n  // frida -D \"$SERIAL\" -f com.target.app -l disable-flag-secure.js\n  Java.perform(function () {\n    var LP = Java.use('android.view.WindowManager$LayoutParams');\n    var FLAG_SECURE = LP.FLAG_SECURE.value;          // 0x00002000\n    var Window = Java.use('android.view.Window');\n    var Activity = Java.use('android.app.Activity');\n    function strip(v) { return v & (~FLAG_SECURE); }\n    Window.setFlags.overload('int','int').implementation = function (f, m) {\n      return this.setFlags.call(this, strip(f), strip(m)); };\n    Window.addFlags.implementation = function (f) { return this.addFlags.call(this, strip(f)); };\n    Window.setAttributes.implementation = function (a) {\n      a.flags.value = strip(a.flags.value); return this.setAttributes.call(this, a); };\n    Activity.onResume.implementation = function () {\n      this.onResume(); var self = this;\n      Java.scheduleOnMainThread(function () {\n        try { self.getWindow().clearFlags(FLAG_SECURE); } catch (e) {} });\n    };\n  });\n```\n```bash\nadb exec-out screencap -p > evidence/F-007/01.png\nadb shell screenrecord --bit-rate 8000000 --time-limit 180 /sdcard/poc.mp4 && adb pull /sdcard/poc.mp4\nscrcpy --record poc.mp4\n```\nHook **every** overload that can re-apply the flag (`setFlags`, `addFlags`, `setAttributes`) and clear\nit again after each `onResume` so Dialogs and Fragments inherit the unlocked state. React Native and\nFlutter apps create nested windows — also hook `android.app.Dialog` or walk\n`getWindow().peekDecorView()` if black frames persist.",
    "proof": "`screencap`/`screenrecord` producing real frames of the protected screen. Note the inverse:\na `FLAG_SECURE` screen capturing as **black** is itself the evidence that the D20 screenshot control\nworks — record that as a ruled-out entry rather than a gap.",
    "escalation": "-> D27 (evidence), D20 (the control's presence or absence).",
    "ruled_out_when": "Frames still render black after all three overloads are hooked and `onResume` clears\nthe flag — then the surface is a `SurfaceView`/DRM path, and stills composed from a second device\n(D26-013) are the honest alternative. Never report the *presence* of `FLAG_SECURE` as a finding."
@@ -2473,8 +2502,12 @@
     "AM-03"
    ],
    "applies_to": "`detectUnsafeIntentLaunch()` needs an **Android 12+ (API 31)** test device; `detectBlockedBackgroundActivityLaunch()` needs **Android 16+**. The underlying bug exists on all versions — the detector is only the discovery tool",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, api>=31",
+   "requires_tags": [
+    "device",
+    "frida",
+    "api>=31"
+   ],
    "maps_to": "MASTG-TECH-0043 (Method Hooking); rule `mastg-android-strictmode`; Android 12 behaviour change \"Unsafe Intent Launch Detection\"; `developer.android.com/guide/components/activities/background-starts` (`detectBlockedBackgroundActivityLaunch()`)",
    "record": "",
    "legacy_meta": {},
@@ -2503,7 +2536,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Rather than reading code for nested-intent launches, make the app report them. Inject the\ndetector at process start and then drive every exported entry point.",
-   "how": "```javascript\n  // frida -U -f com.target.app -l strict.js --no-pause\n  Java.perform(function () {\n    var SM = Java.use('android.os.StrictMode');\n    var B  = Java.use('android.os.StrictMode$VmPolicy$Builder');\n    var b = B.$new().detectUnsafeIntentLaunch().penaltyLog();\n    try { b = b.detectBlockedBackgroundActivityLaunch(); } catch (e) {}\n    SM.setVmPolicy(b.build());\n    console.log('[strictmode] detectors armed');\n  });\n```\n```bash\nadb logcat -c\nadb logcat -v year -v UTC | grep -iE 'StrictMode|UnsafeIntentLaunch' &\n# drive every exported component\nadb shell dumpsys package com.target.app | grep -oE 'com\\.target\\.app/[A-Za-z0-9_.$]+' | sort -u \\\n  | while read -r c; do adb shell am start -n \"$c\" --es x 1 2>/dev/null; done\n```\nOther platform-mitigation strings worth grepping in the same run, each of which is a \"the platform\nblocked it\" negative result you can cite:\n```bash\ngrep -E \"Indirect notification activity start \\(trampoline\\) from\" run.log   # A12 trampoline block\ngrep -E \"Untrusted touch due to occlusion by\" run.log                        # A12 tapjacking block\ngrep -E \"Intent does not match component's intent filter:|Access blocked:\" run.log  # A16 intent matching\ngrep -E \"sendto failed: (EPERM|ECONNABORTED)\" run.log                        # A16 local network\ngrep -E \"ForegroundServiceStartNotAllowedException\" run.log                  # A12/14/15 FGS\ngrep -E \"realCallingPackage|callingPackage\" run.log                          # BAL attribution\n```",
+   "how": "```javascript\n  // frida -D \"$SERIAL\" -f com.target.app -l strict.js\n  Java.perform(function () {\n    var SM = Java.use('android.os.StrictMode');\n    var B  = Java.use('android.os.StrictMode$VmPolicy$Builder');\n    var b = B.$new().detectUnsafeIntentLaunch().penaltyLog();\n    try { b = b.detectBlockedBackgroundActivityLaunch(); } catch (e) {}\n    SM.setVmPolicy(b.build());\n    console.log('[strictmode] detectors armed');\n  });\n```\n```bash\nadb logcat -c\nadb logcat -v year -v UTC | grep -iE 'StrictMode|UnsafeIntentLaunch' &\n# drive every exported component\nadb shell dumpsys package com.target.app | grep -oE 'com\\.target\\.app/[A-Za-z0-9_.$]+' | sort -u \\\n  | while read -r c; do adb shell am start -n \"$c\" --es x 1 2>/dev/null; done\n```\nOther platform-mitigation strings worth grepping in the same run, each of which is a \"the platform\nblocked it\" negative result you can cite:\n```bash\ngrep -E \"Indirect notification activity start \\(trampoline\\) from\" run.log   # A12 trampoline block\ngrep -E \"Untrusted touch due to occlusion by\" run.log                        # A12 tapjacking block\ngrep -E \"Intent does not match component's intent filter:|Access blocked:\" run.log  # A16 intent matching\ngrep -E \"sendto failed: (EPERM|ECONNABORTED)\" run.log                        # A16 local network\ngrep -E \"ForegroundServiceStartNotAllowedException\" run.log                  # A12/14/15 FGS\ngrep -E \"realCallingPackage|callingPackage\" run.log                          # BAL attribution\n```",
    "proof": "A `StrictMode` violation entry with a full stack trace naming the class and method that\nunparcelled a nested intent and immediately launched a component — a runtime-confirmed D08 site with no\nsource reading.",
    "escalation": "-> D08 (intent redirection / PendingIntent), D04 (activity launch), D05 (broadcast).",
    "ruled_out_when": "The detector is confirmed armed (the `[strictmode] detectors armed` line), every\nexported component has been driven with a nested-intent extra, and no violation is logged. On a test\ndevice below API 31 the detector does not exist at all and the absence of violations means nothing —\nstate the device's API level next to the result."
@@ -2672,8 +2705,10 @@
     "AM-11"
    ],
    "applies_to": "**debuggable builds only** — shipped `android:debuggable=\"true\"` (which is D26-038's finding) or a build you repacked debuggable (which is your patch, not a finding)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TOOL-0019 (jdb), MASTG-TECH-0031 (Debugging), MASTG-TECH-0040 (Waiting for the Debugger), MASTG-TECH-0038 (Patching)",
    "record": "",
    "legacy_meta": {},
@@ -2722,8 +2757,11 @@
     "AM-12"
    ],
    "applies_to": "rooted or userdebug devices; `strace` typically needs root",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root",
+   "requires_tags": [
+    "device",
+    "root"
+   ],
    "maps_to": "MASTG-TECH-0032 (Execution Tracing), MASTG-TECH-0027 (Get Open Files — `NAME` and `TYPE` are the relevant columns), MASTG-TECH-0028 (Get Open Connections — `rem_address`, `tx_queue`/`rx_queue`, `uid` in `/proc/<pid>/net/tcp`), MASTG-TECH-0030 (Sandbox Inspection), MASTG-TECH-0143 (Monitor File System Operations in WebViews)",
    "record": "",
    "legacy_meta": {},
@@ -2877,8 +2915,18 @@
     "AM-12"
    ],
    "applies_to": "React Native, Flutter, Cordova/Capacitor, Unity/IL2CPP, Xamarin/.NET MAUI",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, flutter, react-native, hermes, cordova, capacitor, unity, xamarin",
+   "requires_tags": [
+    "device",
+    "frida",
+    "flutter",
+    "react-native",
+    "hermes",
+    "cordova",
+    "capacitor",
+    "unity",
+    "xamarin"
+   ],
    "maps_to": "MASTG-TOOL-0001 (Frida (Android)), MASTG-TOOL-0029 (objection (Android)), MASTG-TOOL-0032 (Frida CodeShare), MASTG-TOOL-0036 (r2frida), MASTG-TOOL-0116 (blutter), MASTG-TOOL-0100 (reFlutter), MASTG-TOOL-0101 (disable-flutter-tls-verification), MASTG-TOOL-0104 (hermes-dec), MASTG-TOOL-0009 (APKiD); MASTG-TECH-0156, MASTG-TECH-0109 (Intercepting Flutter HTTPS Traffic)",
    "record": "",
    "legacy_meta": {},
@@ -2911,7 +2959,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Each framework needs a different instrumentation entry point, and the wrong one produces\nsilence that looks like hardening. Set them all up once and record which the target needs.",
-   "how": "```bash\n  # common base\n  adb root 2>/dev/null; frida-ps -U | head\n  # React Native (old bridge) — CatalystInstanceImpl load hook + XHR interceptor\n  frida -U -f <pkg> -l rn-bridge.js --no-pause\n  # Flutter — TLS and symbol recovery\n  frida -U -f <pkg> -l disable-flutter-tls.js --no-pause\n  python3 blutter.py apk_extracted/lib/arm64-v8a out_dir && wc -l out_dir/pp.txt out_dir/objs.txt\n  frida -U -f <pkg> -l out_dir/blutter_frida.js --no-pause\n  # Cordova / Capacitor — chrome://inspect (needs webContentsDebuggingEnabled or a debuggable build)\n  objection -g <pkg> explore\n  # Unity / IL2CPP\n  npm exec frida-il2cpp-bridge -- -f <pkg> dump --out-dir dumps\n  # Xamarin / .NET\n  frida-trace -U -f <pkg> -i \"mono_*\"\n```\nLoad your own JS into a running React Native app with no repack:\n```javascript\n// inject-bundle.js\nJava.perform(function () {\n  var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n  C.loadScriptFromAssets.implementation = function (am, url, z) {\n    this.loadScriptFromAssets(am, url, z);\n    this.loadScriptFromFile('/data/data/<pkg>/files/hook.js',\n                            '/data/data/<pkg>/files/hook.js', z);\n  };\n});\n```\nInside `hook.js` you have `this.process`, `XMLHttpRequest`, `fetch`, `WebSocket`, `FormData` and the\nMetro module system (`__r`, `__d`, `__c`). On the new architecture, hook `global.__turboModuleProxy`\ninstead. **Prefer application-layer interception over the TLS fight** when pinning, a stripped\nBoringSSL or certificate transparency blocks the proxy:\n```javascript\n// React Native — full request/response logging, TLS-independent\nthis.XMLHttpRequest._interceptor = {\n  requestSent: (id, url, method, headers) => console.log('REQ', id, method, url, JSON.stringify(headers)),\n  responseReceived: (id, url, status, h) => console.log('RES', id, status, url),\n  dataReceived: (id, data) => console.log('DATA', id, data)\n};\n// Capacitor — the native HTTP path is a plain JS interface\nconsole.log(typeof CapacitorHttpAndroidInterface);\n```\nKeep a running version log so you know before quoting effort which tool will work:\n```bash\n{ echo \"pkg=<pkg>\"\n  python3 -c \"import struct;d=open('apk_extracted/assets/index.android.bundle','rb').read(32);print('hbc',struct.unpack_from('<I',d,8)[0],'srchash',d[12:32].hex())\" 2>/dev/null\n  strings apk_extracted/lib/arm64-v8a/libapp.so 2>/dev/null | grep -m1 -E '^[0-9a-f]{32}$' | sed 's/^/dart_snapshot_hash /'\n  unzip -l apk/base.apk | grep -cE 'libassemblies.*blob\\.so' | sed 's/^/maui9_layout /'\n} >> ~/engagements/framework-versions.log\n```",
+   "how": "```bash\n  # common base\n  adb root 2>/dev/null; frida-ps -U | head\n  # React Native (old bridge) — CatalystInstanceImpl load hook + XHR interceptor\n  frida -D \"$SERIAL\" -f <pkg> -l rn-bridge.js\n  # Flutter — TLS and symbol recovery\n  frida -D \"$SERIAL\" -f <pkg> -l disable-flutter-tls.js\n  python3 blutter.py apk_extracted/lib/arm64-v8a out_dir && wc -l out_dir/pp.txt out_dir/objs.txt\n  frida -D \"$SERIAL\" -f <pkg> -l out_dir/blutter_frida.js\n  # Cordova / Capacitor — chrome://inspect (needs webContentsDebuggingEnabled or a debuggable build)\n  objection -g <pkg> explore\n  # Unity / IL2CPP\n  npm exec frida-il2cpp-bridge -- -f <pkg> dump --out-dir dumps\n  # Xamarin / .NET\n  frida-trace -U -f <pkg> -i \"mono_*\"\n```\nLoad your own JS into a running React Native app with no repack:\n```javascript\n// inject-bundle.js\nJava.perform(function () {\n  var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n  C.loadScriptFromAssets.implementation = function (am, url, z) {\n    this.loadScriptFromAssets(am, url, z);\n    this.loadScriptFromFile('/data/data/<pkg>/files/hook.js',\n                            '/data/data/<pkg>/files/hook.js', z);\n  };\n});\n```\nInside `hook.js` you have `this.process`, `XMLHttpRequest`, `fetch`, `WebSocket`, `FormData` and the\nMetro module system (`__r`, `__d`, `__c`). On the new architecture, hook `global.__turboModuleProxy`\ninstead. **Prefer application-layer interception over the TLS fight** when pinning, a stripped\nBoringSSL or certificate transparency blocks the proxy:\n```javascript\n// React Native — full request/response logging, TLS-independent\nthis.XMLHttpRequest._interceptor = {\n  requestSent: (id, url, method, headers) => console.log('REQ', id, method, url, JSON.stringify(headers)),\n  responseReceived: (id, url, status, h) => console.log('RES', id, status, url),\n  dataReceived: (id, data) => console.log('DATA', id, data)\n};\n// Capacitor — the native HTTP path is a plain JS interface\nconsole.log(typeof CapacitorHttpAndroidInterface);\n```\nKeep a running version log so you know before quoting effort which tool will work:\n```bash\n{ echo \"pkg=<pkg>\"\n  python3 -c \"import struct;d=open('apk_extracted/assets/index.android.bundle','rb').read(32);print('hbc',struct.unpack_from('<I',d,8)[0],'srchash',d[12:32].hex())\" 2>/dev/null\n  strings apk_extracted/lib/arm64-v8a/libapp.so 2>/dev/null | grep -m1 -E '^[0-9a-f]{32}$' | sed 's/^/dart_snapshot_hash /'\n  unzip -l apk/base.apk | grep -cE 'libassemblies.*blob\\.so' | sed 's/^/maui9_layout /'\n} >> ~/engagements/framework-versions.log\n```",
    "proof": "Each harness producing output on a trivial app action, and — for Flutter — a count of what\nBlutter recovered (\"N Dart object-pool entries including the API base URL and the AES key material\").\nThat count is also the paragraph that stops a vendor closing a real finding as \"not exploitable due to\nobfuscation\".",
    "escalation": "-> D19 (framework-specific findings), D14 (Flutter ignores the global proxy setting\nentirely — a global `http_proxy` capturing nothing from a Flutter app is not a pinning result).",
    "ruled_out_when": "APKiD and the file inventory identify the framework, the matching entry point was\nused, and it produced output on a trivial action but not on the flow you care about. Using the *wrong*\nentry point rules out nothing — and the commonest silent failure in this domain is running the Java\nharness against a Flutter or Unity app."
@@ -2932,8 +2980,10 @@
     "AM-09"
    ],
    "applies_to": "apps with a parser in native code (media, image, archive, protocol); AArch64 targets emulated on an x86 host",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native",
+   "requires_tags": [
+    "native"
+   ],
    "maps_to": "AOSP AIDL fuzzing (`fuzzService` takes an IBinder and a data provider, initialises a random Parcel and calls `transact`; C++ via `libbinder_ndk_driver.h`, Rust via `binder_random_parcel_rs`; `service_fuzzer_bindings.go` makes a fuzzer or an explicit exception mandatory for every binder service or the build fails)",
    "record": "",
    "legacy_meta": {},
@@ -3056,7 +3106,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "**A zero is only a negative once the instrument is proven able to produce a positive.** Before\nany \"not vulnerable\" enters the ruled-out register, fire a positive control in the same session.",
-   "how": "```bash\n  # 1. against a component you already confirmed vulnerable by code review:\n  dz> run scanner.provider.injection -a com.target.app\n  dz> run app.provider.query content://<auth>/<known-injectable> --projection \"'\"\n  # 2. against a hook that cannot be absent:\n  frida -U -n com.target.app -q -e 'Java.perform(function(){var L=Java.use(\"android.util.Log\");\n    L.i.overload(\"java.lang.String\",\"java.lang.String\").implementation=function(a,b){\n      console.log(\"[CTRL] \"+a); return this.i(a,b);};});'\n  # 3. against a string you know exists:\n  grep -c 'BuildConfig' out/sources/**/BuildConfig.java\n  # 4. against a lab app with the same bug class (D26-079)\n```\nThe four documented silent-zero sources, each of which must be excluded by name:\n1. **Hooking an abstract framework class** (D26-043) — `android.webkit.WebSettings` records nothing.\n2. **Grepping an annotation or class whose name R8 renamed** (D26-029).\n3. **Init-time code paths that ran before your data arrived** (D26-041, D26-044).\n4. **Narrow hardcoded scanner probes** (D26-033) — one quote, one traversal payload, one oracle.",
+   "how": "```bash\n  # 1. against a component you already confirmed vulnerable by code review:\n  dz> run scanner.provider.injection -a com.target.app\n  dz> run app.provider.query content://<auth>/<known-injectable> --projection \"'\"\n  # 2. against a hook that cannot be absent:\n  frida -D \"$SERIAL\" -n com.target.app -q -e 'Java.perform(function(){var L=Java.use(\"android.util.Log\");\n    L.i.overload(\"java.lang.String\",\"java.lang.String\").implementation=function(a,b){\n      console.log(\"[CTRL] \"+a); return this.i(a,b);};});'\n  # 3. against a string you know exists:\n  grep -c 'BuildConfig' out/sources/**/BuildConfig.java\n  # 4. against a lab app with the same bug class (D26-079)\n```\nThe four documented silent-zero sources, each of which must be excluded by name:\n1. **Hooking an abstract framework class** (D26-043) — `android.webkit.WebSettings` records nothing.\n2. **Grepping an annotation or class whose name R8 renamed** (D26-029).\n3. **Init-time code paths that ran before your data arrived** (D26-041, D26-044).\n4. **Narrow hardcoded scanner probes** (D26-033) — one quote, one traversal payload, one oracle.",
    "proof": "The positive control firing, recorded **in the same session** as the negative, with its\noutput path cited next to the negative in the ruled-out register.",
    "escalation": "-> D27. The ruled-out register *is* the evidence of coverage and a deliverable in its own\nright; a register whose entries say \"the scanner found nothing\" is worthless.",
    "ruled_out_when": "Not a finding. Note the three expected defaults that are routinely misread as\nhardening: \"drozer found nothing\", \"`adb backup` was empty\", and \"no exported components\" are all normal\non a modern target and prove nothing on their own."
@@ -3074,8 +3124,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "the emulator-artefact class generalised from the device to the platform",
    "record": "",
    "legacy_meta": {},
@@ -3581,8 +3633,11 @@
     "AM-01"
    ],
    "applies_to": "any app whose backend also serves a web or partner client — i.e. most of them",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm, backend-api",
+   "requires_tags": [
+    "mitm",
+    "backend-api"
+   ],
    "maps_to": "Bugcrowd VRT `broken_access_control.idor.*`; bug-hunting corpus \"Shadow API — the mobile-to-backend bridge\"",
    "record": "",
    "legacy_meta": {},
@@ -3628,8 +3683,11 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "`dumpsys package` resolver tables; `adb shell monkey` (breadth only — **no security signal on its own**)",
    "record": "",
    "legacy_meta": {},
@@ -3652,7 +3710,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Guarantee that every feature was driven at least once with instrumentation on, and produce the\nliteral list of screens the engagement never reached.",
-   "how": "```bash\n  PKG=com.target.app; OUT=tour; mkdir -p $OUT\n  # a) full activity inventory (including aliases and non-exported)\n  adb shell dumpsys package $PKG | grep -oE \"$PKG/[A-Za-z0-9_.\\$]+\" | sort -u > $OUT/activities.txt\n  # b) instrumentation on for the whole tour\n  frida -U -f $PKG -l hooks.js --no-pause &            # the D26-054 hook pack\n  mitmdump -w $OUT/tour.flows &\n  # c) drive it, snapshotting state per step\n  step(){ adb shell dumpsys activity activities | grep -m1 topResumedActivity >> $OUT/stack.log\n          adb exec-out screencap -p > $OUT/$1.png\n          adb shell \"run-as $PKG find . -newermt '-90 seconds' -type f\" > $OUT/$1.files; }\n  # d) breadth sweep of what manual walking misses\n  adb shell monkey -p $PKG --throttle 300 --pct-syskeys 0 -v 3000 > $OUT/monkey.log 2>&1\n  # e) coverage check: which activities never became topResumed?\n  comm -23 $OUT/activities.txt <(grep -oE \"$PKG/[A-Za-z0-9_.\\$]+\" $OUT/stack.log | sort -u)\n```",
+   "how": "```bash\n  PKG=com.target.app; OUT=tour; mkdir -p $OUT\n  # a) full activity inventory (including aliases and non-exported)\n  adb shell dumpsys package $PKG | grep -oE \"$PKG/[A-Za-z0-9_.\\$]+\" | sort -u > $OUT/activities.txt\n  # b) instrumentation on for the whole tour\n  frida -D \"$SERIAL\" -f $PKG -l hooks.js &            # the D26-054 hook pack\n  mitmdump -w $OUT/tour.flows &\n  # c) drive it, snapshotting state per step\n  step(){ adb shell dumpsys activity activities | grep -m1 topResumedActivity >> $OUT/stack.log\n          adb exec-out screencap -p > $OUT/$1.png\n          adb shell \"run-as $PKG find . -newermt '-90 seconds' -type f\" > $OUT/$1.files; }\n  # d) breadth sweep of what manual walking misses\n  adb shell monkey -p $PKG --throttle 300 --pct-syskeys 0 -v 3000 > $OUT/monkey.log 2>&1\n  # e) coverage check: which activities never became topResumed?\n  comm -23 $OUT/activities.txt <(grep -oE \"$PKG/[A-Za-z0-9_.\\$]+\" $OUT/stack.log | sort -u)\n```",
    "proof": "The `comm` output is the literal list of screens the engagement never reached. Attach it to\nthe report: each named screen is either justified as unreachable or becomes a work item.",
    "escalation": "Screens present in `activities.txt` but never in the tour are the highest-yield\ncandidates for the exported-activity and app-lock-bypass items (-> D04), and the per-step `.files`\ndeltas attribute each written file to a named user action (-> D11).",
    "ruled_out_when": "The `comm` output is empty, or every remaining screen has a stated reason\n(paywalled, region-locked, requires a role the client did not provide — in which case it belongs in the\nblocked register, not in the ruled-out table as \"clean\")."
@@ -3712,8 +3770,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "any new tool, hook chain or harness capability",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "the practice-app corpus: `oversecured/ovaa`, `optiv/InsecureShop`, `B3nac/InjuredAndroid`, `rewanth1997/Damn-Vulnerable-Bank`, `jaiswalakshansh/Vuldroid`, `dineshshetty/Android-InsecureBankv2`, `payatu/diva-android`, `WheresMyBrowser.Android`, VyAPI, DVHMA, WaTF Bank, OWASP GoatDroid",
    "record": "",
    "legacy_meta": {},
@@ -3735,7 +3795,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Verify each harness capability end to end on an app whose bug you already know, so a negative\non the client build is trustworthy. This is the concrete form of D26-063's \"positive control\".",
-   "how": "```bash\n  # provider + IPC chain:            ovaa, InsecureShop, Sieve (legacy semantics only — see below)\n  # WebView settings + bridges:      WheresMyBrowser.Android\n  # intent redirection / URI grants: ovaa\n  # storage + crypto:                diva-android, Android-InsecureBankv2\n  # deep links + auth:               InjuredAndroid, Vuldroid\n  # payments / business logic:       Damn-Vulnerable-Bank\n  adb install ovaa.apk\n  dz> run app.package.attacksurface oversecured.ovaa\n  dz> run scanner.provider.injection -a oversecured.ovaa     # must find the bug you know is there\n  frida -U -f oversecured.ovaa -l hooks.js --no-pause        # your D26-054 pack must produce lines\n```",
+   "how": "```bash\n  # provider + IPC chain:            ovaa, InsecureShop, Sieve (legacy semantics only — see below)\n  # WebView settings + bridges:      WheresMyBrowser.Android\n  # intent redirection / URI grants: ovaa\n  # storage + crypto:                diva-android, Android-InsecureBankv2\n  # deep links + auth:               InjuredAndroid, Vuldroid\n  # payments / business logic:       Damn-Vulnerable-Bank\n  adb install ovaa.apk\n  dz> run app.package.attacksurface oversecured.ovaa\n  dz> run scanner.provider.injection -a oversecured.ovaa     # must find the bug you know is there\n  frida -D \"$SERIAL\" -f oversecured.ovaa -l hooks.js        # your D26-054 pack must produce lines\n```",
    "proof": "Your harness reproduces the known bug in the lab app, with the same commands you will run\nagainst the client build.",
    "escalation": "Feeds D26-063 — the lab-app result is the positive control you cite next to a client-build\nnegative.",
    "ruled_out_when": "Not a finding. One warning that matters: **Sieve, FourGoats and GoatDroid are\nAndroid 4.3-era apps** and their observed defaults must never be generalised to a modern target (-> the\nDEAD table in D26-062). A lab app proves your *instrument* works; it never proves anything about the\nclient's app."

@@ -4,7 +4,7 @@
  "file": "D17-dynamic-loading-and-supplychain.md",
  "why": "It pays because it is the only Android domain whose finished product is *arbitrary code execution with the\nvictim's UID, permissions, Keystore handles and network session* — and because the platform itself\nacknowledges the bug class. Android 14's `setReadOnly()`-before-write mandate for dynamically loaded\nDEX/JAR/APK files, and Android 14's default `ZipException` on `..` entries, are both the platform conceding\nthat apps were routinely loading code from paths another party could rewrite. Oversecured measured the\n`createPackageContext` variant alone at roughly **one in every fifty popular apps**. CVE-2020-8913 (Play\nCore `< 1.7.2`) was estimated at ~13% of Play apps affected and ~8% still vulnerable at disclosure, and the\nGoogle-app chain built on it — intent redirection → provider path-traversal write into\n`splitcompat/<ver>/verified-splits/config.*` → SplitCompat load — ran `chmod -R 777` inside the Google app's\nown data directory, persisted after the attacker app was removed, and needed **no user consent**. That is\nthe shape to hunt.\n\nIt also pays because of an asymmetry nobody exploits: everybody greps for `DexClassLoader`, almost nobody\nmaps the app's *write* primitives onto the loader's *read* path. D07 and D08 testers find a provider\ntraversal and file it as \"arbitrary file write, High\". D17 testers take the same primitive, land it in\n`lib-main/`, `verified-splits/config.x.apk`, `files/plugin.dex` or a `.so` the app `System.load()`s, and\nfile P1. The write and the load are separate fixes — file them as separate reports and let the chain be the\nseverity amplifier (see D17-075).\n\nBe honest about the rest of it. Most of this domain is graveyard, and the graveyard is enormous. \"App\nbundles okhttp 4.9.0, CVE-2021-0341\" with no pinning and system trust is **Low**, and with no reachability\ntrace it is P5 `using_components_with_known_vulnerabilities.outdated_software_version`. \"App calls\n`getSerializableExtra`\" behind a non-exported component is not attacker-fed and is not a finding at all.\n\"No `gradle/verification-metadata.xml`\" is a Medium process observation in a pentest and out of scope on\nmost bounty programmes. A `play:core` reference that resolves to **`feature-delivery 2.1.0`** — the patched\n2.x rewrite — means CVE-2020-8913 is **not applicable**, and the worked negative belongs in the ruled-out\nregister, not the findings list. The single most valuable habit in this chapter is closing your own false\npositives before the triager does.",
  "crux": "**Does any byte this app executes arrive after the APK was signed — and if so, what cryptographic check stands between the attacker-influenceable source of those bytes and the `ClassLoader`/`dlopen`/JS-engine call that runs them?**",
- "applicability": "",
+ "applicability": "D17 never goes fully n/a — D17-001, D17-002, D17-005, D17-017, D17-078, D17-079 and D17-080 always run — but four probes decide which of its six blocks apply and let `scripts/scope.py` mark the rest. Run them against `$DEC`, the apktool manifest and `inventory/components.csv`, and paste the four numbers into `notes`.\n\n```bash\n# 1. Code-load call sites outside framework namespaces (blocks D17-003..023, D17-083)\ngrep -rlE 'DexClassLoader|PathClassLoader|InMemoryDexClassLoader|DelegateLastClassLoader|System\\.load\\(|Runtime\\.getRuntime\\(\\)\\.load|createPackageContext\\(|org/mozilla/javascript|com/eclipsesource/v8|org/luaj|com/chaquo/python' \\\n  \"$DEC/jadx/sources\" | grep -vE '/(android|androidx|kotlin|kotlinx|dalvik)/' | wc -l\n# 2. Post-install code/config channels (blocks D17-025..041, D17-081)\nprintf 'manifest=%s strings=%s playcore=%s\\n' \\\n  \"$(grep -cE 'expo\\.modules\\.updates\\.|uses-sdk-library' \"$DEC/apktool/AndroidManifest.xml\")\" \\\n  \"$(grep -cE 'CodePush(DeploymentKey|PublicKey|ServerUrl)' \"$DEC/apktool/res/values/strings.xml\" 2>/dev/null)\" \\\n  \"$(grep -rlE 'com/google/android/play/core|SplitCompat|PhenotypeFlag|MobileDataDownload|DynamiteModule|FirebaseRemoteConfig|LDClient' \"$DEC/jadx/sources\" | wc -l)\"\n# 3. Deserialization / archive sinks in first-party code × exported components (blocks D17-043..058)\ngrep -rlE 'ObjectInputStream|getSerializableExtra|readSerializable|ZipInputStream|ZipFile\\(|Intent\\.parseUri|\\.unmarshall\\(' \"$DEC/jadx/sources\" \\\n  | grep -vE '/(android|androidx|kotlin|kotlinx)/' | wc -l\nawk -F, 'NR>1 && tolower($0) ~ /exported=true|,true,/' \"$E/inventory/components.csv\" | wc -l\n# 4. Native surface and build-system facts (blocks D17-013/014/062/082; D17-059..074)\nunzip -Z1 \"$E/apk/base.apk\" | grep -c '^lib/.*\\.so$'\ngrep -oE 'extractNativeLibs=\"[a-z]+\"' \"$DEC/apktool/AndroidManifest.xml\"\nunzip -Z1 \"$E/apk/base.apk\" | grep -cE '^META-INF/.*\\.version$'          # 0 + no source repo => build-side items n/a\n```\n\nDecision table (write the matching note into `notes` for every row the probe retires):\n\n| Probe result | Rows marked `n/a` | Exact note text |\n|---|---|---|\n| 1 = 0 **and** D17-002 runtime trace shows only `/data/app/` and `/apex/` loads | D17-003, D17-004, D17-008..D17-016, D17-021..D17-023, D17-083 | `n/a: no loader/createPackageContext/interpreter call site outside framework namespaces (probe 1 = 0) and D17-002 trace clean` |\n| 2: manifest=0, strings=0, playcore=0 and the proxy shows no bundle/archive/executable response | D17-025..D17-036, D17-041, D17-081 | `n/a: no OTA, split, remote-config or dynamic-module channel (probe 2 = 0/0/0); D17-025 negative recorded` |\n| 3: first-party sink count = 0 **or** exported component count = 0 | D17-043..D17-051, D17-056..D17-058 | `n/a: no deserialization/archive sink in first-party code (probe 3 = 0) / no exported component (components.csv = 0)` |\n| 4: `.so` count = 0 | D17-013, D17-014, D17-062, D17-082 | `n/a: APK ships no native libraries (probe 4 = 0)` |\n| 4: `META-INF/*.version` = 0 and no source repo in scope | D17-059 (source half), D17-063..D17-069, D17-072..D17-074 | `n/a (black-box): build system not Gradle or no source access; binary-side SBOM (D17-059) and duplicate-class check (D17-069b) recorded instead` |\n| framework ≠ react-native / cordova / capacitor / flutter | D17-006, D17-026..D17-030, D17-033, D17-034, D17-072, D17-073, D17-074 | `n/a: framework=<value>; no JS/Dart bundle to substitute` |\n\nA probe count of 0 is a negative only with its control: for probe 1 the D17-002 runtime trace must have run to completion (`-t` honoured, no crash — D17-A01), and for probe 3 the `components.csv` must have been regenerated after P3 (gap 55: the generator can drop providers).",
  "triage": "1. **Hook every loader at runtime for one full app walkthrough** (`DexClassLoader.$init`,\n   `InMemoryDexClassLoader.$init`, `System.load`, `System.loadLibrary`, `Runtime.load`,\n   `ClassLoader.loadClass`, and for RN `CatalystInstanceImpl.loadScriptFromFile`). Twenty minutes, and it\n   answers the crux question empirically instead of by grep — including for packed apps where the static\n   view is a stub.\n2. **Establish which artefact is actually executing.** If OTA is live, the APK's bundle is only the\n   fallback, and every static finding you are about to write is stated against the wrong bytes. This gates\n   the entire engagement, not just this chapter.\n3. **Manifest and `strings.xml` for the OTA signing config** — `expo.modules.updates.CODE_SIGNING_*`,\n   `CodePushPublicKey`, `CodePushDeploymentKey`. Four greps, and a missing key is an RCE-class finding on\n   an app you have not yet decompiled.\n4. **`createPackageContext` + `CONTEXT_INCLUDE_CODE` + `CONTEXT_IGNORE_SECURITY` + prefix matching.** One\n   grep, Critical when it hits, and the PoC is a package-name claim rather than an exploit.\n5. **Cross-reference every file-write primitive from D07/D08/D11 against every load path found in step 1.**\n   This is the join that produces the chapter's P1s; run it as an explicit table, not from memory.\n6. **Deserialization sinks reachable from an *exported* component**, verified export status first. Behind a\n   non-exported component this is not attacker-fed and costs you credibility to file.\n7. **Archive-extraction loops** (`ZipEntry.getName()` into `new File(dir, name)`), because zip slip is the\n   cheapest delivery vehicle for step 5 and is testable with a six-line Python script.\n8. **Dependency graph and SBOM last**, and only with a reachability trace attached. This step produces the\n   most output and the fewest payable findings; do it when the high-yield work is done.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"App bundles library X version Y, which has CVE-ZZZZ\" | `using_components_with_known_vulnerabilities.outdated_software_version` = **P5**. NVD CPE matching also misflags AndroidX against legacy support-library CVEs. | The three artefacts of D17-060: the symbol present in `classes*.dex`/`lib/`, a caller chain from an attacker-reachable entry point, and a Frida `[REACHED]` log with your input in `args`. Then file it under the **sink's** effect, not under this branch. |\n| \"App uses `DexClassLoader`\" | Loading code is not a vulnerability; loading code from a path someone else can write is. | A writable load path (D17-008/010/011), or a network-sourced artefact with no load-time signature check (D17-015). |\n| `play:core` present in the dependency list | The 2.x rewrite (`feature-delivery`, `app-update`, `core-common`) is patched. The corpus's worked negative: `feature-delivery 2.1.0` → **CVE-2020-8913 not applicable**. | The monolith at `< 1.7.2`, confirmed from `META-INF/*.version`, **plus** the broadcast trigger of D17-019 landing a file in `verified-splits`. |\n| \"`getSerializableExtra` found in the code\" | Behind a non-exported component it is not attacker-fed. Deserialization is execution only if you control the ClassLoader contents. | An exported component (quote the manifest line) plus a gadget with an observable side effect (D17-043/044), or a demonstrated state change. |\n| \"The app deserializes untrusted data\" with only a `ClassCastException` | A crash from a malformed Parcelable is `application_level_denial_of_service_dos.app_crash.malformed_android_intents` = **P5**. | A gadget side effect, a smuggled object that survives a validation boundary (D17-046/047), or a credential object leaked back to you. |\n| \"No `gradle/verification-metadata.xml`\" | A build-hygiene observation. Most bounty programmes scope the build pipeline out entirely. | A concrete hijackable groupId or an internal coordinate leaking to a public repo (D17-063/064) — the missing control is then the *reason* it is exploitable, not the finding. |\n| \"An OTA channel exists\" | The channel is the precondition, not the bug. | A missing or unenforced signature check (D17-026/027) **and** your bundle executing (D17-017's three bindings). |\n| \"I disabled the signature check with Frida and my plugin loaded\" | On your own rooted device that is AM-12 — not an attack. | Decompiled evidence that the check is not bound to a developer-held key, or that the key travels with the payload (D17-032). |\n| \"`Runtime.exec` with a concatenated argument\" | `exec(String)` is shell-less: it splits on whitespace with no metacharacter shell. At most argument injection. | An explicit `sh -c`/`su -c` with attacker data, or a demonstrated behaviour change in the invoked binary that you can name. |\n| \"The app is not obfuscated / APKiD found a packer\" | Obfuscation state is informational under every bounty rubric. | Capture it only where it materially enabled a demonstrated exploit chain. |\n| \"Internal package name `com.client.internal.foo` is unclaimed on npm/Maven\" | Without build access this is a claimable name, not a demonstrated compromise — and publishing to test it is out of bounds. | Proxy evidence that the build requests that coordinate from a **public** host (D17-064). |\n| \"CVE-2025-11953 is in `package-lock.json`\" | A **developer-machine** RCE, not an app-runtime issue. Conflating them discredits the report. | A dev server bound beyond loopback on a shared/CI network, with the command execution demonstrated (D17-073). |\n| \"Emulator lets me overwrite the app's DEX with `run-as`\" | An environment property of a debuggable build on a rooted emulator; AM-12. | The same write achieved from a zero-permission attacker APK, or via a provider/traversal primitive, on a release build (D17-009). |\n| \"The app loads code only from its own internal storage\" | If nothing else can write there, there is no attacker. | Any injection path that reaches that directory — a provider traversal, a zip slip, a `DISPLAY_NAME` write, a download the attacker controls. |\n| \"Feature flags are fetched over TLS without a signature\" | Unsigned config is a design observation until a flag gates a control. | A flag flip that measurably disables pinning, an auth gate or a root check, captured before and after (D17-037). |\n| \"The update endpoint returned 400 without a token, so it is unauthenticated\" | The layer-ordering trap — a body parser or sanitiser frequently runs in front of auth middleware. | A minimal well-formed `{}` retest returning the operation's real response, with the error taxonomy showing you passed the auth layer (D17-040). |",
  "joins": "- **D07/D08 write primitive × D17 load path.** The join that produces this chapter's P1s and the one almost\n  nobody runs: a provider `openFile()` traversal or an `OpenableColumns.DISPLAY_NAME` write is filed as\n  \"arbitrary file write, High\" by the D07 tester, while the D17 tester greps `DexClassLoader` and finds no\n  writable path. Neither sees that the write lands in `verified-splits/config.x.apk`, `lib-main/libfoo.so`\n  or `files/plugin.dex`. Build the join as an explicit table (D17-009), and file the two halves as separate\n  reports with cross-references (D17-079).\n- **D17 OTA channel × D02 versionCode/artefact identity.** An OTA bundle changes without the `versionCode`\n  moving, so *every other domain's finding* can be stated against bytes that are no longer executing — and\n  a \"fixed\" claim can be true of the store build and false of the live one. D17-006 must run before D02\n  records the artefact provenance, or the provenance record is wrong.\n- **D17 MavenGate groupId × D18 App Startup auto-initialisation.** A hijacked library that ships an\n  `androidx.startup` `Initializer` executes on every cold start with **no first-party call site at all** —\n  the shortest possible path from supply chain to runtime, and invisible to any \"where is this library\n  used?\" search. Intersect the release runtime classpath with the `androidx.startup` entries in the merged\n  manifest.\n- **D17 native `.so` inventory × D16 JNI entry points × D17-059 SBOM.** Maven-coordinate SCA never sees\n  `lib/*.so`, so the native half of the supply chain is unscanned **by construction** — and it is the half\n  averaging 859 days out of date. The join is: version-fingerprint every `.so` (D17-062), enumerate\n  `Java_*` exports, and map each to the app feature that feeds it. That pairing is the reachability\n  argument; without it every native CVE is P5.\n- **D14 pinning state × D17 OTA signature state.** An unsigned bundle behind TLS is only exploitable with\n  the network position D14 establishes, and D14's own analysis changes at **API 34+**, where the trust store\n  moved to the Conscrypt APEX and `/system/etc/security/cacerts` is ignored at runtime. Test the two\n  together: \"unsigned OTA\" plus \"no pinning, user CAs trusted below targetSdk 24\" is a different report from\n  \"unsigned OTA behind a pinned channel\", and only the first reaches AM-06.\n- **D05 runtime-registered receivers × D17 deserialization.** The CVE-2020-8913 shape depends on a receiver\n  that exists in **no manifest**, so the standard D05 attack-surface enumeration misses it entirely. Pair\n  `dumpsys activity broadcasts` taken while the app is foregrounded with the `Parcelable`-sink grep: an\n  undeclared receiver reading a `Parcelable` extra is the highest-value combination in either domain.\n- **D11 `shared_prefs` × D17 zip slip.** A traversal write does not have to reach code. Landing\n  `../shared_prefs/config.xml` with `<boolean name=\"pinning\" value=\"false\"/>` or an entitlement flag flips\n  a security decision with no code execution and no SELinux `execute` problem — cheaper than RCE and\n  frequently higher-confidence.\n- **D21 RASP SDK × D17 remote code loading.** A tamper-detection or anti-fraud SDK that itself fetches\n  remote DEX or reflects on server-supplied names is the largest hole in the app it is there to protect,\n  and it is the last place anyone looks. Rank reflection density by package (D17-038) and check the security\n  vendors first.\n- **D23 entitlements × D17 deserialization.** Not every deserialization payoff is code execution. An\n  attacker-supplied object graph that flips a subscription, trial or feature flag inside a restored state\n  object is a business-logic bypass reachable through the same sink, and it is often the only outcome\n  available when no gadget exists.\n- **D10 WebView bridge × D17 OTA/live-update.** Injected JS inherits every `@JavascriptInterface` method the\n  app exposes. Enumerate the bridge first (D10), because that enumeration is what converts \"I changed a\n  label in the bundle\" into \"I read the session token and posted it to my host\" — i.e. the difference\n  between a demonstration and an impact.",
@@ -107,7 +107,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Grep sees only what R8 left behind and nothing a packer decrypts. Hook the loaders and drive the\napp through every feature — onboarding, login, payment, settings, the update check, and a cold start after\nan update.",
-   "how": "```javascript\n  // loaders.js  —  frida -U -f com.target.app -l loaders.js --no-pause\n  Java.perform(function () {\n    var DCL = Java.use('dalvik.system.DexClassLoader');\n    DCL.$init.implementation = function (dex, opt, lib, parent) {\n      console.log('[DexClassLoader] dex=' + dex + ' opt=' + opt + ' lib=' + lib);\n      return this.$init(dex, opt, lib, parent);\n    };\n    var PCL = Java.use('dalvik.system.PathClassLoader');\n    PCL.$init.overloads.forEach(function (o) {\n      o.implementation = function () {\n        console.log('[PathClassLoader] ' + Array.prototype.slice.call(arguments).join(' | '));\n        return o.apply(this, arguments);\n      };\n    });\n    var IMDCL = Java.use('dalvik.system.InMemoryDexClassLoader');\n    IMDCL.$init.overloads.forEach(function (o) {\n      o.implementation = function () {\n        var a = arguments[0];\n        console.log('[InMemoryDexClassLoader] capacity=' + (a && a.capacity ? a.capacity() : '?'));\n        return o.apply(this, arguments);\n      };\n    });\n    var S = Java.use('java.lang.System');\n    S.load.overload('java.lang.String').implementation = function (p) {\n      console.log('[System.load] ' + p); return this.load(p); };\n    S.loadLibrary.overload('java.lang.String').implementation = function (n) {\n      console.log('[System.loadLibrary] ' + n); return this.loadLibrary(n); };\n    var R = Java.use('java.lang.Runtime');\n    R.load.overload('java.lang.String').implementation = function (p) {\n      console.log('[Runtime.load] ' + p); return this.load(p); };\n  });\n```\n```bash\n# native side, catches dlopen the Java hooks miss\nfrida-trace -U -f com.target.app -i \"dlopen*\" -i \"android_dlopen_ext\"\n# and the ground truth after the fact\nadb shell run-as com.target.app sh -c 'find files cache code_cache no_backup app_* -maxdepth 5 \\\n  \\( -name \"*.dex\" -o -name \"*.jar\" -o -name \"*.apk\" -o -name \"*.so\" -o -name \"*.bundle\" -o -name \"*.hbc\" \\) -ls 2>/dev/null'\nadb shell \"cat /proc/$(adb shell pidof com.target.app)/maps\" | grep -E '\\.(so|dex|jar|apk|oat|vdex)$' | grep -v '/data/app/'\n```",
+   "how": "```javascript\n  // loaders.js  —  frida -D \"$SERIAL\" -f com.target.app -l loaders.js\n  Java.perform(function () {\n    var DCL = Java.use('dalvik.system.DexClassLoader');\n    DCL.$init.implementation = function (dex, opt, lib, parent) {\n      console.log('[DexClassLoader] dex=' + dex + ' opt=' + opt + ' lib=' + lib);\n      return this.$init(dex, opt, lib, parent);\n    };\n    var PCL = Java.use('dalvik.system.PathClassLoader');\n    PCL.$init.overloads.forEach(function (o) {\n      o.implementation = function () {\n        console.log('[PathClassLoader] ' + Array.prototype.slice.call(arguments).join(' | '));\n        return o.apply(this, arguments);\n      };\n    });\n    var IMDCL = Java.use('dalvik.system.InMemoryDexClassLoader');\n    IMDCL.$init.overloads.forEach(function (o) {\n      o.implementation = function () {\n        var a = arguments[0];\n        console.log('[InMemoryDexClassLoader] capacity=' + (a && a.capacity ? a.capacity() : '?'));\n        return o.apply(this, arguments);\n      };\n    });\n    var S = Java.use('java.lang.System');\n    S.load.overload('java.lang.String').implementation = function (p) {\n      console.log('[System.load] ' + p); return this.load(p); };\n    S.loadLibrary.overload('java.lang.String').implementation = function (n) {\n      console.log('[System.loadLibrary] ' + n); return this.loadLibrary(n); };\n    var R = Java.use('java.lang.Runtime');\n    R.load.overload('java.lang.String').implementation = function (p) {\n      console.log('[Runtime.load] ' + p); return this.load(p); };\n  });\n```\n```bash\n# native side, catches dlopen the Java hooks miss\nfrida-trace -U -f com.target.app -i \"dlopen*\" -i \"android_dlopen_ext\"\n# and the ground truth after the fact\nadb shell run-as com.target.app sh -c 'find files cache code_cache no_backup app_* -maxdepth 5 \\\n  \\( -name \"*.dex\" -o -name \"*.jar\" -o -name \"*.apk\" -o -name \"*.so\" -o -name \"*.bundle\" -o -name \"*.hbc\" \\) -ls 2>/dev/null'\nadb shell \"cat /proc/$(adb shell pidof com.target.app)/maps\" | grep -E '\\.(so|dex|jar|apk|oat|vdex)$' | grep -v '/data/app/'\n```",
    "proof": "A logged load whose path is **not** under `/data/app/` — e.g.\n`[DexClassLoader] dex=/data/user/0/com.target.app/files/plugin.dex`, or a `/proc/<pid>/maps` line for a\n`.so` under `files/`.",
    "escalation": "Each non-APK path becomes a row in the D17-001 table and a candidate for D17-008.",
    "ruled_out_when": "Across a complete feature walkthrough including an update check, every load resolves\nunder `/data/app/~~<random>/com.target.app-<random>/` or `/apex/`, and `/proc/<pid>/maps` shows no mapped\n`.so` outside the APK and the system paths."
@@ -171,8 +171,11 @@
     "AM-09"
    ],
    "applies_to": "all; modern updaters and packers specifically. Note `InMemoryDexClassLoader` sidesteps the Android 14 file-path DCL hardening entirely because no writable DEX path ever exists",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MASWE-0049; HackTricks *insecure-in-app-update-rce* (\"In-memory DEX loaders\"); ATT&CK T1406.002 (the `assets/*.dat` → AES/CBC hardcoded key+IV → `DexClassLoader` dropper pattern)",
    "record": "",
    "legacy_meta": {},
@@ -265,8 +268,15 @@
     "AM-09"
    ],
    "applies_to": "React Native / Expo / CodePush / Cordova / any app with a custom DEX or JS updater",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida, react-native, cordova, capacitor, flutter",
+   "requires_tags": [
+    "device",
+    "frida",
+    "react-native",
+    "cordova",
+    "capacitor",
+    "flutter"
+   ],
    "maps_to": "facebook/hermes `BytecodeFileHeader.sourceHash`; `CodePushConstants.DEFAULT_JS_BUNDLE_NAME`; expo `dev.expo.updates.prefs` / `updates.db`; MASWE-0075 (Non-Reproducible Builds)",
    "record": "",
    "legacy_meta": {},
@@ -292,7 +302,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If OTA is enabled, the bundle inside the APK is only the *fallback*. Every static finding, and\nevery \"we fixed that\" claim from the client, must be re-verified against the bundle currently in use. This\nalso means a security control the client believes is shipped can be silently removed post-review by a\nchannel push, with no `versionCode` change.",
-   "how": "```bash\n  # 1. hash the bundle inside the APK\n  unzip -o target.apk 'assets/*' -d ext\n  python3 - <<'PY'\n  import struct\n  d = open('ext/assets/index.android.bundle','rb').read(64)\n  print('apk  sourceHash', d[12:32].hex(), 'bytecodeVersion', struct.unpack_from('<I', d, 8)[0])\n  PY\n  # 2. pull the live bundle off the device and hash it the same way\n  adb shell \"run-as com.target.app find files -name 'index.android.bundle' -o -name '*.hbc' -o -name '*.bundle'\"\n  adb exec-out run-as com.target.app cat files/CodePush/<hash>/<app>/index.android.bundle > live.bundle\n  python3 - <<'PY'\n  import struct\n  d = open('live.bundle','rb').read(64)\n  print('live sourceHash', d[12:32].hex(), 'bytecodeVersion', struct.unpack_from('<I', d, 8)[0])\n  PY\n  # 3. or capture it at load time regardless of location\n  frida -U -f com.target.app -q -e \"\n  Java.perform(function(){\n    var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n    C.loadScriptFromFile.implementation=function(f,u,z){console.log('[bundle-from-file] '+f);return this.loadScriptFromFile(f,u,z);};\n    C.loadScriptFromAssets.implementation=function(a,u,z){console.log('[bundle-from-assets] '+u);return this.loadScriptFromAssets(a,u,z);};\n  });\"\n  # 4. expo-side artefacts\n  adb shell \"run-as com.target.app ls -la files/.expo-internal/ shared_prefs/dev.expo.updates.prefs.xml\" 2>/dev/null\n```\nCross-check the app's self-reported version (User-Agent, analytics payload) against the installed\n`versionName` — an observed mismatch such as APK `5.67.0` vs executing bundle `5.67.1` is decisive.",
+   "how": "```bash\n  # 1. hash the bundle inside the APK\n  unzip -o target.apk 'assets/*' -d ext\n  python3 - <<'PY'\n  import struct\n  d = open('ext/assets/index.android.bundle','rb').read(64)\n  print('apk  sourceHash', d[12:32].hex(), 'bytecodeVersion', struct.unpack_from('<I', d, 8)[0])\n  PY\n  # 2. pull the live bundle off the device and hash it the same way\n  adb shell \"run-as com.target.app find files -name 'index.android.bundle' -o -name '*.hbc' -o -name '*.bundle'\"\n  adb exec-out run-as com.target.app cat files/CodePush/<hash>/<app>/index.android.bundle > live.bundle\n  python3 - <<'PY'\n  import struct\n  d = open('live.bundle','rb').read(64)\n  print('live sourceHash', d[12:32].hex(), 'bytecodeVersion', struct.unpack_from('<I', d, 8)[0])\n  PY\n  # 3. or capture it at load time regardless of location\n  frida -D \"$SERIAL\" -f com.target.app -q -e \"\n  Java.perform(function(){\n    var C = Java.use('com.facebook.react.bridge.CatalystInstanceImpl');\n    C.loadScriptFromFile.implementation=function(f,u,z){console.log('[bundle-from-file] '+f);return this.loadScriptFromFile(f,u,z);};\n    C.loadScriptFromAssets.implementation=function(a,u,z){console.log('[bundle-from-assets] '+u);return this.loadScriptFromAssets(a,u,z);};\n  });\"\n  # 4. expo-side artefacts\n  adb shell \"run-as com.target.app ls -la files/.expo-internal/ shared_prefs/dev.expo.updates.prefs.xml\" 2>/dev/null\n```\nCross-check the app's self-reported version (User-Agent, analytics payload) against the installed\n`versionName` — an observed mismatch such as APK `5.67.0` vs executing bundle `5.67.1` is decisive.",
    "proof": "Two different Hermes `sourceHash` values, or a\n`[bundle-from-file] /data/user/0/com.target.app/files/CodePush/…` log line proving the executing code did\nnot come from the APK.",
    "escalation": "Re-base the whole engagement on the on-device bundle and say so in the report's scope\nsection. → D17-028/029 for the signature question; → D19 for bundle analysis.",
    "ruled_out_when": "The manifest carries no `expo.modules.updates.*` meta-data, `strings.xml` carries no\n`CodePush*` resource, the `CatalystInstanceImpl` hook fires only `loadScriptFromAssets`, and the on-device\n`files/` contains no bundle. Record the APK's own `sourceHash` as the tested artefact either way."
@@ -507,8 +517,12 @@
     "AM-04"
    ],
    "applies_to": "`targetSdk < 29`, or `targetSdk ≥ 29` with `android:requestLegacyExternalStorage=\"true\"`. On scoped storage the world-writable variant narrows to the app's own `Android/data/<pkg>/` tree, which is still reachable by anything holding `MANAGE_EXTERNAL_STORAGE` or by the user",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, targetsdk<29, legacy",
+   "requires_tags": [
+    "device",
+    "targetsdk<29",
+    "legacy"
+   ],
    "maps_to": "MASTG-KNOW-0042 (\"external storage can lead to arbitrary control of the application\"); HackTricks *insecure-in-app-update-rce* (\"External storage staging\"); **CVE-2021-24027** (WhatsApp) as the named man-in-the-disk precedent",
    "record": "",
    "legacy_meta": {},
@@ -640,8 +654,11 @@
    "attacker": "n/a (tester step)",
    "attacker_ids": [],
    "applies_to": "targetSdk ≥ 34 (DEX/JAR/APK) and targetSdk ≥ 37 (native `System.load()`)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34, device",
+   "requires_tags": [
+    "api>=34",
+    "device"
+   ],
    "maps_to": "HackTricks *insecure-in-app-update-rce* (\"Platform changes that change exploitation\"), citing Android's dynamic-code-loading risk documentation",
    "record": "",
    "legacy_meta": {},
@@ -731,8 +748,11 @@
    "attacker": "n/a (tester step)",
    "attacker_ids": [],
    "applies_to": "all; the constraint bites from `untrusted_app_29` upwards",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, root",
+   "requires_tags": [
+    "device",
+    "root"
+   ],
    "maps_to": "AOSP SELinux policy for `untrusted_app` / `app_data_file`; the corpus's SELinux-downgrade discipline (D25)",
    "record": "",
    "legacy_meta": {},
@@ -1080,8 +1100,10 @@
     "AM-08"
    ],
    "applies_to": "Android 14+ for the SDK Runtime environment (incorporated into Privacy Sandbox on Android 16)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34",
+   "requires_tags": [
+    "api>=34"
+   ],
    "maps_to": "`privacysandbox.google.com/private-advertising/sdk-runtime` — separate SDK Runtime process, \"No app data access\", \"Permission limitations\", \"File access constraints\", \"IPC restrictions\", \"Activity access: Controlled through `SdkSandboxActivityHandler`\"; `SdkSandboxManager`, `loadSdk()`, `SandboxedSdkProvider`, `SdkSandboxController`, `<uses-sdk-library>`, `certDigest`; `about/versions/16/features`",
    "record": "",
    "legacy_meta": {},
@@ -1350,8 +1372,11 @@
     "AM-09"
    ],
    "applies_to": "React Native with CodePush / expo-updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, device",
+   "requires_tags": [
+    "react-native",
+    "device"
+   ],
    "maps_to": "`CodePushConstants.java` (`PREVIOUS_PACKAGE_KEY`, `CURRENT_PACKAGE_KEY`, `FAILED_UPDATES_KEY`, `LATEST_ROLLBACK_INFO_KEY`, `LATEST_ROLLBACK_PACKAGE_HASH_KEY`, `LATEST_ROLLBACK_COUNT_KEY`); CodePush README (automatic rollback keeps a copy of the previous update); expo `UpdatesConfiguration.kt` `DISABLE_ANTI_BRICKING_MEASURES`",
    "record": "",
    "legacy_meta": {},
@@ -1485,8 +1510,12 @@
     "AM-09"
    ],
    "applies_to": "Cordova, Ionic and Capacitor apps with a live-update plugin",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "cordova, capacitor, device",
+   "requires_tags": [
+    "cordova",
+    "capacitor",
+    "device"
+   ],
    "maps_to": "Capacitor `Bridge.java` (`localServer.hostAssets(DEFAULT_WEB_ASSET_DIR)` with `DEFAULT_WEB_ASSET_DIR = \"public\"`, and the configurable `getServerBasePath` plumbing)",
    "record": "",
    "legacy_meta": {},
@@ -1530,8 +1559,14 @@
     "AM-09"
    ],
    "applies_to": "all RN / Expo / Cordova / Flutter-with-dynamic-assets apps, regardless of Android version",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native, cordova, capacitor, flutter, device",
+   "requires_tags": [
+    "react-native",
+    "cordova",
+    "capacitor",
+    "flutter",
+    "device"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` — the read-only mandate applies to **DEX, JAR, APK**, i.e. not to JS or Dart bundles; `risks/dynamic-code-loading` (MASVS-CODE)",
    "record": "",
    "legacy_meta": {},
@@ -1573,8 +1608,12 @@
     "AM-09"
    ],
    "applies_to": "OEM/vendor updaters, IoT and automotive head units, enterprise installers, MDM agents",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "oem-scope, enterprise, device",
+   "requires_tags": [
+    "oem-scope",
+    "enterprise",
+    "device"
+   ],
    "maps_to": "HackTricks *insecure-in-app-update-rce* (\"Trusted updater abuse: installing packages that do not exist yet\"), citing the MoYu Android head-unit research and Android's `pm` documentation",
    "record": "",
    "legacy_meta": {},
@@ -1747,8 +1786,10 @@
     "AM-08"
    ],
    "applies_to": "all; ad, attribution and \"security\" SDKs first",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Snyk SourMint (Mintegral) — Android side: `AlphabReceiver` listening for `android.intent.action.PACKAGE_ADDED` plus a custom `alphab_net_debug_action`; a `ContentObserver` on `content://downloads/public_downloads`; reports POSTed to `https://n.systemlog.me/stlog` with obfuscated JSON keys (`p`, `v`, `ul`, `kw`, `fl`, `dvi`); a `ParseAndLoad` class checking for a WiFi proxy and VPN and honouring a remote anti-debug disable intent; custom Base64 via `AlphabBase64Util` (`aELKr0xI7UL67iN6HinI` → `android.net.Uri`, `r0HeQibP7inj7EbAQi7ArR==` → `registerReceiver`, `asx6f3H6foh4FsJ4fsLzYscKr2xMfEnzQEbm73xyY0q4aEJgFM==` → `content://downloads/public_downloads`). Same vendor iOS side: `MTGBaseBridgeWebView` `mv://(.+?):(.+?)/(.+?)\\?([\\s\\S]*)` dispatched via `MTGCommandDispatcher`/`MTGRemoteCommandParser`/`MTGInvocationBoxing` giving arbitrary method invocation; malicious functionality in all iOS versions ≥ 5.5.1 (2019-07-17), component removed in 6.5.0.0 (2020-09-03), RCE bridge remediated in 6.6.0.0",
    "record": "",
    "legacy_meta": {},
@@ -1790,8 +1831,10 @@
     "AM-01"
    ],
    "applies_to": "any app with a versioned update/manifest/config endpoint",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "the mobile→backend bridge rule: a mobile app's hardcoded backend calls are frequently an **older API version** than the current web app uses, with weaker auth, weaker rate limits, weaker validation and more field exposure",
    "record": "",
    "legacy_meta": {},
@@ -1888,8 +1931,12 @@
     "AM-09"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm, device",
+   "requires_tags": [
+    "backend-api",
+    "mitm",
+    "device"
+   ],
    "maps_to": "`risks/dynamic-code-loading`, `risks/unsafe-uri-loading`, `risks/unsafe-download-manager`, `risks/path-traversal` (all four slugs verified in the Android risks index)",
    "record": "",
    "legacy_meta": {},
@@ -2590,8 +2637,11 @@
     "AM-03"
    ],
    "applies_to": "targetSdk ≥ 34 — below 34 there is nothing to opt out of and the class is fully live anyway (LEGACY)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=34, legacy",
+   "requires_tags": [
+    "targetsdk>=34",
+    "legacy"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14` — `ZipFile(String)` and `ZipInputStream.getNextEntry()` throw `ZipException` for entries containing `\"..\"` or starting with `\"/\"`, with `dalvik.system.ZipPathValidator.clearCallback()` as the documented opt-out; `risks/zip-path-traversal` (MASVS-STORAGE)",
    "record": "",
    "legacy_meta": {},
@@ -2635,8 +2685,10 @@
     "AM-03"
    ],
    "applies_to": "all apps extracting downloaded or user-supplied archives",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "HackTricks *insecure-in-app-update-rce* (\"Zip Slip path traversal while extracting plugins … Also test symlink entries and non-empty destination directories; canonical-path checks only help if extraction happens inside a fresh app-private directory\")",
    "record": "",
    "legacy_meta": {},
@@ -2752,7 +2804,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "For each CVE hit, demonstrate (a) the vulnerable class/method survived R8 into `classes*.dex`\nor the vulnerable version string is in `lib/`, and (b) attacker-controlled input reaches it. Without\nboth, expect \"Informative\" — and you will deserve it.",
-   "how": "```bash\n  # (a) did the symbol survive shrinking?\n  for d in $(unzip -Z1 target.apk 'classes*.dex'); do unzip -p target.apk \"$d\" > /tmp/$d; done\n  dexdump -d /tmp/classes*.dex | grep -n \"Lcom/squareup/okhttp3/internal/tls/OkHostnameVerifier;->verify\"\n  jadx -d out target.apk && grep -rn \"writeBitmapToUri\\|SplitCompat.install\\|enableDefaultTyping\" out/sources/\n  # (b) walk callers up in jadx-gui: Find Usage (Ctrl+Shift+X) until you reach one of\n  #     onCreate/onNewIntent, onReceive, shouldOverrideUrlLoading/@JavascriptInterface,\n  #     openFile/query, or a network-response parser\n  # (c) confirm the frame is actually entered\n  frida -U -f com.target.app -l reach.js\n```\n```javascript\n// reach.js — prove the sink executes, dump the argument and the stack that got there\nJava.perform(function () {\n  var C = Java.use('com.vendor.sdk.VulnClass');          // swap for your sink\n  C.vulnMethod.overloads.forEach(function (o) {\n    o.implementation = function () {\n      console.log('[REACHED] args=' + JSON.stringify(Array.prototype.slice.call(arguments).map(String)));\n      console.log(Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()));\n      return o.apply(this, arguments);\n    };\n  });\n});\n```",
+   "how": "```bash\n  # (a) did the symbol survive shrinking?\n  for d in $(unzip -Z1 target.apk 'classes*.dex'); do unzip -p target.apk \"$d\" > /tmp/$d; done\n  dexdump -d /tmp/classes*.dex | grep -n \"Lcom/squareup/okhttp3/internal/tls/OkHostnameVerifier;->verify\"\n  jadx -d out target.apk && grep -rn \"writeBitmapToUri\\|SplitCompat.install\\|enableDefaultTyping\" out/sources/\n  # (b) walk callers up in jadx-gui: Find Usage (Ctrl+Shift+X) until you reach one of\n  #     onCreate/onNewIntent, onReceive, shouldOverrideUrlLoading/@JavascriptInterface,\n  #     openFile/query, or a network-response parser\n  # (c) confirm the frame is actually entered\n  frida -D \"$SERIAL\" -f com.target.app -l reach.js\n```\n```javascript\n// reach.js — prove the sink executes, dump the argument and the stack that got there\nJava.perform(function () {\n  var C = Java.use('com.vendor.sdk.VulnClass');          // swap for your sink\n  C.vulnMethod.overloads.forEach(function (o) {\n    o.implementation = function () {\n      console.log('[REACHED] args=' + JSON.stringify(Array.prototype.slice.call(arguments).map(String)));\n      console.log(Java.use('android.util.Log').getStackTraceString(Java.use('java.lang.Exception').$new()));\n      return o.apply(this, arguments);\n    };\n  });\n});\n```",
    "proof": "Three artefacts in the report: the `dexdump`/jadx line showing the symbol present, the jadx\nFind-Usage chain from an exported entry point down to the sink, and the Frida `[REACHED]` log with the\nattacker-supplied value visible in `args`.",
    "escalation": "With reachability, file the bug under **its actual effect** (RCE, path traversal, file\nread), not under the known-vulnerabilities branch — that is what moves it off P5.",
    "ruled_out_when": "The vulnerable symbol is absent from the DEX (R8 stripped it), or no caller chain\nexists from any attacker-reachable entry point. State which, per CVE, in the ruled-out register: e.g.\n\"`okhttp 4.9.0` carries CVE-2021-0341, but the app installs no custom `HostnameVerifier` and pins nothing,\nso the impact caps at Low; not filed.\""
@@ -2952,8 +3004,10 @@
     "AM-01"
    ],
    "applies_to": "**LEGACY — Gradle 5.1 through 6.8.3 only**, fixed in 7.0. Still routinely present in long-lived enterprise Android repos",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "legacy",
+   "requires_tags": [
+    "legacy"
+   ],
    "maps_to": "**GHSA-jvmj-rh6q-x395 / CVE-2021-29427** — `content { includeGroup … }` / `exclusiveContent` filters inside a `settings.gradle` `pluginManagement {}` block are ignored; CVSS **8.0**, CWE-829 (Inclusion of Functionality from Untrusted Control Sphere); impacts: information disclosure of internal package identifiers and dependency confusion/poisoning via name squatting",
    "record": "",
    "legacy_meta": {},
@@ -3296,8 +3350,10 @@
     "AM-01"
    ],
    "applies_to": "source-review engagements and any RN/Cordova project",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "react-native",
+   "requires_tags": [
+    "react-native"
+   ],
    "maps_to": "**CVE-2025-11953** — `@react-native-community/cli`, CVSS **9.8**, unauthenticated OS command execution via the development server's `/open-url` endpoint passing unfiltered input to `open()`; affects 4.8.0 through 20.0.0-alpha.2, patched by Meta in **20.0.0**. Also `cordova-plugin-acuant` removed from npm in July 2024 for dropping malicious code at install; **CVE-2023-2507** (CleverTap Cordova Plugin ≤ 2.6.2, unsanitised deeplink → arbitrary JS in the main WebView context)",
    "record": "",
    "legacy_meta": {},
@@ -3337,8 +3393,10 @@
     "AM-01"
    ],
    "applies_to": "Flutter/Dart projects",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "flutter",
+   "requires_tags": [
+    "flutter"
+   ],
    "maps_to": "**CVE-2026-27704** — Dart SDK before **3.11.0** and Flutter SDK before **3.41.0**, Zip Slip during Pub package extraction letting a malicious package archive write outside the Pub-cache destination. The XCSSET incident: the macOS worm infected the `example/` directory of `universal_file_viewer` **0.1.5** on pub.dev (~500 downloads), injecting malicious build hooks into Android Gradle, Xcode and git build files when the maintainer published — with the textbook reachability caveat that \"simply adding universal_file_viewer to pubspec.yaml and building an app does not trigger the malware, as the infected files live only inside the example/ directory, which ships in the pub.dev tarball but is never compiled as a dependency\". OSV `MAL-` namespace (e.g. `MAL-2024-11812`, `MAL-2025-189`)",
    "record": "",
    "legacy_meta": {},

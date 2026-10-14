@@ -4,7 +4,7 @@
  "file": "D21-resilience-and-rasp.md",
  "why": "Mostly it does not, and the honest number is close to zero. Bugcrowd prices the entire\n`lack_of_binary_hardening` family at **P5** with the baseline vector `AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N`\n— an all-None impact, which is Bugcrowd stating in machine-readable form that these are not\nvulnerabilities. HackerOne's Core Ineligible Findings list carries \"Lack of jailbreak detection in mobile\napps\" under *Optional security hardening steps / Missing best practices*. Google's Mobile VRP lists\n\"Attacks that require a rooted device\" as non-qualifying and its Invalid Reports page is blunter still:\n\"Rooted devices and emulators do not have the same security boundaries as regular devices. Bugs that only\noccur when a device is rooted are not eligible.\" Xiaomi, Grab and Spotify carry the identical line about\n\"runtime hacking exploits using tools like but not limited to Frida/Appmon\". PayPal excludes\n\"vulnerabilities requiring a rooted, jailbroken, or otherwise modified device\". HackenProof qualifies it\nusefully — \"Root/Jailbreak Detection Bypass — **if the app doesn't promise root/jailbreak protection\nexplicitly**\" — and that qualifier is the whole exception. AOSP's own severity-modifier table caps it\nindependently of any programme: \"a local attack that requires the bootloader chain to be unlocked\" and\n\"a local attack that requires Developer Mode to be currently enabled\" are both **no higher than Low**.\nMASVS says the quiet part out loud: \"the absence of any MAS-R measures does not inherently introduce\nvulnerabilities.\"\n\nThe exceptions are narrow, and they are all the same exception wearing different clothes: **the control\nlives on the server, and the client is only a courier**. A rooted device sending `{\"rooted\":false}` and\ngetting a session is not a root-detection finding; it is a server trusting a client assertion, and it is\nrated on what that assertion unlocks. A Play Integrity token replayed from a clean device to a rooted one,\nor relayed alongside a different request body because `requestHash` was never bound, is not a RASP bypass;\nit is a broken attestation integration that defeats the control for the entire user base — including users\nwho never rooted anything. A hardware key-attestation chain generated on a stock phone and injected into\nan instrumented one passes every cryptographic check, because the claims are genuine for the oracle\ndevice; the defect is that the backend treated a hardware-provenance proof as a session-binding proof.\nThose findings survive triage because they need no root in the threat model: the attacker in the report\nis a remote client, not a device owner. The second genuine exception is the destructive tamper response —\nan app that wipes data, logs the account out permanently or locks the user when it thinks it has been\ntampered with, where the trigger is a file any app can plant on shared storage. That is attacker-triggered\ndata destruction against arbitrary users, and it is the one item in this chapter with a Critical ceiling.\n\nThe third reason to walk the domain has nothing to do with filing it: **it is how you decide whether the\nrest of the engagement is even possible**, and it is where negative findings are cheapest to write\ndefensibly. If the app's gate is a server-verified attestation, no local hook forges it and you should\nstop burning hours on Frida and re-scope to server-side testing that day. If the app merely reports\nsignals to a backend and carries on when Frida attaches, the \"protection\" is telemetry, not a control,\nand that sentence — with the evidence of the app running instrumented — is a clean ruled-out entry that\ntakes ten minutes. A consultancy caveat worth carrying: in a signed-SoW pentest, clients frequently buy\nthis domain explicitly. Cobalt's Harsh Bothra: *\"I always raise my hands for SSL pinning and root\ndetection, because they (the client) always want it.\"* In that mode the resilience gap is a contractual\nfinding and belongs in the report. In a bug-bounty submission the same text gets closed as informative.\nDecide which mode you are in before you write a word — that is item D21-001.",
  "crux": "**Does any decision that matters get made off this device on the strength of something this device claimed — and if so, is that claim an opaque, server-verified, freshly-bound attestation, or a boolean the client chose?** If the honest answer is \"the check only stops the device's own owner from seeing their own data\", you have a P5 hardening observation, and the correct output is a ruled-out entry, not a report.",
- "applicability": "",
+ "applicability": "Run these five before marking any D21 row. The chapter has two halves: the always-on half (engagement mode, filing gates, debug artefacts, local-state integrity, obfuscation, evidence discipline) applies to every app; the attestation half and the detection half apply only when the probe finds the control.\n\n```bash\n# 1. Attestation / integrity APIs referenced?  -> decides D21-003, D21-006, D21-013..D21-032, D21-058..D21-063\ngrep -rlE 'IntegrityManager|StandardIntegrityManager|requestIntegrityToken|SafetyNetClient|\\.attest\\(|setAttestationChallenge\\(|getCertificateChain\\(|FirebaseAppCheck|installAppCheckProviderFactory' \"$DEC/jadx/sources\" | wc -l\n# 2. Detection / RASP / tamper response present?  -> decides D21-004, D21-005, D21-007..D21-009, D21-033..D21-035, D21-037..D21-039, D21-041..D21-045, D21-055\napkid \"$E/apk/base.apk\" | grep -iE 'anti_root|anti_vm|anti_debug|obfuscator|packer'\nfor so in \"$DEC\"/apktool/lib/*/*.so; do strings -a \"$so\" | grep -aoiE 'guardsquare|dexguard|appdome|promon|shield|verimatrix|talsec|freerasp|rootbeer|magisk|frida|TracerPid' | head -1 | sed \"s#^#$so: #\"; done\ngrep -rlE 'RootBeer|isRooted|isDeviceRooted|checkRoot|isEmulator|Debug\\.isDebuggerConnected|/system/xbin/su|wipeData|lockNow|clearApplicationUserData' \"$DEC/jadx/sources\" | wc -l\n# 3. Debug artefacts (always run)  -> decides D21-047..D21-050\naapt2 dump xmltree \"$E/apk/base.apk\" --file AndroidManifest.xml | grep -E 'debuggable|testOnly'\ngrep -rlE 'setWebContentsDebuggingEnabled|StrictMode\\.(setVmPolicy|setThreadPolicy)' \"$DEC/jadx/sources\" | wc -l\n# 4. Integrity-shaped traffic on the wire (after P6 capture)  -> confirms or overrides probe 1\nmitmdump -nr \"$E/requests/traffic.flows\" -s /dev/stdin <<'PY' | sort -u | head\ndef request(f):\n    h = {k.lower() for k in f.request.headers}\n    b = (f.request.content or b'').lower()\n    if any('integrity' in k or 'attest' in k or 'appcheck' in k for k in h) or any(k in b for k in (b'integrity', b'attest', b'rooted', b'tampered')):\n        print(f.request.pretty_host, f.request.path[:60])\nPY\n# 5. Backend in scope?  -> every High in the chapter needs it\njq -r '.authorisation.scope, .app_facts.backend_api' \"$E/engagement.json\"\n```\n\nWrite the n/a note in `checklist-status.csv` exactly as:\n\n- Probe 1 = 0 **and** probe 4 empty: `D21-003, D21-006, D21-013..D21-032, D21-058..D21-063 n/a — no attestation, App Check or integrity-shaped request found (probe 1: 0 files, probe 4: empty); \"no attestation implemented\" is MASWE-0054/-0056 hardening, not filed`.\n- Probe 2 = no APKiD signature, no vendor string, 0 call sites: `D21-004, D21-005, D21-007..D21-009, D21-033..D21-035, D21-037..D21-039, D21-041..D21-045, D21-055 n/a — no root/emulator/hook/tamper control shipped (APKiD clean, no RASP vendor .so, 0 detection call sites); absence is lack_of_binary_hardening P5 (MASWE-0051/-0053/-0065), not filed`.\n- Probe 5 says the backend is out of scope: `D21-013..D21-021, D21-025..D21-031, D21-053, D21-054, D21-058, D21-062, D21-063 blocked — backend out of scope; client-side halves recorded under D21-005/D21-033 only`.\n- Never n/a: D21-001, D21-002, D21-010..D21-012, D21-036, D21-040, D21-046..D21-052, D21-057 (and D21-061 when `.so` present). Probe 4 overriding probe 1 (token on the wire, no API reference) means a delegate process mints it: see D21-006 branch (c).",
  "triage": "1. **Is MAS-R contractually in scope?** One question to the client. It decides whether half this chapter\n   is a deliverable or a waste, and getting it wrong is the single most expensive mistake in the domain.\n2. **Is an integrity/RASP gate blocking the dynamic phase at all?** If yes, negotiate it at Gate 1 rather\n   than burning days on it later; the RoE option you pick changes how every later finding must be worded.\n3. **Does an opaque attestation token cross the wire?** One look at the proxy separates the whole payable\n   half of this domain from the whole graveyard half. No token and a `{\"rooted\":false}` field means the\n   control is client-side; an opaque token means go and test the *integration*.\n4. **Strip the attestation token/header and replay.** Cheapest high-value test here. Apply the body-diff\n   and layer-ordering gates before believing the 200 (D21-012) — a status-code-only claim is the most\n   commonly rejected shape on every platform.\n5. **Replay one valid token against a second action, a second account and a later timestamp.** Needs no\n   device bypass at all, and it is the finding that survives any amount of client-side hardening.\n6. **Does the app still ship SafetyNet Attestation?** Dead API since January 2025; if the failure branch\n   allows, the gate has been unconditionally open in production for over a year.\n7. **Does the tamper response destroy or lock anything?** Look for `wipeData`, `lockNow`,\n   `clearApplicationUserData` near the detection code before anything else — the ceiling here is P2 and\n   nobody checks it.\n8. **Control or telemetry?** Attach and drive the app. If it runs normally, everything downstream in this\n   chapter is a ruled-out entry and you have your negative for free.\n9. **Fail-open probing before bypass work.** Make the detection *throw*, do not neutralise it; a broad\n   `catch` around the check is a defect the vendor can fix, and a bypass is not.\n10. **Hook the secret-handling APIs.** If hook detection is absent, the deliverable is the extracted token\n    or key — a D13/D15 finding with a D21 method — never \"hooks worked\".\n11. **Debug artefacts in the release build.** `android:debuggable`, `setWebContentsDebuggingEnabled`, a\n    surviving debug menu. These are the items in this chapter that genuinely rate on their own.\n12. **Obfuscation, last and only for what it reveals.** The fraud threshold, the allowlisted account ids\n    and the detection scope you read out of the decompile are the finding; the absence of R8 is not.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"Root detection is missing\" | `lack_of_binary_hardening.lack_of_jailbreak_detection` = **P5** with an all-zero CVSS impact vector. HackerOne Core Ineligible lists it under \"Optional security hardening steps / Missing best practices\" | Nothing about the absence. Only what the rooted session reached, re-derived on a stock device or through a stock-reachable path (D21-002, D21-010) |\n| \"Root detection is bypassable\" | Same node, same P5. Every major programme excludes it: Google Mobile VRP \"Attacks that require a rooted device\", Xiaomi/Grab/Spotify \"runtime hacking exploits using tools like Frida/Appmon\", PayPal, Basecamp, Snapchat, Reddit, HackenProof, YesWeHack Gojek \"Lack of binary protection / jailbreak and root detection / anti-debugging controls\" | The **server** honouring the client's verdict (D21-013), or the specific control the bypass unlocked, filed under that control's domain (D21-033) |\n| \"Frida can attach / the app has no hook detection\" | `lack_of_binary_hardening.runtime_instrumentation_based` = **P5**. AM-12 is not an attacker model | The credential the hook extracted, proved to authenticate other users or off the device (D21-045 + D21-002 condition 6) |\n| \"The APK can be repackaged and re-signed\" | HackenProof \"Lack of obfuscation or repackaging protections\"; Grab/Spotify/Starbucks/Xiaomi \"Lack of binary protection control\". The repackaged app attacks only its own installer | A distribution channel you can poison so the repackaged build reaches **other** users — that is D17, not D21 |\n| \"The app is not obfuscated\" | `lack_of_binary_hardening.lack_of_obfuscation` = **P5**; MASVS: \"the absence of any MAS-R measures does not inherently introduce vulnerabilities\" | The business rule you read out of the decompile — a fraud threshold, a velocity limit, an allowlist of privileged account ids (D21-051) |\n| \"Emulator detection is missing\" | P5, and an emulator is not a security boundary. Google Invalid Reports: \"Rooted devices and emulators do not have the same security boundaries as regular devices\" | The backend accepting `MEETS_VIRTUAL_INTEGRITY` where its own policy requires device integrity (D21-018), with the abuse rate quantified |\n| \"Debugger detection is missing\" | P5 standalone, and attaching needs USB debugging plus an unlocked device | What the attached debugger extracted or modified (D21-046), or `android:debuggable=\"true\"` on the store build, which is a different item entirely (D21-047) |\n| \"I bypassed the app's RASP with objection/Frida in five minutes\" | A statement about your tooling. AOSP's own modifier table caps anything needing an unlocked bootloader or Developer Mode at **no higher than Low** | Nothing. Report what you reached afterwards, on a stock device where possible |\n| \"Play Integrity can be defeated with Magisk + TrickyStore + a keybox\" | This spoofs attestation *inputs*; Google's backend signature verification still succeeds because the JWT is genuine. It is an operator capability, not an app vulnerability — and abused keyboxes get revoked | The backend accepting a **replayed** or **relayed** token (D21-015, D21-016), or accepting one with no freshness or nonce binding — none of which needs a keybox |\n| \"The app's root check can be defeated, and it uses Play Integrity\" | If the verdict is server-verified, no local hook forges it. Stop and re-scope to server-side testing rather than burning hours on Frida | The server accepting requests that carry **no** integrity verdict at all, or carrying one bound to nothing (D21-006 routes you) |\n| \"Production images cannot be rooted / `adb root` is denied\" | `adbd cannot run as root in production builds` is a platform property of `user` builds, not an app finding | Nothing. It is a harness fact; record it in the methodology |\n| \"The app stores a token in internal storage and root can read it\" | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_internal_storage` = **P5**; the sandbox holds against every attacker except the device owner | The token authenticating a **different** account from your own machine, or a non-root path to the same bytes (backup, exported provider, debuggable build) |\n| \"The app does not use Play Integrity at all\" | MASWE-0054/-0056 are hardening gaps. An app is not obliged to attest | Only in a MAS-R-scoped SoW engagement (D21-001), where it is a contractual finding, not a vulnerability |\n| \"`StrictMode` violations appear in logcat\" | Debug artefact; since Android 4.1 no ordinary app reads another app's log | A violation line that itself carries a token, a private path revealing an unreleased feature, or a reader you can name (a log-uploading SDK, a crash reporter, a debuggable build) |\n| \"A RASP telemetry beacon fires when I attach Frida\" | The SDK reporting a signal is working as designed. Telemetry is not a control | The beacon's *absence* changing a server decision — i.e. the backend gating on a signal a modified client simply never sends (D21-005 -> D21-013) |\n| \"The app runs on my rooted phone and I can see my own data\" | AM-12. You are the device owner attacking yourself | Any one of the six conditions in D21-002, with its artefact |\n| \"The tamper response logs the user out\" | A non-destructive response is the app behaving correctly | The response wiping data, locking the account or bricking the session **and** a trigger another app can plant (D21-039) |\n| \"`attestationSecurityLevel: Software` on my test device\" | On a standard AVD the Keystore is software-backed and the chain terminates in Google's Software attestation root — an artefact of the harness | The same observation reproduced on a **physical** device, or the server accepting a software-rooted chain for a hardware-gated action (D21-030) |\n| \"The app asks for battery-optimisation exemption\" | A functional request, not a security defect, on its own | A code path or on-screen instruction that disables Play Protect, relaxes SELinux, or talks the user through sideloading (D21-040) |\n| \"The obfuscated build took me two days to understand\" | Effort is not a severity axis, and MASVS-RESILIENCE-3 is explicitly about raising cost, not preventing access | What you found at the end of the two days |",
  "joins": "- **Play Integrity verdict × the backend's *other* clients (D21-013/-015 × D15 × D21-054).** The mobile\n  team wires attestation into the mobile client; the web client and the partner API call the same\n  endpoints with no integrity header at all, because they cannot produce one. Nobody reviews the two\n  together. Enumerate every endpoint that carries a token from the app, then call each one from `curl`\n  with a valid session and no token — the endpoints that answer are the ones where the control was never\n  a control. This is the single highest-yield join in the chapter, and it needs no device bypass.\n- **Detection verdict × the backup set (D21-035 × D11 × D02).** The resilience reviewer tests whether the\n  check can be hooked; the storage reviewer inventories `allowBackup` and shrugs because \"it's only\n  preferences\". The join is the intersection: a cached `integrity_ok` or `tamper_strikes` value that is\n  both consumed on next launch **and** in the backup set is a detection bypass with no instrumentation at\n  all, at a far weaker attacker model than anything else in this domain.\n- **Tamper-response trigger × shared-storage write (D21-039 × D07 × D11).** Two teams own the halves: the\n  security team wrote a response that wipes data on detection, and the storage team allowed a path on\n  shared storage that the check inspects. Neither is a finding alone. Together, any zero-permission app on\n  the device destroys the client's users' data — the only Critical in this chapter, and it is found by\n  grepping the detection code for `wipeData` and then asking who can write the path it looks at.\n- **Obfuscation coverage × the fraud engine (D21-051 × D23).** The app-security reviewer rates\n  obfuscation as P5 and moves on; the fraud team never sees the decompile. The join is to grep the\n  decompiled output specifically for the fraud engine's constants — thresholds, velocity limits, amount\n  bands, allowlisted account ids — because those are the values that turn a P5 hardening gap into a\n  structuring attack with a number attached.\n- **Attestation nonce × PII (D21-022 × D20).** The integrity integration and the privacy review never\n  meet. The nonce is a security control to one team and an opaque blob to the other, and in between\n  somebody put the user's email in it. One base64 decode answers it, and it is a disclosure to a third\n  party outside the declared data flow.\n- **App Check enforcement × Firebase rules (D21-025 × D18).** The Firebase rules reviewer argues \"an\n  attacker would need to be in the app\"; the App Check console is owned by a different team and is set to\n  monitoring-only. Read the two together and the \"on-device only\" mitigation in every Firestore finding\n  evaporates — which changes those findings' attacker model from AM-12 to AM-01.\n- **`android:debuggable` × the entire resilience budget (D21-047 × D02 × D14).** A debuggable release is\n  usually filed as a hardening issue by whoever finds it in the manifest. Read it beside the RASP\n  inventory and the NSC: it makes every detection routine bypassable via JDWP with no root, makes\n  `<debug-overrides>` live, and makes `run-as` a data-extraction primitive. The client paid for a RASP SDK\n  and shipped the key to it in the manifest.\n- **Key-attestation chain × the session it is supposed to bind (D21-031 × D13).** The crypto reviewer\n  validates the chain; the auth reviewer validates the session. Nobody asks whether the *same* hardware\n  that produced the chain signs anything afterwards. If it does not, a chain generated on a clean phone\n  binds nothing, and every \"device-bound\" claim in the product documentation is false.\n- **SafetyNet remnant × App Check provider (D21-021 × D21-025 × D18).** An app can carry a dead\n  `SafetyNetAppCheckProviderFactory` while the team believes App Check is enforcing. The dependency scan\n  finds the library and calls it outdated; the backend team sees App Check enabled in the console.\n  The join is that the provider has returned failures since January 2025 and nobody read the enforcement\n  metrics.\n- **RASP vendor `.so` × the dependency inventory (D21-043 × D16 × D17).** The SDK reviewer inventories\n  analytics and ad libraries and treats the security SDK as a control rather than as a dependency. Its\n  native component is the one nobody version-checks, and it is loaded first, in-process, on every launch.",
@@ -116,8 +116,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "any app with Play Integrity, SafetyNet remnants or a commercial RASP SDK",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Play Integrity device-integrity labels `MEETS_DEVICE_INTEGRITY`, `MEETS_BASIC_INTEGRITY`, `MEETS_STRONG_INTEGRITY`, `MEETS_VIRTUAL_INTEGRITY`",
    "record": "",
    "legacy_meta": {},
@@ -186,7 +188,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Checks are scattered across an obfuscated utility class, a vendor SDK **and** a native\nlibrary. Stubbing one of four produces a silent bail-out you will misdiagnose as an app bug and write up\nas \"the app is stable under instrumentation\".",
-   "how": "Build the complete check-site inventory first.\n```bash\napkid target.apk                                  # anti_root / anti_vm / obfuscator / packer, per library\ngrep -rn '/system/xbin/su\\|/system/bin/su\\|/sbin/su\\|Superuser.apk\\|busybox\\|magisk\\|Magisk' jadx_out/sources\ngrep -rn 'Runtime.getRuntime().exec\\|ProcessBuilder' jadx_out/sources\ngrep -rn 'ro.build.tags\\|test-keys\\|ro.debuggable\\|ro.secure\\|SystemProperties.get' jadx_out/sources\ngrep -rn 'isDeviceRooted\\|checkRootMethod\\|RootBeer\\|SafetyNet\\|IntegrityManager\\|attest' jadx_out/sources\ngrep -rn 'getInstallerPackageName\\|getInstallSourceInfo\\|signatures\\|GET_SIGNING_CERTIFICATES' jadx_out/sources\nstrings out/lib/arm64-v8a/*.so | grep -iE 'busybox|magisk|superuser|/su$|frida|gum-js|xposed|ptrace|TracerPid'\n# vendor fingerprint - which commercial RASP is this?\nfor so in out/lib/*/*.so; do strings -a \"$so\" \\\n  | grep -aoiE 'guardsquare|dexguard|appdome|promon|shield|verimatrix|talsec|freerasp' \\\n  | head -1 | sed \"s#^#$so: #\"; done\n```\nRule-based smali triage that requires the suspicious string to sit near the API that consumes it — this\nis what removes the false positives a bare string grep produces:\n```json\n{ \"category\": \"root_check\",\n  \"regex_patterns\": [\n    \"(?i)invoke-static .*Runtime;->getRuntime\\\\(\\\\).*->exec\\\\(.*\\\"(su|magisk|busybox)\\\"\",\n    \"(?i)const-string [vp0-9, ]+\\\"(/system/xbin/su|/system/bin/su|/sbin/su)\\\"\"],\n  \"context_hint\": \"Only report when the same method also calls File;->exists/canExecute or Runtime;->exec.\" }\n```\nIf the app dies before your hooks land, dump what actually loaded:\n```javascript\nJava.perform(() => Java.enumerateLoadedClasses({ onMatch: n => console.log(n), onComplete: () => console.log('Done') }));\n```",
+   "how": "Build the complete check-site inventory first.\n```bash\napkid target.apk                                  # anti_root / anti_vm / obfuscator / packer, per library\ngrep -rn '/system/xbin/su\\|/system/bin/su\\|/sbin/su\\|Superuser.apk\\|busybox\\|magisk\\|Magisk' $DEC/jadx/sources\ngrep -rn 'Runtime.getRuntime().exec\\|ProcessBuilder' $DEC/jadx/sources\ngrep -rn 'ro.build.tags\\|test-keys\\|ro.debuggable\\|ro.secure\\|SystemProperties.get' $DEC/jadx/sources\ngrep -rn 'isDeviceRooted\\|checkRootMethod\\|RootBeer\\|SafetyNet\\|IntegrityManager\\|attest' $DEC/jadx/sources\ngrep -rn 'getInstallerPackageName\\|getInstallSourceInfo\\|signatures\\|GET_SIGNING_CERTIFICATES' $DEC/jadx/sources\nstrings out/lib/arm64-v8a/*.so | grep -iE 'busybox|magisk|superuser|/su$|frida|gum-js|xposed|ptrace|TracerPid'\n# vendor fingerprint - which commercial RASP is this?\nfor so in out/lib/*/*.so; do strings -a \"$so\" \\\n  | grep -aoiE 'guardsquare|dexguard|appdome|promon|shield|verimatrix|talsec|freerasp' \\\n  | head -1 | sed \"s#^#$so: #\"; done\n```\nRule-based smali triage that requires the suspicious string to sit near the API that consumes it — this\nis what removes the false positives a bare string grep produces:\n```json\n{ \"category\": \"root_check\",\n  \"regex_patterns\": [\n    \"(?i)invoke-static .*Runtime;->getRuntime\\\\(\\\\).*->exec\\\\(.*\\\"(su|magisk|busybox)\\\"\",\n    \"(?i)const-string [vp0-9, ]+\\\"(/system/xbin/su|/system/bin/su|/sbin/su)\\\"\"],\n  \"context_hint\": \"Only report when the same method also calls File;->exists/canExecute or Runtime;->exec.\" }\n```\nIf the app dies before your hooks land, dump what actually loaded:\n```javascript\nJava.perform(() => Java.enumerateLoadedClasses({ onMatch: n => console.log(n), onComplete: () => console.log('Done') }));\n```",
    "proof": "A named, complete check-site list — class, method and native symbol per check — produced\nbefore the first hook. The 2016 su/busybox/test-keys triad is the **floor**, not the ceiling: modern\nbuilds add Magisk/Zygisk artefacts, Frida port 27042, `gum-js-loop`, `/proc/self/maps` scans, and\nnative-side `ptrace`/`TracerPid` reads.",
    "escalation": "The inventory is the input to D21-005 (control or telemetry), D21-033 (what does each\ncheck gate) and D21-051 (which of these routines survived obfuscation).",
    "ruled_out_when": "APKiD returns no `anti_root`/`anti_vm` signature, no vendor string matches in any\n`.so`, and none of the greps hits outside third-party analytics code — the app ships no resilience\ncontrols at all. Note it as a fact, then file nothing: \"no root detection\" is\n`lack_of_binary_hardening|lack_of_jailbreak_detection` (P5)."
@@ -204,8 +206,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-KNOW-0118 (RASP), MASWE-0058",
    "record": "",
    "legacy_meta": {},
@@ -231,7 +236,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Most commercial RASP SDKs *report* signals to a backend and never block anything. A signal\nthat reaches analytics is telemetry; a signal that changes what the app or the server will do is a\ncontrol. Only a control can be bypassed, and only a bypassed control can be a finding.",
-   "how": "Attach and drive the app through its most sensitive flow with hooks live, then look for the\nthree possible outcomes rather than the two people expect.\n```bash\nfrida -U -n com.target.app -l noop.js        # attach AFTER the UI loads; no spawn-time race\n# watch all three channels at once\nadb logcat --pid=$(adb shell pidof -s com.target.app) | grep -iE 'tamper|integrity|root|hook|rasp|threat'\n```\nIn the proxy, watch for a *new* request that only appears while instrumented — a threat/telemetry beacon\n— and for a *changed* response to a normal request.\n```\noutcome A  app exits / flow refuses               -> a control. Go to D21-033.\noutcome B  app runs, a beacon fires, nothing else -> telemetry. Ruled out; say so in one sentence.\noutcome C  app runs, no beacon, nothing changes   -> no control at all. Graveyard (P5).\n```",
+   "how": "Attach and drive the app through its most sensitive flow with hooks live, then look for the\nthree possible outcomes rather than the two people expect.\n```bash\nfrida -D \"$SERIAL\" -n com.target.app -l noop.js        # attach AFTER the UI loads; no spawn-time race\n# watch all three channels at once\nadb logcat --pid=$(adb shell pidof -s com.target.app) | grep -iE 'tamper|integrity|root|hook|rasp|threat'\n```\nIn the proxy, watch for a *new* request that only appears while instrumented — a threat/telemetry beacon\n— and for a *changed* response to a normal request.\n```\noutcome A  app exits / flow refuses               -> a control. Go to D21-033.\noutcome B  app runs, a beacon fires, nothing else -> telemetry. Ruled out; say so in one sentence.\noutcome C  app runs, no beacon, nothing changes   -> no control at all. Graveyard (P5).\n```",
    "proof": "For B, the beacon request captured in the proxy with the app still functioning normally\nafterwards — plus the absence of any server-side behaviour change on the next sensitive call. For C, the\napp functioning under instrumentation with no beacon and no logcat line.",
    "escalation": "Outcome B is a legitimate *report sentence* in a SoW engagement (\"the purchased control\nis a reporting integration, not an enforcement point\") and a ruled-out entry in a bounty. Outcome A\nfeeds D21-033, D21-034 and D21-039.",
    "ruled_out_when": "Outcome B or C, recorded with the artefact. This is the single highest-value\nnegative in the chapter: it closes root detection, Frida detection, emulator detection and tamper\ndetection in one paragraph, defensibly."
@@ -249,8 +254,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "any app referencing Play Integrity, SafetyNet or Android key attestation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "MASTG-KNOW-0035, MASWE-0054, MASWE-0056; Play Integrity documentation (\"token verification must occur on your backend server, not on the client app\")",
    "record": "",
    "legacy_meta": {},
@@ -296,8 +303,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "Frida `Java.use` on `java.lang.System` / `android.os.Process`; `Log.getStackTraceString`",
    "record": "",
    "legacy_meta": {},
@@ -337,8 +347,11 @@
     "AM-12"
    ],
    "applies_to": "all hardened apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TECH-0043, MASTG-KNOW-0030",
    "record": "",
    "legacy_meta": {},
@@ -366,7 +379,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Many checks execute only during spawn or `Application.onCreate()`. Spawn-time injection\n(`-f`) and gadget builds get caught; attaching after the UI has loaded slips straight past.",
-   "how": "```bash\n# launch normally from the launcher or adb, wait for the UI, then attach\nadb shell monkey -p com.target.app 1 >/dev/null 2>&1; sleep 6\nfrida -U -n com.target.app -l hooks.js\n# contrast with the spawn path that failed\nfrida -U -f com.target.app -l hooks.js --no-pause\n```\nIf you genuinely need hooks before `onCreate`, use consolidated spawn-mode tooling so each Java method\nand native symbol is hooked exactly once — overlapping hooks are their own crash source.",
+   "how": "```bash\n# launch normally from the launcher or adb, wait for the UI, then attach\nadb shell monkey -p com.target.app 1 >/dev/null 2>&1; sleep 6\nfrida -D \"$SERIAL\" -n com.target.app -l hooks.js\n# contrast with the spawn path that failed\nfrida -D \"$SERIAL\" -f com.target.app -l hooks.js\n```\nIf you genuinely need hooks before `onCreate`, use consolidated spawn-mode tooling so each Java method\nand native symbol is hooked exactly once — overlapping hooks are their own crash source.",
    "proof": "The app running stably with instrumentation attached where `-f` previously exited, and the\ntwo command lines side by side.",
    "escalation": "Unblocks every dynamic item in D10-D15 against a hardened target. In a SoW report this\nis a legitimate resilience observation: continuous re-verification is absent.",
    "ruled_out_when": "Late attach is detected too — the observation hooks from D21-007 fire on a\npost-UI attach — meaning the app re-checks during its lifecycle. That is the correct behaviour and\nbelongs in the report's positive-observations section."
@@ -386,8 +399,11 @@
     "AM-12"
    ],
    "applies_to": "hardened banking, wallet and identity apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-KNOW-0030 (Reverse Engineering Tool Detection), MASTG-TOOL-0021 (Magisk + Zygisk/DenyList), MASTG-TOOL-0149 (LSPosed)",
    "record": "",
    "legacy_meta": {},
@@ -417,7 +433,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Anti-Frida detection is a fixed list of artefacts. Enumerate the list from the binary rather\nthan guessing, so the bypass is targeted and you can state precisely which vectors the app does and does\nnot cover.",
-   "how": "```bash\ngrep -rn -i 'frida\\|gum-js-loop\\|gmain\\|gdbus\\|pool-spawner\\|linjector\\|re\\.frida\\.server\\|27042\\|27047\\|LIBFRIDA' \\\n  jadx_out/sources out/lib/*/*.so\n```\nVectors a modern detector covers, and which a renamed/stealth server changes: process name\n`frida-server`; the mapped `libfrida-agent.so`; thread names `gmain` / `gdbus` / `pool-spawner`; the\nmemfd label; the exported `frida_agent_main` symbol; SELinux label `frida_file`; the D-Bus service\n`re.frida.server`; the default listening port; libc `exit`/`signal` hook side-effects; temp paths\n`.frida` / `frida-`. The three cheap countermeasures, in cost order:\n```bash\n# 1. non-default port\nadb shell \"/data/local/tmp/frida-server -l 0.0.0.0:31337 &\"\nfrida -H 127.0.0.1:31337 -n com.target.app\n# 2. renamed binary (process-name detection)\nadb push frida-server /data/local/tmp/fs && adb shell \"chmod 755 /data/local/tmp/fs && /data/local/tmp/fs &\"\n# 3. gadget instead of server (memory-scan detection for the server's own strings)\nfrida --gadget=libgadget.so -f com.target.app\n```\nLadder for root-hiding, cheapest first: Magisk Zygisk + DenyList with the package added and a reboot;\nthen Shamiko; then KernelSU/APatch (no Zygote injection at all) for apps that heuristically detect\nZygisk. Note MASTG's caveat for the report: Magisk DenyList is **not** kernel-level process hiding — it\nis mount-namespace plus Zygote isolation per app.",
+   "how": "```bash\ngrep -rn -i 'frida\\|gum-js-loop\\|gmain\\|gdbus\\|pool-spawner\\|linjector\\|re\\.frida\\.server\\|27042\\|27047\\|LIBFRIDA' \\\n  $DEC/jadx/sources out/lib/*/*.so\n```\nVectors a modern detector covers, and which a renamed/stealth server changes: process name\n`frida-server`; the mapped `libfrida-agent.so`; thread names `gmain` / `gdbus` / `pool-spawner`; the\nmemfd label; the exported `frida_agent_main` symbol; SELinux label `frida_file`; the D-Bus service\n`re.frida.server`; the default listening port; libc `exit`/`signal` hook side-effects; temp paths\n`.frida` / `frida-`. The three cheap countermeasures, in cost order:\n```bash\n# 1. non-default port\nadb shell \"/data/local/tmp/frida-server -l 0.0.0.0:31337 &\"\nfrida -H 127.0.0.1:31337 -n com.target.app\n# 2. renamed binary (process-name detection)\nadb push frida-server /data/local/tmp/fs && adb shell \"chmod 755 /data/local/tmp/fs && /data/local/tmp/fs &\"\n# 3. gadget instead of server (memory-scan detection for the server's own strings)\nfrida --gadget=libgadget.so -f com.target.app\n```\nLadder for root-hiding, cheapest first: Magisk Zygisk + DenyList with the package added and a reboot;\nthen Shamiko; then KernelSU/APatch (no Zygote injection at all) for apps that heuristically detect\nZygisk. Note MASTG's caveat for the report: Magisk DenyList is **not** kernel-level process hiding — it\nis mount-namespace plus Zygote isolation per app.",
    "proof": "The app that previously exited on injection now runs instrumented, with the specific\nfingerprint you neutralised named.",
    "escalation": "Harness only. -> D10-D15. Never a finding on its own — VRT P5.",
    "ruled_out_when": "The app is still detected after port, name, gadget and Zygisk-hiding changes, and\nthe D21-007 trace names a native routine. That is a genuinely hardened target; record the cost in hours\nin the RoE (D21-003 option 3) rather than continuing indefinitely."
@@ -439,8 +455,10 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Google's reporting guidance (device model/Android version/build number in the report **text**, not a screenshot); AOSP severity modifiers (unlocked bootloader / Developer Mode -> no higher than Low)",
    "record": "",
    "legacy_meta": {},
@@ -482,8 +500,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "Android 13+ for restricted settings; all for the rest",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Android restricted-settings behaviour (\"Allow restricted settings\", Android 13+); Google's reporting guidance on non-standard device configurations; AOSP severity modifiers",
    "record": "",
    "legacy_meta": {},
@@ -521,8 +541,11 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "every attestation-stripping or verdict-flipping claim in this chapter",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "the Body-Diff Rule, the Layer-Ordering Trap and the Statistical-Sample Rule from the bug-hunting corpus",
    "record": "",
    "legacy_meta": {},
@@ -564,8 +587,11 @@
     "AM-01"
    ],
    "applies_to": "any app that sends a device-state field to its backend",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "MASWE-0051 (CWE-1326), MASWE-0054, MASVS-RESILIENCE-1; Play Integrity overview's explicit \"Do NOT\" list (\"Trust verdicts on client-side only\", \"Cache verdicts\", \"Make binary Allow/Deny decisions\", \"Rely solely on Play Integrity API\")",
    "record": "",
    "legacy_meta": {},
@@ -621,8 +647,11 @@
     "AM-12"
    ],
    "applies_to": "all Play Integrity integrations",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, frida",
+   "requires_tags": [
+    "backend-api",
+    "frida"
+   ],
    "maps_to": "MASTG-KNOW-0035, MASWE-0054, MASWE-0056; Play Integrity documentation: token decryption/verification belongs on Google's servers or the app's server, never in the app",
    "record": "",
    "legacy_meta": {},
@@ -669,8 +698,12 @@
     "AM-01"
    ],
    "applies_to": "apps using Play Integrity **classic** requests",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "mitm",
+    "two-accounts"
+   ],
    "maps_to": "MASTG-KNOW-0035 (\"Include a NONCE with integrity verification requests\"); Play Integrity documentation — the nonce \"is used to protect against certain types of attacks, such as replay and tampering attacks\"; MASWE-0054",
    "record": "",
    "legacy_meta": {},
@@ -717,8 +750,12 @@
     "AM-01"
    ],
    "applies_to": "apps using Play Integrity **standard** requests",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "mitm",
+    "two-accounts"
+   ],
    "maps_to": "Play Integrity documentation — `requestHash` is \"a digest of all relevant values from your app's request\"; standard requests carry Google-managed replay mitigation but the backend must still validate `requestHash` against the protected action",
    "record": "",
    "legacy_meta": {},
@@ -761,8 +798,12 @@
     "AM-01"
    ],
    "applies_to": "all Play Integrity integrations",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "mitm",
+    "two-accounts"
+   ],
    "maps_to": "Play Integrity documented server check on `timestampMillis`; the overview's \"No caching: Request verdicts on-demand to prevent replay/proxying attacks\" and the \"Do NOT cache verdicts (replay attack risk)\" list entry",
    "record": "",
    "legacy_meta": {},
@@ -808,8 +849,11 @@
     "AM-01"
    ],
    "applies_to": "all apps using Play Integrity",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, physical",
+   "requires_tags": [
+    "backend-api",
+    "physical"
+   ],
    "maps_to": "Play Integrity verdicts documentation: `MEETS_DEVICE_INTEGRITY` = \"Genuine certified Android device with hardware-backed proof of locked bootloader and certified OS (Android 13+)\"; `MEETS_BASIC_INTEGRITY` = \"bootloader can be locked/unlocked (less strict)\"; `MEETS_VIRTUAL_INTEGRITY` = \"Android-powered emulator with Google Play services\"; MASTG-KNOW-0035",
    "record": "",
    "legacy_meta": {},
@@ -853,8 +897,11 @@
     "AM-01"
    ],
    "applies_to": "all apps using Play Integrity",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "Play Integrity verdicts: `appIntegrity.appRecognitionVerdict` (`PLAY_RECOGNIZED`, `UNRECOGNIZED_VERSION`, `UNEVALUATED`), `accountDetails.appLicensingVerdict` (`LICENSED`, `UNLICENSED`, `UNEVALUATED`); the documented caveat that `requestPackageName` can be spoofed mid-request and must not be the only app-identity check; MASTG-KNOW-0035",
    "record": "",
    "legacy_meta": {},
@@ -900,8 +947,11 @@
     "AM-01"
    ],
    "applies_to": "all apps using Play Integrity",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, frida",
+   "requires_tags": [
+    "backend-api",
+    "frida"
+   ],
    "maps_to": "MASTG-KNOW-0035 — local errors `APP_NOT_INSTALLED`, `APP_UID_MISMATCH`, default quota 10,000 requests/day; MASWE-0054",
    "record": "",
    "legacy_meta": {},
@@ -950,8 +1000,10 @@
     "AM-01"
    ],
    "applies_to": "**LEGACY** — any app still shipping the SafetyNet Attestation dependency; still common in older enterprise and white-label builds",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "Android SafetyNet deprecation timeline (deprecated 2022; full turndown January 2025; \"the attest API returns a task that always invokes the on failure listener with an `ApiException`\", status code 7 `NETWORK_ERROR`); MASWE-0054",
    "record": "",
    "legacy_meta": {},
@@ -998,8 +1050,10 @@
     "AM-09"
    ],
    "applies_to": "all apps using Play Integrity",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "Play Integrity documentation: data used for `requestHash` and `nonce` \"is visible in cleartext to your app, and to Google. You should encrypt or hash the data before passing it to the Play Integrity API.\"",
    "record": "",
    "legacy_meta": {},
@@ -1042,8 +1096,11 @@
     "AM-04"
    ],
    "applies_to": "apps with the `environmentDetails` opt-ins enabled; supported form factors only",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "Play Integrity verdicts: `environmentDetails.appAccessRiskVerdict.appsDetected` (`KNOWN_INSTALLED`/`UNKNOWN_INSTALLED`, `KNOWN_CAPTURING`/`UNKNOWN_CAPTURING`, `KNOWN_CONTROLLING`/`UNKNOWN_CONTROLLING`, `KNOWN_OVERLAYS`/`UNKNOWN_OVERLAYS`), `playProtectVerdict` (`NO_ISSUES`, `NO_DATA`, `POSSIBLE_RISK`, `MEDIUM_RISK`, `HIGH_RISK`, `UNEVALUATED`); MASWE-0039, MASWE-0040",
    "record": "",
    "legacy_meta": {},
@@ -1132,8 +1189,11 @@
     "AM-01"
    ],
    "applies_to": "apps using Firebase/GCP-backed services or the App Check custom-backend integration",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "firebase, backend-api",
+   "requires_tags": [
+    "firebase",
+    "backend-api"
+   ],
    "maps_to": "Firebase App Check documentation — Play Integrity is the Android provider; protects Cloud Firestore, Realtime Database, Cloud Storage, callable Cloud Functions, Firebase Authentication (Preview) and custom backends; debug providers are local-development-only",
    "record": "",
    "legacy_meta": {},
@@ -1158,7 +1218,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "App Check is the control that makes \"only our app may call this backend\" true. Without it,\nevery Firestore/RTDB/Storage/Callable finding is reachable from `curl`. This is the attestation item\nmost often missed, because it lives in a different team's console.",
-   "how": "```bash\ngrep -rnE 'FirebaseAppCheck|installAppCheckProviderFactory|PlayIntegrityAppCheckProviderFactory|DebugAppCheckProviderFactory|SafetyNetAppCheckProviderFactory|firebase_app_check_debug_token' \\\n  jadx_out/sources jadx_out/resources\n# is enforcement actually on?  call the backend with a valid ID token and NO App Check header\ncurl -s -X POST \"https://firestore.googleapis.com/v1/projects/$PROJ/databases/(default)/documents:runQuery\" \\\n  -H \"Authorization: Bearer $ID_TOKEN\" -H 'Content-Type: application/json' -d '{\"structuredQuery\":{}}' -i\n```",
+   "how": "```bash\ngrep -rnE 'FirebaseAppCheck|installAppCheckProviderFactory|PlayIntegrityAppCheckProviderFactory|DebugAppCheckProviderFactory|SafetyNetAppCheckProviderFactory|firebase_app_check_debug_token' \\\n  $DEC/jadx/sources $DEC/jadx/resources\n# is enforcement actually on?  call the backend with a valid ID token and NO App Check header\ncurl -s -X POST \"https://firestore.googleapis.com/v1/projects/$PROJ/databases/(default)/documents:runQuery\" \\\n  -H \"Authorization: Bearer $ID_TOKEN\" -H 'Content-Type: application/json' -d '{\"structuredQuery\":{}}' -i\n```",
    "proof": "A 200 with document data from a plain `curl` carrying no `X-Firebase-AppCheck` header, plus\nthe absence of `installAppCheckProviderFactory` in the decompiled source. If a debug provider or a\ndebug token resource is present in the **release** APK, show the class reference and the shipped token —\nthat is a permanent enforcement bypass.",
    "escalation": "-> D18 (it is the missing-mitigation line in every Firebase rules finding, and it turns\nan \"on-device only\" argument into a remote one). A `SafetyNetAppCheckProviderFactory` is also D21-021.",
    "ruled_out_when": "`installAppCheckProviderFactory` with the Play Integrity provider is present, no\ndebug provider or debug token ships in the release build, and the unauthenticated-App-Check `curl`\nreturns 401/403. Run D21-012's body diff on that response before believing it."
@@ -1178,8 +1238,11 @@
     "AM-01"
    ],
    "applies_to": "Android 7.0+ (Keymaster 2 key attestation)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "MASTG-KNOW-0044 (Key Attestation), MASTG-KNOW-0034 (Device Binding), MASWE-0054; Android security-key-attestation documentation — \"Perform verification on a **separate server**, not on the device itself\"; extension OID `1.3.6.1.4.1.11129.2.1.17`",
    "record": "",
    "legacy_meta": {},
@@ -1232,8 +1295,11 @@
     "AM-01"
    ],
    "applies_to": "all servers consuming Android key attestation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "Android security-key-attestation documentation — \"**Critical**: Only trust the **first occurrence** of the extension (nearest to root). Extensions in the leaf certificate may have been added by attackers\"; `KeyDescription` ASN.1 shape in AOSP keystore attestation docs",
    "record": "",
    "legacy_meta": {},
@@ -1278,8 +1344,11 @@
     "AM-01"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "Android security-key-attestation verification checklist — \"`attestationChallenge` matches your nonce\"; `KeyDescription.attestationChallenge` in AOSP keystore attestation docs; MASTG-KNOW-0034",
    "record": "",
    "legacy_meta": {},
@@ -1325,8 +1394,11 @@
     "AM-01"
    ],
    "applies_to": "Android 7.0+ for the fields; Android 10+ for the VBMeta digest",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, physical",
+   "requires_tags": [
+    "backend-api",
+    "physical"
+   ],
    "maps_to": "AOSP keystore attestation — `RootOfTrust` contains `verifiedBootKey`, `deviceLocked`, `verifiedBootState` (`Verified`, `SelfSigned`, `Unverified`, `Failed`), `verifiedBootHash`; AOSP security-model paper §4.7 (the state \"can be verified by apps as well as passed onto backend services to remotely verify boot integrity\"; from Android 10 with AVB2 the VBMeta struct digest is included \"to support firmware transparency\")",
    "record": "",
    "legacy_meta": {},
@@ -1370,8 +1442,11 @@
     "AM-01"
    ],
    "applies_to": "all servers consuming Android key attestation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, physical",
+   "requires_tags": [
+    "backend-api",
+    "physical"
+   ],
    "maps_to": "Android security-key-attestation documentation — check `attestationSecurityLevel` is `TrustedEnvironment` or `StrongBox`, verify the root \"is signed with Google's attestation root key\", check the chain against the CRL at `https://android.googleapis.com/attestation/status`, roots listed at `https://android.googleapis.com/attestation/root`, official verifier `github.com/android/keyattestation`; AOSP `SecurityLevel` values `Software` / `TrustedEnvironment` / `StrongBox`",
    "record": "",
    "legacy_meta": {},
@@ -1414,8 +1489,12 @@
     "AM-01"
    ],
    "applies_to": "apps that treat an AndroidKeyStore X.509 attestation chain as a device-integrity boolean",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, frida, physical",
+   "requires_tags": [
+    "backend-api",
+    "frida",
+    "physical"
+   ],
    "maps_to": "MASTG-KNOW-0044; AOSP key/ID attestation docs; the published key-attestation relay research",
    "record": "",
    "legacy_meta": {},
@@ -1460,8 +1539,10 @@
     "AM-01"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida",
+   "requires_tags": [
+    "frida"
+   ],
    "maps_to": "AOSP security-model paper §4.7 (the Verified Boot state \"is included in key attestation certificates (provided by Keymint/Strongbox) in the `deviceLocked` and `verifiedBootState` fields, which can be verified by apps as well as passed onto backend services\"); AOSP verified-boot device-state documentation (LOCKED vs UNLOCKED, `fastboot flashing [unlock\\|lock]` wiping data)",
    "record": "",
    "legacy_meta": {},
@@ -1507,8 +1588,11 @@
     "AM-12"
    ],
    "applies_to": "all apps shipping root/emulator/hook detection",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, frida",
+   "requires_tags": [
+    "device",
+    "frida"
+   ],
    "maps_to": "MASTG-TEST-0324, MASTG-TEST-0325, MASTG-TEST-0351, MASTG-TECH-0144, MASWE-0051 (CWE-1326), MASWE-0053, MASTG-KNOW-0027, MASTG-KNOW-0031, MASTG-TOOL-0029/-0038 (objection), MASTG-TOOL-0146 (RootBeer), MASTG-TOOL-0021 (Magisk), MASTG-TOOL-0149 (LSPosed), rule `mastg-android-root-detection`; ATT&CK T1633.001, T1630.003",
    "record": "",
    "legacy_meta": {},
@@ -1579,8 +1663,10 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida",
+   "requires_tags": [
+    "frida"
+   ],
    "maps_to": "MASWE-0051, MASVS-RESILIENCE-1; AOSP security-model paper §3 rule ③ (rooting is \"modifying the system to allow starting processes that are not subject to sandboxing and isolation\" — a CDD non-compliance, and attestation rather than a local check is the supported mechanism)",
    "record": "",
    "legacy_meta": {},
@@ -1629,8 +1715,10 @@
     "AM-11"
    ],
    "applies_to": "apps with `allowBackup` effectively true, or any on-disk cache of the verdict",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASWE-0006, MASWE-0051, MASWE-0057 (CWE-471 \"Modification of Assumed-Immutable Data\")",
    "record": "",
    "legacy_meta": {},
@@ -1684,8 +1772,10 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "root",
+   "requires_tags": [
+    "root"
+   ],
    "maps_to": "MASTG-TEST-0338, MASTG-TECH-0008, MASWE-0057 (CWE-471), MASTG-KNOW-0036, MASTG-BEST-0066, MASVS-RESILIENCE-2, MASVS-CODE-4",
    "record": "",
    "legacy_meta": {},
@@ -1742,8 +1832,10 @@
     "AM-12"
    ],
    "applies_to": "all; cross-platform builds where the check lives in JS/Dart/C# are the weakest case",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida",
+   "requires_tags": [
+    "frida"
+   ],
    "maps_to": "MASWE-0058 (Runtime Code Integrity Not Verified), MASTG-KNOW-0032 (Runtime Integrity Verification), MASTG-TOOL-0103 (uber-apk-signer), MASTG-TECH-0039",
    "record": "",
    "legacy_meta": {},
@@ -1794,8 +1886,10 @@
     "AM-08"
    ],
    "applies_to": "apps with integrity or attestation claims",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida",
+   "requires_tags": [
+    "frida"
+   ],
    "maps_to": "MASWE-0058; the Dirty Stream research pattern (the vendor hash check was defeated by overwriting the stored reference hash — the check ran against attacker-controlled reference data)",
    "record": "",
    "legacy_meta": {},
@@ -1841,8 +1935,10 @@
     "AM-03"
    ],
    "applies_to": "all apps with a destructive tamper response",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "ATT&CK T1662 Data Destruction, T1630.002 File Deletion (`wipeData`), T1629.002 Device Lockout (`DevicePolicyManager.lockNow()`), T1642 Endpoint Denial of Service, T1471 Data Encrypted for Impact",
    "record": "",
    "legacy_meta": {},
@@ -1942,8 +2038,10 @@
     "AM-08"
    ],
    "applies_to": "banking, wallet and DRM apps; any app whose threat model assumes per-package UID isolation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASWE-0058; the dex-load primitive `DexFile.openDexFile()` -> `openDexFileNative()` that containers hook and redirect",
    "record": "",
    "legacy_meta": {},
@@ -1989,8 +2087,12 @@
     "AM-07"
    ],
    "applies_to": "**API 34+**: the live trust store moved to the Conscrypt APEX at `/apex/com.android.conscrypt/cacerts`; `/system/etc/security/cacerts` is ignored at runtime",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=34, mitm, frida",
+   "requires_tags": [
+    "api>=34",
+    "mitm",
+    "frida"
+   ],
    "maps_to": "AOSP Conscrypt modular-system documentation (dual location, Android 14+); MASWE-0058",
    "record": "",
    "legacy_meta": {},
@@ -2035,8 +2137,10 @@
     "AM-09"
    ],
    "applies_to": "apps with commercial RASP",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "native",
+   "requires_tags": [
+    "native"
+   ],
    "maps_to": "D16 for the version ranges and the reachability proof; MASTG-TOOL-0009 (APKiD) for vendor fingerprinting",
    "record": "",
    "legacy_meta": {},
@@ -2079,8 +2183,10 @@
    "attacker": "n/a",
    "attacker_ids": [],
    "applies_to": "all dynamic SDK testing",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "mitm",
+   "requires_tags": [
+    "mitm"
+   ],
    "maps_to": "the SourMint research pattern (`ParseAndLoad` checking the Wi-Fi proxy and VPN client; the iOS analogue checking simulator, debugger, jailbreak paths and the system proxy settings)",
    "record": "",
    "legacy_meta": {},
@@ -2124,8 +2230,11 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "frida, two-accounts",
+   "requires_tags": [
+    "frida",
+    "two-accounts"
+   ],
    "maps_to": "MASTG-TEST-0341 (source of the API list below), MASWE-0058, MASTG-KNOW-0030, MASTG-KNOW-0032, MASTG-KNOW-0118, MASTG-BEST-0041, MASTG-TECH-0043, MASTG-TOOL-0001; ATT&CK T1617 Hooking (M1002, M1010)",
    "record": "",
    "legacy_meta": {},
@@ -2163,7 +2272,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Hook the APIs that handle secrets. If the hooks fire and return data, the app has no runtime\nintegrity verification — and, more importantly, you now hold the secrets. The finding is the secret.",
-   "how": "MASTG-TEST-0341 names the high-value targets and what each yields:\n```\nAccountManager.getPassword() / getAuthToken()  -> auth tokens, OAuth tokens, stored account passwords\nKeyStore.getKey() / getCertificate()           -> cryptographic keys and certificates\nCipher.doFinal()                               -> ephemeral/session keys and plaintext\nSQLiteDatabase.rawQuery() / query() / execSQL()-> database contents\nEncryptedSharedPreferences APIs                -> the decrypted values\nKeyGenParameterSpec.Builder.setUserAuthenticationRequired()  -> authentication bypass\n```\n```bash\nfrida -U -n com.target.app -l - <<'JS'\nJava.perform(function(){\n  try { var AM = Java.use('android.accounts.AccountManager');\n    AM.getPassword.implementation = function(a){ var r=this.getPassword(a); console.log('[AccountManager.getPassword] '+r); return r; }; } catch(e){}\n  try { var KS = Java.use('java.security.KeyStore');\n    KS.getKey.implementation = function(a,p){ console.log('[KeyStore.getKey] '+a); return this.getKey(a,p); }; } catch(e){}\n  var C = Java.use('javax.crypto.Cipher');\n  C.doFinal.overload('[B').implementation = function(b){ var r=this.doFinal(b);\n    console.log('[Cipher.doFinal] out=' + Java.use('java.lang.String').$new(r)); return r; };\n  var DB = Java.use('android.database.sqlite.SQLiteDatabase');\n  DB.rawQuery.overload('java.lang.String','[Ljava.lang.String;').implementation = function(q,a){\n    console.log('[rawQuery] ' + q); return this.rawQuery(q,a); };\n});\nJS\n```",
+   "how": "MASTG-TEST-0341 names the high-value targets and what each yields:\n```\nAccountManager.getPassword() / getAuthToken()  -> auth tokens, OAuth tokens, stored account passwords\nKeyStore.getKey() / getCertificate()           -> cryptographic keys and certificates\nCipher.doFinal()                               -> ephemeral/session keys and plaintext\nSQLiteDatabase.rawQuery() / query() / execSQL()-> database contents\nEncryptedSharedPreferences APIs                -> the decrypted values\nKeyGenParameterSpec.Builder.setUserAuthenticationRequired()  -> authentication bypass\n```\n```bash\nfrida -D \"$SERIAL\" -n com.target.app -l - <<'JS'\nJava.perform(function(){\n  try { var AM = Java.use('android.accounts.AccountManager');\n    AM.getPassword.implementation = function(a){ var r=this.getPassword(a); console.log('[AccountManager.getPassword] '+r); return r; }; } catch(e){}\n  try { var KS = Java.use('java.security.KeyStore');\n    KS.getKey.implementation = function(a,p){ console.log('[KeyStore.getKey] '+a); return this.getKey(a,p); }; } catch(e){}\n  var C = Java.use('javax.crypto.Cipher');\n  C.doFinal.overload('[B').implementation = function(b){ var r=this.doFinal(b);\n    console.log('[Cipher.doFinal] out=' + Java.use('java.lang.String').$new(r)); return r; };\n  var DB = Java.use('android.database.sqlite.SQLiteDatabase');\n  DB.rawQuery.overload('java.lang.String','[Ljava.lang.String;').implementation = function(q,a){\n    console.log('[rawQuery] ' + q); return this.rawQuery(q,a); };\n});\nJS\n```",
    "proof": "The hook output containing a real token, key or row set — **and then that value used off the\ndevice**, from your own machine, against a second account. Without the second half you have an AM-12\nobservation.",
    "escalation": "Extracted token -> D15/D13 (replay it against the backend); hooked\n`setUserAuthenticationRequired` -> D13 biometric bypass; extracted key -> D12. MASTG's pass condition is\nthe inverse and is worth quoting in the negative: the test *passes* if \"the session terminates\nunexpectedly, hook callbacks never execute, or the process exits\".",
    "ruled_out_when": "The hooks never fire, the session terminates on injection, or the extracted values\nare per-device and authenticate nothing off the device (run the two-device `xxd` check from D21-002\ncondition 6). Local-only extraction on the device owner's own data is Low by construction — the attacker\nalready controls the device."
@@ -2184,8 +2293,10 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0352, MASTG-TEST-0353, MASWE-0064, MASTG-KNOW-0028 (Anti-Debugging), MASTG-KNOW-0007, MASTG-TECH-0031, MASTG-TECH-0040, MASTG-TECH-0018, MASTG-BEST-0007/-0029/-0047, rules `mastg-android-debugger-checks` and `mastg-android-native-debugger-checks`, MASTG-TOOL-0019 (jdb), MASTG-TOOL-0152 (lldb), MASTG-TOOL-0151 (debugmepLS); deprecated MASTG-TEST-0046",
    "record": "",
    "legacy_meta": {},
@@ -2250,8 +2361,10 @@
     "AM-11"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0031 (Debugging); drozer `app.package.debuggable`, `exploit.jdwp.check`; Android's `android-debuggable` risk documentation",
    "record": "",
    "legacy_meta": {},
@@ -2299,8 +2412,11 @@
     "AM-11"
    ],
    "applies_to": "all apps with WebViews",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "webview, device",
+   "requires_tags": [
+    "webview",
+    "device"
+   ],
    "maps_to": "MASTG-TECH-0031; Android's test/debug-features risk documentation; MASWE-0061",
    "record": "",
    "legacy_meta": {},
@@ -2348,8 +2464,10 @@
     "AM-11"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Android test/debug-features risk documentation; MASWE-0061",
    "record": "",
    "legacy_meta": {},
@@ -2399,8 +2517,10 @@
     "AM-11"
    ],
    "applies_to": "all; the target of the test is explicitly the production build",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0263, MASTG-TEST-0264, MASTG-TEST-0265, MASTG-TECH-0009, MASWE-0061 (CWE-489, CWE-497, CWE-540, CWE-912, CWE-1295), MASVS-RESILIENCE-3, rule `mastg-android-strictmode`",
    "record": "",
    "legacy_meta": {},
@@ -2578,8 +2698,11 @@
     "AM-01"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "MASVS-RESILIENCE-1; the generalised form of D21-013",
    "record": "",
    "legacy_meta": {},
@@ -2629,8 +2752,10 @@
     "AM-01"
    ],
    "applies_to": "any versioned API; every hardcoded endpoint in the APK is a candidate",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "the shadow/zombie-API class from the bug-hunting corpus — \"a mobile app whose hardcoded backend calls look older than the current web app's\"",
    "record": "",
    "legacy_meta": {},
@@ -2676,8 +2801,10 @@
     "AM-01"
    ],
    "applies_to": "MAS-R scoped engagements for the observation; anti-fraud-relevant apps for the escalation",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0351, MASWE-0053, MASTG-KNOW-0031, MASTG-BEST-0046, MASTG-TECH-0032, MASTG-TOOL-0009 (APKiD `anti_vm`); deprecated MASTG-TEST-0049; ATT&CK T1633 Virtualization/Sandbox Evasion, T1633.001 System Checks",
    "record": "",
    "legacy_meta": {},
@@ -2713,7 +2840,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Hook and trace the common emulator checks while running on an emulator. The observation is\nInformational; the escalation is that the app's abuse economics assume a per-device cost that does not\nexist.",
-   "how": "```bash\ngrep -rn 'Build\\.FINGERPRINT\\|Build\\.MODEL\\|Build\\.MANUFACTURER\\|Build\\.PRODUCT\\|Build\\.HARDWARE\\|Build\\.TAGS\\|ro\\.kernel\\.qemu\\|goldfish\\|ranchu\\|sdk_gphone\\|generic_x86' sources/\napkid app.apk | grep anti_vm\nstrace -p $(adb shell pidof com.target.app) 2>&1 | grep -E 'qemu|goldfish|ranchu|/proc/tty/drivers'\nfrida -U -f com.target.app -l emulator_detect_hooks.js\n```\nNote the sophisticated variants ATT&CK documents, in case the app implements them and you misdiagnose a\nfailure: sampling motion-sensor data, requiring a number of recorded steps before activating, and\nchecking network-adapter addresses, CPU core count and memory/drive size.",
+   "how": "```bash\ngrep -rn 'Build\\.FINGERPRINT\\|Build\\.MODEL\\|Build\\.MANUFACTURER\\|Build\\.PRODUCT\\|Build\\.HARDWARE\\|Build\\.TAGS\\|ro\\.kernel\\.qemu\\|goldfish\\|ranchu\\|sdk_gphone\\|generic_x86' sources/\napkid app.apk | grep anti_vm\nstrace -p $(adb shell pidof com.target.app) 2>&1 | grep -E 'qemu|goldfish|ranchu|/proc/tty/drivers'\nfrida -D \"$SERIAL\" -f com.target.app -l emulator_detect_hooks.js\n```\nNote the sophisticated variants ATT&CK documents, in case the app implements them and you misdiagnose a\nfailure: sampling motion-sensor data, requiring a number of recorded steps before activating, and\nchecking network-adapter addresses, CPU core count and memory/drive size.",
    "proof": "The app running normally on an emulator with no detection call observed in the trace — then\nthe escalation: the *rate* at which account creation, referral redemption or promo claiming can be\ndriven from emulated devices, quantified.",
    "escalation": "-> D23 (automated abuse and fraud farming at scale) and -> D21-018 (the backend accepting\n`MEETS_VIRTUAL_INTEGRITY` is the server-side half of the same problem, and it is the half that rates).",
    "ruled_out_when": "The app refuses to run or restricts the flow on a Play-image emulator, or the\nbackend independently refuses the emulator's requests (verify by replaying with curl). Note the\nenvironment honestly: a standard emulator is software-Keystore-backed and unrooted-production images\ncannot be rooted (`adb root` returns \"adbd cannot run as root in production builds\") — neither is a\nfinding about the app."
@@ -2733,8 +2860,10 @@
     "AM-11"
    ],
    "applies_to": "debuggable or shell-accessible devices; some toggles require the app to be debuggable or the build to be userdebug",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Android 12/15/16 behaviour-change documentation (each documents its own `am compat` change name); Android app-compatibility test/debug guide",
    "record": "",
    "legacy_meta": {},

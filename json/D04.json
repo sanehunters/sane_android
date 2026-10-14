@@ -4,7 +4,7 @@
  "file": "D04-exported-activities-and-task.md",
  "why": "It pays through exactly one door. An exported activity that renders the logged-in user's address book, or\nthat takes `userId` from an extra and asks the backend for that user's record, converts straight out of the\nP5 mobile branch into `broken_authentication_and_session_management.authentication_bypass` (P1) or\n`broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1). The MASTG's\nown worked example — `am start -n com.mwr.example.sieve/.PWList` walking past a password manager's login\nform — is thirteen years old and still the single highest-frequency shape in the disclosed corpus. Google's\nown rule is the calibration: \"It is not a vulnerability if an app exports an activity … **unless it can be\nused to gain unauthorized access to application data or functionality**.\" The export is never the finding.\nThe data behind it is.\n\nEverything else in this chapter is graveyard-adjacent and you should know that before you spend a day on it.\nBugcrowd prices `mobile_security_misconfiguration.tapjacking` at **P5** and\n`insecure_data_storage.screen_caching_enabled` at **P5**. Google's Mobile VRP names \"Variants of Strandhogg\nand Tapjacking\" in its non-qualifying list outright, and its Invalid Reports page excludes\n\"Tapjacking/overlay SYSTEM_ALERT_WINDOW vulnerability on a non-security-critical screen\" with only three\ncarve-outs: overlays that interfere with a **permission** approval, with **app-installation** approval, or\nthat **hide a privacy-sensor indicator**. Task hijacking is heavily represented in every public Android\nchecklist and almost never converts. YesWeHack's Gojek program excludes anything \"only possible on Android\nversion 8 and below\", which is where StrandHogg lives. Treat both as ruled-out work unless you can produce\na *named irreversible action completing* or a *credential you captured*.\n\nThe honest base rate from the disclosed set: exported-activity-to-WebView is the highest-yield single shape\n(H1 #499348 Twitter Lite rated **Critical**; #283058 IRCCloud, #2555949 US DoD and #694053 Lark all Medium;\n#532836 Exness Low at $400 — the differentiator at triage is whether you demonstrated *data egress* rather\nthan `alert(1)`). App-lock and in-app-PIN bypasses cluster at **Low**: Shopify #637194 Low $500, Nextcloud\n#1825679 Low 1.8, #1784645 Low 2.5, Whisper #50884 $100, with several Nextcloud passcode bypasses paying\n$0. Crash-only intent fuzzing pays nothing anywhere: Bugcrowd P5, Xiaomi out-of-scope, Reddit out-of-scope,\nTikTok \"must achieve arbitrary code execution, not just trigger an application crash\".",
  "crux": "**Is there any screen in this app whose security depends on the user having arrived from the previous screen — and can I start it directly, from a package that holds no permissions, with the arguments of my choice?**",
- "applicability": "",
+ "applicability": "Run once, before any D04 item. D04 is never fully n/a for an app with a launcher icon — every such app has at least one exported activity — so the probe decides *which half* of the chapter applies and sizes the register.\n\n```bash\n# 1. Installed truth: how many activities/aliases does the package expose at all? (includes library- and split-contributed components)\nadb shell dumpsys package \"$PKG\" | sed -n '/Activity Resolver Table/,/Receiver Resolver Table/p' | grep -oE \"$PKG/[A-Za-z0-9_.\\$]+\" | sort -u | tee logs/D04-probe-installed.txt | wc -l\n\n# 2. Merged manifest (base + every split under $DEC/apktool*/): exported or filtered activities and aliases, and the UI-redress / keyguard attributes\ngrep -hcE '<(activity|activity-alias)\\b[^>]*android:exported=\"true\"' \"$DEC\"/apktool*/AndroidManifest.xml\ngrep -hoE 'showWhenLocked|turnScreenOn|allowEmbedded|allowUntrustedActivityEmbedding|supportsPictureInPicture|showForAllUsers|directBootAware|documentLaunchMode|android\\.service\\.quicksettings\\.action\\.QS_TILE|android\\.appwidget\\.action\\.APPWIDGET_UPDATE' \"$DEC\"/apktool*/AndroidManifest.xml | sort | uniq -c\n\n# 3. The P3 inventory the items consume (type=activity|activity-alias; exported true/implicit/VERIFY)\nawk -F, 'NR>1 && $2 ~ /activity/ && $4 ~ /true|implicit|VERIFY/ {n++} END {print n+0 \" exported-activity rows\"}' \"$E/inventory/components.csv\"\nawk -F, 'NR>1 && $9 ~ /activity/ {n++} END {print n+0 \" deep-link rows on activities\"}' \"$E/inventory/deeplinks.csv\"\n\n# 4. Version gates that switch whole item groups on or off\naapt dump badging \"$E/apk/base.apk\" | grep -oE \"(min|target)SdkVersion:'[0-9]+'\"; adb shell getprop ro.build.version.sdk\n```\n\nDecision table:\n\n- Probe 1 or 3 > 0 → **the exported-activity half applies** (D04-001..-031, -058..-064, -069..-070 and the gates -065..-067, -072). Set `Requires: exported-activity` rows to applicable.\n- Probe 2 line 2 prints no `showWhenLocked|turnScreenOn|QS_TILE|APPWIDGET_UPDATE` → D04-056, -068, -071 are n/a; no `allowEmbedded|allowUntrustedActivityEmbedding|documentLaunchMode` → D04-037, -040, -041 are n/a; no `showForAllUsers|directBootAware` → D04-057 n/a.\n- Probe 4: `minSdkVersion >= 30` → D04-032/-034 n/a (LEGACY); `targetSdkVersion < 36` → D04-045/-054/-055 recorded as \"not yet affected at targetSdk N\" (forward-looking, not n/a); device API < 31 → D04-053 n/a; device API < 35 → D04-021/-029/-035/-036 \"attribute cannot exist — code-level check only\".\n- The overlay items (D04-047..-053) always apply when the app has any confirmation or credential screen; they are n/a only for an app with no state-changing UI (record which screens you enumerated).\n\nWhole-domain n/a is possible only for a headless package. Exact note text for that case:\n\n`D04 n/a: the merged manifest ($DEC/apktool*/AndroidManifest.xml) declares no <activity> or <activity-alias>; dumpsys package Activity Resolver Table is empty (logs/D04-probe-installed.txt, 0 rows); inventory/components.csv has 0 activity rows. The IPC surface is carried by D05–D08.`\n\nExact note text for the partial case (write it once in `engagement.json.domains_na` notes and per n/a row):\n\n`D04 partial: <N> activities/aliases installed, <M> exported (components.csv C-xxx..C-yyy); no showWhenLocked/turnScreenOn/QS_TILE/appwidget/allowEmbedded/allowUntrustedActivityEmbedding/supportsPictureInPicture/showForAllUsers/directBootAware attribute in the merged manifest → D04-037/-040/-041/-056/-057/-068/-071 n/a; minSdk <v> → D04-032/-034 <n/a|apply>; targetSdk <v> → D04-045/-054/-055 <apply|forward-looking>.`",
  "triage": "1. **Build the register and fire it.** Every other item in this chapter consumes the exported-activity list. An hour here decides the week.\n2. **Post-auth reach.** Launch the screens that sit behind login, onboarding, KYC or the app lock. This is where the only P1 in the domain lives, and it is a two-minute test per activity.\n3. **Extras that name an identity or an amount.** `userId`, `account_id`, `orderId`, `amount`, `isAdmin`. A rendered value is nothing; the backend honouring it is a P1 IDOR.\n4. **URL/HTML extras reaching a WebView.** Highest-yield single sink in the disclosed corpus; hand the origin confusion to D10 immediately.\n5. **The result channel.** `setResult` leaks and the full-intent echo — one grep, and the echo reaches non-exported providers.\n6. **`onNewIntent` re-delivery.** State established in `onCreate`, re-driven from a second caller. Cheap, and it re-opens every activity you thought was single-entry.\n7. **Non-exported reach.** Aliases, system deputies, `intentMatchingFlags` holes. These re-open the components you already ruled out.\n8. **Lock-screen and cross-user attributes.** `showWhenLocked`, `showForAllUsers`, `directBootAware` — four greps, and a hit is a genuine boundary crossing.\n9. **Task hijacking.** Only after you have read `minSdkVersion`. Below that gate it is a demo; above it, a manifest-hygiene note.\n10. **UI redress.** Only with a demonstrated *trigger* and a *named irreversible action*. Overlay-without-timing recordings do not survive triage.\n11. **Recents and `FLAG_SECURE`.** Almost always a ruled-out entry. Write the negative with the black `screencap` as evidence.\n12. **Framework- and library-contributed activities.** The register contains components your client's developers never wrote — an engine player activity, a cropper, a dev menu. Read them by class name, not by package prefix.\n13. **Crash fuzzing.** Run it because it is nearly free, but treat every crash as a triage-ordering signal, not a finding.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| \"The app has exported activities.\" | Exporting is intended behaviour. Google: it is not a vulnerability \"unless it can be used to gain unauthorized access to application data or functionality.\" | Name the activity, the data it renders or the action it performs, and show a zero-permission caller obtaining it (D04-007, D04-010). |\n| \"`android:filterTouchesWhenObscured` is missing.\" | `mobile_security_misconfiguration.tapjacking` is **P5**. MobSF and mobsfscan flag its absence as a good-practice rule, not a vulnerability. | A recording in which an overlay with a demonstrated timing oracle causes a named irreversible action to complete (D04-048, D04-049), filed under the action's category, not tapjacking. |\n| \"Screenshots are not disabled / the Recents thumbnail shows data.\" | `insecure_data_storage.screen_caching_enabled` is **P5**; Bugcrowd's own remediation text calls it \"a best practice\". | A named consumer that reaches the artefact — a `MediaProjection`/accessibility co-resident, or a physical-access narrative — plus the data class (PAN, OTP, seed phrase) (D04-042). |\n| \"`launchMode=\"singleTask\"` is set / `taskAffinity` is non-default.\" | The MobSF `task_affinity_set` condition is a *precondition*, not an attack, and both StrandHogg variants are patched at OS level from Android 11. | A reproduction on an in-scope API level with credentials typed into your activity and logged by your package (D04-032), or the modern `allowCrossUidActivitySwitchFromBelow` variant on Android 15 (D04-035). |\n| \"Sending a malformed intent crashes the app.\" | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` is **P5**; explicitly out of scope at Xiaomi, Reddit and TikTok. | The crash persisting across `force-stop` and reboot because the bad value was written to disk (D04-061), or the same malformed input reaching a data-leak sink, which Grab and Spotify both say is in scope. |\n| \"StrandHogg 2.0 is possible because `minSdkVersion` is 21.\" | Without a reproduction this is a version-support statement, and CVE-2020-0096 is fixed from the May 2020 SPL on 8.0/8.1/9 and absent from 10+. | The reproduction on a device below that patch level, with `ro.build.version.security_patch` in the evidence (D04-034). |\n| \"An app-level PIN can be bypassed with a deep link.\" | Google Mobile VRP lists \"Secondary lockscreen bypasses\" as non-qualifying; the disclosed corpus pays $0–$500 for these. | The same path reaching *another user's* data rather than past the local gate — refile as theft of sensitive data (D04-008 escalation). |\n| \"`adb shell am start` reached the internal activity.\" | `adb shell` runs as uid 2000 with privileges no third-party app holds; on some builds it starts non-exported components. | The same start from a PoC APK whose `dumpsys package` block shows an empty requested-permission list (D04-005). |\n| \"The exported activity displayed `isAdmin=true`.\" | Client-side rendering of your own extra. The app echoing your input is not authorisation. | The backend request carrying the value and returning `200` with privileged data, with the layer-ordering control run (D04-009, D04-010). |\n| \"`PreferenceActivity` fragment injection crashes the app.\" | H1 #43988 paid **$0** for exactly this — a reflection crash is not impact. | Landing on a fragment that discloses credentials or bypasses a gate, screenshotted inside the target app (D04-014). |\n| \"An overlay is possible over the app.\" | The attacker cannot know when the confirm button is on screen; triage closes it as theoretical. | The overlay appearing within one frame of the target dialog, three times, with the oracle's timestamped log alongside (D04-049). |\n| \"The API behind the bypassed screen returned 400 rather than 401.\" | A body parser or sanitiser in front of the auth middleware produces exactly this. | The same endpoint with a minimal well-formed `{}` body still returning a domain-field error rather than `401` (D04-009). |\n| \"The app bundles a library with a known-vulnerable exported activity.\" | A coordinate in a dependency tree is inventory, not impact — and the family in D04-069 carries no CVE at all, so a version string proves nothing on its own. | The class present in the dex, the activity reachable from a zero-permission PoC, and the host app's own file demonstrably overwritten (D04-069). |\n| \"The widget shows the balance on the home screen.\" | On a device whose keyguard forbids widgets this needs an already-unlocked phone, which is the owner. | The same render reproduced with the keyguard up, placed beside the black `screencap` of the in-app screen that does set `FLAG_SECURE` (D04-071). |\n| \"There is no Java code in `MainActivity`, so the entry point is clean.\" | Flutter, Unity and React Native read the extras in Dart, C# and JS respectively; jadx shows an empty `onCreate` either way. | The managed/Dart symbol that reads the extra, plus a behaviour change on device when it is set (D04-018, D04-070). |",
  "joins": "- **Exported activity × `intentMatchingFlags` × the Flutter/RN router (D04-006 + D04-018 + D09).** Testers review the deep-link surface from the browser's point of view and conclude the `autoVerify`'d hosts bound it. They do not test the **local** path: without `enforceIntentFilter`, an installed app sends an *explicit* `VIEW` intent to the exported `MainActivity` carrying any URI at all — `javascript:`, `data:`, an arbitrary host — and the Dart or JS router accepts it. The deep-link chapter says \"hosts are verified\"; the manifest chapter says \"the activity is exported, so what\"; the join is an unauthenticated arbitrary-route primitive.\n- **Result channel × ContentProvider grants (D04-023 + D07).** The provider review checks `exported` and `readPermission` on every `<provider>` and correctly concludes the private ones are unreachable. The activity review greps `setResult` for leaked extras. Nobody joins them: `setResult(RESULT_OK, getIntent())` on *any* exported activity transfers the caller's requested grant flags back, so a non-exported provider with `grantUriPermissions=\"true\"` — a combination both reviews individually approve — becomes readable by any installed app.\n- **Recents/`FLAG_SECURE` × the app-lock gate (D04-042 + D04-008 + D13).** The `FLAG_SECURE` review runs while logged in and passes. The app-lock review checks that backgrounding re-arms the PIN and passes. The join is the moment between them: the snapshot taken at the instant the lock armed still shows the last authenticated screen, so the control that hides the data from a thief is defeated by the control that was supposed to lock it.\n- **Task resurface × tapjacking trigger (D04-030 + D04-049 + D23).** The overlay reviewer cannot demonstrate timing and files \"theoretical\". The task reviewer shows `FLAG_ACTIVITY_NEW_TASK` resurfaces a mid-flow task and files \"Medium, restores state\". Joined, the attacker *causes* the confirm dialog to appear rather than waiting for it — which supplies exactly the oracle the overlay finding was missing, and turns two Mediums into a completed unauthorised payment.\n- **Bubble metadata × overlay policy (D04-040 + D03 + D04-047).** The permission reviewer confirms the app does not request `SYSTEM_ALERT_WINDOW` and marks the overlay surface closed. The notification reviewer sees `BubbleMetadata` and marks it a UX feature. The join is that a bubble target declared `allowEmbedded=\"true\"` with `setAutoExpandBubble(true)` and `setSuppressNotification(true)` floats over other apps **without any overlay permission** and is exempt from the reasoning that closed the surface.\n- **Exported activity × shadow API version (D04-064 + D15).** The mobile reviewer extracts the endpoint from the activity and tests it with the app's own session. The API reviewer tests the *current* version the web app calls. Neither notices that the activity calls `/api/v1/` while the web app moved to `/api/v3/`, and that v1 never received the object-level authorisation fix — so the IDOR that is closed on the surface everyone tests is open on the one only the app reaches.\n- **`showWhenLocked` × the deep-link router (D04-056 + D04-058 + D25).** The keyguard review finds one benign `showWhenLocked` activity and passes. The router review maps every route and tests them unlocked. The join: the pre-unlock activity contains a link that enters the router, and the router does not know it is running over the keyguard — so a locked device drives arbitrary in-app routes.\n- **Library-contributed exported activity × the SCA report (D04-069 + D02 + D17).** The dependency reviewer runs `osv-scanner`, sees no advisory, and marks the third-party surface clean. The component reviewer enumerates the manifest by the app's own package prefix and never looks at `com.canhub.cropper.CropImageActivity` sitting in it. The join is an exported arbitrary-file-write into the host app's credential store, contributed by a library that is archived, carries no CVE, and therefore no scanner will ever flag — the class-level grep is the only thing that finds it.\n- **Lock-screen tile × the app-lock gate (D04-068 + D04-008 + D13).** The keyguard reviewer tests activities and finds them all gated. The app-lock reviewer confirms the PIN re-arms on background. Neither tests the Quick Settings tile, which Google documents as displaying *on top of* the lock screen and which calls `startActivityAndCollapse` into the same screens both reviews just closed — bypassing the keyguard and the app lock in one tap.\n- **`activity-alias` × the permission review (D04-003 + D03).** The permission reviewer enumerates `<activity>` elements, confirms the sensitive ones are `exported=\"false\"` with a `signature` permission, and writes a clean negative. The alias, which carries its own `exported` and whose `permission` *supplants* the target's, is in a different element the enumeration never visited. The join re-opens every activity the permission review closed.",
@@ -126,8 +126,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "MASTG-TECH-0160 (\"activity aliases have their own `android:exported`, `android:permission`, and intent filters, so review them separately\"); MASTG-KNOW-0132; `guide/topics/manifest/activity-alias-element`; hackwithsingh sec-14-16 #41, sec-14-19 #46",
    "record": "",
    "legacy_meta": {},
@@ -176,8 +178,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "MASTG-TECH-0160; MASTG-TOOL-0015 (drozer `app.activity.info` / `app.activity.start`); objection `android intent launch_activity`, `android hooking get current_activity`",
    "record": "",
    "legacy_meta": {},
@@ -225,8 +229,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "sec-88 \"Exported Activity Hacking\"; Google Mobile VRP \"user must install malicious app\" column; MASTG-TEST-0364",
    "record": "",
    "legacy_meta": {},
@@ -268,8 +274,11 @@
     "AM-03"
    ],
    "applies_to": "targetSdk >= 36 for the control; the underlying gap exists on every version",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, api>=36",
+   "requires_tags": [
+    "exported-activity",
+    "api>=36"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-16` (\"Safer Intents\", `intentMatchingFlags` values `none` / `enforceIntentFilter` / `allowNullAction`); `guide/topics/manifest/{application,activity,activity-alias,receiver,service,provider}-element`",
    "record": "",
    "legacy_meta": {},
@@ -313,8 +322,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "MASTG-TEST-0364, MASTG-TEST-0029 (deprecated v1 predecessor, retains the Sieve walkthrough); MASWE-0018 (CWE-306, 862, 863, 926); MASVS-AUTH-1; Mobile Top 10 2024 M3 Scenario 2 (\"backend assumes hidden UI elements prevent unauthorized access\"); H1 #55064, #145402, #951691; sec-88 checklist §8",
    "record": "",
    "legacy_meta": {},
@@ -370,8 +381,10 @@
     "AM-11"
    ],
    "applies_to": "every app shipping an \"app lock\", \"require biometrics to open\" or PIN-on-resume setting",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "H1 #637194 (Shopify, Low $500), #1825679 (Nextcloud, Low 1.8), #1784645 (Nextcloud, Low 2.5), #50884 (Whisper, $100), #2245437 / #1847368 / #631206 (Nextcloud passcode bypasses); Google Mobile VRP non-qualifying \"Secondary lockscreen bypasses\"; Xiaomi rates \"Bypass APP lock screen\" MEDIUM",
    "record": "",
    "legacy_meta": {},
@@ -458,8 +471,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "MASTG-TEST-0364; ATT&CK T1626 (detection DET0642 correlates \"rapid transition to elevated capability state without expected user interaction patterns\"); EDB 49563 (Tasks 9.7.3, `ShareLinkActivity` / `VoiceCommandActivity`); sec-88 \"Android App Components Security Cheatsheet\"; Het Mehta Phase 3",
    "record": "",
    "legacy_meta": {},
@@ -511,8 +526,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "ghandar0x, `com.target.ui.AuthAnswerActivity` (scheme `target`, host `app`) — \"Interface Spoofing\" plus a permanent DoS",
    "record": "",
    "legacy_meta": {},
@@ -557,8 +574,10 @@
     "AM-03"
    ],
    "applies_to": "all; especially `SEND`, `PROCESS_TEXT`, `VIEW` share-target activities",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "Raju Kumar, Medium Android `SaveToMediumActivity` (reported 2020-09-29, fixed and bountied 2020-10-02); EDB 49563; VRT remediation note for this path points at Mobile Top 10 2016-M1 Improper Platform Usage",
    "record": "",
    "legacy_meta": {},
@@ -601,8 +620,10 @@
     "AM-03"
    ],
    "applies_to": "all; React Native and Ionic builds specifically",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "YesWeHack Android recon guide, \"Testing exported activities\" (`DebugActivity`: \"Debug activities often bypass authentication or reveal sensitive internal state\"); React Native `devsupport/DevServerHelper.kt` (bundle URL format, `/inspector/device`, `/open-debugger`)",
    "record": "",
    "legacy_meta": {},
@@ -648,8 +669,10 @@
     "AM-03"
    ],
    "applies_to": "the `PreferenceActivity` path is **LEGACY** (API 19 enforces `isValidFragment()`); the extra-driven class-instantiation pattern applies to all API levels",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "H1 #43988 (Twitter, **$0 — crash only**); mindedsecurity `MSTG-PLATFORM-2_5` and `MSTG-PLATFORM-2_6`; Google ASI campaign \"Fragment Injection\" (started 2016-11-29), support page `faqs/answer/7188427`; hackwithsingh sec-14-13 #45, sec-14-19 #14",
    "record": "",
    "legacy_meta": {},
@@ -694,8 +717,11 @@
     "AM-03"
    ],
    "applies_to": "any app with an exported activity that renders web content",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, webview",
+   "requires_tags": [
+    "exported-activity",
+    "webview"
+   ],
    "maps_to": "H1 #499348 (Twitter Lite, **Critical**), #283058 (IRCCloud, Medium), #2555949 (US DoD, Medium), #532836 (Exness, Low $400), #694053 (Lark, Medium $1000), #414101 (Shipt, $350), #1737358 (Shopify, Low); Yousef Elsheikh `CheckoutActivity` (Oct 2025); B3nac index \"Token leakage due to stolen files via unprotected Activity\" (H1 #288955)",
    "record": "",
    "legacy_meta": {},
@@ -742,8 +768,11 @@
     "AM-03"
    ],
    "applies_to": "apps whose WebView host activity accepts both a `url` and an `html` extra",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, webview",
+   "requires_tags": [
+    "exported-activity",
+    "webview"
+   ],
    "maps_to": "H1 #189793 (Quora, Low as filed, with the escalation ladder documented in the report)",
    "record": "",
    "legacy_meta": {},
@@ -785,8 +814,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "m_kamal finding #3 (`LoginSelectorActivity`, extra `orig_uri`, field `this.onDemandUrl`)",
    "record": "",
    "legacy_meta": {},
@@ -832,8 +863,11 @@
     "AM-03"
    ],
    "applies_to": "Flutter apps using `io.flutter.embedding.android.FlutterActivity` (v2 embedding), all current Flutter versions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, flutter",
+   "requires_tags": [
+    "exported-activity",
+    "flutter"
+   ],
    "maps_to": "Flutter `FlutterActivityLaunchConfigs.java` — `EXTRA_INITIAL_ROUTE = \"route\"`, `EXTRA_DART_ENTRYPOINT = \"dart_entrypoint\"`, `EXTRA_DART_ENTRYPOINT_ARGS = \"dart_entrypoint_args\"`, `EXTRA_CACHED_ENGINE_ID = \"cached_engine_id\"`, `EXTRA_CACHED_ENGINE_GROUP_ID`, `EXTRA_ENABLE_STATE_RESTORATION`; MASTG-TECH-0160",
    "record": "",
    "legacy_meta": {},
@@ -880,8 +914,10 @@
     "AM-03"
    ],
    "applies_to": "apps whose launcher/start activity is `launchMode=\"singleInstance\"` and re-runs startup navigation in `onNewIntent()`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "H1 #3764217 (Basecamp, Medium 4.0), #3829030 (Yelp, Low 3.3)",
    "record": "",
    "legacy_meta": {},
@@ -925,8 +961,10 @@
     "AM-03"
    ],
    "applies_to": "all apps with a `SEND` / `SEND_MULTIPLE` / `GET_CONTENT` receiving activity",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "H1 #377107 (ownCloud, Medium $750), #161710 (Harvest), #288955 (IRCCloud, **High** — the stolen file held the session token), #258460 (Quora, Medium), #1454002 (ownCloud, $50), #1408692 (Nextcloud)",
    "record": "",
    "legacy_meta": {},
@@ -970,8 +1008,11 @@
     "AM-03"
    ],
    "applies_to": "Android 15 / API 35+ for the attribute; the underlying confused deputy works on every version",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, api>=35",
+   "requires_tags": [
+    "exported-activity",
+    "api>=35"
+   ],
    "maps_to": "`guide/topics/manifest/activity-element` (`requireContentUriPermissionFromCaller` values `none` (default) / `read` / `write` / `readOrWrite` / `readAndWrite`, enforced over `Intent.getData()`, `Intent.EXTRA_STREAM` and `Intent.getClipData()`); `about/versions/15/features` (`Context.checkContentUriPermissionFull()`, `ComponentCaller`)",
    "record": "",
    "legacy_meta": {},
@@ -1013,8 +1054,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "HackTricks README \"Sensitive information leakage — activities can also return results … calling the `setResult` method and returning sensitive information\"; Hrishikesh C08; Google Invalid Reports \"Intended Behavior\" (an export is a vulnerability only when it grants unauthorised access)",
    "record": "",
    "legacy_meta": {},
@@ -1060,8 +1103,10 @@
     "AM-03"
    ],
    "applies_to": "all; the victim's own providers become reachable only where `android:grantUriPermissions=\"true\"` (the `<provider>` default for that attribute is `\"false\"`)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "Oversecured, \"Gaining access to arbitrary Content Providers\" (four vectors: direct intent return, intent interception, intent manipulation, permission escalation); `risks/intent-redirection` (flag-clearing mitigation list); AOSP §4.3.1 URI permission grants",
    "record": "",
    "legacy_meta": {},
@@ -1104,8 +1149,10 @@
     "AM-03"
    ],
    "applies_to": "all apps calling `startActivityForResult`/`registerForActivityResult` with an implicit Intent",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "MHL Defense Checklist (\"Validate all data received in `onNewIntent()` and `onActivityResult()`\"); MASTG-TECH-0164",
    "record": "",
    "legacy_meta": {},
@@ -1153,8 +1200,10 @@
     "AM-03"
    ],
    "applies_to": "activities that return results and can be started in the same task",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "drozer Intent flag map verified in `src/drozer/android.py`: `ACTIVITY_FORWARD_RESULT 0x02000000`",
    "record": "",
    "legacy_meta": {},
@@ -1197,8 +1246,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`risks/intent-redirection` — \"Checking `getCallingActivity()` returns non-null\" is listed verbatim as a common mistake, and \"Malicious apps can supply null\"; `risks/access-control-to-exported-components`",
    "record": "",
    "legacy_meta": {},
@@ -1223,7 +1274,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Treating a non-null `getCallingActivity()` as proof of a trusted caller. It is populated only for\n`startActivityForResult()`, it is attacker-controlled in content, and an attacker can make it null at will\nby using `startActivity()` instead. Either branch may be the privileged one — test both.",
-   "how": "```bash\n  grep -rn 'getCallingActivity\\|getCallingPackage' out/sources/ -A8\n```\nFrom the PoC, invoke both ways and log which branch ran:\n```java\nstartActivity(i);                 // getCallingActivity() == null\nstartActivityForResult(i, 1);     // getCallingActivity() == your component\n```\nHook the branch to see it directly:\n```bash\nfrida -U -n com.target.app -e 'Java.perform(function(){var A=Java.use(\"com.target.app.GateActivity\");A.isTrustedCaller.implementation=function(){var r=this.isTrustedCaller();console.log(\"isTrustedCaller -> \"+r);return r;};});'\n```",
+   "how": "```bash\n  grep -rn 'getCallingActivity\\|getCallingPackage' out/sources/ -A8\n```\nFrom the PoC, invoke both ways and log which branch ran:\n```java\nstartActivity(i);                 // getCallingActivity() == null\nstartActivityForResult(i, 1);     // getCallingActivity() == your component\n```\nHook the branch to see it directly:\n```bash\nfrida -D \"$SERIAL\" -n com.target.app -e 'Java.perform(function(){var A=Java.use(\"com.target.app.GateActivity\");A.isTrustedCaller.implementation=function(){var r=this.isTrustedCaller();console.log(\"isTrustedCaller -> \"+r);return r;};});'\n```",
    "proof": "The privileged branch executing under one of the two invocation styles from an untrusted\npackage, with the branch logged.",
    "escalation": "-> D13/D15 auth bypass. The correct construction, worth naming in the remediation, is\n`Binder.getCallingUid()` inside a Service or ContentProvider (D06/D07) followed by\n`PackageManager.getPackagesForUid()` **plus a signature check** — an activity simply cannot obtain a\ntrustworthy caller identity before API 35's `ComponentCaller`.",
    "ruled_out_when": "The activity performs no caller-identity check at all and instead relies on a\n`signature`-level `android:permission` (a real control), or it uses `ComponentCaller`/`getCallingPackage()`\nonly for telemetry with no branch depending on it — verified by invoking both ways and observing identical\nbehaviour."
@@ -1243,8 +1294,10 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`risks/intent-redirection` — \"Assuming `checkCallingPermission()` always throws exceptions (it returns an integer)\"; `risks/access-control-to-exported-components`",
    "record": "",
    "legacy_meta": {},
@@ -1287,8 +1340,10 @@
     "AM-03"
    ],
    "applies_to": "all; `launchMode` in `singleTop`, `singleTask`, `singleInstance`, `singleInstancePerTask`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "`guide/components/activities/tasks-and-back-stack`; `guide/topics/manifest/activity-element` (launchMode table); MHL Defense Checklist",
    "record": "",
    "legacy_meta": {},
@@ -1332,8 +1387,11 @@
     "AM-03"
    ],
    "applies_to": "Android 15 / API 35+ for the API; the `onNewIntent` gap itself is universal",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, api>=35",
+   "requires_tags": [
+    "exported-activity",
+    "api>=35"
+   ],
    "maps_to": "`about/versions/15/features` (`ComponentCaller`, `Context.checkContentUriPermissionFull()`); `risks/intent-redirection`",
    "record": "",
    "legacy_meta": {},
@@ -1377,8 +1435,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, device",
+   "requires_tags": [
+    "exported-activity",
+    "device"
+   ],
    "maps_to": "`guide/components/activities/tasks-and-back-stack` (\"if a task exists with the same affinity, the system brings it to the foreground and restores state\"); `content/Intent.java` flag constants",
    "record": "",
    "legacy_meta": {},
@@ -1421,8 +1482,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, device",
+   "requires_tags": [
+    "exported-activity",
+    "device"
+   ],
    "maps_to": "drozer flag map verified in `src/drozer/android.py`; MASTG-TOOL-0015",
    "record": "",
    "legacy_meta": {},
@@ -1468,8 +1532,12 @@
     "AM-03"
    ],
    "applies_to": "**LEGACY.** Live only where `minSdkVersion` still admits devices below API 30. `risks/strandhogg` states both variants are patched at OS level in Android 11+ (v1 March 2019, v2 September 2020) and recommends `minSdkVersion=30`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "minsdk<30, legacy, device",
+   "requires_tags": [
+    "minsdk<30",
+    "legacy",
+    "device"
+   ],
    "maps_to": "`risks/strandhogg` (MASVS-PLATFORM); MobSF `task_affinity_set`; QARK `qark/plugins/generic/task_affinity.py` and `manifest/task_reparenting.py`; sec-88 \"Task Hijacking\" (victim+attacker PoC, `github.com/az0mb13/Task_Hijacking_Strandhogg`); H1 #1325649; ATT&CK T1417.002, T1655.001",
    "record": "",
    "legacy_meta": {},
@@ -1516,8 +1584,11 @@
     "AM-03"
    ],
    "applies_to": "**LEGACY.** MobSF's condition is `target_sdk < ANDROID_9_0_LEVEL and launchmode == 'singleTask'`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk<29, legacy",
+   "requires_tags": [
+    "targetsdk<29",
+    "legacy"
+   ],
    "maps_to": "MobSF `task_hijacking` (level `high`); MobSF `task_hijacking2` (condition `target_sdk < 29` AND `exported=\"true\"` AND (`launchMode != \"singleInstance\"` OR `taskAffinity != \"\"`), remediation string: set `launchMode=\"singleInstance\"` **and** `taskAffinity=\"\"`, or raise targetSdk to 29+); sec-88 vulnerable pattern `<activity android:name=\".MainActivity\" android:launchMode=\"singleTask\">` on LAUNCHER",
    "record": "",
    "legacy_meta": {},
@@ -1557,8 +1628,12 @@
     "AM-03"
    ],
    "applies_to": "**LEGACY.** Android 8.0 / 8.1 / 9 below the May 2020 security patch level; Android 10 and later are not affected. sec-88 states the exposure floor as API < 29",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "minsdk<29, legacy, device",
+   "requires_tags": [
+    "minsdk<29",
+    "legacy",
+    "device"
+   ],
    "maps_to": "CVE-2020-0096 (`nvd.nist.gov/vuln/detail/CVE-2020-0096`), described in the corpus as \"StrandHogg 2.0\"; HackTricks `android-task-hijacking.md`; Promon write-up",
    "record": "",
    "legacy_meta": {},
@@ -1596,8 +1671,11 @@
     "AM-03"
    ],
    "applies_to": "Android 15+ for the defence; the docs place full enforcement at API 37+, so on Android 15/16 this is an opt-in the app must have taken",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35, device",
+   "requires_tags": [
+    "api>=35",
+    "device"
+   ],
    "maps_to": "`guide/components/activities/background-starts` (Rule 1 / Rule 2, `android:allowCrossUidActivitySwitchFromBelow`, `setAllowCrossUidActivitySwitchFromBelow(true)` as a per-activity exception); `risks/strandhogg`",
    "record": "",
    "legacy_meta": {},
@@ -1642,8 +1720,11 @@
     "AM-03"
    ],
    "applies_to": "Android 15+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=35, device",
+   "requires_tags": [
+    "api>=35",
+    "device"
+   ],
    "maps_to": "`guide/components/activities/background-starts`",
    "record": "",
    "legacy_meta": {},
@@ -1685,8 +1766,10 @@
     "AM-03"
    ],
    "applies_to": "all; `android:allowEmbedded` defaults to `\"false\"`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=33",
+   "requires_tags": [
+    "api>=33"
+   ],
    "maps_to": "`guide/topics/manifest/activity-element` (`allowEmbedded`, `knownActivityEmbeddingCerts`)",
    "record": "",
    "legacy_meta": {},
@@ -1730,8 +1813,11 @@
     "AM-03"
    ],
    "applies_to": "**CURRENT** — decisive at API 34+; weaker below, so state the API level you tested",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device, api>=34",
+   "requires_tags": [
+    "device",
+    "api>=34"
+   ],
    "maps_to": "`about/versions/14/behavior-changes-14`; `about/versions/15/behavior-changes-15` (\"PendingIntent creators block background activity launches by default\"; \"prevent launching arbitrary activities from other apps into your own task\"); `guide/components/activities/background-starts`",
    "record": "",
    "legacy_meta": {},
@@ -1771,8 +1857,10 @@
     "AM-03"
    ],
    "applies_to": "all; mitigated for *implicit* intents at targetSdk 34+, but nested-**explicit** redirection is unaffected",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "Oversecured, \"Discovering vendor-specific vulnerabilities in Android\" — the `com.android.settings.homepage.SettingsHomepageActivity` case, \"since Settings runs with UID 1000 (system), this escalated to accessing non-exported activities across all apps on the device\"; AOSP threat classes [T.A2] and [T.A7]",
    "record": "",
    "legacy_meta": {},
@@ -1864,8 +1952,10 @@
     "AM-11"
    ],
    "applies_to": "all; `documentLaunchMode` defaults to `\"none\"`, `excludeFromRecents` defaults to `\"false\"`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`guide/topics/manifest/activity-element` (`documentLaunchMode`, `excludeFromRecents`, `autoRemoveFromRecents`, `noHistory`); MASTG-TEST-0289",
    "record": "",
    "legacy_meta": {},
@@ -1910,8 +2000,10 @@
     "AM-11"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0291 (References to Screen Capturing Prevention APIs), MASTG-TEST-0289 (runtime verification); MASWE-0038 (CWE-200, CWE-359); MASVS-PLATFORM-3; AOSP threat [T.A5] \"Reading content from system or other app user interfaces\"; Hrishikesh C19 \"Background Screen Caching\"; sec-88 checklist §19, §23",
    "record": "",
    "legacy_meta": {},
@@ -1966,8 +2058,10 @@
     "AM-12"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0289; MASTG-TECH-0002; HackTricks README (\"Background Images\", `/data/system_ce/0/snapshots`)",
    "record": "",
    "legacy_meta": {},
@@ -2013,8 +2107,10 @@
     "AM-11"
    ],
    "applies_to": "all; the three named tests are `status: placeholder` in the current MASTG, so there is no published procedure — test them by hand",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0292 (`setRecentsScreenshotEnabled` not used), MASTG-TEST-0293 (`SurfaceView.setSecure` not used), MASTG-TEST-0294 (Compose dialog `SecureOn` not used); MASTG-TEST-0291",
    "record": "",
    "legacy_meta": {},
@@ -2061,8 +2157,11 @@
     "AM-11"
    ],
    "applies_to": "targetSdk 36+ on `sw600dp`+ displays; games (`android:appCategory`) are excepted",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36, device",
+   "requires_tags": [
+    "targetsdk>=36",
+    "device"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-16` — for displays with `smallestWidth >= 600dp`, `android:screenOrientation`, `android:resizableActivity`, `android:minAspectRatio`, `android:maxAspectRatio` and `Activity#setRequestedOrientation()` are ignored; opt-out `<property android:name=\"android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY\" android:value=\"true\"/>` is temporary and does not apply at API 37+",
    "record": "",
    "legacy_meta": {},
@@ -2107,8 +2206,11 @@
     "AM-04"
    ],
    "applies_to": "targetSdk 35+ / 36+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=35, device",
+   "requires_tags": [
+    "targetsdk>=35",
+    "device"
+   ],
    "maps_to": "`about/versions/15/behavior-changes-15` (edge-to-edge default, `Window.setStatusBarColor()` and friends are no-ops, `Configuration.screenWidthDp/screenHeightDp/orientation` now include the system bars); `about/versions/16/behavior-changes-16` (`R.attr#windowOptOutEdgeToEdgeEnforcement` deprecated and disabled)",
    "record": "",
    "legacy_meta": {},
@@ -2152,8 +2254,10 @@
     "AM-04"
    ],
    "applies_to": "app-side `filterTouchesWhenObscured` gap on all versions; the *exploit* is largely mitigated on Android 12 / API 31+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0340 (References to Overlay Attack Protections); MASWE-0039 (App Vulnerable to Overlay Attacks, CWE-1021), MASWE-0036; MASVS-PLATFORM-3; MASTG-KNOW-0022, MASTG-BEST-0040; `risks/tapjacking`; MobSF `android_tapjacking`, mobsfscan `android_detect_tapjacking`; mindedsecurity `MSTG-PLATFORM-9_1`/`9_2`; AOSP threat [T.A6]; ATT&CK T1516, T1417.002",
    "record": "",
    "legacy_meta": {},
@@ -2214,8 +2318,10 @@
     "AM-04"
    ],
    "applies_to": "all; this is the live variant on API 31+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "MASTG-TEST-0340; MASWE-0039; `risks/tapjacking`; ATT&CK T1516",
    "record": "",
    "legacy_meta": {},
@@ -2263,8 +2369,10 @@
     "AM-04"
    ],
    "applies_to": "every overlay item in this chapter",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`risks/tapjacking`; ATT&CK T1453 (Abuse Accessibility Features), T1417.002",
    "record": "",
    "legacy_meta": {},
@@ -2307,8 +2415,10 @@
     "AM-04"
    ],
    "applies_to": "all; API 34+ gives the app a concrete defence to check for",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "HackTricks `tapjacking.md` (\"Accessibility Overlay Phishing (Banking-Trojan Variant)\"), `accessibility-services-abuse.md`; MASWE-0040; ATT&CK T1453, T1417.002; `risks/tapjacking` (accessibility overlays are an explicit exception to the Android 12 touch block)",
    "record": "",
    "legacy_meta": {},
@@ -2354,8 +2464,11 @@
     "AM-03"
    ],
    "applies_to": "Android 13–16 per the researchers; **fixed by the December 2025 security update**. Report against builds below that patch level, and against apps that still meet all three preconditions on a patched build as defence-in-depth",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, device",
+   "requires_tags": [
+    "exported-activity",
+    "device"
+   ],
    "maps_to": "TapTrap, USENIX Security 2025 (taptrap.click), TU Wien; HackTricks `android-checklist.md` (\"Test for Tapjacking / Animation-driven attacks (TapTrap 2025) even on Android 15+ (no overlay permission required)\")",
    "record": "",
    "legacy_meta": {},
@@ -2400,8 +2513,11 @@
     "AM-03"
    ],
    "applies_to": "all; the documented mitigation is \"don't export activities unnecessarily\"",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, device",
+   "requires_tags": [
+    "exported-activity",
+    "device"
+   ],
    "maps_to": "`risks/tapjacking` (the documented variant); ATT&CK T1417.002",
    "record": "",
    "legacy_meta": {},
@@ -2447,8 +2563,10 @@
     "AM-04"
    ],
    "applies_to": "API 31+ only; below that, touch filtering is the sole control",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "api>=31",
+   "requires_tags": [
+    "api>=31"
+   ],
    "maps_to": "MASTG-TEST-0340; MASTG-BEST-0040; `risks/tapjacking`; Bugcrowd's own remediation note for the tapjacking path (\"set `filterTouchesWhenObscured` true or implement `onFilterTouchEventForSecurity()`\")",
    "record": "",
    "legacy_meta": {},
@@ -2495,8 +2613,11 @@
     "AM-11"
    ],
    "applies_to": "targetSdk 36+ on Android 16; also verify on Android 15 where animations are default-on for opted-in apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36, device",
+   "requires_tags": [
+    "targetsdk>=36",
+    "device"
+   ],
    "maps_to": "`about/versions/16/behavior-changes-16` — predictive back default at targetSdk 36; \"`onBackPressed()` no longer called\"; \"`KeyEvent.KEYCODE_BACK` not dispatched\"; `android:enableOnBackInvokedCallback`; `guide/navigation/custom-back/predictive-back-gesture`",
    "record": "",
    "legacy_meta": {},
@@ -2518,7 +2639,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "At targetSdk 36 the system enables predictive back by default: `onBackPressed()` is no longer\ncalled and `KEYCODE_BACK` is not dispatched. Apps that implemented lock-on-back, clear-sensitive-buffer or\nconfirm-before-leaving-payment inside `onBackPressed()` lose that control silently unless they migrated to\n`OnBackInvokedCallback` / `OnBackPressedCallback`.",
-   "how": "```bash\n  grep -rn 'onBackPressed\\|KEYCODE_BACK' out/sources/ | grep -v 'OnBackPressedCallback\\|OnBackInvokedCallback'\n  grep -n 'enableOnBackInvokedCallback' out/AndroidManifest.xml\n```\nThen on an Android 16 device with targetSdk 36, drive the screen and swipe back while watching state:\n```bash\nfrida -U -n com.target.app -e 'Java.perform(function(){var A=Java.use(\"com.target.app.PinActivity\");A.clearBuffer.implementation=function(){console.log(\"clearBuffer CALLED\");return this.clearBuffer();};});'\n```",
+   "how": "```bash\n  grep -rn 'onBackPressed\\|KEYCODE_BACK' out/sources/ | grep -v 'OnBackPressedCallback\\|OnBackInvokedCallback'\n  grep -n 'enableOnBackInvokedCallback' out/AndroidManifest.xml\n```\nThen on an Android 16 device with targetSdk 36, drive the screen and swipe back while watching state:\n```bash\nfrida -D \"$SERIAL\" -n com.target.app -e 'Java.perform(function(){var A=Java.use(\"com.target.app.PinActivity\");A.clearBuffer.implementation=function(){console.log(\"clearBuffer CALLED\");return this.clearBuffer();};});'\n```",
    "proof": "A sensitive screen that previously cleared its buffer or re-locked on Back now exits with state\nintact — the Frida hook on the clearing method showing it is never invoked, or re-entering the app and\nfinding the field pre-filled.",
    "escalation": "-> D11 residual sensitive data in UI state. Medium; **High** if the retained state is a PAN\nor an OTP.",
    "ruled_out_when": "Every back-related security action is registered through `OnBackPressedCallback` /\n`OnBackInvokedCallback`, verified by the hook firing on a back swipe at targetSdk 36. A target below 36 is\nnot yet affected — record the targetSdk and flag it as a forward-looking issue."
@@ -2538,8 +2659,10 @@
     "AM-01"
    ],
    "applies_to": "Android 16+",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=36",
+   "requires_tags": [
+    "targetsdk>=36"
+   ],
    "maps_to": "`guide/navigation/custom-back/predictive-back-gesture` — the priority constants `PRIORITY_DEFAULT`, `PRIORITY_OVERLAY`, `PRIORITY_SYSTEM_NAVIGATION_OBSERVER`, the last documented as \"Observer-only; doesn't consume event\"",
    "record": "",
    "legacy_meta": {},
@@ -2582,8 +2705,11 @@
     "AM-10"
    ],
    "applies_to": "all. Android 15+ restricts *background* activity launches, so trigger it with a foreground-equivalent path (notification action, Quick Settings tile, NFC tag, USB attach) and say which you used",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "physical, device",
+   "requires_tags": [
+    "physical",
+    "device"
+   ],
    "maps_to": "`guide/topics/manifest/activity-element` (`android:showWhenLocked`); `frameworks/base` `KeyguardManager.requestDismissKeyguard` javadoc, verbatim: \"The activity must either be visible by using `android.R.attr#showWhenLocked` or `Activity#setShowWhenLocked(boolean)`, or must be in a state in which it would be visible if Keyguard would not be hiding it\"; AOSP rates lockscreen bypass **High**",
    "record": "",
    "legacy_meta": {},
@@ -2630,8 +2756,10 @@
     "AM-10"
    ],
    "applies_to": "`showForAllUsers` is API 23+; `directBootAware` defaults to `false`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "device",
+   "requires_tags": [
+    "device"
+   ],
    "maps_to": "`guide/topics/manifest/activity-element` — `android:showForAllUsers` makes an activity display when the current user differs from the launching user; `android:directBootAware`, \"during Direct Boot, activity can only access device-protected storage\"",
    "record": "",
    "legacy_meta": {},
@@ -2676,8 +2804,10 @@
     "AM-03"
    ],
    "applies_to": "all apps with a single entry activity that dispatches by URI",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "deeplink",
+   "requires_tags": [
+    "deeplink"
+   ],
    "maps_to": "MASTG-TECH-0172 (Listing Deep Links); the worked shape in the corpus is Meesho's `TrampolineActivity` -> `AbstractC11424m5.m21326b(host, data)`",
    "record": "",
    "legacy_meta": {},
@@ -2730,8 +2860,11 @@
     "AM-08"
    ],
    "applies_to": "targetSdk >= 31",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "targetsdk>=31, device",
+   "requires_tags": [
+    "targetsdk>=31",
+    "device"
+   ],
    "maps_to": "`about/versions/12/behavior-changes-12` (notification trampoline restriction, `NOTIFICATION_TRAMPOLINE_BLOCK`, exact logcat string)",
    "record": "",
    "legacy_meta": {},
@@ -2774,8 +2907,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, device",
+   "requires_tags": [
+    "exported-activity",
+    "device"
+   ],
    "maps_to": "Android Hacker's Handbook (\"Null-Intent fuzzing is nearly free\"); Google Invalid Reports, \"App crashes\"; Grab and Spotify both: \"Crashes due to malformed Intents sent to exported Activity/Service/BroadcastReceiver **(exploiting these for sensitive data leakage is commonly in scope)**\"; Xiaomi out-of-scope: \"Sending malformed intents to the exported component causes the APP to crash only\"",
    "record": "",
    "legacy_meta": {},
@@ -2821,8 +2957,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, device",
+   "requires_tags": [
+    "exported-activity",
+    "device"
+   ],
    "maps_to": "H1 #65729 (\"Activities are not Protected and able to crash app using other app\"), #1061211 (\"[Java] CWE-755: Query to detect Local Android DoS caused by NFE\"); AOSP rates \"Local persistent denial of service (permanent, requiring reflashing the entire operating system, or factory reset)\" as **High** and \"Local temporary denial of service … resolved by rebooting the device or uninstalling the triggering app\" as NSI; Meta prices persistent DoS at up to $5,000 against $500 temporary; Google notes a bug \"that leads to the app crashing every time it is started … might be eligible … as an abuse-related Denial of Service attack\"",
    "record": "",
    "legacy_meta": {},
@@ -2869,8 +3008,11 @@
     "AM-03"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, device",
+   "requires_tags": [
+    "exported-activity",
+    "device"
+   ],
    "maps_to": "HackTricks `android-applications-basics.md` (\"other exported components that crash on `intent.getData()`, missing extras, or bad casts, giving you a **restart primitive**\"); Hrishikesh C08 item 4; the bugscale Samsung S25 chain, where `com.samsung.android.iap.receiver.IapReceiver` forced a restart so a `new Random(System.currentTimeMillis())` challenge seed could be brute-forced inside a ±200 ms window",
    "record": "",
    "legacy_meta": {},
@@ -2962,8 +3104,10 @@
     "AM-06"
    ],
    "applies_to": "any versioned API behind a mobile client",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "claude-bughunter `hunt-shadow-api` Stages 1 & 3 plus its severity table; explicit chain from `apk-redteam-pipeline`",
    "record": "",
    "legacy_meta": {},
@@ -3127,8 +3271,11 @@
     "AM-10"
    ],
    "applies_to": "apps shipping a Quick Settings tile; API 24+ for `TileService`, API 34+ for the `startActivityAndCollapse(PendingIntent)` form",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "physical, device",
+   "requires_tags": [
+    "physical",
+    "device"
+   ],
    "maps_to": "`develop/ui/views/quicksettings-tiles` — the docs state directly: \"Your tile may display on top of the lock screen on locked devices\", and supply `isLocked()`, `isSecure()` and `unlockAndRun(Runnable)` as the guards; MASWE-0023 (Step-Up Authentication Not Implemented)",
    "record": "",
    "legacy_meta": {},
@@ -3178,8 +3325,10 @@
     "AM-08"
    ],
    "applies_to": "apps bundling `com.theartofdev.edmodo:android-image-cropper:2.8.+`, `com.github.arthurhub:android-image-cropper:2.7.0` or `com.vanniktech:android-image-cropper` below 4.7.0 — and, as a class, any library activity that accepts a destination `Uri` from an extra",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity",
+   "requires_tags": [
+    "exported-activity"
+   ],
    "maps_to": "Oversecured SDK-security write-up — \"Unvalidated `customOutputUri` parameter allowed writing to arbitrary paths including credential stores\", chain `Bundle extras → Uri.Builder → customOutputUri → overwrites SecureStore.xml`; axeploit/dev.to root-cause analysis of `BitmapUtils.writeBitmapToUri` (\"accepts the attacker-controlled Uri and writes to it directly, with no validation of the destination path, the file extension, or whether an existing file would be overwritten\"); CanHub CHANGELOG 4.7.0 (2025-11-27) \"Security: Added URI validation to prevent file system manipulation (fixes #613)\". **No CVE was assigned — say so in the report so triage does not close it on \"no CVE\".**",
    "record": "",
    "legacy_meta": {},
@@ -3230,8 +3379,11 @@
     "AM-03"
    ],
    "applies_to": "Unity Android builds (`com.unity3d.player.UnityPlayerActivity` and subclasses); by extension any engine or framework activity exported as `MAIN`/`LAUNCHER`",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "exported-activity, unity",
+   "requires_tags": [
+    "exported-activity",
+    "unity"
+   ],
    "maps_to": "Il2CppDumper README (`dump.cs` contains method and field information); MASTG-TECH-0160",
    "record": "",
    "legacy_meta": {},
@@ -3279,8 +3431,11 @@
     "AM-10"
    ],
    "applies_to": "apps shipping an `AppWidgetProvider`; especially banking, 2FA, delivery and messaging",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "physical, device",
+   "requires_tags": [
+    "physical",
+    "device"
+   ],
    "maps_to": "no external identifier verified in the corpus for the widget-content path; contrast with MASTG-TEST-0289/-0291 which cover the task snapshot, and `develop/ui/views/quicksettings-tiles` for the sibling tile surface",
    "record": "",
    "legacy_meta": {},

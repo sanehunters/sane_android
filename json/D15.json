@@ -4,7 +4,7 @@
  "file": "D15-backend-api-and-authz.md",
  "why": "Three independent sources in the corpus say the same thing without coordinating. Bugcrowd's own mobile\nguidance: *\"the network and server related vulnerabilities are where the higher impact vulnerabilities are\nfound.\"* The senior-researcher corpus: IDOR/BOLA through the mobile API is *\"consistently the best-paying\napp-layer class because impact is self-evident and server-side.\"* The MAS project concedes the same by\nomission — it has no client-side test for any of it. On a platform grid like YesWeHack's Gojek Android scope\n(Critical $3,500 / High $1,800 / Medium $600 / Low $50), a P5 mobile misconfiguration pays nothing and one\ncross-account read pays the top band.\n\nThe structural reason is specific and worth stating in the report: a mobile backend is usually an **older,\nless-reviewed second surface**. The app's hardcoded calls are frequently an older API version than the web\napp uses, kept alive because old installs must keep working, with weaker auth, weaker rate limits, weaker\ninput validation and more field exposure. Mobile builds are the number-one source of live legacy endpoints.\nThe bug is never \"there is a v1\" — a version difference alone is **Informational** — the bug is the\n*weakened control* you demonstrate on the old path with the same request, side by side. This is the highest\nvalue structural idea available on a mobile engagement and it is why D15 is worked from the endpoint map\nrather than from the proxy history.\n\nThe honest counterweight is false positives. This domain generates more retractions than any other, and all\nof them are avoidable: a 200 that contains your own session-scoped data, a hash differential that was an\nunordered collection serialised twice, a 400 \"field X is required\" that never passed the auth layer because a\nbody parser sits in front of it, a timing outlier that collapses at n=10, a status-code flip whose body is\nbyte-identical. The discipline items (D15-020 … D15-033) are not preamble — they are the difference between\neleven impact-demonstrated findings and thirteen of which two fall apart at triage. Run them first, and\nrecord the negatives they produce: *\"every invalid variant returns a byte-identical response, so injection at\nthis parameter is structurally ruled out\"* is a deliverable, not an absence of one.",
  "crux": "**For every object identifier and every security-relevant field the client is capable of sending, does the server re-derive the answer from its own state — or does it trust the identifier, the field, the version, the header or the client's arithmetic?**",
- "applicability": "",
+ "applicability": "D15 applies when the app talks, from its own process, to a backend the programme lets you test. Run these five before touching any item; paste their output into `inventory/d15-probe.txt`.\n\n```bash\n# 0. scope — the only question that can make the whole domain n/a on policy grounds\njq -r '.authorisation.scope.backend // \"unset\"' engagement.json          # in | out | pending | unset → unset means: read the policy now and write it\n# 1. does the client talk at all?\ngrep -c 'android.permission.INTERNET' \"$DEC/apktool/AndroidManifest.xml\"\n# 2. route / host / stack evidence from the decompiled tree\ngrep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HTTP)\\(\"[^\"]+\"\\)' \"$DEC/jadx/sources\" | sort -u | wc -l                      # Retrofit routes\ngrep -rhoE 'https?://[A-Za-z0-9._-]+' \"$DEC/jadx/sources\" \"$DEC/apktool/res\" \"$DEC/apktool/assets\" | sort -u | wc -l   # host literals\nunzip -l base.apk | grep -cE 'libflutter|lib/.*/libapp\\.so|index\\.android\\.bundle|libhermes|assets/www'              # cross-platform stack (→ D15-007)\ngrep -rlE 'io\\.grpc|GeneratedMessageLite|CronetEngine' \"$DEC/jadx/sources\" | wc -l                                   # gRPC / protobuf-RPC / Cronet (→ D15-R02 branch, D15-009/010)\n# 3. who issues the traffic — the app's own PID or another process (D15-000)\nPID=$(adb -s \"$SERIAL\" shell pidof -s \"$PKG\"); adb -s \"$SERIAL\" shell 'ss -tnp' | grep -c \"pid=$PID,\"\n# 4. the AM-05 half of the chapter needs two owned accounts\njq -r '.accounts | length' engagement.json\n```\n\nDecision: the domain applies if probe 0 is `in` **and** probe 1 ≥ 1 **and** (any of the probe-2 counts > 0) **and** probe 3 ≥ 1. If probe 4 < 2 the two-account items (`Requires: two-accounts`) are **blocked** (write the blocker), not n/a. If probe 0 is `pending`, run only D15-000/001/007 (static, no requests), timestamp every other sweep and keep per-sweep flow files (`mitmdump -w +flows/<item>-<ts>.mitm`).\n\nn/a note the model writes, verbatim shape:\n\n> D15 n/a — reason: (a) programme policy excludes backend/server-side services (quote + URL; `authorisation.scope.backend=out`), or (b) the client has no network surface (`INTERNET` absent / 0 routes, 0 hosts, no cross-platform stack, 0 RPC classes — probe output attached), or (c) every TLS socket in the exercise window belongs to another process (`ss -tnp` + User-Agent table from D15-000 attached) and that service is outside scope. Items D15-001..D15-090 marked n/a with this probe at `inventory/d15-probe.txt`; proxy capture retained at `flows/` for re-reading if scope changes.",
  "triage": "1. **The cross-boundary curl check (D15-021).** Two minutes, and it decides the shape of the entire phase: if\n   the token works off-device the whole sweep is scriptable; if it does not, you test through the app.\n2. **Build the endpoint map from the binary (D15-001 … D15-011).** The proxy shows what the UI happened to\n   exercise; the binary shows everything the client *can* call. Working from proxy history alone is the single\n   biggest coverage failure in this domain.\n3. **The two-account BOLA sweep, read then write separately (D15-034, D15-035).** Highest yield, and the read\n   vs write distinction spans P3 to P1 — get it right before anything else.\n4. **Mobile-only, legacy-version and role-crossing routes (D15-012, D15-013, D15-017, D15-061, D15-062).** The\n   shadow-API delta is where a well-tested web API still bleeds.\n5. **Mass assignment from the DTOs (D15-004, D15-064 … D15-066).** The model classes hand you the exact wire\n   names; guessing field names produces noise.\n6. **Business logic and races on money (D15-076 … D15-085).** Lowest duplication rate in the whole checklist —\n   scanners cannot find these — but they demand ledger-state proof, not a 200.\n7. **Rate limiting and enumeration (D15-086, D15-087).** Cheap, and the mobile-vs-web contrast is the\n   report's strongest sentence.\n8. **Everything else only after the discipline items have produced a documented baseline.** A differential you\n   cannot defend is worse than no differential.",
  "graveyard": "| Observation | Why it is not a finding | What would make it one |\n|---|---|---|\n| GraphQL introspection enabled | `sensitive_data_exposure.graphql_introspection_enabled` is **P5**, and \"introspection alone\" is on the never-submit list | A specific undocumented mutation reached from a low-privilege session, or a field-level authz failure found via the schema (D15-072) |\n| `{\"data\":{\"__schema\":null}}` reported as \"introspection enabled\" | `null` means **disabled** — not \"worked but empty\" | Nothing; re-test with suggestions and the APK operation documents instead |\n| A 200 OK returned for another user's id | \"200 OK without actually leaked data\" is the single biggest N/A driver on H1/Bugcrowd; the body may be empty, may be your own session-scoped data, may be a cached impersonation response, or may be fields already public on the profile page | The second account's 8+ char marker present in the response and absent from the baseline (D15-029) |\n| A 403→200 flip whose body is byte-identical | The edge normalised your input; the Body-Diff Rule says a byte-identical 200 is not a bypass | A body differential, with the changed bytes identified |\n| `400 \"field X is required\"` from an unauthenticated request | A body parser or sanitiser may sit in front of the auth middleware — the layer-ordering trap | The same route still returning the field error for a minimal well-formed `{}` body (D15-024) |\n| \"The API version v1 still exists\" | A version difference alone is **Informational** | A demonstrated regression on the old path: weaker auth, missing 429, weaker validation, or extra fields (D15-013) |\n| A negative price accepted in the cart | Many cart APIs accept arbitrary client state while payment capture rejects it — the cart display is fiction | The credit settling as wallet balance, store credit or a refund to your payment instrument (D15-076) |\n| A discount shown as `-$50.00` in the cart | Systems commonly cap the applied discount at 100%: captured payment `$0.00`, no refund issued | The captured payment or the issued refund reflecting the stacked discount (D15-078) |\n| 100 aliased mutations all returning `success:true` | Apollo/GraphQL-Ruby/Graphene resolve aliases **sequentially**; this is quota enforcement, not a race | Server state showing N applied benefits, or a true parallel single-packet race (D15-085) |\n| A single slow response for a valid username | Network jitter routinely produces 2× outliers | n ≥ 10 interleaved trials with the suspect mean ≥ 2σ above control (D15-030) |\n| An md5 differential across identical requests | Unordered collections serialise differently: same set, same length, different hash | The differential surviving normalisation (sorted arrays, volatile keys stripped) (D15-025) |\n| A uniform 401 on every endpoint from curl | Usually a stale `__cf_bm`-class bot cookie or a duplicated cookie row, not a revoked session | The same request failing when issued by the app itself (D15-028) |\n| A zero-byte 4xx body (md5 `d41d8cd9…`) | Edge/protocol rejection — HTTP header values are ISO-8859-1, so unicode payloads die at the proxy | An origin response with a body |\n| A \"file existence oracle\" on a blocked extension | A fixed deny-list is a server policy, not a state oracle | The differentiator tracking a value that cannot exist in the dataset (D15-031) |\n| Client-sent `finalCustomerAmount` / `senderId` in the request body | A client-sent security value is an **enabling condition**; the server may recompute from the cart session | The server honouring the tampered value in the persisted object, read back with a separate GET (D15-004, D15-076) |\n| OAuth `client_secret` found in the APK | Known and expected for a public client — on the never-submit list | PKCE non-enforcement at the token endpoint, which is the reportable finding (→ D13) |\n| SSRF confirmed by a DNS callback only | \"SSRF DNS callback only\" is on the never-submit list | Cloud metadata or an internal admin API reached, with content returned or exfiltrated OOB (D15-081) |\n| No certificate pinning on the API host | `mobile_security_misconfiguration.ssl_certificate_pinning.absent` is **P5**; once you decrypt, pinning is irrelevant to severity | Nothing on its own — it is the harness, not the finding (→ D14) |\n| \"No application-layer payload encryption\" | A MAS-R resilience control (MASWE-0062); Informational on most programs | Whatever you achieve once inside it — a tampered amount or object id accepted (D15-084) |\n| A mobile-only endpoint that exists | Enumeration is Support, not a finding | The missing authorisation, missing throttle or extra fields demonstrated on it (D15-012) |\n| A UUID-keyed IDOR with no leak path | Defaults to P4 and `AC:H`; some programs exclude UUID-dependent access control outright | An in-app, repeatable method to obtain the specific ids — another API response, a share link, a push payload, a provider row (D15-039) |\n| Admin-only data returned to every client but hidden in the UI | Rated as privilege escalation, and often only Medium | Showing the value is used as a credential, or that it unlocks an action the role cannot perform (D15-046) |",
  "joins": "- **D10/D11/D07/D20 (any token-leak primitive) × D15-021 — the cross-boundary join.** A bridge that returns\n  the session header, a world-readable `shared_prefs` blob, a provider row or a logcat line is **Informational\n  until you replay it**. The join nobody runs is the two-minute curl check: move the token to a host that never\n  ran the app and strip the device header. A leaked token that works from anywhere is\n  `broken_authentication_and_session_management.authentication_bypass` (P1); the same leak with a genuinely\n  sender-constrained token is a P5 storage note. File the storage primitive first, then the server-side\n  consumer, then link them.\n- **D07 provider rows / D09 deep-link parameters / D24 push payloads × D15-039 — the AC:H join.** The\n  HackerOne standard sets `AC:H` on a UUID-keyed IDOR by default and drops it to `AC:L` when you demonstrate a\n  reliable way to obtain the ids. Nobody reviews the exported-provider table and the API's object-id space\n  together — but an exported provider that hands out server object ids is exactly that demonstration, and it\n  moves the same bug two VRT bands.\n- **D01 binary inventory × the live web API — the shadow-API join.** The app's hardcoded endpoints are\n  frequently an older API version than the web app uses. Diff the *behaviour* (auth strength, 429, validation,\n  field exposure) rather than the response shape, for the same operation. The version difference is\n  Informational; the weakened control is the finding, and it is the single highest-value structural move\n  available on a mobile engagement.\n- **D21 attestation × every \"requires a modified client\" caveat.** Vendors downgrade findings by asserting that\n  root detection or Play Integrity prevents exploitation. D15-084 answers that in one request: if the server\n  accepts the call with the verdict stripped or replayed, every such caveat evaporates and each affected\n  finding must be re-rated upward. Test the attestation *before* you accept a downgrade, not after.\n- **D12 hardcoded keys × D15-076/D15-081 — the signed-request join.** An HMAC key recovered from the binary\n  turns \"the request is signed, so it cannot be tampered\" into a price-tampering and webhook-forgery primitive.\n  The crypto team reviews the key; the API team reviews the endpoint; nobody joins them.\n- **D18 storage buckets / CDN × D15-047 and D15-088.** A pre-signed media URL, a subdomain takeover on an\n  allow-listed CORS origin, and an unauthenticated CDN path for private documents are three surfaces owned by\n  three different teams. Together they are unauthenticated bulk retrieval of KYC documents from a page the\n  attacker controls.\n- **D11 offline queue × D15-080.** Offline-first apps persist pending mutations locally and replay them on\n  reconnect. Editing the queued transition on disk delivers an out-of-order or forged state change through a\n  path the UI never shows and the server treats as first-party — the state-machine bug with a local delivery\n  vehicle.\n- **D10 WebView × D15-046/D15-064 — the stored-payload join.** A profile field the API lets you write\n  (sometimes keyed only on a non-secret identifier) rendered by a first-party WebView that carries a bridge is\n  the cleanest full chain in mobile: weak API authorisation → stored XSS on a trusted origin → bridge → token →\n  ATO. Test every free-text field the API accepts against every screen that renders server-supplied HTML.\n- **D13 OTP/session × D15-086/D15-087 — the chain that must be filed as one.** Enumeration gives the target\n  list, the missing mobile-side rate limit gives the attempts, and a 4–6 digit OTP gives the takeover. Filed\n  separately they are P4, P4 and \"expected\"; filed as one chain with the arithmetic, it is an authentication\n  bypass.\n- **D23 payments × D15-085.** The payments team tests the happy path and the fraud engine; nobody fires 30\n  single-packet requests at the top-up, referral-credit or scratch-card endpoints that exist only in the mobile\n  client. Those are the \"you may do this once\" controls with no lock.",
@@ -63,7 +63,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Recover every server route the app is capable of calling. R8/ProGuard renames classes and methods\nbut **does not rewrite the string values inside runtime-visible annotations** — Retrofit needs those strings\nat runtime to build the request line, so `@GET(\"v2/users/{id}/wallet\")` survives minification verbatim even\nwhen the interface is renamed to `a.b.c`. \"The build is obfuscated\" is never a reason to skip this.",
-   "how": "```bash\n  jadx -d jadx_out --no-debug-info base.apk        # and every split_config.*.apk\n  S=jadx_out/sources\n  grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\\(\"[^\"]+\"\\)' $S | sort -u > endpoints.txt\n  grep -rhoE '@HTTP\\([^)]*\\)' $S | sort -u                       # @HTTP hides the verb in a named arg\n  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\\(\"' $S | sed 's#^jadx_out/sources/##' | sort -u > endpoints_with_owner.txt\n  wc -l endpoints.txt\n  # decompiler choked? the same strings live in the DEX string pool:\n  unzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api|1\\.0)/' | sort -u\n```",
+   "how": "```bash\n  jadx -d $DEC/jadx --no-debug-info base.apk        # and every split_config.*.apk\n  S=$DEC/jadx/sources\n  grep -rhoE '@(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|HTTP)\\(\"[^\"]+\"\\)' $S | sort -u > endpoints.txt\n  grep -rhoE '@HTTP\\([^)]*\\)' $S | sort -u                       # @HTTP hides the verb in a named arg\n  grep -rnE '@(GET|POST|PUT|DELETE|PATCH)\\(\"' $S | sed 's#^$DEC/jadx/sources/##' | sort -u > endpoints_with_owner.txt\n  wc -l endpoints.txt\n  # decompiler choked? the same strings live in the DEX string pool:\n  unzip -p base.apk classes*.dex | strings -n 6 | grep -E '^(v[0-9]+|api|1\\.0)/' | sort -u\n```",
    "proof": "`endpoints.txt` containing concrete route templates\n(`1.0/payment-aggregator/users/bank-details/{userId}`), and at least one of them observed in intercepted\ntraffic returning 200 — the map is only \"proved\" when one route from it appears live.",
    "escalation": "Path-parameter routes feed the BOLA sweep (D15-034); body models feed mass assignment\n(D15-004); hosts feed D18; unproxied hosts feed D15-006.",
    "ruled_out_when": "Never ruled out — it is an inventory step. But **zero grep hits is a stack signal, not a\nclean result**: run the framework check (D15-007) before writing anything down. An app with no Retrofit hits\nand a `libflutter.so` has an endpoint map, just not here."
@@ -213,8 +213,10 @@
     "AM-12"
    ],
    "applies_to": "all OkHttp-based apps (includes Retrofit, Coil, Firebase transports)",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "MASVS-AUTH-1; MASTG-TEST-0217 covers the same OkHttp/Retrofit configuration surface",
    "record": "",
    "legacy_meta": {},
@@ -260,8 +262,13 @@
     "AM-12"
    ],
    "applies_to": "all OkHttp apps; mandatory when the app bundles Cronet, gRPC, Flutter or Go",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device, frida, mitm",
+   "requires_tags": [
+    "backend-api",
+    "device",
+    "frida",
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0238 (Runtime Use of Network APIs — placeholder test in MASTG beta; this is the technique it describes); MASTG-TEST-0236's stated proxy-vs-capture limitation",
    "record": "",
    "legacy_meta": {},
@@ -282,7 +289,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Capture full request/response pairs from inside the process. This is immune to pinning, to\nproxy-unaware clients and to `OkHttpClient`s built with `Proxy.NO_PROXY`. Use it to *complete* the endpoint\nmap, not to replace the proxy.",
-   "how": "```javascript\n  // frida -U -p <pid> -l okhttp_tap.js\n  Java.perform(function () {\n    var Buffer = Java.use(\"com.android.okhttp.okio.Buffer\");\n    var Interceptor = Java.use(\"okhttp3.Interceptor\");\n    var Tap = Java.registerClass({\n      name: \"okhttp3.TapInterceptor\", implements: [Interceptor],\n      methods: { intercept: function (chain) {\n          var req = chain.request();\n          console.log(\"[REQ] \" + req.method() + \" \" + req.url() + \"\\n\" + req.headers());\n          var body = req.body();\n          if (body && body.contentLength() > 0) { var b = Buffer.$new(); body.writeTo(b); console.log(b.readString()); }\n          var res = chain.proceed(req);\n          console.log(\"[RES] \" + res.code() + \"\\n\" + res.headers());\n          return res;\n      }}});\n    var B = Java.use(\"okhttp3.OkHttpClient$Builder\");\n    var tap = Tap.$new();\n    B.build.implementation = function () { this.interceptors().add(tap); return this.build(); };\n  });\n```\nCross-check with a packet capture so you can name what is still missing:\n```bash\nemulator -avd pt -writable-system -tcpdump cap.pcap -http-proxy 127.0.0.1:8080 &\ntshark -r cap.pcap -Y 'tcp.flags.syn==1 && tcp.flags.ack==0' -T fields -e ip.dst -e tcp.dstport | sort -u\ntshark -r cap.pcap -Y 'udp.dstport==443' -T fields -e ip.dst | sort -u     # QUIC / HTTP-3\n```",
+   "how": "```javascript\n  // frida -D \"$SERIAL\" -p <pid> -l okhttp_tap.js\n  Java.perform(function () {\n    var Buffer = Java.use(\"com.android.okhttp.okio.Buffer\");\n    var Interceptor = Java.use(\"okhttp3.Interceptor\");\n    var Tap = Java.registerClass({\n      name: \"okhttp3.TapInterceptor\", implements: [Interceptor],\n      methods: { intercept: function (chain) {\n          var req = chain.request();\n          console.log(\"[REQ] \" + req.method() + \" \" + req.url() + \"\\n\" + req.headers());\n          var body = req.body();\n          if (body && body.contentLength() > 0) { var b = Buffer.$new(); body.writeTo(b); console.log(b.readString()); }\n          var res = chain.proceed(req);\n          console.log(\"[RES] \" + res.code() + \"\\n\" + res.headers());\n          return res;\n      }}});\n    var B = Java.use(\"okhttp3.OkHttpClient$Builder\");\n    var tap = Tap.$new();\n    B.build.implementation = function () { this.interceptors().add(tap); return this.build(); };\n  });\n```\nCross-check with a packet capture so you can name what is still missing:\n```bash\nemulator -avd pt -writable-system -tcpdump cap.pcap -http-proxy 127.0.0.1:8080 &\ntshark -r cap.pcap -Y 'tcp.flags.syn==1 && tcp.flags.ack==0' -T fields -e ip.dst -e tcp.dstport | sort -u\ntshark -r cap.pcap -Y 'udp.dstport==443' -T fields -e ip.dst | sort -u     # QUIC / HTTP-3\n```",
    "proof": "Request lines and bodies printed for hosts that never appeared in the proxy log — that delta is\nboth a testability finding (\"traffic bypasses the system proxy\") and the missing half of your inventory.",
    "escalation": "Any endpoint visible only here is by definition untested by anyone who relied on a proxy.",
    "ruled_out_when": "The tap's host set and the pcap's destination set are both subsets of the proxy's host\nset, after exercising the app's full UI including background sync. Note the class is `okhttp3.*` when shaded\nnormally; minified builds relocate it — resolve with `Java.enumerateLoadedClasses` filtering on `Interceptor`\nbefore concluding \"no OkHttp\"."
@@ -302,8 +309,17 @@
     "AM-12"
    ],
    "applies_to": "React Native (Hermes/JSC), Flutter, Cordova, Unity, Xamarin/KMP",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, flutter, react-native, hermes, cordova, unity, xamarin, kmp",
+   "requires_tags": [
+    "backend-api",
+    "flutter",
+    "react-native",
+    "hermes",
+    "cordova",
+    "unity",
+    "xamarin",
+    "kmp"
+   ],
    "maps_to": "MASTG-TEST-0237 (Cross-Platform Framework Configurations — `status: placeholder`; the guide explicitly acknowledges cross-platform HTTP stacks are not yet covered); MASTG-TOOL-0125",
    "record": "",
    "legacy_meta": {},
@@ -344,8 +360,10 @@
     "AM-05"
    ],
    "applies_to": "GraphQL backends",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API9:2023; PortSwigger GraphQL (finding endpoints / schema discovery without introspection)",
    "record": "",
    "legacy_meta": {},
@@ -368,7 +386,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "If the backend is GraphQL the client ships the operation documents (Apollo codegen) or only their\nSHA-256 hashes (Automatic Persisted Queries). Both give you the operation inventory without introspection —\nincluding admin/internal mutations the mobile UI never calls but the endpoint still serves.",
-   "how": "```bash\n  unzip -l base.apk | grep -iE '\\.graphql|\\.gql|graphql'\n  grep -rn 'operationName\\|__typename\\|mutation \\|query \\|subscription ' $S | head -50\n  grep -rnE '\"[0-9a-f]{64}\"' $S | grep -i 'persist\\|hash\\|apq\\|query' | head      # APQ sha256Hash values\n  grep -rn 'OPERATION_DOCUMENT\\|QUERY_DOCUMENT\\|com/apollographql' $S jadx_out/resources 2>/dev/null | head\n```",
+   "how": "```bash\n  unzip -l base.apk | grep -iE '\\.graphql|\\.gql|graphql'\n  grep -rn 'operationName\\|__typename\\|mutation \\|query \\|subscription ' $S | head -50\n  grep -rnE '\"[0-9a-f]{64}\"' $S | grep -i 'persist\\|hash\\|apq\\|query' | head      # APQ sha256Hash values\n  grep -rn 'OPERATION_DOCUMENT\\|QUERY_DOCUMENT\\|com/apollographql' $S $DEC/jadx/resources 2>/dev/null | head\n```",
    "proof": "The recovered document text, then that exact operation replayed against `/graphql` returning\n`data` rather than `PersistedQueryNotFound`.",
    "escalation": "Operation names reveal `grantAdminAccess`-shaped mutations → D15-075/D15-079/D15-080.",
    "ruled_out_when": "No GraphQL transport is present (no `/graphql` route, no Apollo classes, no\n`__typename` strings) — and you confirmed that by probing the common paths in D15-072, not by the absence of\nthe word \"graphql\" in the manifest."
@@ -389,8 +407,10 @@
     "AM-05"
    ],
    "applies_to": "apps bundling `io.grpc` / `grpc-okhttp` / Cronet+gRPC",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API9:2023; API5:2023 Broken Function Level Authorization",
    "record": "",
    "legacy_meta": {},
@@ -433,8 +453,10 @@
     "AM-12"
    ],
    "applies_to": "any protobuf/gRPC backend",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "protobuf.dev wire-format encoding guide; nccgroup blackboxprotobuf",
    "record": "",
    "legacy_meta": {},
@@ -495,7 +517,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Find every host the client knows about, not just the one it uses. Staging backends are the classic\nAPI9 finding: same data, weaker controls, and no WAF.",
-   "how": "```bash\n  apktool d -f -o apktool_out base.apk\n  grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' apktool_out/res apktool_out/assets $S \\\n    | sed 's#\\(https\\?://[^/]*\\).*#\\1#' | sort | uniq -c | sort -rn | head -60\n  grep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'\n  grep -rn 'BASE_URL\\|API_URL\\|ENDPOINT' $S | head -40\n  apkleaks -f base.apk --json -o apkleaks.json\n  apkurlgrep -a base.apk | sort -u > urlgrep.txt\n  comm -23 <(sort -u urlgrep.txt) <(sort -u endpoints.txt)   # paths from a second HTTP stack\n```",
+   "how": "```bash\n  apktool d -f -o $DEC/apktool base.apk\n  grep -rhoE 'https?://[A-Za-z0-9._-]+(:[0-9]+)?' $DEC/apktool/res $DEC/apktool/assets $S \\\n    | sed 's#\\(https\\?://[^/]*\\).*#\\1#' | sort | uniq -c | sort -rn | head -60\n  grep -rn 'BuildConfig' $S | grep -iE 'url|host|endpoint|env|stag|dev|qa|test'\n  grep -rn 'BASE_URL\\|API_URL\\|ENDPOINT' $S | head -40\n  apkleaks -f base.apk --json -o apkleaks.json\n  apkurlgrep -a base.apk | sort -u > urlgrep.txt\n  comm -23 <(sort -u urlgrep.txt) <(sort -u endpoints.txt)   # paths from a second HTTP stack\n```",
    "proof": "A host list with at least one non-production entry, then a `curl` to that host returning an\napplication response (not a parked page), and — the actual finding — production credentials or\nproduction-shaped data being accepted there.",
    "escalation": "Test the staging host with the *production* account token. If it accepts it, every control\ngap there becomes a production account risk, and key reuse across environments is `cryptographic_weakness.key_reuse.inter_environment` (P2). → D18.",
    "ruled_out_when": "Every recovered host resolves to production or to a dead name (NXDOMAIN / connection\nrefused / a parked page with no application response), and the non-production ones reject production tokens."
@@ -516,8 +538,10 @@
     "AM-05"
    ],
    "applies_to": "any target with both a web and a mobile client",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API9:2023 Improper Inventory Management; API3:2023 (excessive data exposure sub-case); Cobalt case study #2 (\"identified undisclosed API endpoints through code references\", rated High)",
    "record": "",
    "legacy_meta": {},
@@ -562,8 +586,10 @@
     "AM-05"
    ],
    "applies_to": "any versioned API; especially apps with a long tail of unforced updates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API9:2023 (\"Running multiple versions of an API … expands the attack surface\"); API1:2023 when the old version leaks objects",
    "record": "",
    "legacy_meta": {},
@@ -606,8 +632,10 @@
     "AM-05"
    ],
    "applies_to": "all apps with a long-lived install base",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API9:2023 (the beta-environment-without-rate-limiting scenario is the same class)",
    "record": "",
    "legacy_meta": {},
@@ -649,8 +677,13 @@
     "AM-05"
    ],
    "applies_to": "apps with Wear/Auto/TV/Glance companions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, wear, tv, auto",
+   "requires_tags": [
+    "backend-api",
+    "wear",
+    "tv",
+    "auto"
+   ],
    "maps_to": "MASWE-0018; the \"validates the action but never the caller\" pattern",
    "record": "",
    "legacy_meta": {},
@@ -694,8 +727,11 @@
     "AM-01"
    ],
    "applies_to": "**LEGACY client surface, current server exposure.** Any app that ever shipped an instant experience",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, legacy",
+   "requires_tags": [
+    "backend-api",
+    "legacy"
+   ],
    "maps_to": "API9:2023; Google Play Instant discontinuation (instant apps cannot be published as of December 2025 and the Play services Instant APIs stop working)",
    "record": "",
    "legacy_meta": {},
@@ -715,7 +751,7 @@
    "has_code": true,
    "skip_when": "",
    "test": "Instant apps could only use a restricted subset of APIs and permissions, so teams built\n*permission-light, frequently unauthenticated* endpoints for them. The client side is dead; the endpoints\nfrequently remain deployed and almost nobody checks them now.",
-   "how": "```bash\n  grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' $S apktool_out/AndroidManifest.xml\n  grep -rnE 'instant|/i/|/lite/|guest' $S | grep -iE 'http'\n  for p in $(cat instant_paths.txt); do curl -s -o /dev/null -w \"%{http_code} $p\\n\" \"https://api.target$p\"; done\n```",
+   "how": "```bash\n  grep -rnE 'InstantApps|isInstantApp|dist:instant|dist:module|targetSandboxVersion' $S $DEC/apktool/AndroidManifest.xml\n  grep -rnE 'instant|/i/|/lite/|guest' $S | grep -iE 'http'\n  for p in $(cat instant_paths.txt); do curl -s -o /dev/null -w \"%{http_code} $p\\n\" \"https://api.target$p\"; done\n```",
    "proof": "An unauthenticated 200 from an `/instant`-flavoured endpoint returning user or catalogue data.",
    "escalation": "Unauthenticated read of user data is a direct P1-band finding; unauthenticated *write* more so.",
    "ruled_out_when": "The manifest and history show the app never shipped an instant experience, or every\nrecovered instant path returns 404/401 with a working positive control elsewhere on the same host."
@@ -735,8 +771,10 @@
     "AM-05"
    ],
    "applies_to": "vendors shipping multiple apps against one backend",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API5:2023 Broken Function Level Authorization",
    "record": "",
    "legacy_meta": {},
@@ -779,8 +817,10 @@
     "AM-01"
    ],
    "applies_to": "any API whose spec is reachable; default routes ship enabled in many .NET 6/7/8, Spring, FastAPI and Quarkus projects and stay on in production",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API8:2023 Security Misconfiguration; API9:2023",
    "record": "",
    "legacy_meta": {},
@@ -822,8 +862,10 @@
     "AM-01"
    ],
    "applies_to": "all commerce/logistics apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API5:2023; API8:2023; WSTG-BUSL-02 Test Ability to Forge Requests",
    "record": "",
    "legacy_meta": {},
@@ -868,8 +910,10 @@
     "AM-12"
    ],
    "applies_to": "all engagements with a live backend",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "NIST SP 800-115 Appendix B §5.2 (Technical Test Components — \"significant detail should be included on what activities will occur on the target network\")",
    "record": "",
    "legacy_meta": {},
@@ -912,8 +956,11 @@
     "AM-06"
    ],
    "applies_to": "all. Run this **before** anything else in D15",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "API2:2023 Broken Authentication; RFC 9449 (DPoP) for what real sender-constraining looks like",
    "record": "",
    "legacy_meta": {},
@@ -963,8 +1010,10 @@
     "AM-01"
    ],
    "applies_to": "all API testing; mandatory before any auth-bypass claim",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (`hunt-spa-api` step 3)",
    "record": "",
    "legacy_meta": {},
@@ -1004,8 +1053,10 @@
     "AM-01"
    ],
    "applies_to": "every APK-derived endpoint list",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API2:2023; API5:2023; CWE-306 Missing Authentication for Critical Function",
    "record": "",
    "legacy_meta": {},
@@ -1051,8 +1102,10 @@
     "AM-01"
    ],
    "applies_to": "**every auth-bypass claim**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (`triage-validation` \"THE LAYER-ORDERING TRAP\")",
    "record": "",
    "legacy_meta": {},
@@ -1090,8 +1143,10 @@
     "AM-12"
    ],
    "applies_to": "all differential testing — injection, enumeration, authz, timing",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (local android-pentest reference 24 §B1)",
    "record": "",
    "legacy_meta": {},
@@ -1129,8 +1184,10 @@
     "AM-12"
    ],
    "applies_to": "all injection triage against a mobile API",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (reference 24 §B2)",
    "record": "",
    "legacy_meta": {},
@@ -1168,8 +1225,10 @@
     "AM-12"
    ],
    "applies_to": "Symfony/Laravel/DRF/Spring-validation-style backends — most modern API estates",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (reference 24 §B3)",
    "record": "",
    "legacy_meta": {},
@@ -1209,8 +1268,11 @@
     "AM-12"
    ],
    "applies_to": "all API testing",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "field methodology (reference 24 §B4)",
    "record": "",
    "legacy_meta": {},
@@ -1248,8 +1310,10 @@
     "AM-05"
    ],
    "applies_to": "every access-control, reflection, cache-poisoning and bypass claim",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (`bb-methodology` PART 4; `hunt-idor` anti-patterns)",
    "record": "",
    "legacy_meta": {},
@@ -1287,8 +1351,10 @@
     "AM-12"
    ],
    "applies_to": "timing oracles, user enumeration, rate-limit absence, race conditions",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (`bb-methodology` PART 4)",
    "record": "",
    "legacy_meta": {},
@@ -1326,8 +1392,10 @@
     "AM-12"
    ],
    "applies_to": "every oracle/bypass claim",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (`bb-methodology` PART 4)",
    "record": "",
    "legacy_meta": {},
@@ -1365,8 +1433,10 @@
     "AM-12"
    ],
    "applies_to": "every automated sweep in this chapter, including agent-driven ones",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (`bb-methodology` PART 4 \"Shell-Loop Ban\")",
    "record": "",
    "legacy_meta": {},
@@ -1404,8 +1474,10 @@
     "AM-12"
    ],
    "applies_to": "every Critical/High in this chapter",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "field methodology (`bb-methodology` Phase 5)",
    "record": "",
    "legacy_meta": {},
@@ -1443,8 +1515,11 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023 Broken Object Level Authorization (its documented scenario is a mobile API that fails to verify the VIN belongs to the authenticated user); MASWE-0018 (CWE-862, CWE-863); ATT&CK T1428; H1 #186279 ($1,500, `/api_android_v3/getUserVideos`), #754044, #203042",
    "record": "",
    "legacy_meta": {},
@@ -1496,8 +1571,11 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; H1 #757095 (Razer, \"broken access control allowing other user's bank account to be deleted\", $1,000, 311 upvotes), #753280 ($1,000), #1819832 ($15,000 remote deletion), #1213237 ($5,000, ~4.4M private messages)",
    "record": "",
    "legacy_meta": {},
@@ -1539,8 +1617,11 @@
     "AM-05"
    ],
    "applies_to": "REST-shaped APIs; older Rails, some Java stacks and some Node middleware honour the override",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API5:2023; PortSwigger access control — method variation",
    "record": "",
    "legacy_meta": {},
@@ -1581,8 +1662,11 @@
     "AM-05"
    ],
    "applies_to": "all; the fastest way to cover a 200-endpoint mobile API in one session",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "PortSwigger Autorize extension (statuses Bypassed! / Enforced! / Is enforced???); API1:2023; API5:2023",
    "record": "",
    "legacy_meta": {},
@@ -1623,8 +1707,10 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API1:2023 prevention guidance (\"use random and unpredictable values as GUIDs for records' IDs\"); CVE-2015-7889 / EDB 38558 (the message id \"just seems to be an incrementing number\")",
    "record": "",
    "legacy_meta": {},
@@ -1665,8 +1751,11 @@
     "AM-05"
    ],
    "applies_to": "any target whose ids \"look random\"",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "HackerOne Platform Standards, IDORs with Unpredictable IDs (effective 2 April 2024, updated 20 January 2026): \"Default: Set Attack Complexity to 'High' (AC:H)\"; \"Set Attack Complexity to 'Low' (AC:L) if the vulnerability report demonstrates a reliable, repeatable method for an attacker to obtain the specific IDs\"; RFC 4122",
    "record": "",
    "legacy_meta": {},
@@ -1970,8 +2059,10 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API3:2023 Broken Object Property Level Authorization — the \"excessive data exposure\" sub-case (formerly API3:2019); its prevention text: \"explicitly whitelist returned properties … avoid automatic binding functions like `to_json()`\"",
    "record": "",
    "legacy_meta": {},
@@ -2232,8 +2323,11 @@
     "AM-05"
    ],
    "applies_to": "team/org products",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API2:2023; `hunt-idor` Chain 5 (the removed-staff persistence class) and root cause #7",
    "record": "",
    "legacy_meta": {},
@@ -2276,8 +2370,11 @@
     "AM-05"
    ],
    "applies_to": "collaboration features",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; `hunt-idor` \"IDOR via share or invite link reuse\"; `hunt-business-logic` \"invitation-token reuse\"; H1 #2032716 ($12,500, viewing any user's email via a crafted invitation)",
    "record": "",
    "legacy_meta": {},
@@ -2320,8 +2417,10 @@
     "AM-02"
    ],
    "applies_to": "CDN/proxy-fronted APIs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API8:2023; `hunt-idor` \"IDOR through caching layer\"; H1 #409370, #728664, #622122, #942629, #1183263, #1096609, #326639 (web-cache class)",
    "record": "",
    "legacy_meta": {},
@@ -2364,8 +2463,12 @@
     "AM-05"
    ],
    "applies_to": "all apps with push",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, push, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "push",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; ATT&CK T1636.004 for the OTP target",
    "record": "",
    "legacy_meta": {},
@@ -2410,8 +2513,13 @@
     "AM-05"
    ],
    "applies_to": "any app using FCM topics; not applicable to token-addressed messaging only",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, push, firebase, frida",
+   "requires_tags": [
+    "backend-api",
+    "push",
+    "firebase",
+    "frida"
+   ],
    "maps_to": "API1:2023 — topic naming is a client-side construct with **no server-side ACL**",
    "record": "",
    "legacy_meta": {},
@@ -2496,8 +2604,12 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "device",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; ATT&CK T1533 Data from Local System",
    "record": "",
    "legacy_meta": {},
@@ -2546,8 +2658,11 @@
     "AM-05"
    ],
    "applies_to": "all ID-bearing endpoints",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; H1 #1819832 ($15,000), #1213237 ($5,000), #757095 ($1,000)",
    "record": "",
    "legacy_meta": {},
@@ -2589,8 +2704,11 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "`hunt-idor` operator-level pattern and Chain 6; H1 #394329 ($8,000, cross-user parameter tampering in billing/subscription), #415081 ($10,500, adding privileged secondary users to another owner's business account)",
    "record": "",
    "legacy_meta": {},
@@ -2632,8 +2750,11 @@
     "AM-05"
    ],
    "applies_to": "all multi-role products; **the most under-tested area in mobile engagements because the UI never reveals the endpoints**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API5:2023 Broken Function Level Authorization (\"complex access controls with unclear separation between administrative and regular functions\"); Mobile Top 10 2024 M3 (its attack vector is \"authenticate as legitimate users then force-browse to a vulnerable endpoint to execute administrative functionality\")",
    "record": "",
    "legacy_meta": {},
@@ -2676,8 +2797,11 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, frida",
+   "requires_tags": [
+    "backend-api",
+    "frida"
+   ],
    "maps_to": "API5:2023; Cobalt's OWASP Mobile Top 10 2024 detection step (\"test authorization checks on backend hidden functionality, assuming that the hidden functionality will only be accessed by a user with the appropriate role\")",
    "record": "",
    "legacy_meta": {},
@@ -2722,8 +2846,12 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm, root",
+   "requires_tags": [
+    "backend-api",
+    "mitm",
+    "root"
+   ],
    "maps_to": "ATT&CK T1641 Data Manipulation; AOSP Application Sandbox (the app process is fully under the device owner's control once instrumented); MASTG-TEST-0338 / MASWE-0057 for the stored-state variant",
    "record": "",
    "legacy_meta": {},
@@ -2771,8 +2899,10 @@
     "AM-05"
    ],
    "applies_to": "any JSON-merge update endpoint",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API3:2023 — the \"mass assignment\" sub-case (formerly API6:2019), with the documented scenarios `\"total_stay_price\": \"$1,000,000\"` and `\"blocked\": false`; Mobile Top 10 2024 M3; ATT&CK T1641",
    "record": "",
    "legacy_meta": {},
@@ -2823,8 +2953,10 @@
     "AM-01"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API3:2023; PortSwigger API testing — \"identify hidden parameters by examining object fields returned in API responses … test by adding suspected parameters to PATCH/POST\"",
    "record": "",
    "legacy_meta": {},
@@ -2867,8 +2999,11 @@
     "AM-05"
    ],
    "applies_to": "multi-user/org products",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023 + API3:2023 combined; `hunt-idor` Chain 4; H1 #981472 ($2,000, undocumented `fileCopy` mutation), #1066203 (cross-tenant `UpdateAtlasApplicationPerson`)",
    "record": "",
    "legacy_meta": {},
@@ -2910,8 +3045,11 @@
     "AM-05"
    ],
    "applies_to": "all offline/sync-capable apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023; API3:2023 (no external identifier verified in the corpus for this specific surface)",
    "record": "",
    "legacy_meta": {},
@@ -2953,8 +3091,10 @@
     "AM-05"
    ],
    "applies_to": "Node/Express backends",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API3:2023 (the object-merge mechanism); API8:2023",
    "record": "",
    "legacy_meta": {},
@@ -2997,8 +3137,10 @@
     "AM-05"
    ],
    "applies_to": "frontends and BFFs that proxy to an internal REST API — **extremely common behind mobile backends**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API8:2023; PortSwigger API testing — server-side parameter pollution",
    "record": "",
    "legacy_meta": {},
@@ -3042,8 +3184,10 @@
     "AM-01"
    ],
    "applies_to": "GraphQL backends",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "PortSwigger GraphQL (universal `{__typename}` probe, introspection, special-character and method bypasses, suggestions/Clairvoyance); mitigation is Apollo Server v4+ `hideSchemaDetailsFromClientErrors`",
    "record": "",
    "legacy_meta": {},
@@ -3085,8 +3229,11 @@
     "AM-05"
    ],
    "applies_to": "GitHub/Shopify/Facebook-style Relay APIs",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API1:2023 (its documented scenario is a GraphQL `deleteReports` mutation that \"deletes documents using only their ID without permission checks\"); H1 #1618347 ($25,000), #807448, #489146, #2207248 ($5,000 `BillingDocumentDownload`/`BillDetails`)",
    "record": "",
    "legacy_meta": {},
@@ -3126,8 +3273,11 @@
     "AM-05"
    ],
    "applies_to": "all GraphQL",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, two-accounts",
+   "requires_tags": [
+    "backend-api",
+    "two-accounts"
+   ],
    "maps_to": "API3:2023 (its documented scenario is a `reportUser` mutation returning the reported user's `fullName` and `recentLocation`); API1:2023",
    "record": "",
    "legacy_meta": {},
@@ -3171,8 +3321,10 @@
     "AM-05"
    ],
    "applies_to": "GraphQL endpoints with request-keyed throttling — which is most mobile GraphQL backends",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API4:2023 Unrestricted Resource Consumption; PortSwigger GraphQL (\"bypassing rate limiting using aliases\", batching); H1 #3287208 ($12,500, DoS via mutation aliasing in an account-recovery flow)",
    "record": "",
    "legacy_meta": {},
@@ -3217,8 +3369,10 @@
     "AM-05"
    ],
    "applies_to": "Apollo APQ deployments — **very common in mobile GraphQL clients**",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API5:2023; PortSwigger/field methodology `hunt-graphql` \"persisted-query fallback bypass\"",
    "record": "",
    "legacy_meta": {},
@@ -3261,8 +3415,10 @@
     "AM-02"
    ],
    "applies_to": "all GraphQL",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API5:2023; API8:2023; `hunt-graphql` \"operation-type confusion\" and \"mutation-via-GET\"",
    "record": "",
    "legacy_meta": {},
@@ -3304,8 +3460,11 @@
     "AM-05"
    ],
    "applies_to": "every app with a checkout, top-up or payout",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, payments",
+   "requires_tags": [
+    "backend-api",
+    "payments"
+   ],
    "maps_to": "API3:2023 (the `\"total_stay_price\"` property-injection scenario); WSTG-BUSL-01 Test Business Logic Data Validation; WSTG-BUSL-03 Test Integrity Checks; ATT&CK T1641.001; Gowthams `price-manipulation.md` / `payment-bypasses.md`",
    "record": "",
    "legacy_meta": {},
@@ -3349,8 +3508,11 @@
     "AM-05"
    ],
    "applies_to": "multi-currency apps; also single-currency apps that expose the field anyway",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, payments",
+   "requires_tags": [
+    "backend-api",
+    "payments"
+   ],
    "maps_to": "WSTG-BUSL-01; API3:2023",
    "record": "",
    "legacy_meta": {},
@@ -3392,8 +3554,11 @@
     "AM-05"
    ],
    "applies_to": "all commerce apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, payments",
+   "requires_tags": [
+    "backend-api",
+    "payments"
+   ],
    "maps_to": "WSTG-BUSL-05 Test Number of Times a Function Can Be Used Limits; API6:2023 Unrestricted Access to Sensitive Business Flows; H1 #1849626 ($5,000, fee discount redeemable many times), #759247 (gift cards redeemed multiple times)",
    "record": "",
    "legacy_meta": {},
@@ -3433,8 +3598,11 @@
     "AM-05"
    ],
    "applies_to": "all consumer apps with growth incentives",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, device",
+   "requires_tags": [
+    "backend-api",
+    "device"
+   ],
    "maps_to": "API6:2023 (its documented scenario is exactly this: \"scripts automate user registration repeatedly, accumulating credits in attacker wallets\"); WSTG-BUSL-05; WSTG-BUSL-06 Circumvention of Work Flows",
    "record": "",
    "legacy_meta": {},
@@ -3476,8 +3644,11 @@
     "AM-05"
    ],
    "applies_to": "all commerce / mobility / ticketing / delivery / enterprise-workflow apps",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, payments",
+   "requires_tags": [
+    "backend-api",
+    "payments"
+   ],
    "maps_to": "WSTG-BUSL-06 Testing for the Circumvention of Work Flows; WSTG-BUSL-04 Test for Process Timing; API6:2023; PortSwigger access control — context-dependent controls (\"modifying shopping cart contents after payment completion\"); H1 #307239 ($10,000, double payout via mishandled provider transaction states), #1295844 ($7,500, modifying in-flight data to a payment provider to generate wallet balance), #1543159 ($5,000, self-approving an admin approval), #894569 ($12,000, running pipeline jobs as an arbitrary user)",
    "record": "",
    "legacy_meta": {},
@@ -3520,8 +3691,11 @@
     "AM-05"
    ],
    "applies_to": "all apps with state-changing endpoints; mandatory for fintech",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, payments",
+   "requires_tags": [
+    "backend-api",
+    "payments"
+   ],
    "maps_to": "WSTG-BUSL-05; WSTG-BUSL-02 Test Ability to Forge Requests; API6:2023",
    "record": "",
    "legacy_meta": {},
@@ -3563,8 +3737,10 @@
     "AM-05"
    ],
    "applies_to": "all regulated apps with in-app identity verification",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API6:2023; WSTG-BUSL-06 (no external identifier verified in the corpus for this specific surface)",
    "record": "",
    "legacy_meta": {},
@@ -3607,8 +3783,11 @@
     "AM-12"
    ],
    "applies_to": "apps using Google Play In-App Updates or a backend `minVersion` gate",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "MASTG-TEST-0392 (References to Enforced Updating APIs), MASTG-TEST-0382 (Runtime Use of Enforced Updating APIs — explicitly instructs \"lowering the reported version value in network requests, for example `version`, `versionCode`, or `build` using an interception proxy\"), MASWE-0043, MASTG-KNOW-0023, MASVS-CODE-2",
    "record": "",
    "legacy_meta": {},
@@ -3659,8 +3838,11 @@
     "AM-12"
    ],
    "applies_to": "all apps sending a signature, device id, integrity verdict or \"rooted:false\" claim",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api, mitm",
+   "requires_tags": [
+    "backend-api",
+    "mitm"
+   ],
    "maps_to": "MASWE-0062 (No Application-Level Payload Encryption — a MAS-R resilience control; its converse is that the layer, once bypassed, provides no authorisation); MASTG-TECH-0043; MASVS-RESILIENCE-3; ATT&CK T1633.001 System Checks, T1630.003 Disguise Root/Jailbreak Indicators, mitigation M1002 Attestation; Google Play Integrity documentation (`requestDetails`, `appIntegrity.appRecognitionVerdict == PLAY_RECOGNIZED`, `accountDetails.appLicensingVerdict == LICENSED`, `deviceIntegrity`, `requestHash` for standard requests / `nonce` for classic, \"No caching: request verdicts on-demand to prevent replay/proxying attacks\", and the note that `requestPackageName` can be spoofed in the middle of the request)",
    "record": "",
    "legacy_meta": {},
@@ -3712,8 +3894,10 @@
     "AM-05"
    ],
    "applies_to": "all stateful backends; highest yield on account-settings and order-state machines",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "PortSwigger \"Smashing the state machine\" (limit-overrun, multi-endpoint collisions, single-endpoint collisions, sub-states, the single-packet attack); WSTG-BUSL-05; API6:2023; H1 #300305 ($15,250, email-verification bypass enabling takeover), #2110030 ($3,000), #759247, #429026, #1438052 ($5,000), #1520931 ($4,000), #2078571 ($2,480), #119657 ($2,000), #486629 (unlocking a loyalty benefit multiple times in one day)",
    "record": "",
    "legacy_meta": {},
@@ -3807,8 +3991,10 @@
     "AM-01"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API3:2023; API4:2023; MHL \"Using WhatsApp for OSINT\" (the pre-confirmation `POST /v2/exist` leaking `wa_old_device_name`, and its honest calibration — Meta did not classify it as a security issue)",
    "record": "",
    "legacy_meta": {},
@@ -3854,8 +4040,10 @@
     "AM-02"
    ],
    "applies_to": "all HTTP APIs; mobile API hosts are often permissive because \"only the app calls it\"",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "OWASP REST Security Cheat Sheet (disable CORS headers unless cross-domain calls are necessary; be specific about allowed origins)",
    "record": "",
    "legacy_meta": {},
@@ -3896,8 +4084,10 @@
     "AM-05"
    ],
    "applies_to": "all",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "PortSwigger API testing (\"changing the content type may enable you to trigger errors that disclose useful information\" or bypass defences); OWASP REST Security Cheat Sheet (reject unexpected content types → 415)",
    "record": "",
    "legacy_meta": {},
@@ -3939,8 +4129,10 @@
     "AM-05"
    ],
    "applies_to": "all apps with a remote backend",
-   "requires": "",
-   "requires_tags": [],
+   "requires": "backend-api",
+   "requires_tags": [
+    "backend-api"
+   ],
    "maps_to": "API7:2023 Server Side Request Forgery; API8:2023; Mobile Top 10 2024 M4; MASWE-0050 (CWE-20, CWE-89, CWE-116); MASVS-CODE-4; ATT&CK T1428, T1426",
    "record": "",
    "legacy_meta": {},

@@ -22,6 +22,40 @@ The third reason it pays is that almost nobody on the client side owns it. The b
 
 For every backend identity the package contains — project id, bucket, identity-pool id, anon key, vendor API key — does it still do anything when it is used from a host that is not the app, by an identity that is not a legitimate user?
 
+## Applicability probe
+
+D18 has two halves. The cloud/backend-identity half (D18-001..-055, -068..-077) applies to any app that names a cloud project, bucket, BaaS or vendor key anywhere in the package; the SDK half (D18-056..-067) applies to any app that bundles a third-party SDK. Both are nearly always true, so the probe decides *which blocks* are n/a far more often than the whole domain. Run it against `$DEC` once, record the five counts, and write the block-level notes it produces.
+
+```bash
+MF=$DEC/apktool/AndroidManifest.xml; R=$DEC/apktool/res; A=$DEC/apktool/assets; S=$DEC/jadx/sources
+# 1. Google/Firebase project present? (strings written by the google-services plugin) and which Firebase SDKs actually have a consumer (registrars)
+grep -cE 'google_app_id|google_api_key|firebase_database_url|google_storage_bucket|project_id' "$R/values/strings.xml"
+grep -oE 'com\.google\.firebase\.components:[A-Za-z0-9_.$]+' "$MF" | sed 's/.*://' | sort -u
+# 2. any cloud / BaaS / function host or identity-pool id anywhere in the package, native blobs and bundles included
+grep -rhoE '[a-z0-9.-]+\.(amazonaws\.com|blob\.core\.windows\.net|storage\.googleapis\.com|firebaseio\.com|firebasedatabase\.app|appspot\.com|firebasestorage\.app|supabase\.co|cloudfunctions\.net|run\.app|back4app\.com|parseapi\.[a-z.]+|data\.mongodb-api\.com)|[a-z]{2}-[a-z]+-[0-9]:[0-9a-f-]{36}' "$DEC" | sort -u | tee inventory/cloud-hosts.txt | wc -l
+# 3. vendor-key prefix hits (the D18-004 set, counted — the sweep itself runs in D18-004)
+grep -rhoE 'AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|sk_live_[A-Za-z0-9]{16,}|da2-[a-z0-9]{26}|mob-[0-9a-f-]{36}|os_v2_app_[a-z0-9_]{40,}|DefaultEndpointsProtocol=|"type": *"service_account"' "$DEC" | sort -u | wc -l
+# 4. third-party SDK inventory: manifest components outside the app's own package, and dex package prefixes
+PKG=$(grep -oE 'package="[^"]+"' "$MF" | head -1 | cut -d'"' -f2)
+grep -oE 'android:name="[a-z]+\.[A-Za-z0-9_.]+"' "$MF" | cut -d'"' -f2 | grep -v "^$PKG" | awk -F. '{print $1"."$2"."$3}' | sort -u | tee inventory/sdk-prefixes.txt | wc -l
+# 5. the runtime-SDK block needs a device + proxy: record lab.mode (device/mitm/frida) from scripts/doctor.sh --json
+```
+
+Decision rules:
+- Probe 1 > 0 **or** any registrar listed → the `firebase` block (D18-001, -009..-034, -075) applies. The registrar list decides which data-plane items have a *consumer*; probe them regardless (they are internet-reachable) and record the consumer status in the identity table.
+- Probe 2 > 0 or probe 3 > 0 → the cloud-credential block (D18-002..-013, -035..-050, -055, -068, -073, -074, -076, -077) applies to the hosts and keys listed; each sub-block (AWS, Azure, BaaS, payments, media, search, push, flags) is n/a when no host/key of that class is in `inventory/cloud-hosts.txt` or the prefix count — name the class and the empty grep in the note.
+- Probe 4 > 0 → the SDK block (D18-006, -008, -046, -051..-054, -056..-067) applies; the vendor-specific rows (session replay -059, support chat -052..-054, attribution -062/-063, ads -064, identity verification -051, payments -047/-048) are n/a when `inventory/sdk-prefixes.txt` holds no prefix of that vendor class — paste the prefix list in the note.
+- Probe 5: with no device or no proxy, D18-057..-061, -065 are `blocked` (not n/a) with the missing capability named.
+- D18-069..-072 (gates) always apply to any probe issued anywhere in the engagement.
+
+Whole-domain n/a note (rare — only when every count is zero):
+
+`D18 n/a — no Google/Firebase strings or registrars (probe 1: 0 strings, no registrar), no cloud/BaaS/function host or identity-pool id in the full decompiled tree including lib/ and bundles (probe 2: 0; inventory/cloud-hosts.txt empty), no vendor-key prefix hit (probe 3: 0), and every manifest component is in the app's own package (probe 4: 0; inventory/sdk-prefixes.txt empty). Commands and counts as run against $DEC on <date>. D18-069..072 still apply to probes issued in other domains.`
+
+Block-level n/a note template:
+
+`D18-<item range> n/a — <block name>: probe <n> returned 0 on $DEC (<command pasted>, count 0) and backend-identity.md has no row of kind <kind>; consumer check (registrar list / sdk-prefixes.txt) pasted.`
+
 ## Triage order
 
 1. **Extract the full backend-identity table first (D18-001 to D18-008).** Every later probe is parameterised by it, and half of it is not in `strings.xml` — it is in `assets/`, in `libapp.so`, in the JS bundle.
@@ -48,6 +82,7 @@ For every backend identity the package contains — project id, bucket, identity
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` (P5) — this item is recon, never a report |
 | **Attacker** | AM-01 |
 | **Applies to** | All apps with a Firebase or Google Cloud SDK |
+| **Requires** | firebase |
 | **Maps to** | MASTG-TECH-0007, MASTG-TECH-0019, MASTG-KNOW-0039, API8:2023 |
 
 - **Test:** The Gradle Google Services plugin compiles `google-services.json` into string resources at build time, so the file itself is usually absent from the APK. Recover the project id, API key, database URL, storage bucket, app id and sender id from `res/values/strings.xml` instead.
@@ -98,6 +133,7 @@ unzip -l target.apk | grep -iE '\.json$' | grep -iE 'service|account|credential|
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Flutter, React Native (Hermes), Unity IL2CPP/Mono, Xamarin/.NET MAUI, Kotlin Multiplatform, and any app with a custom `.so` |
+| **Requires** | native, flutter, react-native, hermes, unity, xamarin, cordova, capacitor, kmp |
 | **Maps to** | MASTG-TOOL-0144 (gitleaks), MASTG-TOOL-0125 (Apkleaks), MASTG-TECH-0019 |
 
 - **Test:** MobSF-class scanners parse DEX and resources. For cross-platform apps the backend config is in `libapp.so`, `global-metadata.dat`, `index.android.bundle` or a `.dll`, so the automated scan returns clean on a vulnerable app.
@@ -419,6 +455,7 @@ curl -s "https://fcm.googleapis.com/v1/projects/$P/messages:send?key=$K" -X POST
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES) for the storage framing |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps with `firebase_database_url` in resources, or any `*.firebaseio.com` / `*.firebasedatabase.app` host in the package |
+| **Requires** | firebase |
 | **Maps to** | MASTG-KNOW-0039 (Firebase Real-time Databases), MASWE-0004, CWE-306; Firebase insecure-rules documentation (`".read": true, ".write": true`); ATT&CK T1481.002 (ATT&CK names Firebase directly as a C2 channel used by Mandrake, TERRACOTTA and VajraSpy S9006) |
 
 - **Test:** RTDB rules are opt-in. Append `.json` to the instance URL and read it with no credential.
@@ -443,6 +480,7 @@ curl -s "$DB/.settings/rules.json" | head -c 300                 # the legacy ru
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); if the write lands on a user-scoped path, `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) |
 | **Attacker** | AM-01 |
 | **Applies to** | Every RTDB instance found, including ones that deny reads — read and write rules are independent |
+| **Requires** | firebase |
 | **Maps to** | Firebase insecure-rules documentation; CWE-306 |
 
 - **Test:** Write is strictly more severe than read and the two rules are separate, so a read-denied database can still be world-writable. The corpus is emphatic: always test both.
@@ -468,6 +506,7 @@ curl -s "$DB/pt_$M.json"                       # confirm removal
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | RTDB projects that deny the root |
+| **Requires** | firebase |
 | **Maps to** | Firebase insecure-rules documentation — a parent `".read": true` at `/foo` **cannot** be revoked by `".read": false` at `/foo/bar`; rules cascade downwards only |
 
 - **Test:** Rules grant downwards and never revoke downwards. A project with `".read": false` at the root can still have a permissive subtree, and the root probe in D18-014 will show "Permission denied" while the data is wide open one level down. Recover candidate paths from the app's own code rather than guessing.
@@ -506,6 +545,7 @@ PY
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Firestore projects — note the `.json` probe of D18-014 misses these entirely |
+| **Requires** | firebase |
 | **Maps to** | Firebase insecure-rules documentation (`allow read, write: if true;`); API1:2023; H1 #731724 (MobiSystems — the REST calls below come from that report) |
 
 - **Test:** Firestore and RTDB are different products with different rules and different endpoints. An app can have a locked RTDB and an open Firestore, and vice versa. Probe Firestore explicitly.
@@ -534,6 +574,7 @@ curl -s -X POST "https://firestore.googleapis.com/v1/projects/$P/databases/(defa
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for a targeted overwrite |
 | **Attacker** | AM-01 |
 | **Applies to** | Firestore projects |
+| **Requires** | firebase |
 | **Maps to** | Firebase insecure-rules documentation; H1 #731724 |
 
 - **Test:** Write rules are separate from read rules here too. Create a document in a scratch collection, read it back, delete it.
@@ -562,6 +603,7 @@ curl -s -X DELETE "https://firestore.googleapis.com/v1/<returned-name>?key=$K" -
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when documents are addressed by iterable ids; `…modify_view_sensitive_information_guid` (P4) when they are GUID-keyed and you cannot enumerate |
 | **Attacker** | AM-01 (self-enrolment) or AM-05 (another user of the same app) |
 | **Applies to** | Firestore, RTDB and Cloud Storage projects that pass the unauthenticated probes |
+| **Requires** | firebase, two-accounts |
 | **Maps to** | Firebase insecure-rules documentation — `if request.auth.uid != null` means "any logged-in user can access all data belonging to other users"; API1:2023 |
 
 - **Test:** This is the most common *serious* Firebase misconfiguration and it is invisible to every unauthenticated scanner. The rule looks defensive (`allow read: if request.auth != null;`) and grants every authenticated identity access to every record, including identities the attacker mints themselves (D18-020).
@@ -589,6 +631,7 @@ curl -s "https://<project>-default-rtdb.firebaseio.com/users.json?auth=$ID_TOKEN
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the rule was the only access control |
 | **Attacker** | AM-01 |
 | **Applies to** | Firebase Auth projects |
+| **Requires** | firebase |
 | **Maps to** | Firebase insecure-rules documentation (the `request.auth != null` case); API2:2023 |
 
 - **Test:** If Anonymous auth or open email/password sign-up is enabled on the project, you can mint a project identity yourself with nothing but the API key from the APK. The "authenticated-only" rule then protects nothing.
@@ -619,6 +662,7 @@ curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:createAuthUr
 | **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES — rate on demonstrated data); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps with `google_storage_bucket` in resources or any `firebasestorage.googleapis.com` reference |
+| **Requires** | firebase |
 | **Maps to** | Firebase insecure Storage rules (`allow read, write;` → "any internet user can read or write to all files in the bucket"); MASWE-0004 |
 
 - **Test:** Cheapest high-signal probe in the domain. One unauthenticated `GET` against the object-list endpoint. For Storage, **a list is itself the finding** — the object names alone frequently disclose user identifiers, document types and the per-user path scheme.
@@ -644,6 +688,7 @@ curl -s -o /tmp/obj "https://firebasestorage.googleapis.com/v0/b/$B/o/$(python3 
 | **VRT** | `cloud_security.storage_misconfigurations.publicly_accessible_cloud_storage` (VARIES); `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) for a targeted overwrite |
 | **Attacker** | AM-01 |
 | **Applies to** | Firebase Storage projects |
+| **Requires** | firebase |
 | **Maps to** | Firebase insecure Storage rules; CWE-306 |
 
 - **Test:** Write is the higher-severity half and is separately ruled. Also check whether you can overwrite an **existing** object — replacing another user's profile image or document is an integrity finding on top of the disclosure one.
@@ -670,6 +715,7 @@ curl -s -X DELETE "https://firebasestorage.googleapis.com/v0/b/$B/o/pt_$M.txt" -
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) for leaked internal endpoints; `…for_publicly_accessible_asset` (P1) if a usable credential is in a parameter value |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps using Firebase Remote Config |
+| **Requires** | firebase |
 | **Maps to** | Firebase Remote Config parameters documentation — "Don't store confidential data in Remote Config parameter keys or values"; values are cached on device; API8:2023 |
 
 - **Test:** Remote Config is delivered to every client, so its whole payload is readable by anyone holding the app id and API key. It routinely contains unreleased feature flags, staging hostnames, internal endpoints, third-party keys and business thresholds.
@@ -697,6 +743,7 @@ adb shell su 0 sqlite3 /data/data/<pkg>/databases/frc*.db '.tables' 2>/dev/null
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when a live credential is in a value |
 | **Attacker** | AM-01 (fetch API) or AM-11/AM-12 (on-device cache) |
 | **Applies to** | Apps using Remote Config or an equivalent flag service (LaunchDarkly, Optimizely, in-house) |
+| **Requires** | firebase |
 | **Maps to** | Firebase Remote Config documentation ("Don't store confidential data in Remote Config parameter keys or values" — end users can access these values); MASWE-0004 |
 
 - **Test:** Teams move a secret out of `strings.xml` into Remote Config believing that hides it. It does not: the value is delivered to every install and cached in plain XML on the device. Distinguish this from D18-023 — here the payload holds a *credential*, not merely config.
@@ -720,6 +767,7 @@ grep -niE 'secret|password|token|private|signing|hmac|salt' rc_entries.txt
 | **VRT** | `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) alone; rate up to the control it disables — e.g. `broken_authentication_and_session_management.authentication_bypass` (P1) if a flag turns off a server-enforced check |
 | **Attacker** | AM-09 malicious backend/CDN, or AM-06/AM-07 on an unpinned config fetch |
 | **Applies to** | Apps that read a config value into a security decision |
+| **Requires** | backend-api, mitm |
 | **Maps to** | Firebase Remote Config value priority (fetched values outrank in-app defaults); API10:2023 Unsafe Consumption of APIs |
 
 - **Test:** Find config values that gate security behaviour — API base URL, "enforce pinning", "require signature", a maximum transaction amount, a fraud threshold — then override them and observe the consequence. If the client obeys, whoever can influence or intercept the config controls the app.
@@ -759,6 +807,7 @@ Java.perform(function () {
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when a cohort-only value exposes internal infrastructure |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps using Remote Config conditions |
+| **Requires** | firebase |
 | **Maps to** | Firebase Remote Config conditions (targeting by app version, platform, user property, country, random percentile) |
 
 - **Test:** A single fetch shows you one cohort's template. Conditions target by app version, platform, user property, country and random percentile, so a default fetch can be empty while an internal-build cohort receives the staging endpoints. Vary the fetch parameters.
@@ -787,6 +836,7 @@ done
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) for an unauthenticated privileged callable; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) when it takes an object id |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps using Firebase callable functions, Lambda function URLs, API Gateway stages or Cloud Run |
+| **Requires** | backend-api |
 | **Maps to** | API5:2023 Broken Function Level Authorization, API1:2023 |
 
 - **Test:** These are plain internet-facing HTTP endpoints; the SDK wrapper in the app is not a control. Critically, a function usually runs with the Firebase Admin SDK, which **ignores every Firestore/RTDB/Storage rule you just tested** — so a hardened rules set means nothing here.
@@ -814,6 +864,7 @@ curl -s -X POST "$FN" -H "Authorization: Bearer $ID_TOKEN" -H 'Content-Type: app
 | **VRT** | `broken_access_control.username_enumeration.non_brute_force` (P4); the provider disclosure additionally enables `server_security_misconfiguration.oauth_misconfiguration.account_squatting` (P4) |
 | **Attacker** | AM-01 |
 | **Applies to** | Firebase Auth projects whose key is not application-restricted (D18-009) |
+| **Requires** | firebase |
 | **Maps to** | API2:2023 |
 
 - **Test:** Several Identity Toolkit endpoints differentiate existing from non-existing accounts, and `createAuthUri` additionally discloses which sign-in providers each account uses — which tells an attacker exactly which social-login or password path to attack.
@@ -840,6 +891,7 @@ curl -s -X POST "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPa
 | **VRT** | `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) standalone; it is the *missing mitigation* line on every rules finding above |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps using Firebase/GCP-backed services or the App Check custom-backend integration |
+| **Requires** | firebase |
 | **Maps to** | `firebase.google.com/docs/app-check` — Play Integrity provider on Android; protects Cloud Firestore, Realtime Database, Cloud Storage, callable Cloud Functions, Firebase Authentication (Preview) and custom backends; debug providers are local-development-only |
 
 - **Test:** App Check is the control that makes "only our app may call this backend" true. Without it, every finding in D18-014 through D18-027 is reachable from `curl`. Check three things: whether the app initialises App Check at all, whether the project enforces it, and whether a debug provider or a debug token shipped in the release build.
@@ -864,6 +916,7 @@ curl -s -i -X POST "https://firestore.googleapis.com/v1/projects/$P/databases/(d
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if credentialed cross-origin reads of authenticated data are possible |
 | **Attacker** | AM-02 remote, one click (a web page the victim visits) |
 | **Applies to** | Firebase/GCP projects with an App Engine or Cloud Run surface on the same project |
+| **Requires** | firebase |
 | **Maps to** | Firebase/App Engine default hostnames; API8:2023 |
 
 - **Test:** The same project id usually also answers on `<project>.appspot.com`. Probe it separately, and check its CORS response — a permissive `Access-Control-Allow-Origin` with credentials turns a same-project API into browser-reachable data theft.
@@ -887,6 +940,7 @@ curl -s -i -X OPTIONS "https://<project>.appspot.com/api/" \
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | FCM apps. **LEGACY:** the `Authorization: key=` server-key endpoint belongs to the legacy FCM HTTP API, superseded by the OAuth2/service-account HTTP v1 API — on a current project the modern equivalent is D18-032 |
+| **Requires** | firebase, push |
 | **Maps to** | Google ASI campaign "Exposed Firebase Cloud Messaging Server Keys" (started 2021-10-12, `support.google.com/faqs/topic/11015404`); H1 #789370 (Smule, Critical, CWE "Use of Hard-coded Credentials"); CWE-798 |
 
 - **Test:** The client needs only the **sender id**. A *server* key in the APK lets anyone send push notifications to the app's entire install base under the vendor's brand.
@@ -917,6 +971,7 @@ curl -s -X POST https://fcm.googleapis.com/fcm/send \
 | **VRT** | `cloud_security.identity_and_access_management_iam_misconfigurations.publicly_accessible_iam_credentials` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Any app whose package contains a `"type": "service_account"` JSON, in assets, raw resources, a native blob or a JS bundle |
+| **Requires** | firebase, push |
 | **Maps to** | API8:2023; CWE-798; apkleaks `Google_Cloud_Platform_Service_Account` rule |
 
 - **Test:** With FCM HTTP v1 the send credential is an OAuth2 service account, not a server key. A service account typically grants far more than push — it is a GCP principal, and its role set decides the severity.
@@ -944,6 +999,7 @@ gcloud auth revoke --all
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.intentionally_public_sample_or_invalid` (P5) for the sender id |
 | **Attacker** | n/a |
 | **Applies to** | All FCM apps |
+| **Requires** | firebase, push |
 | **Maps to** | H1 #941590 (Hostinger — GCM sender key, rated **Low**) versus H1 #789370 (Smule — server key, rated **Critical**) |
 
 - **Test:** `gcm_defaultSenderId` and `google_app_id` are client identifiers and belong in the package by design. Confusing one for a server key is, in the corpus's words, the fastest way to have the report downgraded. Before filing anything push-related, state which credential you hold and show the authentication result.
@@ -968,6 +1024,7 @@ curl -s -i -X POST https://fcm.googleapis.com/fcm/send \
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES — rated on what the handler does) |
 | **Attacker** | AM-01 once you hold a send credential; AM-03 where the messaging receiver is reachable locally |
 | **Applies to** | Apps whose `FirebaseMessagingService` acts on message contents |
+| **Requires** | push, device |
 | **Maps to** | ATT&CK T1437.001 Web Protocols (ATT&CK names GCM/FCM/APNS as blend-in channels); ATT&CK T1481.002 |
 
 - **Test:** A stolen send credential is worth far more when the app *acts* on data messages: opens a deep link, loads a URL in a WebView, writes config, or triggers a silent action. Read the handler before rating D18-031/-032.
@@ -1050,6 +1107,7 @@ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 | **VRT** | `cloud_security.identity_and_access_management_iam_misconfigurations.overly_permissive_iam_roles` (P2); P1 when it yields cross-tenant data |
 | **Attacker** | AM-01 (self-registration) or AM-05 |
 | **Applies to** | Cognito user-pool + identity-pool apps |
+| **Requires** | two-accounts |
 | **Maps to** | Amazon Cognito identity pools documentation (per-identity-type IAM roles); API1:2023 |
 
 - **Test:** Teams disable guest access and consider the pool hardened, while the *authenticated* role still carries `s3:*` or an unscoped DynamoDB policy. Register normally through the app, then exchange the user-pool token for AWS credentials and enumerate.
@@ -1217,6 +1275,7 @@ done
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) for iterable keys; `…modify_view_sensitive_information_guid` (P4) when the key is a GUID and you cannot enumerate |
 | **Attacker** | AM-01 or AM-05 |
 | **Applies to** | Any storage surface whose listing succeeded, and any app that constructs object URLs client-side |
+| **Requires** | two-accounts |
 | **Maps to** | API1:2023; MASWE-0004 |
 
 - **Test:** The listing is not the end of the finding — the *shape* of the keys is. `users/1041/passport.jpg` is an enumerable cross-user read even if the listing is later closed; `private/<identityId>/…` tells you exactly what to substitute. Also check whether the app builds the object URL on the client, which means the server never authorises the fetch.
@@ -1243,6 +1302,7 @@ grep -rnE 'https?://[^"]*(s3|storage\.googleapis|blob\.core\.windows)[^"]*"|getU
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps built on Supabase, Appwrite, PocketBase or any PostgREST-style BaaS |
+| **Requires** | backend-api |
 | **Maps to** | API1:2023 (object-level authorisation delegated to policies that do not check ownership); API8:2023 |
 
 - **Test:** These platforms ship a public `anon`/publishable key in the client and rely entirely on row-level security. If RLS is off, or a policy is `USING (true)`, the anon key is a full database client — and it is in every install.
@@ -1273,6 +1333,7 @@ curl -s -i -X POST "https://$REF.supabase.co/rest/v1/<table>" \
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1); `cloud_security.misconfigured_services_and_apis.insecure_api_endpoints` (P4) for the endpoint alone |
 | **Attacker** | AM-01 |
 | **Applies to** | Amplify/AppSync apps and any managed GraphQL endpoint whose key ships in the client |
+| **Requires** | backend-api |
 | **Maps to** | API1:2023, API5:2023, API8:2023 |
 
 - **Test:** An AppSync endpoint with `API_KEY` as its authorisation mode accepts any caller holding the key in the APK. The resolvers, not the transport, are the only access control — and a `list*` query with no owner filter returns the whole table.
@@ -1326,6 +1387,7 @@ curl -s -u "$K:" 'https://api.<vendor>.com/v1/account'                          
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-01 |
 | **Applies to** | Apps taking card/wallet payments outside Play Billing (Stripe, Braintree, Adyen, Razorpay, PayU, Checkout.com) |
+| **Requires** | payments |
 | **Maps to** | CWE-798; the Datafarm Flutter case (secret key found in `createPaymentIntent()` in the Dart assembly output; the validated account held customer payment-card details, names, addresses, phone numbers and **$3,112 in pending charges**) |
 
 - **Test:** PSPs give the client a *publishable* key and keep the *secret* key server-side. The finding is a secret/private key in the package. Validate with a read-only call and stop.
@@ -1351,6 +1413,7 @@ curl -s https://api.razorpay.com/v1/payments?count=1 -u "$KEY_ID:$KEY_SECRET" | 
 | **VRT** | `broken_access_control.privilege_escalation` (VARIES) — rate on the value obtained; the money movement is the impact statement |
 | **Attacker** | AM-05 (a user of the app) |
 | **Applies to** | Apps whose order state transitions on a PSP SDK callback rather than on a server-verified webhook |
+| **Requires** | payments, backend-api, mitm |
 | **Maps to** | API10:2023 Unsafe Consumption of APIs |
 
 - **Test:** The PSP SDK's local "payment succeeded" callback is client state. If the backend marks the order paid on the client's say-so rather than waiting for the PSP's server-to-server confirmation, the order completes without a charge.
@@ -1424,6 +1487,7 @@ curl -s "https://$APPID.algolia.net/1/keys/$K" \
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_guid` (P4) for the token-mint IDOR; rate up to `…modify_view_sensitive_information_iterable_object_identifiers` (P1) if applicant ids are iterable and the capture binds |
 | **Attacker** | AM-05 |
 | **Applies to** | Apps with third-party identity verification (Onfido, Sumsub, Veriff, Jumio, Persona and similar) |
+| **Requires** | two-accounts, mitm |
 | **Maps to** | No external identifier verified in the corpus for this class; rate on demonstrated impact |
 
 - **Test:** These SDKs initialise with a short-lived, applicant-scoped token that the backend must mint. Test three things: is the token long-lived, is it scoped to *your* applicant, and does swapping an applicant/inquiry id in the mint call bind your capture session to someone else's identity record.
@@ -1449,6 +1513,7 @@ echo "$SDKTOKEN" | cut -d. -f2 | base64 -d 2>/dev/null | jq
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) where user ids are iterable; `broken_authentication_and_session_management.authentication_bypass` (P1) where identity verification was the only control |
 | **Attacker** | AM-01 (with the extracted secret) or AM-05 |
 | **Applies to** | Apps embedding Intercom, Zendesk Messaging, Freshchat, Helpshift or Salesforce Embedded Messaging |
+| **Requires** | mitm |
 | **Maps to** | `developers.intercom.com/installing-intercom/android/identity-verification` — `Intercom.client().setUserHash(...)`, HMAC-SHA256 over the user id or email, the secret must live "in a secure place on your app server", and the API Auth Server returns **401** when the HMAC fails |
 
 - **Test:** Support SDKs authenticate the end user with an HMAC or JWT that the vendor requires to be produced **server-side**. If identity verification is off, or the secret ships in the APK so the client can compute it, any user can register as any other user and read their entire support history — which routinely contains order numbers, addresses, partial card data and account-recovery correspondence.
@@ -1513,6 +1578,7 @@ print(f"probed={hi-lo} nonempty200={hits}")
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES); rate at what the reachable bridge returns |
 | **Attacker** | AM-05 (the peer or agent side of the conversation) |
 | **Applies to** | Apps with embedded support chat |
+| **Requires** | webview, mitm |
 | **Maps to** | H1 #401793 (Grab — a support activity's WebView with `addJavascriptInterface` exposing `getGrabUser()`, High 7.1: "JS interfaces have no origin policies, so if you have the ability to run your own JS in the given WebView, you can access them"); H1 #180349 (Zendesk Android SDK, unprotected `CREATE_REQUEST` broadcast) |
 
 - **Test:** Support SDKs render conversation content in a `WebView` and many expose a bridge for actions and file previews. The content comes from the agent side, a bot template, or another user in a marketplace app. Test whether message bodies, quick replies, article previews or attachment previews execute script, and whether a bridge is reachable from that script.
@@ -1585,12 +1651,13 @@ grep -rnE 'FirebaseAnalytics|setUserId\(|setUserProperty\(|logEvent\(|identify\(
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES, CWE-200); Critical under HackerOne's PII standard for multi-user sensitive PII |
 | **Attacker** | AM-08 |
 | **Applies to** | All |
+| **Requires** | device, frida, mitm |
 | **Maps to** | MASTG-TEST-0319 (Runtime Use of SDK APIs Known to Handle Sensitive User Data), MASWE-0073, MASTG-TECH-0043, MASTG-TECH-0033, MASTG-TECH-0100; MASVS-PRIVACY-1/-3; Mobile Top 10 2024 M6; ATT&CK T1533, T1532, T1646 |
 
 - **Test:** Hook the entry points found in D18-056 and capture the **argument values** plus a stack trace while exercising the app. Argument values are what turns "potential" into a finding.
 - **How:**
 ```bash
-frida -U -f com.target.app -l sdk_hooks.js --no-pause
+frida -D "$SERIAL" -f com.target.app -l sdk_hooks.js
 ```
 ```javascript
 Java.perform(function () {
@@ -1623,6 +1690,7 @@ frida-trace -U -p $(adb shell pidof com.target.app) \
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (VARIES); `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) for the data itself |
 | **Attacker** | AM-08 |
 | **Applies to** | Apps serving EU/California users, or any app with a published privacy policy |
+| **Requires** | device, mitm |
 | **Maps to** | MASWE-0078 (Inadequate or Ambiguous User Consent Mechanisms, CWE-358/CWE-359), MASWE-0073, MASVS-PRIVACY-1 (requires "enforcing that third-party SDKs operate based on user consent, not by default or without it" and preventing SDKs "from ignoring consent signals or from collecting data before consent is confirmed"), MASVS-PRIVACY-4; Mobile Top 10 2024 M6 |
 
 - **Test:** Clean install, proxy attached before first launch, decline or ignore every consent prompt, then inspect what already left the device.
@@ -1652,6 +1720,7 @@ mitmdump -nr first_run.flows -q | grep -iE 'appsflyer|adjust|branch|amplitude|mi
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-08 |
 | **Applies to** | Apps embedding UXCam, Smartlook, Clarity, FullStory, Glassbox, Contentsquare, Quantum Metric, LogRocket or similar |
+| **Requires** | device, mitm |
 | **Maps to** | MASWE-0069 (Usage of Non-Privacy-Preserving Functionality); MASVS-PRIVACY-1 |
 
 - **Test:** Masking in these SDKs is opt-in per view. They routinely capture card numbers, CVVs, OTPs, recovery codes and document scans — including on screens the app excludes from screenshots with `FLAG_SECURE`, because the SDK reads the view hierarchy rather than the framebuffer.
@@ -1675,6 +1744,7 @@ mitmdump -s dump.py -q '~u uxcam|smartlook|clarity|fullstory|quantummetric'
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES); Critical if an auth token is included, refiled as theft of sensitive data |
 | **Attacker** | AM-08 |
 | **Applies to** | Apps with Crashlytics, Sentry, Bugsnag, Instabug, AppCenter or Datadog |
+| **Requires** | device, mitm |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/log-info-disclosure`; MASTG-TECH-0100; MASWE-0073 |
 
 - **Test:** This is the item that converts a D20 logcat observation — whose severity is capped by on-device reachability — into a real cross-boundary leak, because the crash reporter carries the log off the device to a third party. Check the reporter's configuration and read an actual uploaded report.
@@ -1699,6 +1769,7 @@ adb shell am crash com.target.app 2>/dev/null || adb shell run-as com.target.app
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-08 malicious third-party SDK |
 | **Applies to** | All; weight it up for apps carrying session-replay, attribution, chat-support, ad or crash SDKs |
+| **Requires** | device, frida, mitm |
 | **Maps to** | AOSP security-model paper §4.3.4 — "libraries that are embedded by an app are considered to be within the app's security boundary"; the SDK Runtime (Android 13) is the only exception, giving ads SDKs "a secondary bound application sandbox with a separate UID", a separate SELinux policy and "a very limited set of permissions", and even there "there is no security boundary between SDKs for the same app"; `developer.android.com/privacy-and-security/risks/insecure-library` |
 
 - **Test:** Every SDK in the APK runs with the app's UID, its permissions, its Keystore access and its network identity. The corpus covers how SDKs get compromised but rarely asks what a compromised one would reach. Enumerate the blast radius at runtime, not from the manifest.
@@ -1735,6 +1806,7 @@ mitmdump -nr session.flow -q | grep -iE 'Authorization: Bearer|token=' | sort -u
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) — rated on the route reached |
 | **Attacker** | AM-02 remote, one click |
 | **Applies to** | Apps bundling Branch, AppsFlyer, Adjust or a similar attribution SDK |
+| **Requires** | deeplink, device |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/android-exported`; the Branch/AppsFlyer/Adjust deep-link manipulation class |
 
 - **Test:** These SDKs register their own link handlers and accept a routing parameter in the attribution payload. That is a second router, sitting beside the app's own deep-link handling and usually bypassing its validation entirely.
@@ -1758,6 +1830,7 @@ adb shell am start -a android.intent.action.VIEW -d 'targetapp://?adj_deeplink=t
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 zero-permission local app |
 | **Applies to** | Apps with an `INSTALL_REFERRER` receiver |
+| **Requires** | exported-receiver, device |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/android-exported`, `.../access-control-to-exported-components` |
 
 - **Test:** Attribution receivers exported with no guarding permission let any installed app forge attribution data.
@@ -1781,6 +1854,7 @@ adb shell run-as com.target.app cat shared_prefs/*.xml | grep -i 'referrer\|utm'
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the bridge reach; `broken_access_control.privilege_escalation` (VARIES) for the reward |
 | **Attacker** | AM-09 malicious backend/CDN (the ad network or a mediation partner) for the content half; AM-05 for the reward half |
 | **Applies to** | Ad-supported apps |
+| **Requires** | ads-sdk, device |
 | **Maps to** | Google ASI campaigns naming specific ad SDKs ("Supersonic Ad SDK", "Vpon Ad SDK", "Airpush Ad SDK", "MoPub Ad SDK", "AdMarvel", "Vungle Ad SDK", "Vitamio Ad SDK"); ATT&CK T1474.001 |
 
 - **Test:** Ad SDKs render remote HTML in WebViews inside the app's process. Two questions: does the ad WebView have file/content access or an injected bridge, and is rewarded-ad completion verified server-side.
@@ -1807,6 +1881,7 @@ curl -s -i -X POST https://api.target/v1/rewards/claim -H "Authorization: Bearer
 | **VRT** | `privacy_concerns.unnecessary_data_collection` (VARIES) for the egress; rate up where a pre-auth config fetch is a control-plane injection point |
 | **Attacker** | AM-08; AM-09 for the config-fetch half |
 | **Applies to** | Any app using AndroidX App Startup |
+| **Requires** | device, mitm |
 | **Maps to** | `developer.android.com/topic/libraries/app-startup` (initialisers declared as `<meta-data>` under `InitializationProvider`); MASWE-0069, MASWE-0078 |
 
 - **Test:** Every `<meta-data android:value="androidx.startup" />` names an `Initializer` that runs in `InitializationProvider.onCreate()` — before the launcher activity, before any PIN or biometric gate, and before any consent screen. Audit what those initialisers do: fetch remote config, open a socket, read a token, register a listener, send telemetry carrying identifiers.
@@ -1859,6 +1934,7 @@ grep -n -A6 'com.google.android.gms.metadata.ModuleDependencies' merged.xml
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) — rated on what it exposes |
 | **Attacker** | AM-03 |
 | **Applies to** | All |
+| **Requires** | device |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/android-exported`, `.../access-control-to-exported-components`; Oversecured's SDK research (its seven SDK vulnerability classes: intent redirection, WebView misconfiguration, insecure deep-link handlers, hardcoded secrets, insecure local storage, excessive permissions, cryptography failures); EngageLab EngageSDK ≤ v4.5.4 `MTCommonActivity` / `n_intent_uri` (Microsoft reported April 2025, fixed v5.2.1 on 2025-11-03; >50M installs; affected apps removed from Google Play); CVE-2020-8913 (Play Core); H1 #532836 / #1455987 (Exness, SurveyMonkey SDK), #258460 (Quora, gotev UploadService), #192886 (Mapbox SDK, Low, $1,000), #694053 (Lark, Medium, $1,000) |
 
 - **Test:** These reports most often die as "third-party code, not ours". Pre-empt that by proving three things, in this order, in one evidence pack.
@@ -1887,6 +1963,7 @@ unzip -l target.apk | grep -iE 'META-INF/.*\.version'
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where the old version accepts no token; `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for a field-exposure regression |
 | **Attacker** | AM-01 |
 | **Applies to** | Any versioned API reached from the package, including the Remote Config and staging hosts found in D18-023 and D18-055 |
+| **Requires** | backend-api |
 | **Maps to** | API8:2023; the corpus names this "the highest-value mobile→backend bridge" |
 
 - **Test:** A mobile app's hardcoded backend calls are frequently an **older** API version than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Diff **behaviourally** across versions for the same operation, not by response shape. A version difference alone is Informational; the weakened control is the finding.

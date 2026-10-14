@@ -50,6 +50,32 @@ chain from the start, not as an afterthought.
 string into a filesystem path or concatenates a caller-controlled string into SQL — and if the answer is no,
 can the app itself be made to call that method on the attacker's behalf?**
 
+## Applicability probe
+
+Run once per engagement, after P2 has populated `$DEC` and `inventory/` has been generated **with `--all`** (without it `components.csv` omits non-exported providers that carry no grant — D07-056 and D07-065 still need them). `SERIAL` and `PKG` come from `engagement.json`.
+
+```bash
+# 1. declared providers in the MERGED manifest (SDK-contributed providers included)
+grep -c '<provider' "$DEC/apktool/AndroidManifest.xml"
+grep -oE 'android:authorities="[^"]+"' "$DEC/apktool/AndroidManifest.xml" | sed 's/.*="//; s/"//' | tr ';' '\n' | sort -u | tee logs/D07-authorities.txt
+# 2. inventory rows must match the manifest count
+awk -F, '$2=="provider"' inventory/components.csv | wc -l
+# 3. any FileProvider paths XML at all
+grep -c 'FILE_PROVIDER_PATHS' "$DEC/apktool/AndroidManifest.xml"; ls "$DEC"/apktool/res/xml/ 2>/dev/null | grep -ci path
+# 4. the INBOUND direction — applies even with zero providers
+grep -rlE 'getContentResolver\(\)\.(openInputStream|openOutputStream|openFileDescriptor|openAssetFileDescriptor|query)\(|OpenableColumns|DocumentsContract\.getDocumentId|EXTRA_STREAM' "$DEC/jadx/sources" | wc -l
+# 5. runtime provider table (device; shell UID is discovery only)
+adb -s "$SERIAL" shell dumpsys package providers | grep -F -A2 "$PKG" | tee logs/D07-probe.txt
+```
+
+**Decision.** (1) > 0 → every outbound item applies to every authority, exported or not (D07-001..053, D07-056..061, D07-065..073, plus the NEW getType/Bundle-form/DocumentsProvider items); the `Requires: provider` tag is satisfied. (1) = 0 **and** (4) = 0 → the whole domain is n/a except the mechanics items D07-074..076, which are untouched. (1) = 0 and (4) > 0 → only the inbound items apply: D07-054, D07-055, D07-062, D07-063, D07-064. A mismatch between (1) and (2) is a `blocked` state (regenerate the inventory with `--all`), never a reason to proceed on the shorter list.
+
+**n/a note text (whole domain):**
+`D07 n/a — merged manifest declares 0 <provider> elements (grep -c '<provider' $DEC/apktool/AndroidManifest.xml = 0, logs/D07-probe.txt) and $DEC/jadx/sources contains no ContentResolver open*/query call, OpenableColumns, DocumentsContract or EXTRA_STREAM use (grep -rl … | wc -l = 0). D07-074..076 are mechanics and stay untouched. Re-run this probe if a later build or a merged SDK manifest adds a provider.`
+
+**n/a note text (outbound only):**
+`D07 outbound n/a — 0 <provider> elements in the merged manifest (logs/D07-probe.txt); inbound items D07-054/055/062/063/064 apply (N URI-consuming sinks found) and are settled on their own rows.`
+
 ## Triage order
 
 1. **Enumerate authorities from the merged manifest and the runtime provider table, then hit each one with
@@ -125,6 +151,7 @@ aapt2 d xmltree target.apk --file AndroidManifest.xml | grep -A8 "E: provider"
 | **VRT** | n/a (rating qualifier) |
 | **Attacker** | AM-03 |
 | **Applies to** | `targetSdkVersion < 17` only — **LEGACY** |
+| **Requires** | targetsdk<17, legacy |
 | **Maps to** | MASTG-TEST-0355; MobSF `exported_provider` family (`ANDROID_4_2_LEVEL = 17`) |
 
 - **Test:** A `<provider>` with no `android:exported` attribute defaults to `true` when the app targets
@@ -153,6 +180,7 @@ adb shell dumpsys package com.target.app | sed -n '/Provider Resolver Table/,/Se
 | **VRT** | n/a (enabler) |
 | **Attacker** | AM-03 |
 | **Applies to** | all; especially apps with bundled SDKs |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TECH-0163 |
 
 - **Test:** The authorities the app's own developers wrote are a subset of the authorities the app ships.
@@ -213,6 +241,7 @@ drozer> run scanner.provider.finduris -a com.target.app
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) where it yields file bytes; `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the access itself |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TECH-0148, MASTG-TEST-0356, MASWE-0018 |
 
 - **Test:** A denial on `query` says nothing about `insert`, `update`, `delete`, `openFile` or `call`.
@@ -247,6 +276,7 @@ adb shell content gettype --uri $A/items
 | **VRT** | n/a (false-positive gate) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | the layer-ordering trap (an error from a layer in front of the auth check does not prove you passed the auth check) |
 
 - **Test:** This is the provider form of the layer-ordering trap. Testers read "no `SecurityException`" as
@@ -285,6 +315,7 @@ adb shell content query --uri content://com.target.app.provider 2>&1 | head -3
 | **VRT** | n/a (false-positive gate) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TECH-0148 (the `content` command "executes in the context of the shell user") |
 
 - **Test:** `adb shell content` runs as uid 2000, which holds platform permissions no third-party app has.
@@ -318,6 +349,7 @@ Log.i("poc", DatabaseUtils.dumpCursorToString(c));
 | **VRT** | n/a (false-negative gate) |
 | **Attacker** | AM-03 |
 | **Applies to** | any PoC/attacker app whose own `targetSdkVersion >= 30`, running on Android 11+ |
+| **Requires** | provider, device |
 | **Maps to** | package visibility — free below targetSdk 30, filtered at 30+; MASTG-TECH-0148 (the `content` command runs as `shell`) |
 
 - **Test:** Package visibility is filtered for a caller that itself targets SDK 30 or above. An undeclared
@@ -364,6 +396,7 @@ adb logcat -c && adb shell am start -n com.poc.probe/.MainActivity && adb logcat
 | **VRT** | n/a (methodology control) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | the Shell-Loop Ban — zsh array expansion fails silently and the output still looks complete |
 
 - **Test:** A provider sweep is the classic case: dozens of authorities crossed with a dozen path variants
@@ -404,6 +437,7 @@ assert done == expected, "loop ate probes"
 | **VRT** | n/a (deliverable) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | the ruled-out register (`templates/ruled-out-table.md`) |
 
 - **Test:** "The scanner found nothing" is not a negative. A ruled-out entry must carry the evidence that
@@ -432,6 +466,7 @@ done | tee /tmp/provider_negatives.txt
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 on a secondary user / work profile |
 | **Applies to** | Android 5+ multi-user; Private Space Android 15+ |
+| **Requires** | provider, device, api>=35 |
 | **Maps to** | Google's Android & Google Devices scope: "Multi-User & Private Space: Cross-user sensitive data access" |
 
 - **Test:** Everyone queries as user 0. Cross-user data access is an explicitly purchased impact class, and
@@ -461,6 +496,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/x' --u
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | MASTG-TEST-0355; `guide/topics/manifest/provider-element` |
 
 - **Test:** The two directions are independent and are enforced independently. Declaring only
@@ -490,6 +526,7 @@ adb shell content update --uri content://com.target.app.provider/settings \
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | `guide/topics/manifest/provider-element` (readPermission/writePermission take precedence over permission) |
 
 - **Test:** `android:readPermission` and `android:writePermission` *override* `android:permission` for their
@@ -522,6 +559,7 @@ PY
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | MASTG-TEST-0355; D03 permission model |
 
 - **Test:** A provider guarded by `com.target.app.permission.READ_DATA` is only as strong as that
@@ -553,6 +591,7 @@ adb shell dumpsys package com.poc.stub | grep -A20 'requested permissions'
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) where it returns or sets auth state; `broken_access_control.exposed_sensitive_android_intent` (VARIES) otherwise |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers overriding `call()` |
+| **Requires** | provider |
 | **Maps to** | QARK `INSECURE_FUNCTIONS_NAMES = ("call",)` — "The framework does no permission checking on this entry into the content provider besides the basic ability for the application to get access to the provider at all"; drozer `app.provider.call` |
 
 - **Test:** Beyond the provider-acquisition check, the platform applies no permission logic to `call()`.
@@ -586,6 +625,7 @@ drozer> run app.provider.call content://com.target.app.provider \
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers that authorise by path |
+| **Requires** | provider |
 | **Maps to** | `guide/topics/providers/content-provider-creating`; `guide/topics/manifest/provider-element` (`<path-permission>` is path-scoped) |
 
 - **Test:** `ContentProvider.call(authority, method, arg, extras)` is addressed by *authority and method
@@ -617,6 +657,7 @@ adb shell content call --uri content://com.target.app.provider --method readKeys
 | **VRT** | n/a (enabler for D07-015) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers overriding `call()` |
+| **Requires** | provider |
 | **Maps to** | drozer `app.provider.call`; MASTG-TECH-0148 |
 
 - **Test:** `call()` method names are never in the manifest and rarely in a string resource you would
@@ -644,6 +685,7 @@ jadx-gui out/target.apk   # navigate to the provider class, read call() top to b
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) for the access; `server_side_injection.file_inclusion.local` (P1) where `openTypedAssetFile` yields file bytes |
 | **Attacker** | AM-03 |
 | **Applies to** | all; probe from a PoC app, because `adb shell content` cannot reach most of these |
+| **Requires** | provider, device |
 | **Maps to** | QARK `INSECURE_FUNCTIONS_NAMES = ("call",)` — "The framework does no permission checking on this entry into the content provider besides the basic ability for the application to get access to the provider at all" — generalised to the rest of the overridable surface; MASTG-TECH-0148 |
 
 - **Test:** `adb shell content` gives you `query`, `insert`, `update`, `delete`, `call`, `read`, `write`
@@ -656,7 +698,7 @@ jadx-gui out/target.apk   # navigate to the provider class, read call() top to b
   itself does before it reaches the data.
 - **How:** Enumerate what the app actually overrides, then probe each override from a PoC app:
 ```bash
-grep -rnE 'public [A-Za-z<>\[\]]+ (getType|getTypeAnonymous|getStreamTypes|openTypedAssetFile|bulkInsert|applyBatch|refresh|canonicalize|uncanonicalize|checkUriPermission)\(' jadx_out/sources/
+grep -rnE 'public [A-Za-z<>\[\]]+ (getType|getTypeAnonymous|getStreamTypes|openTypedAssetFile|bulkInsert|applyBatch|refresh|canonicalize|uncanonicalize|checkUriPermission)\(' $DEC/jadx/sources/
 # an override that is NOT in this list is the framework's base implementation - note that and move on
 ```
 ```java
@@ -694,6 +736,7 @@ try { Log.i("poc","refresh="      + cr.refresh(u,null,null)); }                 
 | **VRT** | `broken_access_control.idor.modify_sensitive_information_iterable_object_identifiers` (P2) where the batch flips a security-relevant column; `broken_access_control.exposed_sensitive_android_intent` (VARIES) otherwise |
 | **Attacker** | AM-03 |
 | **Applies to** | providers that override `bulkInsert()` or `applyBatch()`; requires a PoC app — the CLI has no batch verb |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TECH-0148 (the CLI's verb set), MASWE-0018; the "batch operations are atomic and consistent" checklist line that no public methodology actually tests |
 
 - **Test:** The `content` CLI has no batch verb, so an override of `bulkInsert()` or `applyBatch()` is a
@@ -705,8 +748,8 @@ try { Log.i("poc","refresh="      + cr.refresh(u,null,null)); }                 
   loops the operations can be handed a batch whose later operations point somewhere else entirely.
 - **How:** Confirm the overrides exist, then build a batch whose operations disagree with each other:
 ```bash
-grep -rnA30 'public int bulkInsert(\|public ContentProviderResult\[\] applyBatch(' jadx_out/sources/
-grep -rn 'beginTransaction\|setTransactionSuccessful\|yieldIfContendedSafely' jadx_out/sources/ | grep -i 'provider'
+grep -rnA30 'public int bulkInsert(\|public ContentProviderResult\[\] applyBatch(' $DEC/jadx/sources/
+grep -rn 'beginTransaction\|setTransactionSuccessful\|yieldIfContendedSafely' $DEC/jadx/sources/ | grep -i 'provider'
 ```
 ```java
 ArrayList<ContentProviderOperation> ops = new ArrayList<>();
@@ -745,6 +788,7 @@ Log.i("poc","bulkInsert rows=" + n);
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | providers declaring `<path-permission>` |
+| **Requires** | provider, device |
 | **Maps to** | `guide/topics/manifest/provider-element` (`path`, `pathPrefix`, `pathPattern`, `pathSuffix`, `pathAdvancedPattern`) |
 
 - **Test:** `<path-permission>` protects only the paths its attribute matches. `android:path` is an exact
@@ -777,6 +821,7 @@ adb shell content query --uri content://com.target.app.provider/Protected       
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers doing path-based authorisation |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0355 (the Sieve example); HackTricks `drozer-tutorial/exploiting-content-providers.md` — "the path `/Keys/` is accessible ... which is not protected due to a mistake by the developer, who secured `/Keys` but declared `/Keys/`" |
 
 - **Test:** The canonical provider bug and still a live one. A `<path-permission android:path="/Keys">`
@@ -808,6 +853,7 @@ Keys/  -> Row: 0 Password=1234567890AZERTYUIOPazertyuiop, pin=1234
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | sec-88 "Content Provider Hacking" Case 1 (permission bypass by appending `/////`); MASTG-TECH-0163 |
 
 - **Test:** Never treat an authority as one object. `addURI()` patterns and the permission-checking branch
@@ -840,6 +886,7 @@ done
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | providers that authorise on the caller's identity |
+| **Requires** | provider |
 | **Maps to** | AOSP `ContentProvider.java` javadoc: `getCallingPackage()` — "The returned package will have been verified to belong to the calling UID"; `getCallingPackageUnchecked()` — "will have **not** been verified" |
 
 - **Test:** A provider that self-authorises using `getCallingPackageUnchecked()` (or the package name out of
@@ -869,6 +916,7 @@ grep -rn -B4 -A20 'getCallingPackageUnchecked' out/sources/
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 (needs a grant primitive from D08) |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | `guide/topics/manifest/provider-element`: if `"true"`, permission is grantable to any data in the provider, overriding the other permission attributes; if `"false"`, only the subsets in `<grant-uri-permission>` may be granted |
 
 - **Test:** `grantUriPermissions="true"` at provider level means *any* URI under the authority can be handed
@@ -897,6 +945,7 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider |
 | **Maps to** | Oversecured "Gaining access to arbitrary Content Providers"; `risks/intent-redirection` |
 
 - **Test:** The single most common wrongly-recorded negative in this domain. A redirected or echoed Intent
@@ -925,6 +974,7 @@ grep -rnE 'setResult\(|startActivity\(.*getIntent|startActivityForResult\(.*getP
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03/AM-04 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | MASWE-0018 (CWE-940) — "over-broad or persistable URI permission grants ... where one-time, scoped sharing would suffice"; `content/Intent.java` grant flag constants |
 
 - **Test:** An app that shares one photo with `FLAG_GRANT_PREFIX_URI_PERMISSION` has shared the directory.
@@ -953,6 +1003,7 @@ adb shell dumpsys activity permissions | sed -n '/Granted Uri Permissions/,/^$/p
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-03/AM-04, recipient of a legitimate share |
 | **Applies to** | all with SAF / share flows |
+| **Requires** | provider, device |
 | **Maps to** | MASWE-0018; `takePersistableUriPermission`; HackTricks `intent-injection.md` (`0x43` = READ `0x1` + WRITE `0x2` + PERSISTABLE `0x40`) |
 
 - **Test:** The corpus covers `takePersistableUriPermission` only defensively; nobody tests **retention**.
@@ -985,6 +1036,7 @@ adb shell dumpsys activity providers | sed -n '/Granted Uri Permissions/,/^$/p'
 | **VRT** | `server_side_injection.file_inclusion.local` (P1); fallback `server_security_misconfiguration.path_traversal` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers implementing any `open*` method |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TECH-0159; MASWE-0050; `risks/path-traversal`; CVE-2025-48636 (`openFile` of `BugreportContentProvider.java`, read+write of unauthorised files, CVSS 8.4); CVE-2024-43089 and CVE-2023-35670 (MediaProvider `openFile` traversal) |
 
 - **Test:** The provider builds a `File` from a URI path segment and returns a `ParcelFileDescriptor`
@@ -1027,6 +1079,7 @@ getContentResolver().openInputStream(Uri.parse(
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all — every Android version |
+| **Requires** | provider, device |
 | **Maps to** | Oversecured "Content Providers and the potential weak spots they can have" (§Path Traversal via Uri Decoding) and "Android security checklist: theft of arbitrary files"; the Google app `CommonContentProvider` case; MASWE-0050 |
 
 - **Test:** `Uri.getPath()`, `Uri.getLastPathSegment()` and `Uri.getPathSegments()` return **decoded**
@@ -1061,6 +1114,7 @@ adb shell content read --uri 'content://com.target.app.provider/..%2Fdatabases%2
 | **VRT** | n/a (technique — the canary alone is never the report; the pivot lands on D07-028) |
 | **Attacker** | AM-03 |
 | **Applies to** | all file-backed providers |
+| **Requires** | provider, device |
 | **Maps to** | drozer `scanner.provider.traversal`, `app.provider.read` |
 
 - **Test:** Traversal depth is not statically knowable — it depends on where the provider's root sits.
@@ -1094,6 +1148,7 @@ adb shell content read --uri "content://com.target.app.provider/../../../data/da
 | **VRT** | n/a (triage control) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | drozer `app.provider.read`/`download` error shape: `java.io.FileNotFoundException: No files supported by provider at content://...` |
 
 - **Test:** An authority that resolves but where every `content query` fails is almost always an `openFile`
@@ -1127,6 +1182,7 @@ grep -rn 'public Cursor query(\|public ParcelFileDescriptor openFile(\|extends F
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all file-backed providers |
+| **Requires** | provider, device |
 | **Maps to** | drozer `scanner/provider/traversal.py` source (one fixed payload); Oversecured file-theft checklist |
 
 - **Test:** Naive `contains("..")` filters, single-pass `replace("../","")` sanitisers and decode-order bugs
@@ -1163,6 +1219,7 @@ done
 | **VRT** | n/a (false-negative control) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | drozer `scanner/provider/traversal.py`, read directly: it calls `contentResolver().read(uri + "/../../../../../../../../../../../../../../../../etc/hosts")` and flags the URI **only** if the returned data is non-empty |
 
 - **Test:** The scanner sends exactly one payload against exactly one file, with a fixed 16-level prefix and
@@ -1193,6 +1250,7 @@ drozer> run app.provider.download content://<auth>/a/../../../../data/data/com.t
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all providers implementing `openFile` |
+| **Requires** | provider, device |
 | **Maps to** | Oversecured "Permission Mismatch in File Access" / "Incorrect Permission Declaration"; `guide/topics/manifest/provider-element` |
 
 - **Test:** The framework checks the caller's requested **mode** against the read or the write permission,
@@ -1231,6 +1289,7 @@ adb shell content read  --uri 'content://com.target.app.provider/config'
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) once execution is demonstrated; `server_security_misconfiguration.path_traversal` (VARIES) for the write alone |
 | **Attacker** | AM-03 |
 | **Applies to** | providers whose `open*` honours a write mode |
+| **Requires** | provider, device |
 | **Maps to** | CVE-2025-48636; Oversecured `TheftOverwriteProvider` (OVAA); Google Mobile VRP: "Path traversal / zip path traversal vulnerabilities leading to arbitrary file write" — and the explicit rule that "if you do not demonstrate this [ACE] in your report, the reward amount will not reflect this" |
 
 - **Test:** The same primitive as D07-028 in the other direction. The write alone underpays; plan the
@@ -1266,6 +1325,7 @@ adb logcat -s pwn:V
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | providers using `openFileHelper()` or a `_data`-style path column |
+| **Requires** | provider, device |
 | **Maps to** | HackTricks `content-protocol.md` (seeding MediaStore's `_data` column and reading it back); MASTG-TECH-0148 |
 
 - **Test:** `ContentProvider.openFileHelper(uri, mode)` opens whatever path sits in the row's `_data`
@@ -1300,6 +1360,7 @@ adb shell content query  --uri content://media/external/file --projection _id,_d
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03/AM-04 |
 | **Applies to** | providers that canonicalise once and open later |
+| **Requires** | provider, device, root |
 | **Maps to** | `risks/content-resolver` (documented symlink-targeting and check/open race); Google VRP remediation tip: "Verify that the canonical path ... right before doing file operations ... Watch out for TOCTOU issues. Symlinks can change at any time." |
 
 - **Test:** A provider that calls `getCanonicalPath()`, validates the prefix, and *then* opens the file has
@@ -1334,6 +1395,7 @@ val sameFile = pfdStat.st_dev == canonicalFileStat.st_dev && pfdStat.st_ino == c
 | **VRT** | `server_side_injection.sql_injection` (P1) — note it is defined server-side; file the closest accurate node and request the severity |
 | **Attacker** | AM-03 |
 | **Applies to** | all SQLite-backed providers |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0339, MASTG-TEST-0025, MASWE-0050 (CWE-89, CWE-20), MASTG-KNOW-0117, rule `mastg-android-sql-injection-contentprovider.yml`, MASTG-TOOL-0110; H1 #291764 (Nextcloud, Low 0.9, $150), #1650264 (ownCloud, Medium 4.2, GHSL-2022-059), #887968 (Mail.ru `ru.mail.data.contact.ContactsProvider`), #143280 (Mail.ru, $250) |
 
 - **Test:** Establish that your string reaches SQL, then break it. A vulnerable provider's error leaks the
@@ -1381,6 +1443,7 @@ grep -rn 'selectionArgs\|setStrict\|setProjectionMap' out/sources/   # absence i
 | **VRT** | `server_side_injection.sql_injection` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all SQLite-backed providers |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0339; drozer `scanner.provider.injection` classification `Injection in Projection`; sec-88 "Content Provider Hacking" §2 Case 1 |
 
 - **Test:** `projection` is never parameterisable — it is a column list spliced into the `SELECT` clause, so
@@ -1415,6 +1478,7 @@ drozer> run scanner.provider.sqltables -a com.target.app
 | **VRT** | `server_side_injection.sql_injection` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all SQLite-backed providers |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0339; `risks/sql-injection` |
 
 - **Test:** `sortOrder` is spliced into `ORDER BY` and is as unparameterisable as `projection`. It is the
@@ -1443,6 +1507,7 @@ adb shell content query --uri $A --sort "_id LIMIT 1 OFFSET 0--"
 | **VRT** | `server_side_injection.sql_injection` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | providers whose `UriMatcher` routes a `*` wildcard segment into SQL |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0339 and rule `mastg-android-sql-injection-contentprovider.yml` (the exact shape: a variable from `Uri.getPathSegments().get(...)` reaching `SQLiteQueryBuilder.appendWhere()`); MASTG-KNOW-0117; H1 #1650264 / GHSL-2022-059 |
 
 - **Test:** A second, distinct sink from the `selection` parameter: the provider concatenates a URI path
@@ -1480,6 +1545,7 @@ count = db.delete(ProviderTableMeta.FILE_TABLE_NAME,
 | **VRT** | `server_side_injection.sql_injection` (P1); `broken_authentication_and_session_management.authentication_bypass` (P1) when it reads OTP SMS |
 | **Attacker** | AM-03 |
 | **Applies to** | exported providers with `writePermission` absent |
+| **Requires** | provider, device |
 | **Maps to** | **CVE-2025-10184** (OnePlus OxygenOS Telephony provider permission bypass); HackTricks `drozer-tutorial/exploiting-content-providers.md`, `android-checklist.md`; H1 #1650264 (GHSL-2022-059) |
 
 - **Test:** `query()` is the method everyone tests. The write methods take a caller-controlled `WHERE` too,
@@ -1520,6 +1586,7 @@ adb shell content update --uri content://service-number/service_number --bind ro
 | **VRT** | `server_side_injection.sql_injection` (P1) |
 | **Attacker** | AM-03 (holding any legitimate grant on the provider) |
 | **Applies to** | any provider that AND-glues the caller's selection onto its own scope constraint |
+| **Requires** | provider, device |
 | **Maps to** | **CVE-2026-28576** (Android 17 Contacts Provider), GHSA-ph86-9mcx-3p6r (CVSS v4 10.0 per GitHub's advisory; High in the Android bulletin), PoC `github.com/mobilehackinglab/CVE-2026-28576-poc`; **CVE-2022-20518** (`MmsSmsProvider.java`, "possible access to restricted tables due to SQL injection", OSV `PUB-A-224770203`) |
 
 - **Test:** The interesting question is never "can I break out of the `WHERE` clause" — paren-wrapping
@@ -1566,6 +1633,7 @@ WHERE (_id=? AND lookup=?)          -- the provider's ENTIRE grant enforcement
 | **VRT** | n/a (negative control) |
 | **Attacker** | AM-03 |
 | **Applies to** | Android builds exposing the compat change; `am compat` itself is Android 10+ |
+| **Requires** | provider, device |
 | **Maps to** | CVE-2026-28576 "The Patched Behavior"; compat change `ENFORCE_STRICT_SQL_CHECKS` id `484953293`, `enableAfterTargetSdk="36"`; `SQLiteQueryBuilder.setStrictGrammar()` |
 
 - **Test:** Before you claim an injection, prove the defence exists and that you are outside it. Android's
@@ -1597,6 +1665,7 @@ adb shell am compat reset 484953293 com.poc.stub
 | **VRT** | `server_side_injection.sql_injection` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps declaring two or more providers over one database file |
+| **Requires** | provider, device |
 | **Maps to** | Oversecured content-providers post (§SQL Injection via Selection Parameters); H1 #518669 |
 
 - **Test:** The permission boundary between two providers is void if they share one `SQLiteOpenHelper` or
@@ -1632,6 +1701,7 @@ query(Uri.parse("content://com.target.app.insensitive/"), null,
 | **VRT** | `server_side_injection.sql_injection` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | providers with more than two `UriMatcher` arms |
+| **Requires** | provider, device |
 | **Maps to** | H1 #518669 (Nextcloud, Low 0.9, $100) — the caller check runs for `ROOT_DIRECTORY`/`SINGLE_FILE`/`DIRECTORY` but the projection-map restriction is applied only when `mUriMatcher.match(uri) == ROOT_DIRECTORY` |
 
 - **Test:** Providers restrict columns or check the caller for the "root" URI and forget the sibling
@@ -1663,6 +1733,7 @@ Row: 0 _id=1, file_source=71580, share_type=3, path=/Nextcloud.mp4, token=rkNCkc
 | **VRT** | n/a (false-negative control) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | drozer `scanner/provider/injection.py` source: it issues `query(uri, projection=["'"])` and `query(uri, selection="'")` and marks the URI vulnerable **only** if the exception text contains `"unrecognized token"`; reports under `Injection in Projection:` / `Injection in Selection:` |
 
 - **Test:** Any provider that catches the exception, returns an empty cursor, or emits a different SQLite
@@ -1696,6 +1767,7 @@ drozer> run app.provider.query content://<auth>/users --selection "_id=1 OR 1=1-
 | **VRT** | n/a (tooling) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | drozer `auxiliary.webcontentresolver` — "Start a Web Service interface to Content Providers. This allows you to use web application testing capabilities and tools to test content providers." |
 
 - **Test:** Turning a suspected blind provider injection into a demonstrated full-table dump by hand is slow.
@@ -1727,6 +1799,7 @@ curl 'http://127.0.0.1:8080/query?uri=content://com.target.app.provider/users&se
 | **VRT** | n/a (false-positive gate) |
 | **Attacker** | AM-03 |
 | **Applies to** | every blind or boolean provider claim |
+| **Requires** | provider, device |
 | **Maps to** | the Body-Diff Rule (a byte-identical result is not a bypass) and the Statistical-Sample Rule (n>=10 interleaved trials, >=2 sigma) |
 
 - **Test:** Two failure modes kill provider-injection reports at triage. (a) **Body-diff**: a cursor with
@@ -1772,6 +1845,7 @@ for k,v in res.items():
 | **VRT** | n/a (false-positive gate) |
 | **Attacker** | AM-03 |
 | **Applies to** | every provider write or "my data appeared in the app" claim |
+| **Requires** | provider, device |
 | **Maps to** | Marker Discipline — 8+ character random markers, and search the BASELINE for the marker first |
 
 - **Test:** A provider write is only proven if the value you see afterwards is unmistakably yours. Writing
@@ -1808,6 +1882,7 @@ adb logcat -d | grep "$M"
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) — argue P1/P2 on the permission re-delegation |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | Oversecured content-providers post (§Proxying to Unintended Providers: "Developers should avoid proxying requests to other providers"); `risks/content-resolver` |
 
 - **Test:** A provider that takes a URI as a *parameter* — a path segment, a query parameter, a `call()`
@@ -1851,6 +1926,7 @@ fun wasGrantedPermission(ctx: Context, uri: Uri?, grantFlag: Int): Boolean =
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps holding a dangerous permission and exposing a provider |
+| **Requires** | provider, device |
 | **Maps to** | Oversecured Class #6/#31 provider-to-provider proxying; T1636 Protected User Data (.001–.005) |
 
 - **Test:** The narrower, more common cousin of D07-051: the provider does not take an arbitrary URI, it
@@ -1886,6 +1962,7 @@ adb shell ls -la /sdcard/Android/data/com.target.app/files /sdcard/Download 2>/d
 | **VRT** | `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3), rising to P1 where the objects are other users' |
 | **Attacker** | AM-03 |
 | **Applies to** | image, avatar, thumbnail and document-preview providers |
+| **Requires** | provider, device |
 | **Maps to** | HackTricks "Exported provider as a confused deputy"; the Google Messages `AvatarContentProvider` contacts bypass (fixed 2026-06-12, rewarded through the Mobile VRP) |
 
 - **Test:** A deputy that returns a **stable fallback** for missing objects — a default avatar, a
@@ -1925,6 +2002,7 @@ PY
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03 (delivery via an exported component) / AM-02 (via a deep link) |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | `risks/content-resolver` (MASVS-PLATFORM) — the documented variants: fully attacker-controlled `file://`, partially controlled with traversal, a `file://` to an attacker-controlled symlink, and a check/open race; H1 #876192 "Cookie steal through content Uri", #288955 "[IRCCloud Android] Theft of arbitrary files leading to token leakage", #161710 "Possible to steal any protected files on Android" |
 
 - **Test:** `openFile()`, `openFileDescriptor()`, `openInputStream()`, `openOutputStream()` and
@@ -1967,6 +2045,7 @@ boolean ok = real.startsWith(Paths.get(ctx.getApplicationInfo().dataDir));
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | device |
 | **Maps to** | `guide/components/intents-filters` data-test rules, quoted: an intent passes the URI test if "it has a `content:` or `file:` URI and the filter does not specify a URI format. In other words, a component is presumed to support `content:` and `file:` data if its filter lists *only* a MIME type." |
 
 - **Test:** A filter declaring only `<data android:mimeType="image/*"/>` with no `scheme` is an open door
@@ -1995,6 +2074,7 @@ adb shell am start -a android.intent.action.SEND -t 'image/*' \
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | Oversecured file-theft checklist: "It's important to note that they do not necessarily need to be exported. Android only checks rights when an attempt is made to access data, but the vulnerable app will be receiving access to one of its resources, and no restrictions will come into play." |
 
 - **Test:** The vector most testers skip after reading `exported="false"`. Android checks the rights of the
@@ -2028,6 +2108,7 @@ adb shell am start -n com.target.app/.ImportActivity \
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) when reachable; `server_security_misconfiguration.path_traversal` (VARIES) for the configuration |
 | **Attacker** | AM-03 (needs an exported provider or a grant primitive) |
 | **Applies to** | all apps declaring a FileProvider |
+| **Requires** | provider |
 | **Maps to** | MASTG-TEST-0357, MASTG-TECH-0159, rule `mastg-android-fileprovider-broad-scope.yml`, MASWE-0018 (CWE-939, CWE-940), MASWE-0002; `risks/file-providers` — "Do not use `<root-path>` in the configuration ... could enable an attacker to access sensitive information stored in databases or overwrite the application's native libraries"; AndroidX `FileProvider.java` `TAG_ROOT_PATH` -> `"/"`; H1 #1161401 (Nextcloud, Low 1.3, $250); Oversecured TikTok `<root-path name="name" path="" />` |
 
 - **Test:** The paths XML is the whole access-control surface of a FileProvider. Each element maps a URI
@@ -2083,6 +2164,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/../dat
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4) for the resting data; the provider read is what lifts it |
 | **Attacker** | AM-03/AM-04 |
 | **Applies to** | apps declaring `<external-path>` |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0357; `risks/file-providers` — `<external-path>` should be avoided "unless you have explicitly verified that the information being stored/shared is not sensitive. Never store PII using this element"; MASTG-KNOW-0042 (external storage, `owner_package_name` attribution) |
 
 - **Test:** `<external-path>` maps the shared volume, which is not part of the app sandbox at all. Anything
@@ -2111,6 +2193,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/external/Dow
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03/AM-02 |
 | **Applies to** | all apps calling `getUriForFile` |
+| **Requires** | provider |
 | **Maps to** | MASTG-TEST-0357 — "Determine whether `FileProvider.getUriForFile()` is called with attacker-controlled input (for example, values derived from URI query parameters or user input)"; MASTG-TECH-0159, MASTG-KNOW-0138 |
 
 - **Test:** Even a narrowly-scoped provider becomes a read primitive if the `File` argument comes from
@@ -2145,6 +2228,7 @@ adb shell am start -W -a android.intent.action.VIEW \
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the recovered file is a live backend credential |
 | **Attacker** | AM-03 |
 | **Applies to** | CURRENT AndroidX FileProvider |
+| **Requires** | provider |
 | **Maps to** | AndroidX `FileProvider.java` canonicalisation; triage-pushback discipline (concede the unreachable half) |
 
 - **Test:** `<files-path path="."/>` exposes the whole of `getFilesDir()`, but AndroidX `FileProvider`
@@ -2177,6 +2261,7 @@ adb shell content read --uri 'content://com.target.app.fileprovider/files/sessio
 | **VRT** | n/a (false-positive gate) |
 | **Attacker** | n/a |
 | **Applies to** | all FileProviders |
+| **Requires** | provider |
 | **Maps to** | MASTG-TEST-0250, MASTG-TEST-0357 — `android:grantUriPermissions` **must** be `true` for a FileProvider by definition, otherwise it throws `SecurityException: Provider must grant uri permissions` |
 
 - **Test:** Scanners and inexperienced testers file `grantUriPermissions="true"` on a FileProvider as a
@@ -2201,6 +2286,7 @@ grep -n -B2 -A6 'androidx.core.content.FileProvider\|android.support.v4.content.
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) once execution is shown; `server_security_misconfiguration.path_traversal` (VARIES) for the write |
 | **Attacker** | AM-03 (the victim must open/accept the share — one interaction) |
 | **Applies to** | every app with a share target, attachment, file-import or "open with" flow |
+| **Requires** | device |
 | **Maps to** | `risks/untrustworthy-contentprovider-provided-filename` — **CWE-73: External Control of Filename or Path**, MASVS-CODE; MASWE-0050; Microsoft "Dirty Stream" (2024-05-01): Xiaomi File Manager `com.mi.android.globalFileexplorer` 1B+ installs (vulnerable V1-210567, fixed V1-210593), WPS Office `cn.wps.moffice_eng` 500M+ installs (vulnerable 16.8.1, fixed 17.0.0), 4B+ installs total; H1 #1115864 (Mattermost, High 7.8), #1362313 / #1377748 (Evernote, same root cause) |
 
 - **Test:** The inverted direction, and the single most commonly missed ContentProvider test. When the app
@@ -2262,6 +2348,7 @@ startActivity(i);
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-03 (the victim must pick your app in the chooser, or you win on priority) |
 | **Applies to** | apps calling `startActivityForResult` with `ACTION_PICK` / `ACTION_GET_CONTENT` / `IMAGE_CAPTURE` / `CROP` |
+| **Requires** | device |
 | **Maps to** | Oversecured "theft of arbitrary files" Class #13 and the 7-vector list; H1 #288955, #161710 |
 
 - **Test:** The victim launches a picker; a malicious responder returns a `file://` URI pointing at the
@@ -2299,6 +2386,7 @@ finish();
 | **VRT** | `server_side_injection.remote_code_execution_rce` (P1) when the write lands on a loaded artefact |
 | **Attacker** | AM-03 |
 | **Applies to** | apps with restore, import or migration flows that accept tree/document URIs |
+| **Requires** | device |
 | **Maps to** | HackTricks `android-applications-basics.md` "DocumentProvider restore/import path traversal"; H1 #859469 (LINE Android, ZIP extract traversal, $475), #284346 |
 
 - **Test:** When an exported receiver, service or activity accepts `DocumentsContract` tree/document URIs
@@ -2344,6 +2432,7 @@ adb push evil.zip /sdcard/ && adb shell am start -a android.intent.action.VIEW \
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | all — **including providers declared `exported="false"`** |
+| **Requires** | provider, device |
 | **Maps to** | Oversecured Class #8; T1641 Data Manipulation |
 
 - **Test:** Developers model providers as CRUD, so nobody audits the maintenance code they put inside them:
@@ -2376,6 +2465,7 @@ adb shell ls -la /sdcard/Download /sdcard/Android/data/com.target.app/files
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-03/AM-04 (needs slice permission, or be a slice host) |
 | **Applies to** | apps shipping AndroidX Slices |
+| **Requires** | provider |
 | **Maps to** | `guide/slices/getting-started` (the documented provider XML with `android.app.slice.category.SLICE`); MASWE-0036 |
 
 - **Test:** Slices are bound by external hosts (Assistant, system search), and the documented setup exports
@@ -2405,6 +2495,7 @@ adb shell content query --uri 'content://com.target.app/account/balance'
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps implementing or consuming a cloud media provider |
+| **Requires** | provider |
 | **Maps to** | `training/data-storage/shared/photopicker` (cloud media providers), `guide/topics/providers/cloud-media-provider` |
 
 - **Test:** The Photo Picker can surface media from an eligible cloud media provider. If the app under test
@@ -2434,6 +2525,7 @@ adb shell dumpsys package com.target.app | grep -i cloud
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for a live backend credential; `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) for another user's records; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) otherwise |
 | **Attacker** | AM-03 |
 | **Applies to** | all |
+| **Requires** | provider, device |
 | **Maps to** | MASTG-TEST-0356, MASWE-0018; Google Mobile VRP "Theft of sensitive data": "Insecurely designed app internals like content providers or activities that can be manipulated to expose sensitive data", CWE-359; H1 #242727 (Nextcloud, bcrypt hashes of password-protected shares, Low, $75), #331302 (Nextcloud, `content://org.nextcloud/arbitrary_data` holding E2EE private keys), #272044 (Dropbox, $1,000); CVE-2019-14339 (Canon PRINT 2.5.5, EDB 47321) |
 
 - **Test:** The severity is set entirely by the columns, so inventory them by sensitivity rather than
@@ -2470,6 +2562,7 @@ done
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps with both a metadata provider and a file/thumbnail/cache provider |
+| **Requires** | provider, device |
 | **Maps to** | H1 #534541 (Nextcloud, Low 3.4, $100), #489105 (the prior thumbnail issue) — `DiskLruImageCacheFileProvider` should not have been exported |
 
 - **Test:** A provider that is "only" a file listing is not a finding on its own, and a cache provider that
@@ -2502,6 +2595,7 @@ grep -rn 'android:authorities' out/AndroidManifest.xml | grep -iE 'cache|image|t
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1) |
 | **Attacker** | AM-03 -> AM-01 |
 | **Applies to** | all |
+| **Requires** | provider, backend-api |
 | **Maps to** | the shadow/zombie-API discipline — old versions stay reachable without receiving the same fixes, and **mobile builds are the number-one source of old-version endpoints**; H1 #518669 (a provider-recovered share token forged a working public URL) |
 
 - **Test:** A provider row is not the end of the finding, it is the input to the next one. Providers carry
@@ -2549,6 +2643,7 @@ curl -s -o /dev/null -w '%{http_code}\n' "https://target.example/index.php/s/rkN
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (VARIES); `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) if the signed URL is replayable by anyone |
 | **Attacker** | AM-03 |
 | **Applies to** | apps using `DownloadManager` |
+| **Requires** | device |
 | **Maps to** | `reference/android/app/DownloadManager` — `Request.setDestinationInExternalPublicDir()`, `Request.addRequestHeader()`, `COLUMN_LOCAL_URI`, `Request.setVisibleInDownloadsUi()` |
 
 - **Test:** Three questions, not one. Where does the downloaded document rest, is the download URL (with its
@@ -2581,6 +2676,7 @@ adb shell content query --uri content://downloads/all_downloads
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (VARIES) |
 | **Attacker** | AM-03/AM-04 |
 | **Applies to** | Scoped storage from Android 10 (API 29); `requestLegacyExternalStorage` ignored at targetSdk 30+; `READ_EXTERNAL_STORAGE` has no effect from Android 13 (API 33); `OWNER_PACKAGE_NAME` redaction from Android 14 |
+| **Requires** | device |
 | **Maps to** | MASTG-KNOW-0042, MASTG-TEST-0202, MASTG-TEST-0254, MASTG-TOOL-0004; `about/versions/14/behavior-changes-all` (`OWNER_PACKAGE_NAME` redaction, `QUERY_ALL_PACKAGES`) |
 
 - **Test:** Two questions. (a) Can the app read media belonging to other apps, and does it hold
@@ -2615,6 +2711,7 @@ adb shell content query --uri content://media/external_primary/file
 | **VRT** | `application_level_denial_of_service_dos` (VARIES) — availability only, and **only if the experiment confirms it**; see the doctrine note below |
 | **Attacker** | AM-03 |
 | **Applies to** | apps using AndroidX App Startup or any fixed-authority initialiser |
+| **Requires** | provider, device |
 | **Maps to** | `topic/libraries/app-startup` (authority format `${applicationId}.androidx-startup`, `android:exported="false"`). **The collision behaviour itself is unverified — do not report it as fact without running the experiment.** |
 
 - **Test:** Android refuses to install a package whose provider authority is already claimed by an installed

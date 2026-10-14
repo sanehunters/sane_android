@@ -52,6 +52,37 @@ app's intent — reach a parser inside this app that hands attacker-controlled b
 the user's session, and is the entry point ownership-verified on the device or merely claimed in the
 manifest?**
 
+## Applicability probe
+
+Run these before loading any item; they decide whether the domain applies, and which half. `$DEC` = `$E/decompiled`, `$PKG`, `$SERIAL` and `$E` come from `engagement.json`. Paste the five outputs into `logs/D09-probe.txt`.
+
+```bash
+mkdir -p "$E/logs/D09"
+# 1. Manifest: any data-bearing intent filter at all — BROWSABLE or not (non-BROWSABLE VIEW and NDEF filters are AM-03/tag-reachable)
+grep -cE 'android:scheme=' "$DEC/apktool/AndroidManifest.xml"
+grep -cE 'android.intent.category.BROWSABLE|android.nfc.action.NDEF_DISCOVERED' "$DEC/apktool/AndroidManifest.xml"
+grep -c 'android:autoVerify="true"' "$DEC/apktool/AndroidManifest.xml"          # >0 → the App Links half (D09-014..025, -055) applies
+# 2. Inventory: the P3 row count (one row per scheme × authority × path)
+tail -n +2 "$E/inventory/deeplinks.csv" | wc -l
+# 3. Code-side routers and framework handoffs — the manifest can be empty and the domain still apply (emitted schemes, SDK routers, Flutter default-on)
+grep -rlE 'getIntent\(\)\.getData\(\)|onNewIntent|Intent\.parseUri|getQueryParameter\(|Linking\.|flutter_deeplinking' "$DEC/jadx/sources" "$DEC/apktool/AndroidManifest.xml" 2>/dev/null | grep -vE '/(android|androidx|kotlin|com/google/android/material)/' | wc -l
+grep -ac 'getInitialURL\|addEventListener("url"' "$DEC/apktool/assets/index.android.bundle" 2>/dev/null   # RN only
+# 4. On-device truth (the manifest lies about verification, never about existence)
+adb -s "$SERIAL" shell -n dumpsys package "$PKG" | sed -n '/Activity Resolver Table/,/Receiver Resolver/p' | grep -c 'Scheme:'
+adb -s "$SERIAL" shell -n pm get-app-links "$PKG" | grep -cE 'verified|legacy_failure|none|[0-9]{4}'      # API 31+; absent below
+```
+
+Decision:
+
+- **Domain applies** when any of (1), (2), (3) or (4) is non-zero. Tag the engagement `deeplink`; add `applink` when the autoVerify count is non-zero.
+- **App Links half n/a** (D09-014..025, D09-055, the `applink`-tagged rows) when the autoVerify count is 0 **and** no `http`/`https` scheme appears in (1) — write: `n/a — no http(s) intent filter and no autoVerify in the merged manifest (probe step 1 = 0/0); custom-scheme half still applies`.
+- **Framework items n/a** (D09-009/-010/-011/-047) when `target.framework` is not flutter/react-native/cordova/capacitor/kmp — write: `n/a — framework=<value>; no cross-language router`.
+- **Whole domain n/a** only when every count is zero. The note a model writes, verbatim shape:
+
+  `D09 n/a — merged manifest has 0 <data android:scheme> filters (BROWSABLE, VIEW or NDEF) and 0 autoVerify; inventory/deeplinks.csv has 0 rows; dumpsys Activity Resolver Table lists 0 schemes; jadx tree outside platform packages has 0 getData()/onNewIntent/parseUri/getQueryParameter consumers; framework=<none|value>, flutter_deeplinking_enabled absent, no Linking in the bundle. Counts and commands in logs/D09-probe.txt. D09-005 (emitted-but-unregistered schemes) still ran: emitted.txt count = <n>.`
+
+  D09-005 is never skipped by this probe — an app with no filters can still *emit* a scheme another app may claim.
+
 ## Triage order
 
 1. **`pm get-app-links` on the device** (D09-014). One command, and it decides whether every interception
@@ -313,6 +344,7 @@ manifest?**
 | **VRT** | none — the classifier that decides which VRT path every later item uses |
 | **Attacker** | AM-02 vs AM-03 — this item is what decides which |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | MASTG-KNOW-0019; MASTG-TEST-0393; RFC 8252 (private-use URI schemes: "multiple apps can typically register the same scheme, making it indeterminate as to which app will receive the authorization code") |
 
 - **Test:** Three classes with three different attacker stories. **(a) Verified App Link** — `https`,
@@ -346,6 +378,7 @@ manifest?**
 | **VRT** | none — the evidence rule that sets the attacker model on every other item |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, device |
 | **Maps to** | Google Mobile VRP interaction tiers ("user must follow a link" = half the remote rate; "user must install malicious app" = 5% of it); MASTG-TECH-0173's own caveat about the disambiguation dialog |
 
 - **Test:** `adb shell am start` runs as `shell`, which holds more privilege than any real attacker and
@@ -382,6 +415,7 @@ manifest?**
 | **VRT** | none — reach calibration for every AM-02 claim |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, device |
 | **Maps to** | `developer.android.com/privacy-and-security/risks/unsafe-use-of-deeplinks`; the `intent://…#Intent;…;end` grammar with `S.browser_fallback_url` |
 
 - **Test:** "A web page can fire an `intent://`" is not one capability. Chrome, Firefox, Samsung Internet and
@@ -423,6 +457,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on the Dart route reached) |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | Flutter apps using the v2 embedding (`io.flutter.embedding.android.FlutterActivity`) |
+| **Requires** | deeplink, flutter |
 | **Maps to** | Flutter `FlutterActivityLaunchConfigs.java` — `HANDLE_DEEPLINKING_META_DATA_KEY = "flutter_deeplinking_enabled"`, documented default **true**; `EXTRA_INITIAL_ROUTE = "route"`; MASTG-TECH-0172 |
 
 - **Test:** `FlutterActivityLaunchConfigs.deepLinkEnabled(metaData)` returns **true when the key is missing**.
@@ -463,6 +498,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | React Native apps (`index.android.bundle`, Hermes or JSC) |
+| **Requires** | deeplink, react-native |
 | **Maps to** | MASTG-TECH-0172, MASTG-TECH-0173; React Native `Linking.getInitialURL()` / `Linking.addEventListener('url', …)` |
 
 - **Test:** In RN the URI crosses a boundary: Java `ReactActivity` receives it, JS consumes it. The validator,
@@ -503,6 +539,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) once the attacker origin reaches the plugin bridge |
 | **Attacker** | AM-02 |
 | **Applies to** | Cordova, Ionic, Capacitor |
+| **Requires** | deeplink, cordova, capacitor |
 | **Maps to** | Cordova `WhitelistPlugin.java` (`<allow-navigation href="*">` expands to `http://*/*`, `https://*/*` **and `data:*`**); Capacitor `Bridge.java` `allowedOriginRules` from `server.allowNavigation`; Capacitor `CapConfig.java` (`server.url`, `server.hostname`, `server.androidScheme`, `server.cleartext`) |
 
 - **Test:** In a Cordova/Capacitor app the *entire app* is one WebView with the plugin bridge attached. If a
@@ -540,6 +577,7 @@ manifest?**
 | **VRT** | none — instrumentation that converts an enumerated scheme into a proven sink |
 | **Attacker** | AM-12 own device (evidence tool, not an attack) |
 | **Applies to** | all; requires a Frida-capable device (D26) |
+| **Requires** | deeplink, device, frida |
 | **Maps to** | MASTG-TECH-0173 (Monitoring Deep Link Handlers at Runtime with Frida); MASTG-TOOL-0032 (Frida CodeShare — "Android Deep Link Observer", `@leolashkevych/android-deep-link-observer`); MASTG-DEMO-0152 |
 
 - **Test:** Stop guessing parameter names. Observe every URI the app consumes *and constructs*, and — the
@@ -583,7 +621,7 @@ manifest?**
   });
   ```
   ```bash
-  frida -U -f com.target.app -l d09-observer.js --no-pause
+  frida -D "$SERIAL" -f com.target.app -l d09-observer.js
   adb shell am start -W -a android.intent.action.VIEW -d "targetapp://load.html/?message=ok#part1" com.target.app
   ```
 - **Proof:** The MASTG-TECH-0173 output shape — scheme, host, params, fragment — **plus** a stack frame naming
@@ -604,6 +642,7 @@ manifest?**
 | **VRT** | none — candidate generation for D09-059 onwards |
 | **Attacker** | AM-03 (discovery only — re-prove per D09-076) |
 | **Applies to** | all |
+| **Requires** | deeplink, device |
 | **Maps to** | repository harness `tools/07-deeplink-sweep.sh`; drozer `app.activity.start --data-uri`; MASTG-TECH-0173 |
 
 - **Test:** Mechanically fire every declared URI plus its mutation set, recording the resolved activity for
@@ -651,6 +690,7 @@ manifest?**
 | **VRT** | no VRT node for App Links — file the consequence: `server_security_misconfiguration.oauth_misconfiguration.insecure_redirect_uri` (varies) or `broken_access_control.exposed_sensitive_android_intent` (null); **Critical** as `broken_authentication_and_session_management.authentication_bypass` (P1) once you intercept a login link |
 | **Attacker** | AM-03 (a competing app wins the chooser); AM-02 for the delivery of the link itself |
 | **Applies to** | App Links exist from Android 6.0 (API 23); `pm get-app-links` / `pm verify-app-links` require **Android 12 (API 31)+** |
+| **Requires** | applink, device, api>=31 |
 | **Maps to** | MASTG-TECH-0174 (Verifying App Link Website Association — documents the exact output shape and the "Common Reasons Verification Fails" list); MASTG-TEST-0393; MASWE-0029; `developer.android.com/training/app-links/verify-android-applinks` (compat change id **175408749** and the state vocabulary) |
 
 - **Test:** `android:autoVerify="true"` is a *request*, not a result. The real state lives in the package
@@ -700,6 +740,7 @@ manifest?**
 | **VRT** | file the consequence — `broken_access_control.exposed_sensitive_android_intent` (null), or P1 `authentication_bypass` once the hijacked link carries a login token |
 | **Attacker** | AM-03 |
 | **Applies to** | all apps declaring `autoVerify` |
+| **Requires** | applink |
 | **Maps to** | MASTG-TECH-0174; `developers.google.com/digital-asset-links/v1/getting-started` (statement structure); MASTG-TEST-0393; MASTG-TOOL-0123 (apksigner) |
 
 - **Test:** The required statement shape is exact. Fetch it for **every** declared host — each subdomain needs
@@ -746,6 +787,7 @@ manifest?**
 | **VRT** | consequence-rated; the mechanism is a verifiable App Links break |
 | **Attacker** | AM-03 |
 | **Applies to** | every app distributed through Play with Play App Signing (the default for new apps since AAB-only publishing in August 2021) |
+| **Requires** | applink |
 | **Maps to** | Play App Signing — upload key vs app signing key (support.google.com/googleplay/android-developer/answer/9842756); MASTG-TECH-0174 |
 
 - **Test:** With Play App Signing the developer signs the bundle with the **upload key**, and Google re-signs
@@ -782,6 +824,7 @@ manifest?**
 | **VRT** | consequence-rated (see D09-014) |
 | **Attacker** | AM-03 |
 | **Applies to** | all apps declaring `autoVerify` |
+| **Requires** | applink |
 | **Maps to** | MASTG-TECH-0174 "Common Reasons Verification Fails"; `developer.android.com/training/app-links/verify-android-applinks` |
 
 - **Test:** When `pm get-app-links` says a host is not verified, the report is only useful if you name the
@@ -819,6 +862,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` if the over-trusted package can reach a login link |
 | **Attacker** | AM-03, AM-08 |
 | **Applies to** | all apps declaring `autoVerify` |
+| **Requires** | applink |
 | **Maps to** | `developers.google.com/digital-asset-links/v1/getting-started`; repository harness `tools/04-applink-verify.sh` ("a `package_name` in assetlinks.json that is not the app -> over-broad trust") |
 
 - **Test:** The statement is an allow-list of packages permitted to handle the domain's URLs. Read every
@@ -848,6 +892,7 @@ manifest?**
 | **VRT** | consequence-rated; the retired key remains trusted for domain handling |
 | **Attacker** | AM-03 (with the retired key), AM-08 |
 | **Applies to** | apps that have rotated a signing key, used Play key upgrade, or migrated between publishers |
+| **Requires** | applink |
 | **Maps to** | repository harness `tools/04-applink-verify.sh` ("a stale sha256 fingerprint (old signing key still trusted)"); MASTG-TECH-0174 |
 
 - **Test:** Statements accumulate fingerprints; nobody removes them. A fingerprint that corresponds to a
@@ -880,6 +925,7 @@ manifest?**
 | **VRT** | `server_security_misconfiguration.misconfigured_dns.subdomain_takeover` (P3) for the takeover itself, chaining to P1 `authentication_bypass` when the taken-over host serves the statement that grants link handling |
 | **Attacker** | AM-01 for the takeover, AM-02 for the link delivery |
 | **Applies to** | all apps with more than one declared host, especially wildcard hosts |
+| **Requires** | deeplink |
 | **Maps to** | repository harness `tools/04-applink-verify.sh` ("an entry for a subdomain the vendor no longer controls -> takeover -> link hijack"); Oversecured "Domain Takeover via Expired Whitelist Entry" ("Static analysis cannot know that a domain has expired") |
 
 - **Test:** Static analysis structurally cannot find this. A host in the manifest — or a CNAME behind it — may
@@ -915,6 +961,7 @@ manifest?**
 | **VRT** | consequence-rated |
 | **Attacker** | AM-03 |
 | **Applies to** | **LEGACY** — devices below Android 12 (API 31). State the app's `minSdkVersion` when reporting |
+| **Requires** | applink, minsdk<31, legacy |
 | **Maps to** | MASTG-TEST-0393 / MASTG-KNOW-0019, verbatim: "a single non-verifiable link (for example, a missing `autoVerify`, an invalid Digital Asset Links file, or a custom URL scheme in a verified intent filter) can cause the system to skip verification for **all** of the app's App Links" |
 
 - **Test:** On pre-12 devices verification was all-or-nothing across the app. One dead subdomain, one
@@ -954,6 +1001,7 @@ manifest?**
 | **VRT** | consequence-rated |
 | **Attacker** | AM-03 |
 | **Applies to** | **LEGACY** effect below API 31; the unverifiable scheme itself is current at every API level |
+| **Requires** | applink |
 | **Maps to** | MASTG-KNOW-0019; MASTG-TECH-0174; MASTG-TEST-0393 |
 
 - **Test:** A custom scheme can never be auto-verified. Putting one in the same filter as the verified https
@@ -991,6 +1039,7 @@ manifest?**
 | **VRT** | none — report-quality item that decides whether your retest is valid |
 | **Attacker** | n/a |
 | **Applies to** | all; behaviour differs on Android 15 (API 35)+ versus Android 14 and lower |
+| **Requires** | applink, device |
 | **Maps to** | `developer.android.com/training/app-links/verify-android-applinks` — Android 15+ periodically re-verifies in the background and an `assetlinks.json` change "can take up to 7 days to propagate"; Android 14 and lower do not re-verify periodically |
 
 - **Test:** Two traps. (1) You fix-verify too early: on Android 15+ the client's corrected statement file may
@@ -1023,6 +1072,7 @@ manifest?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the hijacked link is a magic link |
 | **Attacker** | AM-03 |
 | **Applies to** | any app using Branch (`*.app.link`), AppsFlyer (`*.onelink.me`), Adjust (`*.go.link`), Firebase Dynamic Links or a similar link-shortening/attribution service |
+| **Requires** | deeplink |
 | **Maps to** | H1 **#855618** (Shopify Arrive — magic-link ATO over an unverified Branch `app.link` domain, rated **Low** by the vendor despite full ATO) |
 
 - **Test:** The app registers the *vendor's* domain in its manifest, but the statement file on that domain is
@@ -1074,6 +1124,7 @@ manifest?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if a passkey origin binds to a host outside the client's control |
 | **Attacker** | AM-03, AM-09 |
 | **Applies to** | apps using Credential Manager passkeys, or sharing credentials between an app and a website |
+| **Requires** | applink |
 | **Maps to** | `developers.google.com/digital-asset-links/v1/getting-started` (both relation strings); `developer.android.com/identity/sign-in/credential-manager` ("Passkeys are bound to your app's origin via assetlinks.json") |
 
 - **Test:** Two distinct relations live in the same file: `delegate_permission/common.handle_all_urls`
@@ -1106,6 +1157,7 @@ manifest?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) when the captured value completes a login; `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) for the token itself; `broken_access_control.exposed_sensitive_android_intent` (null) when it captures something less |
 | **Attacker** | AM-03 |
 | **Applies to** | all custom (non-http/https) schemes, every Android version. Custom schemes have **no** ownership verification and never have |
+| **Requires** | deeplink, device |
 | **Maps to** | MASTG-TEST-0393; MASWE-0029 (CWE-939, CWE-917); ATT&CK **T1635.001 URI Hijacking** ("Applications regularly register URIs with the operating system to act as a response handler for various actions, such as logging into an app using an external account via single sign-on"), mitigations M1013/M1006; Google Play ASI "Scheme Hijacking" campaign; MASTG-KNOW-0019 ("Unlike iOS, Android provides no mechanism to identify which app sent the Intent") |
 
 - **Test:** Declare the target's scheme in your own app and see what arrives. This is the base primitive for
@@ -1158,6 +1210,7 @@ manifest?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1); `sensitive_data_exposure.weak_password_reset_implementation` family when the captured artefact is a reset token |
 | **Attacker** | AM-03 |
 | **Applies to** | any `http`/`https` BROWSABLE filter whose host is **not** `verified` per D09-014 |
+| **Requires** | deeplink, device |
 | **Maps to** | MASTG-TEST-0393; the corpus's password-reset hijack write-up ("The reset domain does **not** publish an `assetlinks.json` file, and the official Android application does **not** define a matching `intent-filter`"); H1 #855618 |
 
 - **Test:** An unverified https link is an ordinary implicit intent. Register the exact host and path pattern
@@ -1201,6 +1254,7 @@ manifest?**
 | **VRT** | `server_security_misconfiguration.oauth_misconfiguration.account_takeover` (P2); escalate to `broken_authentication_and_session_management.authentication_bypass` (P1) once you complete the takeover |
 | **Attacker** | AM-03 |
 | **Applies to** | every app whose OAuth/OIDC `redirect_uri` is a private-use URI scheme rather than a claimed https redirect |
+| **Requires** | oauth, deeplink |
 | **Maps to** | RFC 8252 ("multiple apps can typically register the same scheme, making it indeterminate as to which app will receive the authorization code"; native public clients MUST implement PKCE); ATT&CK T1635, T1635.001 (mitigation M1013: "Implement Android App Links and iOS Universal Links for secure URI binding" and "Adopt PKCE … to prevent stolen authorization code misuse"); Google Mobile VRP class "Leaking OAuth tokens"; Oversecured ("For OAuth flows: always use App Links, never custom schemes") |
 
 - **Test:** Extract the real `redirect_uri` from the `/authorize` request in the proxy (not from the manifest —
@@ -1239,6 +1293,7 @@ manifest?**
 | **VRT** | `server_security_misconfiguration.oauth_misconfiguration.account_takeover` (P2) when combined with an interception path; the PKCE gap alone is the control failure |
 | **Attacker** | AM-03 (the interceptor), AM-01 against the authorisation server |
 | **Applies to** | every mobile OAuth public client |
+| **Requires** | oauth, deeplink |
 | **Maps to** | RFC 8252; draft-ietf-oauth-security-topics §2.1.1 (MUST use PKCE; MUST mitigate PKCE downgrade); the corpus's never-submit note: **"OAuth `client_secret` in a mobile app" is known and expected and must not be submitted — PKCE non-enforcement is the reportable finding instead** |
 
 - **Test:** PKCE is only a control if the server enforces it. Four probes, in order.
@@ -1271,6 +1326,7 @@ manifest?**
 | **VRT** | `server_security_misconfiguration.oauth_misconfiguration.account_takeover` (P2) |
 | **Attacker** | AM-03 |
 | **Applies to** | apps doing Authorization Code + PKCE natively (RFC 8252) |
+| **Requires** | oauth, deeplink |
 | **Maps to** | Google Mobile VRP auditing tip, verbatim: "Implicit grant is always bad; If using Authz flow, check for PKCE use; If using PKCE, check that it is not predictable"; the corpus's disclosed Superhuman/Grammarly "Authorization Code with PKCE flow implementation vulnerability that allows account takeover" |
 
 - **Test:** PKCE protects a code only if the verifier is unguessable. `java.util.Random`, `Math.random()`,
@@ -1306,6 +1362,7 @@ manifest?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-03 |
 | **Applies to** | any app with emailed/SMS'd login links, invite links, or "continue on your phone" flows |
+| **Requires** | deeplink, backend-api, two-accounts |
 | **Maps to** | MASTG risk `unsafe-use-of-deeplinks`, which cites H1 **#855618** "Account Takeover via Magic Link Interception"; H1 #855618 (Shopify Arrive) |
 
 - **Test:** Find every flow that mints a bearer credential into a URL, then check whether that URL travels on
@@ -1340,6 +1397,7 @@ manifest?**
 | **VRT** | none — false-positive prevention on every squat claim |
 | **Attacker** | n/a |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | `guide/topics/manifest/intent-filter-element`, verbatim: "In certain circumstances the requested priority is ignored and the value is capped to 0. This occurs when: A non-privileged application requests any priority >0. A privileged application requests a priority >0 for `ACTION_VIEW`, `ACTION_SEND`, `ACTION_SENDTO` or `ACTION_SEND_MULTIPLE`." |
 
 - **Test:** Half the public write-ups say "register with `android:priority="999"` and you win". A
@@ -1368,6 +1426,7 @@ manifest?**
 | **VRT** | consequence-rated; the workaround scheme is a class (c) entry point |
 | **Attacker** | AM-03 (app-to-app), AM-02 (the link that starts the flow) |
 | **Applies to** | Android 12 (API 31)+ for resolution behaviour; the manifest issue is universal |
+| **Requires** | deeplink, device |
 | **Maps to** | `developer.android.com/about/versions/12/behavior-changes-12` and `.../behavior-changes-all` (web intent resolution: a generic web intent resolves to the app only if the app is approved for that domain); **CVE-2024-45240** (TikTok Lynxview deep-link traversal, "only exploitable by third-party applications" on Android 12 and later) |
 
 - **Test:** Two consequences of the Android 12 change that testers get backwards. (1) An unverified https link
@@ -1403,6 +1462,7 @@ manifest?**
 | **VRT** | `server_security_misconfiguration.oauth_misconfiguration.account_takeover` (P2) when the intercepted value is an OAuth artefact |
 | **Attacker** | AM-03, AM-08 |
 | **Applies to** | custom schemes contributed by a shared SDK; **not** verified App Links |
+| **Requires** | deeplink, device |
 | **Maps to** | Google Play ASI "Scheme Hijacking" campaign (started 2018-11-15); Oversecured SDK-security post; ASI "Embedded Facebook OAuth Token" / "Embedded Foursquare OAuth Token" campaigns (both started 2016-09-28) for the adjacent hardcoded-credential case |
 
 - **Test:** When an SDK registers a fixed scheme rather than a per-app one, every app embedding that SDK
@@ -1436,6 +1496,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null — rated on the router sink reached) |
 | **Attacker** | AM-09 (the SDK's backend or whoever controls the link record), AM-02 |
 | **Applies to** | all apps bundling Branch, AppsFlyer, Adjust, Kochava, Firebase Dynamic Links or a similar MMP |
+| **Requires** | deeplink, firebase, ads-sdk |
 | **Maps to** | no external identifier verified for this exact path in the corpus — the corpus covers exported install-referrer *receivers*, not the deferred-deep-link callback. Report it on mechanism, with the SDK's own documentation as the reference |
 
 - **Test:** A deferred deep link never travels as an `Intent`. The SDK resolves it server-side (or from the
@@ -1479,6 +1540,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) for the routing case; the entitlement case is a business-logic finding — file the consequence |
 | **Attacker** | AM-01 (anyone who can construct the referring URL) |
 | **Applies to** | all; any targetSdk |
+| **Requires** | device |
 | **Maps to** | `com.android.installreferrer` / `InstallReferrerClient` / `ReferrerDetails`; no external vulnerability identifier verified in the corpus for the trusted-payload question |
 
 - **Test:** The Play install-referrer string is whatever the referring URL said — fully attacker-controlled,
@@ -1513,6 +1575,7 @@ manifest?**
 | **VRT** | consequence-rated; `broken_access_control.exposed_sensitive_android_intent` (null) at minimum, P1 `authentication_bypass` when the scan completes a login or account link |
 | **Attacker** | AM-02 (a printed sticker over a legitimate code — no malware, no permissions) |
 | **Applies to** | any app with a scanner: payments/UPI, ticketing, delivery, "scan to pair", loyalty, device onboarding |
+| **Requires** | deeplink, device |
 | **Maps to** | `developers.google.com/ml-kit/vision/barcode-scanning/android` — `BarcodeScanning.getClient()`, `Barcode.getRawValue()`, `getValueType()`, `getUrl()`, `getWifi()`, `Barcode.FORMAT_QR_CODE`, and the permission-less "Google code scanner" module; the page carries **no validation guidance**, which is why most integrations pass the raw value through |
 
 - **Test:** A scanner is an unauthenticated physical-world input channel that usually terminates in the app's
@@ -1547,6 +1610,7 @@ manifest?**
 | **VRT** | consequence-rated |
 | **Attacker** | AM-02 variant — one physical tap, no browser, no link, no install prompt |
 | **Applies to** | NFC-capable devices. Pre-Android-16 the app must declare an NFC filter; **Android 16+** an `http(s)` tag triggers `ACTION_VIEW`, which reaches ordinary BROWSABLE/App-Link filters even if the app declares no NFC filter |
+| **Requires** | deeplink, device, physical |
 | **Maps to** | `developer.android.com/develop/connectivity/nfc/nfc` — dispatch priority `ACTION_NDEF_DISCOVERED` > `ACTION_TECH_DISCOVERED` > `ACTION_TAG_DISCOVERED`; AAR precedence ("If no Activity matches the AAR, or multiple Activities handle the intent, start the application specified by the AAR… If the application isn't installed, launch Google Play to download it"); "Starting in Android 16, scanning NFC tags that store web links (URI scheme `http://` or `https://`) triggers `ACTION_VIEW` instead"; `ACTION_TAG_DISCOVERED` is **deprecated starting Android 17 (API 37)** |
 
 - **Test:** A printed tag costs cents and works on a victim who would never tap a link. Check whether the app
@@ -1583,6 +1647,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` when the trusted path skips an auth gate |
 | **Attacker** | AM-02 (a web link carrying a forged signature) |
 | **Applies to** | apps that gate deep-link routes on a notification-origin signature |
+| **Requires** | deeplink, push |
 | **Maps to** | the corpus's worked example: a trampoline activity verifying a `pn_trust_sig` HMAC on links delivered via FCM, with the key resolvable from the APK |
 
 - **Test:** Some routers unlock a privileged route set only when the link "came from a notification", proven
@@ -1619,6 +1684,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); P1 `authentication_bypass` when the retired path skips an auth step |
 | **Attacker** | AM-04 (launcher/shortcut access), AM-02 for the instant-app path |
 | **Applies to** | `ShortcutManager` from API 25+; the instant-app case applies to any app that ever shipped a Google Play Instant experience |
+| **Requires** | deeplink, device |
 | **Maps to** | `developer.android.com/develop/ui/views/launch/shortcuts/managing-shortcuts` — there is **no limit on pinned shortcuts**, `updateShortcuts()` can update pinned shortcuts "even after they're removed as dynamic shortcuts", pinned shortcuts are restored automatically after reinstall, and `disableShortcuts()` is the retirement API; `developer.android.com/topic/google-play-instant/overview` (discontinuation and the restricted API/permission subset) |
 
 - **Test:** Two retired-route classes nobody tests, because the tester upgrades the app by reinstalling —
@@ -1657,6 +1723,7 @@ manifest?**
 | **VRT** | none — the artefact every later item cites |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | MASTG-TEST-0394 (the extraction APIs); MASTG-TECH-0173 (runtime confirmation); MASWE-0029 |
 
 - **Test:** Follow how the entry activity turns the `Uri` into an internal route, and write the table. Without
@@ -1695,6 +1762,7 @@ manifest?**
 | **VRT** | set by the sink: `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the app sends its token to your origin; `unvalidated_redirects_and_forwards.open_redirect.get_based` (P4) for redirect-only |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | Google Mobile VRP class **"Incorrect URL verification"**, CWE-939 (Improper Authorization in Handler for Custom URL Scheme) — its remediation tip is literally "Read and understand https://hackerone.com/reports/431002 — 'Golden techniques to bypass host validations in Android apps'", and its auditing tip: "Narrow it down to those that are used to branch between different code paths — Could be any part of the URL, not just the host name"; Oversecured WebView checklist §2–3; MASTG risk `unsafe-uri-loading` |
 
 - **Test:** Almost every app that validates a URL validates it wrongly. Find the predicate, then run the
@@ -1747,6 +1815,7 @@ manifest?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) for `file://`; `cross_site_scripting_xss.stored.url_based` (P3) or the sink's own path for `javascript:`/`data:` |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | MASTG risk `unsafe-uri-loading` (MASVS-CODE) and `cross-app-scripting`; Oversecured WebView checklist §3 (missing scheme check enabling `javascript:`/`file:`/`content:`); H1 **#3475626** (LinkedIn, **High 8.1** — the `javascript://` plus `#` trick) |
 
 - **Test:** The most common half-validation: the code extracts `getHost()`, compares it correctly, and never
@@ -1787,6 +1856,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the loaded origin receives the session |
 | **Attacker** | AM-02 |
 | **Applies to** | **LEGACY** — the backslash form is documented as affecting **minSdkVersion ≤ 24** (Android 7.0 and below). The userinfo/suffix forms in D09-042 are version-independent; use `java.net.URI` divergence on minSdk 25+ |
+| **Requires** | deeplink, webview, device, frida, minsdk<25, legacy |
 | **Maps to** | Oversecured WebView checklist §5 ("affected Android 7.0 and below; fix is `minSdkVersion` 25+ or validate with `java.net.URI`"); the corpus's host-validation-bypass reference (minSdk ≤ 24) |
 
 - **Test:** `Uri.parse("https://attacker.example\\@trusted.example").getHost()` returns `trusted.example`
@@ -1823,6 +1893,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → the sink's path |
 | **Attacker** | AM-03 (requires app-to-app delivery of a `Uri` **object**, not a browser link) |
 | **Applies to** | **LEGACY-leaning** — Oversecured notes API 28+ forbids internal-interface use "but this can easily be bypassed", and describes it as less relevant on Android 12+. Report only where you demonstrate it on the target's supported API range |
+| **Requires** | deeplink, device |
 | **Maps to** | Oversecured WebView checklist §4 and deep-link post (HierarchicalUri Bypass); the one-line fix is re-parsing: `Uri.parse(intent.getData().toString())` |
 
 - **Test:** When a third-party app (not a browser) hands the victim a `Uri` **object** in an intent, that
@@ -1857,6 +1928,7 @@ manifest?**
 | **VRT** | inherits the sink — `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the sink is a session-bearing WebView |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, device, frida |
 | **Maps to** | Google Mobile VRP "Incorrect URL verification" auditing tip ("Could be any part of the URL, not just the host name"); the corpus's parser-differential method |
 
 - **Test:** Stop trying one malformed URL. The bug class is **two parsers, one string**: `android.net.Uri` at
@@ -1898,6 +1970,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → the framework sink's path |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | React Native, Flutter, Cordova/Capacitor, KMP — any app where the URI crosses a language boundary |
+| **Requires** | deeplink, flutter, react-native, cordova, capacitor, kmp |
 | **Maps to** | MASTG-TECH-0172, MASTG-TECH-0173; the corpus's cross-platform handoff method |
 
 - **Test:** Two parsers again, but now in two languages with different URL semantics: `android.net.Uri` on the
@@ -1935,6 +2008,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — rated on the handler reached |
 | **Attacker** | AM-02 |
 | **Applies to** | all. `pathSuffix` and `pathAdvancedPattern` are **API 31+**; `<data android:query*>` and `android:fragment*` matchers are **API 35+**, so an app using them has a *narrower* filter on old devices — a behavioural split worth testing on both |
+| **Requires** | deeplink, device |
 | **Maps to** | `guide/topics/manifest/data-element` — `.` matches any single character; `*` matches zero or more of the **immediately preceding** character and is greedy; `.*` matches any sequence and is **lazy**; there is **no backtracking**, a single forward pass. Documented non-matches: `"abc.*xyz"` does **not** match `"abcpxqrxyz"`; `"a.*.c"` does **not** match `"abbbc"`; `"a*a"` does **not** match `"aaa"` |
 
 - **Test:** `pathPattern` is not a regex and does not behave like one. Developers write a pattern believing it
@@ -1971,6 +2045,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) — rated on what the escaped path reaches |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps using `android:pathPrefix` to scope an App Link |
+| **Requires** | deeplink, device |
 | **Maps to** | H1 **#1087744** (Shopify, **Low 3.1**) — the verbatim reproduction is `am start -W -a android.intent.action.VIEW -d "https://ravel17.myshopify.com/admin/collections/../../"`; the same report's deeper form reached `/admin/collections/.../oauth/install_custom_app?client_id=…` |
 
 - **Test:** The filter matches on the *literal* path, but the handler (or the WebView it hands the URL to)
@@ -2000,6 +2075,7 @@ manifest?**
 | **VRT** | consequence-rated; chains with `server_security_misconfiguration.misconfigured_dns.subdomain_takeover` (P3) |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, device |
 | **Maps to** | `guide/topics/manifest/data-element` — `scheme`, `host` and `mimeType` are **case-sensitive and must be lowercase** (unlike the RFCs); `*` in `host` matches zero or more characters and **must be the first character**; `*.google.com` is valid and matches `www.google.com`, `.google.com` and `developer.google.com`; `google.co.*` is **invalid**; Gowthams open-redirect research (ideographic full stop `%E3%80%82`) |
 
 - **Test:** Four separate mistakes live in `android:host`. A wildcard admitting an unmanaged subdomain; an
@@ -2034,6 +2110,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-02 |
 | **Applies to** | **Android 15 (API 35)+** |
+| **Requires** | deeplink, device, api>=35 |
 | **Maps to** | `developer.android.com/about/versions/15/features` — `UriRelativeFilterGroup`, `UriRelativeFilter`, `<uri-relative-filter-group>`, including "blocking/exclusion rules" |
 
 - **Test:** Android 15 added precise intent filters that match on query parameters and fragments, including
@@ -2065,6 +2142,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | **Android 16 (API 36)+** with `android:intentMatchingFlags` containing `allowNullAction` |
+| **Requires** | device, api>=36 |
 | **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` — `allowNullAction`, "Intents Without Action Cannot Match Intent Filters"; the documented logcat filter `tag=:PackageManager & (message:"Intent does not match component's intent filter:" | message:"Access blocked:")` |
 
 - **Test:** Android 16's default hardening rejects action-less intents against intent filters.
@@ -2099,6 +2177,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 (local app; browser delivery remains filter-bound) |
 | **Applies to** | all; the attribute is **Android 16 (API 36)** opt-in, so its absence on older targets is a platform limitation rather than a defect — rate accordingly, and use sibling comparison |
+| **Requires** | deeplink, device |
 | **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` (`android:intentMatchingFlags` values `none` / `enforceIntentFilter` / `allowNullAction`, settable on `<application>`, `<activity>`, `<activity-alias>`, `<receiver>`, `<service>`, `<provider>`, component value overriding application value) |
 
 - **Test:** Without `enforceIntentFilter`, a local app can send an **explicit** `ACTION_VIEW` intent carrying
@@ -2132,6 +2211,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) |
 | **Attacker** | AM-03 |
 | **Applies to** | **Android 16 (API 36)+**, targetSdk 36 |
+| **Requires** | device, api>=36, targetsdk>=36 |
 | **Maps to** | `developer.android.com/about/versions/16/behavior-changes-16` — `"none"` **disables all special matching rules and takes precedence**; the same logcat filter as D09-052 |
 
 - **Test:** The security-relevant pattern is an app that sets `enforceIntentFilter` globally and then sets
@@ -2161,6 +2241,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → the sink's path |
 | **Attacker** | AM-02 |
 | **Applies to** | apps whose hosts report `verified` — this is the residual risk once interception is closed |
+| **Requires** | applink, device |
 | **Maps to** | the corpus's ruled-out discipline ("App Links path-scoped correctly" is a negative worth keeping); MASTG-TECH-0174 |
 
 - **Test:** When `pm get-app-links` says `verified`, interception is genuinely closed and D09-026/-027 are
@@ -2192,6 +2273,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the app attaches its auth headers to the resurrected host |
 | **Attacker** | AM-01 (register the domain), AM-02 (deliver the link) |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | Oversecured "Android deep link vulnerabilities" §5 — Domain Takeover via Expired Whitelist Entry; verbatim: "Static analysis cannot know that a domain has expired" |
 
 - **Test:** The allow-list is not bypassed; it is *correct*, and one of its entries is a domain the original
@@ -2234,6 +2316,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when a bridge or session follows the load |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, webview |
 | **Maps to** | the corpus's Source_To_Sink case (Feb 2026), verbatim: "anyone can create an S3 bucket and host content on `*.s3.amazonaws.com`. This wildcard trust effectively allows attacker-controlled content" — the chain reached `window.nativeBridge.uploadFile()` |
 
 - **Test:** Validation that accepts `*.s3.amazonaws.com`, `*.blob.core.windows.net`, `*.herokuapp.com`,
@@ -2264,6 +2347,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null); `broken_access_control.idor.*` when it lands on another user's object |
 | **Attacker** | AM-02 |
 | **Applies to** | all apps that put a parameter **inside** the URL path (`https://api.target.example/v1/users/{username}`) |
+| **Requires** | deeplink, backend-api |
 | **Maps to** | HackTricks deep-link guidance ("Parameters in path … you may be able to cause an Open Redirect …, account takeover …, and any other vuln"); MASTG-TEST-0394's `myapp://open?path=../../data/sensitive.txt` archetype |
 
 - **Test:** When the router builds an API path or an internal route by string-concatenating a URI segment, a
@@ -2297,6 +2381,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when the WebView carries the session to your origin; `broken_authentication_and_session_management.authentication_bypass` (P1) once you complete the takeover; `broken_access_control.exposed_sensitive_android_intent` (null) for a non-session WebView |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, webview |
 | **Maps to** | MASTG risk `unsafe-use-of-deeplinks`, verbatim: "**Never** pass deep-link-derived URLs directly to `WebView.loadUrl()` without thorough validation"; H1 **#401793** (Grab, High 7.1 — $7,500 per Intigriti), **#532225** (Zomato, High, $750), **#328486** (Zomato — evidence line "All tokens were sent to Google page"), **#424443** (PayPal, Medium 5.4), **#1087744** (Shopify, Low 3.1), **#1500614** (TikTok, High 8.3), **#2417516** (TikTok, High 8.1, **CVE-2024-45240**) |
 
 - **Test:** The single most-paid Android bug class in the corpus. A `scheme://host?url=` route loads your value
@@ -2337,6 +2422,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, webview |
 | **Maps to** | Oversecured WebView checklist §1 and §13 (`CookieManager.setCookie(attackerControlledUrl, "token=" + getUserToken())`); Oversecured banking-ATO item 1 |
 
 - **Test:** The two-argument `loadUrl` overload attaches a header map to the request. If the URL is
@@ -2379,6 +2465,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1); `unvalidated_redirects_and_forwards.open_redirect.get_based` (P4) if the redirect leads nowhere useful |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, webview |
 | **Maps to** | H1 **#1372667** (Basecamp, **High 8.7, $6,337** — the highest-paid Android finding in the corpus); MASTG-TEST-0393 cites the same report as "Able to steal bearer token from deep link" |
 
 - **Test:** The app decides "is this URL internal?" **on the wrapper**, then extracts and follows a redirect
@@ -2424,6 +2511,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) → `broken_authentication_and_session_management.authentication_bypass` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | H1 **#1667998** (KAYAK, **Critical 9.3**, CVSS `AV:N/AC:L/PR:N/UI:R/S:C/C:H/I:H/A:N`, patched within 24 hours) |
 
 - **Test:** The inverse of the redirect bug. The app does not load your URL blindly — it *builds* a URL from
@@ -2465,6 +2553,7 @@ manifest?**
 | **VRT** | `server_side_injection.file_inclusion.local` (P1) |
 | **Attacker** | AM-02 |
 | **Applies to** | all; `file://` in `loadUrl` requires `setAllowFileAccess(true)`, which is the **default below API 30** and defaults to **false from targetSdk 30** — check the actual setting before claiming it |
+| **Requires** | deeplink, webview |
 | **Maps to** | MASTG risk `webview-unsafe-file-inclusion`; the corpus's YesWeHack recon guide vulnerable shapes; H1 #2553411 for the write half |
 
 - **Test:** The same `url=`/`path=`/`filepath=` parameter that feeds a WebView often also feeds a file API.
@@ -2502,6 +2591,7 @@ manifest?**
 | **VRT** | `insecure_data_storage.sensitive_application_data_stored_unencrypted.on_external_storage` (P4) for the landing location; the *read by another app* is the impact — file the consequence |
 | **Attacker** | AM-02 (an in-product link; no malicious app needed) |
 | **Applies to** | all; scoped storage (**API 29+**) narrows who can read `/sdcard`, but `/sdcard/Download/` remains broadly readable via the Downloads collection or `MANAGE_EXTERNAL_STORAGE` — say which applies on your test device |
+| **Requires** | deeplink, device |
 | **Maps to** | H1 **#2553411** (Basecamp, **Medium 5.5**, CWE Path Traversal) |
 
 - **Test:** A deep link that takes a `filename` and writes the response to it. Traverse out of the private
@@ -2533,6 +2623,7 @@ manifest?**
 | **VRT** | `broken_access_control.exposed_sensitive_android_intent` (null) → P1 by what the launched component does |
 | **Attacker** | AM-02 (delivered from a web page — this is what makes it worse than the D08 local variant) |
 | **Applies to** | all |
+| **Requires** | deeplink |
 | **Maps to** | AOSP `content/Intent.java` — `parseUri`, `URI_INTENT_SCHEME`, `URI_ANDROID_APP_SCHEME`, `URI_ALLOW_UNSAFE`; MASTG risk `intent-redirection` (which names WebView-to-Intent conversion as a redirection source); the corpus's EngageLab push-SDK case (`processPlatformMessage()` → `n_intent_uri` → `parseUri()` with `URI_ALLOW_UNSAFE`, constant value 4) |
 
 - **Test:** `Intent.parseUri()` reconstructs a full `Intent` — component, action, flags and extras — from a
@@ -2569,6 +2660,7 @@ manifest?**
 | **VRT** | `cross_site_request_forgery_csrf.action_specific.authenticated_action` (varies) when the action is server-side; `broken_access_control.exposed_sensitive_android_intent` (null) when it is local; `broken_authentication_and_session_management.authentication_bypass` (P1) when it changes credentials |
 | **Attacker** | AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, backend-api, device |
 | **Maps to** | MASWE-0018 (CWE-306, CWE-862) — "App-defined URI scheme, Android App Link, or iOS Universal Link triggers a sensitive action (e.g., password reset, fund transfer, account linking) without verifying that the request came from an authenticated or authorized source"; MASVS-AUTH-3; H1 **#583987** (Periscope Android, Low, **$1,540**), **#805073** (Periscope iOS, **$2,940**), **#2139260** (Snapchat, **Medium 6.5** — `snapchat://call/start?…&calling_media=VIDEO&conversation_id=<id>` forced a video call that leaked the victim's surroundings); X/xAI "Changing email address on Twitter for Android unsets 'Protect your Tweets'" **$2,940** |
 
 - **Test:** Web endpoints have CSRF tokens; their deep-link equivalents usually do not. Any page the victim
@@ -2607,6 +2699,7 @@ manifest?**
 | **VRT** | `broken_authentication_and_session_management.authentication_bypass` (P1) if it exposes data or acts; `broken_access_control.exposed_sensitive_android_intent` (null) for navigation only |
 | **Attacker** | AM-02, AM-03 |
 | **Applies to** | all |
+| **Requires** | deeplink, device |
 | **Maps to** | MASTG risk `unsafe-use-of-deeplinks` — "Check internal state: verify preconditions before exposing sensitive functionality"; MASWE-0018 |
 
 - **Test:** Deep links bypass the navigation graph. An activity that assumes "the user got here through login"
@@ -2640,6 +2733,7 @@ manifest?**
 | **VRT** | `broken_access_control.idor.modify_view_sensitive_information_iterable_object_identifiers` (P1); `broken_access_control.idor.view_sensitive_information_iterable_object_identifiers` (P3) for read-only; `broken_access_control.idor.modify_view_sensitive_information_guid` (P4) for opaque identifiers |
 | **Attacker** | AM-05 (another user of the same app), AM-02 |
 | **Applies to** | all |
+| **Requires** | deeplink, backend-api, two-accounts |
 | **Maps to** | MASTG-TEST-0394 archetypes (`myapp://transfer?amount=-1`, `myapp://order/99999`); MASWE-0050 |
 
 - **Test:** The deep-link router is often the most convenient place to find the app's object identifiers,
@@ -2671,6 +2765,7 @@ manifest?**
 | **VRT** | consequence-rated — business logic; file under the affected flow |
 | **Attacker** | AM-02 |
 | **Applies to** | wallet, payment, entitlement and transfer flows |
+| **Requires** | deeplink, payments |
 | **Maps to** | H1 **#3648638** (Monero, **Medium 6.5**, Business Logic Errors) — the QR path uses the strict backend parser but `monero://` deep links are parsed by a separate routine that forwards `tx_amount` raw, and the transfer model treats the literal `"(all)"` as "send entire unlocked balance" |
 
 - **Test:** Transfer, entitlement and pricing models reserve magic strings — `(all)`, `max`, `-1`, `unlimited`,
@@ -2705,6 +2800,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_publicly_accessible_asset` (P1) when credentials follow the switch; `cryptographic_weakness.key_reuse.inter_environment` (P2) when the same key serves both environments |
 | **Attacker** | AM-02 |
 | **Applies to** | all; very common in apps with a debug/QA switcher left compiled in |
+| **Requires** | deeplink, backend-api, mitm |
 | **Maps to** | the corpus's security-model item — "the app switching to a staging backend (visible in the proxy as a different Host header)" |
 
 - **Test:** A parameter such as `env=`, `endpoint=`, `baseUrl=`, `server=`, `host=`, `cluster=` or `region=`
@@ -2739,6 +2835,7 @@ manifest?**
 | **VRT** | `server_security_misconfiguration.server_side_request_forgery_ssrf.internal_data_exposure` (P3) when it is the *server* that fetches; device-side fetches are not SSRF — file them as the data exposure they cause |
 | **Attacker** | AM-02 |
 | **Applies to** | all; apps with a local HTTP/debug listener, a WebSocket bridge, or a "sync with server" flow |
+| **Requires** | deeplink, mitm |
 | **Maps to** | OWASP API7:2023 Server Side Request Forgery mapping in the corpus — "A URL that the app passes to the backend (avatar import, webhook registration, PDF render) reachable from a deep link parameter" |
 
 - **Test:** Two distinct cases, and conflating them is a common reporting error. **(a)** The parameter is
@@ -2772,6 +2869,7 @@ manifest?**
 | **VRT** | `sensitive_data_exposure.disclosure_of_secrets.for_internal_asset` (P3) when a token reaches a third party; `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies) |
 | **Attacker** | AM-04 (a crash-reporting SDK or an app with `READ_LOGS`), AM-08, AM-11 |
 | **Applies to** | all. Note logcat has not been cross-app readable since **API 16** without `READ_LOGS`, so the logcat half alone is Low unless combined with a debuggable build (D03), an accessibility/ADB path, or an SDK that uploads it |
+| **Requires** | deeplink, device, mitm |
 | **Maps to** | MASWE-0001 family (logging of sensitive data); the corpus's deep-link logging items |
 
 - **Test:** Fire a token-bearing link with a unique marker and see where the marker ends up. The high-value
@@ -2808,6 +2906,7 @@ manifest?**
 | **VRT** | `application_level_denial_of_service_dos.app_crash.malformed_android_intents` (**P5**) — informational on its own, so **do not file it alone**; it becomes reportable only via the session-loss delta below |
 | **Attacker** | AM-02 |
 | **Applies to** | all; wildcard-host intent filters (`android:host="*"`) are the usual enabler |
+| **Requires** | deeplink, device |
 | **Maps to** | H1 **#3399016** (Nextcloud — scored **0.0**, crash only, session survived), **#3829030** (Yelp — **Low 3.3**, identical crash but the session was invalidated), **#859136** (Nextcloud, malformed-intent crash, **$0**), **#1058383** (LINE, **$0**) |
 
 - **Test:** Crash-only is worth zero. Crash-plus-logout is a paid DoS. The whole test is the second half, and
@@ -2840,6 +2939,7 @@ manifest?**
 | **VRT** | whichever control is weakened: `broken_authentication_and_session_management.authentication_bypass` (P1), `broken_access_control.idor.*` (P1–P3), `sensitive_data_exposure.disclosure_of_secrets.pii_leakage_exposure` (varies). **A version difference alone is Informational** |
 | **Attacker** | AM-05, AM-01 |
 | **Applies to** | every deep-link route that results in a backend call |
+| **Requires** | backend-api, mitm |
 | **Maps to** | the bug-hunting corpus's shadow-API method — "a mobile app's hardcoded backend calls are frequently an OLDER API version than the current web app uses, with weaker auth, weaker rate limits, weaker input validation and more field exposure. Diff **behaviourally** across versions, not by response shape" |
 
 - **Test:** This is the highest-value structural idea for a mobile engagement, and the deep-link router is the
